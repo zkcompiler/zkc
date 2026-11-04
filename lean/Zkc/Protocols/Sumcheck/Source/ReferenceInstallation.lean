@@ -116,6 +116,7 @@ theorem body_reference (definitions : List CheckedDefinition)
 
 namespace Prover
 open Zkc.Polynomial.Multilinear
+open Zkc.Protocols.Sumcheck.Multilinear (endpoints)
 abbrev signature := SumcheckRoundNormalForms.proverSignature
 abbrev pattern := SumcheckRoundNormalForms.proverPattern
 noncomputable abbrev form := SumcheckRoundNormalForms.proverForm
@@ -123,8 +124,8 @@ abbrev bindings := MultilinearSourceBindings.sumcheck
 
 def results : LawResults model signature.laws where
   result entry := match entry with
-    | ⟨0, _⟩ => fun args => .cons ((args.get .here).take ((args.get .here).length / 2)).sum
-        (.cons ((args.get .here).drop ((args.get .here).length / 2)).sum .nil)
+    | ⟨0, _⟩ => fun args => .cons (endpoints (args.get .here)).1
+        (.cons (endpoints (args.get .here)).2 .nil)
     | ⟨1, _⟩ => fun args => tableValues model field
         (restrictValues (args.get .here) (args.get (.there (.there (.there .here)))))
         (args.get (.there .here) - 1) (args.get (.there (.there .here)))
@@ -211,9 +212,9 @@ def reference (ctx : ProtocolContext) (xs : List (model.Field field)) (n w : Nat
     PIR.Process (Occurrence.signature model.toCarriers)
       (Values (Component model.Value) SumcheckVerifierBodies.repeatState) :=
   .call (.action (.send (ty := .field field) (SumcheckRoundNormalForms.round0Site ctx) (ctx.roles 1)
-    (xs.take (xs.length/2)).sum)) fun _ =>
+    (endpoints xs).1)) fun _ =>
   .call (.action (.send (ty := .field field) (SumcheckRoundNormalForms.round1Site ctx) (ctx.roles 1)
-    (xs.drop (xs.length/2)).sum)) fun _ =>
+    (endpoints xs).2)) fun _ =>
   .call (.action (.receive (.field field) (SumcheckRoundNormalForms.deliverySite ctx) (ctx.roles 1)))
     fun (r : model.Field field) => .done (state model (restrictValues xs r) (n-1) w (point ++ [r]))
 

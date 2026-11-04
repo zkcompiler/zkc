@@ -4,6 +4,8 @@ public import ZkcSecurityExamples.Gkr.HonestLineGoals
 public import Zkc.Polynomial.Multilinear.CoefficientRows
 public import Zkc.Source.Structured.CursorFold
 
+public meta import ZkcTools.StructuredSource.ReferenceInstallation
+
 @[expose] public section
 
 /-! Mathematical line companions. Scalar references and complete forwarding
@@ -48,95 +50,20 @@ theorem total (model : DomainModel) :
 noncomputable def totalLaw (model : DomainModel) :=
   Total.law model (totalReference model) (fun _ _ _ => True) (total model)
 
-noncomputable def differenceWrapperLibrary (model : DomainModel) :=
+noncomputable def differenceWrapperLaw (model : DomainModel) :=
   forward_reference% DifferenceWrapper.body using (differenceLaw model)
 
-def differenceWrapperReference (model : DomainModel) (high : model.Field scalarDomain) (low : model.Field scalarDomain) :
-    PIR.Outcome (DifferenceWrapper.Output model) := .returned ⟨high - low⟩
-
-def differenceWrapperCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) =>
-  (differenceLaw model).Realizes (helper := GkrSourceBodies.helper31Helper) table
-
-theorem differenceWrapper (model : DomainModel) :
-    DifferenceWrapper.Goal model (differenceWrapperReference model) (differenceWrapperCondition model) := by
-  apply DifferenceWrapper.of_law model _ _ (differenceWrapperLibrary model) rfl
-  · intro high low; rfl
-  · intro table high low dependency; exact dependency _
-
-noncomputable def differenceWrapperLaw (model : DomainModel) :=
-  DifferenceWrapper.law model (differenceWrapperReference model) (differenceWrapperCondition model) (differenceWrapper model)
-
-noncomputable def slopeWrapperLibrary (model : DomainModel) :=
+noncomputable def slopeWrapperLaw (model : DomainModel) :=
   forward_reference% SlopeWrapper.body using (slopeLaw model)
 
-def slopeWrapperReference (model : DomainModel) (low : model.Field scalarDomain) (high : model.Field scalarDomain) (delta : model.Field scalarDomain) :
-    PIR.Outcome (SlopeWrapper.Output model) := .returned ⟨(high - low) * delta⟩
-
-def slopeWrapperCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) =>
-  (slopeLaw model).Realizes (helper := GkrSourceBodies.helper32Helper) table
-
-theorem slopeWrapper (model : DomainModel) :
-    SlopeWrapper.Goal model (slopeWrapperReference model) (slopeWrapperCondition model) := by
-  apply SlopeWrapper.of_law model _ _ (slopeWrapperLibrary model) rfl
-  · intro low high delta; rfl
-  · intro table low high delta dependency; exact dependency _
-
-noncomputable def slopeWrapperLaw (model : DomainModel) :=
-  SlopeWrapper.law model (slopeWrapperReference model) (slopeWrapperCondition model) (slopeWrapper model)
-
-noncomputable def slopeCallbackLibrary (model : DomainModel) :=
+noncomputable def slopeCallbackLaw (model : DomainModel) :=
   forward_reference% SlopeCallback.body using (slopeWrapperLaw model)
 
-def slopeCallbackReference (model : DomainModel) (low : model.Field scalarDomain) (high : model.Field scalarDomain) (_left : List (model.Field scalarDomain)) (_right : List (model.Field scalarDomain)) (delta : model.Field scalarDomain) :
-    PIR.Outcome (SlopeCallback.Output model) := .returned ⟨(high - low) * delta⟩
-
-def slopeCallbackCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) (_ : List (model.Field scalarDomain)) (_ : List (model.Field scalarDomain)) (_ : model.Field scalarDomain) =>
-  (slopeWrapperLaw model).Realizes (helper := GkrSourceBodies.helper81Helper) table
-
-theorem slopeCallback (model : DomainModel) :
-    SlopeCallback.Goal model (slopeCallbackReference model) (slopeCallbackCondition model) := by
-  apply SlopeCallback.of_law model _ _ (slopeCallbackLibrary model) rfl
-  · intro low high left right delta; rfl
-  · intro table low high left right delta dependency; exact dependency _
-
-noncomputable def slopeCallbackLaw (model : DomainModel) :=
-  SlopeCallback.law model (slopeCallbackReference model) (slopeCallbackCondition model) (slopeCallback model)
-
-noncomputable def totalWrapperLibrary (model : DomainModel) :=
+noncomputable def totalWrapperLaw (model : DomainModel) :=
   forward_reference% TotalWrapper.body using (totalLaw model)
 
-def totalWrapperReference (model : DomainModel) (left : model.Field scalarDomain) (right : model.Field scalarDomain) :
-    PIR.Outcome (TotalWrapper.Output model) := .returned ⟨left + right⟩
-
-def totalWrapperCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) =>
-  (totalLaw model).Realizes (helper := GkrSourceBodies.helper33Helper) table
-
-theorem totalWrapper (model : DomainModel) :
-    TotalWrapper.Goal model (totalWrapperReference model) (totalWrapperCondition model) := by
-  apply TotalWrapper.of_law model _ _ (totalWrapperLibrary model) rfl
-  · intro left right; rfl
-  · intro table left right dependency; exact dependency _
-
-noncomputable def totalWrapperLaw (model : DomainModel) :=
-  TotalWrapper.law model (totalWrapperReference model) (totalWrapperCondition model) (totalWrapper model)
-
-noncomputable def totalCallbackLibrary (model : DomainModel) :=
-  forward_reference% TotalCallback.body using (totalWrapperLaw model)
-
-def totalCallbackReference (model : DomainModel) (low : model.Field scalarDomain) (high : model.Field scalarDomain) (_left : List (model.Field scalarDomain)) (_right : List (model.Field scalarDomain)) :
-    PIR.Outcome (TotalCallback.Output model) := .returned ⟨low + high⟩
-
-def totalCallbackCondition (model : DomainModel) := fun table (_ : model.Field scalarDomain) (_ : model.Field scalarDomain) (_ : List (model.Field scalarDomain)) (_ : List (model.Field scalarDomain)) =>
-  (totalWrapperLaw model).Realizes (helper := GkrSourceBodies.helper84Helper) table
-
-theorem totalCallback (model : DomainModel) :
-    TotalCallback.Goal model (totalCallbackReference model) (totalCallbackCondition model) := by
-  apply TotalCallback.of_law model _ _ (totalCallbackLibrary model) rfl
-  · intro low high left right; rfl
-  · intro table low high left right dependency; exact dependency _
-
 noncomputable def totalCallbackLaw (model : DomainModel) :=
-  TotalCallback.law model (totalCallbackReference model) (totalCallbackCondition model) (totalCallback model)
+  forward_reference% TotalCallback.body using (totalWrapperLaw model)
 
 /-- Complete scalar laws installed against the actual associated declarations. -/
 structure ScalarLaws (model : DomainModel)
@@ -153,47 +80,7 @@ structure ScalarLaws (model : DomainModel)
 theorem installScalars (model : DomainModel) (definitions : List CheckedDefinition)
     (linked : DeclarationsLinked [] definitions) (bodies : ScalarBodies definitions) :
     ScalarLaws model (definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []) := by
-  have difference := (differenceLaw model).realizes (helper := GkrSourceBodies.helper31Helper)
-    definitions linked bodies.difference (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := Difference.Inputs.pack_surjective arguments
-      trivial)
-  have slope := (slopeLaw model).realizes (helper := GkrSourceBodies.helper32Helper)
-    definitions linked bodies.slope (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := Slope.Inputs.pack_surjective arguments
-      trivial)
-  have total := (totalLaw model).realizes (helper := GkrSourceBodies.helper33Helper)
-    definitions linked bodies.total (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := Total.Inputs.pack_surjective arguments
-      trivial)
-  have differenceWrapper := (differenceWrapperLaw model).realizes (helper := GkrSourceBodies.helper80Helper)
-    definitions linked bodies.differenceWrapper (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := DifferenceWrapper.Inputs.pack_surjective arguments
-      exact difference)
-  have slopeWrapper := (slopeWrapperLaw model).realizes (helper := GkrSourceBodies.helper81Helper)
-    definitions linked bodies.slopeWrapper (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := SlopeWrapper.Inputs.pack_surjective arguments
-      exact slope)
-  have slopeCallback := (slopeCallbackLaw model).realizes (helper := GkrSourceBodies.helper82Helper)
-    definitions linked bodies.slopeCallback (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := SlopeCallback.Inputs.pack_surjective arguments
-      exact slopeWrapper)
-  have totalWrapper := (totalWrapperLaw model).realizes (helper := GkrSourceBodies.helper84Helper)
-    definitions linked bodies.totalWrapper (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := TotalWrapper.Inputs.pack_surjective arguments
-      exact total)
-  have totalCallback := (totalCallbackLaw model).realizes (helper := GkrSourceBodies.helper85Helper)
-    definitions linked bodies.totalCallback (by
-      intro arguments
-      obtain ⟨view, rfl⟩ := TotalCallback.Inputs.pack_surjective arguments
-      exact totalWrapper)
-  exact ⟨difference, slope, total, differenceWrapper, slopeWrapper, slopeCallback, totalWrapper, totalCallback⟩
+  install_reference_laws using linked with bodies
 
 /-- Mathematical state of a row-reset scan, including its final cursor. -/
 structure ShiftState (F : Type) where

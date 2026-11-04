@@ -38,6 +38,50 @@ def encode {n : Nat} (index : Nat) (reference : PrefixState (model.Field field) 
 
 abbrev layout := TableComponent.Nominal.layout (F := model.Field field) (Frame := Frame) field
 
+open Zkc.Polynomial.Multilinear Zkc.Protocols.Sumcheck.Multilinear
+
+/-- The immutable original is decoded from shape, independently of its claim. -/
+def originalTable {n : Nat} (reference : PrefixState (model.Field field) Frame n) :
+    Table (model.Field field) (n + reference.point.length) :=
+  (ofList? _ reference.original).get ((ofList?_isSome_iff _).mpr reference.shape)
+
+theorem original_decoded {n : Nat} (reference : PrefixState (model.Field field) Frame n) :
+    ofList? (n + reference.point.length) reference.original =
+      some (originalTable model reference) :=
+  (Option.some_get ((ofList?_isSome_iff _).mpr reference.shape)).symm
+
+/-- Actual nominal source state uses the same restriction invariant as uniform
+clients. Its caller frame and scalar are unrestricted. -/
+theorem restriction {n : Nat} (reference : PrefixState (model.Field field) Frame n) :
+    RestrictionInvariant (originalTable model reference) reference.point reference.entries n 1 := by
+  simpa only [Nat.add_sub_cancel, PrefixState.entries] using
+    RestrictionInvariant.ofPrefix reference.original (original_decoded model reference)
+      reference.point (by omega)
+
+theorem advance_restriction {n : Nat}
+    (reference : PrefixState (model.Field field) Frame (n + 1))
+    (message : model.Field field × model.Field field) (challenge : model.Field field) :
+    RestrictionInvariant (originalTable model reference)
+      (reference.advance message challenge).point (reference.advance message challenge).entries n 1 := by
+  simpa only [PrefixState.advance_point, PrefixState.advance_entries, Nat.add_sub_cancel] using
+    (restriction model reference).step (by omega) challenge
+
+/-- The family table is the invariant's current decode. This one restriction
+connection is reused by all adversarial messages and arbitrary challenges. -/
+theorem advance_table {n : Nat} (reference : PrefixState (model.Field field) Frame (n + 1))
+    (message : model.Field field × model.Field field) (challenge : model.Field field) :
+    (layout model).table (reference.advance message challenge) =
+      (TableReference.data (model.Field field)).restrict ((layout model).table reference) challenge := by
+  obtain ⟨current, decoded⟩ := (restriction model reference).decoded
+  have same : current = (layout model).table reference :=
+    Option.some.inj (decoded.symm.trans ((layout model).decoded reference))
+  subst current
+  apply Option.some.inj
+  rw [← (layout model).decoded]
+  change ofList? n (reference.advance message challenge).entries = _
+  rw [PrefixState.advance_entries]
+  exact ofList?_restrictValues _ _ challenge decoded
+
 /-- Exact source callback with its own input index and unchanged callerFrame suffix. -/
 def roundStep (definitions : List CheckedDefinition)
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
@@ -188,16 +232,9 @@ def no_contract (original : List (model.Field field)) (callerFrame : Frame)
       rfl
     · change True ∧ _
       refine ⟨trivial, ?_⟩
-      have restrict : (layout model).table (reference.advance (lo,hi) r) =
-          (TableReference.data (model.Field field)).restrict ((layout model).table reference) r := by
-        apply Option.some.inj
-        rw [← (layout model).decoded]
-        change Zkc.Polynomial.Multilinear.ofList? n (reference.advance (lo,hi) r).entries = _
-        rw [PrefixState.advance_entries]
-        exact Zkc.Polynomial.Multilinear.ofList?_restrictValues _ _ r ((layout model).decoded reference)
       change (1-r)*lo+r*hi ≠ (TableReference.data (model.Field field)).total
         ((layout model).table (reference.advance (lo,hi) r))
-      rw [restrict]
+      rw [advance_table model reference (lo,hi) r]
       exact different)
   simpa only [PIR.Process.bind_assoc, PIR.Process.bind, encode] using mapped
 

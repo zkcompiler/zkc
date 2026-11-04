@@ -22,8 +22,7 @@ local instance : Field (model.Field field) := fieldLaw.out.toField
 variable {Frame : Type}
 
 abbrev endpoints {n : Nat} (state : PrefixState (model.Field field) Frame (n+1)) :=
-  ((state.entries.take (state.entries.length/2)).sum,
-    (state.entries.drop (state.entries.length/2)).sum)
+  Zkc.Protocols.Sumcheck.Multilinear.endpoints state.entries
 
 /-- The same representation used by No supplies honest preservation. This is
 an algebraic law for every challenge, independent of any sampling distribution. -/
@@ -31,23 +30,9 @@ theorem advance_honest {n : Nat} (state : PrefixState (model.Field field) Frame 
     (challenge : model.Field field) :
     (state.advance (endpoints model state) challenge).scalar =
       (state.advance (endpoints model state) challenge).entries.sum := by
-  let layout := SourceIteration.layout (Frame := Frame) model
-  have delivered := SourceRound.producer_polynomial model layout state
-  have evaluated := (TableReference.laws (F := model.Field field)).evaluation_eq
-    (layout.table state) challenge trivial
-  have restricted : layout.table (state.advance (endpoints model state) challenge) =
-      (TableReference.data (model.Field field)).restrict (layout.table state) challenge := by
-    apply Option.some.inj
-    rw [← layout.decoded]
-    change Zkc.Polynomial.Multilinear.ofList? n
-      (state.advance (endpoints model state) challenge).entries = _
-    rw [PrefixState.advance_entries]
-    exact Zkc.Polynomial.Multilinear.ofList?_restrictValues _ _ challenge (layout.decoded state)
-  rw [← restricted, layout.total] at evaluated
-  change (Message.endpoints (model.Field field)).polynomial (endpoints model state) =
-    (TableReference.data (model.Field field)).polynomial (layout.table state) at delivered
-  rw [← delivered, Message.endpointPolynomial_eval] at evaluated
-  exact evaluated
+  change (1-challenge) * (endpoints model state).1 + challenge * (endpoints model state).2 = _
+  rw [PrefixState.advance_entries]
+  exact ((SourceIteration.restriction model state).round_sum challenge).symm
 
 /-- Source callback pairing requires both role projections, the actual table
 shape and producer arithmetic bounds. No validator handler is postulated. -/
@@ -85,11 +70,12 @@ theorem round {n : Nat} (definitions : List CheckedDefinition)
     (by simpa using state.entries_shape) (by omega)]
   rw [body_reference model definitions linked bodies protocols ctx distinctV index]
   have boundary : state.scalar = (endpoints model state).1 + (endpoints model state).2 := by
-    rw [honest, ← List.sum_append, List.take_append_drop]
+    exact honest.trans (Zkc.Protocols.Sumcheck.Multilinear.endpoints_sum state.entries).symm
+  dsimp only [endpoints, Zkc.Protocols.Sumcheck.Multilinear.endpoints] at boundary
   change Pair scope _ (PIR.Process.call _ _) (PIR.Process.call _ _)
   apply Pair.message (.field field) _ _ _ _ rfl roles
   apply Pair.message (.field field) _ _ _ _ rfl roles
-  simp only [boundary, ↓reduceIte]
+  simp only [boundary, Zkc.Protocols.Sumcheck.Multilinear.endpoints, ↓reduceIte]
   apply Pair.challenge field _ _ _ _ _ roles delivery
   intro challenge
   apply Pair.done

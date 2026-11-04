@@ -3,6 +3,8 @@ module
 public import ZkcSecurityExamples.Gkr.HonestCollectionGoals
 public meta import ZkcTools.StructuredSource.CollectionProofs
 
+public meta import ZkcTools.StructuredSource.ReferenceInstallation
+
 @[expose] public section
 
 /-! List representations for the actual producer's collection helpers. Names
@@ -134,29 +136,6 @@ structure Laws (table : Evaluation.MeaningsOn model.toCarriers closedInterface) 
 
 theorem install (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
     (bodies : Bodies definitions) : Laws model (closedMeaningsOn model definitions) := by
-  have repeated := install_collection% (repeatLaw model) for_helper GkrSourceBodies.helper14Helper in_definitions definitions
-    linked_by linked body_at bodies.repeated view_by Repeat.Inputs.pack_surjective requiring True.intro
-  have repeatWrapper := install_collection% (repeatWrapperLaw model) for_helper GkrSourceBodies.helper15Helper in_definitions definitions
-    linked_by linked body_at bodies.repeatWrapper view_by Repeat.Inputs.pack_surjective requiring (repeated _)
-  have replicateStep := install_collection% (replicateStepLaw model) for_helper GkrSourceBodies.helper16Helper in_definitions definitions
-    linked_by linked body_at bodies.replicateStep view_by ReplicateStep.Inputs.pack_surjective requiring (repeatWrapper _)
-  have replicateFold := install_collection% (replicateFoldLaw model) for_helper GkrSourceBodies.helper58Helper in_definitions definitions
-    linked_by linked body_at bodies.replicateFold view_by ReplicateFold.Inputs.pack_surjective requiring replicateStep
-  have replicateWrapper := install_collection% (replicateWrapperLaw model) for_helper GkrSourceBodies.helper59Helper in_definitions definitions
-    linked_by linked body_at bodies.replicateWrapper view_by ReplicateWrapper.Inputs.pack_surjective requiring (replicateFold _)
-  have replicated := install_collection% (replicateLaw model) for_helper GkrSourceBodies.helper60Helper in_definitions definitions
-    linked_by linked body_at bodies.replicate view_by Replicate.Inputs.pack_surjective requiring replicateWrapper
-  have appended := install_collection% (appendLaw model) for_helper GkrSourceBodies.helper17Helper in_definitions definitions
-    linked_by linked body_at bodies.append view_by Append.Inputs.pack_surjective requiring True.intro
-  have appendStep := install_collection% (appendStepLaw model) for_helper GkrSourceBodies.helper18Helper in_definitions definitions
-    linked_by linked body_at bodies.appendStep view_by AppendStep.Inputs.pack_surjective requiring (appended _)
-  have appendFold := install_collection% (appendFoldLaw model) for_helper GkrSourceBodies.helper61Helper in_definitions definitions
-    linked_by linked body_at bodies.appendFold view_by AppendFold.Inputs.pack_surjective requiring appendStep
-  have concatenate := install_collection% (concatenateLaw model) for_helper GkrSourceBodies.helper62Helper in_definitions definitions
-    linked_by linked body_at bodies.concatenate view_by Concatenate.Inputs.pack_surjective requiring (appendFold _)
-  have tiled := install_collection% (tileLaw model) for_helper GkrSourceBodies.helper63Helper in_definitions definitions
-    linked_by linked body_at bodies.tile view_by Replicate.Inputs.pack_surjective requiring concatenate
-  exact ⟨repeated, repeatWrapper, replicateStep, replicateFold, replicateWrapper,
-    replicated, appended, appendStep, appendFold, concatenate, tiled⟩
+  install_reference_laws using linked with bodies
 
 end ZkcSecurity.Realizations.Gkr.HonestHelpers.CollectionCompanion

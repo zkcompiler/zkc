@@ -360,6 +360,7 @@ import TestsSecurity.GenerateSubjects
 import TestsSecurity.GenerateSumcheckCompleteness
 import TestsSecurity.GenerateSumcheckSoundness
 import TestsSecurity.GeneratedRootConnections
+import TestsSecurity.GkrAdoption
 import TestsSecurity.GkrCaller
 import TestsSecurity.GkrCanonical
 import TestsSecurity.GkrCanonicalClaims
@@ -468,6 +469,7 @@ import TestsSecurity.RootConnectionPublicDraw
 import TestsSecurity.SampledReadback
 import TestsSecurity.SampledRootClaims
 import TestsSecurity.ScalarDomainEndpoints
+import TestsSecurity.SchnorrMathematicalAdoption
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.SigmaMethodPlurality
@@ -510,6 +512,7 @@ import TestsSecurity.SumcheckConsumers
 import TestsSecurity.SumcheckDomainTargets
 import TestsSecurity.SumcheckHonestReferences
 import TestsSecurity.SumcheckMathematicalConsumers
+import TestsSecurity.SumcheckNominalAdoption
 import TestsSecurity.SumcheckReference
 import TestsSecurity.SumcheckRootCompleteness
 import TestsSecurity.SumcheckSourceAdmissionControls

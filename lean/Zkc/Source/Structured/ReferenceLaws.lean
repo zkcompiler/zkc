@@ -2,6 +2,7 @@ module
 
 public import Zkc.Source.Structured.DomainLinking
 public import Zkc.Source.Structured.Association
+public import Zkc.Semantics.ReturnView
 
 @[expose] public section
 
@@ -31,6 +32,38 @@ structure ReferenceLaw (model : DomainModel) (inputs outputs : List Ty) where
 
 namespace ReferenceLaw
 variable {model : DomainModel} {helper : Helper}
+
+/-- Build an exact body law from a mathematical return view. Packing and the
+mathematical carrier may depend on the complete inputs. Reachability covers
+all replies under the supplied premises, and the separate projected equation
+retains every stop. The stored premises are unchanged; exact body association
+and installation into the actual dependency table remain separate obligations. -/
+def ofReachableView {inputs outputs : List Ty}
+    (body : Region dialect inputs outputs)
+    (Requires : Evaluation.MeaningsOn model.toCarriers closedInterface →
+      Values model.Value inputs → Prop)
+    {View : Values model.Value inputs → Type}
+    (view : (arguments : Values model.Value inputs) → Values model.Value outputs → View arguments)
+    (pack : (arguments : Values model.Value inputs) → View arguments → Values model.Value outputs)
+    (reference : (arguments : Values model.Value inputs) → PIR.Outcome (View arguments))
+    (reachable : ∀ table arguments, Requires table arguments →
+      PIR.Yields (fun values ↦ pack arguments (view arguments values) = values)
+        (body.denote (Evaluation.meaningOn model SiteObservations.closed table) arguments.get))
+    (projected : ∀ table arguments, Requires table arguments →
+      (body.denote (Evaluation.meaningOn model SiteObservations.closed table) arguments.get).bind
+        (fun values ↦ .done (view arguments values)) = primitiveOutcome (reference arguments)) :
+    ReferenceLaw model inputs outputs where
+  body := body
+  Requires := Requires
+  reference arguments := match reference arguments with
+    | .returned value => .returned (pack arguments value)
+    | .stopped reason => .stopped reason
+  valid table arguments premises := by
+    have reconstructed := PIR.Process.reconstruct_from_reachable_view _
+      (view arguments) (pack arguments) (reachable table arguments premises)
+      _ (projected table arguments premises)
+    refine reconstructed.trans ?_
+    cases reference arguments <;> rfl
 
 /-- Apply the same mathematical rule to any exact associated body. The
 statement uses the actual complete linked table, including dependency bodies;

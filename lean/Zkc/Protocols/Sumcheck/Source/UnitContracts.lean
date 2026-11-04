@@ -2,7 +2,9 @@ module
 
 public import Zkc.Source.Structured.UnitViews
 public import Zkc.Protocols.Sumcheck.Source.HelperBridge
+public import Zkc.Protocols.Sumcheck.Source.MathematicalHelpers
 public import Zkc.Protocols.Multilinear.Source.MapPrefixContracts
+import Zkc.Source.Structured.CollectionReference
 
 @[expose] public section
 namespace ZkcExamples.Structured.SumcheckUnitContracts
@@ -34,7 +36,17 @@ variable {definitions : List CheckedDefinition} (linked : DeclarationsLinked [] 
 include linked bodies
 
 theorem first_laws : MapFirstContracts.Laws (closedMeanings (F := F) (G := G) definitions) :=
-  bodies.first.elim fun _ associations => MapFirstContracts.laws_of_bodies linked associations
+  bodies.first.elim fun bindings associations =>
+    ⟨MapFirstContracts.less_all linked associations,
+      MapFirstContracts.halves_equation linked associations,
+      MapFirstContracts.shape_equation linked associations,
+      MapFirstContracts.table_equation linked associations, by
+        intro xs dimension columns challenge shape bound
+        rw [(SumcheckMathematicalHelpers.firstLaw (F := F) (G := G) bindings).invokeUniform
+          definitions linked associations.first (firstInputs xs dimension columns challenge)
+          ⟨MapFirstContracts.halves_equation linked associations,
+            MapFirstContracts.map_law linked associations, shape, bound⟩]
+        exact SumcheckMathematicalHelpers.first_reference_eq bindings xs dimension columns challenge⟩
 
 theorem halves_body : HalvesBodyLaw (closedMeanings (F := F) (G := G) definitions) :=
   bodies.first.elim fun _ associations =>
@@ -53,20 +65,25 @@ theorem sums_all (xs : List F) (dimension columns : Nat) :
             .done (messageResult (xs.take (xs.length / 2)).sum (xs.drop (xs.length / 2)).sum)
           else .halt .refused
         else .halt .reject
-      else .halt .refused :=
-  (bodies.sums.invoke linked (inputs xs dimension columns)).trans
-    (sums_generic_body_all _ (first_laws linked bodies).less (halves_body linked bodies)
-      xs dimension columns)
+      else .halt .refused := by
+  rw [(SumcheckMathematicalHelpers.sumsLaw (F := F) (G := G)).invokeUniform
+    definitions linked bodies.sums (inputs xs dimension columns)
+    ⟨(first_laws linked bodies).less, halves_body linked bodies⟩]
+  exact SumcheckMathematicalHelpers.reference_eq xs dimension columns
 
 theorem sums_honestMessage {n : Nat} (xs : List F) (table : Table F (n + 1))
     (columns : Nat) (decoded : ofList? (n + 1) xs = some table)
     (dimensionBound : n + 1 < indexLimit) :
     invoke (closedMeanings (G := G) definitions) sumsHelper (inputs xs (n + 1) columns) =
       .done (messageResult (Zkc.Protocols.Sumcheck.Multilinear.honestMessage table).1
-        (Zkc.Protocols.Sumcheck.Multilinear.honestMessage table).2) :=
-  (bodies.sums.invoke linked (inputs xs (n + 1) columns)).trans
-    (sums_honestMessage_generic_body _ (first_laws linked bodies).halves xs table columns
-      decoded dimensionBound)
+        (Zkc.Protocols.Sumcheck.Multilinear.honestMessage table).2) := by
+  rw [sums_all linked bodies xs (n + 1) columns]
+  simp only [dimensionBound, Nat.zero_lt_succ,
+    Zkc.Protocols.Sumcheck.Multilinear.decoded_split xs table decoded, ite_true]
+  change PIR.Process.done (messageResult
+    (Zkc.Protocols.Sumcheck.Multilinear.endpoints xs).1
+    (Zkc.Protocols.Sumcheck.Multilinear.endpoints xs).2) = _
+  rw [Zkc.Protocols.Sumcheck.Multilinear.endpoints_honestMessage xs table decoded]
 
 theorem empty_equation :
     invoke (closedMeanings (F := F) (G := G) definitions) emptyHelper .nil = .done (.cons [] .nil) :=

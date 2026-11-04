@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.MultilinearReference
+public import Zkc.Source.Structured.MultilinearReferenceViews
 public import Zkc.Source.TypedABI
 
 @[expose] public section
@@ -118,8 +118,10 @@ theorem first_eq (xs : List (model.Field domain)) (n w : Nat) (r : model.Field d
     (shape : xs.length = 2 ^ n * w) :
     invoke (closed model (definitions := definitions)) (firstHelper domain bindings)
       (.cons xs (.cons n (.cons w (.cons r .nil)))) =
-      primitiveOutcome (firstOutcome model domain (.cons xs (.cons n (.cons w (.cons r .nil))))) :=
-  ReferenceLaw.invoke (model := model) (helper := firstHelper domain bindings) (first model domain bindings) definitions linked bodies.first _
+      primitiveOutcome (firstOutcome model domain (.cons xs (.cons n (.cons w (.cons r .nil))))) := by
+  rw [← firstView_reference model domain bindings]
+  exact ReferenceLaw.invoke (model := model) (helper := firstHelper domain bindings)
+    (firstView model domain bindings) definitions linked bodies.first _
     ⟨lengthBound, Nat.lt_trans small (by decide +kernel),
       fun positive => split_shape model domain xs n w positive width shape,
       halves_eq model linked bodies xs n w,
@@ -175,8 +177,12 @@ theorem sums_eq (xs : List (model.Field domain)) (n w : Nat) :
     invoke (closed model (definitions := definitions))
       ⟨bindings.sums, .local, triple domain, [.field domain, .field domain]⟩
       (tableValues model domain xs n w) =
-      primitiveOutcome ((sums model domain bindings).reference (tableValues model domain xs n w)) :=
-  ReferenceLaw.invoke (model := model) (helper := ⟨bindings.sums, .local, triple domain, [.field domain, .field domain]⟩) (sums model domain bindings) definitions linked bodies.sums _ (halves_eq model linked bodies xs n w)
+      primitiveOutcome ((sums model domain bindings).reference (tableValues model domain xs n w)) := by
+  rw [← sumsView_reference model domain bindings]
+  exact ReferenceLaw.invoke (model := model)
+    (helper := ⟨bindings.sums, .local, triple domain, [.field domain, .field domain]⟩)
+    (sumsView model domain bindings) definitions linked bodies.sums _
+    (halves_eq model linked bodies xs n w)
 
 theorem foldWrapper_eq (xs point : List (model.Field domain)) (n w : Nat)
     (lengthBound : xs.length < indexLimit) (small : n < 64) (width : 0 < w)

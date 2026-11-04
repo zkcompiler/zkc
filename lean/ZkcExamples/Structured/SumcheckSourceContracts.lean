@@ -61,6 +61,25 @@ theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
   MapPrefixContracts.prefix_equation unit.linked prefix_bodies first_laws.first
     xs dimension columns point shape vectorBound
 
+/-- The actual prefix helper establishes the same mathematical state interface
+as the prover loop. The complete raw equation above retains rejection and
+exhaustion; no fitting-point premise is imposed on this return property. -/
+theorem prefix_invariant (xs : List F) (count : Nat) (table : Table F count)
+    (decoded : ofList? count xs = some table) (vectorBound : xs.length < indexLimit)
+    (point : List F) :
+    PIR.Yields (fun result =>
+      let fields := SumcheckMathematicalHelpers.FirstOutputs.unpack result
+      Zkc.Protocols.Sumcheck.Multilinear.RestrictionInvariant table point
+        fields.entries fields.dimension fields.columns)
+      (invoke (helperMeanings (G := G)) prefixHelper
+        (MapPrefixLaws.prefixInputs xs count 1 point)) := by
+  have shape : HasShape xs count 1 := (hasShape_iff_length xs count vectorBound).mpr
+    (ofList?_length xs table decoded)
+  rw [prefix_equation xs count 1 point shape vectorBound]
+  split_ifs with pointBound fits
+  · exact Zkc.Protocols.Sumcheck.Multilinear.RestrictionInvariant.ofPrefix xs decoded point fits
+  all_goals trivial
+
 /-- The callback is an actual member of the same original table, not an appended fixture. -/
 theorem checkTable_body (xs point : List F) (claim : F) :
     invoke (helperMeanings (G := G)) checkTableHelper (checkInputs xs point claim) =

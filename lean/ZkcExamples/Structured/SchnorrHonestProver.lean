@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.SchnorrInteractive
+public import Zkc.Semantics.ReturnView
 
 @[expose] public section
 
@@ -78,6 +79,44 @@ def execution (base key : G) (secret nonce challenge : F) (service : Nat) : Exec
   (SchnorrInteractive.proverProcess base key secret service).run
     (replyHandler service (.returned nonce) (.returned challenge)) ()
 
+/-- One complete source execution law covers independent replies and all stops.
+The commitment is sent before the challenge is received. -/
+theorem run_replies_eq (base key : G) (secret : F) (service : Nat)
+    (nonce challenge : PIR.Outcome F) :
+    (SchnorrInteractive.proverProcess base key secret service).run
+        (replyHandler service nonce challenge) () =
+      (⟨nonce, (), [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)]⟩ :
+        PIR.Execution Unit (Action F G) F).follow (fun n _ ↦
+        (⟨challenge, (),
+          [.send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (n • base),
+           .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1]⟩ :
+          PIR.Execution Unit (Action F G) F).follow (fun c _ ↦
+          ⟨.returned none, (),
+            [.send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1
+              (n + c * secret)]⟩)) := by
+  rw [SchnorrInteractive.prover_equation]
+  cases nonce <;> cases challenge <;>
+    simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
+  all_goals rfl
+
+/-- Recover the actual tuple for arbitrary replies, rather than inventing a
+successful prover output. The return inverse is just the singleton ABI. -/
+theorem full_execution_eq (base key : G) (secret : F) (service : Nat)
+    (nonce challenge : PIR.Outcome F) :
+    (SchnorrInteractive.program.participant F G 0
+        (SchnorrInteractive.proverInputs base key secret service)).run
+        (replyHandler service nonce challenge) () =
+      ((SchnorrInteractive.proverProcess base key secret service).run
+        (replyHandler service nonce challenge) ()).follow
+        (fun decision state ↦ ⟨.returned (.cons decision .nil), state, []⟩) := by
+  exact PIR.Process.run_of_return_view
+    (SchnorrInteractive.program.participant F G 0
+      (SchnorrInteractive.proverInputs base key secret service))
+    (fun outputs ↦ outputs.get .here) (fun decision ↦ .cons decision .nil)
+    Values.singleton_get
+    (SchnorrInteractive.proverProcess base key secret service) rfl
+    (replyHandler service nonce challenge) ()
+
 /-- This equality is derived from the imported source equation. It records the
 actual sent values and all four ordered external sites. Internal marks have
 already been erased by `Program.participant`. -/
@@ -89,9 +128,8 @@ theorem execution_eq (base key : G) (secret nonce challenge : F) (service : Nat)
          .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1,
          .send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1
            (nonce + challenge * secret)]⟩ := by
-  rw [execution, SchnorrInteractive.prover_equation]
-  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
-  rfl
+  rw [execution, run_replies_eq]
+  simp [PIR.Execution.follow]
 
 theorem extract_execution (base key : G) (secret nonce challenge : F) (service : Nat) :
     extract service (execution base key secret nonce challenge service) =
@@ -137,16 +175,16 @@ def strategy (base key : G) (secret nonce : F) (service : Nat) : Zkc.Protocols.S
     rw [extract_execution]
     rfl)
 
-theorem strategy_supplied (base key : G) (secret nonce challenge : F) (service : Nat) :
-    extract service (execution base key secret nonce challenge service) =
-      some ((strategy base key secret nonce service).commitment,
-        (strategy base key secret nonce service).response challenge) := by
-  simp [strategy, strategyOf, extract_execution]
-
 theorem strategy_eq (base key : G) (secret nonce : F) (service : Nat) :
     strategy base key secret nonce service =
       ⟨nonce • base, fun challenge => nonce + challenge * secret⟩ := by
   simp [strategy, strategyOf, extract_execution]
+
+theorem strategy_supplied (base key : G) (secret nonce challenge : F) (service : Nat) :
+    extract service (execution base key secret nonce challenge service) =
+      some ((strategy base key secret nonce service).commitment,
+        (strategy base key secret nonce service).response challenge) := by
+  rw [strategy_eq, extract_execution]
 
 /-- Copies are independent arguments. Equal bases and the verifier-key witness
 relation suffice; this source never inspects the prover's local key, so that
@@ -171,8 +209,8 @@ theorem nonce_stopped (base key : G) (secret challenge : F) (service : Nat) (why
     (SchnorrInteractive.proverProcess base key secret service).run
         (replyHandler service (.stopped why) (.returned challenge)) () =
       ⟨.stopped why, (), [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)]⟩ := by
-  rw [SchnorrInteractive.prover_equation]
-  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
+  rw [run_replies_eq]
+  rfl
 
 /-- A stopped receive retains the commitment and receive request, with no response. -/
 theorem challenge_stopped (base key : G) (secret nonce : F) (service : Nat) (why : PIR.Stop) :
@@ -182,8 +220,7 @@ theorem challenge_stopped (base key : G) (secret nonce : F) (service : Nat) (why
         [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil),
          .send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base),
          .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1]⟩ := by
-  rw [SchnorrInteractive.prover_equation]
-  simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
+  rw [run_replies_eq]
   rfl
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in

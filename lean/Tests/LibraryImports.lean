@@ -305,6 +305,7 @@ import Zkc.Protocols.Sumcheck.Source.HelperBridge
 import Zkc.Protocols.Sumcheck.Source.HelperExpansions
 import Zkc.Protocols.Sumcheck.Source.HelperLaws
 import Zkc.Protocols.Sumcheck.Source.Library
+import Zkc.Protocols.Sumcheck.Source.MathematicalHelpers
 import Zkc.Protocols.Sumcheck.Source.PendingBodies
 import Zkc.Protocols.Sumcheck.Source.PendingLaws
 import Zkc.Protocols.Sumcheck.Source.PreludeNormalForms
@@ -313,6 +314,7 @@ import Zkc.Protocols.Sumcheck.Source.ProverPrelude
 import Zkc.Protocols.Sumcheck.Source.ProverProcess
 import Zkc.Protocols.Sumcheck.Source.Reduce
 import Zkc.Protocols.Sumcheck.Source.ReferenceInstallation
+import Zkc.Protocols.Sumcheck.Source.Representation
 import Zkc.Protocols.Sumcheck.Source.RoundLaws
 import Zkc.Protocols.Sumcheck.Source.RoundNormalForms
 import Zkc.Protocols.Sumcheck.Source.UnitContracts
@@ -401,6 +403,7 @@ import Zkc.Source.Structured.Bindings.Component
 import Zkc.Source.Structured.Bindings.Selection
 import Zkc.Source.Structured.Bindings.Template
 import Zkc.Source.Structured.BodyBindings
+import Zkc.Source.Structured.CallbackPlacement
 import Zkc.Source.Structured.Catalogue
 import Zkc.Source.Structured.CatalogueEnvironment
 import Zkc.Source.Structured.CatalogueJustification
@@ -489,6 +492,7 @@ import Zkc.Source.Structured.MultilinearAdmissionReference
 import Zkc.Source.Structured.MultilinearBodies
 import Zkc.Source.Structured.MultilinearReference
 import Zkc.Source.Structured.MultilinearReferenceInstallation
+import Zkc.Source.Structured.MultilinearReferenceViews
 import Zkc.Source.Structured.NaturalPowerOfTwo
 import Zkc.Source.Structured.NormalForm.Denote
 import Zkc.Source.Structured.NormalForm.Normalize
@@ -556,6 +560,7 @@ import Tests.ArtifactDataAnchors
 import Tests.AuthoredPair
 import Tests.AuthoredPairSnapshots
 import Tests.BatchOpeningByteConnection
+import Tests.CallbackPlacement
 import Tests.CanonicalNormalization
 import Tests.CanonicalNormalizationExamples
 import Tests.ClaimReporting
@@ -713,6 +718,8 @@ import Tests.MathematicalCompanionFreshSources
 import Tests.MathematicalCompanionGoals
 import Tests.MathematicalCompanionSigma
 import Tests.MathematicalCompanionSigmaGoals
+import Tests.MathematicalHelperPresentation
+import Tests.MathematicalReferenceViews
 import Tests.MixedDomainRootConnection
 import Tests.MultilinearAdmissions
 import Tests.MultilinearListRestriction
@@ -754,6 +761,7 @@ import Tests.ReferenceBindingInference
 import Tests.ReferenceComposition
 import Tests.ReferenceDiscovery
 import Tests.ReferenceDiscoveryDependencies
+import Tests.ReferenceLawInstallation
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionDerivation
@@ -785,6 +793,7 @@ import Tests.ReusableGroupInstallation
 import Tests.RoleViewGeneration
 import Tests.ScalarDomainConnections
 import Tests.ScalarSourcePresentations
+import Tests.SchnorrMathematicalAdoption
 import Tests.SigmaProofControls
 import Tests.SourceCalls
 import Tests.SourceCompositionBranches
@@ -886,6 +895,7 @@ import Tests.SumcheckFamilyStops
 import Tests.SumcheckFoldMutations
 import Tests.SumcheckHelperControls
 import Tests.SumcheckHelperMutants
+import Tests.SumcheckMathematicalAdoption
 import Tests.SumcheckMathematicalInstallation
 import Tests.SumcheckNativeConsumer
 import Tests.SumcheckNativeConsumerAudit
@@ -959,6 +969,7 @@ import ZkcExamples.Construction.OkamotoProofModel
 import ZkcExamples.Construction.OkamotoProofParticipant
 import ZkcExamples.Construction.SchnorrAndArtifact
 import ZkcExamples.Construction.SchnorrAndDomainConnection
+import ZkcExamples.Construction.SchnorrAndExecution
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData

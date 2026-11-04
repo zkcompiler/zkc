@@ -18,7 +18,7 @@ open Lean Meta Elab Term
 operation schemas. No helper or primitive implementation is unfolded. -/
 macro "named_reduce" : tactic =>
   `(tactic| (
-    dsimp only [Zkc.Source.Structured.Op.arguments, Zkc.Source.Structured.Op.results,
+    try dsimp only [Zkc.Source.Structured.Op.arguments, Zkc.Source.Structured.Op.results,
       Zkc.Source.Structured.Op.regions, Zkc.Source.Structured.Primitive.arguments,
       Zkc.Source.Structured.Primitive.results]
     simp only [_root_.PIR.Process.bind_assoc, _root_.PIR.Process.bind,
