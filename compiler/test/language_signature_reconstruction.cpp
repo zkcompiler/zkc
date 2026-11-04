@@ -107,11 +107,26 @@ const std::string formationSignature = R"(module m;
   type Nonempty<N:nat> where 1<=N=[bool;N];
   type Special<F:Field> where zkc::algebra::TwoAdicField(F)=F;
   interface I<N:nat,F:Field> {
-    fn pass(xs:[bool;N],f:F)->([bool;N],F)
+    fn pass(xs:[bool;N],f:F)->([bool;N],F) effects()
       where 1<=N,zkc::algebra::TwoAdicField(F);
   }
   module A<N:nat,F:Field>:I<N,F> {
     fn pass(xs:Nonempty<N>,f:Special<F>)->([bool;N],F){return(xs,f);}
+  }
+)";
+const std::string inferredResults = R"(module m;
+  interface I<F:Field> {
+    fn flag()->bool effects();
+    fn pair(x:bool)->(bool,bool) effects();
+    fn unit()->() effects();
+    fn root(n:index)->F effects(stop,opaque)
+      where zkc::algebra::TwoAdicField(F);
+  }
+  module A<F:Field>:I<F> {
+    fn flag() effects() where () {return true;}
+    fn pair(x:bool){return(x,x);}
+    fn unit(){return ();}
+    fn root(n:index){return kernel<F>("poly.domain_root",n);}
   }
 )";
 } // namespace
@@ -164,7 +179,7 @@ int main() {
   });
   cases.run("body natural requirement follows the reconstructed interface", [] {
     auto project = take(check(R"(module m;
-      interface I<N:nat>{fn first(xs:[bool;N])->bool where 1<=N;}
+      interface I<N:nat>{fn first(xs:[bool;N])->bool effects() where 1<=N;}
       module A<N:nat>:I<N>{fn first(xs:[bool;N])->bool{return xs[0];}}
     )"));
     const auto &bounds = named(project, "m::A::first").bounds;
@@ -199,6 +214,53 @@ int main() {
     )"));
     acceptsWitness(project);
   });
+  cases.run("omitted results follow checked bodies and interface promises", [] {
+    auto project = take(check(inferredResults));
+    for (StringRef name :
+         {"m::A::flag", "m::A::pair", "m::A::unit", "m::A::root"}) {
+      const auto &member = named(project, name);
+      require(
+          member.outputs.size() == 1 && member.body &&
+              member.body->results.size() == 1 &&
+              member.outputs.front().type ==
+                  member.body->values[member.body->results.front().index].type,
+          "omitted result did not come from its checked body");
+    }
+    const auto &bounds = named(project, "m::A::root").capabilityBounds;
+    require(bounds.size() == 1 && bounds.front().inferred,
+            "inferred result lost its body capability obligation");
+    acceptsWitness(project);
+  });
+  for (StringRef mutation : {"scalar type", "tuple type", "unit type",
+                             "catalog result type", "arity", "return selector"})
+    cases.run("inferred result rejects candidate " + mutation, [&] {
+      auto project = take(check(inferredResults));
+      acceptsWitness(project);
+      auto &flag = named(project, "m::A::flag");
+      if (mutation == "scalar type")
+        flag.outputs.front().type = Type(Type::Kind::Index);
+      else if (mutation == "tuple type")
+        named(project, "m::A::pair").outputs.front().type =
+            Type(Type::Kind::Index);
+      else if (mutation == "unit type")
+        named(project, "m::A::unit").outputs.front().type =
+            Type(Type::Kind::Boolean);
+      else if (mutation == "catalog result type")
+        named(project, "m::A::root").outputs.front().type =
+            Type(Type::Kind::Boolean);
+      else if (mutation == "arity")
+        flag.outputs.clear();
+      else {
+        auto &pair = named(project, "m::A::pair");
+        auto body = std::make_shared<Body>(*pair.body);
+        require(body->inputs == 1 && body->results.front().index != 0,
+                "return selector mutation would not change the result");
+        body->results.front() = ValueId{0};
+        pair.outputs.front().type = body->values.front().type;
+        pair.body = std::move(body);
+      }
+      refusesWitness(project);
+    });
   // Cover both potential premise providers and both member obligations. Each
   // mutation starts from a fresh accepted source and a passing witness.
   for (auto premise :
@@ -360,10 +422,13 @@ int main() {
         required.inputOrder.front().index = 1;
         provided.inputOrder.front().index = 1;
       } else if (mutation == "bilateral callback effects") {
-        for (StringRef owner : {"m::I::run", "m::A::run"})
-          named(project, owner)
-              .scopedInputs.front()
-              .signature.allowance.mayStop = true;
+        for (StringRef owner : {"m::I::run", "m::A::run"}) {
+          auto &allowance =
+              named(project, owner).scopedInputs.front().signature.allowance;
+          require(allowance.mayStop,
+                  "callback effect mutation would not change the ceiling");
+          allowance.mayStop = false;
+        }
       } else if (mutation == "bilateral alias") {
         named(project, "m::Flag").domain = Type(Type::Kind::Index);
         for (StringRef owner :

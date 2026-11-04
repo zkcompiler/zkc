@@ -219,6 +219,60 @@ struct ContractHeaders {
     return true;
   }
 };
+bool reconstructInferredResult(Semantics &types, const CheckedStorage &storage,
+                               const SyntaxDeclaration &source,
+                               Declaration &written) {
+  if (!source.outputs.empty() || source.abstract ||
+      (source.kind != Declaration::Kind::Math &&
+       source.kind != Declaration::Kind::Local))
+    return true;
+  auto refuse = [&] {
+    return types.fail("source.scoped-witness",
+                      "inferred result differs from checked source body",
+                      source.span);
+  };
+  if (!types.charge(1, source.span))
+    return false;
+  const auto &actual = storage.declarations[written.id.index];
+  auto retained = storage.bodySources.find(written.id.index);
+  if (retained == storage.bodySources.end() || !retained->second ||
+      retained->second->owner.index != written.id.index ||
+      !retained->second->syntax || !actual.body)
+    return refuse();
+  const auto &syntax = *retained->second->syntax;
+  const auto &body = *actual.body;
+  if (syntax.kind != source.kind || syntax.name != source.name ||
+      syntax.abstract || !syntax.outputs.empty() || syntax.bodies.empty() ||
+      syntax.span.source.index != source.span.source.index ||
+      syntax.span.begin != source.span.begin ||
+      syntax.span.end != source.span.end || body.stopped ||
+      body.mode != (source.kind == Declaration::Kind::Math ? Body::Mode::Math
+                                                           : Body::Mode::Local))
+    return refuse();
+  const auto &region = syntax.bodies.front();
+  if (!types.charge(region.results.size() + body.results.size() + 1,
+                    region.span))
+    return false;
+  if (!region.returned || region.results.size() != 1 ||
+      body.results.size() != 1 ||
+      region.results.front().second >= syntax.expressions.size())
+    return refuse();
+  auto value = body.expressionValues.find(region.results.front().second);
+  if (value == body.expressionValues.end() ||
+      value->second.index != body.results.front().index ||
+      value->second.index >= body.values.size())
+    return refuse();
+  // An omitted annotation authorizes body result inference, independently of
+  // whether precondition inference is allowed. The result type comes from the
+  // immutable checked Body, never Declaration::outputs or the interface. The
+  // surrounding scoped witness checks the source/SSA graph with its existing
+  // body witnesses; here we additionally bind its return to the authored tail.
+  const auto &type = body.values[value->second.index].type;
+  if (!types.chargeType(type, region.span))
+    return false;
+  written.outputs.push_back({"result", type, {}, region.span});
+  return true;
+}
 bool signatureAgrees(Semantics &types, const Declaration &actual,
                      const Declaration &written, bool permitsInference) {
   auto refuse = [&] {
@@ -638,6 +692,10 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
       if (!reader.reconstructSignature(DeclarationId{index}))
         return types.accept(reader.types.takeError());
     }
+    for (const auto &[index, source] : headers.sources)
+      if (!reconstructInferredResult(types, storage, *source,
+                                     replay.declarations[index]))
+        return false;
     // Conformance is a proof query over reconstructed premises. In particular,
     // it has no inference hooks and cannot consult candidate alias, permission
     // or interface bounds to justify a candidate implementation requirement.
