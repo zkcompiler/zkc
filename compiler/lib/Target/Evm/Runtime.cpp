@@ -138,22 +138,9 @@ function evm_index_div(a, b) -> r {
 function evm_index_mod(a, b) -> r {
   if iszero(b) { evm_source(2) } r := mod(a, b)
 }
-function evm_index_shl(a, b) -> r {
-  if gt(b, 63) { evm_source(3) }
-  r := shl(b, a) if gt(r, 0xffffffffffffffff) { evm_source(1) }
-}
-function evm_index_shr(a, b) -> r {
-  if gt(b, 63) { evm_source(3) } r := shr(b, a)
-}
-function evm_index_pow2(a) -> r {
-  if gt(a, 63) { evm_source(3) } r := shl(a, 1)
-}
 function evm_index_power_of_two(n, r) -> yes {
   yes := and(lt(r, 64), eq(n, shl(r, 1)))
 }
-function evm_index_wrapping_add(a, b) -> r { r := and(add(a, b), 0xffffffffffffffff) }
-function evm_index_wrapping_sub(a, b) -> r { r := and(sub(a, b), 0xffffffffffffffff) }
-function evm_index_bit_and(a, b) -> r { r := and(a, b) }
 function evm_index_logical_shift_right(a, b) -> r { r := shr(b, a) }
 function evm_indices_empty() -> p, n { p := evm_alloc(0) n := 0 }
 function evm_indices_append(p, n, value) -> out, length {
@@ -162,7 +149,6 @@ function evm_indices_append(p, n, value) -> out, length {
   evm_memory(p, mul(n, 32)) mcopy(out, p, mul(n, 32))
   mstore(add(out, mul(n, 32)), value)
 }
-function evm_scope_root() -> root { root := mload(0x1e0) evm_scope_check(root) }
 function evm_scope_current() -> scope { scope := mload(0x80) evm_scope_check(scope) }
 function evm_scope_check(scope) {
   if or(iszero(scope), iszero(eq(scope, mload(0x80)))) { evm_fault(4) }

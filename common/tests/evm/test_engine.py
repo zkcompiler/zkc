@@ -81,6 +81,34 @@ class EngineTests(unittest.TestCase):
                 self.assertEqual(int(result["output"], 16), 1)
                 self.assertEqual(result["runtime_bytecode"], artifact["runtime"])
 
+    @unittest.skipUnless(os.getenv("ZKC_SOLC"), "set ZKC_SOLC for pinned solc controls")
+    def test_osaka_modexp_price_preserves_the_result(self):
+        # The same 32-byte inversion request under EIP-2565 and EIP-7883.
+        # Empty calldata avoids the calldata-floor difference between forks.
+        solc = Path(os.environ["ZKC_SOLC"])
+        check_solc(solc)
+        modulus = int("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16)
+        exponent = modulus - 2
+        body = f"""
+          mstore(0, 32) mstore(32, 32) mstore(64, 32)
+          mstore(96, 2) mstore(128, {exponent}) mstore(160, {modulus})
+          if iszero(staticcall(gas(), 5, 0, 192, 0, 32)) {{ revert(0, 0) }}
+          return(0, 32)
+        """
+        artifacts, results = {}, {}
+        for fork in ("prague", "osaka"):
+            artifacts[fork] = compile_yul(solc, body, PROFILES["colon"], fork=fork)
+            result = execute(os.environ["ZKC_EVM_RUNNER"], artifacts[fork], b"")
+            self.assertEqual(result["status"], "return")
+            self.assertEqual(int(result["output"], 16), pow(2, -1, modulus))
+            results[fork] = result
+        self.assertEqual(artifacts["prague"]["runtime"], artifacts["osaka"]["runtime"])
+        iterations = exponent.bit_length() - 1
+        before = max(200, 16 * iterations // 3)
+        after = max(500, 16 * iterations)
+        self.assertEqual(results["osaka"]["runtime_gas"] - results["prague"]["runtime_gas"],
+                         after - before)
+
     def test_selected_fork_changes_real_transaction_gas(self):
         # EIP-7623 raises the floor for this calldata-heavy transaction. This
         # exercises real spec selection, even with identical deployed code.

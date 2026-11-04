@@ -1,4 +1,5 @@
 #include "zkc/Compiler/Evm.h"
+#include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Target/Evm/Target.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -42,6 +43,8 @@ proof Proof=Product{
     return 5;
   }
   auto target = compiled->targetSnapshot();
+  bool hasTypedProduct = false;
+  target->walk([&](zkc::evm::FieldMulOp) { hasTypedProduct = true; });
   return mlir::failed(zkc::evm::checkTarget(*target)) ||
-         compiled->yul().empty();
+         compiled->yul().empty() || !hasTypedProduct;
 }

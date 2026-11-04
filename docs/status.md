@@ -6,7 +6,7 @@ interpreter with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
 [Specification](spec/README.md) defines contracts; this page records support.
 Links identify maintained checks, not a claim that they ran for this revision.
 The [EVM verifier target](spec/targets/evm.md) branches from checked closed Exec
-to EVM word/slice operations, Yul and pinned solc bytecode.
+to typed EVM operations, Yul and pinned solc bytecode.
 
 ## Native selected-control boundary
 
@@ -179,9 +179,12 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Execution foundation
 
-The EVM foundation supports installed prime/binomial-extension arithmetic,
-checked indices, finite folds/collects and typed structured value transport on
-Cancun or Prague. One declaration,
+The EVM foundation uses separate ODS operations, shared typed native origins
+and full dialect conversion of the original executable regions. Its checked
+layouts expand values and callback state into physical lanes; a final positive
+legality check precedes Yul export. It supports installed prime/binomial-extension
+arithmetic, checked indices, finite folds/collects and typed structured value transport on
+Cancun, Prague or Osaka (the default). One declaration,
 [`zkc.evm-target/0`](spec/targets/evm.md#target-declaration), states the forks,
 solc pin, verifier ABI, deployment ceilings and revert classes. The compiler,
 SDK and CLI read its generated tables, and the deployed runner and harness read

@@ -275,7 +275,7 @@ struct WireGenerator::Storage {
       : layouts(layouts), limits(limits), out(text) {}
   Expected<Frame *> require(Type);
   void emit(const Frame &);
-  Expected<std::string> operation(CheckedOp);
+  Expected<std::string> operation(Operation *);
   const Frame &child(Type type) { return *frames.find(type)->second; }
   unsigned width(const Frame &f) {
     return f.coefficientWidth * f.field->degree;
@@ -753,13 +753,12 @@ void WireGenerator::Storage::emit(const Frame &f) {
       << "mstore(0x140, add(p, n))\n}\n";
 }
 
-Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
+Expected<std::string> WireGenerator::Storage::operation(Operation *op) {
   auto attribute = op->getAttrOfType<TypeAttr>("value_type");
   if (!attribute)
     return zkc::error("evm.wire-operation", "missing exact logical value_type");
   Type type = attribute.getValue();
-  StringRef code = op.opcode();
-  if (code == "proof.receive") {
+  if (isa<ProofReceiveOp>(op)) {
     auto selected = require(type);
     if (!selected)
       return selected.takeError();
@@ -773,12 +772,14 @@ Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
   // inventory. Static selectors are embedded after exact range validation.
   std::string key;
   raw_string_ostream keyOut(key);
-  keyOut << code << ':' << type.getAsOpaquePointer() << ':'
-         << op->getAttr("alternative") << ':' << op->getAttr("payload");
+  keyOut << op->getName().getStringRef() << ':' << type.getAsOpaquePointer()
+         << ':' << op->getAttr("alternative") << ':' << op->getAttr("payload");
   if (auto found = operations.find(key); found != operations.end())
     return found->second;
   std::string name = "evm_structure_" + std::to_string(operations.size());
-  if (code.starts_with("sequence.") || code.starts_with("bytes.")) {
+  if (isa<SequenceEmptyOp, SequenceAppendOp, SequenceLengthOp, SequenceGetOp,
+          SequenceAllocOp, SequenceSetOp, BytesEmptyOp, BytesLengthOp,
+          BytesGetOp, BytesAppendOp>(op)) {
     if (!layout.collection || layout.collection->storage ==
                                   CollectionLayout::Storage::FieldCoefficients)
       return zkc::error(
@@ -798,19 +799,18 @@ Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
                                           std::to_string(limits.frameBytes) +
                                           ") { evm_resource(13) }\n"
                                     : "evm_wire_count(n)\n";
-    StringRef action = code.split('.').second;
-    if (action == "empty") {
+    if (isa<SequenceEmptyOp, BytesEmptyOp>(op)) {
       out << "function " << name << "() -> p, n { p := evm_alloc(0) n := 0 }\n";
-    } else if (action == "alloc") {
+    } else if (isa<SequenceAllocOp>(op)) {
       out << "function " << name << "(n) -> p {\n"
           << countCheck << "p := evm_alloc(evm_wire_mul(n, " << stride
           << "))\n}\n";
-    } else if (action == "length") {
+    } else if (isa<SequenceLengthOp, BytesLengthOp>(op)) {
       out << "function " << name << "(p, n) -> length {\n"
           << countCheck << "evm_memory(p, evm_wire_mul(n, " << stride
           << ")) length := n\n}\n";
-    } else if (action == "get" || action == "set") {
-      bool set = action == "set";
+    } else if (isa<SequenceGetOp, BytesGetOp>(op) || isa<SequenceSetOp>(op)) {
+      bool set = isa<SequenceSetOp>(op);
       out << "function " << name << "(p, n, i";
       if (set)
         out << ", " << lanes(elementLanes);
@@ -838,7 +838,7 @@ Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
               << "\n";
       }
       out << "}\n";
-    } else if (action == "append") {
+    } else if (isa<SequenceAppendOp, BytesAppendOp>(op)) {
       out << "function " << name << "(p, n, " << lanes(elementLanes)
           << ") -> result, length {\n"
           << countCheck << "let bytes := evm_wire_mul(n, " << stride << ")\n"
@@ -863,10 +863,10 @@ Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
     return name;
   }
   auto variant = dyn_cast<data::VariantType>(type);
-  if (!variant || !code.starts_with("variant."))
+  if (!variant || !isa<VariantMakeOp, VariantTagOp, VariantGetOp>(op))
     return zkc::error("evm.wire-operation",
                       "unsupported typed structural opcode");
-  if (code == "variant.tag") {
+  if (isa<VariantTagOp>(op)) {
     out << "function " << name
         << "(p) -> tag { evm_memory(p, 32) tag := mload(p)\n"
         << "if iszero(lt(tag, " << variant.getAlternatives().size()
@@ -884,7 +884,7 @@ Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
   if (!payload)
     return payload.takeError();
   uint64_t bytes = 32 + payload->lanes.size() * 32;
-  if (code == "variant.make") {
+  if (isa<VariantMakeOp>(op)) {
     out << "function " << name << "(" << lanes(payload->lanes.size())
         << ") -> p {\n"
         << "p := evm_alloc(" << bytes << ") mstore(p, " << arm << ")\n";
@@ -893,7 +893,7 @@ Expected<std::string> WireGenerator::Storage::operation(CheckedOp op) {
     operations[key] = name;
     return name;
   }
-  if (code == "variant.get") {
+  if (isa<VariantGetOp>(op)) {
     auto index = op->getAttrOfType<IntegerAttr>("payload");
     if (!index || index.getValue().isNegative() ||
         index.getUInt() >= payload->values.size())
@@ -928,7 +928,7 @@ Expected<std::string> WireGenerator::encoder(Type type) {
     return value.takeError();
   return (*value)->name + "_encode";
 }
-Expected<std::string> WireGenerator::operation(CheckedOp op) {
+Expected<std::string> WireGenerator::operation(Operation *op) {
   return storage->operation(op);
 }
 std::string WireGenerator::definitions() const {

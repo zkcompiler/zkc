@@ -1,373 +1,689 @@
 #include "zkc/Dialect/Evm/Evm.h"
 #include "mlir/IR/Builders.h"
-#include "zkc/Contracts/NativeOrigin.h"
-#include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
+#include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
-#include "llvm/ADT/StringSwitch.h"
 
 using namespace mlir;
 namespace zkc::evm {
 EvmDialect::EvmDialect(MLIRContext *context)
     : Dialect(getDialectNamespace(), context, TypeID::get<EvmDialect>()) {
-  addOperations<WordOp, CheckedOp>();
+  addOperations<
+#define GET_OP_LIST
+#include "zkc/Dialect/Evm/Ops.cpp.inc"
+      >();
 }
-ArrayRef<StringRef> WordOp::getAttributeNames() {
-  static StringRef names[] = {"opcode"};
-  return names;
-}
-void WordOp::build(OpBuilder &b, OperationState &s, StringRef opcode, Value a,
-                   Value c, Value modulus) {
-  s.addOperands({a, c, modulus});
-  s.addTypes(b.getIntegerType(256));
-  s.addAttribute("opcode", b.getStringAttr(opcode));
-}
-StringRef WordOp::opcode() {
-  auto attr = (*this)->getAttrOfType<StringAttr>("opcode");
-  return attr ? attr.getValue() : StringRef();
-}
-WordOp WordOp::create(OpBuilder &builder, Location loc, StringRef opcode,
-                      Value a, Value b, Value p) {
-  OperationState state(loc, getOperationName());
-  build(builder, state, opcode, a, b, p);
-  return cast<WordOp>(builder.create(state));
-}
-LogicalResult WordOp::verify() {
-  if (opcode() != "addmod" && opcode() != "mulmod")
-    return emitOpError("[evm.opcode] unsupported word opcode");
-  if (!(*this)->getResult(0).getType().isInteger(256) ||
-      llvm::any_of(getOperandTypes(), [](Type t) { return !t.isInteger(256); }))
-    return emitOpError("[evm.type] word operands/results must be i256");
+namespace {
+// Shared layout checking does not choose an operation or its behavior. Each
+// ODS operation below supplies its own named signature and semantic premises.
+struct LayoutCheck {
+  Operation *op;
+  NativeLayouts layouts;
+  Type type;
+  const ValueLayout *layout = nullptr;
+  Type i1, i64, i256;
+  explicit LayoutCheck(Operation *op)
+      : op(op), layouts(*op->getContext()),
+        i1(IntegerType::get(op->getContext(), 1)),
+        i64(IntegerType::get(op->getContext(), 64)),
+        i256(IntegerType::get(op->getContext(), 256)) {}
+  LogicalResult load() {
+    auto attr = op->getAttrOfType<TypeAttr>("value_type");
+    if (!attr)
+      return op->emitOpError(
+          "[evm.value-type] requires exact native value_type");
+    type = attr.getValue();
+    auto found = layouts.get(type);
+    if (!found) {
+      llvm::consumeError(found.takeError());
+      return op->emitOpError(
+          "[evm.value-type] unsupported complete native layout");
+    }
+    layout = *found;
+    return success();
+  }
+  LogicalResult signature(TypeRange inputs, TypeRange outputs) {
+    if (!llvm::equal(inputs, op->getOperandTypes()) ||
+        !llvm::equal(outputs, op->getResultTypes()))
+      return op->emitOpError("[evm.signature] incorrect exact layout lanes");
+    return success();
+  }
+  LogicalResult field() {
+    if (!isa<algebra::FieldType>(type))
+      return op->emitOpError("[evm.value-type] field requires FieldType");
+    return success();
+  }
+  LogicalResult collection(CollectionLayout::Storage storage) {
+    if (!layout->collection || layout->collection->storage != storage)
+      return op->emitOpError("[evm.value-type] incorrect collection family");
+    return success();
+  }
+  FailureOr<SmallVector<Type>> element() {
+    if (layout->kind == ValueLayout::Kind::Bytes)
+      return SmallVector<Type>{i64};
+    auto child = layouts.get(layout->collection->element);
+    if (!child) {
+      llvm::consumeError(child.takeError());
+      return failure();
+    }
+    return llvm::to_vector((*child)->lanes);
+  }
+  bool literal(Attribute value) {
+    auto literal = dyn_cast_or_null<algebra::FieldLiteralAttr>(value);
+    auto field = dyn_cast<algebra::FieldType>(type);
+    return literal && literal.getField() == field &&
+           succeeded(algebra::FieldLiteralAttr::verify(
+               [&] { return op->emitOpError(); }, field, literal.getValue()));
+  }
+};
+template <typename Op> LogicalResult attributes(Op op) {
+  for (auto attr : op->getAttrs())
+    if (!llvm::is_contained(Op::getAttributeNames(), attr.getName().strref()))
+      return op.emitOpError("[evm.attributes] unexpected attribute: ")
+             << attr.getName();
   return success();
 }
-ArrayRef<StringRef> CheckedOp::getAttributeNames() {
-  static StringRef names[] = {"opcode",      "value_type", "value",  "values",
-                              "alternative", "payload",    "origin", "site"};
-  return names;
-}
-void CheckedOp::build(OpBuilder &b, OperationState &s, TypeRange types,
-                      StringRef opcode, ValueRange operands,
-                      ArrayRef<NamedAttribute> attributes) {
-  s.addOperands(operands);
-  s.addTypes(types);
-  s.addAttributes(attributes);
-  s.addAttribute("opcode", b.getStringAttr(opcode));
-}
-StringRef CheckedOp::opcode() {
-  auto attr = (*this)->getAttrOfType<StringAttr>("opcode");
-  return attr ? attr.getValue() : StringRef();
-}
-CheckedOp CheckedOp::create(OpBuilder &builder, Location loc, TypeRange results,
-                            StringRef opcode, ValueRange args,
-                            ArrayRef<NamedAttribute> attributes) {
-  OperationState state(loc, getOperationName());
-  build(builder, state, results, opcode, args, attributes);
-  return cast<CheckedOp>(builder.create(state));
-}
-bool isCheckedOpcode(StringRef name) {
-  return llvm::StringSwitch<bool>(name)
-      .Cases({"index.add", "index.sub", "index.mul", "index.div"}, true)
-      .Cases({"index.mod", "index.shl", "index.shr", "index.pow2"}, true)
-      .Case("index.power_of_two", true)
-      .Cases({"index.wrapping_add", "index.wrapping_sub", "index.bit_and",
-              "index.logical_shift_right"},
-             true)
-      .Cases({"field.constant", "field.add", "field.sub", "field.mul",
-              "field.neg", "field.equal", "field.from_index", "field.embed",
-              "field.inverse", "field.pow", "field.div"},
-             true)
-      .Case("vector.constant", true)
-      .Cases({"sequence.empty", "sequence.append", "sequence.length",
-              "sequence.get", "sequence.alloc", "sequence.set"},
-             true)
-      .Cases({"variant.make", "variant.tag", "variant.get"}, true)
-      .Cases({"bytes.empty", "bytes.length", "bytes.get", "bytes.append"}, true)
-      .Cases({"vector.empty", "vector.length", "vector.append"}, true)
-      .Cases({"vector.split", "vector.sum", "vector.alloc"}, true)
-      .Cases({"vector.get", "vector.set", "vector.equal"}, true)
-      .Cases({"indices.empty", "indices.append"}, true)
-      .Cases({"scope.root", "scope.enter", "scope.exit", "scope.check"}, true)
-      .Case("scope.current", true)
-      .Cases({"transfer.make", "transfer.accept", "transfer.release"}, true)
-      .Case("transfer.check", true)
-      .Cases({"transcript.observe", "transcript.challenge"}, true)
-      .Cases({"proof.receive", "source.stop", "loop.bound", "range.check",
-              "range.admit"},
-             true)
-      .Default(false);
-}
-LogicalResult CheckedOp::verify() {
-  StringRef code = opcode();
-  if (!isCheckedOpcode(code))
-    return emitOpError("[evm.opcode] unsupported checked opcode: ") << code;
-  auto valid = [](Type t) {
-    auto integer = dyn_cast<IntegerType>(t);
-    return integer && integer.isSignless() &&
-           llvm::is_contained({1u, 32u, 64u, 256u}, integer.getWidth());
-  };
-  if (!llvm::all_of(getOperandTypes(), valid) ||
-      !llvm::all_of(getResultTypes(), valid))
-    return emitOpError(
-        "[evm.type] checked operands/results must be EVM integers");
-  for (auto attribute : (*this)->getAttrs()) {
-    StringRef name = attribute.getName().strref();
-    bool allowed =
-        name == "opcode" || (name == "site" && code == "source.stop") ||
-        (name == "value_type" &&
-         (code.starts_with("field.") || code.starts_with("vector.") ||
-          code.starts_with("sequence.") || code.starts_with("variant.") ||
-          code.starts_with("bytes.") || code.starts_with("indices.") ||
-          code == "proof.receive" || code.starts_with("transcript."))) ||
-        (name == "value" && code == "field.constant") ||
-        (name == "values" && code == "vector.constant") ||
-        (name == "alternative" &&
-         (code == "variant.make" || code == "variant.get")) ||
-        (name == "payload" && code == "variant.get") ||
-        (name == "origin" && code.starts_with("transcript."));
-    if (!allowed)
-      return emitOpError("[evm.attributes] unexpected checked attribute: ")
-             << name;
+LogicalResult origin(Operation *op, bool observation) {
+  auto attr = op->getAttrOfType<runtime::NativeOriginAttr>("origin");
+  auto value = runtime::exportNativeOrigin(attr);
+  if (!value) {
+    llvm::consumeError(value.takeError());
+    return op->emitOpError("[evm.origin] invalid shared source occurrence");
   }
-  auto i1 = IntegerType::get(getContext(), 1);
-  auto i64 = IntegerType::get(getContext(), 64);
-  auto i256 = IntegerType::get(getContext(), 256);
-  auto signature = [&](TypeRange inputs, TypeRange outputs) {
-    return llvm::equal(inputs, getOperandTypes()) &&
-           llvm::equal(outputs, getResultTypes());
-  };
-  NativeLayouts layouts(*getContext());
-  auto type = (*this)->getAttrOfType<TypeAttr>("value_type");
-  bool typed = code.starts_with("field.") || code.starts_with("vector.") ||
-               code.starts_with("sequence.") || code.starts_with("variant.") ||
-               code.starts_with("bytes.") || code.starts_with("indices.") ||
-               code == "proof.receive" || code.starts_with("transcript.");
-  const ValueLayout *layout = nullptr;
-  if (typed) {
-    if (!type)
-      return emitOpError("[evm.value-type] requires exact native value_type");
-    auto result = layouts.get(type.getValue());
-    if (!result) {
-      llvm::consumeError(result.takeError());
-      return emitOpError("[evm.value-type] unsupported complete native layout");
-    }
-    layout = *result;
+  if (llvm::any_of(value->path, [](const auto &step) {
+        return step.kind == protocol::NativeOriginStep::Kind::Branch;
+      }))
+    return op->emitOpError(
+        "[evm.origin] unsupported selected-control transcript origin");
+  if (observation) {
+    if (!std::holds_alternative<protocol::NativeMessageOrigin>(value->event))
+      return op->emitOpError(
+          "[evm.origin] observation requires message occurrence");
+  } else {
+    auto *query = std::get_if<protocol::NativeQueryOrigin>(&value->event);
+    if (!query || query->method != "draw")
+      return op->emitOpError(
+          "[evm.origin] challenge requires draw query occurrence");
   }
-  auto literalValid = [&](Attribute attribute, algebra::FieldType expected) {
-    auto literal = dyn_cast_or_null<algebra::FieldLiteralAttr>(attribute);
-    return literal && literal.getField() == expected &&
-           succeeded(algebra::FieldLiteralAttr::verify(
-               [&] { return emitOpError(); }, expected, literal.getValue()));
-  };
-  auto number = [&](StringRef name) -> std::optional<uint32_t> {
-    auto value = (*this)->getAttrOfType<IntegerAttr>(name);
-    if (!value || !value.getType().isInteger(32))
-      return std::nullopt;
-    return uint32_t(value.getUInt());
-  };
-  bool correct = false;
-  if (code.starts_with("field.")) {
-    auto scalar = dyn_cast<algebra::FieldType>(type.getValue());
-    if (!scalar)
-      return emitOpError("[evm.value-type] field operation requires FieldType");
-    if (code == "field.constant") {
-      if (!literalValid((*this)->getAttr("value"), scalar))
-        return emitOpError(
-            "[evm.literal] requires exact canonical field literal");
-      correct = signature({}, layout->lanes);
-    } else if (code == "field.from_index")
-      correct = signature({i64}, layout->lanes);
-    else if (code == "field.embed") {
-      auto facts = layouts.field(scalar);
-      if (!facts) {
-        llvm::consumeError(facts.takeError());
-        return failure();
-      }
-      correct = (*facts)->degree > 1 && signature({i256}, layout->lanes);
-    } else if (code == "field.inverse" || code == "field.neg")
-      correct = signature(layout->lanes, layout->lanes);
-    else {
-      SmallVector<Type> inputs(layout->lanes.begin(), layout->lanes.end());
-      if (code == "field.pow")
-        inputs.push_back(i64);
-      else
-        llvm::append_range(inputs, layout->lanes);
-      correct =
-          signature(inputs, code == "field.equal" ? TypeRange(i1)
-                                                  : TypeRange(layout->lanes));
-    }
-  } else if (code.starts_with("vector.") || code.starts_with("sequence.") ||
-             code.starts_with("indices.") || code.starts_with("bytes.")) {
-    bool coefficients = code.starts_with("vector.");
-    bool bytes = code.starts_with("bytes.");
-    bool indices = code.starts_with("indices.");
-    if (!layout->collection ||
-        (coefficients && layout->collection->storage !=
-                             CollectionLayout::Storage::FieldCoefficients) ||
-        (bytes && layout->kind != ValueLayout::Kind::Bytes) ||
-        (indices && layout->kind != ValueLayout::Kind::Indices) ||
-        (!coefficients && !bytes && !indices &&
-         layout->collection->storage != CollectionLayout::Storage::LaneCells))
-      return emitOpError("[evm.value-type] incorrect collection family");
-    SmallVector<Type> element{i64};
-    if (!bytes) {
-      auto child = layouts.get(layout->collection->element);
-      if (!child) {
-        llvm::consumeError(child.takeError());
-        return failure();
-      }
-      element.assign((*child)->lanes.begin(), (*child)->lanes.end());
-    }
-    StringRef action = code.split('.').second;
-    if (action == "constant") {
-      auto values = (*this)->getAttrOfType<ArrayAttr>("values");
-      auto scalar = dyn_cast<algebra::FieldType>(layout->collection->element);
-      if (!values || !scalar || !llvm::all_of(values, [&](Attribute a) {
-            return literalValid(a, scalar);
-          }))
-        return emitOpError("[evm.literal] requires exact collection literals");
-      correct = signature({}, layout->lanes);
-      if (auto array = dyn_cast<data::FieldArrayType>(type.getValue()))
-        correct &= values.size() == array.getLength();
-    } else if (action == "empty") {
-      correct = signature({}, layout->lanes);
-      if (auto array = dyn_cast<data::FieldArrayType>(type.getValue()))
-        correct &= array.getLength() == 0;
-      if (auto fixed = dyn_cast<data::FixedVectorType>(type.getValue()))
-        correct &= fixed.getLength() == 0;
-    } else if (action == "length")
-      correct = signature(layout->lanes, {i64});
-    else if (action == "alloc")
-      correct = signature({i64}, {i64});
-    else if (action == "get")
-      correct = signature({i64, i64, i64}, element);
-    else if (action == "sum")
-      correct = coefficients && signature(layout->lanes, element);
-    else if (action == "equal")
-      correct = signature({i64, i64, i64, i64}, {i1});
-    else if (action == "split")
-      correct = layout->kind == ValueLayout::Kind::FieldVector &&
-                signature(layout->lanes, {i64, i64, i64, i64});
-    else {
-      SmallVector<Type> inputs{i64, i64};
-      if (action == "set")
-        inputs.push_back(i64);
-      llvm::append_range(inputs, element);
-      correct = action == "set" ? signature(inputs, {})
-                                : signature(inputs, layout->lanes);
-      if (action == "append" &&
-          isa<data::FieldArrayType, data::FixedVectorType>(type.getValue()))
-        correct = false;
-    }
-  } else if (code.starts_with("variant.")) {
-    auto variant = dyn_cast<data::VariantType>(type.getValue());
-    if (!variant)
-      return emitOpError("[evm.value-type] requires complete VariantType");
-    if (code == "variant.tag")
-      correct = signature({i64}, {i64});
-    else {
-      auto alternative = number("alternative");
-      if (!alternative || *alternative >= variant.getAlternatives().size())
-        return emitOpError("[evm.alternative] invalid alternative index");
-      if (code == "variant.make") {
-        auto payload = layouts.payload(variant, *alternative);
-        if (!payload) {
-          llvm::consumeError(payload.takeError());
-          return failure();
-        }
-        correct = signature(payload->lanes, {i64});
-      } else {
-        auto index = number("payload");
-        auto payload = variant.getAlternatives()[*alternative].getPayload();
-        if (!index || *index >= payload.size())
-          return emitOpError("[evm.payload] invalid payload index");
-        auto child = layouts.get(payload[*index]);
-        if (!child) {
-          llvm::consumeError(child.takeError());
-          return failure();
-        }
-        correct = signature({i64}, (*child)->lanes);
-      }
-    }
-  } else if (code == "proof.receive" || code == "transcript.observe") {
-    if (auto error = verifyWireType(layouts, type.getValue())) {
-      llvm::consumeError(std::move(error));
-      return emitOpError("[evm.wire-type] complete native message permission "
-                         "and codec required");
-    }
-    if (code == "proof.receive")
-      correct = signature({}, layout->lanes);
-    else {
-      SmallVector<Type> inputs{i64, i64};
-      llvm::append_range(inputs, layout->lanes);
-      inputs.append({i64, i64});
-      correct = signature(inputs, {i64});
-    }
-  } else if (code == "transcript.challenge") {
-    // The challenge is an element of a realized suite's challenge field.
-    auto scalar = dyn_cast<algebra::FieldType>(type.getValue());
-    correct =
-        scalar &&
-        realizedChallengeField(layouts, *getContext(), scalar.getDomain()) &&
-        signature({i64, i64, i64, i64}, {i256, i64});
-  } else if (code.starts_with("index.")) {
-    if (code == "index.pow2")
-      correct = signature({i64}, {i64});
-    else if (code == "index.power_of_two")
-      correct = signature({i64, i64}, {i1});
-    else
-      correct = signature({i64, i64}, {i64});
-  } else if (code == "scope.root" || code == "scope.current")
-    correct = signature({}, {i64});
-  else if (code == "scope.enter")
-    correct = signature({i64, i64}, {i64});
-  else if (code == "scope.exit")
-    correct = signature({i64, i64}, {i64}) || signature({i64, i64}, {});
-  else if (code == "scope.check" || code == "transfer.check" ||
-           code == "transfer.release")
-    correct = signature({i64}, {});
-  else if (code == "transfer.make")
-    correct = signature({i64}, {i64});
-  else if (code == "transfer.accept" || code == "loop.bound" ||
-           code == "range.check" || code == "range.admit")
-    correct = signature({i64, i64}, {});
-  else if (code == "source.stop")
-    correct = signature({}, {}) || signature({i1}, {});
-  if (!correct)
-    return emitOpError("[evm.signature] incorrect operands/results for ")
-           << code;
-  if (code == "vector.set" || code == "sequence.set") {
-    auto allocation = getOperand(0).getDefiningOp<CheckedOp>();
-    StringRef expected =
-        code == "vector.set" ? "vector.alloc" : "sequence.alloc";
-    if (!allocation || allocation.opcode() != expected ||
-        allocation->getAttr("value_type") != type ||
-        allocation->getNumOperands() != 1 ||
-        allocation.getOperand(0) != getOperand(1))
-      return emitOpError("[evm.construction] stores require their exact fresh "
-                         "construction buffer and count");
+  return success();
+}
+LogicalResult wire(LayoutCheck &check) {
+  if (auto error = verifyWireType(check.layouts, check.type)) {
+    llvm::consumeError(std::move(error));
+    return check.op->emitOpError(
+        "[evm.wire-type] complete message permission and codec required");
   }
-
-  if (auto site = (*this)->getAttr("site");
+  return success();
+}
+LogicalResult stop(Operation *op) {
+  if (auto site = op->getAttr("site");
       site &&
       (!isa<StringAttr>(site) || cast<StringAttr>(site).getValue().empty()))
-    return emitOpError("[evm.site] requires nonempty source stop site");
-  if (code.starts_with("transcript.")) {
-    auto origin = (*this)->getAttrOfType<StringAttr>("origin");
-    if (!origin || origin.getValue().empty())
-      return emitOpError(
-          "[evm.origin] transition requires an occurrence template");
-    auto occurrence = protocol::decodeNativeOriginTemplate(origin.getValue());
-    if (!occurrence) {
-      llvm::consumeError(occurrence.takeError());
-      return emitOpError("[evm.origin] invalid exact occurrence template");
-    }
-  }
+    return op->emitOpError("[evm.site] requires nonempty source stop site");
   return success();
 }
-void CheckedOp::getEffects(
-    SmallVectorImpl<MemoryEffects::EffectInstance> &effects) {
-  effects.emplace_back(MemoryEffects::Read::get());
-  effects.emplace_back(MemoryEffects::Write::get());
+} // namespace
+LogicalResult FieldConstantOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  if (!c.literal(getValueAttr()))
+    return emitOpError("[evm.literal] requires exact canonical field literal");
+  return c.signature({}, c.layout->lanes);
 }
+LogicalResult FieldAddOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  SmallVector<Type> inputs(c.layout->lanes.begin(), c.layout->lanes.end());
+  llvm::append_range(inputs, c.layout->lanes);
+  return c.signature(inputs, TypeRange(c.layout->lanes));
+}
+LogicalResult FieldSubOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  SmallVector<Type> inputs(c.layout->lanes.begin(), c.layout->lanes.end());
+  llvm::append_range(inputs, c.layout->lanes);
+  return c.signature(inputs, TypeRange(c.layout->lanes));
+}
+LogicalResult FieldMulOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  SmallVector<Type> inputs(c.layout->lanes.begin(), c.layout->lanes.end());
+  llvm::append_range(inputs, c.layout->lanes);
+  return c.signature(inputs, TypeRange(c.layout->lanes));
+}
+LogicalResult FieldNegOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  return c.signature(c.layout->lanes, c.layout->lanes);
+}
+LogicalResult FieldEqualOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  SmallVector<Type> inputs(c.layout->lanes.begin(), c.layout->lanes.end());
+  llvm::append_range(inputs, c.layout->lanes);
+  return c.signature(inputs, TypeRange(c.i1));
+}
+LogicalResult FieldFromIndexOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  return c.signature({c.i64}, c.layout->lanes);
+}
+LogicalResult FieldEmbedOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  auto facts = c.layouts.field(cast<algebra::FieldType>(c.type));
+  if (!facts) {
+    llvm::consumeError(facts.takeError());
+    return failure();
+  }
+  if ((*facts)->degree <= 1)
+    return emitOpError("[evm.value-type] embedding requires extension field");
+  return c.signature({c.i256}, c.layout->lanes);
+}
+LogicalResult FieldInverseOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.field()))
+    return failure();
+  return c.signature(c.layout->lanes, c.layout->lanes);
+}
+LogicalResult VectorConstantOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  auto scalar = dyn_cast<algebra::FieldType>(c.layout->collection->element);
+  if (!scalar)
+    return emitOpError("[evm.value-type] requires field elements");
+  auto values = getValues();
+  auto saved = c.type;
+  c.type = scalar;
+  if (!llvm::all_of(values, [&](Attribute value) { return c.literal(value); }))
+    return emitOpError("[evm.literal] requires exact collection literals");
+  c.type = saved;
+  uint64_t count = values.size();
+  if (auto array = dyn_cast<data::FieldArrayType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  if (auto array = dyn_cast<data::FixedVectorType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  return c.signature({}, c.layout->lanes);
+}
+LogicalResult VectorEmptyOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  uint64_t count = 0;
+  if (auto array = dyn_cast<data::FieldArrayType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  if (auto array = dyn_cast<data::FixedVectorType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  return c.signature({}, c.layout->lanes);
+}
+LogicalResult VectorLengthOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  return c.signature(c.layout->lanes, {c.i64});
+}
+LogicalResult VectorAppendOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  SmallVector<Type> inputs{c.i64, c.i64};
+  if (isa<data::FieldArrayType, data::FixedVectorType>(c.type))
+    return emitOpError("[evm.signature] cannot append fixed collection");
+  llvm::append_range(inputs, *element);
+  return c.signature(inputs, TypeRange(c.layout->lanes));
+}
+LogicalResult VectorSplitOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  if (c.layout->kind != ValueLayout::Kind::FieldVector)
+    return emitOpError("[evm.value-type] split requires field vector");
+  return c.signature(c.layout->lanes, {c.i64, c.i64, c.i64, c.i64});
+}
+LogicalResult VectorSumOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  return c.signature(c.layout->lanes, *element);
+}
+LogicalResult VectorAllocOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  return c.signature({c.i64}, {c.i64});
+}
+LogicalResult VectorGetOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  return c.signature({c.i64, c.i64, c.i64}, *element);
+}
+LogicalResult VectorSetOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  SmallVector<Type> inputs{c.i64, c.i64};
+  inputs.push_back(c.i64);
+  auto allocation = getData().getDefiningOp<VectorAllocOp>();
+  if (!allocation || allocation.getValueType() != c.type ||
+      allocation.getCapacity() != getCount())
+    return emitOpError("[evm.construction] stores require exact fresh "
+                       "construction buffer and count");
+  llvm::append_range(inputs, *element);
+  return c.signature(inputs, {});
+}
+LogicalResult VectorEqualOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::FieldCoefficients)))
+    return failure();
+  return c.signature({c.i64, c.i64, c.i64, c.i64}, {c.i1});
+}
+LogicalResult SequenceEmptyOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  uint64_t count = 0;
+  if (auto array = dyn_cast<data::FieldArrayType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  if (auto array = dyn_cast<data::FixedVectorType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  return c.signature({}, c.layout->lanes);
+}
+LogicalResult SequenceAppendOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  SmallVector<Type> inputs{c.i64, c.i64};
+  if (isa<data::FieldArrayType, data::FixedVectorType>(c.type))
+    return emitOpError("[evm.signature] cannot append fixed collection");
+  llvm::append_range(inputs, *element);
+  return c.signature(inputs, TypeRange(c.layout->lanes));
+}
+LogicalResult SequenceLengthOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  return c.signature(c.layout->lanes, {c.i64});
+}
+LogicalResult SequenceGetOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  return c.signature({c.i64, c.i64, c.i64}, *element);
+}
+LogicalResult SequenceAllocOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  return c.signature({c.i64}, {c.i64});
+}
+LogicalResult SequenceSetOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  SmallVector<Type> inputs{c.i64, c.i64};
+  inputs.push_back(c.i64);
+  auto allocation = getData().getDefiningOp<SequenceAllocOp>();
+  if (!allocation || allocation.getValueType() != c.type ||
+      allocation.getCapacity() != getCount())
+    return emitOpError("[evm.construction] stores require exact fresh "
+                       "construction buffer and count");
+  llvm::append_range(inputs, *element);
+  return c.signature(inputs, {});
+}
+LogicalResult BytesEmptyOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::PackedBytes)))
+    return failure();
+  uint64_t count = 0;
+  if (auto array = dyn_cast<data::FieldArrayType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  if (auto array = dyn_cast<data::FixedVectorType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  return c.signature({}, c.layout->lanes);
+}
+LogicalResult BytesLengthOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::PackedBytes)))
+    return failure();
+  return c.signature(c.layout->lanes, {c.i64});
+}
+LogicalResult BytesGetOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::PackedBytes)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  return c.signature({c.i64, c.i64, c.i64}, *element);
+}
+LogicalResult BytesAppendOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::PackedBytes)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  SmallVector<Type> inputs{c.i64, c.i64};
+  if (isa<data::FieldArrayType, data::FixedVectorType>(c.type))
+    return emitOpError("[evm.signature] cannot append fixed collection");
+  llvm::append_range(inputs, *element);
+  return c.signature(inputs, TypeRange(c.layout->lanes));
+}
+LogicalResult IndicesEmptyOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  if (c.layout->kind != ValueLayout::Kind::Indices)
+    return emitOpError("[evm.value-type] requires indices");
+  uint64_t count = 0;
+  if (auto array = dyn_cast<data::FieldArrayType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  if (auto array = dyn_cast<data::FixedVectorType>(c.type);
+      array && array.getLength() != count)
+    return emitOpError("[evm.signature] incorrect fixed collection length");
+  return c.signature({}, c.layout->lanes);
+}
+LogicalResult IndicesAppendOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(c.collection(CollectionLayout::Storage::LaneCells)))
+    return failure();
+  if (c.layout->kind != ValueLayout::Kind::Indices)
+    return emitOpError("[evm.value-type] requires indices");
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  SmallVector<Type> inputs{c.i64, c.i64};
+  if (isa<data::FieldArrayType, data::FixedVectorType>(c.type))
+    return emitOpError("[evm.signature] cannot append fixed collection");
+  llvm::append_range(inputs, *element);
+  return c.signature(inputs, TypeRange(c.layout->lanes));
+}
+LogicalResult VariantMakeOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  auto variant = dyn_cast<data::VariantType>(c.type);
+  if (!variant)
+    return emitOpError("[evm.value-type] requires complete VariantType");
+  uint64_t alternative = getAlternativeAttr().getUInt();
+  if (alternative >= variant.getAlternatives().size())
+    return emitOpError("[evm.alternative] invalid alternative index");
+  auto payload = c.layouts.payload(variant, alternative);
+  if (!payload) {
+    llvm::consumeError(payload.takeError());
+    return failure();
+  }
+  return c.signature(payload->lanes, {c.i64});
+}
+LogicalResult VariantTagOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  auto variant = dyn_cast<data::VariantType>(c.type);
+  if (!variant)
+    return emitOpError("[evm.value-type] requires complete VariantType");
+  return c.signature({c.i64}, {c.i64});
+}
+LogicalResult VariantGetOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  auto variant = dyn_cast<data::VariantType>(c.type);
+  if (!variant)
+    return emitOpError("[evm.value-type] requires complete VariantType");
+  uint64_t alternative = getAlternativeAttr().getUInt();
+  if (alternative >= variant.getAlternatives().size())
+    return emitOpError("[evm.alternative] invalid alternative index");
+  auto payload = variant.getAlternatives()[alternative].getPayload();
+  auto index = getPayloadAttr().getUInt();
+  if (index >= payload.size())
+    return emitOpError("[evm.payload] invalid payload index");
+  auto child = c.layouts.get(payload[index]);
+  if (!child) {
+    llvm::consumeError(child.takeError());
+    return failure();
+  }
+  return c.signature({c.i64}, (*child)->lanes);
+}
+LogicalResult ProofReceiveOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(wire(c)))
+    return failure();
+  return c.signature({}, c.layout->lanes);
+}
+LogicalResult TranscriptObserveOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(origin(*this, true)))
+    return failure();
+  if (failed(wire(c)))
+    return failure();
+  SmallVector<Type> inputs{c.i64, c.i64};
+  llvm::append_range(inputs, c.layout->lanes);
+  inputs.append({c.i64, c.i64});
+  return c.signature(inputs, {c.i64});
+}
+LogicalResult TranscriptChallengeOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (failed(origin(*this, false)))
+    return failure();
+  auto scalar = dyn_cast<algebra::FieldType>(c.type);
+  if (!scalar ||
+      !realizedChallengeField(c.layouts, *getContext(), scalar.getDomain()))
+    return emitOpError("[evm.value-type] requires realized challenge field");
+  return c.signature({c.i64, c.i64, c.i64, c.i64}, {c.i256, c.i64});
+}
+LogicalResult SourceStopOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  return stop(*this);
+}
+LogicalResult SourceGuardOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  return stop(*this);
+}
+LogicalResult IndexAddOp::verify() { return attributes(*this); }
+LogicalResult IndexSubOp::verify() { return attributes(*this); }
+LogicalResult IndexMulOp::verify() { return attributes(*this); }
+LogicalResult IndexDivOp::verify() { return attributes(*this); }
+LogicalResult IndexModOp::verify() { return attributes(*this); }
+LogicalResult IndexPowerOfTwoOp::verify() { return attributes(*this); }
+LogicalResult IndexLogicalShiftRightOp::verify() { return attributes(*this); }
+LogicalResult ScopeCurrentOp::verify() { return attributes(*this); }
+LogicalResult ScopeEnterOp::verify() { return attributes(*this); }
+LogicalResult ScopeExitOp::verify() { return attributes(*this); }
+LogicalResult ScopeCheckOp::verify() { return attributes(*this); }
+LogicalResult TransferMakeOp::verify() { return attributes(*this); }
+LogicalResult TransferAcceptOp::verify() { return attributes(*this); }
+LogicalResult TransferReleaseOp::verify() { return attributes(*this); }
+LogicalResult TransferCheckOp::verify() { return attributes(*this); }
+LogicalResult LoopBoundOp::verify() { return attributes(*this); }
+LogicalResult RangeCheckOp::verify() { return attributes(*this); }
+LogicalResult RangeAdmitOp::verify() { return attributes(*this); }
 } // namespace zkc::evm
+
+#define GET_OP_CLASSES
+#include "zkc/Dialect/Evm/Ops.cpp.inc"

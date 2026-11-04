@@ -6,6 +6,7 @@
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/RegionUtils.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
@@ -28,7 +29,6 @@ using namespace llvm;
 namespace zkc::evm {
 namespace {
 using Values = SmallVector<Value>;
-using ValueMap = llvm::DenseMap<Value, Values>;
 
 bool isTranscript(Type type) {
   auto capability = dyn_cast<runtime::CapabilityType>(type);
@@ -101,22 +101,418 @@ private:
   }
 };
 
+struct PreparedFunction {
+  std::string name;
+  FunctionType signature;
+  bool entry;
+};
+struct PreparedEndpoint {
+  llvm::DenseMap<Operation *, PreparedFunction> functions;
+  llvm::DenseMap<Operation *, Operation *> references;
+  llvm::DenseMap<Operation *, finite::Computation> computations;
+  llvm::DenseMap<Operation *, NativeBinding> bindings;
+  SmallPtrSet<Block *, 32> omittedBlocks;
+  SmallPtrSet<Operation *, 32> omittedOperations;
+
+  LogicalResult prepare(ModuleOp source, ModuleOp target, EvmTypes &types,
+                        NativeLayouts &layouts) {
+    SymbolTableCollection symbols;
+    SmallVector<Operation *> owners;
+    source.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) ||
+          op->getName().getStringRef() == "protocol.participant")
+        owners.push_back(op);
+    });
+    unsigned serial = 0, entries = 0;
+    for (Operation *owner : owners) {
+      bool entry = owner->getName().getStringRef() == "protocol.participant";
+      auto attr = owner->getAttrOfType<TypeAttr>("function_type");
+      auto signature =
+          attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType();
+      if (!signature || (entry && ++entries != 1) ||
+          owner->getRegion(0).empty())
+        return owner->emitError("[evm.unsupported-operation] expected one "
+                                "defined endpoint closure");
+      auto capabilities = [&](TypeRange ports) {
+        unsigned count = 0;
+        std::function<bool(Type)> inspect = [&](Type type) {
+          if (isTranscript(type))
+            return ++count <= 1;
+          if (auto outcome = dyn_cast<exec::OutcomeType>(type))
+            return llvm::all_of(outcome.getPayload(), inspect);
+          if (auto transfer = dyn_cast<runtime::TransferType>(type))
+            return llvm::all_of(transfer.getPayload(), inspect);
+          return true;
+        };
+        return llvm::all_of(ports, inspect);
+      };
+      if (!capabilities(signature.getInputs()) ||
+          !capabilities(signature.getResults()))
+        return owner->emitError("[evm.unsupported-operation] multiple "
+                                "transcript capabilities are unsupported");
+      SmallVector<Type> inputs, outputs;
+      if (failed(types.convertTypes(signature.getInputs(), inputs)) ||
+          failed(types.convertTypes(signature.getResults(), outputs)))
+        return owner->emitError(
+            "[evm.unsupported-type] reachable function signature");
+      functions[owner] = {
+          entry ? "verify_endpoint" : "helper_" + std::to_string(serial++),
+          FunctionType::get(source.getContext(), inputs, outputs), entry};
+      // Checked failures become immediate terminal EVM effects. Their source
+      // propagation blocks are not reached by target execution. Keep the
+      // blocks until conversion rewrites their incoming dispatch edges.
+      Region &body = owner->getRegion(0);
+      SmallPtrSet<Block *, 32> reached;
+      SmallVector<Block *> pending{&body.front()};
+      while (!pending.empty()) {
+        Block *block = pending.pop_back_val();
+        if (!reached.insert(block).second)
+          continue;
+        Operation *terminator = block->getTerminator();
+        StringRef name = terminator->getName().getStringRef();
+        if (name == "exec.dispatch")
+          pending.push_back(terminator->getSuccessor(0));
+        else if (name == "exec.match")
+          append_range(pending, terminator->getSuccessors().drop_front());
+        else
+          append_range(pending, terminator->getSuccessors());
+      }
+      for (Block &block : body) {
+        if (!reached.contains(&block)) {
+          omittedBlocks.insert(&block);
+          for (Operation &op : block)
+            op.walk(
+                [&](Operation *nested) { omittedOperations.insert(nested); });
+          continue;
+        }
+        SmallVector<Type> lanes;
+        if (failed(types.convertTypes(block.getArgumentTypes(), lanes)))
+          return owner->emitError(
+              "[evm.unsupported-type] reachable block signature");
+      }
+      WalkResult checked = owner->walk([&](Operation *op) {
+        if (omittedOperations.contains(op))
+          return WalkResult::advance();
+        for (StringRef key : {"binding", "callee"})
+          if (auto ref = op->getAttrOfType<SymbolRefAttr>(key)) {
+            auto *resolved = symbols.lookupNearestSymbolFrom(op, ref);
+            if (!resolved) {
+              op->emitError("[evm.unsupported-operation] unresolved checked "
+                            "source reference");
+              return WalkResult::interrupt();
+            }
+            references[op] = resolved;
+          }
+        if (op->getName().getStringRef() == "exec.apply") {
+          auto admitted = readNativeBinding([&] { return op->emitOpError(); },
+                                            references.lookup(op));
+          if (failed(admitted))
+            return WalkResult::interrupt();
+          auto signature = executableBindingSignature(admitted->valueType);
+          auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
+          StringRef contract = admitted->declaration.getContract();
+          if (!admitted->declaration.getImplementation().empty()) {
+            op->emitError("[evm.unsupported-operation] pinned runtime "
+                          "implementation has no EVM realization");
+            return WalkResult::interrupt();
+          }
+          bool supported =
+              protocol::resourceUnitContract(contract) ||
+              llvm::is_contained(
+                  ArrayRef<StringRef>{"bool.and",
+                                      "bool.equal",
+                                      "bool.not",
+                                      "bool.or",
+                                      "bool.select",
+                                      "bool.xor",
+                                      "bytes.append",
+                                      "bytes.at",
+                                      "bytes.empty",
+                                      "bytes.get",
+                                      "bytes.length",
+                                      "field.add",
+                                      "field.constant",
+                                      "field.embed",
+                                      "field.equal",
+                                      "field.from_index",
+                                      "field.inverse",
+                                      "field.mul",
+                                      "field.neg",
+                                      "field.select",
+                                      "field.sub",
+                                      "index.add",
+                                      "index.bit_and",
+                                      "index.constant",
+                                      "index.div",
+                                      "index.equal",
+                                      "index.less",
+                                      "index.logical_shift_right",
+                                      "index.mod",
+                                      "index.mul",
+                                      "index.power_of_two",
+                                      "index.sub",
+                                      "index.wrapping_add",
+                                      "index.wrapping_sub",
+                                      "indices.append",
+                                      "indices.empty",
+                                      "sequence.append",
+                                      "sequence.at",
+                                      "sequence.empty",
+                                      "sequence.get",
+                                      "sequence.length",
+                                      "transcript.native.indexed.challenge",
+                                      "transcript.native.indexed.observe.data",
+                                      "vector.append",
+                                      "vector.at",
+                                      "vector.constant",
+                                      "vector.empty",
+                                      "vector.equal",
+                                      "vector.get",
+                                      "vector.length",
+                                      "vector.split",
+                                      "vector.sum"},
+                  contract);
+          if (!supported || op->getOperandTypes() != signature.getInputs() ||
+              op->getResultTypes() != signature.getResults() ||
+              failed(verifyInvocationParameters(
+                  [&] { return op->emitOpError(); }, contract,
+                  admitted->declaration.getArgumentsAttr(), parameters,
+                  protocol::ParameterStage::Logical))) {
+            op->emitError("[evm.unsupported-operation] unsupported exact "
+                          "runtime realization: ")
+                << contract;
+            return WalkResult::interrupt();
+          }
+          if (contract == "transcript.native.indexed.challenge" ||
+              contract == "transcript.native.indexed.observe.data") {
+            auto origin = runtime::exportNativeOrigin(
+                cast<runtime::NativeOriginAttr>(parameters[0]));
+            if (!origin) {
+              consumeError(origin.takeError());
+              op->emitError("[evm.unsupported-operation] invalid checked "
+                            "occurrence template");
+              return WalkResult::interrupt();
+            }
+            bool selected = llvm::any_of(origin->path, [](const auto &step) {
+              return step.kind == protocol::NativeOriginStep::Kind::Branch;
+            });
+            bool observe = contract.ends_with("observe.data");
+            auto *query =
+                std::get_if<protocol::NativeQueryOrigin>(&origin->event);
+            if (selected ||
+                (observe
+                     ? !std::holds_alternative<protocol::NativeMessageOrigin>(
+                           origin->event)
+                     : !query || query->method != "draw")) {
+              op->emitError("[evm.unsupported-operation] unsupported "
+                            "transcript occurrence kind or selected control");
+              return WalkResult::interrupt();
+            }
+          }
+          bindings[op] = *admitted;
+        }
+        if (finite::isComputation(op)) {
+          finite::Computation computation;
+          if (failed(finite::describe(op, computation, nullptr, &symbols)) ||
+              failed(finite::readCallbackABI(
+                  computation, computation.collect
+                                   ? finite::CallbackRole::Body
+                                   : finite::CallbackRole::Step)) ||
+              (computation.predicate &&
+               failed(finite::readCallbackABI(
+                   computation, finite::CallbackRole::Predicate)))) {
+            op->emitError("[evm.unsupported-operation] invalid checked finite "
+                          "computation");
+            return WalkResult::interrupt();
+          }
+          // Enumeration descriptors stay in the checked source. Decide their
+          // target storage/axis support before conversion moves callback ABIs.
+          for (Operation &node :
+               computation.domain.getBody().front().without_terminator()) {
+            if (isa<data::DomainElementsOp, data::DomainIndicesOp>(node)) {
+              auto layout = layouts.get(node.getOperand(0).getType());
+              if (!layout) {
+                consumeError(layout.takeError());
+                node.emitError("[evm.unsupported-operation] unsupported "
+                               "complete finite element layout");
+                return WalkResult::interrupt();
+              }
+              auto axis = node.getAttrOfType<IntegerAttr>("axis");
+              if (!(*layout)->collection || (*layout)->lanes.size() != 2 ||
+                  (*layout)->collection->storage ==
+                      CollectionLayout::Storage::PackedBytes ||
+                  (isa<data::DomainIndicesOp>(node) &&
+                   (!axis || axis.getUInt() != 0))) {
+                node.emitError("[evm.unsupported-operation] unsupported "
+                               "finite collection storage or axis");
+                return WalkResult::interrupt();
+              }
+            } else if (!isa<data::DomainRangeOp, data::DomainZipOp,
+                            data::DomainProductOp>(node)) {
+              node.emitError("[evm.unsupported-operation] unsupported finite "
+                             "enumeration");
+              return WalkResult::interrupt();
+            }
+          }
+          if (computation.collect) {
+            TypeRange results = op->getResultTypes();
+            if (computation.scoped)
+              results = cast<exec::OutcomeType>(results[0]).getPayload();
+            auto layout =
+                results.size() == 1
+                    ? layouts.get(results[0])
+                    : Expected<const ValueLayout *>(zkc::error("evm.layout"));
+            if (!layout) {
+              consumeError(layout.takeError());
+              op->emitError("[evm.unsupported-operation] unsupported complete "
+                            "collect layout");
+              return WalkResult::interrupt();
+            }
+            if (!(*layout)->collection ||
+                (*layout)->collection->storage ==
+                    CollectionLayout::Storage::PackedBytes) {
+              op->emitError("[evm.unsupported-operation] unsupported collected "
+                            "element family");
+              return WalkResult::interrupt();
+            }
+          }
+          computations[op] = computation;
+        }
+        if (op == owner)
+          return WalkResult::advance();
+        if (auto flags = op->getAttrOfType<arith::IntegerOverflowFlagsAttr>(
+                "overflowFlags"))
+          if (flags.getValue() != arith::IntegerOverflowFlags::none) {
+            op->emitError("[evm.unsupported-operation] arithmetic overflow "
+                          "promises are unsupported");
+            return WalkResult::interrupt();
+          }
+        if (op->getName().getStringRef() == "protocol.loop") {
+          auto parameter = op->getAttrOfType<BoolAttr>("parameter");
+          if (!parameter || parameter.getValue()) {
+            op->emitError(
+                "[evm.unsupported-operation] parameterized participant "
+                "loops have no EVM realization");
+            return WalkResult::interrupt();
+          }
+        }
+        bool supported =
+            isa<arith::ConstantOp, arith::CmpIOp, arith::AddIOp, arith::SubIOp,
+                arith::MulIOp, arith::AndIOp, arith::OrIOp, arith::XOrIOp,
+                arith::SelectOp, arith::ExtUIOp, arith::ExtSIOp,
+                arith::TruncIOp, arith::IndexCastOp, arith::IndexCastUIOp>(
+                op) ||
+            llvm::is_contained(
+                ArrayRef<StringRef>{"exec.apply",
+                                    "exec.fold",
+                                    "exec.collect",
+                                    "data.finite_fold",
+                                    "data.finite_collect",
+                                    "protocol.loop",
+                                    "protocol.yield",
+                                    "func.return",
+                                    "protocol.finish",
+                                    "cf.br",
+                                    "cf.cond_br",
+                                    "exec.dispatch",
+                                    "exec.match",
+                                    "exec.returned",
+                                    "exec.complete",
+                                    "exec.test",
+                                    "exec.boolean",
+                                    "exec.reject",
+                                    "exec.failed",
+                                    "exec.range",
+                                    "runtime.iteration",
+                                    "runtime.enter_scope",
+                                    "runtime.exit_scope",
+                                    "runtime.borrow_transfer",
+                                    "runtime.accept_transfer",
+                                    "runtime.transfer_values",
+                                    "runtime.release_transfer",
+                                    "func.call",
+                                    "exec.compute",
+                                    "protocol.local_call",
+                                    "protocol.receive",
+                                    "protocol.guard",
+                                    "algebra.constant",
+                                    "algebra.field_add",
+                                    "algebra.field_subtract",
+                                    "algebra.field_multiply",
+                                    "algebra.field_equal",
+                                    "data.make",
+                                    "exec.variant",
+                                    "data.is",
+                                    "data.get",
+                                    "data.sequence_empty",
+                                    "data.sequence_append",
+                                    "data.sequence_length",
+                                    "data.bounded_at",
+                                    "data.array_at",
+                                    "data.array_from_elements",
+                                    "data.index",
+                                    "data.dim",
+                                    "data.index_power_of_two",
+                                    "data.index_equal",
+                                    "data.index_less",
+                                    "data.index_add",
+                                    "data.index_subtract",
+                                    "data.index_multiply",
+                                    "data.index_divide",
+                                    "data.index_modulo",
+                                    "data.index_wrapping_add",
+                                    "data.index_wrapping_subtract",
+                                    "data.index_bit_and",
+                                    "data.index_logical_shift_right"},
+                op->getName().getStringRef());
+        if (!supported) {
+          op->emitError("[evm.unsupported-operation] no EVM realization for "
+                        "this reachable operation");
+          return WalkResult::interrupt();
+        }
+
+        SmallVector<Type> converted;
+        if (failed(types.convertTypes(op->getOperandTypes(), converted)) ||
+            failed(types.convertTypes(op->getResultTypes(), converted))) {
+          op->emitError(
+              "[evm.unsupported-type] reachable signature or payload");
+          return WalkResult::interrupt();
+        }
+        return WalkResult::advance();
+      });
+      if (checked.wasInterrupted())
+        return failure();
+    }
+    if (entries != 1)
+      return source.emitError(
+          "[evm.unsupported-operation] missing selected endpoint");
+    // Move the original executable owners. The full conversion below is the
+    // only producer of lowered instructions and SSA replacements.
+    for (Operation *owner : owners)
+      owner->moveBefore(target.getBody(), target.getBody()->end());
+    return success();
+  }
+};
+
 class Lowering {
 public:
-  Lowering(ModuleOp source, ModuleOp target, const EvmOptions &options)
-      : source(source), target(target), options(options),
-        layouts(*source.getContext()), types(layouts, source.getContext()),
-        builder(source.getContext()) {}
-  LogicalResult run();
+  Lowering(const PreparedEndpoint &prepared, const EvmOptions &options,
+           NativeLayouts &layouts, const EvmTypes &types,
+           ConversionPatternRewriter &builder, Operation *source,
+           ArrayRef<ValueRange> operands)
+      : prepared(prepared), options(options), layouts(layouts), types(types),
+        builder(builder), source(source), operands(operands) {}
+  LogicalResult lowerOperation(Operation *);
+  bool replaced = false;
 
 private:
-  ModuleOp source, target;
+  const PreparedEndpoint &prepared;
   const EvmOptions &options;
-  NativeLayouts layouts;
-  EvmTypes types;
-  OpBuilder builder;
-  SymbolTableCollection symbols;
-  llvm::DenseMap<Operation *, func::FuncOp> functions;
+  NativeLayouts &layouts;
+  const EvmTypes &types;
+  ConversionPatternRewriter &builder;
+  Operation *source;
+  ArrayRef<ValueRange> operands;
   LogicalResult refuse(Operation *op, StringRef reason) {
     return op->emitError("[evm.unsupported-operation] ")
            << op->getName() << ": " << reason;
@@ -137,42 +533,49 @@ private:
   Value integer(Location loc, uint64_t value, unsigned width = 64) {
     return constant(loc, builder.getIntegerType(width), APInt(width, value));
   }
-  Values get(ValueRange values, const ValueMap &map) {
+  Values get(ValueRange values) {
     Values result;
-    for (Value value : values)
-      append_range(result, map.lookup(value));
+    for (Value value : values) {
+      auto position = llvm::find(source->getOperands(), value);
+      assert(position != source->operand_end() &&
+             "expected a source operand in the one-to-many adaptor");
+      append_range(result, operands[position - source->operand_begin()]);
+    }
     return result;
   }
-  LogicalResult bind(Operation *op, ValueRange result, ValueMap &map) {
+  Values get(Value value) { return get(ValueRange(value)); }
+  LogicalResult bind(Operation *op, ValueRange result) {
+    SmallVector<Values> groups;
     unsigned offset = 0;
     for (Value value : op->getResults()) {
-      auto convertedTypes = converted(TypeRange(value.getType()), op);
-      if (failed(convertedTypes) ||
-          offset + convertedTypes->size() > result.size())
+      auto lanes = converted(TypeRange(value.getType()), op);
+      if (failed(lanes) || offset + lanes->size() > result.size())
         return refuse(op, "invalid realized result signature");
-      map[value] = Values(result.slice(offset, convertedTypes->size()));
-      offset += convertedTypes->size();
+      groups.emplace_back(result.slice(offset, lanes->size()));
+      offset += lanes->size();
     }
     if (offset != result.size())
       return refuse(op, "extra realized result values");
+    builder.replaceOpWithMultiple(op, std::move(groups));
+    replaced = true;
     return success();
   }
-  Values checked(Operation *op, StringRef opcode, TypeRange result,
-                 ValueRange operands,
-                 ArrayRef<NamedAttribute> attributes = {}) {
-    return Values(CheckedOp::create(builder, op->getLoc(), result, opcode,
-                                    operands, attributes)
-                      .getResults());
+  template <typename Op>
+  Values emit(Operation *source, TypeRange results, ValueRange operands,
+              ArrayRef<NamedAttribute> attrs = {}) {
+    return Values(
+        Op::create(builder, source->getLoc(), results, operands, attrs)
+            ->getResults());
   }
-  Values checkedResult(Operation *op, StringRef opcode, ValueRange operands,
-                       ArrayRef<NamedAttribute> attributes = {}) {
-    auto result = converted(op->getResultTypes(), op);
-    if (failed(result))
-      return {};
-    return checked(op, opcode, *result, operands, attributes);
+  template <typename Op>
+  Values emitResult(Operation *source, ValueRange operands,
+                    ArrayRef<NamedAttribute> attrs = {}) {
+    auto result = converted(source->getResultTypes(), source);
+    return failed(result) ? Values{}
+                          : emit<Op>(source, *result, operands, attrs);
   }
   void active(Operation *op, Value scope) {
-    checked(op, "scope.check", {}, {scope});
+    emit<ScopeCheckOp>(op, {}, {scope});
   }
   LogicalResult checkCapabilities(Operation *op, TypeRange types) {
     unsigned count = 0;
@@ -189,138 +592,38 @@ private:
       return refuse(op, "multiple transcript capabilities are unsupported");
     return success();
   }
-  Operation *resolve(Operation *op, StringRef name) {
-    auto reference = op->getAttrOfType<SymbolRefAttr>(name);
-    return reference ? symbols.lookupNearestSymbolFrom(op, reference) : nullptr;
+  Operation *resolve(Operation *op, StringRef) {
+    return prepared.references.lookup(op);
   }
-  LogicalResult lowerBody(Operation *owner, func::FuncOp function);
-  LogicalResult lowerOperation(Operation *, ValueMap &,
-                               const llvm::DenseMap<Block *, Block *> &);
-  LogicalResult lowerFinite(Operation *, ValueMap &);
-  LogicalResult lowerBinding(Operation *, ValueMap &);
+  LogicalResult lowerFinite(Operation *);
+  LogicalResult lowerBinding(Operation *);
   std::optional<LogicalResult> lowerScalar(Operation *, StringRef, ValueRange,
-                                           ArrayAttr, ValueMap &);
-  LogicalResult lowerLoop(Operation *, ValueMap &);
+                                           ArrayAttr);
+  LogicalResult lowerLoop(Operation *);
   FailureOr<Values> call(Operation *op, Operation *callee, ValueRange args) {
-    auto function = functions.lookup(callee);
-    if (!function || function.getNumArguments() != args.size()) {
+    auto found = prepared.functions.find(callee);
+    if (found == prepared.functions.end() ||
+        found->second.signature.getNumInputs() != args.size()) {
       (void)refuse(op, "unresolved helper or mismatched expanded signature");
       return failure();
     }
-    return Values(func::CallOp::create(builder, op->getLoc(), function, args)
-                      .getResults());
+    return Values(
+        func::CallOp::create(builder, op->getLoc(), found->second.name,
+                             found->second.signature.getResults(), args)
+            .getResults());
   }
 };
 
-LogicalResult Lowering::run() {
-  SmallVector<Operation *> inventory;
-  source.walk([&](Operation *op) {
-    if (isa<func::FuncOp>(op) ||
-        op->getName().getStringRef() == "protocol.participant")
-      inventory.push_back(op);
-  });
-  unsigned serial = 0, entries = 0;
-  for (Operation *owner : inventory) {
-    bool entry = owner->getName().getStringRef() == "protocol.participant";
-    auto attribute = owner->getAttrOfType<TypeAttr>("function_type");
-    auto signature = attribute ? dyn_cast<FunctionType>(attribute.getValue())
-                               : FunctionType();
-    if (!signature || (entry && ++entries != 1))
-      return refuse(owner, "expected exactly one selected endpoint");
-    if (failed(checkCapabilities(owner, signature.getInputs())) ||
-        failed(checkCapabilities(owner, signature.getResults())))
-      return failure();
-    auto inputs = converted(signature.getInputs(), owner);
-    auto outputs = converted(signature.getResults(), owner);
-    if (failed(inputs) || failed(outputs))
-      return failure();
-    builder.setInsertionPointToEnd(target.getBody());
-    auto function = func::FuncOp::create(
-        builder, owner->getLoc(),
-        entry ? "verify_endpoint" : "helper_" + std::to_string(serial++),
-        builder.getFunctionType(*inputs, *outputs));
-    function.setPrivate();
-    if (entry)
-      function->setAttr("evm.entry", builder.getUnitAttr());
-    functions[owner] = function;
-  }
-  if (entries != 1)
-    return refuse(source, "missing selected endpoint");
-  for (Operation *owner : inventory)
-    if (failed(lowerBody(owner, functions.lookup(owner))))
-      return failure();
-  return success();
-}
-
-LogicalResult Lowering::lowerBody(Operation *owner, func::FuncOp function) {
-  Region &region = owner->getRegion(0);
-  if (region.empty())
-    return refuse(owner, "external executable helpers are unsupported");
-  // Failure edges are represented by immediate terminal EVM effects. Dispatch
-  // therefore reaches only the actual success payload. Do not invent values
-  // for failure successors or carry produced successor operands into CFGToSCF.
-  SmallPtrSet<Block *, 32> reached;
-  SmallVector<Block *> pending{&region.front()};
-  while (!pending.empty()) {
-    Block *block = pending.pop_back_val();
-    if (!reached.insert(block).second)
-      continue;
-    Operation *term = block->getTerminator();
-    if (term->getName().getStringRef() == "exec.dispatch")
-      pending.push_back(term->getSuccessor(0));
-    else if (term->getName().getStringRef() == "exec.match")
-      append_range(pending, term->getSuccessors().drop_front());
-    else
-      append_range(pending, term->getSuccessors());
-  }
-  ValueMap map;
-  llvm::DenseMap<Block *, Block *> blocks;
-  for (Block &old : region) {
-    if (!reached.contains(&old))
-      continue;
-    auto *block = new Block;
-    function.getBody().push_back(block);
-    blocks[&old] = block;
-    for (BlockArgument arg : old.getArguments()) {
-      auto convertedTypes = converted(TypeRange(arg.getType()), owner);
-      if (failed(convertedTypes))
-        return failure();
-      Values args;
-      for (Type type : *convertedTypes)
-        args.push_back(block->addArgument(type, arg.getLoc()));
-      map[arg] = std::move(args);
-    }
-  }
-  // Block layout need not be dominance order. Use the actual dominator tree.
-  DominanceInfo dominance;
-  SmallVector<Block *> ordered;
-  if (llvm::hasSingleElement(region))
-    ordered.push_back(&region.front());
-  else
-    for (auto *node : depth_first(dominance.getRootNode(&region)))
-      ordered.push_back(node->getBlock());
-  for (Block *old : ordered) {
-    if (!reached.contains(old))
-      continue;
-    builder.setInsertionPointToEnd(blocks.lookup(old));
-    for (Operation &op : *old)
-      if (failed(lowerOperation(&op, map, blocks)))
-        return failure();
-  }
-  return success();
-}
-
-std::optional<LogicalResult>
-Lowering::lowerScalar(Operation *op, StringRef code, ValueRange operands,
-                      ArrayAttr parameters, ValueMap &map) {
+std::optional<LogicalResult> Lowering::lowerScalar(Operation *op,
+                                                   StringRef code,
+                                                   ValueRange operands,
+                                                   ArrayAttr parameters) {
   Location loc = op->getLoc();
   if (code == "field.select") {
     if (!parameters || !parameters.empty() || operands.size() != 3)
       return refuse(op, "field.select requires exact empty parameters");
-    return bind(op,
-                {arith::SelectOp::create(builder, loc, operands[0], operands[1],
-                                         operands[2])},
-                map);
+    return bind(op, {arith::SelectOp::create(builder, loc, operands[0],
+                                             operands[1], operands[2])});
   }
   if (code.starts_with("field.")) {
     TypeRange results = op->getResultTypes();
@@ -344,9 +647,25 @@ Lowering::lowerScalar(Operation *op, StringRef code, ValueRange operands,
       attributes.push_back(builder.getNamedAttr("value", parameters[0]));
     } else if (!parameters || !parameters.empty())
       return refuse(op, "unsupported field invocation parameters");
-    if (!isCheckedOpcode(code))
-      return refuse(op, "unsupported field operation");
-    return bind(op, checkedResult(op, code, operands, attributes), map);
+    if (code == "field.constant")
+      return bind(op, emitResult<FieldConstantOp>(op, operands, attributes));
+    if (code == "field.add")
+      return bind(op, emitResult<FieldAddOp>(op, operands, attributes));
+    if (code == "field.sub")
+      return bind(op, emitResult<FieldSubOp>(op, operands, attributes));
+    if (code == "field.mul")
+      return bind(op, emitResult<FieldMulOp>(op, operands, attributes));
+    if (code == "field.neg")
+      return bind(op, emitResult<FieldNegOp>(op, operands, attributes));
+    if (code == "field.equal")
+      return bind(op, emitResult<FieldEqualOp>(op, operands, attributes));
+    if (code == "field.from_index")
+      return bind(op, emitResult<FieldFromIndexOp>(op, operands, attributes));
+    if (code == "field.embed")
+      return bind(op, emitResult<FieldEmbedOp>(op, operands, attributes));
+    if (code == "field.inverse")
+      return bind(op, emitResult<FieldInverseOp>(op, operands, attributes));
+    return refuse(op, "unsupported field operation");
   }
   if (!code.starts_with("bool."))
     return std::nullopt;
@@ -355,85 +674,53 @@ Lowering::lowerScalar(Operation *op, StringRef code, ValueRange operands,
   if (code == "bool.equal")
     return bind(op,
                 {arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::eq,
-                                       operands[0], operands[1])},
-                map);
+                                       operands[0], operands[1])});
   if (code == "bool.select")
-    return bind(op,
-                {arith::SelectOp::create(builder, loc, operands[0], operands[1],
-                                         operands[2])},
-                map);
+    return bind(op, {arith::SelectOp::create(builder, loc, operands[0],
+                                             operands[1], operands[2])});
   if (code == "bool.and")
-    return bind(op,
-                {arith::AndIOp::create(builder, loc, operands[0], operands[1])},
-                map);
+    return bind(
+        op, {arith::AndIOp::create(builder, loc, operands[0], operands[1])});
   if (code == "bool.or")
     return bind(op,
-                {arith::OrIOp::create(builder, loc, operands[0], operands[1])},
-                map);
+                {arith::OrIOp::create(builder, loc, operands[0], operands[1])});
   if (code == "bool.xor")
-    return bind(op,
-                {arith::XOrIOp::create(builder, loc, operands[0], operands[1])},
-                map);
-  if (code == "bool.not")
     return bind(
-        op,
-        {arith::XOrIOp::create(builder, loc, operands[0], integer(loc, 1, 1))},
-        map);
+        op, {arith::XOrIOp::create(builder, loc, operands[0], operands[1])});
+  if (code == "bool.not")
+    return bind(op, {arith::XOrIOp::create(builder, loc, operands[0],
+                                           integer(loc, 1, 1))});
   return std::nullopt;
 }
 
-LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
-  Operation *binding = resolve(op, "binding");
-  if (!binding)
-    return refuse(op, "missing checked runtime binding");
-  auto admitted = readNativeBinding([&] { return op->emitOpError(); }, binding);
-  if (failed(admitted))
-    return refuse(op, "invalid checked runtime binding");
-  if (!admitted->declaration.getImplementation().empty())
-    return refuse(op, "EVM cannot honor a pinned runtime implementation");
+LogicalResult Lowering::lowerBinding(Operation *op) {
+  auto admitted = prepared.bindings.find(op)->second;
   auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
-  auto signature = executableBindingSignature(admitted->valueType);
-  if (op->getOperandTypes() != signature.getInputs() ||
-      op->getResultTypes() != signature.getResults() ||
-      failed(verifyInvocationParameters(
-          [&] { return op->emitOpError(); },
-          admitted->declaration.getContract(),
-          admitted->declaration.getArgumentsAttr(), parameters,
-          protocol::ParameterStage::Logical)))
-    return refuse(
-        op, "invocation differs from exact binding signature or parameters");
-  auto contract =
-      binding ? binding->getAttrOfType<StringAttr>("contract") : StringAttr();
-  if (!contract)
-    return refuse(op, "missing checked runtime binding");
-  StringRef name = contract.getValue();
-  Values operands = get(op->getOperands().drop_front(), map);
-  active(op, map.lookup(op->getOperand(0))[0]);
+  StringRef name = admitted.declaration.getContract();
+  Values operands = get(op->getOperands().drop_front());
+  active(op, get(op->getOperand(0))[0]);
   auto resultTypes = converted(op->getResultTypes(), op);
   if (failed(resultTypes))
     return failure();
   if (protocol::resourceUnitContract(name)) {
     // Exact nominal signatures and affine succession were checked before
     // erasure. Retain the active-scope check above, even for empty results.
-    return bind(op, {}, map);
+    return bind(op, {});
   }
-  if (auto scalar = lowerScalar(op, name, operands, parameters, map))
+  if (auto scalar = lowerScalar(op, name, operands, parameters))
     return *scalar;
   if (name == "index.constant") {
     if (!parameters || parameters.size() != 1 ||
         !isa<IntegerAttr>(parameters[0]))
       return refuse(op, "index.constant requires an exact u64 parameter");
-    return bind(
-        op, {integer(op->getLoc(), cast<IntegerAttr>(parameters[0]).getUInt())},
-        map);
+    return bind(op, {integer(op->getLoc(),
+                             cast<IntegerAttr>(parameters[0]).getUInt())});
   }
   if (name == "index.equal" || name == "index.less") {
     auto predicate = name == "index.less" ? arith::CmpIPredicate::ult
                                           : arith::CmpIPredicate::eq;
-    return bind(op,
-                {arith::CmpIOp::create(builder, op->getLoc(), predicate,
-                                       operands[0], operands[1])},
-                map);
+    return bind(op, {arith::CmpIOp::create(builder, op->getLoc(), predicate,
+                                           operands[0], operands[1])});
   }
   if (name.starts_with("transcript.native.indexed.")) {
     bool observe = name == "transcript.native.indexed.observe.data";
@@ -446,37 +733,31 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
       consumeError(neutral.takeError());
       return refuse(op, "invalid checked occurrence template");
     }
-    auto encoded = protocol::encodeNativeOriginTemplate(*neutral);
-    if (!encoded) {
-      consumeError(encoded.takeError());
-      return refuse(op, "invalid encoded occurrence template");
-    }
-    Values args{map.lookup(op->getOperand(0))[0]};
+    Values args{get(op->getOperand(0))[0]};
     append_range(args, operands);
+    SmallVector<NamedAttribute> attrs{
+        builder.getNamedAttr("origin", origin),
+        builder.getNamedAttr(
+            "value_type",
+            TypeAttr::get(observe ? op->getOperand(2).getType()
+                                  : admitted.valueType.getResult(0)))};
     return bind(
-        op,
-        checked(
-            op, observe ? "transcript.observe" : "transcript.challenge",
-            *resultTypes, args,
-            {builder.getNamedAttr("origin", builder.getStringAttr(*encoded)),
-             builder.getNamedAttr(
-                 "value_type",
-                 TypeAttr::get(observe ? op->getOperand(2).getType()
-                                       : admitted->valueType.getResult(0)))}),
-        map);
+        op, observe
+                ? emit<TranscriptObserveOp>(op, *resultTypes, args, attrs)
+                : emit<TranscriptChallengeOp>(op, *resultTypes, args, attrs));
   }
   SmallVector<NamedAttribute> attributes;
   if (name.starts_with("vector.") || name.starts_with("sequence.") ||
       name.starts_with("indices.") || name.starts_with("bytes.")) {
     Type collection;
-    for (Type type : admitted->valueType.getInputs())
+    for (Type type : admitted.valueType.getInputs())
       if (isa<data::FieldVectorType, data::IndicesType, data::SequenceType,
               data::BytesType>(type)) {
         collection = type;
         break;
       }
-    if (!collection && admitted->valueType.getNumResults())
-      collection = admitted->valueType.getResult(0);
+    if (!collection && admitted.valueType.getNumResults())
+      collection = admitted.valueType.getResult(0);
     if (!collection)
       return refuse(op, "missing collection type");
     attributes.push_back(
@@ -498,12 +779,85 @@ LogicalResult Lowering::lowerBinding(Operation *op, ValueMap &map) {
       name = "bytes.get";
   } else if (!parameters || !parameters.empty())
     return refuse(op, "unsupported invocation parameters");
-  if (!isCheckedOpcode(name))
-    return refuse(op, ("unsupported runtime contract: " + name).str());
-  return bind(op, checked(op, name, *resultTypes, operands, attributes), map);
+  if (name == "index.add")
+    return bind(op, emit<IndexAddOp>(op, *resultTypes, operands, attributes));
+  if (name == "index.sub")
+    return bind(op, emit<IndexSubOp>(op, *resultTypes, operands, attributes));
+  if (name == "index.mul")
+    return bind(op, emit<IndexMulOp>(op, *resultTypes, operands, attributes));
+  if (name == "index.div")
+    return bind(op, emit<IndexDivOp>(op, *resultTypes, operands, attributes));
+  if (name == "index.mod")
+    return bind(op, emit<IndexModOp>(op, *resultTypes, operands, attributes));
+  if (name == "index.power_of_two")
+    return bind(
+        op, emit<IndexPowerOfTwoOp>(op, *resultTypes, operands, attributes));
+  if (name == "index.logical_shift_right")
+    return bind(op, emit<IndexLogicalShiftRightOp>(op, *resultTypes, operands,
+                                                   attributes));
+  if (name == "vector.constant")
+    return bind(op,
+                emit<VectorConstantOp>(op, *resultTypes, operands, attributes));
+  if (name == "vector.empty")
+    return bind(op,
+                emit<VectorEmptyOp>(op, *resultTypes, operands, attributes));
+  if (name == "vector.length")
+    return bind(op,
+                emit<VectorLengthOp>(op, *resultTypes, operands, attributes));
+  if (name == "vector.append")
+    return bind(op,
+                emit<VectorAppendOp>(op, *resultTypes, operands, attributes));
+  if (name == "vector.split")
+    return bind(op,
+                emit<VectorSplitOp>(op, *resultTypes, operands, attributes));
+  if (name == "vector.sum")
+    return bind(op, emit<VectorSumOp>(op, *resultTypes, operands, attributes));
+  if (name == "vector.get")
+    return bind(op, emit<VectorGetOp>(op, *resultTypes, operands, attributes));
+  if (name == "vector.equal")
+    return bind(op,
+                emit<VectorEqualOp>(op, *resultTypes, operands, attributes));
+  if (name == "sequence.empty")
+    return bind(op,
+                emit<SequenceEmptyOp>(op, *resultTypes, operands, attributes));
+  if (name == "sequence.append")
+    return bind(op,
+                emit<SequenceAppendOp>(op, *resultTypes, operands, attributes));
+  if (name == "sequence.length")
+    return bind(op,
+                emit<SequenceLengthOp>(op, *resultTypes, operands, attributes));
+  if (name == "sequence.get")
+    return bind(op,
+                emit<SequenceGetOp>(op, *resultTypes, operands, attributes));
+  if (name == "bytes.empty")
+    return bind(op, emit<BytesEmptyOp>(op, *resultTypes, operands, attributes));
+  if (name == "bytes.length")
+    return bind(op,
+                emit<BytesLengthOp>(op, *resultTypes, operands, attributes));
+  if (name == "bytes.get")
+    return bind(op, emit<BytesGetOp>(op, *resultTypes, operands, attributes));
+  if (name == "bytes.append")
+    return bind(op,
+                emit<BytesAppendOp>(op, *resultTypes, operands, attributes));
+  if (name == "indices.empty")
+    return bind(op,
+                emit<IndicesEmptyOp>(op, *resultTypes, operands, attributes));
+  if (name == "indices.append")
+    return bind(op,
+                emit<IndicesAppendOp>(op, *resultTypes, operands, attributes));
+  if (name == "index.wrapping_add")
+    return bind(op, {arith::AddIOp::create(builder, op->getLoc(), operands[0],
+                                           operands[1])});
+  if (name == "index.wrapping_sub")
+    return bind(op, {arith::SubIOp::create(builder, op->getLoc(), operands[0],
+                                           operands[1])});
+  if (name == "index.bit_and")
+    return bind(op, {arith::AndIOp::create(builder, op->getLoc(), operands[0],
+                                           operands[1])});
+  return refuse(op, ("unsupported runtime contract: " + name).str());
 }
 
-LogicalResult Lowering::lowerLoop(Operation *op, ValueMap &map) {
+LogicalResult Lowering::lowerLoop(Operation *op) {
   auto carried = op->getAttrOfType<IntegerAttr>("carried");
   auto maximum = op->getAttrOfType<IntegerAttr>("maximum");
   auto parameter = op->getAttrOfType<BoolAttr>("parameter");
@@ -513,54 +867,41 @@ LogicalResult Lowering::lowerLoop(Operation *op, ValueMap &map) {
       static_cast<uint64_t>(maximum.getInt()) >
           options.limits.participantLoopMaximum)
     return refuse(op, "loop requires an admitted deployment maximum");
-  Value count = map.lookup(op->getOperand(0))[0];
-  checked(op, "loop.bound", {},
-          {count, integer(op->getLoc(), maximum.getUInt())});
-  Values initial = get(op->getOperands().slice(1, carried.getUInt()), map);
+  Value count = get(op->getOperand(0))[0];
+  emit<LoopBoundOp>(op, {}, {count, integer(op->getLoc(), maximum.getUInt())});
+  Values initial = get(op->getOperands().slice(1, carried.getUInt()));
   Value zero = integer(op->getLoc(), 0), one = integer(op->getLoc(), 1);
   auto loop =
       scf::ForOp::create(builder, op->getLoc(), zero, count, one, initial);
   loop.setUnsignedCmpAttr(builder.getUnitAttr());
-  OpBuilder::InsertionGuard guard(builder);
   Block &body = op->getRegion(0).front();
-  ValueMap nested = map;
-  unsigned offset = 0;
-  nested[body.getArgument(0)] = {loop.getInductionVar()};
+  TypeConverter::SignatureConversion signature(body.getNumArguments());
+  signature.addInputs(0, {builder.getI64Type()});
   for (unsigned i = 0; i < carried.getUInt(); ++i) {
-    unsigned n = map.lookup(op->getOperand(i + 1)).size();
-    nested[body.getArgument(i + 1)] =
-        Values(loop.getRegionIterArgs().slice(offset, n));
-    offset += n;
+    auto lanes = converted(TypeRange(body.getArgument(i + 1).getType()), op);
+    if (failed(lanes))
+      return failure();
+    signature.addInputs(i + 1, *lanes);
   }
   for (unsigned i = carried.getUInt() + 1; i < body.getNumArguments(); ++i)
-    nested[body.getArgument(i)] = map.lookup(op->getOperand(i));
-  builder.setInsertionPointToStart(loop.getBody());
-  for (Operation &child : body.without_terminator())
-    if (failed(
-            lowerOperation(&child, nested, llvm::DenseMap<Block *, Block *>())))
-      return failure();
-  builder.setInsertionPointToEnd(loop.getBody());
-  if (!loop.getBody()->empty() && isa<scf::YieldOp>(loop.getBody()->back()))
-    loop.getBody()->back().erase();
-  scf::YieldOp::create(builder, op->getLoc(),
-                       get(body.getTerminator()->getOperands(), nested));
-  return bind(op, loop.getResults(), map);
+    signature.remapInput(i, get(op->getOperand(i)));
+  builder.eraseBlock(loop.getBody());
+  builder.inlineRegionBefore(op->getRegion(0), loop.getRegion(),
+                             loop.getRegion().end());
+  if (failed(builder.convertRegionTypes(&loop.getRegion(), types, &signature)))
+    return failure();
+  return bind(op, loop.getResults());
 }
 
-LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
-  finite::Computation computation;
-  if (failed(finite::describe(op, computation, nullptr, &symbols)))
-    return refuse(op, "invalid checked finite computation");
+LogicalResult Lowering::lowerFinite(Operation *op) {
+  auto computation = prepared.computations.lookup(op);
   bool scoped = computation.scoped, fold = !computation.collect;
   auto entry = finite::partitionEntry(
       computation, op->getOperands().drop_front(scoped ? 1 : 0));
-  auto callback =
-      finite::readCallbackABI(computation, fold ? finite::CallbackRole::Step
-                                                : finite::CallbackRole::Body);
-  if (failed(entry) || failed(callback))
-    return refuse(op, "invalid checked finite callback ABI");
+  if (failed(entry))
+    return refuse(op, "invalid prepared finite entry ABI");
   if (scoped)
-    active(op, map.lookup(op->getOperand(0))[0]);
+    active(op, get(op->getOperand(0))[0]);
   struct Domain {
     enum Kind { Elements, Indices, Range, Zip, Product } kind;
     Value count, lower;
@@ -570,15 +911,15 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
     SmallVector<Value> suffixes;
   };
   llvm::DenseMap<Value, std::shared_ptr<Domain>> domains;
-  ValueMap environment;
+  llvm::DenseMap<Value, Values> domainArgumentsByFormal;
   Block &body = computation.domain.getBody().front();
   for (auto [formal, actual] : zip(body.getArguments(), entry->domain))
-    environment[formal] = map.lookup(actual);
+    domainArgumentsByFormal[formal] = get(actual);
   auto typed = [&](Type type) {
     return builder.getNamedAttr("value_type", TypeAttr::get(type));
   };
   auto admitCount = [&](Operation *at, Value count) {
-    checked(at, "range.admit", {}, {integer(at->getLoc(), 0), count});
+    emit<RangeAdmitOp>(at, {}, {integer(at->getLoc(), 0), count});
   };
   // Every constructor, even unused or empty, contributes its reached admission
   // before callbacks. Descriptor nodes retain exact original collection types.
@@ -588,7 +929,7 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
       domain->kind = isa<data::DomainElementsOp>(child) ? Domain::Elements
                                                         : Domain::Indices;
       domain->collection = child.getOperand(0).getType();
-      domain->carrier = environment.lookup(child.getOperand(0));
+      domain->carrier = domainArgumentsByFormal.lookup(child.getOperand(0));
       auto layout = layouts.get(domain->collection);
       if (!layout) {
         consumeError(layout.takeError());
@@ -608,17 +949,20 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
       bool coefficients = (*layout)->collection->storage ==
                           CollectionLayout::Storage::FieldCoefficients;
       domain->count =
-          checked(&child, coefficients ? "vector.length" : "sequence.length",
-                  {builder.getI64Type()}, domain->carrier,
-                  {typed(domain->collection)})[0];
+          (coefficients ? emit<VectorLengthOp>(&child, {builder.getI64Type()},
+                                               domain->carrier,
+                                               {typed(domain->collection)})
+                        : emit<SequenceLengthOp>(
+                              &child, {builder.getI64Type()}, domain->carrier,
+                              {typed(domain->collection)}))[0];
       admitCount(&child, domain->count);
     } else if (isa<data::DomainRangeOp>(child)) {
       domain->kind = Domain::Range;
-      auto lower = environment.lookup(child.getOperand(0));
-      auto upper = environment.lookup(child.getOperand(1));
+      auto lower = domainArgumentsByFormal.lookup(child.getOperand(0));
+      auto upper = domainArgumentsByFormal.lookup(child.getOperand(1));
       if (lower.size() != 1 || upper.size() != 1)
         return refuse(&child, "invalid finite range bounds");
-      checked(&child, "range.admit", {}, {lower[0], upper[0]});
+      emit<RangeAdmitOp>(&child, {}, {lower[0], upper[0]});
       domain->lower = lower[0];
       auto increasing =
           arith::CmpIOp::create(builder, child.getLoc(),
@@ -642,13 +986,13 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
       if (domain->kind == Domain::Zip) {
         domain->count = domain->children.front()->count;
         for (auto &factor : drop_begin(domain->children))
-          checked(&child, "range.check", {}, {domain->count, factor->count});
+          emit<RangeCheckOp>(&child, {}, {domain->count, factor->count});
       } else {
         domain->count = integer(child.getLoc(), 1);
         // Preserve declaration order for all intermediate cardinality checks.
         for (auto &factor : domain->children) {
-          domain->count = checked(&child, "index.mul", {builder.getI64Type()},
-                                  {domain->count, factor->count})[0];
+          domain->count = emit<IndexMulOp>(&child, {builder.getI64Type()},
+                                           {domain->count, factor->count})[0];
           admitCount(&child, domain->count);
         }
         Value suffix = integer(child.getLoc(), 1);
@@ -693,21 +1037,21 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
       }
       Values args(node->carrier);
       args.push_back(position);
-      return checked(op,
-                     (*layout)->collection->storage ==
-                             CollectionLayout::Storage::FieldCoefficients
-                         ? "vector.get"
-                         : "sequence.get",
-                     (*child)->lanes, args, {typed(node->collection)});
+      return (*layout)->collection->storage ==
+                     CollectionLayout::Storage::FieldCoefficients
+                 ? emit<VectorGetOp>(op, (*child)->lanes, args,
+                                     {typed(node->collection)})
+                 : emit<SequenceGetOp>(op, (*child)->lanes, args,
+                                       {typed(node->collection)});
     }
     Values result;
     for (auto [i, factor] : enumerate(node->children)) {
       Value index = position;
       if (node->kind == Domain::Product) {
-        index = checked(op, "index.div", {builder.getI64Type()},
-                        {position, node->suffixes[i]})[0];
-        index = checked(op, "index.mod", {builder.getI64Type()},
-                        {index, factor->count})[0];
+        index = emit<IndexDivOp>(op, {builder.getI64Type()},
+                                 {position, node->suffixes[i]})[0];
+        index = emit<IndexModOp>(op, {builder.getI64Type()},
+                                 {index, factor->count})[0];
       }
       auto value = items(factor, index);
       if (failed(value))
@@ -716,9 +1060,8 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
     }
     return result;
   };
-  Values domainArguments = get(entry->domain, map),
-         captures = get(entry->captures, map);
-  Values initial = get(entry->initialState, map);
+  Values domainArguments = get(entry->domain), captures = get(entry->captures);
+  Values initial = get(entry->initialState);
   Type collection;
   const ValueLayout *outputLayout = nullptr;
   Value output, capacity;
@@ -739,8 +1082,8 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
                                          CollectionLayout::Storage::PackedBytes)
       return refuse(op, "unsupported collected element family");
     if (auto array = dyn_cast<data::FieldArrayType>(collection))
-      checked(op, "range.check", {},
-              {count, integer(op->getLoc(), array.getLength())});
+      emit<RangeCheckOp>(op, {},
+                         {count, integer(op->getLoc(), array.getLength())});
     capacity = count;
     if (!isa<data::FieldArrayType, data::FixedVectorType>(collection)) {
       // Traversal cardinality is independent of selected output cardinality.
@@ -751,13 +1094,12 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
       capacity =
           arith::SelectOp::create(builder, op->getLoc(), fits, count, ceiling);
     }
-    output =
-        checked(op,
-                outputLayout->collection->storage ==
-                        CollectionLayout::Storage::FieldCoefficients
-                    ? "vector.alloc"
-                    : "sequence.alloc",
-                {builder.getI64Type()}, {capacity}, {typed(collection)})[0];
+    output = (outputLayout->collection->storage ==
+                      CollectionLayout::Storage::FieldCoefficients
+                  ? emit<VectorAllocOp>(op, {builder.getI64Type()}, {capacity},
+                                        {typed(collection)})
+                  : emit<SequenceAllocOp>(op, {builder.getI64Type()},
+                                          {capacity}, {typed(collection)}))[0];
     initial = {integer(op->getLoc(), 0)};
   }
   auto loop =
@@ -773,7 +1115,7 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
     auto arguments = [&](bool state) {
       Values args;
       if (scoped)
-        args.push_back(map.lookup(op->getOperand(0))[0]);
+        args.push_back(get(op->getOperand(0))[0]);
       if (state)
         append_range(args, loop.getRegionIterArgs());
       append_range(args, *item);
@@ -782,7 +1124,7 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
       return args;
     };
     auto collect = [&]() -> FailureOr<Values> {
-      auto result = call(op, callback->symbol, arguments(false));
+      auto result = call(op, computation.helper, arguments(false));
       if (failed(result))
         return failure();
       auto element = layouts.get(outputLayout->collection->element);
@@ -795,28 +1137,23 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
         return failure();
       Values args{output, capacity, loop.getRegionIterArgs()[0]};
       append_range(args, *result);
-      checked(op,
-              outputLayout->collection->storage ==
-                      CollectionLayout::Storage::FieldCoefficients
-                  ? "vector.set"
-                  : "sequence.set",
-              {}, args, {typed(collection)});
+      if (outputLayout->collection->storage ==
+          CollectionLayout::Storage::FieldCoefficients)
+        emit<VectorSetOp>(op, {}, args, {typed(collection)});
+      else
+        emit<SequenceSetOp>(op, {}, args, {typed(collection)});
       return Values{arith::AddIOp::create(builder, op->getLoc(),
                                           loop.getRegionIterArgs()[0],
                                           integer(op->getLoc(), 1))};
     };
     auto step = [&]() -> FailureOr<Values> {
-      return fold ? call(op, callback->symbol, arguments(true)) : collect();
+      return fold ? call(op, computation.helper, arguments(true)) : collect();
     };
     FailureOr<Values> result = failure();
     if (!computation.predicate)
       result = step();
     else {
-      auto predicate =
-          finite::readCallbackABI(computation, finite::CallbackRole::Predicate);
-      if (failed(predicate))
-        return refuse(op, "invalid finite predicate ABI");
-      auto condition = call(op, predicate->symbol, arguments(false));
+      auto condition = call(op, computation.predicate, arguments(false));
       if (failed(condition) || condition->size() != 1 ||
           !(*condition)[0].getType().isInteger(1))
         return refuse(op, "finite predicate requires Boolean result");
@@ -825,6 +1162,12 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
                                       (*condition)[0], true);
       {
         OpBuilder::InsertionGuard branchGuard(builder);
+        // SCF creates implicit yields when the converted state has no lanes.
+        // Replace them through the conversion rewriter before filling either
+        // arm, just as for the enclosing loop's implicit terminator.
+        for (Region *arm : {&branch.getThenRegion(), &branch.getElseRegion()})
+          if (!arm->front().empty())
+            builder.eraseOp(arm->front().getTerminator());
         builder.setInsertionPointToStart(&branch.getThenRegion().front());
         auto value = step();
         if (failed(value) || !llvm::equal(ValueRange(*value).getTypes(),
@@ -840,43 +1183,42 @@ LogicalResult Lowering::lowerFinite(Operation *op, ValueMap &map) {
     if (failed(result) || result->size() != initial.size())
       return refuse(op, "finite callback result differs from carried layout");
     if (!loop.getBody()->empty() && isa<scf::YieldOp>(loop.getBody()->back()))
-      loop.getBody()->back().erase();
+      builder.eraseOp(&loop.getBody()->back());
     builder.setInsertionPointToEnd(loop.getBody());
     scf::YieldOp::create(builder, op->getLoc(), *result);
   }
-  return bind(
-      op, fold ? Values(loop.getResults()) : Values{output, loop.getResult(0)},
-      map);
+  return bind(op, fold ? Values(loop.getResults())
+                       : Values{output, loop.getResult(0)});
 }
 
-LogicalResult
-Lowering::lowerOperation(Operation *op, ValueMap &map,
-                         const llvm::DenseMap<Block *, Block *> &blocks) {
+LogicalResult Lowering::lowerOperation(Operation *op) {
   StringRef name = op->getName().getStringRef();
   Location loc = op->getLoc();
-  Values operands = get(op->getOperands(), map);
+  Values operands = get(op->getOperands());
   if (name == "exec.apply")
-    return lowerBinding(op, map);
+    return lowerBinding(op);
   if (name == "exec.fold" || name == "exec.collect" ||
       name == "data.finite_fold" || name == "data.finite_collect")
-    return lowerFinite(op, map);
+    return lowerFinite(op);
   if (name == "protocol.loop")
-    return lowerLoop(op, map);
+    return lowerLoop(op);
+  if (name == "protocol.yield") {
+    scf::YieldOp::create(builder, loc, operands);
+    return success();
+  }
   if (name == "func.return" || name == "protocol.finish") {
     func::ReturnOp::create(builder, loc, operands);
     return success();
   }
   if (name == "cf.br") {
-    cf::BranchOp::create(builder, loc, blocks.lookup(op->getSuccessor(0)),
-                         operands);
+    cf::BranchOp::create(builder, loc, op->getSuccessor(0), operands);
     return success();
   }
   if (auto branch = dyn_cast<cf::CondBranchOp>(op)) {
-    cf::CondBranchOp::create(builder, loc, map.lookup(branch.getCondition())[0],
-                             blocks.lookup(branch.getTrueDest()),
-                             get(branch.getTrueDestOperands(), map),
-                             blocks.lookup(branch.getFalseDest()),
-                             get(branch.getFalseDestOperands(), map));
+    cf::CondBranchOp::create(
+        builder, loc, get(branch.getCondition())[0], branch.getTrueDest(),
+        get(branch.getTrueDestOperands()), branch.getFalseDest(),
+        get(branch.getFalseDestOperands()));
     return success();
   }
   if (name == "exec.dispatch") {
@@ -885,10 +1227,9 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
         op->getAttrOfType<DenseI32ArrayAttr>("successor_operand_segments");
     if (!sizes || sizes.size() != 2 || sizes[0] < 0)
       return refuse(op, "invalid checked outcome dispatch");
-    Values args = map.lookup(op->getOperand(0));
-    append_range(args, get(op->getOperands().slice(1, sizes[0]), map));
-    cf::BranchOp::create(builder, loc, blocks.lookup(op->getSuccessor(0)),
-                         args);
+    Values args = get(op->getOperand(0));
+    append_range(args, get(op->getOperands().slice(1, sizes[0])));
+    cf::BranchOp::create(builder, loc, op->getSuccessor(0), args);
     return success();
   }
   if (name == "exec.match") {
@@ -900,22 +1241,25 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
         size_t(segments.size()) != variant.getAlternatives().size() + 1)
       return refuse(op, "invalid checked variant dispatch");
     auto type = builder.getNamedAttr("value_type", TypeAttr::get(variant));
-    Value input = map.lookup(op->getOperand(1))[0];
+    Value input = get(op->getOperand(1))[0];
     Value tag =
-        checked(op, "variant.tag", {builder.getI64Type()}, {input}, {type})[0];
+        emit<VariantTagOp>(op, {builder.getI64Type()}, {input}, {type})[0];
     Region *region = builder.getInsertionBlock()->getParent();
     unsigned forwarded = 2 + segments[0];
     // Dispatch to dedicated arm blocks before reading any payload. Inactive
     // alternatives can have different sizes and must never be eagerly loaded.
     for (auto [i, alternative] : enumerate(variant.getAlternatives())) {
-      auto *load = new Block;
-      region->push_back(load);
+      Block *load;
       Block *next = nullptr;
+      {
+        OpBuilder::InsertionGuard guard(builder);
+        load = builder.createBlock(region);
+        if (i + 1 != variant.getAlternatives().size())
+          next = builder.createBlock(region);
+      }
       if (i + 1 == variant.getAlternatives().size())
         cf::BranchOp::create(builder, loc, load);
       else {
-        next = new Block;
-        region->push_back(next);
         auto selected = arith::CmpIOp::create(
             builder, loc, arith::CmpIPredicate::eq, tag, integer(loc, i));
         cf::CondBranchOp::create(builder, loc, selected, load, ValueRange{},
@@ -927,46 +1271,46 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
         auto lanes = converted(TypeRange(payload), op);
         if (failed(lanes))
           return failure();
-        append_range(
-            args, checked(op, "variant.get", *lanes, {input},
-                          {type,
-                           builder.getNamedAttr("alternative",
-                                                builder.getI32IntegerAttr(i)),
-                           builder.getNamedAttr(
-                               "payload", builder.getI32IntegerAttr(index))}));
+        append_range(args,
+                     emit<VariantGetOp>(
+                         op, *lanes, {input},
+                         {type,
+                          builder.getNamedAttr("alternative",
+                                               builder.getI32IntegerAttr(i)),
+                          builder.getNamedAttr(
+                              "payload", builder.getI32IntegerAttr(index))}));
       }
-      append_range(
-          args, get(op->getOperands().slice(forwarded, segments[i + 1]), map));
+      append_range(args,
+                   get(op->getOperands().slice(forwarded, segments[i + 1])));
       forwarded += segments[i + 1];
-      cf::BranchOp::create(builder, loc, blocks.lookup(op->getSuccessor(i + 1)),
-                           args);
+      cf::BranchOp::create(builder, loc, op->getSuccessor(i + 1), args);
       if (next)
         builder.setInsertionPointToStart(next);
     }
     return success();
   }
   if (name == "exec.returned")
-    return bind(op, operands, map);
+    return bind(op, operands);
   if (name == "exec.complete" || name == "exec.test") {
     active(op, operands[0]);
-    return bind(op, ValueRange(operands).drop_front(), map);
+    return bind(op, ValueRange(operands).drop_front());
   }
   if (name == "exec.boolean") {
     active(op, operands[0]);
     auto value = op->getAttrOfType<BoolAttr>("value");
-    return bind(op, {integer(loc, value.getValue(), 1)}, map);
+    return bind(op, {integer(loc, value.getValue(), 1)});
   }
   if (name == "exec.reject") {
     active(op, operands[0]);
-    checked(op, "source.stop", {}, {},
-            {builder.getNamedAttr("site", op->getAttr("site"))});
-    return bind(op, {integer(loc, 0)}, map);
+    emit<SourceStopOp>(op, {}, {},
+                       {builder.getNamedAttr("site", op->getAttr("site"))});
+    return bind(op, {integer(loc, 0)});
   }
   if (name == "exec.failed") {
     // Only a directly rejecting block can still reach this operation; rejection
     // already emitted a nonreturning effect. Retain an explicit second terminal
     // effect rather than manufacturing a successful source outcome.
-    checked(op, "source.stop", {}, {});
+    emit<SourceStopOp>(op, {}, {});
     auto results = converted(op->getResultTypes(), op);
     if (failed(results))
       return failure();
@@ -974,16 +1318,16 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     for (Type type : *results)
       inactive.push_back(
           constant(loc, type, APInt(type.getIntOrFloatBitWidth(), 0)));
-    return bind(op, inactive, map);
+    return bind(op, inactive);
   }
   if (name == "exec.range") {
     active(op, operands[0]);
-    checked(op, "range.admit", {}, ValueRange(operands).drop_front());
-    return bind(op, ValueRange(operands).drop_front(), map);
+    emit<RangeAdmitOp>(op, {}, ValueRange(operands).drop_front());
+    return bind(op, ValueRange(operands).drop_front());
   }
   if (name == "runtime.iteration") {
     active(op, operands[0]);
-    return bind(op, {operands[1]}, map);
+    return bind(op, {operands[1]});
   }
   if (name == "runtime.enter_scope") {
     if (failed(checkCapabilities(op, op->getOperandTypes())))
@@ -991,9 +1335,8 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     Value generation = integer(loc, UINT64_MAX);
     for (Value value : op->getOperands())
       if (isTranscript(value.getType()))
-        generation = map.lookup(value)[0];
-    return bind(op, checkedResult(op, "scope.enter", {operands[0], generation}),
-                map);
+        generation = get(value)[0];
+    return bind(op, emitResult<ScopeEnterOp>(op, {operands[0], generation}));
   }
   if (name == "runtime.exit_scope") {
     if (failed(checkCapabilities(op, op->getOperandTypes())))
@@ -1010,27 +1353,27 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
         return failure();
       offset += convertedTypes->size();
     }
-    auto ticket = checked(op, "scope.exit", {builder.getI64Type()},
-                          {operands[0], generation});
+    auto ticket = emit<ScopeExitOp>(op, {builder.getI64Type()},
+                                    {operands[0], generation});
     append_range(ticket, ValueRange(operands).drop_front());
-    return bind(op, ticket, map);
+    return bind(op, ticket);
   }
   if (name == "runtime.borrow_transfer") {
     auto ticket =
-        checked(op, "transfer.make", {builder.getI64Type()}, {operands[0]});
+        emit<TransferMakeOp>(op, {builder.getI64Type()}, {operands[0]});
     append_range(ticket, ValueRange(operands).drop_front());
-    return bind(op, ticket, map);
+    return bind(op, ticket);
   }
   if (name == "runtime.accept_transfer") {
-    checked(op, "transfer.accept", {}, {operands[0], operands[1]});
-    return bind(op, ValueRange(operands).drop_front(2), map);
+    emit<TransferAcceptOp>(op, {}, {operands[0], operands[1]});
+    return bind(op, ValueRange(operands).drop_front(2));
   }
   if (name == "runtime.transfer_values") {
-    checked(op, "transfer.check", {}, {operands[0]});
-    return bind(op, ValueRange(operands).drop_front(), map);
+    emit<TransferCheckOp>(op, {}, {operands[0]});
+    return bind(op, ValueRange(operands).drop_front());
   }
   if (name == "runtime.release_transfer") {
-    checked(op, "transfer.release", {}, {operands[0]});
+    emit<TransferReleaseOp>(op, {}, {operands[0]});
     return success();
   }
   if (name == "func.call" || name == "exec.compute" ||
@@ -1051,11 +1394,10 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       Value generation = integer(loc, UINT64_MAX);
       for (Value value : op->getOperands())
         if (isTranscript(value.getType()))
-          generation = map.lookup(value)[0];
-      Value parent =
-          checked(op, "scope.current", {builder.getI64Type()}, {})[0];
-      scope = checked(op, "scope.enter", {builder.getI64Type()},
-                      {parent, generation})[0];
+          generation = get(value)[0];
+      Value parent = emit<ScopeCurrentOp>(op, {builder.getI64Type()}, {})[0];
+      scope = emit<ScopeEnterOp>(op, {builder.getI64Type()},
+                                 {parent, generation})[0];
       args.insert(args.begin(), scope);
     }
     auto results = call(op, callee, args);
@@ -1072,23 +1414,22 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
           return failure();
         offset += convertedTypes->size();
       }
-      checked(op, "scope.exit", {}, {scope, generation});
+      emit<ScopeExitOp>(op, {builder.getI64Type()}, {scope, generation});
     }
-    return bind(op, *results, map);
+    return bind(op, *results);
   }
   if (name == "protocol.receive") {
     if (op->getNumResults() != 1)
       return refuse(op, "receive requires one complete payload");
-    return bind(op,
-                checkedResult(op, "proof.receive", {},
-                              {builder.getNamedAttr(
-                                  "value_type",
-                                  TypeAttr::get(op->getResult(0).getType()))}),
-                map);
+    return bind(
+        op, emitResult<ProofReceiveOp>(
+                op, {},
+                {builder.getNamedAttr(
+                    "value_type", TypeAttr::get(op->getResult(0).getType()))}));
   }
   if (name == "protocol.guard") {
-    checked(op, "source.stop", {}, operands,
-            {builder.getNamedAttr("site", op->getAttr("site"))});
+    emit<SourceGuardOp>(op, {}, operands,
+                        {builder.getNamedAttr("site", op->getAttr("site"))});
     return success();
   }
   StringRef scalar = llvm::StringSwitch<StringRef>(name)
@@ -1108,8 +1449,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     return *lowerScalar(op, scalar, operands,
                         name == "algebra.constant"
                             ? builder.getArrayAttr({op->getAttr("value")})
-                            : builder.getArrayAttr({}),
-                        map);
+                            : builder.getArrayAttr({}));
   if (name == "data.make" || name == "exec.variant") {
     bool scoped = name == "exec.variant";
     if (scoped)
@@ -1127,14 +1467,12 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     if (selected == alternatives.end())
       return refuse(op, "unknown variant alternative");
     return bind(
-        op,
-        checkedResult(
-            op, "variant.make", ValueRange(operands).drop_front(scoped ? 1 : 0),
-            {builder.getNamedAttr("value_type", TypeAttr::get(type)),
-             builder.getNamedAttr(
-                 "alternative",
-                 builder.getI32IntegerAttr(selected - alternatives.begin()))}),
-        map);
+        op, emitResult<VariantMakeOp>(
+                op, ValueRange(operands).drop_front(scoped ? 1 : 0),
+                {builder.getNamedAttr("value_type", TypeAttr::get(type)),
+                 builder.getNamedAttr("alternative",
+                                      builder.getI32IntegerAttr(
+                                          selected - alternatives.begin()))}));
   }
   if (name == "data.is" || name == "data.get") {
     auto variant = dyn_cast<data::VariantType>(op->getOperand(0).getType());
@@ -1146,15 +1484,13 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       if (!index || variant.getAlternatives().size() != 1)
         return refuse(op, "total projection requires a single alternative");
       return bind(
-          op,
-          checkedResult(
-              op, "variant.get", operands,
-              {type,
-               builder.getNamedAttr("alternative",
-                                    builder.getI32IntegerAttr(0)),
-               builder.getNamedAttr(
-                   "payload", builder.getI32IntegerAttr(index.getUInt()))}),
-          map);
+          op, emitResult<VariantGetOp>(
+                  op, operands,
+                  {type,
+                   builder.getNamedAttr("alternative",
+                                        builder.getI32IntegerAttr(0)),
+                   builder.getNamedAttr("payload", builder.getI32IntegerAttr(
+                                                       index.getUInt()))}));
     }
     auto label = op->getAttrOfType<StringAttr>("alternative");
     auto alternatives = variant.getAlternatives();
@@ -1163,25 +1499,22 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     if (selected == alternatives.end())
       return refuse(op, "unknown variant alternative");
     auto tag =
-        checked(op, "variant.tag", {builder.getI64Type()}, operands, {type})[0];
-    return bind(
-        op,
-        {arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::eq, tag,
-                               integer(loc, selected - alternatives.begin()))},
-        map);
+        emit<VariantTagOp>(op, {builder.getI64Type()}, operands, {type})[0];
+    return bind(op, {arith::CmpIOp::create(
+                        builder, loc, arith::CmpIPredicate::eq, tag,
+                        integer(loc, selected - alternatives.begin()))});
   }
   if (name == "data.sequence_empty" || name == "data.sequence_append" ||
       name == "data.sequence_length") {
     Type type = name == "data.sequence_empty" ? op->getResult(0).getType()
                                               : op->getOperand(0).getType();
-    StringRef opcode = name == "data.sequence_empty"    ? "sequence.empty"
-                       : name == "data.sequence_append" ? "sequence.append"
-                                                        : "sequence.length";
-    return bind(op,
-                checkedResult(
-                    op, opcode, operands,
-                    {builder.getNamedAttr("value_type", TypeAttr::get(type))}),
-                map);
+    SmallVector<NamedAttribute> attrs{
+        builder.getNamedAttr("value_type", TypeAttr::get(type))};
+    if (name == "data.sequence_empty")
+      return bind(op, emitResult<SequenceEmptyOp>(op, operands, attrs));
+    if (name == "data.sequence_append")
+      return bind(op, emitResult<SequenceAppendOp>(op, operands, attrs));
+    return bind(op, emitResult<SequenceLengthOp>(op, operands, attrs));
   }
   if (name == "data.bounded_at" || name == "data.array_at") {
     Type type = op->getOperand(0).getType();
@@ -1198,16 +1531,12 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
         return refuse(op, "missing array index");
       operands.push_back(integer(loc, index.getUInt()));
     }
-    return bind(op,
-                checkedResult(
-                    op,
-                    (*layout)->collection->storage ==
+    SmallVector<NamedAttribute> attrs{
+        builder.getNamedAttr("value_type", TypeAttr::get(type))};
+    return bind(op, (*layout)->collection->storage ==
                             CollectionLayout::Storage::FieldCoefficients
-                        ? "vector.get"
-                        : "sequence.get",
-                    operands,
-                    {builder.getNamedAttr("value_type", TypeAttr::get(type))}),
-                map);
+                        ? emitResult<VectorGetOp>(op, operands, attrs)
+                        : emitResult<SequenceGetOp>(op, operands, attrs));
   }
   if (name == "data.array_from_elements") {
     auto array = dyn_cast<data::FieldArrayType>(op->getResult(0).getType());
@@ -1216,17 +1545,17 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     auto type = builder.getNamedAttr("value_type", TypeAttr::get(array));
     Value count = integer(loc, array.getLength());
     Value pointer =
-        checked(op, "vector.alloc", {builder.getI64Type()}, {count}, {type})[0];
+        emit<VectorAllocOp>(op, {builder.getI64Type()}, {count}, {type})[0];
     for (auto [index, element] : enumerate(op->getOperands())) {
       Values args{pointer, count, integer(loc, index)};
-      append_range(args, map.lookup(element));
-      checked(op, "vector.set", {}, args, {type});
+      append_range(args, get(element));
+      emit<VectorSetOp>(op, {}, args, {type});
     }
-    return bind(op, {pointer, count}, map);
+    return bind(op, {pointer, count});
   }
   if (name == "data.index") {
     auto literal = op->getAttrOfType<IntegerAttr>("value");
-    return bind(op, {integer(loc, literal.getUInt())}, map);
+    return bind(op, {integer(loc, literal.getUInt())});
   }
   if (name == "data.dim") {
     auto axis = op->getAttrOfType<IntegerAttr>("axis");
@@ -1238,57 +1567,58 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     if (!axis || axis.getUInt() != 0 || !(*layout)->collection ||
         operands.size() != 2)
       return refuse(op, "unsupported collection dimension");
-    StringRef opcode = (*layout)->collection->storage ==
-                               CollectionLayout::Storage::FieldCoefficients
-                           ? "vector.length"
-                       : (*layout)->kind == ValueLayout::Kind::Bytes
-                           ? "bytes.length"
-                           : "sequence.length";
-    return bind(op,
-                checkedResult(op, opcode, operands,
-                              {builder.getNamedAttr(
-                                  "value_type",
-                                  TypeAttr::get(op->getOperand(0).getType()))}),
-                map);
+    SmallVector<NamedAttribute> attrs{builder.getNamedAttr(
+        "value_type", TypeAttr::get(op->getOperand(0).getType()))};
+    if ((*layout)->collection->storage ==
+        CollectionLayout::Storage::FieldCoefficients)
+      return bind(op, emitResult<VectorLengthOp>(op, operands, attrs));
+    if ((*layout)->kind == ValueLayout::Kind::Bytes)
+      return bind(op, emitResult<BytesLengthOp>(op, operands, attrs));
+    return bind(op, emitResult<SequenceLengthOp>(op, operands, attrs));
   }
   if (name == "data.index_power_of_two") {
-    return bind(op, checkedResult(op, "index.power_of_two", operands), map);
+    return bind(op, emitResult<IndexPowerOfTwoOp>(op, operands));
   }
   if (name == "data.index_equal" || name == "data.index_less")
-    return bind(op,
-                {arith::CmpIOp::create(builder, loc,
-                                       name.ends_with("less")
-                                           ? arith::CmpIPredicate::ult
-                                           : arith::CmpIPredicate::eq,
-                                       operands[0], operands[1])},
-                map);
+    return bind(op, {arith::CmpIOp::create(builder, loc,
+                                           name.ends_with("less")
+                                               ? arith::CmpIPredicate::ult
+                                               : arith::CmpIPredicate::eq,
+                                           operands[0], operands[1])});
   if (name.starts_with("data.index_")) {
-    auto opcode =
-        llvm::StringSwitch<StringRef>(name)
-            .Case("data.index_add", "index.add")
-            .Case("data.index_subtract", "index.sub")
-            .Case("data.index_multiply", "index.mul")
-            .Case("data.index_divide", "index.div")
-            .Case("data.index_modulo", "index.mod")
-            .Case("data.index_wrapping_add", "index.wrapping_add")
-            .Case("data.index_wrapping_subtract", "index.wrapping_sub")
-            .Case("data.index_bit_and", "index.bit_and")
-            .Case("data.index_logical_shift_right", "index.logical_shift_right")
-            .Default("");
-    if (!opcode.empty())
-      return bind(op, checkedResult(op, opcode, operands), map);
+    if (name == "data.index_add")
+      return bind(op, emitResult<IndexAddOp>(op, operands));
+    if (name == "data.index_subtract")
+      return bind(op, emitResult<IndexSubOp>(op, operands));
+    if (name == "data.index_multiply")
+      return bind(op, emitResult<IndexMulOp>(op, operands));
+    if (name == "data.index_divide")
+      return bind(op, emitResult<IndexDivOp>(op, operands));
+    if (name == "data.index_modulo")
+      return bind(op, emitResult<IndexModOp>(op, operands));
+    if (name == "data.index_logical_shift_right")
+      return bind(op, emitResult<IndexLogicalShiftRightOp>(op, operands));
+    if (name == "data.index_wrapping_add")
+      return bind(
+          op, {arith::AddIOp::create(builder, loc, operands[0], operands[1])});
+    if (name == "data.index_wrapping_subtract")
+      return bind(
+          op, {arith::SubIOp::create(builder, loc, operands[0], operands[1])});
+    if (name == "data.index_bit_and")
+      return bind(
+          op, {arith::AndIOp::create(builder, loc, operands[0], operands[1])});
   }
   if (auto select = dyn_cast<arith::SelectOp>(op)) {
-    auto condition = map.lookup(select.getCondition());
-    auto yes = map.lookup(select.getTrueValue());
-    auto no = map.lookup(select.getFalseValue());
+    auto condition = get(select.getCondition());
+    auto yes = get(select.getTrueValue());
+    auto no = get(select.getFalseValue());
     if (condition.size() != 1 || yes.size() != no.size())
       return refuse(op, "invalid expanded selection");
     Values results;
     for (auto [a, b] : zip(yes, no))
       results.push_back(
           arith::SelectOp::create(builder, loc, condition[0], a, b));
-    return bind(op, results, map);
+    return bind(op, results);
   }
   if (name.starts_with("arith.")) {
     // Preserve standard fixed-width arithmetic and predicate semantics. The
@@ -1303,7 +1633,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       return failure();
     if (isa<arith::IndexCastOp, arith::IndexCastUIOp>(op)) {
       if (operands[0].getType() == (*resultTypes)[0])
-        return bind(op, operands, map);
+        return bind(op, operands);
       unsigned from = operands[0].getType().getIntOrFloatBitWidth();
       unsigned to = (*resultTypes)[0].getIntOrFloatBitWidth();
       Value casted;
@@ -1316,7 +1646,7 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
       else
         casted = arith::ExtUIOp::create(builder, loc, (*resultTypes)[0],
                                         operands[0]);
-      return bind(op, {casted}, map);
+      return bind(op, {casted});
     }
     OperationState state(loc, name);
     state.addOperands(operands);
@@ -1331,9 +1661,106 @@ Lowering::lowerOperation(Operation *op, ValueMap &map,
     if (auto literal = op->getAttrOfType<IntegerAttr>("value"))
       state.attributes.set("value", builder.getIntegerAttr((*resultTypes)[0],
                                                            literal.getValue()));
-    return bind(op, builder.create(state)->getResults(), map);
+    return bind(op, builder.create(state)->getResults());
   }
   return refuse(op, "no EVM realization for this reachable operation");
+}
+
+class EndpointConversion final : public ConversionPattern {
+public:
+  EndpointConversion(const PreparedEndpoint &prepared,
+                     const EvmOptions &options, NativeLayouts &layouts,
+                     const EvmTypes &types, MLIRContext *context)
+      : ConversionPattern(types, MatchAnyOpTypeTag(), 1, context),
+        prepared(prepared), options(options), layouts(layouts), types(types) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<ValueRange> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    // The one-to-many adaptor is produced by MLIR, not a target SSA map.
+    if (operands.size() != op->getNumOperands())
+      return failure();
+    auto found = prepared.functions.find(op);
+    if (found != prepared.functions.end()) {
+      const auto &info = found->second;
+      auto function = func::FuncOp::create(rewriter, op->getLoc(), info.name,
+                                           info.signature);
+      function.setPrivate();
+      if (info.entry)
+        function->setAttr("evm.entry", rewriter.getUnitAttr());
+      rewriter.inlineRegionBefore(op->getRegion(0), function.getBody(),
+                                  function.end());
+      for (Block &block : llvm::make_early_inc_range(function.getBody())) {
+        if (prepared.omittedBlocks.contains(&block)) {
+          // Source dispatch edges still name these blocks. Erase their
+          // omitted instructions through the rewriter; remove the empty
+          // unreachable blocks once those incoming edges are converted.
+          for (Operation &nested : llvm::reverse(block))
+            rewriter.eraseOp(&nested);
+          continue;
+        }
+        auto signature = types.convertBlockSignature(&block);
+        if (!signature)
+          return failure();
+        rewriter.applySignatureConversion(&block, *signature, &types);
+      }
+      rewriter.eraseOp(op);
+      return success();
+    }
+    Lowering lowering(prepared, options, layouts, types, rewriter, op,
+                      operands);
+    if (failed(lowering.lowerOperation(op)))
+      return failure();
+    if (!lowering.replaced)
+      rewriter.eraseOp(op);
+    return success();
+  }
+
+private:
+  const PreparedEndpoint &prepared;
+  const EvmOptions &options;
+  NativeLayouts &layouts;
+  const EvmTypes &types;
+};
+
+LogicalResult convertEndpoint(ModuleOp module, const PreparedEndpoint &prepared,
+                              const EvmOptions &options, NativeLayouts &layouts,
+                              const EvmTypes &types) {
+  ConversionTarget target(*module.getContext());
+  target.addLegalOp<ModuleOp>();
+  target.addLegalDialect<EvmDialect>();
+  auto legal = [&](Operation *op) {
+    if (!types.isLegal(op->getOperandTypes()) ||
+        !types.isLegal(op->getResultTypes()))
+      return false;
+    for (Region &region : op->getRegions())
+      for (Block &block : region)
+        if (!prepared.omittedBlocks.contains(&block) &&
+            !types.isLegal(block.getArgumentTypes()))
+          return false;
+    if (auto flags =
+            op->getAttrOfType<arith::IntegerOverflowFlagsAttr>("overflowFlags"))
+      if (flags.getValue() != arith::IntegerOverflowFlags::none)
+        return false;
+    return true;
+  };
+  target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
+    return !prepared.functions.count(op) &&
+           types.isSignatureLegal(op.getFunctionType()) && legal(op);
+  });
+  target.addDynamicallyLegalOp<func::CallOp>([&](func::CallOp op) {
+    // Source call sites must be rewritten even if their lane counts coincide.
+    return !prepared.references.count(op) && legal(op);
+  });
+  target.addDynamicallyLegalOp<
+      func::ReturnOp, cf::BranchOp, cf::CondBranchOp, arith::ConstantOp,
+      arith::CmpIOp, arith::AddIOp, arith::SubIOp, arith::MulIOp, arith::AndIOp,
+      arith::OrIOp, arith::XOrIOp, arith::SelectOp, arith::ExtUIOp,
+      arith::ExtSIOp, arith::TruncIOp, scf::ForOp, scf::IfOp, scf::YieldOp>(
+      legal);
+  RewritePatternSet patterns(module.getContext());
+  patterns.add<EndpointConversion>(prepared, options, layouts, types,
+                                   module.getContext());
+  return applyFullConversion(module, target, std::move(patterns));
 }
 
 // The upstream algorithm only requests fillers for newly introduced inactive
@@ -1391,13 +1818,19 @@ LogicalResult checkTarget(ModuleOp module) {
       arith::XOrIOp, arith::SelectOp, arith::ExtUIOp, arith::ExtSIOp,
       arith::TruncIOp, arith::IndexCastOp, arith::IndexCastUIOp, scf::ForOp,
       scf::IfOp, scf::WhileOp, scf::ConditionOp, scf::YieldOp,
-      scf::IndexSwitchOp, WordOp, CheckedOp>(legalTypes);
-  RewritePatternSet patterns(module.getContext());
-  if (failed(applyFullConversion(module, target, std::move(patterns)))) {
-    module.emitError(
+      scf::IndexSwitchOp,
+#define GET_OP_LIST
+#include "zkc/Dialect/Evm/Ops.cpp.inc"
+      >(legalTypes);
+  WalkResult checked = module.walk([&](Operation *op) {
+    if (target.isLegal(op))
+      return WalkResult::advance();
+    op->emitError(
         "[evm.target-legality] residual unsupported operation or type");
+    return WalkResult::interrupt();
+  });
+  if (checked.wasInterrupted())
     return failure();
-  }
   return success();
 }
 
@@ -1455,9 +1888,19 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   context->getOrLoadDialect<cf::ControlFlowDialect>();
   context->getOrLoadDialect<func::FuncDialect>();
   OwningOpRef<ModuleOp> target(ModuleOp::create(candidate->getLoc()));
-  Lowering lowering(*candidate, *target, options);
-  if (failed(lowering.run()) || failed(verify(*target)))
+  NativeLayouts layouts(*context);
+  EvmTypes types(layouts, context);
+  PreparedEndpoint prepared;
+  if (failed(prepared.prepare(*candidate, *target, types, layouts)) ||
+      failed(convertEndpoint(*target, prepared, options, layouts, types)))
     return zkc::error("evm.lowering", "EVM operation realization failed");
+  for (auto function : target->getOps<func::FuncOp>()) {
+    IRRewriter cleanup(context);
+    (void)eraseUnreachableBlocks(cleanup, function->getRegions());
+  }
+  if (failed(verify(*target)))
+    return zkc::error("evm.lowering",
+                      "EVM operation realization failed verification");
   InactiveIntegerLanes policy;
   for (auto function : target->getOps<func::FuncOp>()) {
     DominanceInfo dominance;

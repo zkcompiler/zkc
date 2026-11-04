@@ -1,4 +1,5 @@
 #include "Arithmetic.h"
+#include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
@@ -23,13 +24,6 @@ function evm_math_zero(ptr, words) {
 }
 function evm_math_get(ptr, i) -> value { value := mload(add(ptr, mul(i, 32))) }
 function evm_math_set(ptr, i, value) { mstore(add(ptr, mul(i, 32)), value) }
-function evm_math_base_power(a, n, p) -> r {
-    r := 1
-    for {} n { n := shr(1, n) } {
-        if and(n, 1) { r := mulmod(r, a, p) }
-        a := mulmod(a, a, p)
-    }
-}
 function evm_math_base_inverse(a, p) -> r {
     // Source failure must happen before allocation and before any precompile.
     if iszero(a) { evm_source(2) }
@@ -134,24 +128,6 @@ function evm_math_field_memory(a, d, p) {
     if iszero(lt(evm_math_get(a, i), p)) { evm_fault(9) }
   }
 }
-function evm_math_extension_power(a, n, d, beta, p) -> out {
-  out := evm_alloc(mul(d, 32))
-  let scratch := mload(0x40)
-  let accumulator := evm_alloc(mul(d, 32))
-  let power := evm_alloc(mul(d, 32))
-  evm_math_zero(accumulator, d) evm_math_set(accumulator, 0, 1)
-  mcopy(power, a, mul(d, 32))
-  let temporary := mload(0x40)
-  for {} n { n := shr(1, n) } {
-    if and(n, 1) {
-      let product := evm_math_extension_multiply(accumulator, power, d, beta, p)
-      mcopy(accumulator, product, mul(d, 32)) mstore(0x40, temporary)
-    }
-    let square := evm_math_extension_multiply(power, power, d, beta, p)
-    mcopy(power, square, mul(d, 32)) mstore(0x40, temporary)
-  }
-  mcopy(out, accumulator, mul(d, 32)) mstore(0x40, scratch)
-}
 )YUL";
 }
 } // namespace
@@ -174,19 +150,25 @@ std::string Arithmetic::helpers() const {
   return result;
 }
 
-Expected<std::string> Arithmetic::helper(CheckedOp op) {
-  if (failed(op.verify()))
+Expected<std::string> Arithmetic::helper(Operation *op) {
+  if (failed(mlir::verify(op)))
     return zkc::error("evm.arithmetic", "invalid checked arithmetic operation");
   auto attr = op->getAttrOfType<TypeAttr>("value_type");
-  if (!attr || (!op.opcode().starts_with("field.") &&
-                !op.opcode().starts_with("vector.")))
+  if (!attr ||
+      (!isa<FieldConstantOp, FieldAddOp, FieldSubOp, FieldMulOp, FieldNegOp,
+            FieldEqualOp, FieldFromIndexOp, FieldEmbedOp, FieldInverseOp>(op) &&
+       !isa<VectorConstantOp, VectorEmptyOp, VectorLengthOp, VectorAppendOp,
+            VectorSplitOp, VectorSumOp, VectorAllocOp, VectorGetOp, VectorSetOp,
+            VectorEqualOp>(op)))
     return zkc::error(
         "evm.arithmetic",
         "requires typed field or coefficient collection operation");
   auto layout = storage->layouts.get(attr.getValue());
   if (!layout)
     return layout.takeError();
-  bool vector = op.opcode().starts_with("vector.");
+  bool vector = isa<VectorConstantOp, VectorEmptyOp, VectorLengthOp,
+                    VectorAppendOp, VectorSplitOp, VectorSumOp, VectorAllocOp,
+                    VectorGetOp, VectorSetOp, VectorEqualOp>(op);
   auto scalar = dyn_cast<algebra::FieldType>(
       vector ? (*layout)->collection->element : attr.getValue());
   auto field = storage->layouts.field(scalar);
@@ -196,7 +178,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
   std::string p = word(f.modulus), d = std::to_string(f.degree),
               beta = word(f.beta);
   std::string stride = std::to_string(f.coefficientBytes());
-  std::string code = op.opcode().str();
+  std::string code = op->getName().stripDialect().str();
   std::string identity = p + "_" + d + "_" + beta;
   if (auto array = dyn_cast<data::FieldArrayType>(attr.getValue()))
     identity += "_array_" + std::to_string(array.getLength());
@@ -243,18 +225,17 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
     out << "evm_memory(" << pointer << ", mul(" << count << ", " << stride
         << "))\n";
   };
-  StringRef opcode = op.opcode();
   if (!vector) {
-    if (opcode == "field.constant") {
+    if (isa<FieldConstantOp>(op)) {
       begin("", "r");
       if (f.degree > 1) {
         allocateField();
         out << "mstore(r, " << word(literal.getValue().getValue()) << ")\n";
       } else
         out << "r := " << word(literal.getValue().getValue()) << "\n";
-    } else if (opcode == "field.from_index" || opcode == "field.embed") {
+    } else if (isa<FieldFromIndexOp>(op) || isa<FieldEmbedOp>(op)) {
       begin("a", "r");
-      if (opcode == "field.embed")
+      if (isa<FieldEmbedOp>(op))
         out << "if iszero(lt(a, " << p << ")) { evm_fault(9) }\n";
       else
         out << "if gt(a, 0xffffffffffffffff) { evm_fault(9) }\n";
@@ -263,7 +244,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
         out << "mstore(r, mod(a, " << p << "))\n";
       } else
         out << "r := mod(a, " << p << ")\n";
-    } else if (opcode == "field.inverse") {
+    } else if (isa<FieldInverseOp>(op)) {
       begin("a", "r");
       check("a");
       if (f.degree == 1)
@@ -271,16 +252,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
       else
         out << "r := evm_math_extension_inverse(a, " << d << ", " << beta
             << ", " << p << ")\n";
-    } else if (opcode == "field.pow") {
-      begin("a, n", "r");
-      check("a");
-      out << "if gt(n, 0xffffffffffffffff) { evm_fault(9) }\n";
-      if (f.degree == 1)
-        out << "r := evm_math_base_power(a, n, " << p << ")\n";
-      else
-        out << "r := evm_math_extension_power(a, n, " << d << ", " << beta
-            << ", " << p << ")\n";
-    } else if (opcode == "field.neg") {
+    } else if (isa<FieldNegOp>(op)) {
       begin("a", "r");
       check("a");
       if (f.degree == 1)
@@ -295,7 +267,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
       begin("a, b", "r");
       check("a");
       check("b");
-      if (opcode == "field.equal") {
+      if (isa<FieldEqualOp>(op)) {
         if (f.degree == 1)
           out << "r := eq(a, b)\n";
         else
@@ -303,29 +275,16 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
               << ") { i := add(i, 1) } { if "
                  "iszero(eq(evm_math_get(a,i),evm_math_get(b,i))) { r := 0 "
                  "break } }\n";
-      } else if (opcode == "field.div") {
-        if (f.degree == 1)
-          out << "r := mulmod(a, evm_math_base_inverse(b, " << p << "), " << p
-              << ")\n";
-        else
-          out << "evm_math_extension_nonzero(b," << d << ") r := evm_alloc("
-              << stride
-              << ") let scratch := mload(0x40) let inverse := "
-                 "evm_math_extension_inverse(b,"
-              << d << "," << beta << "," << p
-              << ") let product := evm_math_extension_multiply(a,inverse," << d
-              << "," << beta << "," << p << ") mcopy(r,product," << stride
-              << ") mstore(0x40,scratch)\n";
-      } else if (opcode == "field.mul" && f.degree > 1) {
+      } else if (isa<FieldMulOp>(op) && f.degree > 1) {
         out << "r := evm_math_extension_multiply(a,b," << d << "," << beta
             << "," << p << ")\n";
       } else {
         auto expression = [&](StringRef a, StringRef b) {
-          if (opcode == "field.mul")
+          if (isa<FieldMulOp>(op))
             out << "mulmod(" << a << "," << b << "," << p << ")";
           else {
             out << "addmod(" << a << ",";
-            if (opcode == "field.sub")
+            if (isa<FieldSubOp>(op))
               out << "sub(" << p << "," << b << ")";
             else
               out << b;
@@ -345,7 +304,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
         }
       }
     }
-  } else if (opcode == "vector.empty" || opcode == "vector.constant") {
+  } else if (isa<VectorEmptyOp>(op) || isa<VectorConstantOp>(op)) {
     begin("", "r, n");
     unsigned count = literals ? literals.size() : 0;
     if (count > storage->limits.publicElements)
@@ -361,22 +320,21 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
                    cast<algebra::FieldLiteralAttr>(value).getValue().getValue())
             << ")\n";
     }
-  } else if (opcode == "vector.alloc") {
+  } else if (isa<VectorAllocOp>(op)) {
     begin("n", "r");
     out << "if gt(n," << storage->limits.publicElements
         << ") { evm_resource(2) } r := evm_alloc(mul(n," << stride << "))\n";
-  } else if (opcode == "vector.get" || opcode == "vector.set") {
-    begin(opcode == "vector.get" ? "a, n, i" : "a, n, i, v",
-          opcode == "vector.get" ? "r" : "");
-    if (opcode == "vector.set")
+  } else if (isa<VectorGetOp>(op) || isa<VectorSetOp>(op)) {
+    begin(isa<VectorGetOp>(op) ? "a, n, i" : "a, n, i, v",
+          isa<VectorGetOp>(op) ? "r" : "");
+    if (isa<VectorSetOp>(op))
       out << "if iszero(lt(i," << storage->limits.publicElements
           << ")) { evm_resource(2) }\n";
     out << "if iszero(lt(i,n)) { "
-        << (opcode == "vector.get" ? "evm_source(4)" : "evm_fault(3)")
-        << " }\n";
+        << (isa<VectorGetOp>(op) ? "evm_source(4)" : "evm_fault(3)") << " }\n";
     collectionCheck("a", "n");
     out << "let element := add(a,mul(i," << stride << "))\n";
-    if (opcode == "vector.get") {
+    if (isa<VectorGetOp>(op)) {
       if (f.degree == 1)
         out << "r := mload(element)\n";
       else
@@ -389,11 +347,11 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
       else
         out << "mcopy(element,v," << stride << ")\n";
     }
-  } else if (opcode == "vector.length") {
+  } else if (isa<VectorLengthOp>(op)) {
     begin("a, n", "r");
     collectionCheck("a", "n");
     out << "r := n\n";
-  } else if (opcode == "vector.append") {
+  } else if (isa<VectorAppendOp>(op)) {
     begin("a, n, v", "r, length");
     collectionCheck("a", "n");
     check("v");
@@ -406,13 +364,13 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
       out << "mstore(element,v)\n";
     else
       out << "mcopy(element,v," << stride << ")\n";
-  } else if (opcode == "vector.split") {
+  } else if (isa<VectorSplitOp>(op)) {
     begin("a, n", "left, ln, right, rn");
     out << "if or(iszero(n),and(n,1)) { evm_source(5) }\n";
     collectionCheck("a", "n");
     out << "left := a ln := div(n,2) right := add(a,mul(ln," << stride
         << ")) rn := ln\n";
-  } else if (opcode == "vector.sum") {
+  } else if (isa<VectorSumOp>(op)) {
     begin("a, n", "r");
     collectionCheck("a", "n");
     if (f.degree > 1)
@@ -431,7 +389,7 @@ Expected<std::string> Arithmetic::helper(CheckedOp op) {
              ","
           << p << ")) }\n";
     out << "}\n";
-  } else if (opcode == "vector.equal") {
+  } else if (isa<VectorEqualOp>(op)) {
     begin("a, n, b, m", "r");
     collectionCheck("a", "n");
     collectionCheck("b", "m");

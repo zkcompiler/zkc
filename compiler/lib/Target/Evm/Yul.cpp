@@ -3,13 +3,13 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/BindingTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
@@ -17,6 +17,7 @@
 #include "zkc/Target/Evm/Wire.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
@@ -104,7 +105,7 @@ private:
   }
   LogicalResult operation(Operation *);
   LogicalResult block(Block &, bool terminator = false);
-  LogicalResult transcript(CheckedOp);
+  LogicalResult transcript(Operation *);
   LogicalResult function(func::FuncOp);
   LogicalResult outer(func::FuncOp);
   LogicalResult refuse(Operation *op, StringRef reason) {
@@ -134,12 +135,9 @@ std::string sign(Type type, StringRef value) {
          ")";
 }
 
-LogicalResult Exporter::transcript(CheckedOp op) {
-  auto encoded = op->getAttrOfType<StringAttr>("origin");
-  auto origin = encoded
-                    ? protocol::decodeNativeOriginTemplate(encoded.getValue())
-                    : Expected<protocol::NativeOriginTemplate>(
-                          zkc::error("evm.origin", "missing occurrence"));
+LogicalResult Exporter::transcript(Operation *op) {
+  auto origin = runtime::exportNativeOrigin(
+      op->getAttrOfType<runtime::NativeOriginAttr>("origin"));
   if (!origin) {
     consumeError(origin.takeError());
     return refuse(op, "invalid transcript origin");
@@ -188,9 +186,9 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   if (prefix->size() + suffix->size() + 9 + depth * 29 > 4096)
     return refuse(op,
                   "origin template exceeds the bounded transition workspace");
-  unsigned coordinates = op.getNumOperands() - 2;
-  Value coordinateData = op.getOperand(coordinates);
-  Value coordinateLength = op.getOperand(coordinates + 1);
+  unsigned coordinates = op->getNumOperands() - 2;
+  Value coordinateData = op->getOperand(coordinates);
+  Value coordinateLength = op->getOperand(coordinates + 1);
   out << "{\nlet occurrence := evm_alloc(4096)\n";
   out << "if iszero(eq(" << name(coordinateLength) << ", " << depth
       << ")) { evm_fault(8) }\n";
@@ -206,7 +204,7 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   copyStatic(*suffix, "end");
   out << "end := add(end, " << suffix->size() << ")\n"
       << "if gt(sub(end, occurrence), 4096) { evm_resource(9) }\n";
-  if (op.opcode() == "transcript.observe") {
+  if (isa<TranscriptObserveOp>(op)) {
     auto type = op->getAttrOfType<TypeAttr>("value_type");
     if (!type)
       return refuse(op, "observation lacks exact native value_type");
@@ -216,13 +214,13 @@ LogicalResult Exporter::transcript(CheckedOp op) {
       return refuse(op, reason);
     }
     out << "let frame, frameLength := " << *encoder << "("
-        << list(op.getOperands().slice(2, coordinates - 2)) << ")\n";
-    out << list(op.getResults()) << " := evm_transcript_observe("
-        << name(op.getOperand(0)) << ", " << name(op.getOperand(1))
+        << list(op->getOperands().slice(2, coordinates - 2)) << ")\n";
+    out << list(op->getResults()) << " := evm_transcript_observe("
+        << name(op->getOperand(0)) << ", " << name(op->getOperand(1))
         << ", frame, frameLength, occurrence, sub(end, occurrence))\n";
   } else {
-    out << list(op.getResults()) << " := evm_transcript_challenge("
-        << name(op.getOperand(0)) << ", " << name(op.getOperand(1))
+    out << list(op->getResults()) << " := evm_transcript_challenge("
+        << name(op->getOperand(0)) << ", " << name(op->getOperand(1))
         << ", occurrence, sub(end, occurrence))\n";
   }
   out << "mstore(0x40, occurrence)\n}\n";
@@ -238,17 +236,11 @@ LogicalResult Exporter::operation(Operation *op) {
         << " := " << number(literal.getValue()) << "\n";
     return success();
   }
-  if (auto word = dyn_cast<WordOp>(op)) {
-    out << "let " << name(op->getResult(0)) << " := " << word.opcode() << "("
-        << list(op->getOperands()) << ")\n";
-    return success();
-  }
-  if (auto checked = dyn_cast<CheckedOp>(op)) {
+  if (isa<EvmDialect>(op->getDialect())) {
     declare(op->getResults());
-    StringRef opcode = checked.opcode();
-    if (opcode.starts_with("transcript."))
-      return transcript(checked);
-    if (opcode == "source.stop") {
+    if (isa<TranscriptObserveOp, TranscriptChallengeOp>(op))
+      return transcript(op);
+    if (isa<SourceStopOp, SourceGuardOp>(op)) {
       uint64_t code = 0;
       if (auto site = op->getAttrOfType<StringAttr>("site")) {
         // Stable bounded FNV-1a site code, not a source admission identity.
@@ -266,16 +258,58 @@ LogicalResult Exporter::operation(Operation *op) {
     }
     Expected<std::string> helper =
         zkc::error("evm.yul", "unsupported checked helper");
-    if (opcode.starts_with("field.") || opcode.starts_with("vector."))
-      helper = arithmetic.helper(checked);
-    else if (opcode == "proof.receive" || opcode.starts_with("sequence.") ||
-             opcode.starts_with("variant.") || opcode.starts_with("bytes."))
-      helper = wire.operation(checked);
+    if (isa<FieldConstantOp, FieldAddOp, FieldSubOp, FieldMulOp, FieldNegOp,
+            FieldEqualOp, FieldFromIndexOp, FieldEmbedOp, FieldInverseOp,
+            VectorConstantOp, VectorEmptyOp, VectorLengthOp, VectorAppendOp,
+            VectorSplitOp, VectorSumOp, VectorAllocOp, VectorGetOp, VectorSetOp,
+            VectorEqualOp>(op))
+      helper = arithmetic.helper(op);
+    else if (isa<ProofReceiveOp, SequenceEmptyOp, SequenceAppendOp,
+                 SequenceLengthOp, SequenceGetOp, SequenceAllocOp,
+                 SequenceSetOp, VariantMakeOp, VariantTagOp, VariantGetOp,
+                 BytesEmptyOp, BytesLengthOp, BytesGetOp, BytesAppendOp>(op))
+      helper = wire.operation(op);
     else {
-      // checkTarget has admitted the exact closed ordinary Runtime inventory.
-      std::string ordinary = opcode.str();
-      std::replace(ordinary.begin(), ordinary.end(), '.', '_');
-      helper = "evm_" + ordinary;
+      StringRef name =
+          llvm::TypeSwitch<Operation *, StringRef>(op)
+              .Case<IndexAddOp>([](IndexAddOp) { return "evm_index_add"; })
+              .Case<IndexSubOp>([](IndexSubOp) { return "evm_index_sub"; })
+              .Case<IndexMulOp>([](IndexMulOp) { return "evm_index_mul"; })
+              .Case<IndexDivOp>([](IndexDivOp) { return "evm_index_div"; })
+              .Case<IndexModOp>([](IndexModOp) { return "evm_index_mod"; })
+              .Case<IndexPowerOfTwoOp>(
+                  [](IndexPowerOfTwoOp) { return "evm_index_power_of_two"; })
+              .Case<IndexLogicalShiftRightOp>([](IndexLogicalShiftRightOp) {
+                return "evm_index_logical_shift_right";
+              })
+              .Case<IndicesEmptyOp>(
+                  [](IndicesEmptyOp) { return "evm_indices_empty"; })
+              .Case<IndicesAppendOp>(
+                  [](IndicesAppendOp) { return "evm_indices_append"; })
+              .Case<ScopeCurrentOp>(
+                  [](ScopeCurrentOp) { return "evm_scope_current"; })
+              .Case<ScopeEnterOp>(
+                  [](ScopeEnterOp) { return "evm_scope_enter"; })
+              .Case<ScopeExitOp>([](ScopeExitOp) { return "evm_scope_exit"; })
+              .Case<ScopeCheckOp>(
+                  [](ScopeCheckOp) { return "evm_scope_check"; })
+              .Case<TransferMakeOp>(
+                  [](TransferMakeOp) { return "evm_transfer_make"; })
+              .Case<TransferAcceptOp>(
+                  [](TransferAcceptOp) { return "evm_transfer_accept"; })
+              .Case<TransferReleaseOp>(
+                  [](TransferReleaseOp) { return "evm_transfer_release"; })
+              .Case<TransferCheckOp>(
+                  [](TransferCheckOp) { return "evm_transfer_check"; })
+              .Case<LoopBoundOp>([](LoopBoundOp) { return "evm_loop_bound"; })
+              .Case<RangeCheckOp>(
+                  [](RangeCheckOp) { return "evm_range_check"; })
+              .Case<RangeAdmitOp>(
+                  [](RangeAdmitOp) { return "evm_range_admit"; })
+              .Default(StringRef());
+      if (name.empty())
+        return refuse(op, "no typed runtime helper");
+      helper = name.str();
     }
     if (!helper) {
       auto reason = toString(helper.takeError());
@@ -283,11 +317,7 @@ LogicalResult Exporter::operation(Operation *op) {
     }
     if (op->getNumResults())
       out << list(op->getResults()) << " := ";
-    else if (opcode == "scope.exit")
-      out << "pop(";
     out << *helper << "(" << list(op->getOperands()) << ")";
-    if (!op->getNumResults() && opcode == "scope.exit")
-      out << ")";
     out << "\n";
     return success();
   }
@@ -463,16 +493,17 @@ LogicalResult Exporter::operation(Operation *op) {
         << " := " << mask(op->getResult(0).getType(), value) << "\n";
     return success();
   }
-  auto opcode = llvm::StringSwitch<StringRef>(op->getName().getStringRef())
-                    .Case("arith.addi", "add")
-                    .Case("arith.subi", "sub")
-                    .Case("arith.muli", "mul")
-                    .Case("arith.andi", "and")
-                    .Case("arith.ori", "or")
-                    .Case("arith.xori", "xor")
-                    .Default("");
-  if (!opcode.empty()) {
-    std::string expression = opcode.str() + "(" + list(op->getOperands()) + ")";
+  auto instruction = llvm::TypeSwitch<Operation *, StringRef>(op)
+                         .Case<arith::AddIOp>([](auto) { return "add"; })
+                         .Case<arith::SubIOp>([](auto) { return "sub"; })
+                         .Case<arith::MulIOp>([](auto) { return "mul"; })
+                         .Case<arith::AndIOp>([](auto) { return "and"; })
+                         .Case<arith::OrIOp>([](auto) { return "or"; })
+                         .Case<arith::XOrIOp>([](auto) { return "xor"; })
+                         .Default(StringRef());
+  if (!instruction.empty()) {
+    std::string expression =
+        instruction.str() + "(" + list(op->getOperands()) + ")";
     out << "let " << name(op->getResult(0))
         << " := " << mask(op->getResult(0).getType(), expression) << "\n";
     return success();

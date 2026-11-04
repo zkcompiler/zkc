@@ -39,9 +39,9 @@ by `0x`:
   "creation_bytecode": "...",
   "expected_runtime_bytecode": "...",
   "calldata": "...",
-  "gas_limit": 20000000,
-  "deployment_gas_limit": 20000000,
-  "fork": "cancun",
+  "gas_limit": 16777216,
+  "deployment_gas_limit": 16777216,
+  "fork": "osaka",
   "repeat_count": 2
 }
 ```

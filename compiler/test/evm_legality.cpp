@@ -7,6 +7,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/Passes.h"
 #include "support/NativeCases.h"
 #include "support/ResourceSources.h"
 #include "zkc/Analysis/Finite.h"
@@ -17,6 +18,7 @@
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Target/Evm/Target.h"
 #include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
@@ -24,12 +26,23 @@
 #include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include "llvm/Support/Signals.h"
 
 using namespace llvm;
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
+// Build malformed concrete ODS operations without bypassing MLIR verification.
+Operation *physicalFixture(OpBuilder &builder, Location loc, TypeRange results,
+                           StringRef mnemonic, ValueRange operands,
+                           ArrayRef<NamedAttribute> attributes = {}) {
+  OperationState state(loc, ("evm." + mnemonic).str());
+  state.addOperands(operands);
+  state.addTypes(results);
+  state.addAttributes(attributes);
+  return builder.create(state);
+}
 constexpr StringLiteral sourceText = R"mlir(
 module {
  "protocol.module"() ({
@@ -180,6 +193,7 @@ std::string replaceFixture(std::string text, StringRef before,
 }
 } // namespace
 int main() {
+  llvm::sys::PrintStackTraceOnErrorSignal("zkc-evm-legality-test");
   Cases cases;
   DialectRegistry registry;
   registerDialects(registry);
@@ -193,6 +207,105 @@ int main() {
     out << '\n';
     return success();
   });
+  cases.run("typed ordered effects survive CSE and canonicalization", [&] {
+    auto module = parseSourceString<ModuleOp>(R"mlir(
+      module { func.func @ordered(%scope:i64, %generation:i64, %value:i256,
+                                  %coordinates:i64, %count:i64) {
+        %yes = arith.constant true
+        "evm.scope.check"(%scope) : (i64)->()
+        %next = "evm.transcript.observe"(%scope,%generation,%value,%coordinates,%count)
+          {value_type=!algebra.field<"bls12-381.fr">,
+           origin=#runtime.origin<"main", #runtime.message_origin<"Round","message","field","P","V">>}
+          : (i64,i64,i256,i64,i64)->i64
+        "evm.source.guard"(%yes) {site="guard"} : (i1)->()
+        "evm.scope.check"(%scope) : (i64)->()
+        %unused = "evm.index.logical_shift_right"(%count,%count) : (i64,i64)->i64
+        func.return
+      } })mlir",
+                                              &context);
+    require(bool(module) && succeeded(verify(*module)),
+            "invalid typed effect fixture: " + diagnostics);
+    SmallVector<Operation *> ordered;
+    module->walk([&](Operation *op) {
+      if (isa<evm::ScopeCheckOp, evm::TranscriptObserveOp, evm::SourceGuardOp>(
+              op)) {
+        require(!isMemoryEffectFree(op) && !isSpeculatable(op),
+                "ordered operation acquired pure/speculatable semantics");
+        ordered.push_back(op);
+      }
+    });
+    PassManager pm(&context);
+    pm.addPass(createCSEPass());
+    pm.addPass(createCanonicalizerPass());
+    require(succeeded(pm.run(*module)), "typed effect optimization failed");
+    SmallVector<Operation *> retained;
+    unsigned shifts = 0;
+    module->walk([&](Operation *op) {
+      if (isa<evm::ScopeCheckOp, evm::TranscriptObserveOp, evm::SourceGuardOp>(
+              op))
+        retained.push_back(op);
+      shifts += isa<evm::IndexLogicalShiftRightOp>(op);
+    });
+    require(ordered.size() == 4 && ordered == retained && shifts == 0,
+            "optimization erased or reordered observations/checks/stops, or "
+            "retained dead total arithmetic");
+    require(succeeded(evm::checkTarget(*module)),
+            "typed optimized target refused");
+  });
+  cases.run("typed origins reject strings and selected-control events", [&] {
+    auto fixture = [&](StringRef origin) {
+      return parseSourceString<ModuleOp>(
+          (R"mlir(module { func.func @origin(%s:i64,%g:i64,%p:i64,%n:i64) {
+        %v,%next = "evm.transcript.challenge"(%s,%g,%p,%n) {
+          value_type=!algebra.field<"bls12-381.fr">, origin=)mlir" +
+           origin + R"mlir(}
+          : (i64,i64,i64,i64)->(i256,i64)
+        func.return
+      } })mlir")
+              .str(),
+          &context);
+    };
+    auto valid = fixture(
+        R"mlir(#runtime.origin<"main", #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","draw","V">>)mlir");
+    require(bool(valid), "shared typed query origin refused");
+    auto message = fixture(
+        R"mlir(#runtime.origin<"main", #runtime.message_origin<"Round","message","field","P","V">>)mlir");
+    require(!message &&
+                StringRef(diagnostics).contains("draw query occurrence"),
+            "challenge accepted a message occurrence");
+    auto otherMethod = fixture(
+        R"mlir(#runtime.origin<"main", #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","sample","V">>)mlir");
+    require(!otherMethod &&
+                StringRef(diagnostics).contains("draw query occurrence"),
+            "challenge accepted an unrelated query method");
+    auto observation = parseSourceString<ModuleOp>(R"mlir(
+      module { func.func @observe(%s:i64,%g:i64,%v:i256,%p:i64,%n:i64) {
+        %next = "evm.transcript.observe"(%s,%g,%v,%p,%n) {
+          value_type=!algebra.field<"bls12-381.fr">,
+          origin=#runtime.origin<"main", #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","draw","V">>}
+          : (i64,i64,i256,i64,i64)->i64
+        func.return
+      } })mlir",
+                                                   &context);
+    require(!observation &&
+                StringRef(diagnostics).contains("message occurrence"),
+            "observation accepted a query occurrence");
+    auto text = fixture("\"00\"");
+    require(!text && StringRef(diagnostics)
+                         .contains("shared source-relative native origin"),
+            "legacy string origin acquired typed authority");
+    auto selected = fixture(
+        R"mlir(#runtime.origin<"main" path [#runtime.origin_step<branch,"Round","choose","left">], #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","draw","V">>)mlir");
+    require(!selected && StringRef(diagnostics).contains("evm.origin"),
+            "selected-control origin was silently reinterpreted");
+  });
+  for (StringRef name : {"evm.checked", "evm.word", "evm.scope.root",
+                         "evm.index.pow2", "evm.field.pow", "evm.field.div"})
+    cases.run("retired operation has no compatibility registration " + name,
+              [&] {
+                require(!RegisteredOperationName::lookup(name, &context),
+                        "retired operation remains registered");
+              });
   auto close = [&](StringRef text) {
     auto source = parseSourceString<ModuleOp>(text, &context);
     require(bool(source), "numeric source failed to parse");
@@ -228,6 +341,21 @@ int main() {
   auto compileSource = [&](StringRef text) {
     return take(compileEvmEntry(originalSource(text)));
   };
+  cases.run("typed target round trip retains origins and identical Yul", [&] {
+    auto compiled = compileSource(proofSource(
+        "fn work(a:Fr,b:Fr,c:Fr)->bool{return a*b==c;}", "accepted:bool@V",
+        "let result@V=work(a,b,c);return(accepted=result);"));
+    auto target = compiled.targetSnapshot();
+    std::string text;
+    raw_string_ostream out(text);
+    target->print(out);
+    auto reparsed = parseSourceString<ModuleOp>(text, target->getContext());
+    require(bool(reparsed) && succeeded(evm::checkTarget(*reparsed)),
+            "typed target did not survive textual serialization");
+    require(take(evm::exportYul(*reparsed, compiled.endpoint(),
+                                compiled.policy(), {})) == compiled.yul(),
+            "typed origin serialization changed Yul or occurrence bytes");
+  });
   for (bool managed : {false, true})
     cases.run(
         managed ? "nominal units coexist with managed transcript state"
@@ -236,28 +364,39 @@ int main() {
           std::string text = R"zkc(
 module scalar;
 domain Fr=field("bls12-381.fr");
+type Vector<E:Field> = builtin("vector",E);
+domain fn range(lower:index,upper:index)->domain<index> = domain("range");
+fn fold_where<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,
+  keep:fn(item:I)->bool effects(stop) where item_from(item,rows),
+  step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S
+  effects(stop) = finite("local.fold_where");
 struct Empty{}
 #[linear] struct Ticket<N:nat>{empty:(),phantom:[bool;0]}
 #[linear] struct Payload{value:Fr,padding:Empty}
 fn make()->Ticket<1>{return Ticket<1>{empty:(),phantom:[]};}
 fn make_second()->Ticket<2>{return Ticket<2>{empty:(),phantom:[]};}
 fn payload(value:Fr)->Payload{return Payload{value:value,padding:Empty{}};}
-fn advance(x:Ticket<1>)->Ticket<1>{return repack_record(x,((),[]));}
+fn advance(x:Ticket<1>,values:Vector<Fr>,value:Fr)->(Ticket<1>,Vector<Fr>,Fr){
+  return(repack_record(x,((),[])),values,value);
+}
 fn check_empty(go:bool)->Empty{require go;return Empty{};}
 fn preserve(x:Payload)->Payload{
   let parts=inspect_record(x);return repack_record(parts.0,parts.1);
 }
-fn finish(x:Ticket<1>,y:Ticket<2>,p:Payload)->Fr{
+fn finish(x:Ticket<1>,y:Ticket<2>,p:Payload,held:Vector<Fr>)->Fr{
   consume x;consume y;let parts=unpack(p);return parts.0;
 }
-protocol Work roles(P,V)(value:Fr@V,go:bool@V)->(accepted:bool@V){
-  let x@V=make();let next@V=advance(x);
+protocol Work roles(P,V)(values:Vector<Fr>@V,value:Fr@V,go:bool@V)->(accepted:bool@V){
+  let x@V=make();let mixed@V=advance(x,values,value);
+  let next@V=mixed.0;let held@V=mixed.1;let echoed@V=mixed.2;
+  require echoed==value;
+  let folded@V=fold_where(range(0,2),next,fn(i)=>go,fn(state,i)=>state);
   let empty@V=check_empty(go);
   let y@V=make_second();let p@V=payload(value);
-  let q@V=preserve(p);let observed@V=finish(next,y,q);
+  let q@V=preserve(p);let observed@V=finish(folded,y,q,held);
   return(accepted=observed==value);
 }
-proof Proof=Work{prover P;verifier V;public{value,go};accept accepted;construction authored;}
+proof Proof=Work{prover P;verifier V;public{values,value,go};accept accepted;construction authored;}
 )zkc";
           if (managed) {
             text = replaceFixture(text, "go:bool@V)->",
@@ -280,12 +419,37 @@ proof Proof=Work{prover P;verifier V;public{value,go};accept accepted;constructi
           options.mathematics.finiteBulk = false;
           auto compiled = take(compileEvmEntry(original, options));
           auto target = compiled.targetSnapshot();
+          unsigned erasedFolds = 0;
+          target->walk([&](scf::ForOp loop) {
+            if (!loop.getInitArgs().empty())
+              return;
+            ++erasedFolds;
+            require(loop.getNumResults() == 0 &&
+                        loop.getBody()->getTerminator()->getNumOperands() == 0,
+                    "unit fold acquired physical state lanes");
+            auto branches = loop.getBody()->getOps<scf::IfOp>();
+            require(llvm::hasSingleElement(branches),
+                    "unit fold lost its predicate branch");
+            auto branch = *branches.begin();
+            require(branch.getNumResults() == 0,
+                    "unit predicate branch acquired physical state lanes");
+            for (Region *arm :
+                 {&branch.getThenRegion(), &branch.getElseRegion()}) {
+              auto yields = arm->front().getOps<scf::YieldOp>();
+              require(llvm::hasSingleElement(yields) &&
+                          (*yields.begin())->getNumOperands() == 0 &&
+                          &arm->front().back() ==
+                              (*yields.begin()).getOperation(),
+                      "unit predicate arm requires exactly one empty yield");
+            }
+          });
+          require(erasedFolds == 1, "unit regression lost its erased fold");
           unsigned calls = 0, fields = 0, scopeChecks = 0, stops = 0;
           target->walk([&](func::CallOp) { ++calls; });
-          target->walk([&](evm::CheckedOp op) {
-            fields += op.opcode() == "field.equal";
-            scopeChecks += op.opcode() == "scope.check";
-            stops += op.opcode() == "source.stop";
+          target->walk([&](Operation *op) {
+            fields += isa<evm::FieldEqualOp>(op);
+            scopeChecks += isa<evm::ScopeCheckOp>(op);
+            stops += isa<evm::SourceStopOp>(op);
           });
           require(
               calls && fields && scopeChecks && stops,
@@ -400,14 +564,14 @@ proof Proof=Work {
             "fixture did not use the native byte source contract");
     auto target = result.targetSnapshot();
     unsigned accesses = 0;
-    target->walk([&](evm::CheckedOp op) {
-      if (op.opcode() != "bytes.get")
+    target->walk([&](Operation *op) {
+      if (!isa<evm::BytesGetOp>(op))
         return;
       ++accesses;
       require(isa<data::BytesType>(
                   op->getAttrOfType<TypeAttr>("value_type").getValue()) &&
                   op->getNumOperands() == 3 && op->getNumResults() == 1 &&
-                  op.getResult(0).getType().isInteger(64),
+                  op->getResult(0).getType().isInteger(64),
               "byte indexing lost its complete type or index result");
     });
     require(accesses == 1 &&
@@ -586,6 +750,38 @@ proof Proof=Work {
     auto source = close(orderedScalarSource);
     take(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}));
   });
+  cases.run("terminal checked effects omit failure-only realization", [&] {
+    auto source = close(orderedScalarSource);
+    unsigned failures = 0;
+    source->walk([&](Operation *op) {
+      failures += op->getName().getStringRef() == "exec.failed";
+    });
+    auto target =
+        take(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}));
+    unsigned products = 0, stops = 0;
+    target->walk([&](Operation *op) {
+      products += isa<evm::FieldMulOp>(op);
+      stops += isa<evm::SourceStopOp>(op);
+    });
+    require(failures && products == 1 && stops == 0 &&
+                succeeded(evm::checkTarget(*target)),
+            "failure-only propagation acquired a reached source stop");
+    // A failure continuation is exact common structural glue. An extra
+    // instruction there must still refuse before target reachability applies.
+    source->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "exec.failed")
+        return;
+      OpBuilder builder(op);
+      OperationState identity(op->getLoc(), "algebra.group_identity");
+      identity.addTypes(algebra::GroupType::get(&context, "bls12-381.g1"));
+      builder.create(identity);
+    });
+    require(succeeded(verify(*source)), "invalid failure-only source fixture");
+    diagnostics.clear();
+    refuses(closeEndpoint(*source, "V"), "endpoint-source");
+    require(StringRef(diagnostics).contains("execution-cfg"),
+            "mutated failure continuation escaped common structural admission");
+  });
   for (auto replacement :
        {std::pair<StringRef, StringRef>{"arguments=[\"bls12-381.fr\"]",
                                         "arguments=[]"},
@@ -724,7 +920,7 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
         auto target = take(evm::lowerEndpoint(endpoint, {}));
         unsigned products = 0;
         target->walk(
-            [&](evm::CheckedOp op) { products += op.opcode() == "field.mul"; });
+            [&](Operation *op) { products += isa<evm::FieldMulOp>(op); });
         require(products == 1, "field multiplication was not operation based");
         require(succeeded(evm::checkTarget(*target)),
                 "numeric target was illegal");
@@ -754,15 +950,15 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
               auto zero = arith::ConstantIntOp::create(b, fn.getLoc(), 0, 64);
               arith::DivUIOp::create(b, fn.getLoc(), zero, zero);
               require(failed(evm::checkTarget(*target)),
-                      "illegal division passed full conversion");
+                      "illegal division passed target legality");
             });
-  cases.run("checked opcode rejects a malformed signature", [&] {
+  cases.run("concrete ODS operation rejects a malformed signature", [&] {
     OwningOpRef<ModuleOp> module(ModuleOp::create(UnknownLoc::get(&context)));
     OpBuilder b(&context);
     b.setInsertionPointToEnd(module->getBody());
     auto one = arith::ConstantIntOp::create(b, module->getLoc(), 1, 64);
-    evm::CheckedOp::create(b, module->getLoc(), {b.getI64Type()},
-                           "proof.receive", {one});
+    physicalFixture(b, module->getLoc(), {b.getI64Type()}, "proof.receive",
+                    {one});
     require(failed(verify(*module)), "wrong proof receive signature verified");
   });
   cases.run(
@@ -783,7 +979,7 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
         unsigned loops = 0;
         target->walk([&](scf::ForOp loop) {
           ++loops;
-          require(loop.getInitArgs().size() == 1 && loop.getNumResults() == 1,
+          require(loop.getInitArgs().size() == 1 && loop->getNumResults() == 1,
                   "invariant captures became carried state");
           auto owner = loop->getParentOfType<func::FuncOp>();
           require(loop.getInitArgs()[0] == owner.getArgument(5),
@@ -807,20 +1003,20 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
     auto target =
         take(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}));
     unsigned checks = 0;
-    target->walk([&](evm::CheckedOp check) {
-      if (check.opcode() != "range.check")
+    target->walk([&](Operation *check) {
+      if (!isa<evm::RangeCheckOp>(check))
         return;
       auto owner = check->getParentOfType<func::FuncOp>();
       require(!check->getParentOfType<scf::ForOp>(),
               "zero-trip traversal bypasses constructor admission");
       unsigned left = checks == 0 ? 2 : 4, right = checks == 0 ? 4 : 2;
-      auto leftLength = check.getOperand(0).getDefiningOp<evm::CheckedOp>();
-      auto rightLength = check.getOperand(1).getDefiningOp<evm::CheckedOp>();
+      auto leftLength = check->getOperand(0).getDefiningOp();
+      auto rightLength = check->getOperand(1).getDefiningOp();
       require(checks < 2 && leftLength && rightLength &&
-                  leftLength.opcode() == "vector.length" &&
-                  rightLength.opcode() == "vector.length" &&
-                  leftLength.getOperand(1) == owner.getArgument(left) &&
-                  rightLength.getOperand(1) == owner.getArgument(right),
+                  isa<evm::VectorLengthOp>(leftLength) &&
+                  isa<evm::VectorLengthOp>(rightLength) &&
+                  leftLength->getOperand(1) == owner.getArgument(left) &&
+                  rightLength->getOperand(1) == owner.getArgument(right),
               "discarded constructors lost admission order or operands");
       ++checks;
     });
@@ -844,8 +1040,8 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
                   call.getOperand(1) == loop.getRegionIterArgs()[0],
               "finite callback lost borrowed scope or affine state");
     });
-    target->walk([&](evm::CheckedOp check) {
-      if (check.opcode() == "transcript.challenge")
+    target->walk([&](Operation *check) {
+      if (isa<evm::TranscriptChallengeOp>(check))
         ++challenges;
     });
     require(loops == 1 && challenges == 1,
@@ -1055,17 +1251,18 @@ proof Proof=Work {
             evm::WireGenerator wire(layouts, options.limits);
             unsigned stores = 0, lengths = 0;
             scf::ForOp traversal;
-            target->walk([&](evm::CheckedOp op) {
-              if (op.opcode() != (sequence ? "sequence.set" : "vector.set"))
+            target->walk([&](Operation *op) {
+              if (!(sequence ? isa<evm::SequenceSetOp>(op)
+                             : isa<evm::VectorSetOp>(op)))
                 return;
               ++stores;
               traversal = op->getParentOfType<scf::ForOp>();
               require(bool(traversal), "collect lost its traversal");
-              auto allocation =
-                  op.getOperand(0).getDefiningOp<evm::CheckedOp>();
-              auto capacity = op.getOperand(1).getDefiningOp<arith::SelectOp>();
+              auto allocation = op->getOperand(0).getDefiningOp();
+              auto capacity =
+                  op->getOperand(1).getDefiningOp<arith::SelectOp>();
               require(allocation && capacity &&
-                          allocation.getOperand(0) == capacity &&
+                          allocation->getOperand(0) == capacity &&
                           capacity.getTrueValue() == traversal.getUpperBound(),
                       "collect allocation did not bound storage alone");
               auto ceiling =
@@ -1081,9 +1278,9 @@ proof Proof=Work {
                           condition.getLhs() == traversal.getUpperBound() &&
                           condition.getRhs() == ceiling,
                       "collect capacity was not min(candidates, ceiling)");
-              require(op.getOperand(2) == traversal.getRegionIterArgs()[0],
+              require(op->getOperand(2) == traversal.getRegionIterArgs()[0],
                       "collect stores by traversal rather than selection");
-              auto callback = op.getOperand(3).getDefiningOp<func::CallOp>();
+              auto callback = op->getOperand(3).getDefiningOp<func::CallOp>();
               require(callback && callback->getBlock() == op->getBlock() &&
                           callback->isBeforeInBlock(op),
                       "capacity check preempted the selected body");
@@ -1113,23 +1310,23 @@ proof Proof=Work {
                       "output ceiling must precede fresh-buffer fault");
               require(definition.contains(sequence ? "lt(i, 3)" : "lt(i,3)"),
                       "selected write ignored the configured ceiling");
-              Value capacityValue = op.getOperand(1);
+              Value capacityValue = op->getOperand(1);
               op->setOperand(1, traversal.getUpperBound());
               diagnostics.clear();
-              require(failed(op.verify()) &&
+              require(failed(verify(op)) &&
                           StringRef(diagnostics).contains("evm.construction"),
                       "store accepted a count different from allocation");
               op->setOperand(1, capacityValue);
             });
             require(stores == 1, "collect must use one fresh-buffer store");
-            target->walk([&](evm::CheckedOp op) {
-              require(op.opcode() != "vector.append" &&
-                          op.opcode() != "sequence.append",
+            target->walk([&](Operation *op) {
+              require(!isa<evm::VectorAppendOp>(op) &&
+                          !isa<evm::SequenceAppendOp>(op),
                       "collect introduced repeated append allocation");
-              if (op.opcode() ==
-                  (sequence ? "sequence.length" : "vector.length")) {
+              if ((sequence ? isa<evm::SequenceLengthOp>(op)
+                            : isa<evm::VectorLengthOp>(op))) {
                 ++lengths;
-                require(op.getOperand(1) == traversal.getResult(0),
+                require(op->getOperand(1) == traversal.getResult(0),
                         "collect exposed capacity as its output length");
               }
             });
@@ -1151,8 +1348,8 @@ proof Proof=Work {
         auto target =
             take(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}));
         unsigned reads = 0, products = 0;
-        target->walk([&](evm::CheckedOp op) {
-          if (op.opcode() == "vector.get") {
+        target->walk([&](Operation *op) {
+          if (isa<evm::VectorGetOp>(op)) {
             ++reads;
             require(
                 op->getNumResults() == 1 &&
@@ -1165,7 +1362,7 @@ proof Proof=Work {
                         "koala-bear.ext4-binomial3",
                 "extension finite access lost exact nominal field");
           }
-          if (op.opcode() == "field.mul")
+          if (isa<evm::FieldMulOp>(op))
             ++products;
         });
         require(reads == 1 && products == 1,
@@ -1203,18 +1400,18 @@ module { "protocol.module"() ({
                       loop.getInitArgs()[0].getType().isInteger(1),
                   "Boolean fold lost zero-trip seed");
         });
-        target->walk([&](evm::CheckedOp op) {
-          if (op.opcode() == "sequence.get") {
+        target->walk([&](Operation *op) {
+          if (isa<evm::SequenceGetOp>(op)) {
             ++reads;
             require(op->getResult(0).getType().isInteger(1),
                     "Boolean item widened");
           }
-          if (op.opcode() == "range.admit") {
+          if (isa<evm::RangeAdmitOp>(op)) {
             ++admission;
             require(!op->getParentOfType<scf::ForOp>(),
                     "eager descriptor admission moved inside traversal");
           }
-          if (op.opcode() == "index.mod")
+          if (isa<evm::IndexModOp>(op))
             ++remainders;
         });
         require(loops == 1 && reads == 1 && admission >= 5 && remainders == 2,
@@ -1247,10 +1444,10 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
         auto target = take(evm::lowerEndpoint(
             take(closeEndpoint(*source, policy.validator)), {}));
         unsigned payloads = 0, tags = 0;
-        target->walk([&](evm::CheckedOp op) {
-          if (op.opcode() == "variant.tag")
+        target->walk([&](Operation *op) {
+          if (isa<evm::VariantTagOp>(op))
             ++tags;
-          if (op.opcode() == "variant.get") {
+          if (isa<evm::VariantGetOp>(op)) {
             ++payloads;
             require(op->getParentOfType<scf::IfOp>() ||
                         op->getParentOfType<scf::IndexSwitchOp>(),
@@ -1267,14 +1464,14 @@ proof Proof=Main{prover P;verifier V;public{value};accept ok;construction author
     auto target =
         take(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}));
     unsigned current = 0, borrowed = 0;
-    target->walk([&](evm::CheckedOp check) {
-      if (check.opcode() != "scope.enter")
+    target->walk([&](Operation *check) {
+      if (!isa<evm::ScopeEnterOp>(check))
         return;
-      auto parent = check.getOperand(0).getDefiningOp<evm::CheckedOp>();
-      if (parent && parent.opcode() == "scope.current")
+      auto parent = check->getOperand(0).getDefiningOp();
+      if (parent && isa<evm::ScopeCurrentOp>(parent))
         ++current;
       else {
-        require(isa<BlockArgument>(check.getOperand(0)),
+        require(isa<BlockArgument>(check->getOperand(0)),
                 "callback scope was neither borrowed nor acquired");
         ++borrowed;
       }

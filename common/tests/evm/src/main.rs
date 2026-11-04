@@ -546,6 +546,38 @@ mod tests {
     }
 
     #[test]
+    fn osaka_transaction_cap_applies_to_deployment_and_calls() {
+        let fork = target()
+            .forks
+            .iter()
+            .position(|fork| fork.name == "osaka")
+            .unwrap();
+        let cap = EvmFork(fork).budget();
+        let request = |call, deployment| Request {
+            // Deploy one STOP byte as the exact runtime.
+            creation_bytecode: "6001600c60003960016000f300".into(),
+            calldata: String::new(),
+            gas_limit: Some(call),
+            fork: EvmFork(fork),
+            deployment_gas_limit: Some(deployment),
+            expected_runtime_bytecode: Some("00".into()),
+            repeat_count: Some(1),
+        };
+        let accepted = run(request(cap, cap)).unwrap();
+        assert_eq!(accepted["status"], "return");
+        assert!(
+            run(request(cap + 1, cap))
+                .unwrap_err()
+                .starts_with("runtime-transaction:")
+        );
+        assert!(
+            run(request(cap, cap + 1))
+                .unwrap_err()
+                .starts_with("deployment-transaction:")
+        );
+    }
+
+    #[test]
     fn requested_gas_above_the_declared_maximum_refuses() {
         let request = |gas_limit, deployment_gas_limit| Request {
             creation_bytecode: String::new(),
