@@ -58,7 +58,8 @@ struct LayoutCheck {
     return success();
   }
   LogicalResult collection(CollectionLayout::Storage storage) {
-    if (!layout->collection || layout->collection->storage != storage)
+    if (!layout->collection || layout->collection->storage != storage ||
+        layout->kind == ValueLayout::Kind::Univariate)
       return op->emitOpError("[evm.value-type] incorrect collection family");
     return success();
   }
@@ -782,6 +783,7 @@ LogicalResult TranscriptIndicesGatedOp::verify() {
     return failure();
   return indexBlock(*this, true);
 }
+LogicalResult RequireOp::verify() { return attributes(*this); }
 LogicalResult SourceStopOp::verify() {
   if (failed(attributes(*this)))
     return failure();

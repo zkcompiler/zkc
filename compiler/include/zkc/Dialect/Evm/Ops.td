@@ -403,6 +403,11 @@ def Evm_SourceGuardOp : Evm_OrderedOp<"source.guard"> {
   let arguments = (ins I1:$condition, OptionalAttr<StrAttr>:$site);
   let hasVerifier = 1;
 }
+def Evm_RequireOp : Evm_OrderedOp<"control.require"> {
+  let summary = "Preserve the bound backend require failure contract";
+  let arguments = (ins I1:$condition);
+  let hasVerifier = 1;
+}
 def Evm_OracleCheckOp : Evm_OrderedOp<"oracle.check"> {
   let summary = "Authenticate one complete row using an installed Keccak scheme";
   // Root and path lanes retain the existing complete native frame envelopes.

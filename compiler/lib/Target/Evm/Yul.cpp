@@ -303,6 +303,13 @@ LogicalResult Exporter::operation(Operation *op) {
     if (isa<TranscriptObserveOp, TranscriptChallengeOp, TranscriptIndexOp,
             TranscriptIndicesOp, TranscriptIndicesGatedOp>(op))
       return transcript(op);
+    if (isa<RequireOp>(op)) {
+      // Bound control.require reports rejected:require, independently of the
+      // source-site classification of a protocol guard.
+      out << "if iszero(" << name(op->getOperand(0))
+          << ") { evm_source(16) }\n";
+      return success();
+    }
     if (isa<SourceStopOp, SourceGuardOp>(op)) {
       uint64_t code = 0;
       if (auto site = op->getAttrOfType<StringAttr>("site")) {

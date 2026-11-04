@@ -22,10 +22,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("compiler", "native-driver", "solc", "runner", "output"):
         parser.add_argument(f"--{name}", type=Path, required=True)
+    parser.add_argument("--queries", type=int, choices=(2, 8), default=8)
     parser.add_argument("--sampling", choices=("scalar", "block"), default="scalar")
     parser.add_argument("--grouping", choices=("individual", "antipodal-pairs"), default="individual")
     parser.add_argument("--table-order", choices=("natural", "bit-reversed"), default="natural")
-    parser.add_argument("--authentication", choices=("per-query", "atomic-blocks"), default="per-query")
+    parser.add_argument("--authentication", choices=("per-query", "atomic-blocks"), default="atomic-blocks")
     parser.add_argument("--expected", type=Path,
                         help="independent JSON: proof_sha256, fork, trace, evm_revert (null or [class,code])")
     args = parser.parse_args()
@@ -38,29 +39,32 @@ def main():
     selection = table_realization(f"rows.merkle-keccak256.{field}/0",
                                   grouping=args.grouping, table_order=args.table_order,
                                   authentication=args.authentication)
-    subject = controls.compile(module, (FIXTURES / f"{module}.zkc").read_text(), module,
+    text = (FIXTURES / f"{module}.zkc").read_text()
+    if args.queries == 2:
+        text = text.replace(",5,0,3,8>", ",5,0,3,2>")
+    subject = controls.compile(module, text, module,
                                (*library_modules("protocols/polynomial/fri"), selection))
     ref, shift = CosetReference(field), (3, 1, 0, 0)
     coefficients = [(i + 1, i * i, 2 * i, 1) for i in range(8)]
     word = [ref.horner(coefficients, point) for point in ref.domain(shift, 32)]
     wires = {0: vector_wire(field, word), 1: field_wire(field, shift),
-             2: index_wire(3), 3: index_wire(8)}
+             2: index_wire(3), 3: index_wire(args.queries)}
     # Native budget is independent of the unchanged deployment limit of 64.
     fixture = controls.native(subject, "honest", wires, budget=4096)
     check_native_outcome(fixture, True, None)
     proof = bytes.fromhex(fixture["proof"])
     outputs = fixture["outputs"]
     positions_frame = bytes.fromhex(outputs["2"])
-    if (positions_frame[:10] != b"ZKCV\x00\x44" + (8).to_bytes(4, "little")
-            or len(positions_frame) != 74):
-        raise AssertionError("native FRI did not return eight canonical indices")
-    positions = [int.from_bytes(positions_frame[i:i + 8], "little") for i in range(10, 74, 8)]
+    if (positions_frame[:10] != b"ZKCV\x00\x44" + args.queries.to_bytes(4, "little")
+            or len(positions_frame) != 10 + 8 * args.queries):
+        raise AssertionError("native FRI did not return the selected canonical indices")
+    positions = [int.from_bytes(positions_frame[i:i + 8], "little") for i in range(10, 10 + 8 * args.queries, 8)]
     if any(position >= 32 for position in positions):
         raise AssertionError("native FRI returned an out-of-range query")
     if outputs["3"] != vector_wire(field, [word[position] for position in positions]).hex():
         raise AssertionError("authenticated native values differ from independent polynomial evaluation")
     report = {"status": "prepared-awaiting-independent-trace", "sampling": args.sampling,
-              "selection": selection, "parameters": [5, 0, 3, 8],
+              "selection": selection, "parameters": [5, 0, 3, args.queries],
               "production_security": False, "proof_sha256": hashlib.sha256(proof).hexdigest(),
               "fork": subject[2]["fork"], "positions": positions}
     (subject[0] / "honest.proof").write_bytes(proof)

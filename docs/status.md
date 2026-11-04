@@ -202,9 +202,13 @@ authentication for installed base/quartic/octic KoalaBear schemes, exact install
 coset roots and points, internal normalized univariate polynomials with Horner
 evaluation, and index selection. Common oracle realization retains query history,
 anchors, extents, packet deduplication and repeated authentication semantics.
-Focused Direct quartic Keccak FRI fixtures and malformed physical-operation
-controls are authored; this addition has no build, native or deployed validation
-receipt yet. The small FRI geometry is a closure control, not a security profile.
+Focused row, polynomial and backend-require controls compare native outcomes
+and complete deployed hash traces; malformed ODS controls protect normalization.
+The Direct quartic Keccak FRI reference independently replays the shared library.
+Its original eight-query scalar fixture needs 122 transitions, above the target's
+64-transition ceiling; wide helper signatures also expose solc stack pressure.
+Native/reference FRI success does not establish deployed FRI or STARK support.
+The small FRI geometry is a closure control, not a security profile.
 Every path envelope remains bounded by the declared path ceiling. Other Merkle
 schemes, multiproofs, curve operations, transcript families and decoders other
 than the realized ones and full STARK verifier deployment need additional

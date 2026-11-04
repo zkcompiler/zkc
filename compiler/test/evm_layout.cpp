@@ -341,6 +341,48 @@ int main() {
           auto error = evm::verifyWireType(layouts, polynomial);
           require(bool(error), "internal polynomial acquired wire ingress");
           consumeError(std::move(error));
+          // A vector constructor must not grant a normalized polynomial type.
+          for (auto mnemonic : {"vector.append", "vector.alloc", "vector.empty",
+                                "vector.sum", "vector.length", "vector.get"}) {
+            StringRef code(mnemonic);
+            SmallVector<Type> inputs, outputs;
+            if (code == "vector.append") {
+              inputs = {i64, i64, lane};
+              outputs = {i64, i64};
+            } else if (code == "vector.alloc") {
+              inputs = {i64};
+              outputs = {i64};
+            } else if (code == "vector.empty") {
+              outputs = {i64, i64};
+            } else if (code == "vector.get") {
+              inputs = {i64, i64, i64};
+              outputs = {lane};
+            } else {
+              inputs = {i64, i64};
+              outputs = {code == "vector.sum" ? lane : i64};
+            }
+            auto malformed = operation(code, polynomial, inputs, outputs);
+            require(failed(verify(malformed.second)),
+                    "vector acquired a normalized polynomial contract");
+          }
+          if (f->degree == 1) {
+            auto zero = algebra::FieldLiteralAttr::get(
+                &context, field(domain),
+                builder.getIntegerAttr(
+                    IntegerType::get(&context, 31, IntegerType::Unsigned), 0));
+            auto one = algebra::FieldLiteralAttr::get(
+                &context, field(domain),
+                builder.getIntegerAttr(
+                    IntegerType::get(&context, 31, IntegerType::Unsigned), 1));
+            for (auto values : {builder.getArrayAttr({zero}),
+                                builder.getArrayAttr({one, zero})}) {
+              auto malformed =
+                  operation("vector.constant", polynomial, {}, {i64, i64},
+                            {builder.getNamedAttr("values", values)});
+              require(failed(verify(malformed.second)),
+                      "unnormalized vector literals acquired polynomial type");
+            }
+          }
           for (auto mnemonic :
                {"poly.domain_root", "poly.domain_point",
                 "poly.from_coefficients", "poly.univariate_evaluate"}) {
@@ -418,6 +460,16 @@ int main() {
                   "authentication accepted non-index position");
         });
   }
+  cases.run("bound require has exact Boolean lanes and no attributes", [&] {
+    auto good = operation("control.require", {}, {builder.getI1Type()}, {});
+    require(succeeded(verify(good.second)), "bound require refused");
+    auto wrong = operation("control.require", {}, {i64}, {});
+    require(failed(verify(wrong.second)), "bound require accepted non-Boolean");
+    auto site = operation(
+        "control.require", {}, {builder.getI1Type()}, {},
+        {builder.getNamedAttr("site", builder.getStringAttr("guard"))});
+    require(failed(verify(site.second)), "backend require acquired guard site");
+  });
   cases.run("Poseidon rows do not acquire Keccak authentication", [&] {
     auto root = commitment::VectorObjectType::get(
         &context, "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",

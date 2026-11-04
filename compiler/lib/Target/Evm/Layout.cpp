@@ -133,7 +133,8 @@ Expected<const ValueLayout *> NativeLayouts::get(Type type) {
     result->collection = CollectionLayout{element, Cells::FieldCoefficients,
                                           (*facts)->coefficientBytes()};
   } else if (auto polynomial = dyn_cast<poly::UnivariateType>(type)) {
-    auto element = algebra::FieldType::get(&storage->context, polynomial.getDomain());
+    auto element =
+        algebra::FieldType::get(&storage->context, polynomial.getDomain());
     auto facts = field(element);
     if (!facts)
       return facts.takeError();

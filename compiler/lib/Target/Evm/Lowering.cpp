@@ -233,6 +233,7 @@ struct PreparedEndpoint {
                                       "bytes.empty",
                                       "bytes.get",
                                       "bytes.length",
+                                      "control.require",
                                       "field.add",
                                       "field.constant",
                                       "field.embed",
@@ -298,10 +299,12 @@ struct PreparedEndpoint {
             return WalkResult::interrupt();
           }
           if (contract == "oracle.check") {
-            auto rows = realizeKeccakRows(layouts, admitted->valueType.getInput(0));
+            auto rows =
+                realizeKeccakRows(layouts, admitted->valueType.getInput(0));
             if (!rows) {
               consumeError(rows.takeError());
-              op->emitError("[evm.unsupported-operation] no exact installed Keccak row realization");
+              op->emitError("[evm.unsupported-operation] no exact installed "
+                            "Keccak row realization");
               return WalkResult::interrupt();
             }
           }
@@ -458,6 +461,7 @@ struct PreparedEndpoint {
                                     "runtime.borrow_transfer",
                                     "runtime.accept_transfer",
                                     "runtime.transfer_values",
+                                    "runtime.take_condition",
                                     "runtime.release_transfer",
                                     "func.call",
                                     "exec.compute",
@@ -495,8 +499,8 @@ struct PreparedEndpoint {
                                     "data.index_logical_shift_right"},
                 op->getName().getStringRef());
         if (!supported) {
-          op->emitError("[evm.unsupported-operation] no EVM realization for "
-                        "this reachable operation");
+          op->emitError("[evm.unsupported-operation] no EVM realization for ")
+              << op->getName().getStringRef();
           return WalkResult::interrupt();
         }
 
@@ -736,6 +740,12 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
     // erasure. Retain the active-scope check above, even for empty results.
     return bind(op, {});
   }
+  if (name == "control.require") {
+    if (!parameters || !parameters.empty())
+      return refuse(op, "control.require requires empty parameters");
+    emit<RequireOp>(op, {}, operands);
+    return bind(op, {});
+  }
   if (auto scalar = lowerScalar(op, name, operands, parameters))
     return *scalar;
   if (name == "index.constant") {
@@ -753,12 +763,13 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
   }
   if (name == "index.select")
     return bind(op, {arith::SelectOp::create(builder, op->getLoc(), operands[0],
-                                           operands[1], operands[2])});
+                                             operands[1], operands[2])});
   if (name == "oracle.check" || name == "poly.domain_root" ||
       name == "poly.domain_point" || name == "poly.from_coefficients" ||
       name == "poly.univariate_evaluate") {
     if (!parameters || !parameters.empty())
-      return refuse(op, "authentication/polynomial operation requires empty parameters");
+      return refuse(
+          op, "authentication/polynomial operation requires empty parameters");
     Type type = name == "oracle.check" || name == "poly.univariate_evaluate"
                     ? admitted.valueType.getInput(0)
                     : admitted.valueType.getResult(0);
@@ -767,11 +778,14 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
     if (name == "oracle.check")
       return bind(op, emit<OracleCheckOp>(op, *resultTypes, operands, attrs));
     if (name == "poly.domain_root")
-      return bind(op, emit<PolyDomainRootOp>(op, *resultTypes, operands, attrs));
+      return bind(op,
+                  emit<PolyDomainRootOp>(op, *resultTypes, operands, attrs));
     if (name == "poly.domain_point")
-      return bind(op, emit<PolyDomainPointOp>(op, *resultTypes, operands, attrs));
+      return bind(op,
+                  emit<PolyDomainPointOp>(op, *resultTypes, operands, attrs));
     if (name == "poly.from_coefficients")
-      return bind(op, emit<PolyFromCoefficientsOp>(op, *resultTypes, operands, attrs));
+      return bind(
+          op, emit<PolyFromCoefficientsOp>(op, *resultTypes, operands, attrs));
     return bind(op, emit<PolyEvaluateOp>(op, *resultTypes, operands, attrs));
   }
   if (name.starts_with("transcript.native.indexed.")) {
@@ -1450,6 +1464,15 @@ LogicalResult Lowering::lowerOperation(Operation *op) {
     emit<TransferCheckOp>(op, {}, {operands[0]});
     return bind(op, ValueRange(operands).drop_front());
   }
+  if (name == "runtime.take_condition") {
+    // Native admission establishes a leading Boolean and exact affine carry.
+    // The EVM ticket tracks lifetime/scope, not payload storage: narrowing the
+    // carried lanes retains this one live ticket without allocating an alias.
+    emit<TransferCheckOp>(op, {}, {operands[0]});
+    Values narrowed{operands[1], operands[0]};
+    append_range(narrowed, ValueRange(operands).drop_front(2));
+    return bind(op, narrowed);
+  }
   if (name == "runtime.release_transfer") {
     emit<TransferReleaseOp>(op, {}, {operands[0]});
     return success();
@@ -1741,7 +1764,8 @@ LogicalResult Lowering::lowerOperation(Operation *op) {
                                                            literal.getValue()));
     return bind(op, builder.create(state)->getResults());
   }
-  return refuse(op, "no EVM realization for this reachable operation");
+  return refuse(
+      op, ("no EVM realization for " + op->getName().getStringRef()).str());
 }
 
 class EndpointConversion final : public ConversionPattern {
@@ -1905,7 +1929,8 @@ LogicalResult checkTarget(ModuleOp module) {
     if (target.isLegal(op))
       return WalkResult::advance();
     op->emitError(
-        "[evm.target-legality] residual unsupported operation or type");
+        "[evm.target-legality] residual unsupported operation or type: ")
+        << op->getName();
     return WalkResult::interrupt();
   });
   if (checked.wasInterrupted())

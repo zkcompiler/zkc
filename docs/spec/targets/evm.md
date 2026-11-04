@@ -121,6 +121,10 @@ evaluation with the existing installed field arithmetic. This internal layout
 grants no public or proof wire ingress. `index.select` converts to standard
 `arith.select` over the existing Boolean and index lanes.
 
+Internal normalized polynomials are constructed only by the dedicated
+normalizing operation; matching vector storage does not grant vector operations
+the polynomial contract.
+
 These operation implementations permit generic FRI verifier closure without
 recognizing a protocol name. The focused Direct quartic Keccak fixtures in
 `common/tests/evm/fixtures/` explicitly select their transcript and row scheme.
@@ -175,6 +179,16 @@ An explicit implementation constraint must be honored; a CPU provider selector
 does not silently select an EVM realization. The invocation adapter selects the
 Entry's checked Boolean acceptance output, including when other data results
 precede it, and validates all returned managed transcript state.
+
+Bound `control.require` uses ordered `evm.control.require`: false reports
+`SourceStop(16)` for native backend `rejected:require`. It does not acquire a
+protocol guard site or turn that backend failure into a normal false result.
+
+Checked conditional numeric loops consume their leading Boolean through
+`runtime.take_condition`. Lowering checks the live transfer ticket, returns the
+Boolean lane and preserves that one ticket with the exact remaining payload.
+It allocates no second ownership ticket and does not move or erase effects.
+This does not enable conditional participant completion.
 
 ## Target declaration
 

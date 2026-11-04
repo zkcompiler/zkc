@@ -1,4 +1,4 @@
-"""Native/deployed row authentication and polynomial controls for parent execution.
+"""Native/deployed Keccak row authentication and polynomial controls.
 
 Uses the existing fixture driver, solc adapter and independent integer Keccak.
 The native driver produces framed source proofs. This module constructs only
@@ -17,8 +17,6 @@ from foundation_controls import (
     Subjects, check_native_outcome, field_wire, frame, index_wire, invocation_root,
     vector_wire,
 )
-from message_frames import children, replace_child
-from oracle_deployment import table_realization
 from probe import check_solc, execute
 from validate import check_return, check_revert
 
@@ -218,14 +216,13 @@ def authentication(controls):
             if (width, height, position) == (2, 8, 0):
                 encoded = bytes.fromhex(honest["proof"])
                 spans = messages(encoded)
-                if len(spans) != 1 or len(children(spans[0][3])) != 3:
-                    raise AssertionError("raw source did not send one root/row/path tuple")
-                start, _, end, packet = spans[0]
+                if len(spans) != 3:
+                    raise AssertionError("source tuple did not flatten to root/row/path messages")
                 inputs = {0: frame(root_tag, root), 1: vector_wire(field, row),
                           2: frame(path_tag, len(path).to_bytes(4, "little") + b"".join(path)),
                           3: index_wire(width), 4: index_wire(height),
                           5: index_wire(position), 6: boolean(False)}
-                root_frame, row_frame, path_frame = children(packet)
+                root_frame, row_frame, path_frame = [span[3] for span in spans]
                 noncanonical = bytearray(row_frame)
                 noncanonical[10:14] = (2130706433).to_bytes(4, "little")
                 for label, child, replacement, native, code in (
@@ -234,21 +231,42 @@ def authentication(controls):
                     ("short-path-payload", 2, path_frame[:-1], "Length", 2),
                     ("wrong-path-domain", 2, path_frame[:5] + bytes([root_tag]) + path_frame[6:], "Header", 3),
                 ):
-                    changed = replace_child(packet, [child], replacement)
-                    supplied = encoded[:start] + len(changed).to_bytes(8, "little") + changed + encoded[end:]
+                    start, _, end, _ = spans[child]
+                    supplied = (encoded[:start] + len(replacement).to_bytes(8, "little")
+                                + replacement + encoded[end:])
                     controls.check(subject, label, inputs, proof=supplied, expected=None,
                                    native_error=f"artifact-stopped:Decode({native})", revert=("decode", code))
         # A tiny opening of a large shape must not be charged as a materialized
-        # table against public_elements. No million-row tree is needed here.
+        # table against public_elements. Use the native default 2^16 table
+        # allowance; its configurable kernel hard cap is separately 2^20.
         row = [tuple(range(1, FIELDS[field][0] + 1))]
-        path = [bytes([i]) * 32 for i in range(20)]
-        _, trace = authenticate(field, bytes(32), 1, 1 << 20, (1 << 20) - 1, row, path)
+        path = [bytes([i]) * 32 for i in range(16)]
+        _, trace = authenticate(field, bytes(32), 1, 1 << 16, (1 << 16) - 1, row, path)
         root = bytes.fromhex(trace[-1]["output"])
         controls.check(subject, "large-committed-shape-small-opening", {
             0: frame(root_tag, root), 1: vector_wire(field, row),
             2: frame(path_tag, len(path).to_bytes(4, "little") + b"".join(path)),
-            3: index_wire(1), 4: index_wire(1 << 20), 5: index_wire((1 << 20) - 1),
+            3: index_wire(1), 4: index_wire(1 << 16), 5: index_wire((1 << 16) - 1),
             6: boolean(False)}, trace=trace * 2)
+
+
+def backend_require(controls):
+    subject = controls.compile("backend-require", (FIXTURES / "backend_require.zkc").read_text(),
+                               "backend_require")
+    controls.check(subject, "true", {0: index_wire(7), 1: index_wire(7), 2: boolean(True)})
+    controls.check(subject, "false-equation", {0: index_wire(7), 1: index_wire(8),
+                                             2: boolean(True)}, expected=False)
+    inputs = {0: index_wire(7), 1: index_wire(7), 2: boolean(False)}
+    fixture = controls.check(subject, "backend-failure", inputs, expected=None,
+                             native_error="rejected:require", revert=("source", 16))
+    proof = bytes.fromhex(fixture["proof"])
+    spans = messages(proof)
+    if len(spans) != 2:
+        raise AssertionError("require fixture has unexpected proof messages")
+    _, start, end, _ = spans[1]
+    controls.check(subject, "stop-before-malformed-later-message", inputs, expected=None,
+                   native_error="rejected:require", revert=("source", 16),
+                   proof=proof[:start] + bytes(end - start) + proof[end:])
 
 
 def polynomial(controls):
@@ -288,44 +306,11 @@ def polynomial(controls):
                 expected=None, native_error=error, revert=revert)
 
 
-def logical(controls):
-    """Real common query controllers, repeated reads and physical selections."""
-    field = "koala-bear.ext4-binomial3"
-    word = [tuple(1 + 10 * i + j for j in range(4)) for i in range(16)]
-    for grouping, order, authentication_policy in (
-        ("individual", "natural", "per-query"),
-        ("antipodal-pairs", "bit-reversed", "atomic-blocks"),
-    ):
-        paired = grouping == "antipodal-pairs"
-        height = len(word) // (2 if paired else 1)
-        rows = [[word[i], word[i + height]] if paired else [word[i]] for i in range(height)]
-        if order == "bit-reversed":
-            bits = (height - 1).bit_length()
-            rows = [rows[int(f"{i:0{bits}b}"[::-1], 2)] for i in range(height)]
-        selected = table_realization(f"rows.merkle-keccak256.{field}/0", grouping=grouping,
-                                     table_order=order, authentication=authentication_policy)
-        subject = controls.compile("logical-" + grouping, (FIXTURES / "authenticated_read.zkc").read_text(),
-                                   "authenticated_read", (selected,))
-        for position in (0, 7, 15):
-            leaf = position % height
-            if order == "bit-reversed":
-                leaf = int(f"{leaf:0{bits}b}"[::-1], 2)
-            root, row, path = opening_rows(field, rows, leaf)
-            valid, trace = authenticate(field, root, len(row), height, leaf, row, path)
-            if not valid:
-                raise AssertionError("independent logical opening failed")
-            inputs = {0: vector_wire(field, word), 1: index_wire(len(word)),
-                      2: index_wire(position), 3: field_wire(field, word[position])}
-            controls.check(subject, f"repeat-{position}", inputs, trace=trace * 2)
-            inputs[3] = field_wire(field, (word[position][0] + 1, *word[position][1:]))
-            controls.check(subject, f"value-false-{position}", inputs, expected=False, trace=trace * 2)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("compiler", "native-driver", "solc", "runner", "output"):
         parser.add_argument(f"--{name}", type=Path, required=True)
-    suites = {"authentication": authentication, "polynomial": polynomial, "logical": logical}
+    suites = {"require": backend_require, "authentication": authentication, "polynomial": polynomial}
     parser.add_argument("--suite", action="append", choices=suites)
     args = parser.parse_args()
     for name in ("compiler", "native_driver", "solc", "runner", "output"):

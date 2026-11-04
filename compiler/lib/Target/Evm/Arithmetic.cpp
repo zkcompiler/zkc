@@ -173,7 +173,8 @@ Expected<std::string> Arithmetic::helper(Operation *op) {
                     VectorGetOp, VectorSetOp, VectorEqualOp>(op);
   auto scalar = dyn_cast<algebra::FieldType>(
       vector || isa<PolyFromCoefficientsOp, PolyEvaluateOp>(op)
-          ? (*layout)->collection->element : attr.getValue());
+          ? (*layout)->collection->element
+          : attr.getValue());
   auto field = storage->layouts.field(scalar);
   if (!field)
     return field.takeError();

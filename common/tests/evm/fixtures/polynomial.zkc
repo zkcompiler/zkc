@@ -5,8 +5,8 @@ type Polynomial<E: Field> = builtin("polynomial", E);
 fn normalized(values: Vector<F>) -> Polynomial<F> {
   return kernel<F>("poly.from_coefficients", values);
 }
-fn evaluate(value: Polynomial<F>, point: F) -> F {
-  return kernel<F>("poly.univariate_evaluate", value, point);
+fn evaluate(value: Polynomial<F>, coordinate: F) -> F {
+  return kernel<F>("poly.univariate_evaluate", value, coordinate);
 }
 fn root(size: index) -> F = primitive("poly.domain_root");
 fn point(shift: F, size: index, position: index) -> F = primitive("poly.domain_point");

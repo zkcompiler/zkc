@@ -96,8 +96,10 @@ Expected<std::string> Authentication::helper(Operation *op) {
     return name;
   // Exact prefixes/byte law: crates/zkc-kernels/src/plonky3/oracle.rs,
   // LeafHash::new/hash_iter and NodeHash::compress, including terminal NULs.
-  constexpr StringLiteral leafTag = "zkc.oracle.keccak256.leaf/0\0";
-  constexpr StringLiteral nodeTag = "zkc.oracle.keccak256.node/0\0";
+  constexpr auto leafTag =
+      StringLiteral::withInnerNUL("zkc.oracle.keccak256.leaf/0\0");
+  constexpr auto nodeTag =
+      StringLiteral::withInnerNUL("zkc.oracle.keccak256.node/0\0");
   const uint64_t header = leafTag.size() + 8 + rows->codec.size() + 16;
   std::string body;
   raw_string_ostream out(body);
