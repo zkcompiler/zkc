@@ -202,6 +202,28 @@ fn dormant(go:bool)->bool{return apply(go,fn(x)=>{if x {require x;x} else {requi
     std::swap(candidates[0]->regions[0], candidates[0]->regions[1]);
     rejected(project);
   });
+  cases.run("eager Boolean regions and callback modes remain valid", [&] {
+    replay(take(check(R"(
+math fn mathematical(go:bool)->bool{return go&&{go||!go};}
+math fn math_apply(go:bool,callback:math fn(bool)->bool)->bool{return callback(go);}
+fn local_apply(go:bool,callback:fn(bool)->bool effects(stop))->bool effects(stop){return callback(go);}
+fn dormant(go:bool)->bool{return math_apply(go,fn(x)=>x&&go)&&local_apply(go,fn(x)=>x||go);}
+protocol Run roles(V)(go:bool@V)->(out:bool@V){return go&&{go||!go};}
+)")));
+  });
+  cases.run("oracle bodies and generated predicate regions remain valid", [&] {
+    replay(take(check(R"(
+type Table=builtin("oracle.table",bool,16);
+type O=builtin("oracle",Table);
+oracle def Identity(source:O)->O {
+ requires true&&true;
+ query(position:index) {
+  let answer <- oracle.query(source,position);
+  return answer&&true;
+ }
+}
+)")));
+  });
   cases.run("unused ordinary chain does not consume managed depth",
             [&] { replay(take(check(aliases(65, false)))); });
   cases.run("managed alias depth boundary",
