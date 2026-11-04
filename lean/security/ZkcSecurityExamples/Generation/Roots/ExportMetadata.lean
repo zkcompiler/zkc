@@ -8,7 +8,7 @@ Current participant exports are independently checked against the selected pair.
 namespace ZkcSecurity.Generation.Roots
 
 def exportDigests : List (String × String × String × String) := [
-  ("SmallSumcheck", "sha256:2570cea125278771a8451ddc403d67d3cd7080315e457c4adc175a89508e1356", "sha256:5592d46a92e6c1df4f875dcee0566bb3e5bba510580b3bd2de6e35e511fbee4d", "sha256:319f01c59dea31eafdcc8512da7a195a34173c5ffbfd558c91d56b9093ba3108"),
-  ("TwoSums", "sha256:d599edea4215f7f3349457a06480c86d19cb7492ed5f0707264e9159367dc939", "sha256:13fa19f0bd32f0e4ac65649705b74d2b4844368ab5cdc210c789c84c0bd3e77d", "sha256:60fa4320e8a4e3b5fc39cdbdd68fc181c7128971935ececba23be11dbc18db35")]
+  ("SmallSumcheck", "sha256:a97cec552c7c3eb40577b93eb195965de358090ac6b786cd718ffae4847ed51e", "sha256:9b4215eb172dd7fe907314e8e67a47018f55fca07693b1cda96da6538128699c", "sha256:c7698d09e1962c0b0c5d5f13ece4ce9fd307f824bab26e86bbd696e7932f84aa"),
+  ("TwoSums", "sha256:e565f70ed061cdd7a411052abe0b918571fa7d0a0c8f8448599a5e40f82aff63", "sha256:292823554fb08e7c790831a90b8e6051def32e359c3acf01221d6f9abcfcf884", "sha256:b0616eb026871c4ba87d24296f187fb58bd56f7cc8a31dc9626d95540ecae5c1")]
 
 end ZkcSecurity.Generation.Roots

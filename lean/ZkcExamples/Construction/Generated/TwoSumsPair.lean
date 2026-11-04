@@ -8,8 +8,8 @@ namespace ZkcExamples.Construction.Generated.TwoSumsPair.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:ef2de365a4ac3cce9226e88a1e517a3fd0ae00f844911d366544d2a7ecf8f39e"
-  candidate := "sha256:ece776f641d9f4881d7342fe7fcd0936843499f62e8ebb9a75da6f395c0790e3"
+  source := "sha256:9f091877267fd6605862a0daed2acc2efb8194eb9e709bc9c4eea30db812275a"
+  candidate := "sha256:91263e7d2d41268bf606616c44c604102c7cd4272b28b8b8a740c5d1f00616c1"
   policy := ⟨"zkl_441c117f8000119f8eafff882ba0eaa7842ce440e5d97bb64e08f51893894e2d", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [5], [0, 1, 2, 3, 4], [("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data .index, .transcript "merlin3.bls12-381.fr64be/0"]
@@ -84,14 +84,14 @@ namespace ZkcExamples.Construction.Generated.TwoSumsPair.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:ef2de365a4ac3cce9226e88a1e517a3fd0ae00f844911d366544d2a7ecf8f39e"
-  candidate := "sha256:ece776f641d9f4881d7342fe7fcd0936843499f62e8ebb9a75da6f395c0790e3"
+  source := "sha256:9f091877267fd6605862a0daed2acc2efb8194eb9e709bc9c4eea30db812275a"
+  candidate := "sha256:91263e7d2d41268bf606616c44c604102c7cd4272b28b8b8a740c5d1f00616c1"
   policy := ⟨"zkl_441c117f8000119f8eafff882ba0eaa7842ce440e5d97bb64e08f51893894e2d", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [5], [0, 1, 2, 3, 4], [("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .data (.field "bls12-381.fr"), .data .index, .transcript "merlin3.bls12-381.fr64be/0"]
   outputs := [.data .boolean, .transcript "merlin3.bls12-381.fr64be/0"]
   instructions := [
-    ⟨.call "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", [2], [.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
+    ⟨.call "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", [2], [.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.call "zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", [6, 7, 8], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.loop "apply_14_label_6c656674_s18" 4 [32, 37, 31], [4, 9, 10, 5], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
         ⟨.receive "apply_14_label_6c656674_label_726f756e64_0" "apply_14_label_6c656674_label_726f756e64_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
@@ -117,9 +117,9 @@ def participant : Participant where
         ⟨.calculate (.fieldMultiply "bls12-381.fr"), [34, 15], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.calculate (.fieldMultiply "bls12-381.fr"), [27, 19], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.calculate (.fieldAdd "bls12-381.fr"), [35, 36], [.data (.field "bls12-381.fr")], []⟩]⟩,
-    ⟨.call "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", [11, 12], [.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
+    ⟨.call "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", [11, 12], [.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.call "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", [0, 14, 15, 16], [.data .boolean], []⟩,
-    ⟨.call "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", [3], [.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
+    ⟨.call "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", [3], [.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.call "zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", [18, 19, 20], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.loop "apply_16_label_7269676874_s18" 4 [44, 49, 43], [4, 21, 22, 13], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
         ⟨.receive "apply_16_label_7269676874_label_726f756e64_0" "apply_16_label_7269676874_label_726f756e64_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
@@ -145,7 +145,7 @@ def participant : Participant where
         ⟨.calculate (.fieldMultiply "bls12-381.fr"), [46, 27], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.calculate (.fieldMultiply "bls12-381.fr"), [39, 31], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.calculate (.fieldAdd "bls12-381.fr"), [47, 48], [.data (.field "bls12-381.fr")], []⟩]⟩,
-    ⟨.call "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", [23, 24], [.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
+    ⟨.call "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", [23, 24], [.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.call "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", [1, 26, 27, 28], [.data .boolean], []⟩,
     ⟨.calculate .booleanAnd, [17, 29], [.data .boolean], []⟩]
   returned := [30, 25]

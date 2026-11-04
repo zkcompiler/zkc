@@ -11,7 +11,7 @@ prove these equalities in the kernel. -/
 namespace ZkcExamples.Structured.SumcheckPendingBodies
 open Zkc.Source Zkc.Source.Structured
 
-abbrev custodySlot : String := "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"
+abbrev custodySlot : String := "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"
 
 abbrev custodyType : Ty := .resourceUnit custodySlot
 

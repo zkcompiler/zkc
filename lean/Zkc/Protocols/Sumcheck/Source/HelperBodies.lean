@@ -47,7 +47,7 @@ def checkFalseBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.
 
 def checkBody : Region dialect checkHelper.inputs checkHelper.outputs :=
   .letOp (.mark "s0_unpack_0") .nil .nil <|
-  .letOp (.consumeUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992") (.cons (.there .here) .nil) .nil <|
+  .letOp (.consumeUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495") (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s3") .nil .nil <|
   .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
   .letOp (.mark "s4") .nil .nil <|
