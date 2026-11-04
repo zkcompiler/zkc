@@ -100,22 +100,26 @@ adapter and Lean interpretation. Each face declares its supported parameters;
 availability is their required intersection, not the union of familiar names.
 The catalog may name laws but cannot prove a kernel implementation correct.
 
-The first service change uses `Contracts/Services.h`, the existing owner of
-logical service contracts. Its `SourceService` rows name installed declarations
-and a typed family adapter. Header parsing retains ordinary typed ports. After
-module/import resolution, the checker partitions service ports by the resolved
-catalog declaration. `Random`, `zkc::prelude::Random`, and an imported module
-alias can select the same installed constructor. An authored type or static
-binder named `Random` keeps its own meaning. The selected family and parameter
-count are checked by signature formation and included in installation identity.
+`Contracts/Services.h` owns logical service contracts. Each service method row
+has a stable identity and a nominal constructor owner; installed method
+associations enter the same `DeclarationIndex` as ordinary declarations. Explicit
+catalog prelude membership controls unqualified visibility. Header parsing
+retains ordinary typed ports; resolution partitions service ports by the
+selected constructor. `Random`, `zkc::prelude::Random`, and an imported module
+alias can select that constructor. An authored type or static binder named
+`Random` keeps its own meaning.
 
-The initial installed declaration is the prelude interface `Random<F: Field>`.
-It is a name-resolution anchor, not an ordinary data type, a provider root, or a
-proof of random sampling. Its `draw` and `index` signatures still come from the
-existing logical service catalog, and provider/root admission remains separate.
+The installed prelude interface `Random<F: Field>` anchors resolution. Its
+`draw`, `index` and `indices` methods use ordinary indexed call bindings with
+retained provider routes. An independent source witness reconstructs the
+service input, lexical aliases and nested captures, and checks the exact query
+method, bound and count against the authored occurrence. Header reconstruction
+shares the parameter, inference and admission lifecycle used for interface
+conformance; candidate ports cannot establish their own authority. Nominal
+selection does not establish provider/root admission or random sampling.
 New service families require an explicit typed adapter until a probe establishes
-that a more general signature algebra covers them. No catch-all string dispatch
-is added to the parser.
+that a more general signature algebra covers them. Installation identity binds
+the method identity, constructor, signature, capability and prelude membership.
 
 Notation has two independent concerns. `Syntax/Operators.def` owns built-in
 shape, precedence and associativity. Installed/library callable declarations
