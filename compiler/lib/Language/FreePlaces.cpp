@@ -70,7 +70,8 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
           result.scoped.insert(*name.binding);
           return true;
         }
-        if (environment.services.count(*name.binding)) {
+        if (environment.service ? environment.service(*name.binding)
+                                : environment.services.count(*name.binding)) {
           result.services.insert(*name.binding);
           return true;
         }
