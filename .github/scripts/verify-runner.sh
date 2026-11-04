@@ -24,6 +24,10 @@ done
   echo '::error::Configure the dedicated compiler cache before running CI.'
   exit 1
 }
+# Nix resolves bind sources as a build user before entering its sandbox.
+# Permit traversal of the cache parent; individual caches retain their owners
+# and private permissions. The runner owns this parent directory.
+chmod 0711 "$ZKC_CI_ROOT/cache"
 df -h "$ZKC_CI_ROOT"
 # Keep all scratch data on the CI volume. Refuse before a build exhausts it.
 available=$(df -PB1 "$ZKC_CI_ROOT" | awk 'NR == 2 {print $4}')
