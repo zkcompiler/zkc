@@ -27,15 +27,13 @@ jobs:
   quick:
     name: Quick source and harness checks
     if: github.event_name != 'workflow_dispatch' || inputs.scope == 'quick' || inputs.scope == 'all'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, zkc-ci]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/nix
-        with:
-          cache: "false"
       - name: Check sources without building project tools
         run: |
           mkdir -p build/reports
@@ -44,14 +42,15 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: quick-checks-${{ github.run_id }}
+          name: quick-checks-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/reports/
           retention-days: 14
 
   native:
+    needs: quick
     name: Native build and execution
     if: github.event_name != 'workflow_dispatch'
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    runs-on: [self-hosted, linux, x64, zkc-ci]
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,21 +63,29 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
         run: python3 .github/scripts/select-native-changes.py
-      - name: Reserve build space
-        if: steps.changes.outputs.native == 'true' && runner.environment == 'github-hosted'
-        run: |
-          # A fresh compiler and Rust check can exhaust even 25 GiB of free
-          # space. The hosted runner's Android SDK is not used by native checks.
-          sudo rm -rf /usr/local/lib/android
-          df -h /
       - uses: ./.github/actions/nix
         if: steps.changes.outputs.native == 'true'
-      - name: Check Rust, installed application, SDK and C++ formatting
+      - name: Verify compiler cache correctness
+        if: steps.changes.outputs.native == 'true'
+        run: nix build -L --no-link .#compiler-cache-check
+      - name: Select Rust checks from package inputs
+        id: rust
+        if: steps.changes.outputs.native == 'true'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: python3 .github/scripts/select-rust-check.py
+      - name: Check Rust with isolated incremental outputs
+        if: steps.changes.outputs.native == 'true' && steps.rust.outputs.needed != 'false'
+        run: |
+          mkdir -p build/reports
+          nix develop --command bash .github/scripts/check-rust-incremental.sh \
+            2>&1 | tee build/reports/rust-checks.log
+      - name: Check installed application, SDK and C++ formatting
         if: steps.changes.outputs.native == 'true'
         run: |
           mkdir -p build/reports
           nix build -L --keep-going --no-link \
-            .#checks.x86_64-linux.rust \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
             .#checks.x86_64-linux.rust-consumer \
@@ -99,7 +106,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && steps.changes.outputs.native == 'true'
         with:
-          name: native-checks-${{ github.run_id }}
+          name: native-checks-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/reports/
           retention-days: 14
 
@@ -107,7 +114,7 @@ jobs:
   main:
     name: Full main packages and checks
     if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache')
-    runs-on: ${{ vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    runs-on: [self-hosted, linux, x64, zkc-ci]
     timeout-minutes: ${{ inputs.scope == 'cache' && 360 || 180 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -115,13 +122,7 @@ jobs:
           persist-credentials: false
       - name: Check the public source tree
         run: bash .github/scripts/public-tree-guard.sh
-      - name: Reserve space for LLVM source builds
-        if: runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
-      - name: Require restoration on a fresh project store
-        if: github.event_name == 'workflow_dispatch' && inputs.scope == 'cache'
-        run: bash .github/scripts/check-nix-cache.sh
       - name: Record selected tools and lock
         run: |
           mkdir -p build/reports/environment
@@ -132,6 +133,9 @@ jobs:
           test "$(cat build/reports/environment/sandbox.txt)" = true
       - name: Check all main packages in the sandbox
         run: nix flake check -L --keep-going 2>&1 | tee build/reports/nix-check.log
+      - name: Require reuse without builds or downloads
+        if: inputs.scope == 'cache'
+        run: bash .github/scripts/check-nix-cache.sh
       - name: Retain successful check records
         run: |
           nix build .#checks.x86_64-linux.project --out-link build/nix-project
@@ -139,14 +143,14 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: main-checks-${{ github.run_id }}
+          name: main-checks-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/reports/
           retention-days: 14
 
   optional:
     name: Optional (${{ matrix.package }})
     if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'optional')
-    runs-on: ${{ vars.ZKC_OPTIONAL_RUNNER || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    runs-on: [self-hosted, linux, x64, zkc-ci]
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -156,9 +160,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Reserve build space
-        if: runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
       - name: Build and test the selected integration
         env:
@@ -173,43 +174,54 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: optional-${{ matrix.package }}-${{ github.run_id }}
+          name: optional-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/reports/
           retention-days: 14
 
   fresh:
-    name: Formal source rebuild without a project cache
+    name: Formal source rebuild without project output reuse
     if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'fresh')
-    runs-on: ${{ vars.ZKC_FRESH_RUNNER || vars.ZKC_OPTIONAL_RUNNER || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    runs-on: [self-hosted, linux, x64, zkc-ci]
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Reserve build space
-        if: runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
-        with:
-          cache: "false"
-      - name: Require a fresh project store
-        run: |
-          for package in lean arklib; do
-            output=$(nix eval --raw ".#$package.outPath")
-            if nix-store --check-validity "$output" 2>/dev/null; then
-              echo "::error::$package already exists in this store. Configure ZKC_FRESH_RUNNER with an ephemeral runner or a fresh Nix store; disabling cache restore alone does not force source reconstruction."
-              exit 1
-            fi
-          done
-      - name: Build main and optional Lean packages from sources
+      - name: Rebuild the formal package chain from sources
+        env:
+          ZKC_CI_FRESH_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           mkdir -p build/reports
-          nix build -L .#lean .#arklib --no-link \
-            --option substituters https://cache.nixos.org \
-            2>&1 | tee build/reports/lean-fresh.log
+          nix build -L --no-link --impure --expr '
+            let
+              project = builtins.getFlake (toString ./.);
+              fresh = import ./nix/fresh-formal.nix {
+                packages = project.packages.x86_64-linux;
+                runId = builtins.getEnv "ZKC_CI_FRESH_RUN";
+              };
+            in fresh.arklib
+          ' 2>&1 | tee build/reports/formal-fresh.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: lean-fresh-${{ github.run_id }}
+          name: lean-fresh-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/reports/
           retention-days: 30
+
+  required:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'Selected manual checks' || 'Required CI' }}
+    if: always()
+    needs: [quick, native, main, optional, fresh]
+    runs-on: [self-hosted, linux, x64, zkc-ci]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require every selected job to succeed
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT: ${{ github.event_name }}
+          CI_SCOPE: ${{ inputs.scope }}
+        run: python3 .github/scripts/require-checks.py

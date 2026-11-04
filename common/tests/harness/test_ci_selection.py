@@ -49,6 +49,7 @@ def check_output(output, expected):
     ("lean/Zkc.lean", False, False),
     ("compiler/CMakeLists.txt", False, True),
     ("crates/zkc/build.rs", False, True),
+    ("crates/zkc/README.md", False, True),
     ("common/unicode/README.md", False, False),
     ("docs/README.md", False, False),
 ])
