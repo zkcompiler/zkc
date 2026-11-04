@@ -2,6 +2,7 @@
 #include "Checker.h"
 #include "Effects.h"
 #include "Internal.h"
+#include "ScopedWitness.h"
 #include "WrittenSource.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
@@ -175,6 +176,7 @@ struct ContractHeaders {
   Semantics &types;
   std::map<uint32_t, const SyntaxDeclaration *> sources;
   std::map<uint32_t, uint32_t> parents;
+  bool managed = false;
   bool collect(const SyntaxDeclaration &source, const std::string &path,
                std::optional<DeclarationId> parent, unsigned depth) {
     if (depth > types.work.limits.typeDepth)
@@ -193,6 +195,7 @@ struct ContractHeaders {
         source.kind != Declaration::Kind::Variant &&
         source.kind != Declaration::Kind::Math &&
         source.kind != Declaration::Kind::Local &&
+        (!managed || source.kind != Declaration::Kind::Protocol) &&
         source.kind != Declaration::Kind::DomainFunction)
       return true;
     auto id = storage.declarationIndex->canonical(path);
@@ -443,6 +446,80 @@ bool implementationAgrees(Semantics &types, const Declaration &module,
                        provided.span);
 }
 } // namespace
+llvm::Expected<std::map<uint32_t, std::vector<ServicePort>>>
+replayServicePorts(const CheckedStorage &storage, Work &work) {
+  std::map<uint32_t, std::vector<ServicePort>> ports;
+  bool needed = false;
+  for (const auto &[id, source] : storage.bodySources) {
+    if (auto error = work.charge(1, {}))
+      return std::move(error);
+    if (!source || !source->syntax)
+      return failure("source.binding-witness", "missing body source syntax");
+    needed |= !source->syntax->services.empty();
+  }
+  if (!needed)
+    return ports;
+  Semantics types(storage.declarations, storage.assets, work);
+  if (!storage.writtenSources || !storage.declarationIndex)
+    return failure("source.binding-witness", "missing managed input headers");
+  uint64_t tokens = 0;
+  for (const auto &source : storage.tokens)
+    tokens += source.size();
+  if (!types.charge(tokens, {}))
+    return types.takeError();
+  auto authored = storage.writtenSources->modules;
+  if (auto error = expandLayoutSections(authored, work))
+    return std::move(error);
+  ContractHeaders headers{storage, types, {}, {}, true};
+  for (const auto &source : authored)
+    if (!headers.collect(source, source.name, {}, 1))
+      return types.takeError();
+  // The retained body syntax owns the classification and lexical input IDs.
+  // Its type terms and roles are replayed; candidate fields are discarded.
+  for (auto &[id, source] : headers.sources) {
+    if (source->kind != Declaration::Kind::Protocol)
+      continue;
+    auto found = storage.bodySources.find(id);
+    if (found == storage.bodySources.end() || !found->second ||
+        !found->second->syntax)
+      return failure("source.binding-witness", "missing managed input syntax",
+                     source->span);
+    source = found->second->syntax.get();
+    for (const auto &port : source->services) {
+      auto selected = storage.declarationIndex->lookup(
+          SourceAccess{DeclarationId{id}}, port.type.name,
+          {[&] { return types.charge(1, port.span); }, {}});
+      auto *reference = std::get_if<ResolvedReference>(&selected);
+      if (!reference || !port.serviceReference ||
+          *reference != *port.serviceReference)
+        return types.diagnostic
+                   ? types.takeError()
+                   : failure("source.binding-witness",
+                             "managed constructor lookup differs", port.span);
+    }
+  }
+  if (auto error = chargeSemanticIndex(storage.declarations, work))
+    return std::move(error);
+  CheckedStorage replay(storage.capture, storage.installation);
+  replay.declarations = storage.declarations;
+  replay.assets = storage.assets;
+  replay.sources = storage.sources;
+  replay.declarationIndex = storage.declarationIndex;
+  Checker reader(replay, work, SourceAccess{{0}});
+  // Shared signature reconstruction must assign parameter indices from the
+  // immutable header before substituting service fields and static terms.
+  // Service replay deliberately has no separate parameter-indexing authority.
+  for (const auto &[id, source] : headers.sources)
+    if (!reader.prepareSignatureReconstruction(DeclarationId{id}, *source))
+      return reader.types.takeError();
+  for (const auto &[id, source] : headers.sources) {
+    if (!reader.reconstructSignature(DeclarationId{id}))
+      return reader.types.takeError();
+    if (source->kind == Declaration::Kind::Protocol)
+      ports.emplace(id, replay.declarations[id].services);
+  }
+  return ports;
+}
 llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
   if (!storage.sources || !storage.declarationIndex)
     return failure("source.scoped-witness",

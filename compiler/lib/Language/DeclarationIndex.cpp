@@ -42,6 +42,7 @@ bool DeclarationIndex::add(const Declaration &decl, SourceOrigin origin) {
   auto selectedCategory = category(decl);
   if (origin == SourceOrigin::Installation)
     if (auto *row = protocol::frontendDeclaration(decl.qualifiedName)) {
+      associations.emplace(decl.id.index, row);
       if (row->rule == protocol::FrontendSignature::RandomConstructor)
         selectedCategory = ResolutionCategory::ServiceConstructor;
       if (row->prelude)
@@ -49,8 +50,23 @@ bool DeclarationIndex::add(const Declaration &decl, SourceOrigin origin) {
             row->name,
             NamespaceBinding{decl.id, decl.span, true, decl.module, {}});
     }
-  nodes.push_back(
-      {decl.parent, decl.module, decl.kind, selectedCategory, origin});
+  if (origin == SourceOrigin::Installation && decl.parent) {
+    auto parent = associations.find(decl.parent->index);
+    if (parent != associations.end())
+      for (const auto &row : protocol::serviceMethodDeclarations())
+        if (row.constructor == parent->second->identity &&
+            row.name == decl.name) {
+          selectedCategory = ResolutionCategory::ServiceMethod;
+          serviceAssociations.emplace(decl.id.index, &row);
+        }
+  }
+  std::optional<InstallationIdentity> installation;
+  if (origin == SourceOrigin::Installation)
+    installation =
+        InstallationIdentity{decl.name, decl.qualifiedName, decl.span,
+                             decl.isPublic, decl.anonymous};
+  nodes.push_back({decl.parent, decl.module, decl.kind, selectedCategory,
+                   origin, std::move(installation)});
   namespaces.emplace_back();
   if (decl.kind == Declaration::Kind::Module) {
     moduleMembers.emplace(decl.id.index, std::vector<DeclarationId>{});
@@ -66,6 +82,39 @@ bool DeclarationIndex::add(const Declaration &decl, SourceOrigin origin) {
   }
   return true;
 }
+bool DeclarationIndex::matchesInstallation(
+    ArrayRef<Declaration> declarations, ArrayRef<SourceBuffer> sources) const {
+  for (unsigned i = 0; i < nodes.size(); ++i) {
+    const auto &node = nodes[i];
+    if (!node.installation)
+      continue;
+    if (i >= declarations.size())
+      return false;
+    const auto &decl = declarations[i];
+    const auto &identity = *node.installation;
+    if (decl.id.index != i || decl.name != identity.name ||
+        decl.qualifiedName != identity.qualifiedName ||
+        bool(decl.parent) != bool(node.parent) ||
+        (decl.parent && decl.parent->index != node.parent->index) ||
+        decl.module.index != node.module.index || decl.kind != node.kind ||
+        decl.isPublic != identity.isPublic ||
+        decl.anonymous != identity.anonymous ||
+        decl.span.source.index != identity.span.source.index ||
+        decl.span.begin != identity.span.begin ||
+        decl.span.end != identity.span.end)
+      return false;
+  }
+  for (unsigned i = 0; i < declarations.size(); ++i) {
+    const auto &decl = declarations[i];
+    if (decl.span.source.index >= sources.size())
+      return false;
+    bool installed =
+        sources[decl.span.source.index].origin == SourceOrigin::Installation;
+    if (installed != (i < nodes.size() && nodes[i].installation.has_value()))
+      return false;
+  }
+  return true;
+}
 DeclarationIndex::Namespace &
 DeclarationIndex::formingNamespace(DeclarationId id) {
   assert(!frozen);
@@ -76,18 +125,13 @@ DeclarationIndex::bindings(DeclarationId id) const {
   return namespaces.at(id.index);
 }
 void DeclarationIndex::finish(ArrayRef<Declaration> declarations,
-                              ArrayRef<SourceBuffer> sources) {
+                              ArrayRef<SourceBuffer>) {
   assert(!frozen);
   for (const auto &decl : declarations) {
     if (decl.kind == Declaration::Kind::Record ||
         decl.kind == Declaration::Kind::Variant ||
         decl.kind == Declaration::Kind::Associated)
       nominalHomes.emplace(decl.qualifiedName, decl.module);
-    if (sources[decl.span.source.index].origin != SourceOrigin::Installation)
-      continue;
-    if (auto *row = protocol::frontendDeclaration(decl.qualifiedName)) {
-      associations.emplace(decl.id.index, row);
-    }
   }
   for (const auto &row : protocol::frontendHomes()) {
     auto module = canonical(row.module);
@@ -344,6 +388,11 @@ const protocol::FrontendDeclaration *
 DeclarationIndex::ruleAssociation(DeclarationId id) const {
   const auto *row = association(id);
   return row && row->rule ? row : nullptr;
+}
+const protocol::ServiceMethodDeclaration *
+DeclarationIndex::serviceAssociation(DeclarationId id) const {
+  auto at = serviceAssociations.find(id.index);
+  return at == serviceAssociations.end() ? nullptr : at->second;
 }
 std::optional<DeclarationId> DeclarationIndex::canonical(StringRef name) const {
   auto at = canonicalDeclarations.find(name.str());

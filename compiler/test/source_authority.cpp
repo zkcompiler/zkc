@@ -696,6 +696,53 @@ int main() {
     only(report, "facade", "import-name", "lower::Hidden::combine");
     require(crossCheck(facade).empty(), "facade capture fails cross-check");
   });
+  cases.run(
+      "managed method references preserve import-free facade providers", [] {
+        auto sources = [](StringRef comment) {
+          return std::vector<SourceBuffer>{
+              {"facade",
+               "module facade;pub use zkc::prelude::{Random as Coins};" +
+                   comment.str(),
+               "facade.zkc"},
+              {"client",
+               R"(module client;domain F=field("koala-bear.ext4-binomial3");
+protocol Run roles(V)(coins:facade::Coins<F>@V)->(){
+ let alias=coins;let a=alias.draw();let b=alias.index<8>();let c=alias.indices(8,3);return ();})",
+               "client.zkc"}};
+        };
+        auto project = check(sources(""));
+        auto report = bindings(project);
+        auto constructor =
+            project.declarationIndex().canonical("zkc::prelude::Random");
+        require(bool(constructor), "missing installed constructor");
+        for (const auto &row : zkc::protocol::serviceMethodDeclarations()) {
+          if (row.constructor !=
+              project.declarationIndex().association(*constructor)->identity)
+            continue;
+          auto selected = project.declarationIndex().member(
+              SourceAccess{*constructor}, *constructor, row.name);
+          auto *reference = std::get_if<ResolvedReference>(&selected);
+          require(reference &&
+                      reference->category == ResolutionCategory::ServiceMethod,
+                  "managed row was not installed as an indexed member");
+          const auto &target = project.declarations()[reference->target.index];
+          const auto *record =
+              only(report, "client::Run", "method", target.qualifiedName);
+          require(record->getObject("provider")->getString("name") == "facade",
+                  "managed method lost its facade provider");
+        }
+        require(crossCheck(project).empty(),
+                "managed facade references fail authority cross-check");
+        require(revision(project, "client") !=
+                    revision(check(sources("// changed facade")), "client"),
+                "managed facade dependency was omitted");
+        auto unrelated = sources("");
+        unrelated.push_back(
+            {"unrelated", "module unrelated;", "unrelated.zkc"});
+        require(revision(project, "client") ==
+                    revision(check(unrelated), "client"),
+                "unrelated capture changed managed client authority");
+      });
   cases.run("a discarded lookup records nothing", [] {
     // A data port's type is resolved once by its signature; service
     // classification probes the same name without recording it.

@@ -71,6 +71,11 @@ public:
   std::map<std::string, ResolvedReference> accessible(SourceAccess) const;
   const protocol::FrontendDeclaration *association(DeclarationId) const;
   const protocol::FrontendDeclaration *ruleAssociation(DeclarationId) const;
+  const protocol::ServiceMethodDeclaration *
+      serviceAssociation(DeclarationId) const;
+  /// Replay installed identity and ownership against the frozen namespace.
+  bool matchesInstallation(llvm::ArrayRef<Declaration>,
+                           llvm::ArrayRef<SourceBuffer>) const;
   std::optional<DeclarationId> home(const Type &) const;
   llvm::ArrayRef<DeclarationId> members(DeclarationId) const;
   /// Internal exact identity joins only; never source name resolution.
@@ -78,12 +83,18 @@ public:
   uint64_t bindingCount() const;
 
 private:
+  struct InstallationIdentity {
+    std::string name, qualifiedName;
+    Span span;
+    bool isPublic, anonymous;
+  };
   struct Node {
     std::optional<DeclarationId> parent;
     DeclarationId module;
     Declaration::Kind kind;
     ResolutionCategory category;
     SourceOrigin origin;
+    std::optional<InstallationIdentity> installation;
   };
   std::vector<Node> nodes;
   std::vector<Namespace> namespaces;
@@ -91,6 +102,8 @@ private:
   bool within(DeclarationId, DeclarationId) const;
   std::optional<DeclarationId> context(const AccessContext &) const;
   std::map<uint32_t, const protocol::FrontendDeclaration *> associations;
+  std::map<uint32_t, const protocol::ServiceMethodDeclaration *>
+      serviceAssociations;
   std::map<std::string, DeclarationId> canonicalDeclarations, roots;
   /// Only installed rows with explicit prelude membership enter this scope.
   Namespace prelude;

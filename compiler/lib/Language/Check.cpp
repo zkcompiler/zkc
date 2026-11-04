@@ -43,6 +43,7 @@ void Checker::registerContractInference(Declaration &decl,
   // theirs like any primitive declaration.
   if (!source.abstract && !source.explicitRequirements &&
       !index().ruleAssociation(decl.id) &&
+      !index().serviceAssociation(decl.id) &&
       (source.kind == Declaration::Kind::Oracle ||
        source.kind == Declaration::Kind::Math ||
        source.kind == Declaration::Kind::Local ||

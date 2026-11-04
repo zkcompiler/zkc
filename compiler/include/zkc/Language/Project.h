@@ -167,6 +167,7 @@ enum class ResolutionCategory {
   Domain,
   Callable,
   ServiceConstructor,
+  ServiceMethod,
   Other
 };
 struct ResolutionStep {

@@ -815,5 +815,82 @@ int main() {
                                   "source.scoped-witness"),
                   "conformance mutation did not name its witness refusal");
         });
+  for (StringRef constructor :
+       {"Random", "zkc::prelude::Random", "facade::Coins"}) {
+    auto sources = [&](const std::string &body) {
+      return std::vector<SourceBuffer>{
+          {"facade", "module facade;pub use zkc::prelude::{Random as Coins};",
+           "facade.zkc"},
+          {"m",
+           "module m;domain F=field(\"koala-bear.ext4-binomial3\");" + body,
+           "m.zkc"}};
+    };
+    cases.run("managed constructor route " + constructor, [&] {
+      take(check(
+          sources("protocol Run roles(V)(coins:" + constructor.str() +
+                  "<F>@V)->(){let a=coins.draw();let b=coins.index<8>();let "
+                  "c=coins.indices(8,3);return ();}")));
+    });
+    cases.run("managed constructor cannot constrain modules " + constructor,
+              [&] {
+                refuses(check(sources("fn bad<C:" + constructor.str() +
+                                      "<F>>()->(){return ();}")),
+                        "source.service");
+              });
+    cases.run("managed constructor cannot be implemented " + constructor, [&] {
+      refuses(check(sources("module Bad:" + constructor.str() + "<F>{}")),
+              "source.service");
+    });
+    cases.run("managed constructor is not callable " + constructor, [&] {
+      refuses(check(sources("fn bad()->(){let x=" + constructor.str() +
+                            "<F>();return ();}")),
+              "source.service");
+    });
+    cases.run("managed method is not callable " + constructor, [&] {
+      refuses(check(sources("fn bad()->F{return " + constructor.str() +
+                            "::draw<F>();}")),
+              "source.service");
+    });
+    cases.run(
+        "managed method grants no notation authority " + constructor, [&] {
+          refuses(
+              check(sources("operator + = " + constructor.str() + "::draw;")),
+              "source.service");
+        });
+    cases.run(
+        "managed method grants no scoped callback authority " + constructor,
+        [&] {
+          refuses(check(sources("fn apply(body:fn()->F effects())->F{return "
+                                "body();}fn bad()->F{return apply(" +
+                                constructor.str() + "::draw);}")),
+                  "source.scoped");
+        });
+  }
+  for (StringRef request :
+       {"coins.index<0>()", "coins.indices(8,0)", "coins.indices(0,3)"})
+    cases.run("managed positive natural refusal " + request, [&] {
+      refuses(
+          check(
+              "module m;domain F=field(\"koala-bear.ext4-binomial3\");protocol "
+              "Run roles(V)(coins:Random<F>@V)->(){let x=" +
+              request.str() + ";return ();}"),
+          "source.service");
+    });
+  cases.run("an ordinary interface named Random retains ordinary authority",
+            [] {
+              take(check(R"(
+module m;domain F=field("bls12-381.fr");
+interface Random<T:Field>{math fn yes()->bool;}
+module Ordinary:Random<F>{math fn yes()->bool{return true;}}
+math fn through<C:Random<F>>()->bool{return C::yes();}
+math fn call()->bool{return through<Ordinary>();}
+)"));
+            });
+  cases.run("managed row capability refusal is unchanged", [] {
+    refuses(check("module m;domain F=field(\"koala-bear\");protocol Run "
+                  "roles(V)(coins:Random<F>@V)->(){let "
+                  "x=coins.index<8>();return ();}"),
+            "source.service");
+  });
   return cases.result();
 }

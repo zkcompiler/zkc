@@ -1,6 +1,7 @@
 #include "RecordIntrinsics.h"
 #include "BindingWitness.h"
 #include "BodyCheck.h"
+#include "ManagedServices.h"
 #include "ScopedWitness.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
@@ -64,13 +65,63 @@ bool Checker::indexDeclarations() {
   return true;
 }
 bool Checker::checkInstalledSignatures() {
-  return checkDeclarationAssociations(types, output.declarations,
-                                      *output.declarationIndex);
+  return checkDeclarationAssociations(
+      types, output.declarations, *output.declarationIndex, *output.sources);
 }
 bool checkDeclarationAssociations(Semantics &types,
                                   ArrayRef<Declaration> declarations,
-                                  const DeclarationIndex &index) {
+                                  const DeclarationIndex &index,
+                                  ArrayRef<SourceBuffer> sources) {
+  uint64_t identityWork = declarations.size();
+  for (const auto &decl : declarations)
+    identityWork += decl.name.size() + decl.qualifiedName.size();
+  if (!types.charge(identityWork, {}))
+    return false;
+  if (!index.matchesInstallation(declarations, sources))
+    return types.fail("source.installation",
+                      "installed declaration identity or ownership differs",
+                      {});
   for (const auto &decl : declarations) {
+    if (auto *method = index.serviceAssociation(decl.id)) {
+      auto refuse = [&] {
+        return types.fail(
+            "source.installation",
+            "installed managed method differs from its catalog signature",
+            decl.span);
+      };
+      const auto *constructor =
+          decl.parent ? index.ruleAssociation(*decl.parent) : nullptr;
+      if (!constructor || constructor->identity != method->constructor ||
+          decl.name != method->name ||
+          decl.qualifiedName != declarations[decl.parent->index].qualifiedName +
+                                    "::" + method->name ||
+          constructor->rule != protocol::FrontendSignature::RandomConstructor ||
+          decl.kind != Declaration::Kind::Local || !decl.isPublic ||
+          decl.abstract || decl.primitive || decl.body ||
+          decl.finiteDefinition || !decl.members.empty() ||
+          !decl.inputs.empty() || !decl.inputOrder.empty() ||
+          !decl.roles.empty() || !decl.services.empty() ||
+          !decl.scopedInputs.empty() || !decl.domainInputs.empty() ||
+          !decl.permissionBounds.empty() || !decl.capabilityBounds.empty() ||
+          !decl.bounds.empty() || !decl.dataPreconditions.empty() ||
+          decl.effectAllowance ||
+          decl.parameters.size() != 1 + serviceStaticCount(method->signature) ||
+          decl.parameters.front().sort != Parameter::Sort::Domain ||
+          decl.parameters.front().domainSort != "Field" ||
+          declarations[decl.parent->index].parameters.size() != 1 ||
+          parameterType(decl.parameters.front()) !=
+              parameterType(
+                  declarations[decl.parent->index].parameters.front()) ||
+          decl.outputs.size() != 1 ||
+          decl.outputs.front().type !=
+              serviceResult(method->signature,
+                            parameterType(decl.parameters.front())))
+        return refuse();
+      for (unsigned i = 1; i < decl.parameters.size(); ++i)
+        if (decl.parameters[i].sort != Parameter::Sort::Natural)
+          return refuse();
+      continue;
+    }
     auto *row = index.association(decl.id);
     if (!row)
       continue;
@@ -104,8 +155,24 @@ bool checkDeclarationAssociations(Semantics &types,
           decl.parameters.size() != 1 ||
           decl.parameters.front().sort != Parameter::Sort::Domain ||
           decl.parameters.front().domainSort != "Field" ||
-          !decl.members.empty() || !decl.inputs.empty() ||
-          !decl.outputs.empty())
+          !decl.inputs.empty() || !decl.outputs.empty())
+        return refuse();
+      unsigned expected = 0;
+      for (const auto &method : protocol::serviceMethodDeclarations()) {
+        if (method.constructor != row->identity)
+          continue;
+        ++expected;
+        auto selected =
+            index.member(SourceAccess{decl.id}, decl.id, method.name);
+        auto *ref = std::get_if<ResolvedReference>(&selected);
+        if (!ref || ref->category != ResolutionCategory::ServiceMethod ||
+            index.serviceAssociation(ref->target) != &method ||
+            !llvm::any_of(decl.members, [&](auto id) {
+              return id.index == ref->target.index;
+            }))
+          return refuse();
+      }
+      if (decl.members.size() != expected)
         return refuse();
       continue;
     }

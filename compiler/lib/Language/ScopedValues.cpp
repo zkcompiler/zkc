@@ -580,6 +580,13 @@ class ValueCheck {
         const auto &binding = *op->binding;
         if (binding.target.declaration.index >= storage.declarations.size())
           return refuse(expr.span);
+        if (binding.target.reference.category ==
+            ResolutionCategory::ServiceMethod) {
+          if (!checkCallAction(types, storage.declarations, body, *op,
+                               storage.declarationIndex.get()))
+            return false;
+          continue;
+        }
         const auto &callee =
             storage.declarations[binding.target.declaration.index];
         auto inputOrder = callee.inputOrder;

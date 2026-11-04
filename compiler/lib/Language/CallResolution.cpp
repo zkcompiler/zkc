@@ -170,7 +170,16 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
     }
   }
   auto reference = select(decl, name, span);
-  if (!reference || !signature(reference->target))
+  if (!reference)
+    return {};
+  if (reference->category == ResolutionCategory::ServiceConstructor ||
+      reference->category == ResolutionCategory::ServiceMethod) {
+    types.fail("source.service",
+               "managed declarations require a borrowed service receiver",
+               span);
+    return {};
+  }
+  if (!signature(reference->target))
     return {};
   const auto &target = output.declarations[reference->target.index];
   if (target.abstract && target.kind != Declaration::Kind::Associated) {

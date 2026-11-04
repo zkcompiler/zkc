@@ -294,6 +294,33 @@ random-service contract for that field; analysis can retain a generic declaratio
 before that selection. The installed catalog includes service contracts in its
 identity.
 
+The installed frontend constructor association determines the service family.
+Its source spelling, qualification and reexport aliases grant no ordinary
+interface, module implementation, callable, scoped callback or notation
+authority. Catalog method rows install actual declarations beneath that
+constructor. Member lookup uses its resolved constructor route and preserves
+the facade provider and installed method target. A method's catalog signature
+and capability determine its static request shape and result; ordinary home
+methods with the same name remain ordinary methods.
+
+Every query retains one immutable authored call occurrence and the operation's
+normal call binding, with an explicit managed-method resolution category.
+The binding carries the selected member reference, field, static naturals,
+owner role and managed root separately from ordinary data operands. Independent
+source replay checks occurrence coverage, selected provider and target, exact
+static arguments, capability, result and lexical service aliases. Missing or
+reused occurrences and missing bindings refuse with `source.binding-witness`.
+Changing an action and its advertised binding together does not change the
+retained source occurrence.
+
+Service input fields, owners and constructor references are reconstructed from
+immutable authored headers, including their type dependencies. Region-relative
+root slots are reconstructed through lexical aliases and ordered free-service
+captures at every nested branch or repeat. Candidate port metadata and source
+spans cannot establish a root by themselves. Closure substitutes fields and
+static naturals in the same binding; independent specialization and native
+query validation retain their separate checks and execution representation.
+
 `let alias = coins;` names the same root. The alias is immutable and unannotated. Aliases introduce no query, reset or
 independence assumption. `coins.draw()` is ordered protocol work: its result is
 available only at the service owner, and an unused result does not remove the

@@ -327,13 +327,19 @@ abstract context; `abstract_module` is only a presentation projection. Before
 independent witness checking, the authored occurrence inventory is frozen.
 Replay reauthorizes its routes using source access and rejects changed or missing
 candidate references, including provider changes accompanied by changed candidate
-metadata. It never appends reference records. `route` names the resolution route:
+metadata. It never appends reference records. Installed declaration replay also
+checks exact name, canonical identity, parent, owning module and installation
+origin against the frozen declaration index. An association slot and a matching
+signature shape do not establish that identity. Missing retained occurrence
+handles or syntax refuse with a witness diagnostic.
+
+`route` names the resolution route:
 
 | Route | Records |
 |---|---|
 | `path` | A written path in a signature, associated type, constraint, conformance contract, construction provider, body callee or type, including qualified paths without an import and names selected from the explicit prelude |
 | `import`, `import-name` | An import's module and each selected name; a facade keeps its facade provider |
-| `method` | A home method; the provider is the selected home, including a catalog-authorized forwarding home, and the target is the canonical implementation |
+| `method` | A home method keeps its selected home provider, including a catalog-authorized forwarding home, and canonical implementation target. A managed method keeps its constructor's authored provider route, including a facade, and its indexed installed method target |
 | `module-member` | An associated type or callable member of a bound module parameter; the interface-bound route keeps its provider and `abstract_module` is its binder |
 | `service` | A managed service constructor in a protocol port; the port retains its selected provider and canonical installed constructor even through an import-free facade path |
 | `notation` | An operator, delimiter, indexing or reduction use, once its callee is fixed. The provider is the module whose declaration or body introduces the selected binding, which is the installed module for prelude operators; the target is the selected, or filtered, callable |

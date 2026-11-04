@@ -822,7 +822,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
   // A rule association has no body; an installed primitive keeps its own.
   if ((decl.generated && decl.generated->operation) ||
-      (output.declarationIndex && output.declarationIndex->ruleAssociation(id)))
+      (output.declarationIndex &&
+       (output.declarationIndex->ruleAssociation(id) ||
+        output.declarationIndex->serviceAssociation(id))))
     return true;
   if (sources[id.index]->invalidBody)
     return types.fail("source.dependency", "body depends on malformed source",

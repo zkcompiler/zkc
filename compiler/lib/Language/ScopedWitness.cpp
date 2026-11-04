@@ -5,7 +5,9 @@
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "FiniteDomains.h"
+#include "FreePlaces.h"
 #include "HelperResults.h"
+#include "ManagedServices.h"
 #include "RecordIntrinsics.h"
 #include "Semantics.h"
 #include "SignatureWitness.h"
@@ -17,6 +19,112 @@ bool same(Span a, Span b) {
   return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
+/// Lexical aliases lead to declaration input identities. Region slots are
+/// derived from the authored free-service order, independently of the action's
+/// advertised capture vector and the region's mutable port descriptions.
+class ServiceRoots {
+  Semantics &types;
+  const SyntaxDeclaration &syntax;
+  struct Alias {
+    BindingId source;
+    unsigned scope;
+    Span span;
+  };
+  std::map<BindingId, Alias> aliases;
+
+public:
+  ServiceRoots(Semantics &types, const SyntaxDeclaration &syntax)
+      : types(types), syntax(syntax) {}
+  bool prepare() {
+    for (unsigned scope = 0; scope < syntax.bodies.size(); ++scope)
+      for (const auto &statement : syntax.bodies[scope].statements) {
+        if (!types.charge(1, statement.span))
+          return false;
+        if (statement.kind != Statement::Kind::Let ||
+            !statement.pattern.binding)
+          continue;
+        const auto &rhs = syntax.expressions.at(statement.expression);
+        if (rhs.kind == Expression::Kind::Name && rhs.binding)
+          aliases.emplace(*statement.pattern.binding,
+                          Alias{*rhs.binding, scope, statement.span});
+      }
+    return true;
+  }
+  std::optional<unsigned> input(BindingId binding, Span span) {
+    for (unsigned depth = 0; depth <= types.work.limits.expressionDepth;
+         ++depth) {
+      if (!types.charge(syntax.serviceBindings.size() + 1, span))
+        return {};
+      auto at = llvm::find(syntax.serviceBindings, binding);
+      if (at != syntax.serviceBindings.end())
+        return at - syntax.serviceBindings.begin();
+      auto alias = aliases.find(binding);
+      if (alias == aliases.end())
+        return {};
+      binding = alias->second.source;
+    }
+    types.fail("source.limit", "managed alias depth exceeded", span);
+    return {};
+  }
+  std::optional<std::vector<unsigned>> captures(const Operation &op,
+                                                ArrayRef<unsigned> parent) {
+    auto refuse = [&]() -> std::optional<std::vector<unsigned>> {
+      types.fail("source.binding-witness",
+                 "managed region captures differ from source", op.span);
+      return {};
+    };
+    if (!op.expression || *op.expression >= syntax.expressions.size())
+      return refuse();
+    const auto &expr = syntax.expressions[*op.expression];
+    if (!same(expr.span, op.span) || (expr.kind != Expression::Kind::If &&
+                                      expr.kind != Expression::Kind::Match &&
+                                      expr.kind != Expression::Kind::For &&
+                                      expr.kind != Expression::Kind::And &&
+                                      expr.kind != Expression::Kind::Or))
+      return refuse();
+    FreePlaceEnvironment environment;
+    environment.services.insert(syntax.serviceBindings.begin(),
+                                syntax.serviceBindings.end());
+    for (const auto &[binding, alias] : aliases) {
+      if (!types.charge(1, op.span))
+        return {};
+      if (alias.span.end > expr.span.begin)
+        continue;
+      auto scope = expr.scope;
+      unsigned depth = 0;
+      while (scope && *scope != alias.scope) {
+        if (*scope >= syntax.bodies.size() ||
+            ++depth > types.work.limits.expressionDepth)
+          return refuse();
+        scope = syntax.bodies[*scope].parent;
+      }
+      if (!scope)
+        continue;
+      // Only immutable aliases of managed inputs enter this environment.
+      auto root = input(binding, op.span);
+      if (types.diagnostic)
+        return {};
+      if (root)
+        environment.services.insert(binding);
+    }
+    environment.place = [](uint32_t)
+        -> std::optional<std::pair<BindingId, std::vector<unsigned>>> {
+      return {};
+    };
+    auto free = queryFreePlaces(types, syntax, expr, environment);
+    if (!free)
+      return {};
+    std::vector<unsigned> roots;
+    for (auto binding : free->services) {
+      auto root = input(binding, op.span);
+      if (!root || !llvm::is_contained(parent, *root))
+        return refuse();
+      if (!llvm::is_contained(roots, *root))
+        roots.push_back(*root);
+    }
+    return roots;
+  }
+};
 class CaptureCheck {
   Semantics &types;
   const ScopedSource &source;
@@ -284,9 +392,10 @@ public:
 } // namespace
 Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
-  if (!storage.declarationIndex ||
+  if (!storage.declarationIndex || !storage.sources ||
       !checkDeclarationAssociations(types, storage.declarations,
-                                    *storage.declarationIndex))
+                                    *storage.declarationIndex,
+                                    *storage.sources))
     return types.diagnostic
                ? types.takeError()
                : failure("source.installation", "missing declaration index");
@@ -358,6 +467,42 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     return error;
   if (auto error = checkSignatureSources(storage, work))
     return error;
+  auto servicePorts = replayServicePorts(storage, work);
+  if (!servicePorts)
+    return servicePorts.takeError();
+  std::map<uint32_t, std::unique_ptr<ServiceRoots>> serviceSources;
+  for (const auto &[owner, ports] : *servicePorts) {
+    auto source = storage.bodySources.find(owner);
+    if (source == storage.bodySources.end() || !source->second ||
+        !source->second->syntax)
+      return failure("source.binding-witness", "missing managed root syntax");
+    auto roots = std::make_unique<ServiceRoots>(types, *source->second->syntax);
+    if (!roots->prepare())
+      return types.takeError();
+    const auto &candidate = storage.declarations[owner].services;
+    auto samePort = [&](const ServicePort &a, const ServicePort &b) {
+      return a.name == b.name && a.field == b.field && a.owner == b.owner &&
+             a.constructor == b.constructor && same(a.span, b.span);
+    };
+    if (candidate.size() != ports.size() ||
+        !std::equal(candidate.begin(), candidate.end(), ports.begin(),
+                    samePort))
+      return failure("source.binding-witness",
+                     "managed input differs from authored header");
+    serviceSources.emplace(owner, std::move(roots));
+  }
+  std::map<const Body *, std::vector<unsigned>> serviceMaps;
+  auto sourceRoot = [&](const SourceCall &source, const Body &body,
+                        const Expression &argument, ServiceId actual) {
+    auto owner = serviceSources.find(source.owner.index);
+    auto mapping = serviceMaps.find(&body);
+    if (argument.kind != Expression::Kind::Name || !argument.binding ||
+        owner == serviceSources.end() || mapping == serviceMaps.end() ||
+        actual.index >= mapping->second.size())
+      return false;
+    auto expected = owner->second->input(*argument.binding, argument.span);
+    return expected && *expected == mapping->second[actual.index];
+  };
   std::vector<unsigned> uses(storage.scopedSources.size());
   std::vector<unsigned> callUses(storage.scopedCalls.size());
   std::vector<unsigned> intrinsicUses(storage.intrinsicCalls.size());
@@ -416,6 +561,35 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                      : refuse("abstract source route is inaccessible");
       }
     }
+    if (source.reference.category == ResolutionCategory::ServiceMethod) {
+      if (expr.kind != Expression::Kind::MethodCall ||
+          expr.children.size() != 1 || op.expression != source.expression ||
+          !expr.callLabels.empty() || !expr.staticLabels.empty() ||
+          expr.roles || binding.services.size() != 1 ||
+          !sourceRoot(source, body,
+                      source.syntax->expressions.at(expr.children.front()),
+                      binding.services.front()))
+        return types.diagnostic ? false
+                                : refuse("authored managed root differs");
+      const auto &port = body.services[binding.services.front().index];
+      auto selected =
+          resolveServiceMethod(types, *storage.declarationIndex, source.owner,
+                               port.constructor, expr.text, expr.span);
+      const auto *row =
+          storage.declarationIndex->serviceAssociation(source.target);
+      if (!selected || !row || selected->reference != source.reference ||
+          expr.arguments.size() != serviceStaticCount(row->signature) ||
+          source.arguments.size() != 1 + expr.arguments.size() ||
+          source.arguments.front() != port.field)
+        return refuse("authored managed member differs");
+      if (!row->capability.empty() &&
+          !types.entails(
+              &owner, CapabilityBound{row->capability, {port.field}, expr.span},
+              "source.binding-witness"))
+        return false;
+      return checkCallAction(types, storage.declarations, body, op,
+                             storage.declarationIndex.get());
+    }
     auto order = bindArguments(types, inputNames(callee), expr.children.size(),
                                expr.callLabels, true, expr.span, diagnostic);
     if (!order || *order != binding.argumentOrder)
@@ -441,41 +615,10 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         if (argument.kind != Expression::Kind::Name || !argument.binding ||
             slot.index >= binding.services.size())
           return refuse();
-        auto lexical = *argument.binding;
-        auto at = llvm::find(source.syntax->serviceBindings, lexical);
-        std::set<BindingId> aliases;
-        while (at == source.syntax->serviceBindings.end()) {
-          if (!aliases.insert(lexical).second)
-            return refuse();
-          std::optional<BindingId> previous;
-          for (const auto &region : source.syntax->bodies)
-            for (const auto &statement : region.statements) {
-              if (!types.charge(1, statement.span))
-                return false;
-              if (statement.kind != Statement::Kind::Let ||
-                  !statement.pattern.binding ||
-                  !(*statement.pattern.binding == lexical))
-                continue;
-              const auto &rhs =
-                  source.syntax->expressions[statement.expression];
-              if (rhs.kind == Expression::Kind::Name && rhs.binding)
-                previous = *rhs.binding;
-            }
-          if (!previous)
-            return refuse();
-          lexical = *previous;
-          at = llvm::find(source.syntax->serviceBindings, lexical);
-        }
-        auto root = binding.services[slot.index].index;
-        if (at == source.syntax->serviceBindings.end() ||
-            size_t(at - source.syntax->serviceBindings.begin()) >=
-                source.syntax->services.size() ||
-            root >= body.services.size() ||
-            !same(body.services[root].span,
-                  source.syntax
-                      ->services[at - source.syntax->serviceBindings.begin()]
-                      .span))
-          return refuse();
+        if (!sourceRoot(source, body, argument, binding.services[slot.index]))
+          return types.diagnostic
+                     ? false
+                     : refuse("authored managed argument root differs");
       }
     }
     if (expr.kind == Expression::Kind::MethodCall) {
@@ -543,7 +686,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         }
       } else {
         auto header = storage.bodySources.find(callee.id.index);
-        if (header == storage.bodySources.end() || !header->second->syntax)
+        if (header == storage.bodySources.end() || !header->second ||
+            !header->second->syntax)
           return refuse();
         for (const auto &name :
              expr.roles ? *expr.roles : header->second->syntax->roles) {
@@ -567,6 +711,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       const auto &binding = *op.binding;
       if (!binding.intrinsicSource ||
           *binding.intrinsicSource >= storage.intrinsicCalls.size() ||
+          !storage.intrinsicCalls[*binding.intrinsicSource] ||
           ++intrinsicUses[*binding.intrinsicSource] != 1)
         return types.fail("source.binding-witness",
                           "intrinsic source occurrence differs", op.span);
@@ -601,11 +746,21 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                         "scoped call differs from authored argument mapping",
                         op.span);
     };
+    bool managed = std::holds_alternative<ServiceQuery>(op.action) ||
+                   (op.binding && op.binding->target.reference.category ==
+                                      ResolutionCategory::ServiceMethod);
+    auto missing = [&] {
+      return managed ? types.fail("source.binding-witness",
+                                  "managed source occurrence differs", op.span)
+                     : refuse();
+    };
     const auto *call = std::get_if<HelperCall>(&op.action);
     if (!op.binding || !op.binding->scopedSource) {
       if (call &&
           (!call->scopedArguments.empty() || !call->domainArguments.empty()))
         return refuse();
+      if (managed)
+        return missing();
       if (!op.binding)
         return true;
       return types.fail("source.binding-witness",
@@ -613,8 +768,9 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     }
     const auto &binding = *op.binding;
     if (*binding.scopedSource >= storage.scopedCalls.size() ||
+        !storage.scopedCalls[*binding.scopedSource] ||
         ++callUses[*binding.scopedSource] != 1)
-      return refuse();
+      return missing();
     const auto &source = *storage.scopedCalls[*binding.scopedSource];
     if (!source.syntax || source.target.index >= storage.declarations.size() ||
         !authoredCall(body, op, source))
@@ -890,31 +1046,32 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                            storage.declarationIndex.get());
   };
   using Formal = std::pair<const ScopedSignature *, Span>;
-  std::function<bool(const Body &, ArrayRef<Formal>, unsigned, DeclarationId)>
+  std::function<bool(const Body &, ArrayRef<Formal>, unsigned, DeclarationId,
+                     ArrayRef<unsigned>)>
       visit = [&](const Body &body, ArrayRef<Formal> formals, unsigned depth,
-                  DeclarationId lexicalOwner) {
+                  DeclarationId lexicalOwner, ArrayRef<unsigned> roots) {
         if (depth > work.limits.expressionDepth)
           return types.fail("source.limit", "scoped witness body depth", {});
         if (!types.charge(body.values.size() + body.operations.size() + 1, {}))
           return false;
-        if (!body.services.empty()) {
-          auto source = storage.bodySources.find(lexicalOwner.index);
-          if (source == storage.bodySources.end() || !source->second->syntax)
+        serviceMaps.emplace(&body, roots.vec());
+        auto ports = servicePorts->find(lexicalOwner.index);
+        if (body.services.size() != roots.size())
+          return types.fail("source.binding-witness",
+                            "managed region input coverage differs", {});
+        for (unsigned i = 0; i < roots.size(); ++i) {
+          if (ports == servicePorts->end() || roots[i] >= ports->second.size())
             return types.fail("source.binding-witness",
-                              "missing managed constructor owner", {});
-          const auto &written = source->second->syntax->services;
-          for (const auto &service : body.services) {
-            if (!types.charge(written.size() + 1, service.span))
-              return false;
-            auto found = llvm::find_if(written, [&](const auto &port) {
-              return port.name == service.name;
-            });
-            if (found == written.end() || !found->serviceReference ||
-                *found->serviceReference != service.constructor)
-              return types.fail("source.binding-witness",
-                                "body constructor provider differs",
-                                service.span);
-          }
+                              "unknown managed source root", {});
+          const auto &expected = ports->second[roots[i]];
+          const auto &actual = body.services[i];
+          if (actual.name != expected.name || actual.field != expected.field ||
+              actual.owner != expected.owner ||
+              actual.constructor != expected.constructor ||
+              !same(actual.span, expected.span))
+            return types.fail("source.binding-witness",
+                              "managed region input differs from source root",
+                              actual.span);
         }
         std::vector<const Operation *> producers(body.values.size());
         for (const auto &op : body.operations)
@@ -952,6 +1109,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                               "scoped formal order differs", binding.span);
           if (!binding.source ||
               *binding.source >= storage.scopedSources.size() ||
+              !storage.scopedSources[*binding.source] ||
+              !storage.scopedSources[*binding.source]->syntax ||
               !binding.computation || ++uses[*binding.source] != 1)
             return types.fail("source.scoped-witness",
                               "missing or duplicated scoped source witness",
@@ -975,7 +1134,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                    .run(body, binding) ||
               !checkScopedValues(types, storage, source, binding) ||
               !visit(*binding.computation->body, captured, depth + 1,
-                     source.owner))
+                     source.owner, {}))
             return false;
           if (!effectsWithin(types, binding.computation->body->effects,
                              EffectSummary{binding.signature.allowance},
@@ -991,6 +1150,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                  op.binding->lexicalOwner->index != lexicalOwner.index)) ||
                (op.binding->scopedSource &&
                 (*op.binding->scopedSource >= storage.scopedCalls.size() ||
+                 !storage.scopedCalls[*op.binding->scopedSource] ||
+                 !storage.scopedCalls[*op.binding->scopedSource]->syntax ||
                  storage.scopedCalls[*op.binding->scopedSource]->owner.index !=
                      lexicalOwner.index))))
             return types.fail("source.binding-witness",
@@ -1004,6 +1165,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                                 "scoped invocation target differs", op.span);
             };
             if (invoke->source >= storage.scopedInvocations.size() ||
+                !storage.scopedInvocations[invoke->source] ||
                 ++invocationUses[invoke->source] != 1 ||
                 invoke->binding >= body.scopedBindings.size())
               return refuse();
@@ -1037,12 +1199,48 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 return refuse();
             }
           }
-          if (const auto *control = std::get_if<Control>(&op.action))
-            for (const auto &region : control->regions)
-              if (!visit(*region, formals, depth + 1, lexicalOwner))
+          auto nested = [&](ArrayRef<ServiceId> advertised,
+                            ArrayRef<unsigned> roles,
+                            ArrayRef<std::shared_ptr<const Body>> regions) {
+            auto source = serviceSources.find(lexicalOwner.index);
+            if (source == serviceSources.end()) {
+              if (!advertised.empty())
+                return types.fail("source.binding-witness",
+                                  "region has unauthored services", op.span);
+              for (const auto &region : regions)
+                if (!visit(*region, formals, depth + 1, lexicalOwner, {}))
+                  return false;
+              return true;
+            }
+            auto expected = source->second->captures(op, roots);
+            if (!expected || advertised.size() != expected->size())
+              return types.diagnostic
+                         ? false
+                         : types.fail("source.binding-witness",
+                                      "managed capture coverage differs",
+                                      op.span);
+            for (unsigned i = 0; i < expected->size(); ++i) {
+              auto at = llvm::find(roots, (*expected)[i]);
+              if (at == roots.end() ||
+                  advertised[i].index != size_t(at - roots.begin()) ||
+                  !llvm::is_contained(
+                      roles,
+                      servicePorts->at(lexicalOwner.index)[(*expected)[i]]
+                          .owner))
+                return types.fail("source.binding-witness",
+                                  "managed capture order differs from source",
+                                  op.span);
+            }
+            for (const auto &region : regions)
+              if (!visit(*region, formals, depth + 1, lexicalOwner, *expected))
                 return false;
+            return true;
+          };
+          if (const auto *control = std::get_if<Control>(&op.action))
+            if (!nested(control->services, control->roles, control->regions))
+              return false;
           if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
-            if (!visit(*repeat->region, {}, depth + 1, lexicalOwner))
+            if (!nested(repeat->services, repeat->roles, {repeat->region}))
               return false;
         }
         auto effects = inferEffects(types, storage.declarations, body);
@@ -1059,14 +1257,21 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     std::vector<Formal> formals;
     for (const auto &parameter : decl.scopedInputs)
       formals.emplace_back(&parameter.signature, parameter.span);
-    if (!visit(*decl.body, formals, 1, decl.id) ||
+    std::vector<unsigned> roots;
+    if (auto at = servicePorts->find(decl.id.index); at != servicePorts->end())
+      for (unsigned i = 0; i < at->second.size(); ++i)
+        roots.push_back(i);
+    if (!visit(*decl.body, formals, 1, decl.id, roots) ||
         !checkFiniteContracts(types, storage.declarations, decl, *decl.body,
                               helperResults))
       return types.takeError();
     if (auto source = storage.bodySources.find(decl.id.index);
         source != storage.bodySources.end() &&
-        !checkInvocationValues(types, storage, *source->second, *decl.body))
-      return types.takeError();
+        (!source->second ||
+         !checkInvocationValues(types, storage, *source->second, *decl.body)))
+      return types.diagnostic
+                 ? types.takeError()
+                 : failure("source.binding-witness", "missing body source");
     if (decl.effectAllowance &&
         !effectsWithin(types, decl.body->effects, *decl.effectAllowance,
                        decl.span)) {
@@ -1076,9 +1281,10 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     }
   }
   for (const auto &[owner, source] : storage.bodySources)
-    if (source->syntax && !source->syntax->bodies.empty() &&
-        (owner >= storage.declarations.size() ||
-         !storage.declarations[owner].body))
+    if (!source || !source->syntax ||
+        (!source->syntax->bodies.empty() &&
+         (owner >= storage.declarations.size() ||
+          !storage.declarations[owner].body)))
       return failure("source.binding-witness", "missing authored body");
   for (auto count : intrinsicUses)
     if (count != 1)
@@ -1091,9 +1297,14 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   for (auto count : uses)
     if (count != 1)
       return failure("source.scoped-witness", "missing scoped occurrence");
-  for (auto count : callUses)
-    if (count != 1)
-      return failure("source.scoped-witness", "missing scoped call occurrence");
+  for (unsigned i = 0; i < callUses.size(); ++i)
+    if (callUses[i] != 1)
+      return failure(!storage.scopedCalls[i] ||
+                             storage.scopedCalls[i]->reference.category ==
+                                 ResolutionCategory::ServiceMethod
+                         ? "source.binding-witness"
+                         : "source.scoped-witness",
+                     "missing source call occurrence");
   return Error::success();
 }
 } // namespace zkc::language::detail
