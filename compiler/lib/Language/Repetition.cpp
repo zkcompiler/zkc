@@ -52,7 +52,8 @@ bool BodyChecker::repeat(const Expression &expr) {
   ProtocolRepeat operation{*roles, *count, maximum->dimension, {}, {}, {}, {}};
   auto region = std::make_shared<Body>();
   region->mode = Body::Mode::Protocol;
-  BodyChecker nested(checker, decl, syntax, *region, callDepth);
+  BodyChecker nested(checker, decl, syntax, *region, callDepth,
+                     lexicalCallbackDepth);
   nested.usageGuard = usageGuard;
   nested.enclosing = this;
   nested.completionAllowed = completionAllowed;

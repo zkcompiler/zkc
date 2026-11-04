@@ -8,7 +8,7 @@ namespace zkc::language::detail {
 class BodyChecker {
 public:
   BodyChecker(Checker &, Declaration &, const SyntaxDeclaration &, Body &,
-              unsigned);
+              unsigned, unsigned lexicalCallbackDepth = 0);
   bool run(const SyntaxBody &, std::vector<Port> &, bool protocol);
   bool addScoped(BindingId, const ScopedSignature &, Span);
   bool addDomain(BindingId, const DomainParameter &, unsigned);
@@ -31,6 +31,9 @@ private:
   UsagePlan::Guard usageGuard = UsagePlan::always;
   std::vector<UsagePlan::Value> usageValues;
   unsigned callDepth;
+  /// Literal frames relative to this declaration, independent of caller depth.
+  /// Control and repetition regions preserve this count.
+  unsigned lexicalCallbackDepth;
   uint32_t statement = 0;
   /// Only the outer expression selected by an authored `<-` may be ordered.
   std::optional<uint32_t> orderedRoot;

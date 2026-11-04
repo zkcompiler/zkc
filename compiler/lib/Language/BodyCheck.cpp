@@ -16,10 +16,11 @@ bool BodyChecker::fail(StringRef code, const Twine &message, Span span) {
 
 BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
                          const SyntaxDeclaration &syntax, Body &body,
-                         unsigned depth)
+                         unsigned depth, unsigned lexicalCallbackDepth)
     : checker(checker), decl(decl), syntax(syntax), body(body),
       plan(checker.bodyPlan(decl.id)),
-      witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth) {
+      witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth),
+      lexicalCallbackDepth(lexicalCallbackDepth) {
   retainExpressionValues = true;
 }
 bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {

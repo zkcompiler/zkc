@@ -195,8 +195,8 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     arm.body = std::make_shared<Body>();
     arm.body->mode = body.mode;
     arm.body->stage = body.stage;
-    arm.checker = std::make_unique<BodyChecker>(checker, decl, syntax,
-                                                *arm.body, callDepth);
+    arm.checker = std::make_unique<BodyChecker>(
+        checker, decl, syntax, *arm.body, callDepth, lexicalCallbackDepth);
     auto &nested = *arm.checker;
     nested.usageGuard =
         collectingBranch

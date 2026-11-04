@@ -1,6 +1,7 @@
 #include "../lib/Language/BodySummary.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include <array>
 
 using namespace llvm;
 using namespace zkc;
@@ -189,9 +190,63 @@ Expected<CheckedProject> check(StringRef source, const Limits &limits = {}) {
     return captured.takeError();
   return analyze(*captured, limits).checkedProject();
 }
+uint64_t sourceCallWork(unsigned seedCallbacks, unsigned laterCalls,
+                        bool nested) {
+  std::string source = R"(
+math fn apply_math(x:bool,f:math fn(bool)->bool)->bool{return f(x);}
+math fn identity(x:bool)->bool{return x;}
+)";
+  for (unsigned i = 0; i < seedCallbacks; ++i)
+    source += "math fn seed" + std::to_string(1000 + i) +
+              "(x:bool)->bool{return apply_math(x,fn(y)=>y);}";
+  source += "math fn run(x:bool,capture:bool)->bool{";
+  if (nested)
+    source += "return apply_math(x,fn(y)=>if capture{"
+              "apply_math(y,fn(z)=>{";
+  for (unsigned i = 0; i < laterCalls; ++i)
+    source += "let v" + std::to_string(1000 + i) + "=identity(" +
+              (nested ? "z" : "x") + ");";
+  source += nested ? "z&&capture})}else{y});}" : "return x&&capture;}";
+  // Full source analysis reaches Calls; isolate its owning phase from parsing
+  // and source-witness publication. Seed construction cancels in the deltas.
+  auto project = take(check(source));
+  return project.workObservation().charged.used(SourceWorkPhase::Bodies);
+}
+std::string controlExpression(StringRef control, const std::string &value) {
+  if (control == "block")
+    return "{let copied=capture;" + value + "}";
+  if (control == "if")
+    return "if capture{" + value + "}else{false}";
+  if (control == "match")
+    return "match flag{Left(v)=>{" + value + "},Right(v)=>{v}}";
+  return "{let mut result=false;for _ in 0.." +
+         std::string(control == "zero-trip" ? "0" : "1") + "{result=" + value +
+         ";}result}";
+}
 } // namespace
 int main() {
   Cases cases;
+  for (bool nested : {false, true})
+    cases.run(
+        nested ? "source calls in captured nested callbacks ignore history"
+               : "source calls outside callbacks ignore history",
+        [=] {
+          auto increments = [&](unsigned seeds) {
+            auto first = sourceCallWork(seeds, 1, nested),
+                 second = sourceCallWork(seeds, 9, nested),
+                 third = sourceCallWork(seeds, 17, nested);
+            require(first < second && second < third,
+                    "additional source calls did not charge body work");
+            return std::array<uint64_t, 2>{second - first, third - second};
+          };
+          const auto baseline = increments(0);
+          require(baseline[1] <= 2 * baseline[0],
+                  "equal batches of source calls grew superlinearly");
+          for (unsigned seeds : {32, 128})
+            require(increments(seeds) == baseline,
+                    "incremental source call work depends on unrelated "
+                    "retained callbacks");
+        });
   cases.run(
       "helper chain 40 and shared diamond 30 have linear charged work", [] {
         auto zero = graphWork(0, false), twenty = graphWork(20, false),
@@ -672,6 +727,98 @@ math fn deep(x:bool)->bool{return relay(x);}
             refuses(check(source, limits), "source.limit");
           }
       });
+  for (StringRef control : {"block", "if", "match", "for", "zero-trip"})
+    for (bool inner : {false, true})
+      for (bool warm : {false, true})
+        cases.run("source callback depth through " + control.str() +
+                      (inner ? " inside a literal" : " between literals") +
+                      (warm ? " with completed callees" : " with lazy callees"),
+                  [=] {
+                    std::string source = R"(
+interface Operation {math fn call(x:bool)->bool;}
+math fn tail(x:bool)->bool{return x;}
+module Implementation:Operation {math fn call(x:bool)->bool{return tail(x);}}
+math fn forward<C:Operation>(x:bool)->bool{return C::call(x);}
+fn ignore(x:bool,f:fn(bool)->bool effects())->bool effects(){return x;}
+enum Choice {Left(bool),Right(bool)}
+)";
+                    std::string leaf = "forward<Implementation>(z&&capture)";
+                    if (inner)
+                      leaf = controlExpression(control, leaf);
+                    auto middle = "ignore(y,fn(z)=>" + leaf + ")";
+                    if (!inner)
+                      middle = controlExpression(control, middle);
+                    const auto subject =
+                        "fn subject(x:bool,flag:Choice,capture:bool)->bool{"
+                        "return ignore(x,fn(y)=>" +
+                        middle + ");}";
+                    const std::string relay =
+                        "fn relay(x:bool,flag:Choice,capture:bool)->bool{"
+                        "return subject(x,flag,capture);}";
+                    const std::string deep =
+                        "fn deep(x:bool,flag:Choice,capture:bool)->bool{"
+                        "return relay(x,flag,capture);}";
+                    source +=
+                        warm ? subject + relay + deep : deep + relay + subject;
+                    // deep -> relay -> subject -> literal -> literal ->
+                    // forward -> Implementation::call -> tail. Blocks,
+                    // selected arms and loops add no callable frames. Even
+                    // ignored literals and zero-trip bodies are checked.
+                    Limits limits;
+                    limits.callDepth = 8;
+                    take(check(source, limits));
+                    limits.callDepth = 7;
+                    refuses(check(source, limits), "source.limit");
+                  });
+  for (bool warm : {false, true})
+    cases.run(warm ? "completed sibling literals do not inflate caller height"
+                   : "lazy sibling literals do not inflate caller height",
+              [=] {
+                std::string source = R"(
+interface Operation {math fn call(x:bool)->bool;}
+math fn tail(x:bool)->bool{return x;}
+module Implementation:Operation {math fn call(x:bool)->bool{return tail(x);}}
+math fn forward<C:Operation>(x:bool)->bool{return C::call(x);}
+fn ignore(x:bool,f:fn(bool)->bool effects())->bool effects(){return x;}
+)";
+                const std::string subject = R"(
+fn subject(x:bool)->bool{
+ let unused=ignore(x,fn(y)=>ignore(y,fn(z)=>z));
+ return forward<Implementation>(x);
+})";
+                const std::string relay =
+                    "fn relay(x:bool)->bool{return subject(x);}";
+                const std::string deep =
+                    "fn deep(x:bool)->bool{return relay(x);}";
+                source +=
+                    warm ? subject + relay + deep : deep + relay + subject;
+                // The later Math call is outside both sibling literal frames.
+                Limits limits;
+                limits.callDepth = 6;
+                take(check(source, limits));
+                limits.callDepth = 5;
+                refuses(check(source, limits), "source.limit");
+              });
+  cases.run("protocol repetition preserves nested literal depth", [] {
+    const std::string source = R"(
+interface Operation {math fn call(x:bool)->bool;}
+math fn tail(x:bool)->bool{return x;}
+module Implementation:Operation {math fn call(x:bool)->bool{return tail(x);}}
+math fn forward<C:Operation>(x:bool)->bool{return C::call(x);}
+math fn ignore(x:bool,f:math fn(bool)->bool)->bool{return x;}
+protocol Subject roles(P)(x:bool@P,capture:bool@P)->(r:bool@P){
+ for _ in 0..1 roles(P) max 1 {
+  let unused=ignore(x,fn(y)=>ignore(y,fn(z)=>forward<Implementation>(z&&capture)));
+ }
+ return x;
+})";
+    // The repetition preserves Subject's frame; its two literals add two.
+    Limits limits;
+    limits.callDepth = 6;
+    take(check(source, limits));
+    limits.callDepth = 5;
+    refuses(check(source, limits), "source.limit");
+  });
   cases.run(
       "source helper chain 40 and shared diamond 30 fit default limits", [] {
         for (bool diamond : {false, true}) {

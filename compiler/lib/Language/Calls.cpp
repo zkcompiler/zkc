@@ -298,24 +298,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         fail("source.limit", "retained helper call depth exceeded", expr.span);
         return {};
       }
-      // A literal's checked source is retained before checking its body. These
-      // enclosing lexical literals account for scoped frames; control regions
-      // share their declaration's frame. Deduplicate replayed source records.
-      std::set<uint32_t> enclosingScopes;
-      for (const auto &source : witnesses.sources) {
-        if (!checker.types.charge(1, expr.span))
-          return {};
-        if (!source || source->owner.index != decl.id.index ||
-            source->expression >= syntax.expressions.size())
-          continue;
-        const auto &scope = syntax.expressions[source->expression].span;
-        if (scope.source.index == expr.span.source.index &&
-            scope.begin <= expr.span.begin && scope.end >= expr.span.end)
-          enclosingScopes.insert(source->expression);
-      }
+      // Relative declaration height includes the current lexical literals,
+      // regardless of retained sources or the declaration's absolute caller.
       checker.bodyHeights[decl.id.index] =
           std::max(checker.bodyHeights[decl.id.index],
-                   height + unsigned(enclosingScopes.size()) + 1);
+                   height + lexicalCallbackDepth + 1);
       result = summary->results.front();
       formation = std::move(summary->formation);
       body.parameterizedSummary |= summary->parameterized;
