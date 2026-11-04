@@ -43,8 +43,8 @@ theorem public_positions : selected.policy.publicInputs = ([0, 1, 2, 3, 4, 5, 6]
 theorem public_types : validatorArtifacts.publics = ([Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.index,  Zkc.Source.Structured.Ty.index,  Zkc.Source.Structured.Ty.index]) := rfl
 theorem target_positions : selectorPositions subject.target.application.selectors = .ok ([0, 2, 3, 4, 5, 6, 1]) := rfl
 theorem artifact_identities :
-    (artifacts.producer.source, artifacts.producer.candidate, artifacts.producer.symbol) = (("sha256:a5289afe31388c50774845aeb37eb1503e3d632984bef46f44224dafbf9807cd",  "sha256:04cf289b1b3e0db0c3f299afdcce3d96aed20cb98a63a0338db9811ae59859a6",  "_math_0")) ∧
-    (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:a5289afe31388c50774845aeb37eb1503e3d632984bef46f44224dafbf9807cd",  "sha256:04cf289b1b3e0db0c3f299afdcce3d96aed20cb98a63a0338db9811ae59859a6",  "_math_1")) := by decide +kernel
+    (artifacts.producer.source, artifacts.producer.candidate, artifacts.producer.symbol) = (("sha256:b8d4a08c910b4c6ae7326518656c1fc274045b055dc26cfcba21b878c6e41334",  "sha256:88a1ae4bfff52f3496a2163625b409c4be8f031df3cb8724381350d60dde560c",  "_math_0")) ∧
+    (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:b8d4a08c910b4c6ae7326518656c1fc274045b055dc26cfcba21b878c6e41334",  "sha256:88a1ae4bfff52f3496a2163625b409c4be8f031df3cb8724381350d60dde560c",  "_math_1")) := by decide +kernel
 
 def sourceInputs (input0 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input3 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input4 : Option (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.index))) (input6 : Option (model.Value (Zkc.Source.Structured.Ty.index))) (input7 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) : subject.Inputs :=
   SourceView.pack { inputs := input0, outputs := input1, add := input2, mul := input3, layers := input4, selector := input5, width := input6, handle := input7 }
@@ -161,8 +161,8 @@ theorem context_eq : subject.selection.context = (Context.fiatShamir ("zkl_c0372
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 
-theorem original_export : subject.originalExport = ("sha256:7b3e3da564803e49660fccb8feb29b0e4aaa01acb5f08b4e60e8a32b85079c2b") := rfl
-theorem producer_export : subject.producerExport = ("sha256:285347ab7c197eededbe9b20c47749d8aff8585b9f6e40b0ed9d4666284201ee") := rfl
-theorem validator_export : subject.validatorExport = ("sha256:2f0e071388e726c32a5a18354a5ff7ded0972ecacb7f3f03975e8e83290ad6fa") := rfl
+theorem original_export : subject.originalExport = ("sha256:56939f44b7084b9a929d7858dd0f5d85ef15d5486befff392fa0eab76f3eb756") := rfl
+theorem producer_export : subject.producerExport = ("sha256:7906c9ce135594427e53a157741d36b38d7aa26c82f937263902e4238ede3ef5") := rfl
+theorem validator_export : subject.validatorExport = ("sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec") := rfl
 
 end ZkcSecurity.Realizations.Gkr.Generated.ABI
