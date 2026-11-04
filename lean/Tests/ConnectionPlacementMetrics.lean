@@ -53,7 +53,7 @@ elab_rules : command
     let objects ← value.numObjs
     logInfo m!"PLACEMENT-METRIC {Json.mkObj [
       ("name", toJson name.toString), ("proposal_ns", toJson (proposed - start)),
-      ("kernel_ns", toJson (checked - proposed)), ("expression_objects", toJson objects),
+      ("kernel_ns", toJson (checked - proposed)), ("expression_objects", toJson objects), ("type_objects", toJson (← expected.numObjs)),
       ("family_references", Json.mkObj familyReferences.toList),
       ("generated_exact_bodies", toJson (← ZkcTools.ConstructionBindings.Alignment.placementCosts.get).size),
       ("inline_alignment_guards", toJson (occurrences value (· == ``Zkc.Construction.ConnectionCertificate.Alignment.guard))),

@@ -34,6 +34,11 @@ exactly its premises on the packed inputs. `encodeOutcome` and `decodeOutcome`
 are inverse transports, including every stopped reason. `law` performs the
 converse assembly from a proof of `Goal`; it does not discharge dependency
 premises or the caller's final relation link.
+
+`lawOfView` exposes a smaller mathematical result when an input-dependent
+packing restores every reachable complete output. Its two explicit proofs
+cover reachable restoration and the projected computation, including stops.
+The dependency predicate is preserved; a projected equation alone is insufficient.
 -/
 
 set_option autoImplicit false
@@ -129,14 +134,15 @@ def generate : CommandElab := fun stx => do
     "Inputs", "Output", "Goal", "SourceEquation", "encodeOutcome", "decodeOutcome", "outcome",
     "encode_decode", "decode_encode", "encode_decode_outcome", "decode_encode_outcome",
     "run_eq", "equation", "of_law", "of_installed", "law", "mk", "Values", "Region", "DomainModel",
-    "Evaluation", "PIR", "Closed", "ReferenceLaw", "primitiveOutcome"]
+    "Evaluation", "PIR", "Closed", "ReferenceLaw", "primitiveOutcome",
+    "lawOfView", "View", "view", "pack", "reachable", "projected"]
   for names in [inputNames, outputNames] do
     unless names.eraseDups.length == names.length do
       throwError "helper_presentation requires distinct field names"
     for name in names do
       if reserved.contains name || name.contains '.' then
         throwError "helper_presentation field name is reserved or qualified: {name}"
-  let (bodyText, inputTypes, outputTypes) ← runTermElabM fun _ => Term.withoutErrToSorry do
+  let (bodySyntax, inputTypes, outputTypes) ← runTermElabM fun _ => Term.withoutErrToSorry do
     let expression ← elabTerm body none
     synthesizeSyntheticMVarsNoPostponing
     let expression ← instantiateMVars expression
@@ -147,7 +153,12 @@ def generate : CommandElab := fun stx => do
       throwError "helper_presentation expects an actual typed helper Region"
     unless ← isDefEq type.getAppArgs[0]! (mkConst ``dialect) do
       throwError "helper_presentation expects the existing closed helper dialect"
-    return (← printTerm expression, ← (← types type.getAppArgs[1]!).mapM (fun type => do printTerm (← reduce type)),
+    -- Preserve the resolved syntax, including private numeric name components.
+    -- A pretty-printed string can resolve `body` to the generated alias itself.
+    let bodySyntax ← withOptions (fun options =>
+        (options.setBool `pp.fullNames true).setBool `pp.privateNames true) do
+      PrettyPrinter.delab expression
+    return (bodySyntax, ← (← types type.getAppArgs[1]!).mapM (fun type => do printTerm (← reduce type)),
       ← (← types type.getAppArgs[2]!).mapM (fun type => do printTerm (← reduce type)))
   unless inputNames.length == inputTypes.length && outputNames.length == outputTypes.length do
     throwError "helper_presentation names must cover every input and output in ABI order"
@@ -168,7 +179,13 @@ def generate : CommandElab := fun stx => do
   command "set_option Elab.async false"
   command "open Zkc.Source Zkc.Source.Structured"
   command "attribute [local implicit_reducible] Op.arguments Op.results Op.regions"
-  command ("noncomputable abbrev body : Region dialect [" ++ String.intercalate ", " inputTypes ++ "] [" ++ String.intercalate ", " outputTypes ++ "] := " ++ bodyText)
+  let bodyTypeText := "Region dialect [" ++ String.intercalate ", " inputTypes ++
+    "] [" ++ String.intercalate ", " outputTypes ++ "]"
+  let .ok bodyType := Parser.runParserCategory (← getEnv) `term bodyTypeText |
+    throwError "helper_presentation generated an invalid body type"
+  let bodyName := mkIdent `body
+  let bodyType : Term := ⟨bodyType⟩
+  elabCommand (← `(command| noncomputable abbrev $bodyName:ident : $bodyType:term := $bodySyntax:term))
   command ("named_values Inputs [" ++ String.intercalate ", " inputNames ++ "] := ([" ++
     String.intercalate ", " inputTypes ++ "] : List Zkc.Source.Structured.Ty)")
   command ("structure Output (model : DomainModel) where\n" ++
@@ -253,6 +270,32 @@ def generate : CommandElab := fun stx => do
     "change _ = primitiveOutcome " ++ encodedReference ++ "; " ++
     "rw [equation, proof table " ++ arguments ++ " premise]; " ++
     "cases reference " ++ arguments ++ " <;> rfl")
+  -- A mathematical view can forget only data reconstructible on reachable
+  -- returns. The companion proves the projected computation separately;
+  -- neither proof is smuggled into the dependency predicate. This uses the
+  -- existing complete presentation and installer, with no second evaluator.
+  let viewBinders := "(model : DomainModel) {View : Type} " ++
+    "(view : " ++ arrows ++ "Output model → View) " ++
+    "(pack : " ++ arrows ++ "View → Output model) " ++
+    "(reference : " ++ arrows ++ "PIR.Outcome View) " ++
+    "(condition : Evaluation.MeaningsOn model.toCarriers closedInterface → " ++ arrows ++ "Prop)"
+  let referenceView := "(" ++ curryInputs ++ "match reference " ++ arguments ++ " with " ++
+    "| .returned result => .returned (pack " ++ arguments ++ " result) " ++
+    "| .stopped reason => .stopped reason)"
+  command ("noncomputable def lawOfView " ++ viewBinders ++ "\n" ++
+    "  (reachable : ∀ table " ++ binders ++ ", condition table " ++ arguments ++ " →\n" ++
+    "    PIR.Yields (fun result => pack " ++ arguments ++ " (view " ++ arguments ++ " result) = result) " ++
+    "(run model table " ++ arguments ++ "))\n" ++
+    "  (projected : ∀ table " ++ binders ++ ", condition table " ++ arguments ++ " →\n" ++
+    "    (run model table " ++ arguments ++ ").bind (fun result => .done (view " ++ arguments ++
+    " result)) = primitiveOutcome (reference " ++ arguments ++ ")) : " ++ abi ++ " :=\n" ++
+    "  law model " ++ referenceView ++ " condition (by\n" ++
+    "    intro table " ++ arguments ++ " premise\n" ++
+    "    have reconstructed := PIR.Process.reconstruct_from_reachable_view " ++
+    "(run model table " ++ arguments ++ ") (view " ++ arguments ++ ") (pack " ++ arguments ++
+    ") (reachable table " ++ arguments ++ " premise) _ (projected table " ++ arguments ++ " premise)\n" ++
+    "    refine reconstructed.trans ?_\n" ++
+    "    cases reference " ++ arguments ++ " <;> rfl)")
   command ("end " ++ name.getId.toString)
 
 /-- Failed generation restores declarations, local attributes and namespaces.

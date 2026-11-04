@@ -53,16 +53,6 @@ def HonestTrace.events {handler : PIR.Handler (Occurrence.signature model.toCarr
     (trace : HonestTrace model handler ctx handle index reference initial) : List E :=
   trace.e0 ++ (trace.e1 ++ (trace.e2 ++ (trace.e3 ++ (trace.e4 ++ trace.e5))))
 
-private theorem advance_table {n : Nat} (reference : PrefixState (model.Field field) Frame (n+1))
-    (message : model.Field field × model.Field field) (r : model.Field field) :
-    (layout model).table (reference.advance message r) =
-      (TableReference.data (model.Field field)).restrict ((layout model).table reference) r := by
-  apply Option.some.inj
-  rw [← (layout model).decoded]
-  change Zkc.Polynomial.Multilinear.ofList? n (reference.advance message r).entries = _
-  rw [PrefixState.advance_entries]
-  exact Zkc.Polynomial.Multilinear.ofList?_restrictValues _ _ r ((layout model).decoded reference)
-
 theorem advance_yes {n : Nat} (reference : PrefixState (model.Field field) Frame (n+1))
     (r : model.Field field) :
     (layout model).representation.Yes (reference.advance (honestMessage model reference) r) := by

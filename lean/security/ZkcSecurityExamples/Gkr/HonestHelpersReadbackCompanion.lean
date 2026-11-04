@@ -3,6 +3,8 @@ module
 public import ZkcSecurityExamples.Gkr.HonestHelpersReadbackGoals
 public import Zkc.Algorithms.ListReadback
 
+public meta import ZkcTools.StructuredSource.ReferenceInstallation
+
 @[expose] public section
 
 /-! The chosen representation scans a list with a default and a cursor. These
@@ -27,19 +29,8 @@ theorem zero : Zero.Goal model (zeroReference model) (fun _ => True) := by
 
 noncomputable def zeroLaw := Zero.law model (zeroReference model) (fun _ => True) (zero model)
 
-noncomputable def zeroWrapperLibrary :=
-  forward_reference% ZeroWrapper.body using (zeroLaw model)
-
-def zeroWrapperCondition := fun table =>
-  (zeroLaw model).Realizes (helper := GkrSourceBodies.helper28Helper) table
-
-theorem zeroWrapper : ZeroWrapper.Goal model (.returned ⟨0⟩) (zeroWrapperCondition model) := by
-  apply ZeroWrapper.of_law model _ _ (zeroWrapperLibrary model) rfl
-  · rfl
-  · intro table dependency; exact dependency _
-
 noncomputable def zeroWrapperLaw :=
-  ZeroWrapper.law model (.returned ⟨0⟩) (zeroWrapperCondition model) (zeroWrapper model)
+  forward_reference% ZeroWrapper.body using (zeroLaw model)
 
 def stepReference (current : model.Field scalarDomain) (index : Nat)
     (value : model.Field scalarDomain) (position : Nat) : PIR.Outcome (Step.Output model) :=
@@ -70,31 +61,8 @@ theorem step : Step.Goal model (stepReference model) (fun _ _ _ _ _ => True) := 
 noncomputable def stepLaw :=
   Step.law model (stepReference model) (fun _ _ _ _ _ => True) (step model)
 
-noncomputable def callbackLibrary :=
-  forward_reference% Callback.body using (stepLaw model)
-
-def callbackReference (current : model.Field scalarDomain) (index : Nat)
-    (value : model.Field scalarDomain) (_source : List (model.Field scalarDomain)) (position : Nat) :
-    PIR.Outcome (Callback.Output model) :=
-  match ListReadback.step indexLimit position (current, index) value with
-  | .returned state => .returned ⟨state.1, state.2⟩
-  | .stopped reason => .stopped reason
-
-def callbackCondition := fun table (_ : model.Field scalarDomain) (_ : Nat)
-    (_ : model.Field scalarDomain) (_ : List (model.Field scalarDomain)) (_ : Nat) =>
-  (stepLaw model).Realizes (helper := GkrSourceBodies.helper29Helper) table
-
-theorem callback : Callback.Goal model (callbackReference model) (callbackCondition model) := by
-  apply Callback.of_law model _ _ (callbackLibrary model) rfl
-  · intro current index value source position
-    change Step.encodeOutcome model (stepReference model current index value position) = _
-    cases outcome : ListReadback.step indexLimit position (current, index) value <;>
-      simp [stepReference, callbackReference, outcome, Step.encodeOutcome, Callback.encodeOutcome,
-        Step.encode, Callback.encode]
-  · intro table current index value source position dependency; exact dependency _
-
 noncomputable def callbackLaw :=
-  Callback.law model (callbackReference model) (callbackCondition model) (callback model)
+  forward_reference% Callback.body using (stepLaw model)
 
 def scanReference (source : List (model.Field scalarDomain)) (current : model.Field scalarDomain)
     (index position : Nat) : PIR.Outcome (Scan.Output model) :=
@@ -132,11 +100,11 @@ theorem scan : Scan.Goal model (scanReference model) (scanCondition model) := by
         change invoke table GkrSourceBodies.helper30Helper (Callback.Inputs.pack
           { current := state.1, index := state.2, value, source, position }) = _
         rw [call]
-        change primitiveOutcome (Callback.encodeOutcome model
-          (callbackReference model state.1 state.2 value source position)) = _
+        change primitiveOutcome (Step.encodeOutcome model
+          (stepReference model state.1 state.2 value position)) = _
         cases state with | mk current index =>
           cases outcome : ListReadback.step indexLimit position (current, index) value <;>
-            simp [callbackReference, outcome, Callback.encodeOutcome, Callback.encode,
+            simp [stepReference, outcome, Step.encodeOutcome, Step.encode,
               Finite.toProcess, primitiveOutcome, PIR.Process.bind, encode, State.pack])
     dsimp only [DomainArguments.pack, Captures.pack, Item.pack, encode, State.pack] at folded
     erw [folded]
@@ -158,27 +126,8 @@ theorem scan : Scan.Goal model (scanReference model) (scanCondition model) := by
 
 noncomputable def scanLaw := Scan.law model (scanReference model) (scanCondition model) (scan model)
 
-noncomputable def wrapperLibrary :=
-  forward_reference% ScanWrapper.body using (scanLaw model)
-
-def wrapperReference (current : model.Field scalarDomain) (index position : Nat)
-    (source : List (model.Field scalarDomain)) : PIR.Outcome (ScanWrapper.Output model) :=
-  ScanWrapper.decodeOutcome model
-    (Scan.encodeOutcome model (scanReference model source current index position))
-
-def wrapperCondition := fun table (_ : model.Field scalarDomain) (_ _ : Nat)
-    (_ : List (model.Field scalarDomain)) =>
-  (scanLaw model).Realizes (helper := GkrSourceBodies.helper95Helper) table
-
-/-- Only the complete ABI transport is generated; the chosen scan mathematics
-and its dependency premise are retained by the named reference and condition. -/
-theorem wrapper : ScanWrapper.Goal model (wrapperReference model) (wrapperCondition model) := by
-  intro table current index position source dependency
-  exact ScanWrapper.of_installed model (wrapperLibrary model) rfl
-    table current index position source (dependency _)
-
 noncomputable def wrapperLaw :=
-  ScanWrapper.law model (wrapperReference model) (wrapperCondition model) (wrapper model)
+  forward_reference% ScanWrapper.body using (scanLaw model)
 
 def elementReference (source : List (model.Field scalarDomain)) (position : Nat) :
     PIR.Outcome (Element.Output model) :=
@@ -196,19 +145,19 @@ theorem element : Element.Goal model (elementReference model) (elementCondition 
   have scanCall := dependencies.2 (ScanWrapper.Inputs.pack
     { current := 0, index := 0, position, source })
   simp only [Element.run, Environment.prepend, Environment.push, Values.get, PIR.Process.bind_done]
-  dsimp only [Zero.Inputs.pack] at zeroCall
+  change invoke table GkrSourceBodies.helper87Helper .nil = .done (.cons 0 .nil) at zeroCall
   rw [zeroCall]
-  simp only [zeroWrapperLaw, ZeroWrapper.law, ZeroWrapper.encodeOutcome, ZeroWrapper.encode,
+  simp only [zeroWrapperLaw, zeroLaw, Zero.law, zeroReference, Zero.encodeOutcome, Zero.encode,
     primitiveOutcome, PIR.Process.bind, Environment.prepend, Environment.push, Values.get,
     Primitive.evaluateOn, show 0 < indexLimit by decide +kernel, ↓reduceIte]
   change invoke table GkrSourceBodies.helper96Helper _ =
-    primitiveOutcome (ScanWrapper.encodeOutcome model (wrapperReference model 0 0 position source)) at scanCall
+    primitiveOutcome (Scan.encodeOutcome model (scanReference model source 0 0 position)) at scanCall
   dsimp only [ScanWrapper.Inputs.pack] at scanCall
   rw [scanCall]
-  simp only [wrapperReference, elementReference]
+  simp only [elementReference]
   cases outcome : scanReference model source 0 0 position <;>
-    simp [outcome, ScanWrapper.decodeOutcome, Scan.encodeOutcome, Scan.encode,
-      ScanWrapper.encodeOutcome, primitiveOutcome, PIR.Process.bind, Element.decode, ScanWrapper.encode,
+    simp [outcome, Scan.encodeOutcome, Scan.encode,
+      primitiveOutcome, PIR.Process.bind, Element.decode,
       Environment.prepend, Environment.push, Values.get]
 
 noncomputable def elementLaw :=
@@ -263,38 +212,6 @@ structure Laws (table : Evaluation.MeaningsOn model.toCarriers closedInterface) 
 theorem install (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
     (bodies : Bodies definitions) :
     Laws model (definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []) := by
-  have zero := (zeroLaw model).realizes (helper := GkrSourceBodies.helper28Helper) definitions linked bodies.zero (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := Zero.Inputs.pack_surjective arguments
-    trivial)
-  have step := (stepLaw model).realizes (helper := GkrSourceBodies.helper29Helper) definitions linked bodies.step (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := Step.Inputs.pack_surjective arguments
-    trivial)
-  have zeroWrapper := (zeroWrapperLaw model).realizes (helper := GkrSourceBodies.helper87Helper) definitions linked bodies.zeroWrapper (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := Zero.Inputs.pack_surjective arguments
-    exact zero)
-  have callback := (callbackLaw model).realizes (helper := GkrSourceBodies.helper30Helper) definitions linked bodies.callback (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := Callback.Inputs.pack_surjective arguments
-    exact step)
-  have scan := (scanLaw model).realizes (helper := GkrSourceBodies.helper95Helper) definitions linked bodies.scan (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := Scan.Inputs.pack_surjective arguments
-    exact callback)
-  have wrapper := (wrapperLaw model).realizes (helper := GkrSourceBodies.helper96Helper) definitions linked bodies.scanWrapper (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := ScanWrapper.Inputs.pack_surjective arguments
-    exact scan)
-  have element := (elementLaw model).realizes (helper := GkrSourceBodies.helper97Helper) definitions linked bodies.element (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := Element.Inputs.pack_surjective arguments
-    exact ⟨zeroWrapper, wrapper⟩)
-  have after := (afterLaw model).realizes (helper := GkrSourceBodies.helper98Helper) definitions linked bodies.after (by
-    intro arguments
-    obtain ⟨view, rfl⟩ := Element.Inputs.pack_surjective arguments
-    exact element)
-  exact ⟨zero, zeroWrapper, step, callback, scan, wrapper, element, after⟩
+  install_reference_laws using linked with bodies
 
 end ZkcSecurity.Realizations.Gkr.HonestHelpers.ReadbackCompanion

@@ -102,7 +102,9 @@ from the body. It produces ordinary declarations:
 - `Gate.Goal model reference condition`, the complete mathematical obligation;
 - `Gate.of_installed`, which presents an existing exact-body law with named
   outputs and exactly its original premises;
-- `Gate.law`, which assembles a proof into the existing `ReferenceLaw`.
+- `Gate.law`, which assembles a proof into the existing `ReferenceLaw`;
+- `Gate.lawOfView`, which reconstructs the complete result from a mathematical
+  view when packing restores every reachable return.
 
 The reference returns `PIR.Outcome (Gate.Output model)`. It describes stops as
 well as successful returns. The condition states actual mathematical or helper
@@ -157,6 +159,92 @@ a plain theorem application needs neither. An invalid explicit companion
 cannot fall back to another method. Ordinary mathematical mismatches can try an
 ordered alternative; unexpected internal errors and resource failures propagate. Goal generation introduces no new request
 meaning, assumption, registry or trusted evaluator.
+
+## Use a smaller mathematical view without losing behavior
+
+A mathematical value need not contain the helper's entire return row. For
+example, Sumcheck's sums helper returns both endpoints. Its first endpoint,
+together with the input sum, determines the second. The companion supplies:
+
+```lean
+-- Schematic types: the generated command supplies the concrete input fields.
+Sums.lawOfView model
+  (fun entries dimension columns result => result.low)
+  (fun entries dimension columns low => ⟨low, entries.sum - low⟩)
+  reference condition reachable projected
+```
+
+`reachable` proves that packing the view restores **every return of the actual
+body under `condition`**. It is a `PIR.Yields` fact, so it covers all replies of
+any interaction retained by the process. `projected` proves the equation for
+the view of the entire process, including its stopped outcomes. Neither an
+honest-output lemma nor agreement on successful runs alone suffices. Packing
+may depend on the inputs; it need not invert unreachable output rows.
+
+The generated constructor applies
+`PIR.Process.reconstruct_from_reachable_view` and returns the original
+`ReferenceLaw`, with the original condition. The raw API
+`ReferenceLaw.ofReachableView` also permits an input-dependent mathematical
+carrier. New representation laws remain ordinary library or companion proofs.
+Use the full `Gate.law` interface when a smaller view would merely add work.
+
+The actual Sumcheck implementation is in
+[`MathematicalHelpers`](../../Zkc/Protocols/Sumcheck/Source/MathematicalHelpers.lean).
+Its reconstruction preserves the order of dimension, nonempty/even-length and
+admission checks. The restriction invariant is a separate mathematical fact:
+the current entries represent the original table restricted by the challenges
+received so far. This fact is reusable by the existing honest and adversarial
+consumers; their property-specific hypotheses remain separate. The nominal
+security installation consumes the same representation facts through
+`Zkc.Source.Structured.MultilinearReferenceViews`; it retains each named field
+domain and the original body-law prerequisites.
+
+For effectful clients, `PIR.Process.run_of_reachable_view` transports the whole
+execution to the mathematical return view. The state and event-prefix laws
+apply to stopped runs too. See
+[`SchnorrAndExecution`](../../ZkcExamples/Construction/SchnorrAndExecution.lean)
+for optional decisions, both nonces and a shared challenge. Acceptance is an
+observation of that complete execution. Paired witness recovery additionally
+needs the shared commitments, distinct challenges and the request-fixed
+extractor; the one-run equation does not supply those facts.
+
+## Install dependency laws once
+
+A companion need not repackage a proved forwarding or collection law through a
+second complete-output reference. Use that law directly. For a record of
+`ReferenceLaw.Realizes` fields in dependency order, installation is:
+
+```lean
+theorem installed (model : DomainModel) (definitions : List CheckedDefinition)
+    (linked : DeclarationsLinked [] definitions) (bodies : Bodies model definitions) :
+    Laws model (closedMeaningsOn model definitions) := by
+  install_reference_laws using linked with bodies
+```
+
+`Bodies` contains exact `BodyIn` associations selected from the admitted source.
+`Laws` names the laws needed by the consumer. The tactic reads the exact helper
+from each target, applies the proved `ReferenceLaw.realizes` rule, and uses only
+supplied checked facts and earlier installed fields. It handles structural
+argument tuples, conjunctions and `True`; a missing association or mathematical
+premise remains an ordinary Lean goal. It does not execute a helper to invent
+its dependency equation or choose a security claim.
+
+Each completed installation is bound once in an enclosing `have`; later fields
+refer to it. This preserves the proof sharing of a careful manual installation.
+Records with genuinely conditional laws can retain explicit applications of
+`ReferenceLaw.invoke` or `invokeUniform` rather than pretending that the laws
+hold for every input. A cyclic or unavailable dependency requires a real proof,
+not a fallback assumption.
+
+For counted callbacks, separate placement from the mathematical invariant.
+`Evaluation.denoteLoopOn_states_of_equation` takes an equation between the
+source callback and the actual placed callback at reached states, plus a law
+for the next mathematical state. The law retains the complete returned row,
+including captures. Existing `source_reference` equations can supply placement;
+the companion supplies the state recurrence and bounds. Both a forward layer
+loop and a backward circuit traversal use this rule in GKR. The general
+`denoteLoopOn_callback_eq` rule also transports complete loops whose callbacks
+stop or perform effects, without requiring a successful-return invariant.
 
 ## Present rows and reuse checked process equations
 

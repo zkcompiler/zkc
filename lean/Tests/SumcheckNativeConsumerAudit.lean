@@ -1,4 +1,6 @@
 module
+import all Zkc.Source.Structured.DomainContract
+import all Zkc.Source.Structured.CollectionRepresentation
 import all Zkc.Source.Structured.Bindings.Assembly
 import all Zkc.Source.Structured.Bindings.Component
 import all Zkc.Source.Structured.Bindings.Selection
@@ -18,6 +20,8 @@ import all ZkcTools.ConstructionBindings.Readback
 import all ZkcTools.ConstructionBindings.Root
 import all ZkcTools.ConstructionBindings.Syntax
 import all Zkc.Source.Structured.ReferenceLaws
+import all Zkc.Semantics.ReturnView
+import all Zkc.Source.Structured.MultilinearReferenceViews
 import all Zkc.Source.Structured.ReferenceLibrary
 import all Zkc.Source.Structured.MultilinearBodies
 import all Zkc.Source.Structured.MultilinearReference
@@ -26,12 +30,15 @@ import all Zkc.Source.Structured.MultilinearAdmissionReference
 import all Zkc.Source.Structured.RelationChecking
 import all Zkc.Source.Structured.FiniteDomains
 import all Zkc.Source.Structured.CollectionReferenceLaws
+import all Zkc.Source.Structured.CollectionReference
 import all Zkc.Source.Structured.CollectEvaluation
 import all Zkc.Source.Structured.CollectLaws
 import all Zkc.Protocols.Multilinear.Source.CollectBodies
 import all Zkc.Protocols.Multilinear.Source.CollectLaws
 import all Zkc.Protocols.Multilinear.Source.PrefixBodies
 import all Zkc.Protocols.Sumcheck.Source.DomainHelpers
+import all Zkc.Protocols.Sumcheck.Source.MathematicalHelpers
+import all Zkc.Protocols.Sumcheck.Source.Representation
 
 import all Tests.SumcheckNativeConsumer
 import all Zkc.Algebra.RingExpression.Basic

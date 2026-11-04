@@ -70,21 +70,12 @@ theorem observed_accepts_iff (base key : G) (service : Nat)
   apply Iff.trans (decisionSelector.returnedSatisfies_decision
     (Value := assignment F G) rfl {} 1 (SchnorrInteractive.verifierInputs base key service)
     (SchnorrExecution.execute base key service prover challenge).outcome .here rfl rfl)
-  apply Iff.trans ?_ (SchnorrExecution.accepted_iff base key service prover challenge)
-  generalize (SchnorrExecution.execute base key service prover challenge).outcome = outcome
-  cases outcome with
-  | stopped reason => exact ⟨False.elim, (by intro impossible; cases impossible)⟩
-  | returned results =>
-    cases results with
-    | cons decision rest =>
-      cases rest
-      constructor
-      · intro same
-        change decision = some true at same
-        cases same
-        rfl
-      · intro same
-        exact congrArg (fun values => values.get .here) (PIR.Outcome.returned.inj same)
+  rw [SchnorrExecution.execute_eq]
+  exact PIR.Execution.follow_return_observed_iff
+    (SchnorrInteractive.run base key service prover challenge)
+    (fun decision ↦ (Values.cons decision .nil :
+      Values (Component (assignment F G)) [.boolean]))
+    (fun results ↦ results.get .here = some true) (some true) (fun _ ↦ Iff.rfl)
 
 theorem observed_read (base key : G) (witness : F) (service : Nat)
     (prover : Zkc.Protocols.Schnorr.Common.Strategy F G) (challenge : F) :

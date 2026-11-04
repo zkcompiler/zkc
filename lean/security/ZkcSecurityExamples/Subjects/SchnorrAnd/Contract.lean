@@ -5,6 +5,7 @@ public import ZkcSecurityExamples.Subjects.SchnorrAnd.Artifacts
 public import ZkcExamples.Construction.SchnorrAndProof
 public import Zkc.Source.Structured.ContractExecution
 public import Zkc.Source.Structured.ContractElaboration
+public import ZkcExamples.Construction.SchnorrAndExecution
 
 @[expose] public section
 
@@ -126,5 +127,63 @@ theorem holds_pinned (statement : artifacts.Statement F G) (witnesses : F × F) 
     holds statement witnesses ↔ retained.Holds formulaBinding statement (embed witnesses) :=
   (retained.holds_iff_of_arguments formulaBinding statement (embed witnesses) (arguments statement witnesses)
     (arguments_read statement witnesses)).symm
+
+/-- The deciding verifier port of this exact retained protocol. -/
+def decisionSelector : BoundarySelector owner.protocol.signature .boolean :=
+  ⟨.output .here, ⟨1, by decide +kernel⟩, by decide +kernel⟩
+
+/-- Observe actual returned values; a stopped verifier supplies no output. -/
+def observedBoundary {S E : Type} (firstBase firstPoint secondBase secondPoint : G)
+    (service : Nat) (handler : PIR.Handler (participantInterface F G) S E) (state : S) :
+    ContractBoundaryValues owner F G :=
+  BoundaryValuation.ofOutcome 1
+    (verifierInputs firstBase firstPoint secondBase secondPoint service)
+    (ZkcExamples.Construction.SchnorrAndExecution.execute
+      firstBase firstPoint secondBase secondPoint service handler state).outcome
+
+/-- The complete-execution observation adapter is shared with single Schnorr.
+All optional outputs and stopped prefixes retain their original meaning. -/
+theorem observed_accepts_iff {S E : Type} (firstBase firstPoint secondBase secondPoint : G)
+    (service : Nat) (handler : PIR.Handler (participantInterface F G) S E) (state : S) :
+    decisionSelector.read {}
+      (observedBoundary firstBase firstPoint secondBase secondPoint service handler state) =
+        some true ↔
+      ((process firstBase firstPoint secondBase secondPoint service).run handler state).outcome =
+        .returned (some true) := by
+  apply Iff.trans (decisionSelector.returnedSatisfies_decision
+    (Value := assignment F G) rfl {} 1
+    (verifierInputs firstBase firstPoint secondBase secondPoint service)
+    (ZkcExamples.Construction.SchnorrAndExecution.execute
+      firstBase firstPoint secondBase secondPoint service handler state).outcome .here rfl rfl)
+  rw [ZkcExamples.Construction.SchnorrAndExecution.execute_eq]
+  exact PIR.Execution.follow_return_observed_iff
+    ((process firstBase firstPoint secondBase secondPoint service).run handler state)
+    (fun decision ↦ (Values.cons decision .nil :
+      Values (Component (assignment F G)) [.boolean]))
+    (fun results ↦ results.get .here = some true) (some true) (fun _ ↦ Iff.rfl)
+
+/-- The fixed pair of recovered scalars satisfies the actual retained formula.
+Both source runs replay the same commitments under two distinct challenges. -/
+theorem extracted_holds (firstBase firstPoint secondBase secondPoint : G) (service : Nat)
+    (commitments : G × G) (responses : F → F × F) (first second : F)
+    (distinct : first ≠ second)
+    (acceptFirst : decisionSelector.read {} (observedBoundary
+      firstBase firstPoint secondBase secondPoint service
+      (ZkcExamples.Construction.SchnorrAndExecution.verifierReplies
+        commitments (responses first) first).handler ()) = some true)
+    (acceptSecond : decisionSelector.read {} (observedBoundary
+      firstBase firstPoint secondBase secondPoint service
+      (ZkcExamples.Construction.SchnorrAndExecution.verifierReplies
+        commitments (responses second) second).handler ()) = some true) :
+    holds (.cons firstBase (.cons firstPoint (.cons secondBase (.cons secondPoint .nil))))
+      (((responses first).1 - (responses second).1) / (first - second),
+       ((responses first).2 - (responses second).2) / (first - second)) := by
+  apply (holds_iff ..).mpr
+  apply ZkcExamples.Construction.SchnorrAndExecution.fixed_recovery
+    firstBase firstPoint secondBase secondPoint service commitments responses first second distinct
+  · exact (ZkcExamples.Construction.SchnorrAndExecution.returned_iff ..).mpr
+      ((observed_accepts_iff ..).mp acceptFirst)
+  · exact (ZkcExamples.Construction.SchnorrAndExecution.returned_iff ..).mpr
+      ((observed_accepts_iff ..).mp acceptSecond)
 
 end ZkcSecurity.Examples.Subjects.SchnorrAnd.Contract

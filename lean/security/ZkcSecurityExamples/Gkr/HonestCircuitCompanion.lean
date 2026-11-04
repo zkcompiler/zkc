@@ -4,6 +4,10 @@ public import ZkcSecurityExamples.Gkr.HonestCircuitGoals
 public import ZkcExamples.Structured.GkrGateGoals
 public import ZkcSecurity.Bindings.Gkr.CircuitEncodingLaws
 public import Zkc.Protocols.Multilinear.Source.CollectionEncoding
+public import Zkc.Source.Structured.CallbackPlacement
+
+meta import ZkcTools.StructuredSource.NamedEquations
+meta import ZkcTools.StructuredSource.CollectionProofs
 
 @[expose] public section
 
@@ -82,23 +86,16 @@ theorem step_encoded (table : Meanings F G) (dependencies : Dependencies table) 
   have selectBlock_equation := dependencies.block
   dsimp only [Goals.BlockArguments.pack, Goals.BlockResult.pack] at selectBlock_equation
   dsimp only [Goals.Step.Inputs.pack]
-  simp only [meaning]
-  rw [Evaluation.denote_meaning_eq_meaningOn, Goals.stepProcess_equation]
-  dsimp only [Goals.stepProcess, Goals.stepProcess_certificate, Op.arguments, Op.results, Op.regions]
-  simp only [Op.arguments, Op.results, Op.regions, Primitive.evaluateOn, primitiveOutcome, PIR.Process.bind,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get,
-    Goals.Step.encode, show 1 < indexLimit by decide +kernel, ite_true]
+  named_process Goals.stepProcess over F G
+  simp only [Primitive.evaluateOn, primitiveOutcome, PIR.Process.bind, Goals.Step.encode,
+    show 1 < indexLimit by decide +kernel, ite_true]
+  named_reduce
   rw [selectBlock_equation _ position.val width (2 ^ (width + width)) shape (by positivity)
       position.isLt (by simpa [GkrRoundsLayout.encode] using bound)]
-  simp only [PIR.Process.bind, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
+  named_reduce
   rw [selectBlock_equation _ position.val width (2 ^ (width + width)) shapeM (by positivity)
     position.isLt (by simpa [GkrRoundsLayout.encode] using bound)]
-  simp only [PIR.Process.bind, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
+  named_reduce
   rw [block_encode width (width + width) a position, block_encode width (width + width) m position]
   have mapped := dependencies.gates
     (fun bits => a (Quadratic.point width (vertex width position) bits))
@@ -106,9 +103,8 @@ theorem step_encoded (table : Meanings F G) (dependencies : Dependencies table) 
     (GkrRoundsLayout.replicate width width v) (GkrRoundsLayout.tile width width v) pairBound
   dsimp only [GkrGateGoals.Map.Inputs.pack] at mapped
   rw [mapped]
-  simp only [GkrGateGoals.Map.encode, PIR.Process.bind, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
+  simp only [GkrGateGoals.Map.encode]
+  named_reduce
   rw [← List.sum_eq_foldl, sum_encode]
   have formula : (fun bits => Zkc.Protocols.AlgebraicRounds.Gate.value
       (a (Quadratic.point width (vertex width position) bits))
@@ -137,44 +133,35 @@ theorem layer_encoded_body (table : Meanings F G) (dependencies : Dependencies t
   have widthSmall : width < 64 := by omega
   have countBound : 2 ^ width < indexLimit := Nat.pow_lt_pow_right (by decide) widthSmall
   dsimp only [Goals.Layer.Inputs.pack]
-  simp only [meaning]
-  rw [Evaluation.denote_meaning_eq_meaningOn, Goals.layerProcess_equation]
-  dsimp only [Goals.layerProcess, Goals.layerProcess_certificate, Op.arguments, Op.results, Op.regions]
-  simp only [Op.arguments, Op.results, Op.regions, Primitive.evaluateOn, primitiveOutcome, PIR.Process.bind,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get,
+  named_process Goals.layerProcess over F G
+  simp only [Primitive.evaluateOn, primitiveOutcome, PIR.Process.bind,
     show 0 < indexLimit by decide +kernel, ite_true]
+  named_reduce
   have power := dependencies.power width widthSmall
   dsimp only [Goals.PowerArguments.pack, Goals.PowerResult.pack] at power
   rw [power]
-  simp only [PIR.Process.bind, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
+  named_reduce
   have repeated := dependencies.replicate (GkrRoundsLayout.encode v) (2 ^ width)
     (by simpa [GkrRoundsLayout.encode] using countBound) countBound
   dsimp only [Goals.RepeatArguments.pack, Goals.RepeatResult.pack] at repeated
   rw [repeated]
-  simp only [PIR.Process.bind, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
+  named_reduce
   have tiled := dependencies.tile (GkrRoundsLayout.encode v) (2 ^ width) countBound
     (by simpa [GkrRoundsLayout.encode] using countBound)
   dsimp only [Goals.RepeatArguments.pack, Goals.RepeatResult.pack] at tiled
   rw [tiled]
-  simp only [PIR.Process.bind, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
+  named_reduce
   rw [← GkrRoundsLayout.encode_replicate, ← GkrRoundsLayout.encode_tile]
-  rw [← Evaluation.denoteLoop_eq_denoteLoopOn]
-  erw [denoteLoop_states (F := F) (G := G)
-    Goals.LayerState.types Goals.LayerCaptures.types
+  erw [Evaluation.denoteLoopOn_states_of_equation
+    (state := Goals.LayerState.types) (captures := Goals.LayerCaptures.types)
+    (fun arguments => Goals.Step.body.denote (meaning F G table) arguments.get)
     _ (2 ^ width) _
     (Goals.LayerCaptures.pack (Value := assignment F G)
       { addWeights := GkrRoundsLayout.encode a, mulWeights := GkrRoundsLayout.encode m, width,
         left := GkrRoundsLayout.encode (GkrRoundsLayout.replicate width width v),
         right := GkrRoundsLayout.encode (GkrRoundsLayout.tile width width v) })
     (fun i => Goals.LayerState.pack (Value := assignment F G)
-      ⟨(GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)).take i⟩) ?_ ?_]
+      ⟨(GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)).take i⟩) ?_ ?_ ?_]
   · simp only [PIR.Process.bind, Op.arguments, Op.results, Op.regions,
     SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
     Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get]
@@ -182,21 +169,17 @@ theorem layer_encoded_body (table : Meanings F G) (dependencies : Dependencies t
       simp [GkrRoundsLayout.encode], List.take_length]
   · rfl
   · intro i bound
+    simp only [Goals.LayerState.pack, Goals.LayerCaptures.pack, Values.append]
+    named_process Goals.stepProcess over F G
+    collection_simp [Goals.Step.encode, Goals.Step.decode,
+      SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one]
+  · intro i bound
     have iteration := step_encoded table dependencies a m v
       ((GkrRoundsLayout.encode (Zkc.Protocols.Gkr.layer a m v)).take i) ⟨i, bound⟩ small
-    simp only [Goals.Step.Inputs.pack, meaning] at iteration
-    rw [Evaluation.denote_meaning_eq_meaningOn, Goals.stepProcess_equation] at iteration
-    dsimp only [Goals.stepProcess, Goals.stepProcess_certificate] at iteration
-    simp only [Evaluation.invokeCallback, Goals.LayerState.pack, Goals.LayerCaptures.pack,
-      Values.append, PIR.Process.bind_assoc, Goals.Step.encode,
-      Op.arguments, Op.results, Op.regions,
-      SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-      Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get,
-      Primitive.evaluateOn, primitiveOutcome, PIR.Process.bind, Goals.Step.decode,
-      show 1 < indexLimit by decide +kernel, ite_true] at iteration ⊢
-    rw [iteration]
+    simp only [Goals.LayerState.pack, Goals.LayerCaptures.pack, Values.append]
     rw [List.take_succ_eq_append_getElem (by simpa [GkrRoundsLayout.encode] using bound)]
-    simp only [GkrRoundsLayout.encode, List.getElem_ofFn]
+    simpa only [Goals.Step.Inputs.pack, Goals.Step.encode, GkrRoundsLayout.encode,
+      List.getElem_ofFn] using iteration
 
 /-- The independent layer formula determines the new value; the complete
 returned captures are the actual named input captures. -/

@@ -11,6 +11,7 @@ public import ZkcExamples.Structured.Generated.Connections.SchnorrAnd
 public import ZkcExamples.Construction.SchnorrAndArtifact
 public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedValidator
+public import Zkc.Semantics.ReturnView
 
 @[expose] public section
 
@@ -51,7 +52,8 @@ def sourceVerifier (firstBase firstPoint secondBase secondPoint : G) (handle : N
 
 /-- The actual source Process has this finite normal form for every reply. -/
 theorem source_equation (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
-    sourceVerifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.conjunction SchnorrAndProof.wiring firstBase firstPoint secondBase secondPoint handle := by kernel_rfl
+    sourceVerifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.conjunction SchnorrAndProof.wiring firstBase firstPoint secondBase secondPoint handle :=
+  SchnorrAndProof.verifier_correspondence firstBase firstPoint secondBase secondPoint handle
 
 def sourceDecision (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) : PIR.Process (Actions F G) Bool :=
   (sourceVerifier firstBase firstPoint secondBase secondPoint handle).bind fun decision => .done (decision.getD false)
@@ -59,9 +61,11 @@ def sourceDecision (firstBase firstPoint secondBase secondPoint : G) (handle : N
 theorem source_decision (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
     sourceVerifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle =
       (sourceDecision firstBase firstPoint secondBase secondPoint handle).bind fun decision => .done (some decision) := by
+  apply PIR.Process.reconstruct_from_reachable_view _ (fun decision ↦ decision.getD false) some
+    _ (sourceDecision firstBase firstPoint secondBase secondPoint handle) rfl
   rw [source_equation]
-  simp only [sourceDecision, source_equation]
-  kernel_rfl
+  intro firstCommitment secondCommitment challenge sent firstResponse secondResponse
+  rfl
 
 def inputs (firstBase firstPoint secondBase secondPoint : G) : Domain.Environment (uniformCarriers F G) :=
   [.data (.group "bls12-381.g1" firstBase), .data (.group "bls12-381.g1" firstPoint), .data (.group "bls12-381.g1" secondBase), .data (.group "bls12-381.g1" secondPoint), .transcript context.suite []]

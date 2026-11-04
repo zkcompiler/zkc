@@ -4,6 +4,8 @@ public import ZkcExamples.Structured.GkrGateGoals
 public import Zkc.Protocols.Multilinear.Source.CollectionEncoding
 public import Zkc.Source.Structured.MapLaws
 
+public meta import ZkcTools.StructuredSource.ReferenceInstallation
+
 @[expose] public section
 
 /-! Mathematical companions for the source-selected gates. The generated Goal
@@ -26,50 +28,23 @@ theorem value (model : DomainModel) :
 noncomputable def valueLaw (model : DomainModel) :=
   Value.law model (valueReference model) (fun _ _ _ _ _ => True) (value model)
 
-def realizationReference (model : DomainModel)
-    (addWeight mulWeight left right : model.Field scalarDomain) :
-    PIR.Outcome (Realization.Output model) :=
-  .returned ⟨Zkc.Protocols.AlgebraicRounds.Gate.value addWeight mulWeight left right⟩
-
-noncomputable def realizationLibrary (model : DomainModel) :=
+noncomputable def realizationLaw (model : DomainModel) :=
   forward_reference% Realization.body using (valueLaw model)
 
-def realizationCondition (model : DomainModel) :=
-  fun table (_ _ _ _ : model.Field scalarDomain) =>
-    (valueLaw model).Realizes (helper := GkrSourceBodies.helper19Helper) table
-
-/-- The direct forwarding library preserves all outcomes of the explicit
-value dependency; it checks the actual scoped wrapper's complete body. -/
-theorem realization (model : DomainModel) :
-    Realization.Goal model (realizationReference model) (realizationCondition model) := by
-  apply Realization.of_law model _ _ (realizationLibrary model) rfl
-  · intro addWeight mulWeight left right; rfl
-  · intro table addWeight mulWeight left right dependency; exact dependency _
-
-noncomputable def realizationLaw (model : DomainModel) :=
-  Realization.law model (realizationReference model) (realizationCondition model) (realization model)
-
-def callbackReference (model : DomainModel)
-    (addWeight mulWeight left right : model.Field scalarDomain)
-    (_ _ _ _ : List (model.Field scalarDomain)) : PIR.Outcome (Callback.Output model) :=
-  .returned ⟨Zkc.Protocols.AlgebraicRounds.Gate.value addWeight mulWeight left right⟩
-
-noncomputable def callbackLibrary (model : DomainModel) :=
+noncomputable def callbackLaw (model : DomainModel) :=
   forward_reference% Callback.body using (realizationLaw model)
 
-def callbackCondition (model : DomainModel) :=
-  fun table (_ _ _ _ : model.Field scalarDomain) (_ _ _ _ : List (model.Field scalarDomain)) =>
-    (realizationLaw model).Realizes (helper := GkrSourceBodies.helper55Helper) table
+/-- One installation of the scalar dependency chain in the actual linked table. -/
+structure ScalarLaws (model : DomainModel)
+    (table : Evaluation.MeaningsOn model.toCarriers closedInterface) : Prop where
+  value : (valueLaw model).Realizes (helper := GkrSourceBodies.helper19Helper) table
+  realization : (realizationLaw model).Realizes (helper := GkrSourceBodies.helper55Helper) table
+  callback : (callbackLaw model).Realizes (helper := GkrSourceBodies.helper56Helper) table
 
-theorem callback (model : DomainModel) :
-    Callback.Goal model (callbackReference model) (callbackCondition model) := by
-  apply Callback.of_law model _ _ (callbackLibrary model) rfl
-  · intro addWeight mulWeight left right addWeights mulWeights lefts rights; rfl
-  · intro table addWeight mulWeight left right addWeights mulWeights lefts rights dependency
-    exact dependency _
-
-noncomputable def callbackLaw (model : DomainModel) :=
-  Callback.law model (callbackReference model) (callbackCondition model) (callback model)
+theorem installScalars (model : DomainModel) (definitions : List CheckedDefinition)
+    (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions) :
+    ScalarLaws model (closedMeaningsOn model definitions) := by
+  install_reference_laws using linked with bodies
 
 def mapValues (model : DomainModel)
     (addWeights mulWeights lefts rights : List (model.Field scalarDomain)) (length : Nat) :=
@@ -86,7 +61,7 @@ def mapReference (model : DomainModel)
   | .stopped reason => .stopped reason
   | .returned length => .returned ⟨mapValues model addWeights mulWeights lefts rights length⟩
 
-noncomputable def mapLibrary (model : DomainModel) :=
+noncomputable def mapLaw (model : DomainModel) :=
   collection_reference% Map.body with_model model
     with_shape (fun addWeights mulWeights lefts rights => Evaluation.mapShape
       [addWeights.length, mulWeights.length, lefts.length, rights.length])
@@ -96,20 +71,11 @@ noncomputable def mapLibrary (model : DomainModel) :=
     with_formula (fun addWeight mulWeight left right _ _ _ _ =>
       Zkc.Protocols.AlgebraicRounds.Gate.value addWeight mulWeight left right)
 
-noncomputable def mapCondition (model : DomainModel) := fun table =>
-  Values.curry _ ((mapLibrary model).Requires table)
-
-/-- Direct library transport discharges the generated named complete Goal.
-The remaining premises are source admission and the actual callback law. -/
-theorem map (model : DomainModel) :
-    Map.Goal model (mapReference model) (mapCondition model) := by
-  apply Map.of_law model _ _ (mapLibrary model) rfl
-  · intro addWeights mulWeights lefts rights
-    reference_encoding [mapLibrary, mapReference, Item.pack]
-  · intro table addWeights mulWeights lefts rights dependencies; exact dependencies
-
-noncomputable def mapLaw (model : DomainModel) :=
-  Map.law model (mapReference model) (mapCondition model) (map model)
+theorem map_reference (model : DomainModel)
+    (addWeights mulWeights lefts rights : List (model.Field scalarDomain)) :
+    (mapLaw model).reference (Map.Inputs.pack { addWeights, mulWeights, lefts, rights }) =
+      Map.encodeOutcome model (mapReference model addWeights mulWeights lefts rights) := by
+  reference_encoding [mapLaw, mapReference, Item.pack]
 
 /-- Pointwise gate evaluation commutes with the shared finite vertex order,
 for four arbitrary tables. No source layout or fixed wiring table is a premise. -/

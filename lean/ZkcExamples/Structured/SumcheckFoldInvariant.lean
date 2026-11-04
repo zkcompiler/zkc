@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Structured.LogicalFrames
 public import ZkcExamples.Structured.SumcheckProverRoots
-public import Zkc.Protocols.Sumcheck.Multilinear.Fold
+public import Zkc.Protocols.Sumcheck.Source.Representation
 
 @[expose] public section
 
@@ -23,7 +23,7 @@ namespace ZkcExamples.Structured.SumcheckFoldInvariant
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Logical PrimitiveLibrary
 open SumcheckVerifierBodies SumcheckVerifierHelpers SumcheckVerifierLaws SumcheckProverLaws
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
-open Zkc.Protocols.Sumcheck.Multilinear (PartialEvaluation roundEndpoint)
+open Zkc.Protocols.Sumcheck.Multilinear (PartialEvaluation roundEndpoint RestrictionInvariant)
 
 -- Interpretation meanings compute dependent sort and value types.
 set_option backward.isDefEq.respectTransparency false
@@ -123,25 +123,53 @@ abbrev Holds (count : Nat) (table : Table F count) (index : Nat)
 variable [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- Every honest state whose point fits the dimension satisfies the invariant. -/
-theorem holds_honest (raw : List F) (count : Nat) (table : Table F count)
-    (decoded : ofList? count raw = some table) (point : List F) (fits : point.length ≤ count) :
-    Holds count table point.length (embedP (G := G) (honestState raw count point)) := by
-  have represents := Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_restrict raw table decoded
-    point fits
+/-- Install the mathematical invariant on the complete carried source state.
+This bridge is shared by both actual units and covers every logical atom. -/
+theorem holds_of_restriction {count : Nat} (table : Table F count)
+    (point entries : List F) (dimension columns index : Nat)
+    (invariant : RestrictionInvariant table point entries dimension columns) :
+    Holds count table index (embedP (G := G) (entries, dimension, columns, point)) := by
   intro atom member
   simp only [proverInvariant, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl | rfl | rfl
-  · exact ⟨_, rfl, represents⟩
+  · exact ⟨_, rfl, invariant.represents⟩
   · refine ⟨_, rfl, ?_⟩
-    show point.length ≤ count ∧ count - point.length = count - point.length
-    exact ⟨fits, rfl⟩
+    exact ⟨invariant.represents.1, invariant.remaining⟩
   · refine ⟨_, rfl, ?_⟩
-    show (1 : Nat) = 1
-    rfl
+    exact invariant.unitWidth
   · refine ⟨_, rfl, ?_⟩
-    exact fun remaining =>
-      Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_endpoints table point _ represents remaining
+    intro remaining
+    exact ⟨congrArg Prod.fst (invariant.message remaining),
+      congrArg Prod.snd (invariant.message remaining)⟩
+
+omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- Every honest state whose point fits the dimension satisfies the invariant. -/
+theorem holds_honest (raw : List F) (count : Nat) (table : Table F count)
+    (decoded : ofList? count raw = some table) (point : List F) (fits : point.length ≤ count) :
+    Holds count table point.length (embedP (G := G) (honestState raw count point)) :=
+  holds_of_restriction table point _ _ _ _ (RestrictionInvariant.ofPrefix raw decoded point fits)
+
+/-- The actual callback preserves the mathematical invariant for every typed
+challenge. All four prover outputs and the two absent verifier slots remain
+in the result. This uses the installed sums and restriction laws, not another
+loop evaluator. -/
+theorem round_preserves_invariant (U : UnitPayload)
+    (bodies : SumcheckUnitContracts.Bodies U.definitions)
+    (ctx : ProtocolContext) (self : Nat) (prover : self = ctx.roles 0)
+    (separate : ctx.roles 1 ≠ self) (count : Nat) (table : Table F count)
+    (entries point : List F) (dimension columns index : Nat) (service : Option Nat)
+    (shape : HasShape entries dimension columns) (bound : entries.length < indexLimit)
+    (invariant : RestrictionInvariant table point entries dimension columns)
+    (remaining : point.length < count) :
+    PIR.Yields (Holds count table (index + 1))
+      (bodyFn U ctx self (.cons (some index)
+        ((embedP (G := G) (entries, dimension, columns, point)).append (cap service)))) := by
+  have positive : 0 < dimension := by rw [invariant.remaining]; omega
+  rw [round_body_present U bodies ctx self prover separate index service
+    (entries, dimension, columns, point) shape bound positive]
+  simp only [SumcheckProverLaws.roundPresent, PIR.Process.bind, PIR.Yields]
+  intro _ _ challenge
+  exact holds_of_restriction table _ _ _ _ _ (invariant.step remaining challenge)
 
 /-- The phase records, in order, the challenges the prover has received at the
 delivery site of `ctx`. Sends and other actions leave it unchanged. -/
@@ -236,9 +264,9 @@ theorem prover_messages (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies
         (roundEndpoint table point 1)) fun _ =>
       .call (.receive (.field "bls12-381.fr") (deliverySite ctx) (ctx.roles 1)) fun (cp : F) =>
       .done (embedP (honestState raw count (point ++ [cp]))) := by
-  have endpoints := Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_endpoints table point _
-    (Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_restrict raw table decoded point
-      (Nat.le_of_lt remaining)) remaining
+  have endpoints := (RestrictionInvariant.ofPrefix raw decoded point
+    (Nat.le_of_lt remaining)).message remaining
+  simp only [Zkc.Protocols.Sumcheck.Multilinear.endpoints, Prod.mk.injEq] at endpoints
   rw [step_honest U bodies ctx self prover separate maximum service raw count shape bound point index]
   simp only [roundHonest, remaining, ↓reduceIte, SumcheckProverLaws.roundPresent, PIR.Process.bind,
     honestState]

@@ -3,6 +3,9 @@ module
 public import ZkcSecurityExamples.Gkr.HonestCircuit
 public import ZkcSecurityExamples.Gkr.HonestTraversalGoals
 
+meta import ZkcTools.StructuredSource.NamedEquations
+meta import ZkcTools.StructuredSource.CollectionProofs
+
 @[expose] public section
 
 /-! Correspondence of the actual backward layer traversal with the independent
@@ -102,23 +105,16 @@ theorem values_step {width : Nat} (add mul : List F) (layers selector : Nat)
     rw [dm.1, ← Nat.pow_add]
     simpa [Nat.add_comm] using powerSmall
   dsimp only [Goals.TraversalStepArguments.pack]
-  simp only [meaning]
-  rw [Evaluation.denote_meaning_eq_meaningOn, Goals.traversalStepProcess_equation]
-  dsimp only [Goals.traversalStepProcess, Goals.traversalStepProcess_certificate,
-    Op.arguments, Op.results, Op.regions]
+  named_process Goals.traversalStepProcess over F G
   simp only [Primitive.evaluateOn, primitiveOutcome, checkedIndices, currentBound,
     show 1 < indexLimit by decide +kernel, positive, nextBound, and_self, ite_true,
     PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
     SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
     Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
   rw [selectBlock_equation add _ selector _ da.1 (by positivity) position addBound]
-  simp only [PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
+  named_reduce
   rw [selectBlock_equation mul _ selector _ dm.1 (by positivity) position mulBound]
-  simp only [PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
+  named_reduce
   rw [layer_encodes _ _ _ (circuit.add _) (circuit.mul _)
     (circuit.wires iteration (layers - iteration))
     (da.2 _ (by omega)) (dm.2 _ (by omega)) (GkrRoundsLayout.decode_encode _) (by omega)]
@@ -150,9 +146,7 @@ theorem values_below {width : Nat} (add mul inputValues : List F) (layers select
   have countBound : layers - layerIndex - 1 < indexLimit := by omega
   dsimp only [Goals.Traversal.Inputs.pack]
   rw [circuit_bodies.values.invoke unit.linked]
-  simp only [meaning]
-  rw [Evaluation.denote_meaning_eq_meaningOn, Goals.valuesProcess_equation]
-  dsimp only [Goals.valuesProcess, Goals.valuesProcess_certificate, Op.arguments, Op.results, Op.regions]
+  named_process Goals.valuesProcess over F G
   simp only [Primitive.evaluateOn, primitiveOutcome, checkedIndices, layersBound, indexBound,
     remainingBound, countBound, show 0 < indexLimit by decide +kernel,
     show 1 < indexLimit by decide +kernel,
@@ -161,13 +155,14 @@ theorem values_below {width : Nat} (add mul inputValues : List F) (layers select
     Op.arguments, Op.results, Op.regions,
     SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
     Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.split]
-  rw [← Evaluation.denoteLoop_eq_denoteLoopOn]
-  erw [denoteLoop_states (F := F) (G := G) Goals.TraversalState.types Goals.TraversalCaptures.types
+  erw [Evaluation.denoteLoopOn_states_of_equation
+    (state := Goals.TraversalState.types) (captures := Goals.TraversalCaptures.types)
+    (fun arguments => Goals.TraversalStep.body.denote (meaning F G (helpers (G := G))) arguments.get)
     _ (layers - layerIndex - 1) _
     (Goals.TraversalCaptures.pack (Value := assignment F G)
       { addWeights := add, mulWeights := mul, selector, width })
     (fun i => Goals.TraversalState.pack (Value := assignment F G)
-      { values := GkrRoundsLayout.encode (circuit.wires i (layers - i)), current := layers - i }) ?_ ?_]
+      { values := GkrRoundsLayout.encode (circuit.wires i (layers - i)), current := layers - i }) ?_ ?_ ?_]
   · simp only [PIR.Process.bind, Values.get, Op.arguments, Op.results, Op.regions,
       SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
       Environment.prepend, Environment.push, Values.get_head, Values.get_tail]
@@ -175,16 +170,12 @@ theorem values_below {width : Nat} (add mul inputValues : List F) (layers select
   · rw [← HonestHelpers.encode_of_decodes inputValues circuit.inputs di]
     rfl
   · intro i bound
-    have iteration := values_step (G := G) add mul layers selector circuit da dm capacity small layersBound i (by omega)
-    simp only [Goals.TraversalStepArguments.pack, meaning] at iteration
-    rw [Evaluation.denote_meaning_eq_meaningOn, Goals.traversalStepProcess_equation] at iteration
-    dsimp only [Goals.traversalStepProcess, Goals.traversalStepProcess_certificate] at iteration
-    simp only [Evaluation.invokeCallback, Goals.TraversalState.pack, Goals.TraversalCaptures.pack,
-      Values.append, PIR.Process.bind_assoc, Goals.TraversalStep.encode,
-      Op.arguments, Op.results, Op.regions,
-      SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-      Environment.prepend, Environment.push, Values.get_head, Values.get_tail, Values.get,
-      Primitive.evaluateOn, primitiveOutcome, checkedIndices, PIR.Process.bind, Goals.TraversalStep.decode,
-      show 1 < indexLimit by decide +kernel, ite_true] at iteration ⊢
-    exact iteration
+    simp only [Goals.TraversalState.pack, Goals.TraversalCaptures.pack, Values.append]
+    named_process Goals.traversalStepProcess over F G
+    collection_simp [Goals.TraversalStep.encode, Goals.TraversalStep.decode, checkedIndices,
+      SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one]
+  · intro i bound
+    simpa only [Goals.TraversalStepArguments.pack, Goals.TraversalState.pack,
+      Goals.TraversalCaptures.pack, Values.append, Goals.TraversalStep.encode] using
+      values_step (G := G) add mul layers selector circuit da dm capacity small layersBound i (by omega)
 end ZkcSecurity.Realizations.Gkr.HonestCircuit

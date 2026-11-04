@@ -39,38 +39,19 @@ theorem gate_bodies : GkrGateGoals.Bodies unit.definitions := by
 theorem circuit_bodies : Goals.Bodies unit.definitions := by
   bind_structured_bodies
 
+theorem gate_scalar_laws : GkrGateCompanion.ScalarLaws (ringModel F G)
+    (closedMeaningsOn (ringModel F G) unit.definitions) :=
+  GkrGateCompanion.installScalars (ringModel F G) unit.definitions unit.linked gate_bodies
+
 /-- The source gate callback is the independent gate formula. -/
 theorem gate_equation (add mul left right : F) :
     invoke (helpers (G := G)) GkrSourceBodies.helper19Helper
-      ((GkrGateGoals.Value.Inputs.pack (Value := assignment F G))
+      (GkrGateGoals.Value.Inputs.pack (Value := assignment F G)
         { addWeight := add, mulWeight := mul, left, right }) =
         .done (GkrGateGoals.Value.encode (ringModel F G)
           ⟨Zkc.Protocols.AlgebraicRounds.Gate.value add mul left right⟩) := by
-  apply (GkrGateCompanion.valueLaw (ringModel F G)).invokeUniform
-    (helper := GkrSourceBodies.helper19Helper)
-    unit.definitions unit.linked gate_bodies.value
-  trivial
-
-/-- Dependencies use the same actual linked table, with no assumed helper law. -/
-theorem gate_value_dependency :
-    (GkrGateCompanion.valueLaw (ringModel F G)).Realizes
-      (helper := GkrSourceBodies.helper19Helper) (helpers (G := G)) := by
-  apply (GkrGateCompanion.valueLaw (ringModel F G)).realizesUniform
-    (F := F) (G := G) (helper := GkrSourceBodies.helper19Helper)
-    unit.definitions unit.linked gate_bodies.value
-  intro arguments
-  rw [← GkrGateGoals.Value.Inputs.pack_unpack arguments]
-  trivial
-
-theorem gate_realization_dependency :
-    (GkrGateCompanion.realizationLaw (ringModel F G)).Realizes
-      (helper := GkrSourceBodies.helper55Helper) (helpers (G := G)) := by
-  apply (GkrGateCompanion.realizationLaw (ringModel F G)).realizesUniform
-    (F := F) (G := G) (helper := GkrSourceBodies.helper55Helper)
-    unit.definitions unit.linked gate_bodies.realization
-  intro arguments
-  rw [← GkrGateGoals.Value.Inputs.pack_unpack arguments]
-  exact gate_value_dependency
+  simp only [helpers, closedMeanings_eq_closedMeaningsOn]
+  exact gate_scalar_laws.value _
 
 abbrev gateCollection : CollectSpec := GkrGateGoals.collection
 
@@ -82,24 +63,14 @@ theorem gate_callback (a m l r : F) (add mul left right : List F) :
           addWeights := add, mulWeights := mul, lefts := left, rights := right }) =
       .done (GkrGateGoals.Callback.encode (ringModel F G)
         ⟨Zkc.Protocols.AlgebraicRounds.Gate.value (F := F) a m l r⟩) := by
-  apply (GkrGateCompanion.callbackLaw (ringModel F G)).invokeUniform
-    (helper := GkrSourceBodies.helper56Helper)
-    unit.definitions unit.linked gate_bodies.callback
-  exact gate_realization_dependency
-
-theorem gate_callback_dependency :
-    (GkrGateCompanion.callbackLaw (ringModel F G)).Realizes
-      (helper := GkrSourceBodies.helper56Helper) (helpers (G := G)) := by
-  apply (GkrGateCompanion.callbackLaw (ringModel F G)).realizesUniform
-    (F := F) (G := G) (helper := GkrSourceBodies.helper56Helper)
-    unit.definitions unit.linked gate_bodies.callback
-  intro arguments
-  rw [← GkrGateGoals.Callback.Inputs.pack_unpack arguments]
-  exact gate_realization_dependency
+  simp only [helpers, closedMeanings_eq_closedMeaningsOn]
+  exact gate_scalar_laws.callback _
 
 /-- Actual ordered domain admission and the installed complete callback law. -/
 theorem gate_map_dependencies (add mul left right : List F) :
-    GkrGateCompanion.mapCondition (ringModel F G) (helpers (G := G)) add mul left right := by
+    (GkrGateCompanion.mapLaw (ringModel F G)).Requires (helpers (G := G))
+      (GkrGateGoals.Map.Inputs.pack
+        { addWeights := add, mulWeights := mul, lefts := left, rights := right }) := by
   constructor
   · exact GkrRoundsHelpers.values_domain (G := G) add mul left right
   · intro length _ index _
@@ -119,10 +90,7 @@ theorem gate_map_encodes {n : Nat} (add mul left right : Table F n)
   rw [(GkrGateCompanion.mapLaw (ringModel F G)).invokeUniform
     (helper := GkrSourceBodies.helper57Helper)
     unit.definitions unit.linked gate_bodies.map]
-  · change primitiveOutcome (GkrGateGoals.Map.encodeOutcome (ringModel F G)
-      (GkrGateCompanion.mapReference (ringModel F G)
-        (GkrRoundsLayout.encode add) (GkrRoundsLayout.encode mul)
-        (GkrRoundsLayout.encode left) (GkrRoundsLayout.encode right))) = _
+  · rw [GkrGateCompanion.map_reference]
     simp only [GkrRoundsLayout.encode]
     rw [GkrGateCompanion.map_encodes (ringModel F G) add mul left right small]
     rfl
