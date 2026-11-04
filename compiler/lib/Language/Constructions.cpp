@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "ConstructionWitness.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -52,6 +53,15 @@ bool Checker::constructions() {
     state[id.index] = 1;
     auto freezeContract = scope_exit([&] { inferredContracts.erase(&decl); });
     const auto &syntax = *sources[id.index]->construction;
+    auto retainSource = [&] {
+      if (!types.charge(1, decl.span))
+        return false;
+      output.constructionSources.emplace(
+          id.index,
+          std::make_shared<const ConstructionSource>(ConstructionSource{
+              syntax.parent, syntax.provider, syntax.codec}));
+      return true;
+    };
     const auto &target = output.declarations[decl.target->index];
     // Protocol bodies have now completed their inferred contracts. Signature
     // formation alone cannot validate a construction's target application.
@@ -161,6 +171,8 @@ bool Checker::constructions() {
                           "authored base accepts only a proof format",
                           decl.span);
       decl.construction = std::move(result);
+      if (!retainSource())
+        return false;
       state[id.index] = 2;
       return true;
     }
@@ -230,8 +242,8 @@ bool Checker::constructions() {
                 : std::nullopt);
         if (!state)
           return false;
-        auto stateType =
-            types.associated(*provider, state->target, syntax.provider->span);
+        auto stateType = types.associated(*provider, state->declaration,
+                                          syntax.provider->span);
         if (!stateType)
           return false;
         auto permissions = types.permissions(*stateType, decl.span, &decl);
@@ -250,7 +262,7 @@ bool Checker::constructions() {
                 : std::nullopt);
         if (!member)
           return false;
-        const auto &factory = output.declarations[member->target.index];
+        const auto &factory = output.declarations[member->declaration.index];
         auto bindings =
             types.boundMemberSubstitution(factory, *provider, decl.span);
         if (!bindings)
@@ -274,8 +286,7 @@ bool Checker::constructions() {
         result.provider = std::move(*provider);
         result.root = ConstructionDefinition::Root::Local;
         result.state = std::move(*stateType);
-        result.initializer =
-            CallableReference{member->target, result.provider, *member};
+        result.initializer = *member;
         for (const auto &parameter : factory.parameters)
           result.initializerArguments.push_back(bindings->at(parameter.atom));
       }
@@ -778,6 +789,8 @@ bool Checker::constructions() {
       return types.fail("source.limit", "construction selection depth",
                         decl.span);
     decl.construction = std::move(result);
+    if (!retainSource())
+      return false;
     state[id.index] = 2;
     return true;
   };

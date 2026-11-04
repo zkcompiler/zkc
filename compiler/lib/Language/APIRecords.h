@@ -4,6 +4,7 @@
 #include "zkc/Language/Project.h"
 
 namespace zkc::language::detail {
+struct ReferenceNode;
 /// Checked ordinary bindings form a compact export graph. Module aliases are
 /// edges, rather than eagerly expanded combinations of all accessible paths.
 struct ExportRecord {
@@ -46,6 +47,8 @@ struct ReferenceRecord {
   ReferenceRoute route;
   ResolvedReference reference;
   ReferencePosition position;
+  /// Shared written-node identity, independent of locations and checked fields.
+  std::shared_ptr<const ReferenceNode> site;
 };
 struct APIRecords {
   std::vector<ExportRecord> exports;

@@ -24,6 +24,7 @@ struct ScopedInvocationSource;
 struct SourceCall;
 using IntrinsicCallSource = SourceCall;
 struct AuthoringStorage;
+struct ConstructionSource;
 /// Defining source authorities, computed once after the last checking step.
 /// A unit is one captured file, named by its module path. Installation
 /// sources are not units: installed declarations enter through the
@@ -64,6 +65,11 @@ struct CheckedStorage {
   NotationRecords notations;
   APIRecords api;
   std::shared_ptr<const std::vector<ReferenceRecord>> authoredReferences;
+  /// Written construction header terms; callable selections use the existing
+  /// immutable reference inventory, not a second resolved-construction
+  /// snapshot.
+  std::map<uint32_t, std::shared_ptr<const ConstructionSource>>
+      constructionSources;
   std::vector<LexicalResolution> lexicalResolutions;
   std::shared_ptr<const DeclarationIndex> declarationIndex;
   std::shared_ptr<const AuthoringStorage> authoring;

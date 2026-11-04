@@ -854,7 +854,9 @@ class SpecializationCheck {
     };
     auto method = [&](const CallableReference &x, const CallableReference &y,
                       ArrayRef<Type> args, ArrayRef<Type> closedArgs) {
-      if (x.reference != y.reference || x.declaration.index >= source.size() ||
+      if (x.reference != y.reference ||
+          x.authoredReference != y.authoredReference ||
+          x.declaration.index >= source.size() ||
           !optionalType(x.module, y.module))
         return false;
       auto selected = arguments(args, subst, actual.span);

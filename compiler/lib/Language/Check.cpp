@@ -787,7 +787,8 @@ bool Checker::recordReference(const Declaration &owner, ReferenceRoute route,
            : std::nullopt,
        route,
        reference,
-       {node->second, route, written.str(), ordinal}});
+       {node->second, route, written.str(), ordinal},
+       site});
   return true;
 }
 bool Checker::retainAPI() {

@@ -247,6 +247,9 @@ struct CallableReference {
   DeclarationId declaration;
   std::optional<Type> module;
   ResolvedReference reference = {};
+  /// Construction projection's immutable authored occurrence. Inheritance and
+  /// specialization preserve this index even when dispatch changes declaration.
+  std::optional<uint32_t> authoredReference = {};
 };
 /// The tracked Local effects, also used as fixed callback acceptance ceilings.
 struct Effects {

@@ -122,6 +122,7 @@ add_zkc_component(Language
   lib/Language/Entries.cpp
   lib/Language/Constructions.cpp
   lib/Language/ConstructionCodecs.cpp
+  lib/Language/ConstructionWitness.cpp
   lib/Language/EntryBoundary.cpp
   lib/Language/EntrySetups.cpp
   lib/Language/Capabilities.cpp

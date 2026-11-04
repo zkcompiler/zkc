@@ -3,7 +3,7 @@
 #include "zkc/Language/Diagnostics.h"
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<ResolvedReference>
+std::optional<CallableReference>
 Checker::constructionMember(const Declaration &owner, const Type &provider,
                             StringRef name, Span span,
                             std::optional<ResolvedReference> selectedProvider) {
@@ -64,7 +64,24 @@ Checker::constructionMember(const Declaration &owner, const Type &provider,
       !recordReference(owner, ReferenceRoute::Construction, *reference, name,
                        span))
     return {};
-  return reference;
+  const auto &site =
+      referenceSite ? referenceSite : sources[owner.id.index]->referenceSite;
+  const auto node = referenceNodes.find(site);
+  if (node == referenceNodes.end()) {
+    types.fail("source.binding-witness", "missing construction reference node",
+               span);
+    return {};
+  }
+  const auto occurrence = recordedReferences.find(
+      std::make_tuple(owner.id.index, node->second.index,
+                      ReferenceRoute::Construction, name.str(), 0));
+  if (occurrence == recordedReferences.end()) {
+    types.fail("source.binding-witness", "missing construction occurrence",
+               span);
+    return {};
+  }
+  return CallableReference{member.target, provider, *reference,
+                           occurrence->second};
 }
 bool Checker::constructionCodec(Declaration &decl,
                                 const SyntaxConstruction &syntax,
@@ -90,7 +107,8 @@ bool Checker::constructionCodec(Declaration &decl,
           : std::nullopt);
   if (!member)
     return false;
-  auto record = types.associated(*provider, member->target, syntax.codec->span);
+  auto record =
+      types.associated(*provider, member->declaration, syntax.codec->span);
   if (!record || !types.executableType(*record, syntax.codec->span))
     return false;
   auto permissions = types.permissions(*record, decl.span, &decl);
@@ -140,7 +158,7 @@ bool Checker::constructionCodec(Declaration &decl,
             : std::nullopt);
     if (!found)
       return false;
-    const auto &function = output.declarations[found->target.index];
+    const auto &function = output.declarations[found->declaration.index];
     if (function.kind != Declaration::Kind::Local ||
         function.parameters.size() !=
             output.declarations[function.parent->index].parameters.size() ||
@@ -166,7 +184,7 @@ bool Checker::constructionCodec(Declaration &decl,
                             "codec method type differs: " + name.str(),
                             decl.span);
       }
-    selected.target = {found->target, *provider, *found};
+    selected.target = *found;
     for (const auto &parameter : function.parameters)
       selected.arguments.push_back(bindings->at(parameter.atom));
     return true;

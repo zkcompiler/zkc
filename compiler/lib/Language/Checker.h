@@ -233,7 +233,7 @@ private:
   bool constructionsReady = false;
   bool constructions();
   /// Select a provider's interface member and record its construction route.
-  std::optional<ResolvedReference>
+  std::optional<CallableReference>
   constructionMember(const Declaration &, const Type &, llvm::StringRef, Span,
                      std::optional<ResolvedReference> = {});
   bool constructionCodec(Declaration &, const SyntaxConstruction &,
