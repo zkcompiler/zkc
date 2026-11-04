@@ -242,7 +242,10 @@ int main() {
        {"m::Concrete", "m::Derived", "m::Layer", "m::ConcreteInherited"}) {
     cases.run(owner + " initializer provider forgery", [&] {
       mutation(owner, [](auto &plan, const auto &project) {
-        plan.initializer->reference.provider = named(project, "m").id;
+        auto replacement = named(project, "m::Front").id;
+        require(plan.initializer->reference.provider.index != replacement.index,
+                "initializer provider mutation must change its input");
+        plan.initializer->reference.provider = replacement;
       });
     });
     cases.run(
@@ -292,7 +295,11 @@ int main() {
       auto name = (owner + " codec slot " + Twine(slot)).str();
       cases.run(name + " provider forgery", [&] {
         mutation(owner, [&](auto &plan, const auto &project) {
-          method(plan, slot).target.reference.provider = named(project, "m").id;
+          auto replacement = named(project, "m::Front").id;
+          auto &provider = method(plan, slot).target.reference.provider;
+          require(provider.index != replacement.index,
+                  "codec provider mutation must change its input");
+          provider = replacement;
         });
       });
       cases.run(name + " compatible target and reference forgery", [&] {
