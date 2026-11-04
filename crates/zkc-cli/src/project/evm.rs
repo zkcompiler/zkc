@@ -19,6 +19,12 @@ fn options(args: &Arguments<'_>, compile: zkc::entry::CompileOptions) -> Result<
             .map_err(|e: zkc::evm::Error| e.to_string())?
             .unwrap_or_default(),
         compile,
+        limits: args
+            .value("--evm-limits")
+            .map(zkc::evm::Limits::read)
+            .transpose()
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default(),
     };
     if options.compile.release_storage {
         return Err("evm-option-unsupported".into());
@@ -84,6 +90,7 @@ pub(super) fn compile(args: &Arguments<'_>, source: &Source, report: &mut Json) 
     report["runtime_bytes"] = json!(artifact.runtime_bytecode().len());
     report["creation_bytes"] = json!(artifact.creation_bytecode().len());
     report["evm_version"] = json!(artifact.manifest().evm_version);
+    report["evm_limits"] = json!(metadata.limits());
     report["status"] = json!("compiled");
     report["phase"] = json!("complete");
     Ok(())
@@ -92,6 +99,91 @@ pub(super) fn compile(args: &Arguments<'_>, source: &Source, report: &mut Json) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn evm_limits_file_fills_defaults_only_in_sdk() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("limits.json");
+        let row = &zkc::evm_target::LIMITS[0];
+        std::fs::write(&path, json!({row.name: row.minimum}).to_string()).unwrap();
+        let args = Arguments {
+            positional: vec![],
+            options: vec![("--evm-limits", path.to_str())],
+        };
+        let selected = options(&args, super::super::ResolvedSettings::default().options()).unwrap();
+        assert_eq!(
+            selected.limits,
+            zkc::evm::Limits::default()
+                .with(row.name, row.minimum)
+                .unwrap()
+        );
+        let complete: Json = serde_json::from_str(&selected.limits.canonical_json()).unwrap();
+        assert_eq!(
+            complete.as_object().unwrap().len(),
+            zkc::evm_target::LIMITS.len()
+        );
+        // The file is captured into a value; later file changes cannot alter it.
+        std::fs::write(&path, "{}").unwrap();
+        assert_eq!(selected.limits.get(row.name), Some(row.minimum));
+        assert_eq!(
+            options(&args, super::super::ResolvedSettings::default().options())
+                .unwrap()
+                .limits,
+            zkc::evm::Limits::default()
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn invalid_evm_limits_refuse_before_spawning_compiler_or_solc() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let module = directory.path().join("sample.zkc");
+        std::fs::write(&module, "module sample;\n").unwrap();
+        let tool = directory.path().join("tool");
+        let marker = directory.path().join("spawned");
+        std::fs::write(
+            &tool,
+            format!("#!/bin/sh\ntouch '{}'\nexit 99\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let limits = directory.path().join("limits.json");
+        let args = vec![
+            "--target=evm".to_owned(),
+            "--source-format=zkc".to_owned(),
+            format!("--module=sample={}", module.display()),
+            format!("--compiler={}", tool.display()),
+            format!("--solc={}", tool.display()),
+            format!("--solc-sha256={}", "00".repeat(32)),
+            format!("--evm-limits={}", limits.display()),
+        ];
+        let report = crate::cli::run("compile", &args);
+        assert_eq!(report["code"], "evm-limits-read", "{report}");
+        let mut refused = vec![
+            "[]".to_owned(),
+            r#"{"unknown":1}"#.to_owned(),
+            r#"{"public_elements":1,"\u0070ublic_elements":2}"#.to_owned(),
+            r#"{"public_elements":1.0}"#.to_owned(),
+            r#"{"public_elements":1e0}"#.to_owned(),
+            r#"{"public_elements":-1}"#.to_owned(),
+            r#"{"public_elements":"1"}"#.to_owned(),
+            r#"{"public_elements":true}"#.to_owned(),
+            r#"{"public_elements":null}"#.to_owned(),
+            r#"{"public_elements":18446744073709551616}"#.to_owned(),
+        ];
+        for row in &zkc::evm_target::LIMITS {
+            for value in [row.minimum - 1, row.maximum + 1] {
+                refused.push(json!({row.name: value}).to_string());
+            }
+        }
+        for text in refused {
+            std::fs::write(&limits, &text).unwrap();
+            let report = crate::cli::run("compile", &args);
+            assert_eq!(report["code"], "evm-limits", "{text}: {report}");
+            assert!(!marker.exists(), "invalid limits started a tool: {text}");
+        }
+    }
 
     #[test]
     fn evm_shares_resolved_profile_and_request_options() {

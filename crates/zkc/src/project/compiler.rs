@@ -187,6 +187,7 @@ impl Compiler {
         }
         let mut flags = options.compile.flags().map_err(|e| e.to_string())?;
         flags.push(format!("--evm-version={}", options.fork.as_str()));
+        flags.push(format!("--evm-limits={}", options.limits.canonical_json()));
         let flags: Vec<_> = flags.iter().map(String::as_str).collect();
         let bytes = self.invoke(project, "language-evm", selection, &flags)?;
         let source = crate::evm::Source::capture(&bytes).map_err(|e| Error::from(e.to_string()))?;
@@ -195,6 +196,9 @@ impl Compiler {
         }
         if source.fork() != options.fork || source.options() != &options.compile {
             return Err("evm-source-options".into());
+        }
+        if source.limits() != &options.limits {
+            return Err("evm-source-limits".into());
         }
         Ok(source)
     }
@@ -724,8 +728,12 @@ mod tests {
         use std::{collections::BTreeMap, os::unix::fs::PermissionsExt};
 
         fn script(path: &Path, text: &str) {
-            std::fs::write(path, text).unwrap();
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+            // Replace the executable inode: a just-exited mock child may still
+            // hold its old script while the next selection is prepared.
+            let replacement = path.with_extension("next");
+            std::fs::write(&replacement, text).unwrap();
+            std::fs::set_permissions(&replacement, std::fs::Permissions::from_mode(0o700)).unwrap();
+            std::fs::rename(replacement, path).unwrap();
         }
 
         fn response(entry: &str) -> String {
@@ -747,6 +755,178 @@ mod tests {
             )
             .unwrap();
             (Compiler::new(path.to_str().unwrap()).unwrap(), project)
+        }
+
+        #[test]
+        fn evm_limits_requests_are_complete_and_forged_responses_refuse_before_adoption() {
+            use crate::evm::{Limits, Options, tests::source_record};
+            let directory = tempfile::tempdir().unwrap();
+            let (compiler, project) = fixture(directory.path(), "example::Proof");
+            let defaults = Options::default();
+            let mut requests = vec![defaults.clone()];
+            for row in &crate::evm_target::LIMITS {
+                if row.minimum < row.maximum {
+                    requests.push(Options {
+                        limits: Limits::default().with(row.name, row.minimum).unwrap(),
+                        ..Default::default()
+                    });
+                }
+            }
+            for options in &requests {
+                let mut record = source_record("example::Proof", "unchanged Yul");
+                record["limits"] = serde_json::json!(options.limits);
+                let flag = format!("--evm-limits={}", options.limits.canonical_json());
+                // Exactly one full inline object crosses the bounded adapter.
+                script(
+                    compiler.path(),
+                    &format!(
+                        "#!/bin/sh\ncount=0\nfor arg do\n case \"$arg\" in --evm-limits=*)\n [ \"$arg\" = '{flag}' ] || exit 8\n count=$((count+1));; esac\ndone\n[ \"$count\" = 1 ] || exit 9\nprintf '%s' '{record}'\n"
+                    ),
+                );
+                let direct = compiler
+                    .evm_source_from(&project, Selection::default(), options)
+                    .unwrap();
+                let sealed = compiler
+                    .evm_source(&project, Selection::default(), options)
+                    .unwrap();
+                assert_eq!(direct.bytes(), sealed.bytes());
+                assert_eq!(sealed.limits(), &options.limits);
+
+                // Both ignored lower requests and unsolicited lower defaults
+                // are valid Source objects, but not the requested selection.
+                let wrong = if options == &defaults {
+                    &requests[1]
+                } else {
+                    &defaults
+                };
+                record["limits"] = serde_json::json!(wrong.limits);
+                script(
+                    compiler.path(),
+                    &format!("#!/bin/sh\nprintf '%s' '{record}'\n"),
+                );
+                for result in [
+                    compiler.evm_source_from(&project, Selection::default(), options),
+                    compiler.evm_source(&project, Selection::default(), options),
+                ] {
+                    assert_eq!(result.unwrap_err().code, "evm-source-limits");
+                }
+            }
+
+            // A malformed compiler response still passes through the existing
+            // independent hostile reader, not the partial request parser.
+            let record = source_record("example::Proof", "forged limits");
+            let row = &crate::evm_target::LIMITS[0];
+            let mut malformed = Vec::new();
+            for wrong in [
+                serde_json::json!(row.maximum + 1),
+                serde_json::json!("1"),
+                serde_json::json!(null),
+            ] {
+                let mut forged = record.clone();
+                forged["limits"][row.name] = wrong;
+                malformed.push((forged.to_string(), "evm-source-limits"));
+            }
+            let mut missing = record.clone();
+            missing["limits"].as_object_mut().unwrap().remove(row.name);
+            malformed.push((missing.to_string(), "evm-source-limits"));
+            let mut unknown = record.clone();
+            unknown["limits"]["unknown"] = serde_json::json!(1);
+            malformed.push((unknown.to_string(), "evm-source-limits"));
+            let duplicate = record.to_string().replace(
+                "\"limits\":{",
+                &format!("\"limits\":{{\"{}\":{},", row.name, row.maximum),
+            );
+            malformed.push((duplicate, "evm-json"));
+            for (record, code) in malformed {
+                script(
+                    compiler.path(),
+                    &format!("#!/bin/sh\nprintf '%s' '{record}'\n"),
+                );
+                assert_eq!(
+                    compiler
+                        .evm_source(&project, Selection::default(), &defaults)
+                        .unwrap_err()
+                        .code,
+                    code
+                );
+            }
+        }
+
+        #[test]
+        fn evm_limit_mismatch_refuses_even_with_matching_reuse_artifact() {
+            use crate::evm::{
+                Options,
+                tests::{RESPONSE, fake_tool},
+            };
+            let directory = tempfile::tempdir().unwrap();
+            let (compiler, project) = fixture(directory.path(), "example::Proof");
+            let solc = fake_tool(directory.path(), RESPONSE);
+            let defaults = Options::default();
+            let artifact = compiler
+                .build_evm(&project, Selection::default(), &defaults, &solc, None)
+                .unwrap();
+            let row = crate::evm_target::LIMITS
+                .iter()
+                .find(|row| row.minimum < row.maximum)
+                .unwrap();
+            let lowered = Options {
+                limits: defaults.limits.clone().with(row.name, row.minimum).unwrap(),
+                ..defaults.clone()
+            };
+            // The compiler returns the default Source, which would match the
+            // reused artifact. Request/response comparison must refuse first.
+            for reuse in [None, Some(&artifact)] {
+                assert_eq!(
+                    compiler
+                        .build_evm(&project, Selection::default(), &lowered, &solc, reuse)
+                        .unwrap_err()
+                        .code,
+                    "evm-source-limits"
+                );
+            }
+            let mut record = crate::evm::tests::source_record(
+                "example::Proof",
+                "object \"Verifier\" { code {} }",
+            );
+            record["limits"] = serde_json::json!(lowered.limits);
+            script(
+                compiler.path(),
+                &format!("#!/bin/sh\nprintf '%s' '{record}'\n"),
+            );
+            assert_eq!(
+                compiler
+                    .build_evm(
+                        &project,
+                        Selection::default(),
+                        &lowered,
+                        &solc,
+                        Some(&artifact)
+                    )
+                    .unwrap_err()
+                    .code,
+                "evm-cache-key"
+            );
+            let selected = compiler
+                .build_evm(&project, Selection::default(), &lowered, &solc, None)
+                .unwrap();
+            assert_eq!(selected.source().unwrap().limits(), &lowered.limits);
+            let output = directory.path().join("lowered");
+            selected.publish(&output).unwrap();
+            let captured = crate::evm::Artifact::capture(&output, &selected.identity()).unwrap();
+            assert_eq!(captured.source().unwrap().limits(), &lowered.limits);
+            assert_eq!(
+                compiler
+                    .build_evm(
+                        &project,
+                        Selection::default(),
+                        &lowered,
+                        &solc,
+                        Some(&captured)
+                    )
+                    .unwrap()
+                    .identity(),
+                selected.identity()
+            );
         }
 
         #[test]

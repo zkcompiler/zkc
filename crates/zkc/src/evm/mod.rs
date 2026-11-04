@@ -2,9 +2,11 @@
 //! This module does not execute EVM bytecode and has no CPU runtime dependency.
 mod artifact;
 mod calldata;
+mod limits;
 mod solc;
 pub use artifact::{Artifact, Manifest};
 pub use calldata::Invocation;
+pub use limits::Limits;
 pub use solc::{Build, Solc};
 
 use serde_json::Value;
@@ -55,12 +57,14 @@ impl std::str::FromStr for EvmFork {
 pub struct Options {
     pub fork: EvmFork,
     pub compile: crate::entry::CompileOptions,
+    pub limits: Limits,
 }
 impl Default for Options {
     fn default() -> Self {
         Self {
             fork: EvmFork::default(),
             compile: crate::project::ResolvedSettings::default().options(),
+            limits: Limits::default(),
         }
     }
 }
@@ -359,6 +363,7 @@ pub struct Source {
     record: Value,
     fork: EvmFork,
     options: crate::entry::CompileOptions,
+    limits: Limits,
 }
 impl Source {
     pub fn capture(bytes: &[u8]) -> Result<Self> {
@@ -401,6 +406,7 @@ impl Source {
         let fork = record["fork"].as_str().ok_or("evm-fork")?.parse()?;
         let options = source_options(&record["options"])?;
         source_limits(&record["limits"])?;
+        let limits = Limits::from_source(&record["limits"]);
         for key in ["capture", "installation", "original", "compiler"] {
             if record[key]
                 .as_str()
@@ -415,6 +421,7 @@ impl Source {
             record,
             fork,
             options,
+            limits,
         })
     }
     pub fn bytes(&self) -> &[u8] {
@@ -438,6 +445,10 @@ impl Source {
     }
     pub fn options(&self) -> &crate::entry::CompileOptions {
         &self.options
+    }
+    /// Immutable effective deployment ceilings, independently checked on capture.
+    pub fn limits(&self) -> &Limits {
+        &self.limits
     }
 }
 

@@ -442,11 +442,38 @@ or EVM engine dependency. Compilation requires an explicit installed solc path
 and independent executable SHA-256 pin; no download or PATH substitution occurs.
 The declaration pins the solc release and its standard-JSON settings.
 `--evm-version` selects a declared fork, defaulting to the declared default. The
-typed SDK equivalent is `evm::Options { fork, compile }`. Effective common
+typed SDK equivalent is `evm::Options { fork, compile, limits }`. Effective common
 mathematical/oracle options flow through checked compilation and are bound into
 source and artifact identity; CPU storage and physical-target selections refuse.
 Exact standard-JSON settings are retained in `solc-input.json`. Reuse requires
-the same fork and options.
+the same fork, options and complete effective limits.
+
+`--evm-limits=FILE` reads a regular JSON file of at most 64 KiB. Its object may
+select a subset of the exact declared ceiling names, with decimal unsigned
+64-bit integer values within each row's inclusive minimum and maximum.
+Unknown names, duplicate decoded keys (including escaped spellings), negative,
+fractional, exponent, string, Boolean, null and out-of-range values refuse
+before a compiler process is started. An empty object selects all maxima.
+The SDK alone fills omitted names from its generated declaration rows.
+`evm::Limits::default()` selects those maxima; `Limits::with(name, value)`
+returns a validated changed selection, `Limits::parse(bytes)` accepts the
+partial object, and `Limits::read(path)` captures and parses the file. The
+selection has no public mutable map or unchecked deserializer.
+
+The SDK always sends one complete canonical object as inline
+`zkc-compile language-evm --evm-limits=JSON`, using the existing bounded command
+adapter. This compiler option is unique and EVM-only; its value is JSON, never
+a file path. If present, it must name every declared ceiling exactly once.
+The shared decoder uses the C++ API's existing range validator. Omitting the
+compiler option preserves the maxima. The SDK independently checks the returned
+Source, then requires its complete effective limits to equal the actual request
+before adopting it or considering artifact reuse. `Source::limits()` exposes
+the immutable validated selection. Exact `source.json` bytes bind every ceiling
+into artifact hashes and the existing build key, even when Yul or bytecode is
+identical. The CLI JSON report includes the effective object as `evm_limits`.
+Changing a selection requires compiling another deployment; the ABI accepts no
+per-call limit override. Native capacity, native VM fuel and EVM gas retain
+their existing meanings and settings.
 
 ### Source response
 
@@ -520,7 +547,7 @@ The compiler's EVM target refuses, in pipeline order:
 |---|---|
 | `evm.options` | A `language-evm` invocation with a CPU or observation option: `--cpu-target=`, `--dump=` or `--release-storage` |
 | `evm.fork` | `--evm-version=` on another command or given twice, or a fork name or selection that is not a declared fork |
-| `evm.limits` | A deployment ceiling outside its declared minimum and maximum |
+| `evm.limits` | A deployment ceiling outside its declared range, or a `--evm-limits=` option that is repeated, used on another language command, exceeds 64 KiB, is malformed/duplicate JSON or is not the complete exact object of declared unsigned integer ceilings |
 | `evm.source-limit` | An original over 16 MiB, empty, nested beyond the MLIR nesting limit or with a filename over 4,096 bytes, or a `zkc.evm-source/0` response over 16 MiB |
 | `evm.source` | An original that does not parse or is not admitted at its stage; the detail is the captured diagnostics |
 | `evm.entry` | A selected Entry that is not a checked proof Entry, a proof without exactly one native Boolean acceptance, or a lowered module without exactly one EVM entry function |
@@ -546,13 +573,15 @@ The SDK refuses, by phase:
 |---|---|
 | `evm-option-unsupported` | A CPU-only option on an EVM build: `--cache`, `--dump`, `--report` or `--release-storage`, a profile that releases storage, or `evm::Options` that release storage |
 | `evm-fork` | A fork spelling that is not a declared fork name, or a response `fork` that is not a string |
+| `evm-limits-read` | A limit selection file that cannot be captured as a regular file within 64 KiB |
+| `evm-limits` | A partial SDK/CLI selection with malformed/duplicate JSON, a nonobject, an unknown ceiling, a non-u64 integer token, an out-of-range value, or JSON beyond the byte/node/depth bound; also an invalid `Limits::with` name or value |
 | `evm-solc-required`, `evm-solc-pin-required` | A command-line EVM build without `--solc` or without `--solc-sha256` |
 | `evm-artifact-limit` | A compiler response, tool JSON or encoded file over 16 MiB |
 | `evm-json` | A response or tool document that is not bounded JSON: invalid, a duplicate key, a non-natural number, or beyond the node or depth limit |
 | `evm-source-format` | A response that is not an object with exactly the [source response](#source-response) members and formats, or with an empty `yul` or `entry` |
 | `evm-target-declaration` | A response whose `declaration` is not the installed declaration's identity |
 | `evm-source-options` | Response options that do not decode, release storage, or differ from the requested options or fork |
-| `evm-source-limits` | Response `limits` that do not name exactly the declared ceilings, or a ceiling outside its declared range; at call encoding, a missing or out-of-range ceiling |
+| `evm-source-limits` | Response `limits` that do not name exactly the declared ceilings, a ceiling outside its declared range, or effective limits that differ from the request; at call encoding, a missing or out-of-range ceiling |
 | `evm-source-identity` | A `capture`, `installation`, `original` or `compiler` that is not a SHA-256 digest, or public rows that do not name the validator and the policy's public ports in order |
 | `evm-source-descriptor` | A descriptor or policy outside the exact shape the target realizes, or a selection that is not the normalized requested oracle selection |
 | `evm-solc-path` | A solc path that cannot be canonicalized |

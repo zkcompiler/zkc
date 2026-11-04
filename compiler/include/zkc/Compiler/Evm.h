@@ -32,6 +32,11 @@ struct EvmLimits {
 #undef ZKC_EVM_LIMIT_MEMBER
 };
 
+/// Decode a complete effective selection from bounded inline JSON. Requires
+/// exactly the generated names and unique keys, then uses the same range
+/// validation as the C++ compilation API. Partial selections belong to the SDK.
+llvm::Expected<EvmLimits> parseEvmLimits(llvm::StringRef);
+
 struct EvmOptions {
   /// Explicit logical proof selection. Managed empty draws are selected by the
   /// common checker; the authored empty suite needs no draw selection.

@@ -337,6 +337,41 @@ artifact's fork as `--evm-version` to validation and capacity commands when it i
 not the declared default; a mismatch refuses before execution. `native_fixtures.py` accepts the same paired
 options for the complete matrix.
 
+### Lower deployment selections
+
+`limits_controls.py` uses the ordinary CLI's partial JSON file selection, the
+existing SDK `evm_native` artifact capture and `Artifact::calldata`, the
+independent Python ABI encoder and the uninstrumented deployed runner. Supply
+fresh tools and native fixtures from the same revision, and a fresh output
+directory; publication refuses an existing artifact directory.
+
+```sh
+python3 common/tests/evm/limits_controls.py \
+ --cli /path/to/zkc --compiler /path/to/zkc-compile \
+ --solc /path/to/solc --solc-sha256 EXPECTED_BINARY_SHA256 \
+ --native-driver /path/to/evm_native --runner /path/to/zkc-evm-test-runner \
+ --project examples/projects/sumcheck-keccak/zkc.toml \
+ --fixtures /fixtures --output /fresh/lower-limit-controls
+```
+
+The controls compile actual lower transcript (16, 15, 2, 1), element (16, 15)
+and memory (maximum minus one, minimum) selections. They require exact repeated
+outcomes and full primitive traces: completion at sixteen transitions, refusal
+before the final delivery with fifteen, source rejection before the next debit
+and an unread malformed later frame with two, and the earlier exhausted debit
+with one. Sixteen elements complete; fifteen refuse public admission before
+binding. Lower memory includes a completing deployment and an allocation
+refusal before binding. The minimum-memory case reaches the fixed root
+workspace allocation; it is not an independent measurement of peak memory.
+The reference receives a copy with the selected deployment transition ceiling,
+and the existing SDK driver actually verifies the identical proof with that
+logical transition allowance, checking its precise native refusal/decision.
+Original native fixture budgets and outcomes remain separate evidence.
+These cases do not identify EVM ceilings or gas with native VM fuel/capacity.
+
+The script builds no tools. Compiler/SDK/CLI tests and these deployed controls
+must be executed explicitly; their presence does not establish passing evidence.
+
 Pass the unmodified **binary** creation/runtime files to the execution helper; `--bytecode-format hex` is available for explicit hex files.
 
 ```sh

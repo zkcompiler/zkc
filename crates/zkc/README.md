@@ -449,11 +449,43 @@ fn compile_verifier(
 }
 ```
 
-`Options::default()` selects the declared default fork and the common compiler
-defaults. `fork` takes any `evm::EvmFork`, the forks of the
+`Options::default()` selects the declared default fork, common compiler
+defaults and every deployment ceiling at its declared maximum. `fork` takes any `evm::EvmFork`, the forks of the
 [target declaration](../../docs/spec/targets/evm.md#target-declaration) that
 `zkc::evm_target` projects; `compile` carries shared mathematical/oracle settings. The source response, solc request and authenticated
 artifact retain those effective selections.
+
+Use a validated `Limits` value to lower deployment ceilings:
+
+```rust,ignore
+use zkc::{evm::{Artifact, Limits, Options, Solc}, project::{Compiler, Project, Selection}};
+fn lower_verifier(
+    compiler: &Compiler, project: &Project, solc: &Solc,
+) -> Result<Artifact, Box<dyn std::error::Error>> {
+    let limits = Limits::default()
+        .with("public_elements", 16)?
+        .with("transcript_transitions", 16)?;
+    let options = Options { limits, ..Default::default() };
+    let selection = Selection { name: Some("example::Proof"), kind: None };
+    let artifact = compiler.build_evm(project, selection, &options, solc, None)?;
+    let source = artifact.source()?;
+    assert_eq!(source.limits(), &options.limits);
+    Ok(artifact)
+}
+```
+
+`Limits::parse(br#"{"public_elements":16}"#)` and `Limits::read("limits.json")`
+accept partial JSON objects and fill omitted values from the generated maxima.
+Exact names and inclusive ranges are available as `zkc::evm_target::LIMITS`.
+Unknown names, duplicate decoded keys, noninteger values and out-of-range values
+refuse before a compiler starts. `canonical_json()` exposes the complete sorted
+object sent inline to the compiler. The independent hostile Source reader
+requires a complete object and the compiler adapter compares every effective
+ceiling to the request before adoption or reuse. Source limits have no mutable
+accessor. Changing them requires another compilation, and every value affects
+artifact/build identity even when generated code is unchanged. Native capacity,
+VM fuel and EVM gas are separate controls. `Artifact::calldata` remains the
+canonical SDK encoder with the deployment's immutable byte ceilings.
 
 On Linux, EVM compilation executes sealed snapshots of the compiler and solc;
 the executable hash describes those exact bytes. Script interpreters and dynamic
