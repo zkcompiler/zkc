@@ -78,6 +78,38 @@ std::string chain(unsigned depth, bool diamond = false) {
   return source + "protocol Run roles(P,V)(flag:bool@(P,V))->(){let guard=h" +
          std::to_string(depth) + "(flag);if guard{()}else{()}return();}";
 }
+// Every Protocol retains a formation-demand edge, even though its child
+// results are unused. A demand-free Math diamond cannot exercise this path.
+std::string protocolDiamond(unsigned depth) {
+  std::string source = R"(module m
+protocol P0 roles(P,V)(x:bool @(P,V))->bool @(P,V):
+    if x:
+        ()
+    else:
+        ()
+    return x
+)";
+  for (unsigned i = 1; i <= depth; ++i) {
+    auto previous = "P" + std::to_string(i - 1);
+    source += "protocol P" + std::to_string(i) +
+              " roles(P,V)(x:bool @(P,V))->bool @(P,V):\n"
+              "    a <- " +
+              previous + "(x) @(P,V)\n    b <- " + previous +
+              "(x) @(P,V)\n    return x\n";
+  }
+  return source +
+         "pub protocol Run roles(P,V)(flag:bool @(P,V))->() @(P,V):\n"
+         "    result <- P" +
+         std::to_string(depth) + "(flag) @(P,V)\n    return ()\n";
+}
+const std::string inspectProtocol =
+    R"(protocol Inspect roles(A,B)(x:bool @(A,B))->bool @(A,B):
+    if x:
+        ()
+    else:
+        ()
+    return x
+)";
 std::string independent(unsigned bodySize, unsigned calls, unsigned roots) {
   std::string source = "module m;math fn helper(x:bool)->bool{";
   for (unsigned i = 0; i < bodySize; ++i)
@@ -132,6 +164,234 @@ int main() {
                 result.observation.applications <= 42,
             "diamond expanded its call tree");
   });
+  cases.run("demand-bearing Protocol diamonds share actual applications", [&] {
+    std::vector<uint64_t> costs;
+    for (unsigned depth : {12u, 24u, 36u}) {
+      auto project = take(check(protocolDiamond(depth), true));
+      auto result = derive(project);
+      exactInputs(result.rows, {0});
+      require(result.observation.instances == depth + 2 &&
+                  result.observation.applications == depth + 2 &&
+                  result.observation.applicationHits == depth &&
+                  result.observation.loopNamespaces == 0,
+              "formation demands expanded a Protocol application tree");
+      costs.push_back(result.work);
+      outs() << "Protocol diamond " << depth << ": work=" << result.work
+             << ", applications=" << result.observation.applications << '\n';
+    }
+    // Retained diagnostic paths can cost quadratically in depth. Equal depth
+    // increments must still stay far below the binary expansion recurrence.
+    require(costs[2] > costs[1] && costs[1] > costs[0] &&
+                costs[2] - costs[1] <= 3 * (costs[1] - costs[0]),
+            "demand-bearing diamond work exceeds polynomial growth gate");
+  });
+  cases.run("Protocol diamond reuse charges work and application ceilings",
+            [&] {
+              auto project = take(check(protocolDiamond(24), true));
+              Limits limits;
+              limits.operations = 26;
+              auto measured = derive(project, "Run", limits);
+              exactInputs(measured.rows, {0});
+              --limits.operations;
+              refuses(deriveCommonControlRequirements(
+                          project, named(project, "Run"), limits),
+                      "source.limit");
+              limits.operations = 26;
+              for (bool enough : {false, true}) {
+                uint64_t remaining = measured.work - unsigned(!enough);
+                source_detail::Work work{limits};
+                work.allowance = &remaining;
+                source_detail::CommonSummaryObservation observation;
+                auto rows = source_detail::deriveCommonSummaryRequirements(
+                    source_detail::DeclarationAccess::get(project),
+                    project.assets(), work, named(project, "Run"), observation);
+                require(observation.applicationHits == 24,
+                        "budget probe did not reach the diamond cache hits");
+                if (enough) {
+                  exactInputs(take(std::move(rows)), {0});
+                  require(remaining == 0 && work.used == measured.work,
+                          "demand-bearing reuse escaped cumulative work");
+                } else
+                  refuses(std::move(rows), "source.limit");
+              }
+            });
+  cases.run("closed Protocol diamond retains each concrete source inventory",
+            [&] {
+              auto project = take(check(protocolDiamond(4), true));
+              auto entry = take(closeNativeRun(project, "m::Run"));
+              unsigned protocols = 0;
+              for (const auto &decl : entry.declarations()) {
+                if (!isClosedConcreteProtocol(decl))
+                  continue;
+                ++protocols;
+                auto retained = take(entry.commonInputs(decl.id));
+                exactInputs(retained, {0});
+                Limits limits;
+                source_detail::Work work{limits};
+                source_detail::CommonSummaryObservation observation;
+                exactInputs(
+                    take(source_detail::deriveCommonSummaryRequirements(
+                        source_detail::DeclarationAccess::get(entry),
+                        entry.project().assets(), work, decl.id, observation)),
+                    {0});
+              }
+              require(protocols == 6,
+                      "closure lost a demand-bearing Protocol inventory");
+            });
+  cases.run("demand-bearing reuse distinguishes actual input bindings", [&] {
+    auto project = take(check(
+        inspectProtocol +
+            R"(protocol Pair roles(A,B)(x:bool @(A,B),y:bool @(A,B))->() @(A,B):
+    first <- Inspect(x) @(A,B)
+    second <- Inspect(y) @(A,B)
+    return ()
+pub protocol Run roles(P,V)(x:bool @(P,V),y:bool @(P,V))->() @(P,V):
+    first <- Pair(x,y) @(P,V)
+    second <- Pair(x,y) @(P,V)
+    return ()
+)",
+        true));
+    auto result = derive(project);
+    exactInputs(result.rows, {0, 1});
+    require(result.observation.applications == 4 &&
+                result.observation.applicationHits == 1,
+            "different actuals aliased or identical demand bindings expanded");
+  });
+  cases.run("demand-bearing reuse preserves ordered and selected roles", [&] {
+    auto project = take(check(
+        inspectProtocol +
+            R"(pub protocol Run roles(P,V,W)(x:bool @(P,V,W))->() @(P,V,W):
+    first <- Inspect(x) @(V,P)
+    sameSet <- Inspect(x) @(P,V)
+    second <- Inspect(x) @(P,W)
+    third <- Inspect(x) @(V,P)
+    return ()
+)",
+        true));
+    auto result = derive(project);
+    require(result.observation.applications == 4 &&
+                result.observation.applicationHits == 1 &&
+                result.rows.size() == 2,
+            "role-specific application bindings were conflated");
+    for (unsigned i = 0; i < result.rows.size(); ++i) {
+      const auto &row = result.rows[i];
+      require(row.components.size() == 2 && !row.tagOnly && !row.extentAxis,
+              "role demand facet or arity differs");
+      require(row.components[0].input == 0 && row.components[1].input == 0 &&
+                  row.components[0].path.empty() &&
+                  row.components[1].path.empty() &&
+                  row.components[0].role == (i == 0 ? 1u : 0u) &&
+                  row.components[1].role == (i == 0 ? 0u : 2u),
+              "shared demand lost its actual ordered role substitution");
+    }
+  });
+  cases.run("a valid demand cannot discharge a later received actual", [&] {
+    auto source = inspectProtocol +
+                  R"(pub protocol Run roles(P,V)(x:bool @(P,V))->() @(P,V):
+    warm <- Inspect(x) @(P,V)
+    received <- send x from P to V
+    both = @(P = x, V = received)
+    cold <- Inspect(both) @(P,V)
+    return ()
+)";
+    auto result = check(source, true);
+    require(!result, "received actual reused a successful formation demand");
+    std::optional<Diagnostic> diagnostic;
+    handleAllErrors(result.takeError(), [&](const DiagnosticError &error) {
+      diagnostic = error.diagnostic();
+    });
+    require(diagnostic && diagnostic->code == "source.common-provenance" &&
+                diagnostic->primary && !diagnostic->related.empty(),
+            "received demand lost its provenance diagnostic");
+    auto primary = *diagnostic->primary;
+    require(
+        StringRef(source).slice(primary.begin, primary.end).contains("if x"),
+        "diagnostic no longer identifies the authored control");
+    require(llvm::any_of(diagnostic->related,
+                         [&](Span span) {
+                           return StringRef(source)
+                               .slice(span.begin, span.end)
+                               .contains("Inspect(both)");
+                         }),
+            "diagnostic reused the warm call path for different actuals");
+  });
+  cases.run("transitive loops remain fresh across identical demand bindings",
+            [&] {
+              for (bool zero : {false, true}) {
+                auto source =
+                    R"(protocol Clock roles(A,B)(n:index @(A,B))->index @(A,B):
+    mut last = index<0>()
+    for i in 0..n roles(A,B) max 4:
+        last := i
+    return last
+protocol Relay roles(A,B)(n:index @(A,B))->() @(A,B):
+    clock <- Clock(n) @(A,B)
+    return ()
+pub protocol Run roles(P,V)(n:index @(P,V))->() @(P,V):
+)" + std::string(zero ? "    count = index<0>()\n" : "") +
+                    "    first <- Relay(" + (zero ? "count" : "n") +
+                    ") @(P,V)\n    second <- Relay(" + (zero ? "count" : "n") +
+                    ") @(P,V)\n    return ()\n";
+                auto result = derive(take(check(source, true)));
+                if (zero)
+                  require(result.rows.empty(),
+                          "constant zero loops acquired input premises");
+                else
+                  exactInputs(result.rows, {0});
+                require(result.observation.applications == 5 &&
+                            result.observation.loopNamespaces == 2,
+                        "transitive recurrence occurrences were shared");
+              }
+            });
+  for (bool local : {false, true})
+    cases.run(local ? "Local results retain opaque application occurrences"
+                    : "received results retain opaque application occurrences",
+              [&] {
+                auto source =
+                    std::string(local ? "local def identity(x:bool)->bool:\n"
+                                        "    return x\n"
+                                      : "") +
+                    inspectProtocol +
+                    "protocol Sample roles(A,B)(x:bool @(A,B))->bool @(A,B):\n"
+                    "    checked <- Inspect(x) @(A,B)\n" +
+                    (local ? "    bit:bool @B <- identity(x)\n"
+                           : "    bit <- send x from A to B\n") +
+                    "    if bit roles(B):\n        ()\n"
+                    "    else:\n        ()\n    return x\n"
+                    "protocol Relay roles(A,B)(x:bool @(A,B))->bool @(A,B):\n"
+                    "    result <- Sample(x) @(A,B)\n    return result\n"
+                    "pub protocol Run roles(P,V)(x:bool @(P,V))->() @(P,V):\n"
+                    "    first <- Relay(x) @(P,V)\n"
+                    "    second <- Relay(x) @(P,V)\n    return ()\n";
+                auto result = derive(take(check(source, true)));
+                exactInputs(result.rows, {0});
+                require(result.observation.applications == 6 &&
+                            result.observation.applicationHits == 1,
+                        "new opaque values lost their transitive occurrence "
+                        "boundary or prevented safe child reuse");
+              });
+  for (bool dormant : {false, true})
+    cases.run(dormant ? "shared calls preserve dormant received demands"
+                      : "shared calls preserve zero-trip received demands",
+              [&] {
+                auto source = inspectProtocol +
+                              "protocol Hidden roles(A,B)(x:bool @(A,B))"
+                              "->() @(A,B):\n" +
+                              (dormant ? "    if false:\n"
+                                       : "    for i in 0..index<0>() "
+                                         "roles(A,B) max 0:\n") +
+                              "        result <- Inspect(x) @(A,B)\n" +
+                              (dormant ? "    else:\n        ()\n" : "") +
+                              "    return ()\n"
+                              "pub protocol Run roles(P,V)(x:bool @(P,V))"
+                              "->() @(P,V):\n"
+                              "    received <- send x from P to V\n"
+                              "    both = @(P = x, V = received)\n"
+                              "    first <- Hidden(both) @(P,V)\n"
+                              "    second <- Hidden(both) @(P,V)\n"
+                              "    return ()\n";
+                refuses(check(source, true), "source.common-provenance");
+              });
   cases.run("unused helper work is constructed once across roots", [&] {
     std::vector<uint64_t> deltas;
     for (unsigned bodySize : {40u, 400u}) {

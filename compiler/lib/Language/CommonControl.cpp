@@ -105,6 +105,9 @@ struct CommonInstance {
   std::vector<CommonLoop> loops;
   std::vector<CommonDemand> demands;
   unsigned operands = 0, callHeight = 1, regionHeight = 1;
+  // Recurrence subjects and newly produced unknown values belong to a call
+  // occurrence. Propagate this conservatively through every retained edge,
+  // including unused results and dormant regions.
   bool fresh = false;
 };
 struct CommonCall {
@@ -249,6 +252,11 @@ class Requirements {
                    constantCount, std::move(statics)});
   }
   Node unknown(const Type &type) {
+    // Unknown is not a total expression: Local, received and service results
+    // must not acquire a shared identity merely because their inputs match.
+    // Forwarding an existing unknown formal does not mint a new occurrence.
+    if (building)
+      building->fresh = true;
     return node(Provenance::Kind::Unknown, type);
   }
   Node recipe(Provenance::Kind kind, const Type &type,
@@ -1147,7 +1155,10 @@ class Requirements {
       return {};
     }
     ApplicationKey key;
-    bool reusable = !instance->fresh && instance->demands.empty();
+    // Reuse the binding and its complete demand graph, never an agreement
+    // judgment. Exact actual origins, missing components and ordered roles
+    // distinguish callers. Occurrence-sensitive products remain unshared.
+    bool reusable = !instance->fresh;
     if (reusable) {
       std::vector<const Provenance *> nodes;
       for (const auto &components : operands) {
@@ -1164,6 +1175,10 @@ class Requirements {
       auto found = applications.find(key);
       if (found != applications.end()) {
         ++observation.applicationHits;
+        // The first occurrence already retained every formation demand with
+        // a valid source path. It will still be checked against these actuals;
+        // no successful premise is assumed here. Heights were checked above
+        // even when this edge reaches the binding at a different call depth.
         return found->second;
       }
     }
