@@ -292,6 +292,19 @@ ceiling at the declared default and lowered below a path's length. Envelope tran
 not establish cryptographic authentication. These are bounded differential
 controls, not a general EVM refinement proof.
 
+The wire controls also deploy `zkc-evm_wire-test --emit-tree-hex`, which calls
+the production `evm_tree_hex` runtime helper. They check the complete logical
+string header, lowercase hexadecimal payload and returned end offset against
+the independent logical-tree encoder. Cases include empty input, 15/16/17 and
+31/32/33-byte boundaries, every tail length, multiple bulk chunks, all byte
+values, and aligned/unaligned source and destination addresses. Nonzero input
+padding and output sentinels expose accidental dependence on trailing loaded
+bytes or writes beyond the exact output; full allocation snapshots also check
+that input, guards and allocation padding remain untouched. Input and output
+are disjoint, as in production: invocation rows and context are ABI-tail
+allocations separate from the bounded root buffer. Arbitrary overlapping
+buffers are outside this helper's caller invariant.
+
 ## Managed Keccak transcript controls
 
 With the same prepared compiler, native fixture driver, wire consumer, pinned
@@ -308,7 +321,7 @@ python3 common/tests/evm/transcript_controls.py \
 
 The explicit refusal codes are expectations from the target contract. They are
 never inferred from generated Yul, an engine result or a failed run. The default
-matrix covers quartic challenges, scalar indices, ordered index blocks, gated
+matrix covers quartic and octic challenges, scalar indices, ordered index blocks, gated
 CHECK and repeated occurrences, with real native producers and independently
 constructed complete hash traces. Every execution case requires two calls on
 the same deployment. The block matrix includes Q=128/129 with bound 256: all
@@ -349,6 +362,6 @@ native reports for compiled cases, source products and solc requests/artifacts
 remain under the output directory. Helper deployments have no compiled native
 proof, authenticated SDK artifact or natural sampler-exhaustion evidence.
 The maximum-count helper does not test compiled output compaction or lifetime.
-Refusal precedence, internal preflight atomicity, octic execution and an honest
-passing b=64 compiled proof remain outside these added controls. No native
+Refusal precedence, internal preflight atomicity and an honest passing b=64
+compiled proof remain outside these added controls. No native
 b=64 witness search is attempted.

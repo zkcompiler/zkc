@@ -212,6 +212,47 @@ void emitTranscriptBlock() {
 )YUL" << transcriptProbeHelpers()
          << "} } }\n";
 }
+void emitTreeHex() {
+  outs() << R"YUL(object "TreeHex" {
+  code {
+    datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
+    return(0, datasize("Runtime"))
+  }
+  object "Runtime" { code { {
+    let base := memoryguard(0x400)
+    mstore(0x40, base) mstore(0x200, base)
+    evm_calldata(0, 96)
+    let n := calldataload(0)
+    let sourceOffset := calldataload(32)
+    let destinationOffset := calldataload(64)
+    if or(gt(n, 4096), or(gt(sourceOffset, 31), gt(destinationOffset, 31))) {
+      evm_fault(90)
+    }
+    evm_calldata(96, add(n, 32))
+    // Separate allocations preserve the production non-overlap invariant.
+    let input := evm_alloc(add(n, 96))
+    let output := evm_alloc(add(add(9, mul(n, 2)), 96))
+    let limit := mload(0x40)
+    for { let p := input } lt(p, output) { p := add(p, 32) } {
+      mstore(p, 0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5)
+    }
+    for { let p := output } lt(p, limit) { p := add(p, 32) } {
+      mstore(p, 0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a)
+    }
+    let source := add(input, add(32, sourceOffset))
+    let destination := add(output, add(32, destinationOffset))
+    // Include caller-supplied nonzero bytes immediately after the input.
+    calldatacopy(source, 96, add(n, 32))
+    let end := evm_tree_hex(destination, source, n)
+    let size := sub(limit, input)
+    let result := evm_alloc(add(32, size))
+    mstore(result, sub(end, destination))
+    mcopy(add(result, 32), input, size)
+    return(result, add(32, size))
+  }
+)YUL" << evm::detail::runtimeHelpers(EvmLimits(), nullptr)
+         << "} } }\n";
+}
 void emitStore(MLIRContext &context, unsigned ceiling) {
   evm::NativeLayouts layouts(context);
   EvmLimits limits;
@@ -377,6 +418,15 @@ int main(int argc, char **argv) {
   registry.insert<evm::EvmDialect>();
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  if (argc == 2 && StringRef(argv[1]) == "--emit-tree-hex") {
+    try {
+      emitTreeHex();
+    } catch (const std::exception &failure) {
+      errs() << failure.what() << '\n';
+      return 1;
+    }
+    return 0;
+  }
   if (argc == 2 && StringRef(argv[1]) == "--emit-transcript-sampler") {
     try {
       emitTranscriptSampler();
