@@ -161,8 +161,8 @@ theorem context_eq : subject.selection.context = (Context.fiatShamir ("zkl_c0372
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 
-theorem original_export : subject.originalExport = ("sha256:56939f44b7084b9a929d7858dd0f5d85ef15d5486befff392fa0eab76f3eb756") := rfl
-theorem producer_export : subject.producerExport = ("sha256:7906c9ce135594427e53a157741d36b38d7aa26c82f937263902e4238ede3ef5") := rfl
-theorem validator_export : subject.validatorExport = ("sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec") := rfl
+theorem original_export : subject.originalExport = ("sha256:22db60d5e42b2a5a78aff7282b43e48ecb93b1d1a7ffddb23cadc6ebaaa82a2e") := rfl
+theorem producer_export : subject.producerExport = ("sha256:7773e8e729a9f5d6e30497791f245f726e0a72601b50b2a6835b7d3d591eb4bd") := rfl
+theorem validator_export : subject.validatorExport = ("sha256:2a65472a388ebca4ed47dcb1f7879a903b7a1c9f0f4dfe1b308f561b113b0e37") := rfl
 
 end ZkcSecurity.Realizations.Gkr.Generated.ABI

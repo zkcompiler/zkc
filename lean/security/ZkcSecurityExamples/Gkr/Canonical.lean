@@ -35,9 +35,9 @@ def subject (model : DomainModel) :
     ZkcSecurity.Claims.HonestPair.Subject model original imported selected := by
   bind_authored_subject "circuit_outputs" with_registry (Relations.registry model)
     connections ZkcExamples.Structured.Generated.Connections.Gkr.producer, ZkcExamples.Structured.Generated.Connections.Gkr.validator
-    exports "sha256:56939f44b7084b9a929d7858dd0f5d85ef15d5486befff392fa0eab76f3eb756",
-      "sha256:7906c9ce135594427e53a157741d36b38d7aa26c82f937263902e4238ede3ef5",
-      "sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec"
+    exports "sha256:22db60d5e42b2a5a78aff7282b43e48ecb93b1d1a7ffddb23cadc6ebaaa82a2e",
+      "sha256:7773e8e729a9f5d6e30497791f245f726e0a72601b50b2a6835b7d3d591eb4bd",
+      "sha256:2a65472a388ebca4ed47dcb1f7879a903b7a1c9f0f4dfe1b308f561b113b0e37"
 
 /- Complete raw views share the retained source schema for every carrier,
 including optional components and preparation data. Labels carry no authority. -/
