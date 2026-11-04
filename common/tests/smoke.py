@@ -31,7 +31,7 @@ def select_families(paths, root=ROOT):
     if paths is None:
         return all_families
     relevant = [path for path in paths if not path.endswith('.md') or
-                path.startswith(('examples/', 'libraries/'))]
+                path.startswith(('crates/', 'examples/', 'libraries/'))]
     if not relevant:
         return set()
     from project import project_inputs

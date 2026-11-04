@@ -20,6 +20,10 @@ for setting in 'sandbox true' 'sandbox-fallback false' 'max-jobs 1' 'cores 4'; d
     exit 1
   }
 done
+[[ " $(nix config show sandbox-paths) " == *" /var/cache/zkc-ccache=$ZKC_CI_ROOT/cache/ccache "* ]] || {
+  echo '::error::Configure the dedicated compiler cache before running CI.'
+  exit 1
+}
 df -h "$ZKC_CI_ROOT"
 # Keep all scratch data on the CI volume. Refuse before a build exhausts it.
 available=$(df -PB1 "$ZKC_CI_ROOT" | awk 'NR == 2 {print $4}')

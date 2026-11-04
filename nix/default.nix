@@ -30,10 +30,27 @@ let
   pythonTools = pythonSet.mkVirtualEnv "zkc-python-tools" workspace.deps.all;
   environment = import ./environment.nix { inherit pkgs llvm python; };
   sources = import ./sources.nix { inherit lib; };
+  # Put ccache inside Nix's compiler wrapper so it sees the actual expanded
+  # compiler flags, including hardening and dependency search paths.
+  compilerStdenv = pkgs.ccacheStdenv.override {
+    stdenv = llvm.stdenv;
+    extraConfig = ''
+      export CCACHE_CONFIGPATH=${./ccache.conf}
+      if [[ -d /var/cache/zkc-ccache ]]; then
+        test -w /var/cache/zkc-ccache
+        export CCACHE_DIR=/var/cache/zkc-ccache
+        export CCACHE_NAMESPACE=zkc-${builtins.hashString "sha256" (toString llvm.stdenv.cc)}
+        export CCACHE_STATSLOG="$TMPDIR/ccache-stats.log"
+      else
+        # The cache is an optional acceleration of the same package build.
+        export CCACHE_DISABLE=1
+      fi
+    '';
+  };
   compiler = pkgs.callPackage ./compiler.nix {
     inherit llvm utf8proc;
     source = sources.compiler;
-    stdenv = llvm.stdenv;
+    stdenv = compilerStdenv;
     python3 = python;
   };
   compilerChecks = compiler.override {
@@ -186,6 +203,10 @@ in
     rust-toolchain = rust;
     python-tools = pythonTools;
     compiler-sanitize = compilerSanitize;
+    compiler-cache-check = pkgs.callPackage ./checks/compiler-cache.nix {
+      stdenv = compilerStdenv;
+      python3 = python;
+    };
     compiler-domain-checks = domainCheck false;
     compiler-domain-shared-checks = domainCheck true;
     lean-checks = pkgs.callPackage ./checks/lean.nix {

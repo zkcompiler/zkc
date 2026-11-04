@@ -84,11 +84,20 @@ preserved by disabling that cleanup. Git credentials are not persisted.
   native compiler configuration. Cargo owns source, feature and dependency
   fingerprints. The all-features workspace, normal-feature benchmark tests and
   disabled execution collector remain three distinct required obligations.
+* C++ compilation uses Nixpkgs' ccache wrapper inside the normal compiler
+  wrapper, so dependency paths, hardening flags and toolchain identity are
+  included. The dedicated daemon mounts only its 20-GiB object cache at
+  `/var/cache/zkc-ccache`. Header, source and flag checks remain strict; no
+  sloppiness exceptions are enabled. Without that mount, ordinary developer
+  package builds use the same compiler with caching disabled. CI requires the
+  mount and prints per-build cache statistics.
 * C++ packages, the installed CLI, detached C++ and Rust SDK consumers, source
   boundaries, SDK discovery, formatting and selected valid/invalid protocol
   cases retain their Nix checks. Only identical derivation inputs reuse a
   successful result. A changed C++ package rebuilds; this is package reuse,
-  not persistent Ninja object reuse or reuse of a developer build tree.
+  not persistent Ninja build-tree reuse. Changed packages can reuse unchanged
+  compilation results through ccache; installation and affected consumer
+  checks still run.
 * The signed upstream binary cache supplies dependencies. The private local
   store retains project outputs without uploading them to a second cache
   service. `cache` runs the main scope, then verifies reuse with both local
@@ -99,8 +108,15 @@ preserved by disabling that cleanup. Git credentials are not persisted.
   per-attempt derivation input. Each package consumes its newly built parent,
   and source builds retain the no-Lake-cache policy. Only this explicit mode
   changes package identity to prevent output reuse; ordinary jobs retain
-  content-addressed input identities. It does not delete the store or impose
+  input-based derivation identities. It does not delete the store or impose
   bit-for-bit reproducibility on outputs that contain test timing records.
+
+Before Rust unit checks, CI compares the base and head identities of the
+Nix Rust check and the development shell. Only identical declared inputs
+permit skipping that independent step. Changed Rust sources, embedded crate
+Markdown, shared catalog data, fixtures, toolchains or invocation inputs select
+it again. Unavailable comparisons run it conservatively. This does not skip
+installed consumers or the selected compiler/runtime protocol checks.
 
 Automatic quick and native jobs run sequentially on the sole runner. Expensive
 manual main/formal/adapter scopes remain explicit. Test reports and logs are
@@ -108,6 +124,30 @@ uploaded per run; cached objects are not evidence that a new check ran.
 The Nix store may collect unrooted outputs under disk pressure. Mutable Cargo
 caches require occasional operator cleanup while the runner is idle; they
 cannot consume a developer cache and are not deleted by a workflow.
+
+## Enable the compiler cache on an existing runner
+
+The installer configures this cache on new installations. To update the existing
+CI daemon, wait until the runner is idle, then run:
+
+```sh
+sudo bash .github/runner/configure-cache.sh /ethereum/zkc-ci restart
+```
+
+This needs no registration token. It creates the CI-owned cache, adds its one
+sandbox mount and restarts the dedicated services. It does not change host Nix,
+developer caches or resource budgets, and refuses while a runner worker is
+active. Administrative sudo is needed because daemon configuration and mount
+permissions are root-owned.
+
+The manual `compiler-cache` workflow scope exercises source/header/compiler-flag
+invalidation, compilation failures and Nix wrapper flags. It measures two actual
+one-file compiler changes in a disposable Git worktree, validates installed
+consumers and all compact protocol families for each, and compares an uncached
+compiler build on the same source. Rust input equality is checked at each
+mutation. The original PR source stays unchanged; timings and logs are uploaded.
+This explicit experiment is separate from ordinary PR validation. Times are
+observations under the fixed resource budget, not general performance guarantees.
 
 ## Required checks and acceptance
 

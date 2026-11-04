@@ -21,7 +21,7 @@ def main():
     else:
         paths = subprocess.check_output(
             ["git", "diff", "--name-only", base, os.environ["HEAD"]], text=True).splitlines()
-    selected = any((not path.endswith(".md") or path.startswith(('examples/', 'libraries/'))) and re.match(
+    selected = any((not path.endswith(".md") or path.startswith(('crates/', 'examples/', 'libraries/'))) and re.match(
         r"^(compiler/|crates/|libraries/|examples/|common/|nix/|scripts/|zkc\.workspace\.toml$|Cargo\.|rust-toolchain|pyproject\.toml|uv\.lock|flake\.|justfile|\.clang-format|\.github/)", path)
         for path in paths)
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:

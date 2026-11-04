@@ -2,6 +2,7 @@
 # Install or resume this server's runner. Read a registration token on stdin.
 set -euo pipefail
 
+installer_dir=$(dirname "$(readlink -f "$0")")
 ci_root=${1:-/ethereum/zkc-ci}
 [[ $EUID == 0 ]] || { echo 'Run this installer with sudo.' >&2; exit 1; }
 [[ $ci_root =~ ^/[-a-zA-Z0-9_/]+$ && $ci_root != / ]] || exit 1
@@ -72,6 +73,7 @@ substituters = https://cache.nixos.org
 min-free = 21474836480
 max-free = 42949672960
 EOF
+bash "$installer_dir/configure-cache.sh" "$ci_root"
 
 if [[ ! -x $ci_root/runner/config.sh ]]; then
   archive="$ci_root/admin/runner.tar.gz"

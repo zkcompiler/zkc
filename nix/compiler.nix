@@ -3,6 +3,7 @@
   stdenv,
   cmake,
   ninja,
+  ccache,
   python3,
   llvm,
   utf8proc,
@@ -35,6 +36,11 @@ stdenv.mkDerivation {
     "-DMLIR_TABLEGEN_EXE=${llvm.tblgen}/bin/mlir-tblgen"
     "-DBUILD_TESTING=${if withTests then "ON" else "OFF"}"
   ];
+  postBuild = ''
+    if [[ -f "$TMPDIR/ccache-stats.log" ]]; then
+      CCACHE_STATSLOG="$TMPDIR/ccache-stats.log" ${ccache}/bin/ccache --show-log-stats
+    fi
+  '';
   # Full validation and integration helpers share checks.compiler.
   doCheck = withTests;
   postInstall = lib.optionalString withTests ''
