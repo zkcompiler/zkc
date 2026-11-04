@@ -119,6 +119,15 @@ private:
   }
   std::optional<std::string> unit(StringRef path) const {
     auto id = project.declarationIndex().canonical(path);
+    if (!id) {
+      // Reports identify anonymous construction handlers too. They are checked
+      // declarations, but deliberately have no source-resolvable namespace key.
+      auto owner = llvm::find_if(project.declarations(), [&](const auto &decl) {
+        return decl.anonymous && decl.qualifiedName == path;
+      });
+      if (owner != project.declarations().end())
+        id = owner->id;
+    }
     require(id.has_value(), "recorded declaration is not checked: " + path);
     return unit(*id);
   }

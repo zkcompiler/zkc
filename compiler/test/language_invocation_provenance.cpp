@@ -742,9 +742,9 @@ protocol Run roles(V)(coins:facade::Random<F>@V)->(){let a=coins.draw();return (
           require(owner != project.declarations().end(),
                   "missing facade query owner");
           auto method = project.declarationIndex().lookup(
-              SourceAccess{owner->id}, "other::Coins::draw");
+              SourceAccess{owner->id}, "other::Random::draw");
           auto constructor = project.declarationIndex().lookup(
-              SourceAccess{owner->id}, "other::Coins");
+              SourceAccess{owner->id}, "other::Random");
           require(std::holds_alternative<ResolvedReference>(method) &&
                       std::holds_alternative<ResolvedReference>(constructor),
                   "missing alternate facade path");
