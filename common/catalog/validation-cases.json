@@ -209,7 +209,7 @@
           "op": "insert",
           "value": {
             "owner": "zkc::prelude",
-            "symbol": "⋅",
+            "symbol": "\u22c5",
             "fixity": null,
             "target": "field_multiply",
             "public": true
@@ -290,6 +290,108 @@
           "value": [
             "Scalar"
           ]
+        }
+      ]
+    },
+    {
+      "name": "source constructor and method renaming preserves nominal ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "service.random"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "OpenService"
+        },
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "service.random"
+          },
+          "path": [
+            "owner"
+          ],
+          "value": "zkc::services"
+        },
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "sample"
+        }
+      ]
+    },
+    {
+      "name": "method identities are explicit rather than derived from owner and name",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": "installed.sample"
+        }
+      ]
+    },
+    {
+      "name": "different service constructors may declare the same method name",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "insert",
+          "value": {
+            "identity": "service.other",
+            "owner": "zkc::services",
+            "name": "OtherService",
+            "kind": "Interface",
+            "statics": [
+              {
+                "name": "F",
+                "parameter": {
+                  "kind": "Domain",
+                  "sort": "Field"
+                }
+              }
+            ],
+            "inputs": [],
+            "output": null,
+            "association": {
+              "kind": "rule",
+              "target": "RandomConstructor"
+            },
+            "prelude": false
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "insert",
+          "value": {
+            "identity": "other.sample",
+            "constructor": "service.other",
+            "name": "draw",
+            "signature": "RandomDraw",
+            "capability": ""
+          }
         }
       ]
     }
@@ -5735,7 +5837,7 @@
               "kind": "primitive",
               "target": "field.add"
             },
-            "implicit": false
+            "prelude": false
           }
         }
       ],
@@ -5938,6 +6040,276 @@
         "generator": "service method capability mismatch",
         "native": "service method capability mismatch",
         "rust": "service method capability mismatch"
+      }
+    },
+    {
+      "name": "unknown service method constructor",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "service.unknown"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid service method constructor",
+        "native": "invalid service method constructor",
+        "rust": "invalid service method constructor"
+      }
+    },
+    {
+      "name": "ordinary declaration cannot own service methods",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "prelude.field_add"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid service method constructor",
+        "native": "invalid service method constructor",
+        "rust": "invalid service method constructor"
+      }
+    },
+    {
+      "name": "nonservice rule cannot own service methods",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "record.unpack"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid service method constructor",
+        "native": "invalid service method constructor",
+        "rust": "invalid service method constructor"
+      }
+    },
+    {
+      "name": "an unrelated Interface named Random is not a service constructor",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendRules",
+          "op": "insert",
+          "value": {
+            "name": "OtherInterface",
+            "kind": "Interface",
+            "statics": [
+              {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            ],
+            "inputs": [],
+            "output": null
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "insert",
+          "value": {
+            "identity": "service.unrelated",
+            "owner": "zkc::services",
+            "name": "Random",
+            "kind": "Interface",
+            "statics": [
+              {
+                "name": "F",
+                "parameter": {
+                  "kind": "Domain",
+                  "sort": "Field"
+                }
+              }
+            ],
+            "inputs": [],
+            "output": null,
+            "association": {
+              "kind": "rule",
+              "target": "OtherInterface"
+            },
+            "prelude": false
+          }
+        },
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "constructor"
+          ],
+          "value": "service.unrelated"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid service method constructor",
+        "native": "invalid service method constructor",
+        "rust": "invalid service method constructor"
+      }
+    },
+    {
+      "name": "service method identity collides with a frontend declaration",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": "record.unpack"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate service method identity",
+        "native": "duplicate service method identity",
+        "rust": "duplicate service method identity"
+      }
+    },
+    {
+      "name": "service method identity collides with another method",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": "service.random.index"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate service method identity",
+        "native": "duplicate service method identity",
+        "rust": "duplicate service method identity"
+      }
+    },
+    {
+      "name": "empty service method identity",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": ""
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate service method identity",
+        "native": "duplicate service method identity",
+        "rust": "duplicate service method identity"
+      }
+    },
+    {
+      "name": "duplicate constructor and method name with distinct identities",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "insert",
+          "value": {
+            "identity": "another.sample",
+            "constructor": "service.random",
+            "name": "draw",
+            "signature": "RandomDraw",
+            "capability": ""
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate service method",
+        "native": "invalid or duplicate service method",
+        "rust": "invalid or duplicate service method"
+      }
+    },
+    {
+      "name": "duplicate complete service method row is refused by identity first",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "duplicate",
+          "where": {
+            "identity": "service.random.draw"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate service method identity",
+        "native": "duplicate service method identity",
+        "rust": "duplicate service method identity"
+      }
+    },
+    {
+      "name": "invalid service method name",
+      "rule": "nominal service method ownership",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "serviceMethods",
+          "op": "set",
+          "where": {
+            "identity": "service.random.draw"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "not.a.name"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid service method",
+        "native": "invalid or duplicate service method",
+        "rust": "invalid or duplicate service method"
       }
     }
   ]

@@ -8,6 +8,7 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <tuple>
 
 using namespace llvm;
 using namespace zkc::language;
@@ -56,18 +57,25 @@ public:
       for (const auto &dependency : *unit.getArray("dependencies"))
         dependencies.insert(dependency.getAsString()->str());
     }
-    std::set<std::string> occurrences;
+    std::set<
+        std::tuple<uint32_t, uint32_t, zkc::language::detail::ReferenceRoute,
+                   std::string, uint32_t>>
+        occurrences;
+    for (const auto &record :
+         zkc::language::detail::DeclarationAccess::storage(project)
+             .api.references) {
+      const auto &position = record.position;
+      if (!occurrences
+               .emplace(record.owner.index, position.node.index, position.kind,
+                        position.slot, position.ordinal)
+               .second)
+        return "owner " +
+               project.declarations()[record.owner.index].qualifiedName +
+               " records one reference position twice";
+    }
     for (const auto &item : *report.getArray("declarations")) {
       const auto &record = *item.getAsObject();
       records.push_back(&record);
-      std::string key;
-      for (StringRef field : {"owner", "route", "written"})
-        key += record.getString(field)->str() + '|';
-      key += zkc::printJson(*record.get("target")) + '|' +
-             zkc::printJson(*record.get("source"));
-      if (!occurrences.insert(key).second)
-        return "owner " + record.getString("owner")->str() +
-               " records one route twice: " + key;
     }
     if (auto failure = checkDependencies(); !failure.empty())
       return failure;
@@ -111,6 +119,15 @@ private:
   }
   std::optional<std::string> unit(StringRef path) const {
     auto id = project.declarationIndex().canonical(path);
+    if (!id) {
+      // Reports identify anonymous construction handlers too. They are checked
+      // declarations, but deliberately have no source-resolvable namespace key.
+      auto owner = llvm::find_if(project.declarations(), [&](const auto &decl) {
+        return decl.anonymous && decl.qualifiedName == path;
+      });
+      if (owner != project.declarations().end())
+        id = owner->id;
+    }
     require(id.has_value(), "recorded declaration is not checked: " + path);
     return unit(*id);
   }
@@ -147,8 +164,7 @@ private:
       auto name = [&](StringRef field) {
         return *record->getObject(field)->getString("name");
       };
-      if (record->get("abstract_module")->kind() == json::Value::Null)
-        depend(owner, unit(name("provider")));
+      depend(owner, unit(name("provider")));
       depend(owner, unit(name("target")));
     }
     for (const auto &[module, dependencies] : derived) {
@@ -172,9 +188,19 @@ private:
     for (const auto &argument : type.arguments)
       walkType(argument, reach);
   }
+  void walkReference(const ResolvedReference &reference, const Reach &reach,
+                     StringRef why) const {
+    reach(reference.provider, why);
+    reach(reference.target, why);
+    for (const auto &step : reference.path)
+      reach(step.owner, why);
+    if (reference.abstract)
+      walkType(reference.abstract->module, reach);
+  }
   void walkCallable(const CallableReference &target, const Reach &reach,
                     StringRef why) const {
     reach(target.declaration, why);
+    walkReference(target.reference, reach, why);
     if (target.module)
       walkType(*target.module, reach);
   }
@@ -185,8 +211,10 @@ private:
   void walkBody(const Body &body, const Reach &reach) const {
     for (const auto &value : body.values)
       walkType(value.type, reach);
-    for (const auto &service : body.services)
+    for (const auto &service : body.services) {
       walkType(service.field, reach);
+      walkReference(service.constructor, reach, "service constructor");
+    }
     for (const auto &domain : body.domainBindings) {
       walkType(domain.item, reach);
       if (domain.factory)
@@ -240,8 +268,10 @@ private:
     for (const auto *ports : {&decl.inputs, &decl.outputs})
       for (const auto &port : *ports)
         walkType(port.type, reach);
-    for (const auto &service : decl.services)
+    for (const auto &service : decl.services) {
       walkType(service.field, reach);
+      walkReference(service.constructor, reach, "service constructor");
+    }
     for (const auto &parameter : decl.parameters) {
       if (parameter.interface)
         reach(*parameter.interface, "parameter bound");
@@ -600,9 +630,11 @@ int main() {
     storage.declarations.push_back(record);
     storage.sources = std::make_shared<std::vector<SourceBuffer>>(
         std::vector<SourceBuffer>{{"m", "module m;", "m.zkc"}});
-    storage.declarationIndex = std::make_shared<DeclarationIndex>(
-        storage.declarations, *storage.sources,
-        std::vector<DeclarationIndex::Namespace>(1));
+    auto index = std::make_shared<DeclarationIndex>();
+    require(index->add(record, SourceOrigin::Captured),
+            "failed to index fixture");
+    index->finish(storage.declarations, *storage.sources);
+    storage.declarationIndex = std::move(index);
     refuses(zkc::language::detail::definingAuthority(storage, "m::Secret"),
             "source.authority");
   });
@@ -673,6 +705,52 @@ int main() {
     only(report, "facade", "import-name", "lower::Hidden::combine");
     require(crossCheck(facade).empty(), "facade capture fails cross-check");
   });
+  cases.run(
+      "managed method references preserve import-free facade providers", [] {
+        auto sources = [](StringRef comment) {
+          return std::vector<SourceBuffer>{
+              {"facade",
+               "module facade;pub use zkc::prelude::{Random};" + comment.str(),
+               "facade.zkc"},
+              {"client",
+               R"(module client;domain F=field("koala-bear.ext4-binomial3");
+protocol Run roles(V)(coins:facade::Random<F>@V)->(){
+ let alias=coins;let a=alias.draw();let b=alias.index<8>();let c=alias.indices(8,3);return ();})",
+               "client.zkc"}};
+        };
+        auto project = check(sources(""));
+        auto report = bindings(project);
+        auto constructor =
+            project.declarationIndex().canonical("zkc::prelude::Random");
+        require(bool(constructor), "missing installed constructor");
+        for (const auto &row : zkc::protocol::serviceMethodDeclarations()) {
+          if (row.constructor !=
+              project.declarationIndex().association(*constructor)->identity)
+            continue;
+          auto selected = project.declarationIndex().member(
+              SourceAccess{*constructor}, *constructor, row.name);
+          auto *reference = std::get_if<ResolvedReference>(&selected);
+          require(reference &&
+                      reference->category == ResolutionCategory::ServiceMethod,
+                  "managed row was not installed as an indexed member");
+          const auto &target = project.declarations()[reference->target.index];
+          const auto *record =
+              only(report, "client::Run", "method", target.qualifiedName);
+          require(record->getObject("provider")->getString("name") == "facade",
+                  "managed method lost its facade provider");
+        }
+        require(crossCheck(project).empty(),
+                "managed facade references fail authority cross-check");
+        require(revision(project, "client") !=
+                    revision(check(sources("// changed facade")), "client"),
+                "managed facade dependency was omitted");
+        auto unrelated = sources("");
+        unrelated.push_back(
+            {"unrelated", "module unrelated;", "unrelated.zkc"});
+        require(revision(project, "client") ==
+                    revision(check(unrelated), "client"),
+                "unrelated capture changed managed client authority");
+      });
   cases.run("a discarded lookup records nothing", [] {
     // A data port's type is resolved once by its signature; service
     // classification probes the same name without recording it.
@@ -721,6 +799,36 @@ int main() {
     require(StringRef(failure).contains("no notation route"),
             "a dropped notation route was not detected: " + failure);
   });
+  for (auto route : {zkc::language::detail::ReferenceRoute::Notation,
+                     zkc::language::detail::ReferenceRoute::Construction})
+    cases.run(
+        "independent replay requires retained non-call routes " +
+            Twine(unsigned(route)),
+        [&] {
+          const bool notation =
+              route == zkc::language::detail::ReferenceRoute::Notation;
+          auto project =
+              notation
+                  ? check({{"written", notationModule.str(), "written.zkc"}})
+                  : check({{"m", constructionModule.str(), "m.zkc"}});
+          if (auto error = checkScopedElaboration(project))
+            throw std::runtime_error(toString(std::move(error)));
+          auto &storage = const_cast<zkc::language::detail::CheckedStorage &>(
+              zkc::language::detail::DeclarationAccess::storage(project));
+          auto found =
+              llvm::find_if(storage.api.references, [&](const auto &record) {
+                return record.route == route;
+              });
+          require(found != storage.api.references.end(),
+                  "missing positive-control route");
+          storage.api.references.erase(found);
+          auto error = checkScopedElaboration(project);
+          require(bool(error),
+                  "removed non-call route passed independent replay");
+          auto message = toString(std::move(error));
+          require(namesIdentifier(message, "source.binding-witness"),
+                  "wrong replay refusal: " + message);
+        });
   cases.run("every maintained package and fixture records complete routes", [] {
     unsigned packages = 0, fixtures = 0;
     for (const auto &inputs : maintainedInputs()) {

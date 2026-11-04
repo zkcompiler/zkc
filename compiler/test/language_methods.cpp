@@ -703,6 +703,9 @@ protocol Run roles(P)(values:zkc::vector::Vector<F>@P)->(out:index@P){let n@P=re
                                 "zkc::primitives::vector::length")
                               .id.index,
                   "builtin forwarding selected an unrelated declaration");
+          require(call->binding->target.reference.provider.index ==
+                      named(project.declarations(), "zkc::vector").id.index,
+                  "builtin forwarding lost its selected home provider");
           take(prepareOriginal(take(closeNativeRun(project, "m::Run"))));
         }
       });

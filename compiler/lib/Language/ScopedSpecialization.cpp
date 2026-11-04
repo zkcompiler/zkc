@@ -264,6 +264,7 @@ class SpecializationCheck {
     for (unsigned i = 0; i < original.services.size(); ++i)
       if (actual.services[i].name != original.services[i].name ||
           actual.services[i].owner != original.services[i].owner ||
+          actual.services[i].constructor != original.services[i].constructor ||
           !typeEqual(original.services[i].field, actual.services[i].field,
                      subst, original.services[i].span))
         return refuse(original.services[i].span);
@@ -282,6 +283,7 @@ class SpecializationCheck {
         auto statics = arguments(a.arguments, subst, op.span);
         if (!statics || *statics != b.arguments ||
             a.target.declaration.index != b.target.declaration.index ||
+            a.target.reference != b.target.reference ||
             !same(b.operands, mapped(a.operands)) || a.symbol != b.symbol ||
             a.family != b.family || a.scopedSource != b.scopedSource ||
             a.argumentOrder != b.argumentOrder || a.roles != b.roles ||
@@ -360,17 +362,11 @@ class SpecializationCheck {
           auto module = type(*call->module, subst, op.span);
           if (!module)
             return false;
-          const auto *definition = types.typeDeclaration(*module);
-          if (!definition || definition->kind != Declaration::Kind::Module ||
-              !types.charge(definition->members.size(), op.span))
-            return refuse(op.span, "finite module selection differs");
-          auto member = llvm::find_if(definition->members, [&](auto id) {
-            return source[id.index].name == source[target.index].name;
-          });
-          if (member == definition->members.end())
-            return refuse(op.span, "finite module member differs");
-          target = *member;
-          *statics = module->arguments;
+          auto selected = types.dispatch(*module, target, *statics, op.span);
+          if (!selected)
+            return false;
+          target = selected->declaration;
+          *statics = std::move(selected->arguments);
         }
         const auto &definition = source[target.index];
         if (definition.kind != Declaration::Kind::Math || definition.abstract ||
@@ -482,21 +478,12 @@ class SpecializationCheck {
                   auto module = type(*action.module, subst, op.span);
                   if (!module || *module != *value.module)
                     return false;
-                  auto *definition = types.typeDeclaration(*module);
-                  if (!definition ||
-                      definition->kind != Declaration::Kind::Module)
+                  auto selected =
+                      types.dispatch(*module, target, *statics, op.span);
+                  if (!selected)
                     return false;
-                  bool found = false;
-                  for (auto member : definition->members)
-                    if (source[member.index].name ==
-                        source[target.index].name) {
-                      target = member;
-                      *statics = module->arguments;
-                      found = true;
-                      break;
-                    }
-                  if (!found)
-                    return false;
+                  target = selected->declaration;
+                  *statics = std::move(selected->arguments);
                 }
               }
               if constexpr (std::is_same_v<T, HelperCall>) {
@@ -867,7 +854,9 @@ class SpecializationCheck {
     };
     auto method = [&](const CallableReference &x, const CallableReference &y,
                       ArrayRef<Type> args, ArrayRef<Type> closedArgs) {
-      if (x.declaration.index >= source.size() ||
+      if (x.reference != y.reference ||
+          x.authoredReference != y.authoredReference ||
+          x.declaration.index >= source.size() ||
           !optionalType(x.module, y.module))
         return false;
       auto selected = arguments(args, subst, actual.span);
@@ -876,18 +865,14 @@ class SpecializationCheck {
       auto target = x.declaration;
       if (x.module) {
         auto bound = type(*x.module, subst, actual.span);
-        auto *owner = bound ? types.typeDeclaration(*bound) : nullptr;
-        if (!owner || owner->kind != Declaration::Kind::Module ||
-            !types.charge(owner->members.size(), actual.span))
+        if (!bound)
           return false;
-        auto found = llvm::find_if(owner->members, [&](DeclarationId member) {
-          return source[member.index].name == source[target.index].name;
-        });
-        if (found == owner->members.end() ||
-            ArrayRef<Type>(bound->arguments) != closedArgs)
+        auto dispatched =
+            types.dispatch(*bound, target, *selected, actual.span);
+        if (!dispatched)
           return false;
-        target = *found;
-        *selected = bound->arguments;
+        target = dispatched->declaration;
+        *selected = std::move(dispatched->arguments);
       }
       if (ArrayRef<Type>(*selected) != closedArgs)
         return false;
@@ -1301,13 +1286,18 @@ public:
 } // namespace
 } // namespace zkc::language::detail
 namespace zkc::language {
-llvm::Error checkScopedSpecialization(const ClosedEntry &entry,
-                                      const Limits &limits) {
+llvm::Error
+checkScopedSpecialization(const ClosedEntry &entry, const Limits &limits,
+                          std::vector<SourceWorkBudget> *observations) {
   if (auto error = checkLimits(limits))
     return error;
-  if (auto error = checkScopedElaboration(entry.project(), limits))
+  if (auto error =
+          checkScopedElaboration(entry.project(), limits, observations))
     return error;
   detail::Work work{limits};
+  detail::Work::Scope phase(work, SourceWorkPhase::ScopedSpecialization);
+  detail::Work::Record record(work, SourceWorkPhase::ScopedSpecialization,
+                              observations);
   return detail::SpecializationCheck(entry, work).run();
 }
 } // namespace zkc::language

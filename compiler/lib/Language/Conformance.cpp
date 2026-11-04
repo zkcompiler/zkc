@@ -13,19 +13,12 @@ bool Checker::conformance(DeclarationId id) {
   for (auto &p : module.parameters)
     self.arguments.push_back(parameterType(p));
   bindings.emplace("self:" + interface->qualifiedName, self);
-  for (auto requiredId : interface->members) {
-    auto &required = output.declarations[requiredId.index];
-    const Declaration *provided = nullptr;
-    if (!types.charge(module.members.size(), required.span))
-      return false;
-    for (auto providedId : module.members)
-      if (output.declarations[providedId.index].name == required.name)
-        provided = &output.declarations[providedId.index];
-    if (!provided || provided->kind != required.kind)
-      return types.fail(
-          "source.conformance",
-          "module member missing or has a different callable mode",
-          module.span);
+  if (module.conformance.size() != interface->members.size())
+    return types.fail("source.conformance", "module member edges incomplete",
+                      module.span);
+  for (const auto &edge : module.conformance) {
+    auto &required = output.declarations[edge.required.index];
+    const auto *provided = &output.declarations[edge.provided.index];
     if (required.kind == Declaration::Kind::Associated) {
       auto sort = required.associatedSort;
       if (isDomainSort(sort) && (domainSort(provided->domain) != sort ||

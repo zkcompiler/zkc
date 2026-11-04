@@ -7,6 +7,17 @@
 using namespace llvm;
 namespace zkc::syntax::detail {
 namespace {
+Budget bounded(Budget budget) {
+  const Budget maximum;
+  // Cap before Work initializes its remaining counter, so both counters refer
+  // to the same allowance even when an enclosing phase supplies more work.
+  for (uint64_t Budget::*field :
+       {&Budget::bytes, &Budget::tokens, &Budget::tokenBytes,
+        &Budget::identifierBytes, &Budget::nodes, &Budget::depth, &Budget::work,
+        &Budget::diagnostics, &Budget::insertions})
+    budget.*field = std::min(budget.*field, maximum.*field);
+  return budget;
+}
 enum class SuiteKind {
   Declarations,
   Statements,
@@ -19,7 +30,7 @@ enum class SuiteKind {
   Oracle,
   Cases
 };
-}
+} // namespace
 class Parser {
   std::shared_ptr<Storage> data;
   Work work;
@@ -1068,23 +1079,13 @@ public:
          Environment env, Environments environments, Budget budget,
          source::Cancellation cancellation)
       : data(std::make_shared<Storage>(std::move(revision), id)),
-        work(*data, budget, cancellation) {
+        work(*data, bounded(budget), cancellation) {
     data->headersOnly = headers;
     data->defaultEnvironment = std::move(env);
     data->environments = std::move(environments);
     environment = &data->defaultEnvironment;
   }
   Snapshot run() {
-    const Budget maximum;
-    if (work.budget.bytes > maximum.bytes ||
-        work.budget.tokens > maximum.tokens ||
-        work.budget.tokenBytes > maximum.tokenBytes ||
-        work.budget.identifierBytes > maximum.identifierBytes ||
-        work.budget.nodes > maximum.nodes ||
-        work.budget.depth > maximum.depth || work.budget.work > maximum.work ||
-        work.budget.diagnostics > maximum.diagnostics ||
-        work.budget.insertions > maximum.insertions)
-      work.exhaust(0);
     lex(work);
     layout(work);
     for (uint32_t i = 0; i < data->tokens.size(); ++i)

@@ -307,6 +307,22 @@ whole inherited rule at that selector; other rules remain inherited. Without a
 native base, the resolved construction must have a start handler and cover every
 message and every query on the selected authority. Bases must be acyclic.
 
+Checked initializer and codec `initialize`, `write` and `finish` projections
+must identify their exact immutable authored reference occurrences. The
+occurrence fixes the authoring declaration, written node, route, member slot
+and ordinal, including the written provider or facade and canonical interface
+member. A same-signature member or another occurrence of the same member
+cannot replace it. Replay also checks coverage: absent projections cannot be
+added and required projections cannot be removed.
+
+Inheritance preserves these original occurrence identities and written routes
+while substituting the provider terms and method arguments from the written
+base application. Static specialization preserves the same identities while
+independently checking actual implementation dispatch. The implementing method
+and closed module term therefore need not equal the original abstract target
+and authoring module term. Native source replay checks these associations;
+this adds no construction syntax, wire format or formal correspondence claim.
+
 Retained verifier services remain explicit Host inputs with their own budgets.
 Their replies may affect verifier-local guards, completion and acceptance. They
 cannot affect outgoing messages, shared construction state, child-start inputs

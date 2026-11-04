@@ -15762,7 +15762,7 @@
         "kind": "rule",
         "target": "RandomConstructor"
       },
-      "implicit": true
+      "prelude": true
     },
     {
       "identity": "prelude.field_add",
@@ -15799,7 +15799,7 @@
         "kind": "primitive",
         "target": "field.add"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.field_subtract",
@@ -15836,7 +15836,7 @@
         "kind": "primitive",
         "target": "field.sub"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.field_multiply",
@@ -15873,7 +15873,7 @@
         "kind": "primitive",
         "target": "field.mul"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.field_equal",
@@ -15910,7 +15910,7 @@
         "kind": "primitive",
         "target": "field.equal"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.group_add",
@@ -15947,7 +15947,7 @@
         "kind": "primitive",
         "target": "curve.add"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.group_scale",
@@ -15985,7 +15985,7 @@
         "kind": "primitive",
         "target": "curve.scale"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.group_equal",
@@ -16022,7 +16022,7 @@
         "kind": "primitive",
         "target": "curve.equal"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.boolean_equal",
@@ -16051,7 +16051,7 @@
         "kind": "primitive",
         "target": "bool.equal"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.index_add",
@@ -16080,7 +16080,7 @@
         "kind": "primitive",
         "target": "index.add"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.index_subtract",
@@ -16109,7 +16109,7 @@
         "kind": "primitive",
         "target": "index.sub"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.index_multiply",
@@ -16138,7 +16138,7 @@
         "kind": "primitive",
         "target": "index.mul"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "prelude.index_equal",
@@ -16167,7 +16167,7 @@
         "kind": "primitive",
         "target": "index.equal"
       },
-      "implicit": false
+      "prelude": false
     },
     {
       "identity": "record.unpack",
@@ -16198,7 +16198,7 @@
         "kind": "rule",
         "target": "RecordUnpack"
       },
-      "implicit": true
+      "prelude": true
     },
     {
       "identity": "record.inspect",
@@ -16229,7 +16229,7 @@
         "kind": "rule",
         "target": "RecordInspect"
       },
-      "implicit": true
+      "prelude": true
     },
     {
       "identity": "record.repack",
@@ -16273,7 +16273,7 @@
         "kind": "rule",
         "target": "RecordRepack"
       },
-      "implicit": true
+      "prelude": true
     }
   ],
   "frontendRules": [
@@ -16511,16 +16511,22 @@
   ],
   "serviceMethods": [
     {
+      "identity": "service.random.draw",
+      "constructor": "service.random",
       "name": "draw",
       "signature": "RandomDraw",
       "capability": ""
     },
     {
+      "identity": "service.random.index",
+      "constructor": "service.random",
       "name": "index",
       "signature": "RandomIndex",
       "capability": "IndexRandomness"
     },
     {
+      "identity": "service.random.indices",
+      "constructor": "service.random",
       "name": "indices",
       "signature": "RandomIndices",
       "capability": "IndexBlockRandomness"

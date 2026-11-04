@@ -57,6 +57,41 @@ the remaining virtual-definition and logical-record integration boundaries.
 Protocol oracle calls and returns already decompose/rejoin their components
 through the existing checked ABI; no separate source keyword is needed.
 
+## Resolution and reusable analyses
+
+`DeclarationIndex` owns declaration and import namespaces. Source lookup,
+import authorization and external selection supply explicit access contexts to
+that owner. A selected root is terminal: a private, missing or wrong-category
+member cannot trigger another namespace search. Retained references identify
+both the selected provider route and the canonical target. Authored occurrence
+identity distinguishes repeated type, call and notation uses; a name or span
+alone is insufficient.
+
+An implementing module records one edge from each required interface member to
+its direct provided member. Dispatch uses those edges with the actual module
+instance. Independent source checking reconstructs the authored headers and
+judges implementation obligations against reconstructed premises. Candidate
+inference flags do not authorize stronger module or interface assumptions.
+
+Source analyses retain different products for different questions. Body
+summaries compose logical dependencies and formation requirements; common-control
+summaries retain typed expressions, role bindings and recurrence obligations.
+Neither dependency membership nor shared placement establishes value agreement.
+Completed products belong to a checking invocation and its immutable bodies,
+with exact lexical static, callback and domain contexts. Applications rebind
+caller values and allocate fresh recurrence subjects. Only demanded recurrence
+slots allocate per-application maps. Cache hits still obey the current depth,
+type and work limits; an in-progress recurrence hypothesis is not a reusable
+agreement fact.
+
+Closure derives each concrete Protocol's common-input inventory once and retains
+it in `ClosedEntry`. Publication borrows that inventory while charging its own
+layout, projection and normalization work. Native analysis independently derives
+obligations from the actual candidate and compares the complete inventory.
+This reuse changes neither the interface schema nor the formal interpretation
+boundary. Diagnostic work ledgers expose charged construction and application
+costs without serving as admission evidence.
+
 ## Catalog selection and four faces
 
 The shared catalog is an installation contract, not a parser keyword table.
@@ -65,22 +100,34 @@ adapter and Lean interpretation. Each face declares its supported parameters;
 availability is their required intersection, not the union of familiar names.
 The catalog may name laws but cannot prove a kernel implementation correct.
 
-The first service change uses `Contracts/Services.h`, the existing owner of
-logical service contracts. Its `SourceService` rows name installed declarations
-and a typed family adapter. Header parsing retains ordinary typed ports. After
-module/import resolution, the checker partitions service ports by the resolved
-catalog declaration. `Random`, `zkc::prelude::Random`, and an imported module
-alias can select the same installed constructor. An authored type or static
-binder named `Random` keeps its own meaning. The selected family and parameter
-count are checked by signature formation and included in installation identity.
+`Contracts/Services.h` owns logical service contracts. Each service method row
+has a stable identity and a nominal constructor owner; installed method
+associations enter the same `DeclarationIndex` as ordinary declarations. Explicit
+catalog prelude membership controls unqualified visibility. Header parsing
+retains ordinary typed ports; resolution partitions service ports by the
+selected constructor. `Random`, `zkc::prelude::Random`, and an imported module
+alias can select that constructor. An authored type or static binder named
+`Random` keeps its own meaning.
 
-The initial installed declaration is the prelude interface `Random<F: Field>`.
-It is a name-resolution anchor, not an ordinary data type, a provider root, or a
-proof of random sampling. Its `draw` and `index` signatures still come from the
-existing logical service catalog, and provider/root admission remains separate.
+The installed prelude interface `Random<F: Field>` anchors resolution. Its
+`draw`, `index` and `indices` methods use ordinary indexed call bindings with
+retained provider routes. An independent source witness reconstructs the
+service input, lexical aliases and nested captures, and checks the exact query
+method, bound and count against the authored occurrence. Header reconstruction
+shares the parameter, inference and admission lifecycle used for interface
+conformance; candidate ports cannot establish their own authority. Nominal
+selection does not establish provider/root admission or random sampling.
+Source replay also carries the expected authored region into each selected arm,
+repeat and extracted callback. Transparent blocks and eager Boolean expressions
+preserve their enclosing checked region. A valid call occurrence in the wrong
+arm still refuses. One retained lexical-scope index supplies region membership
+and visibility; one binding-to-root index resolves managed aliases. Flat aliases
+use an iterative, cycle-checked walk under the shared work budget, so unrelated
+aliases and ports do not multiply each root lookup or control membership query.
+
 New service families require an explicit typed adapter until a probe establishes
-that a more general signature algebra covers them. No catch-all string dispatch
-is added to the parser.
+that a more general signature algebra covers them. Installation identity binds
+the method identity, constructor, signature, capability and prelude membership.
 
 Notation has two independent concerns. `Syntax/Operators.def` owns built-in
 shape, precedence and associativity. Installed/library callable declarations

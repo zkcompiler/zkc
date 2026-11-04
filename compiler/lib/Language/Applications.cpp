@@ -232,11 +232,16 @@ BodyChecker::application(const Expression &expr) {
     invocation.services = managed;
     invocation.scopedSource = witnesses.calls.size();
     witnesses.calls.push_back(
-        std::make_shared<ScopedCallSource>(ScopedCallSource{
-            {decl.id, target.declaration, id, {}, target.module, arguments},
-            scoped,
-            domains,
-            {}}));
+        std::make_shared<ScopedCallSource>(ScopedCallSource{{decl.id,
+                                                             target.declaration,
+                                                             id,
+                                                             {},
+                                                             target.module,
+                                                             arguments,
+                                                             target.reference},
+                                                            scoped,
+                                                            domains,
+                                                            {}}));
     body.operations.back().binding = std::move(invocation);
     placement->applications.push_back(body.operations.size() - 1);
   }

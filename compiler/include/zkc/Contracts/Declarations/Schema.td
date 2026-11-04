@@ -21,8 +21,10 @@ class ZKC_FrontendHome<string head, string owner, list<string> exports = []> : Z
   string module = owner;
   list<string> members = exports;
 }
-class ZKC_ServiceMethod<string value, string rule, string requirement>
+class ZKC_ServiceMethod<string id, string owner, string value, string rule, string requirement>
     : ZKC_Declaration {
+  string identity = id;
+  string constructor = owner;
   string name = value;
   string signature = rule;
   string capability = requirement;
@@ -75,7 +77,7 @@ class ZKC_FrontendDeclaration<string id, string owner, string value,
                               string declared, list<ZKC_SourceStatic> s,
                               list<ZKC_SourceInput> i, list<ZKC_SourceTerm> o,
                               string associationKind, string associated,
-                              bit fallback> : ZKC_Declaration {
+                              bit inPrelude> : ZKC_Declaration {
   string identity = id;
   string module = owner;
   string name = value;
@@ -85,7 +87,7 @@ class ZKC_FrontendDeclaration<string id, string owner, string value,
   list<ZKC_SourceTerm> output = o;
   string association = associationKind;
   string target = associated;
-  bit implicit = fallback;
+  bit prelude = inPrelude;
 }
 // An installed notation names a declaration of its owner. An empty
 // associativity keeps the symbol's fixed syntax.

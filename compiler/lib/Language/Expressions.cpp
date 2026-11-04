@@ -1,5 +1,7 @@
 #include "BodyCheck.h"
+#include "ManagedServices.h"
 #include "RecordIntrinsics.h"
+#include "ScopedWitness.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
@@ -13,6 +15,8 @@ BodyChecker::expression(uint32_t id, std::optional<Type> expected,
                         unsigned depth, bool allowUntypedStop,
                         std::optional<ValuePlacement> placed,
                         const ValuePlacement *schema) {
+  SaveAndRestore referenceSite(checker.referenceSite,
+                               syntax.expressions[id].referenceSite);
   assert((!protocol() || placement) &&
          "protocol expression requires a statement inference scope");
   SaveAndRestore completionScope(completionAllowed,
@@ -148,22 +152,14 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
 
   } else if (expr.kind == K::Map) {
     result = bulk(expr, depth);
-  } else if (expr.kind == K::MethodCall && !inference->callees.count(id)) {
-    auto methods = protocol::serviceMethodDeclarations();
-    auto selected = llvm::find_if(
-        methods, [&](const auto &row) { return row.name == expr.text; });
-    bool index = selected != methods.end() &&
-                 selected->signature == protocol::ServiceSignature::RandomIndex,
-         block =
-             selected != methods.end() &&
-             selected->signature == protocol::ServiceSignature::RandomIndices;
-    if (!protocol() || selected == methods.end() || expr.children.size() != 1 ||
-        expr.arguments.size() != (block   ? 2u
-                                  : index ? 1u
-                                          : 0u)) {
-      fail("source.service",
-           "managed query requires draw(), index<N>() or indices(N,Q)",
-           expr.span);
+  } else if (auto selected = inference->callees.find(id);
+             selected != inference->callees.end() &&
+             selected->second.reference.category ==
+                 ResolutionCategory::ServiceMethod) {
+    const auto &target = selected->second;
+    const auto *method = checker.index().serviceAssociation(target.declaration);
+    if (!protocol() || !method || expr.children.size() != 1) {
+      fail("source.service", "managed query requires Protocol mode", expr.span);
       return {};
     }
     auto root = service(syntax.expressions[expr.children.front()]);
@@ -172,49 +168,30 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     const auto &port = body.services[root->index];
     if (!active({port.owner}, expr.span))
       return {};
-    if (!index && !block) {
-      result =
-          emit(ServiceQuery{*root, {}}, port.field, {port.owner}, expr.span);
-    } else {
-      if (!checker.types.entails(
-              &decl,
-              CapabilityBound{selected->capability, {port.field}, expr.span},
-              "source.service"))
-        return {};
-      auto bound = checker.type(decl, expr.arguments.front());
-      if (!bound)
-        return {};
-      auto positive = [&](const Type &value) {
-        return value.kind == T::Natural &&
-               (!value.dimension.isClosed() ||
-                protocol::uniformIndexBound(value.dimension.closedValue()));
-      };
-      if (!positive(*bound)) {
-        fail("source.service",
-             "index domain must be a positive static u64 natural", expr.span);
-        return {};
-      }
-      std::optional<Natural> count;
-      if (block) {
-        auto selected = checker.type(decl, expr.arguments[1]);
-        if (!selected || !positive(*selected)) {
-          if (selected)
-            fail("source.service",
-                 "index count must be a positive static u64 natural",
-                 expr.span);
-          return {};
-        }
-        count = selected->dimension;
-      }
-      auto output = block ? builtinType("indices", {})
-                          : llvm::Expected<Type>(Type(T::Index));
-      if (!output) {
-        consumeError(output.takeError());
-        return {};
-      }
-      result = emit(ServiceQuery{*root, bound->dimension, count}, *output,
-                    {port.owner}, expr.span);
+    const auto &arguments = inference->arguments.at(id);
+    unsigned count = serviceStaticCount(method->signature);
+    if (arguments.size() != count + 1 || arguments.front() != port.field) {
+      fail("source.service", "managed request arguments differ", expr.span);
+      return {};
     }
+    CallBinding binding{target, arguments, {}, {}, {}, {}, {}};
+    binding.roles = {port.owner};
+    binding.services = {*root};
+    binding.scopedSource = witnesses.calls.size();
+    witnesses.calls.push_back(std::make_shared<
+                              ScopedCallSource>(ScopedCallSource{
+        {decl.id, target.declaration, id, {}, {}, arguments, target.reference},
+        {},
+        {},
+        {}}));
+    result = emit(
+        ServiceQuery{
+            *root,
+            count >= 1 ? std::optional(arguments[1].dimension) : std::nullopt,
+            count == 2 ? std::optional(arguments[2].dimension) : std::nullopt},
+        serviceResult(method->signature, port.field), {port.owner}, expr.span);
+    if (result)
+      body.operations.back().binding = std::move(binding);
   } else if (expr.kind == K::Name) {
     auto p = place(id, depth);
     if (!p)

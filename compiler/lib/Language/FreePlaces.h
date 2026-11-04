@@ -21,6 +21,8 @@ struct FreePlaceEnvironment {
   std::function<std::optional<std::pair<BindingId, std::vector<unsigned>>>(
       uint32_t)>
       place;
+  /// Optional indexed lexical membership query, independent of candidate slots.
+  std::function<bool(BindingId)> service;
 };
 /// Shared control/scoped query. Deferred bodies contribute free places without
 /// contributing execution flow. Occurrences survive projection minimization.

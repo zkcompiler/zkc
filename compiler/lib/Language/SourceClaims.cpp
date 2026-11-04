@@ -581,6 +581,7 @@ bool detail::Checker::sourceClaims() {
         if (!blocks.emplace(block.name, &block).second)
           return types.fail("source.claim.duplicate-label",
                             "duplicate claim block", block.span);
+        SaveAndRestore site(referenceSite, syntax.referenceSite);
         auto subject = declaration.kind == Declaration::Kind::Entry
                            ? std::optional(declaration.id)
                            : resolve(owner, block.entry, block.span, false);

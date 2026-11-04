@@ -3,6 +3,7 @@
 #include "APIRecords.h"
 #include "LexicalRecords.h"
 #include "NotationRecords.h"
+#include "zkc/Language/CommonControl.h"
 #include "zkc/Language/DeclarationIndex.h"
 #include "zkc/Language/Project.h"
 #include "zkc/Syntax/Syntax.h"
@@ -22,18 +23,8 @@ struct ScopedCallSource;
 struct ScopedInvocationSource;
 struct SourceCall;
 using IntrinsicCallSource = SourceCall;
-struct SourceBinding {
-  DeclarationId target;
-  Span span;
-  bool isPublic;
-  std::optional<DeclarationId> provider;
-};
-/// Frozen source namespaces, including resolved imports and facade bindings.
-struct NameEnvironment {
-  std::map<std::string, DeclarationId> modules;
-  std::vector<std::map<std::string, SourceBinding>> visible;
-};
 struct AuthoringStorage;
+struct ConstructionSource;
 /// Defining source authorities, computed once after the last checking step.
 /// A unit is one captured file, named by its module path. Installation
 /// sources are not units: installed declarations enter through the
@@ -67,13 +58,19 @@ struct CheckedStorage {
   /// Fixed before declaration collection, including generated nominal families.
   const std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
+  SourceWorkObservation workObservation;
   uint64_t notationDescriptors = 0, notationHoles = 0;
   /// Written headers and parsed bodies, frozen before resolution/elaboration.
   std::shared_ptr<const WrittenSources> writtenSources;
   NotationRecords notations;
   APIRecords api;
+  std::shared_ptr<const std::vector<ReferenceRecord>> authoredReferences;
+  /// Written construction header terms; callable selections use the existing
+  /// immutable reference inventory, not a second resolved-construction
+  /// snapshot.
+  std::map<uint32_t, std::shared_ptr<const ConstructionSource>>
+      constructionSources;
   std::vector<LexicalResolution> lexicalResolutions;
-  std::shared_ptr<const NameEnvironment> names;
   std::shared_ptr<const DeclarationIndex> declarationIndex;
   std::shared_ptr<const AuthoringStorage> authoring;
   /// Immutable authored callback and effect contracts, independent of mutable
@@ -94,7 +91,10 @@ struct ClosedStorage {
   std::optional<DeclarationId> protocol;
   std::vector<ClosedInvocation> invocations;
   std::optional<HostInvocation::Kind> invocationKind;
+  /// Complete source-derived obligations, frozen with this exact closure.
+  std::map<uint32_t, std::vector<CommonControlRequirement>> commonInputs;
   uint64_t work = 0;
+  SourceWorkObservation workObservation;
 };
 /// Editor facts are frozen separately from a CheckedProject. A declaration may
 /// have a valid header without a checked signature, or a signature without a
@@ -106,11 +106,13 @@ struct AuthoringStorage {
   std::vector<std::optional<syntax::Snapshot>> layoutBodies;
   std::vector<LexicalResolution> lexicalResolutions;
   APIRecords api;
-  std::shared_ptr<const NameEnvironment> names;
   std::shared_ptr<const DeclarationIndex> declarationIndex;
 };
 /// Internal immutable vector access; the project/Entry must outlive the borrow.
 struct DeclarationAccess {
+  static const CheckedStorage &storage(const CheckedProject &project) {
+    return *project.storage;
+  }
   static const std::vector<Declaration> &get(const CheckedProject &project) {
     return project.storage->declarations;
   }
@@ -119,6 +121,7 @@ struct DeclarationAccess {
   }
 };
 struct AnalysisStorage {
+  SourceWorkObservation workObservation;
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<Diagnostic> diagnostics;
   std::vector<std::vector<Token>> tokens;
@@ -144,6 +147,40 @@ struct Work {
   std::optional<source::Cancellation> cancellation = {};
   /// Optional enclosing allowance, debited immediately by every nested charge.
   uint64_t *allowance = nullptr;
+  WorkLedger ledger{};
+  SourceWorkPhase phase = SourceWorkPhase::Unscoped;
+  /// Exclusive attribution: nested scopes replace, then restore, the phase.
+  class Scope {
+    Work &work;
+    SourceWorkPhase previous;
+
+  public:
+    Scope(Work &work, SourceWorkPhase phase)
+        : work(work), previous(work.phase) {
+      enter(phase);
+    }
+    Scope(const Scope &) = delete;
+    Scope &operator=(const Scope &) = delete;
+    ~Scope() { work.phase = previous; }
+    void enter(SourceWorkPhase phase) { work.phase = phase; }
+  };
+  /// Snapshot an independently bounded operation, including partial failure.
+  class Record {
+    const Work &work;
+    SourceWorkPhase phase;
+    std::vector<SourceWorkBudget> *output;
+
+  public:
+    Record(const Work &work, SourceWorkPhase phase,
+           std::vector<SourceWorkBudget> *output)
+        : work(work), phase(phase), output(output) {}
+    Record(const Record &) = delete;
+    Record &operator=(const Record &) = delete;
+    ~Record() {
+      if (output)
+        output->push_back({phase, work.ledger});
+    }
+  };
   uint64_t remaining() const {
     auto local = limits.work - used;
     return allowance ? std::min(local, *allowance) : local;

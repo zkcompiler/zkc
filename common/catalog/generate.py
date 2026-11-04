@@ -442,7 +442,7 @@ def validate(catalog):
                 "inputs": sequence(row({"name": text, "type": source_term})),
                 "output": nullable(source_term),
                 "association": row({"kind": one_of("primitive", "rule"), "target": text}),
-                "implicit": flag,
+                "prelude": flag,
             })),
             "frontendRules": sequence(row({
                 "name": text, "kind": source_kind, "statics": sequence(kind),
@@ -456,7 +456,7 @@ def validate(catalog):
             "frontendConstructors": sequence(row({"name": text, "form": one_of(*FRONTEND_CONSTRUCTOR_FORMS)})),
             "frontendHomes": sequence(row({"constructor": text, "module": text, "members": sequence(text)})),
             "serviceSignatures": sequence(row({"name": text, "capability": text})),
-            "serviceMethods": sequence(row({"name": text, "signature": text, "capability": text})),
+            "serviceMethods": sequence(row({"identity": text, "constructor": text, "name": text, "signature": text, "capability": text})),
             "families": sequence(
                 row(
                     {
@@ -585,8 +585,8 @@ def validate_frontend(catalog):
     """Installed source declarations, their rules and notations.
 
     Rule shapes, service-signature capabilities, home constructors and
-    declaration references are data; nothing here names a particular rule,
-    method, constructor or declaration.
+    declaration references are data. Service owners must carry the supported
+    RandomConstructor semantic rule; their source names carry no authority.
     """
     import re
 
@@ -632,7 +632,7 @@ def validate_frontend(catalog):
     operations = {r["name"] for r in catalog["operations"]}
     owners = {(r["module"], r["name"]) for r in catalog["exports"]}
     identities = set()
-    implicit = set()
+    prelude = set()
     declared = set()
     for row in catalog["frontendDeclarations"]:
         require(row["identity"] and row["identity"] not in identities, "duplicate frontend identity")
@@ -654,9 +654,9 @@ def validate_frontend(catalog):
             require(row["kind"] != "Interface"
                     and target in (intrinsics if row["kind"] == "Math" else operations),
                     "frontend primitive kind mismatch")
-        if row["implicit"]:
-            require(row["name"] not in implicit, "duplicate implicit frontend name")
-            implicit.add(row["name"])
+        if row["prelude"]:
+            require(row["name"] not in prelude, "duplicate prelude frontend name")
+            prelude.add(row["name"])
     modules = {owner for owner, _ in declared}
     notations = set()
     for row in catalog["frontendNotations"]:
@@ -690,11 +690,17 @@ def validate_frontend(catalog):
         require(identifier(row["name"]) and row["name"] not in signatures, "invalid or duplicate service signature")
         require(not row["capability"] or any(c["name"] == row["capability"] and c["parameters"] == [{"kind": "Domain", "sort": "Field"}] for c in catalog["capabilities"]), "unknown service capability")
         signatures[row["name"]] = row["capability"]
+    constructors = {row["identity"] for row in catalog["frontendDeclarations"]
+                    if row["association"] == {"kind": "rule", "target": "RandomConstructor"}}
     seen = set()
     for row in catalog["serviceMethods"]:
+        require(row["identity"] and row["identity"] not in identities, "duplicate service method identity")
+        identities.add(row["identity"])
+        require(row["constructor"] in constructors, "invalid service method constructor")
         require(identifier(row["name"]), "invalid service method")
-        require(row["name"] not in seen, "duplicate service method")
-        seen.add(row["name"])
+        key = (row["constructor"], row["name"])
+        require(key not in seen, "duplicate service method")
+        seen.add(key)
         require(signatures.get(row["signature"]) == row["capability"], "service method capability mismatch")
 
 

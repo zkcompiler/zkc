@@ -247,6 +247,7 @@ detail::Semantics::nativeLayout(const Type &type) {
   auto limits = work.limits;
   limits.work = work.remaining();
   Layouts layouts(declarations, limits, authorities);
+  Work::Scope phase(layouts.state->work, work.phase);
   auto result = layouts.packed(type);
   auto charged = work.charge(layouts.state->work.used);
   if (charged) {
@@ -266,6 +267,7 @@ detail::Semantics::nativePortLayout(const Port &port) {
   auto limits = work.limits;
   limits.work = work.remaining();
   Layouts layouts(declarations, limits, authorities);
+  Work::Scope phase(layouts.state->work, work.phase);
   auto result = layouts.protocolPort(port);
   auto charged = work.charge(layouts.state->work.used);
   if (charged) {

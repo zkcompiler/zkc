@@ -44,6 +44,11 @@ public:
                      llvm::StringRef, llvm::StringRef)>
       collectUsage;
   std::function<bool(const Declaration &, AdmissionObligation)> recordAdmission;
+  /// Checking only: finish a selected implementation before a body consumer
+  /// observes it. Edges themselves are formed from headers before signatures.
+  /// The second argument counts enclosing helpers in a summary traversal.
+  std::function<bool(DeclarationId, unsigned enclosingCalls)>
+      completeDispatchBody;
   enum class Admission { Accepted, Deferred, Rejected };
   /// Pure source authority/profile query. Deferred means an open type needs
   /// specialization; it never authorizes a boundary.
@@ -70,6 +75,18 @@ public:
   std::optional<Type> substitute(const Type &, const Substitution &, Span,
                                  unsigned = 1);
   std::optional<Type> associated(const Type &, llvm::StringRef, Span);
+  /// Normalize an already resolved projection without resolving its name again.
+  std::optional<Type> associated(const Type &, DeclarationId, Span);
+  struct Dispatch {
+    DeclarationId declaration;
+    std::vector<Type> arguments;
+  };
+  /// Select only interface-owned members. Concrete targets (including closed
+  /// instances) retain their identity and arguments. Open modules retain the
+  /// abstract reference; a concrete module requires its recorded exact edge.
+  std::optional<Dispatch> dispatch(const std::optional<Type> &, DeclarationId,
+                                   llvm::ArrayRef<Type>, Span,
+                                   unsigned enclosingCalls = 0);
   bool oracleKind(const Type &, Span, const Declaration * = nullptr);
   /// A derived natural of an asset term. A closed term yields the fact of its
   /// captured asset; a symbolic term yields a projection factor that closure

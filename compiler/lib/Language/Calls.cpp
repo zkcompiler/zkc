@@ -260,12 +260,49 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     }
     std::vector<Dependencies> formation;
     Dependencies result;
-    if (callee.body) {
-      auto summary = summarizeBody(checker.types, checker.output.declarations,
-                                   *callee.body, subst, inputs, selected, 1,
-                                   selectedDomains);
+    // Select the implementation without replacing the caller's retained source
+    // route below. A retained dependency application is not resolution
+    // evidence.
+    auto dispatch = checker.types.dispatch(target.module, target.declaration,
+                                           staticArgs, expr.span);
+    if (!dispatch)
+      return {};
+    const auto &implementation =
+        checker.output.declarations[dispatch->declaration.index];
+    if (implementation.body) {
+      auto frame =
+          bodySummaryFrame(checker.types, checker.output.declarations,
+                           implementation, dispatch->arguments, target.module);
+      if (!frame)
+        return {};
+      auto summary = checker.bodySummaries.apply(
+          checker.types, checker.output.declarations, *implementation.body,
+          *frame, inputs, selected, 1, selectedDomains);
       if (!summary)
         return {};
+      if (summary->results.size() != 1) {
+        fail("source.scoped-summary", "Math summary result arity differs",
+             expr.span);
+        return {};
+      }
+      // Hits retain the source call height as well as summary traversal
+      // bounds. Propagate it exactly as ordinary lazy body completion does.
+      const unsigned edge =
+          callee.primitive && primitiveCallIsInline(body.mode, callee.kind,
+                                                    callee.primitive->identity)
+              ? 0
+              : 1;
+      const auto height = summary->callHeight - 1 + edge;
+      if (callDepth > checker.work.limits.callDepth ||
+          height > checker.work.limits.callDepth - callDepth) {
+        fail("source.limit", "retained helper call depth exceeded", expr.span);
+        return {};
+      }
+      // Relative declaration height includes the current lexical literals,
+      // regardless of retained sources or the declaration's absolute caller.
+      checker.bodyHeights[decl.id.index] =
+          std::max(checker.bodyHeights[decl.id.index],
+                   height + lexicalCallbackDepth + 1);
       result = summary->results.front();
       formation = std::move(summary->formation);
       body.parameterizedSummary |= summary->parameterized;
@@ -309,11 +346,16 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     evidence.argumentOrder = binding;
     evidence.scopedArguments = scopedArgs;
     evidence.domainArguments = domainArgs;
-    ScopedCallSource source{
-        {decl.id, target.declaration, id, {}, target.module, staticArgs},
-        scoped,
-        domains,
-        {}};
+    ScopedCallSource source{{decl.id,
+                             target.declaration,
+                             id,
+                             {},
+                             target.module,
+                             staticArgs,
+                             target.reference},
+                            scoped,
+                            domains,
+                            {}};
     std::function<bool(uint32_t, unsigned)> retainDomain =
         [&](uint32_t expression, unsigned nesting) {
           const auto &argument = syntax.expressions[expression];

@@ -3,8 +3,9 @@
 using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::moduleContracts() {
-  // Interface membership determines the public contract before imports are
-  // authorized. Full type/effect conformance follows signature formation.
+  // Select direct members once, before lazy signatures or dependent bodies can
+  // dispatch. These provisional edges cannot publish a CheckedProject: full
+  // conformance and independent source checking must still succeed.
   for (auto id : moduleIds) {
     auto &module = output.declarations[id.index];
     auto &written = *sources[id.index];
@@ -14,6 +15,12 @@ bool Checker::moduleContracts() {
         resolve(module, written.definition->name, written.definition->span);
     if (!target)
       return false;
+    if (auto *row = protocol::frontendDeclaration(
+            output.declarations[target->index].qualifiedName);
+        row && row->rule == protocol::FrontendSignature::RandomConstructor)
+      return types.fail("source.service",
+                        "managed constructor cannot be implemented",
+                        module.span);
     const auto &contract = output.declarations[target->index];
     if (contract.kind != Declaration::Kind::Interface)
       return types.fail("source.conformance",
@@ -23,12 +30,18 @@ bool Checker::moduleContracts() {
       return false;
     for (auto required : contract.members) {
       const auto &member = output.declarations[required.index];
-      auto found = visible[id.index].find(member.name);
-      if (found == visible[id.index].end())
-        continue; // The conformance checker reports missing members.
+      auto found = formingIndex->formingNamespace(id).find(member.name);
+      if (found == formingIndex->formingNamespace(id).end())
+        return types.fail("source.conformance", "module member missing",
+                          module.span);
       auto &provided = output.declarations[found->second.target.index];
-      if (!provided.parent || provided.parent->index != id.index)
-        continue; // Imports do not implement an authored interface member.
+      if (!provided.parent || provided.parent->index != id.index ||
+          provided.kind != member.kind)
+        return types.fail(
+            "source.conformance",
+            "implementation requires a direct member of the same kind",
+            module.span);
+      module.conformance.push_back({required, provided.id});
       provided.isPublic = true;
       found->second.isPublic = true;
     }
@@ -38,7 +51,6 @@ bool Checker::moduleContracts() {
 bool Checker::imports() {
   const auto count = sources.size();
   std::vector<std::vector<unsigned>> bindingState(count), bindingHeight(count);
-  std::vector<std::vector<std::vector<ModuleLookup>>> routes(count);
   std::vector<std::map<std::string, std::vector<unsigned>>> candidates(count);
   for (auto module : moduleIds) {
     const auto id = module.index;
@@ -47,7 +59,6 @@ bool Checker::imports() {
       return false;
     bindingState[id].resize(imports.size());
     bindingHeight[id].resize(imports.size());
-    routes[id].resize(imports.size());
     for (unsigned i = 0; i < imports.size(); ++i) {
       const auto &import = imports[i];
       if (!types.charge(import.names.size() + 1, import.span))
@@ -95,8 +106,16 @@ bool Checker::imports() {
     bindingHeight[id][index] = 1;
     ++bindingDepth;
     bindingStack.emplace_back(id, index);
-    auto selected = resolve(context, import.module, import.span, false,
-                            &routes[id][index], &import.provider);
+    auto savedAccess = access;
+    access = ImportBindingAccess{context.id, index};
+    auto reference = select(context, import.module, import.span, false);
+    std::optional<DeclarationId> selected;
+    if (reference) {
+      selected = reference->target;
+      import.provider = reference->provider;
+      import.reference = *reference;
+    }
+    access = savedAccess;
     if (!selected ||
         output.declarations[selected->index].kind != Declaration::Kind::Module)
       return types.diagnostic
@@ -109,14 +128,24 @@ bool Checker::imports() {
     auto bind = [&](StringRef name, DeclarationId target) {
       if (!types.charge(1, import.span))
         return false;
-      auto [position, inserted] = visible[id].emplace(
-          name.str(),
-          ScopeBinding{target, import.span, import.isPublic, import.provider});
+      auto [position, inserted] =
+          formingIndex->formingNamespace(DeclarationId{id})
+              .emplace(name.str(), DeclarationIndex::NamespaceBinding{
+                                       target, import.span, import.isPublic,
+                                       import.provider, index});
       if (!inserted && position->second.target.index != target.index)
         return types.fail("source.duplicate",
                           "import conflicts with visible name: " + name,
                           import.span);
-      position->second.isPublic |= import.isPublic;
+      auto &binding = position->second;
+      if (!inserted && binding.provider && import.provider &&
+          output.declarations[import.provider->index].qualifiedName <
+              output.declarations[binding.provider->index].qualifiedName) {
+        binding.provider = import.provider;
+        binding.span = import.span;
+        binding.import = index;
+      }
+      binding.isPublic |= import.isPublic;
       return true;
     };
     for (const auto &name : import.names) {
@@ -135,8 +164,8 @@ bool Checker::imports() {
   loadBinding = [&](DeclarationId module, StringRef name) {
     // Authored declarations already fix their binding. Imports still check
     // conflicts when loaded; cached imports retain their dependency heights.
-    auto existing = visible[module.index].find(name.str());
-    if (existing != visible[module.index].end()) {
+    auto existing = formingIndex->bindings(module).find(name.str());
+    if (existing != formingIndex->bindings(module).end()) {
       const auto &target = output.declarations[existing->second.target.index];
       if (target.parent && target.parent->index == module.index &&
           target.name == name)
@@ -193,7 +222,8 @@ bool Checker::imports() {
 
   if (!moduleContracts())
     return false;
-  checkingVisibility = true;
+  access = SourceAccess{{0}};
+  referencesReady = true;
   for (auto module : moduleIds) {
     auto id = module.index;
     const auto &context = output.declarations[id];
@@ -201,7 +231,7 @@ bool Checker::imports() {
       const auto &import = sources[id]->imports[i];
       // Authorize the selected route, without resolving its head again through
       // the names introduced by this same import.
-      for (const auto &step : routes[id][i])
+      for (const auto &step : import.reference->path)
         if (!lookup(context, step.owner, step.name, import.span))
           return false;
       auto exportable = [&](DeclarationId declaration) {
@@ -214,18 +244,30 @@ bool Checker::imports() {
       };
       if (import.alias && !exportable(*import.target))
         return false;
-      if (!recordReference(context, ReferenceRoute::Import,
-                           import.provider.value_or(*import.target),
-                           *import.target, import.module, import.span))
+      SaveAndRestore site(referenceSite, import.referenceSite);
+      if (!recordReference(context, ReferenceRoute::Import, *import.reference,
+                           import.module, import.span))
         return false;
-      for (const auto &name : import.names) {
+      for (unsigned position = 0; position < import.names.size(); ++position) {
+        const auto &name = import.names[position];
         auto selected = lookup(context, *import.target, name, import.span);
         if (!selected || !exportable(*selected))
           return false;
-        if (!recordReference(context, ReferenceRoute::ImportName,
-                             import.provider.value_or(*import.target),
-                             *selected, import.module + "::" + name,
-                             import.span))
+        auto result =
+            index().member(SourceAccess{context.id}, *import.target, name,
+                           {[&] { return types.charge(1, import.span); }, {}});
+        auto *memberReference = std::get_if<ResolvedReference>(&result);
+        if (!memberReference)
+          return false;
+        auto reference = *import.reference;
+        reference.target = memberReference->target;
+        reference.category = memberReference->category;
+        reference.path.insert(reference.path.end(),
+                              memberReference->path.begin(),
+                              memberReference->path.end());
+        if (!recordReference(context, ReferenceRoute::ImportName, reference,
+                             import.module + "::" + name, import.span,
+                             position))
           return false;
       }
     }
@@ -318,8 +360,8 @@ bool Checker::imports() {
                                       visibleOperators[parent].begin(),
                                       visibleOperators[parent].end());
   }
-  if (auto prelude = modules.find("zkc::prelude"); prelude != modules.end()) {
-    const auto id = prelude->second.index;
+  if (auto prelude = formingIndex->canonical("zkc::prelude")) {
+    const auto id = prelude->index;
     if (!sources[id]->imports.empty())
       return types.fail("source.import",
                         "installed prelude cannot import captured modules",

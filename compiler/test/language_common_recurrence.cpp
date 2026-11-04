@@ -147,8 +147,8 @@ pairedEntry(mlir::MLIRContext &context, const ClosedEntry &entry,
     concrete += isClosedConcreteProtocol(decl);
   require(concrete > 0 && view.protocols.size() == concrete,
           "no actual concrete Protocol inventories compared");
-  return take(
-      deriveCommonControlRequirements(entry, entry.protocol().id, limits));
+  auto retained = take(entry.commonInputs(entry.protocol().id));
+  return {retained.begin(), retained.end()};
 }
 auto pairedProject(mlir::MLIRContext &context, const CheckedProject &project,
                    const Limits &limits = {}) {
@@ -637,17 +637,15 @@ protocol Run roles(P,V)(base:Vector<Fr>@(P,V),step:Vector<Fr>@(P,V))->() {
                   "requirement lost the actual source establishing control");
         }
       });
-  cases.run("retained Protocol overload refuses non-Protocol targets", [&] {
+  cases.run("retained Protocol inventory refuses non-Protocol targets", [&] {
     auto project = take(check(pure()));
     auto entry = take(closeNativeRun(project, "m::Run"));
-    require(take(deriveCommonControlRequirements(entry, {})).size() == 3,
-            "existing braced Limits call changed meaning");
-    refuses(
-        deriveCommonControlRequirements(entry, named(project, "xor").id, {}),
-        "source.common-provenance");
-    refuses(
-        deriveCommonControlRequirements(entry, DeclarationId{0xffffffffu}, {}),
-        "source.common-provenance");
+    require(take(entry.commonInputs(entry.protocol().id)).size() == 3,
+            "retained root inventory changed meaning");
+    refuses(entry.commonInputs(named(project, "xor").id),
+            "source.common-provenance");
+    refuses(entry.commonInputs(DeclarationId{0xffffffffu}),
+            "source.common-provenance");
   });
   cases.run("lowered source derivation depth ceilings refuse exactly", [&] {
     auto project = take(check(pure()));
@@ -1166,7 +1164,7 @@ protocol Run roles(P,V)(n:index@(P,V))->(r:bool@(P,V)){
         project, named(project, "Run").id, limits));
     require(rows.size() == 2, "nested control dependencies differ");
     auto entry = take(closeNativeRun(project, "m::Run", limits));
-    exactInputs(take(deriveCommonControlRequirements(entry, limits)), {0, 1});
+    exactInputs(take(entry.commonInputs(entry.protocol().id)), {0, 1});
     // Common-control limits are checked above. The original/correspondence
     // validators have their own independently bounded traversal.
     exactInputs(pairedEntry(context, entry), {0, 1});
@@ -1326,8 +1324,7 @@ protocol Run<N:nat> roles(P,V)(xs:[Choice;N]@(P,V))->(r:bool@(P,V)){
     auto entry = take(closeNativeRun(project, "m::Run"));
     Limits limits;
     limits.aggregateLeaves = 2;
-    require(take(zkc::language::deriveCommonControlRequirements(entry, limits))
-                    .size() == 1,
+    require(take(entry.commonInputs(entry.protocol().id)).size() == 1,
             "one observed element required a whole interface layout");
     // Publication lays out the whole port and keeps the capacity limit.
     refuses(prepareOriginal(entry, limits), "source.limit");
@@ -1638,10 +1635,9 @@ protocol Run roles()") + (shared ? "P,V" : "P") +
                                 .empty(),
                             "closed static count acquired input obligations");
                     auto entry = take(closeNativeRun(project, "m::Run"));
-                    require(take(zkc::language::deriveCommonControlRequirements(
-                                     entry))
-                                .empty(),
-                            "closed static stages changed requirements");
+                    require(
+                        take(entry.commonInputs(entry.protocol().id)).empty(),
+                        "closed static stages changed requirements");
                   });
   for (bool distinct : {false, true})
     for (bool receivedSelector : {false, true})

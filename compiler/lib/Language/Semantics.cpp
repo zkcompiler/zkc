@@ -338,9 +338,17 @@ std::optional<Type> Semantics::substitute(const Type &input,
     return associated(result.arguments.front(), result.domain, span);
   if ((result.kind == Type::Kind::Associated || !domainSort(result).empty()) &&
       !result.arguments.empty()) {
-    StringRef name = result.domain;
-    auto pos = name.rfind("::");
-    return associated(result.arguments.front(), name.drop_front(pos + 2), span);
+    // Installed domain associations (for example G::Scalar) have catalog
+    // member names, rather than source declaration IDs.
+    if (result.arguments.front().kind != Type::Kind::Module)
+      return associated(result.arguments.front(),
+                        StringRef(result.domain).rsplit("::").second, span);
+    auto found = qualified.find(result.domain);
+    if (found == qualified.end()) {
+      fail("source.type", "unknown associated declaration", span);
+      return {};
+    }
+    return associated(result.arguments.front(), found->second, span);
   }
   // Substitution must not introduce a logical value into an ordinary product,
   // even when an array has no elements in its eventual native layout.
@@ -448,23 +456,148 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
         fail("source.type", "member is not a type", span);
       return {};
     }
-    Type result(Type::Kind::Associated, decl.qualifiedName);
-    result.arguments = {base};
-    result.assumptions = decl.permissions.value_or(Permissions{});
-    if (isDomainSort(decl.associatedSort)) {
-      if (!decl.abstract)
-        return substitute(decl.domain, substitution(*owner, base.arguments),
-                          span);
-      auto domain = domainType(decl.associatedSort, decl.qualifiedName);
-      domain.arguments = {base};
-      domain.assumptions = result.assumptions;
-      result = std::move(domain);
-      result.symbolic = true;
-    }
-    return result;
+    return associated(base, id, span);
   }
   fail("source.type", "unknown associated type: " + member, span);
   return {};
+}
+std::optional<Semantics::Dispatch>
+Semantics::dispatch(const std::optional<Type> &module, DeclarationId required,
+                    ArrayRef<Type> arguments, Span span,
+                    unsigned enclosingCalls) {
+  auto refuse = [&](StringRef message) -> std::optional<Dispatch> {
+    fail("source.conformance", message, span);
+    return {};
+  };
+  if (!charge(arguments.size() + 1, span))
+    return {};
+  for (const auto &argument : arguments)
+    if (!chargeType(argument, span))
+      return {};
+  if (required.index >= declarations.size())
+    return refuse("dispatch member is outside declarations");
+  if (complete && !complete(required))
+    return {};
+  auto parent = declarations[required.index].parent;
+  if (parent && parent->index >= declarations.size())
+    return refuse("dispatch interface owner is outside declarations");
+  if (!module || !parent ||
+      declarations[parent->index].kind != Declaration::Kind::Interface ||
+      module->symbolic)
+    return Dispatch{required, arguments.vec()};
+  if (!chargeType(*module, span))
+    return {};
+  const auto *definition = typeDeclaration(*module);
+  if (!definition || definition->kind != Declaration::Kind::Module)
+    return refuse("static dispatch requires an implementing module");
+  const auto owner = definition->id;
+  if (complete && !complete(owner))
+    return {};
+  const auto &implementation = declarations[owner.index];
+  if (!implementation.implementation ||
+      implementation.parameters.size() != module->arguments.size())
+    return refuse("static dispatch has no implementation instance");
+  auto selected =
+      substitute(*implementation.implementation,
+                 substitution(implementation, module->arguments), span);
+  if (!selected)
+    return {};
+  const auto *interface = typeDeclaration(*selected);
+  const auto inherited = declarations[parent->index].parameters.size();
+  if (!interface || interface->id.index != parent->index ||
+      selected->arguments.size() != inherited || arguments.size() < inherited ||
+      ArrayRef<Type>(selected->arguments) != arguments.take_front(inherited))
+    return refuse("static dispatch interface instance differs");
+  if (!charge(implementation.conformance.size() + 1, span))
+    return {};
+  std::optional<DeclarationId> provided;
+  for (const auto &edge : implementation.conformance)
+    if (edge.required.index == required.index) {
+      if (provided)
+        return refuse("duplicate static dispatch edge");
+      provided = edge.provided;
+    }
+  if (!provided || provided->index >= declarations.size())
+    return refuse("static dispatch edge missing");
+  if (complete && !complete(*provided))
+    return {};
+  const auto &target = declarations[provided->index];
+  if ((!target.parent || target.parent->index != owner.index) ||
+      target.module.index != owner.index ||
+      target.kind != declarations[required.index].kind)
+    return refuse("static dispatch edge has a different owner or kind");
+  std::vector<Type> actual = module->arguments;
+  llvm::append_range(actual, arguments.drop_front(inherited));
+  if (target.parameters.size() != actual.size())
+    return refuse("static dispatch member arguments differ");
+  const bool callable = target.kind == Declaration::Kind::Math ||
+                        target.kind == Declaration::Kind::Local ||
+                        target.kind == Declaration::Kind::DomainFunction;
+  if (callable && completeDispatchBody &&
+      !completeDispatchBody(*provided, enclosingCalls))
+    return {};
+  return Dispatch{*provided, std::move(actual)};
+}
+std::optional<Type> Semantics::associated(const Type &base,
+                                          DeclarationId required, Span span) {
+  if (required.index >= declarations.size()) {
+    fail("source.type", "associated member is outside declarations", span);
+    return {};
+  }
+  if (complete && !complete(required))
+    return {};
+  auto parent = declarations[required.index].parent;
+  if (!parent || parent->index >= declarations.size() ||
+      declarations[required.index].kind != Declaration::Kind::Associated) {
+    fail("source.type", "projection is not an associated member", span);
+    return {};
+  }
+  if (!base.symbolic &&
+      declarations[parent->index].kind == Declaration::Kind::Module) {
+    const auto *owner = typeDeclaration(base);
+    if (!owner || owner->id.index != parent->index) {
+      fail("source.conformance", "associated member belongs to another module",
+           span);
+      return {};
+    }
+  }
+  std::vector<Type> arguments = base.arguments;
+  if (!base.symbolic &&
+      declarations[parent->index].kind == Declaration::Kind::Interface) {
+    const auto *owner = typeDeclaration(base);
+    if (!owner || (complete && !complete(owner->id)))
+      return {};
+    if (!owner->implementation) {
+      fail("source.conformance", "associated module has no implementation",
+           span);
+      return {};
+    }
+    auto instance = substitute(*owner->implementation,
+                               substitution(*owner, base.arguments), span);
+    if (!instance)
+      return {};
+    arguments = std::move(instance->arguments);
+  }
+  auto selected = dispatch(base, required, arguments, span);
+  if (!selected)
+    return {};
+  const auto &decl = declarations[selected->declaration.index];
+  Type result(Type::Kind::Associated, decl.qualifiedName);
+  result.arguments = {base};
+  result.assumptions = decl.permissions.value_or(Permissions{});
+  if (isDomainSort(decl.associatedSort)) {
+    if (!decl.abstract)
+      return substitute(
+          decl.domain,
+          substitution(declarations[decl.parent->index], selected->arguments),
+          span);
+    auto domain = domainType(decl.associatedSort, decl.qualifiedName);
+    domain.arguments = {base};
+    domain.assumptions = result.assumptions;
+    result = std::move(domain);
+    result.symbolic = true;
+  }
+  return result;
 }
 std::optional<Substitution>
 Semantics::boundMemberSubstitution(const Declaration &callee,

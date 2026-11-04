@@ -37,7 +37,9 @@ mlir_target_link_libraries(zkc-representation_formation-test PRIVATE MLIRAsmPars
 add_zkc_test(role_assembly CpuTarget role-assembly)
 add_zkc_test(language_value_placement Language language-value-placement)
 add_zkc_test(language_invocation_provenance Language language-invocation-provenance)
+add_zkc_test(language_managed_source Language language-managed-source)
 add_zkc_test(language_selected_control Compiler language-selected-control)
+add_zkc_test(language_common_summaries Language language-common-summaries)
 add_zkc_test(language_common_recurrence Compiler language-common-recurrence)
 mlir_target_link_libraries(zkc-language_common_recurrence-test PRIVATE MLIRParser)
 zkc_source_project(zkc-language_common_recurrence-test
@@ -363,7 +365,9 @@ target_compile_definitions(zkc-construction_binding-test PRIVATE
 mlir_target_link_libraries(zkc-construction_binding-test PRIVATE MLIRParser)
 
 add_zkc_test(language_constructions CpuTarget language-constructions)
+add_zkc_test(language_construction_witness Language language-construction-witness)
 add_zkc_test(language_modules Compiler language-modules)
+add_zkc_test(language_signature_reconstruction Language language-signature-reconstruction)
 add_zkc_test(language_layout Compiler language-layout)
 target_compile_definitions(zkc-language_layout-test PRIVATE
   ZKC_LAYOUT_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/layout")
@@ -379,7 +383,10 @@ add_zkc_test(language_specification_ir CpuTarget language-specification-ir)
 mlir_target_link_libraries(zkc-language_specification_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_natural Language language-natural)
 add_zkc_test(language_semantic_budget Language language-semantic-budget)
+add_zkc_test(language_work_observation Language language-work-observation)
+add_zkc_test(language_body_summary Language language-body-summary)
 add_zkc_test(language_names Language language-names)
+add_zkc_test(language_resolution Language language-resolution)
 target_link_libraries(zkc-language_names-test PRIVATE utf8proc::utf8proc)
 target_compile_definitions(zkc-language_names-test PRIVATE
   ZKC_UNICODE_DATA="${ZKC_UNICODE_SOURCE_DIR}/17.0.0")

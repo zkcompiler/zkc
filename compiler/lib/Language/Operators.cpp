@@ -15,6 +15,7 @@ StringRef operatorSymbol(const Expression &expression) {
 std::string operatorBindingKey(const OperatorBinding &binding,
                                ArrayRef<Declaration> declarations) {
   std::string key;
+  frame(key, std::to_string(binding.module.index));
   if (binding.notation) {
     const auto &notation = *binding.notation;
     frame(key, notation.key());
@@ -23,6 +24,25 @@ std::string operatorBindingKey(const OperatorBinding &binding,
     frame(key, std::to_string(notation.precedence));
     frame(key, std::to_string(notation.arity));
   }
+  auto referenceKey = [&](const ResolvedReference &reference) {
+    frame(key, std::to_string(reference.provider.index));
+    frame(key, std::to_string(reference.target.index));
+    frame(key, std::to_string(static_cast<unsigned>(reference.category)));
+    frame(key, std::to_string(reference.path.size()));
+    for (const auto &step : reference.path) {
+      frame(key, std::to_string(step.owner.index));
+      frame(key, step.name);
+      frame(key, step.import ? std::to_string(*step.import) : "");
+    }
+    frame(key, reference.abstract ? "abstract" : "concrete");
+    if (reference.abstract) {
+      frame(key, typeIdentity(reference.abstract->module));
+      frame(key, std::to_string(reference.abstract->interface.index));
+      frame(key, std::to_string(reference.abstract->binderOwner.index));
+      frame(key, std::to_string(reference.abstract->binder));
+    }
+  };
+  referenceKey(binding.target.reference);
   frame(key, declarations[binding.target.declaration.index].qualifiedName);
   frame(key, binding.target.module ? typeIdentity(*binding.target.module) : "");
   for (const auto &argument : binding.arguments)
@@ -31,6 +51,7 @@ std::string operatorBindingKey(const OperatorBinding &binding,
       binding.notation->position == NotationDescriptor::Position::Reduction)
     frame(key, binding.filtered ? "filtered" : "unfiltered");
   if (binding.filtered) {
+    referenceKey(binding.filtered->target.reference);
     frame(
         key,
         declarations[binding.filtered->target.declaration.index].qualifiedName);
@@ -79,6 +100,7 @@ Checker::operatorBinding(const Declaration &context,
                source.span);
     return {};
   }
+  SaveAndRestore site(referenceSite, source.target.referenceSite);
   auto target = callable(context, source.target.name, source.target.span);
   if (!target)
     return {};

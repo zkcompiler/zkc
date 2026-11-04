@@ -251,7 +251,8 @@ module C: I { type State: Copy + Drop = bool; }
   require(analysis.diagnostics().front().primary.has_value(),
           "private projection lost source location");
 
-  // Repeated lookups in a wide module must account for the member scans.
+  // Associated semantic projections still charge their traversal. Indexed
+  // direct module lookups charge each use without scanning unrelated members.
   constexpr unsigned width = 512, uses = 32;
   std::string wide = "module m;interface I{";
   for (unsigned i = 0; i < width; ++i)
@@ -274,8 +275,10 @@ module C: I { type State: Copy + Drop = bool; }
   for (unsigned i = 0; i < uses; ++i)
     wide += "fn f" + std::to_string(i) + "(x:C::T511)->C::T511{return x;}";
   auto full = check(wide);
-  require(full.checkedWork() >= baseWork + 2 * width * uses,
-          "module lookup scans escaped the work budget");
+  require(full.checkedWork() >= baseWork + 2 * uses,
+          "indexed module lookups escaped the work budget");
+  require(full.checkedWork() < baseWork + 2 * width * uses,
+          "indexed module lookup still charges full member scans");
   Limits limit;
   limit.work = full.checkedWork() - 1;
   sourceRefuses(wide, "source.limit", limit);
@@ -843,7 +846,7 @@ void managedServices() {
            {"entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
             "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }fn "
             "bad(x:Random<Fr>)->(){return ();}",
-            "source.name"},
+            "source.service"},
        })
     sourceRefuses(replace(source, from, to), code);
   auto alternate = source + R"(

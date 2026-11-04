@@ -751,7 +751,7 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
                         "inputs",
                         "output",
                         "association",
-                        "implicit",
+                        "prelude",
                     ],
                     &[],
                 )?;
@@ -803,7 +803,7 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
                         ),
                         ("output", optional(r.get("output"), source_term)?),
                         ("association", association),
-                        ("implicit", flag(&r["implicit"])?),
+                        ("prelude", flag(&r["prelude"])?),
                     ],
                 ))
             })?,
@@ -860,10 +860,16 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
         (
             "service_methods",
             array(&v["serviceMethods"], |r| {
-                object(r, &["name", "signature", "capability"], &[])?;
+                object(
+                    r,
+                    &["identity", "constructor", "name", "signature", "capability"],
+                    &[],
+                )?;
                 Ok(record(
                     "ServiceMethodDeclaration",
                     &[
+                        ("identity", quoted(&r["identity"])?),
+                        ("constructor", quoted(&r["constructor"])?),
                         ("name", quoted(&r["name"])?),
                         (
                             "signature",

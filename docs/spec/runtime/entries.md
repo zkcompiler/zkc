@@ -568,6 +568,15 @@ Concrete protocol defaults have kind `function` and are selected by the protocol
 name, through the same rules. They include imported concrete protocols; an
 authored Entry does not silently hide a default.
 
+External Entry eligibility and name uniqueness are separate from source name
+access. External selectors may name private Entries and private static arguments;
+this exception does not authorize sibling source references. Static arguments
+use the declaration index with external access: an unqualified name must be
+unique across captured module namespaces before its category is checked, while a
+qualified name selects its exact route. A selected root remains terminal on a
+missing tail or wrong category. Explicit Entry names remain unique across Entry
+kinds before execution-kind filtering.
+
 `Interface` is the checked logical source view. `BoundInterface` additionally
 binds it to the package's artifact identity and compile options. `inspect` and `prepare`
 can obtain the logical view directly from `language-interface`, before executable

@@ -21,6 +21,35 @@
 
 using namespace llvm;
 namespace zkc {
+namespace {
+json::Object sourceWorkLedger(const language::WorkLedger &ledger) {
+  json::Object subphases;
+  for (size_t i = 0; i < ledger.phases.size(); ++i)
+    subphases[language::sourceWorkPhaseName(
+        static_cast<language::SourceWorkPhase>(i))] = ledger.phases[i];
+  return json::Object{{"total", ledger.total},
+                      {"subphases", std::move(subphases)}};
+}
+json::Object
+sourceWorkObservation(const language::SourceWorkObservation &observation) {
+  json::Array separate;
+  for (const auto &budget : observation.separateBudgets)
+    separate.push_back(
+        json::Object{{"phase", language::sourceWorkPhaseName(budget.phase)},
+                     {"work", sourceWorkLedger(budget.ledger)}});
+  return json::Object{{"charged", sourceWorkLedger(observation.charged)},
+                      {"separate_budgets", std::move(separate)}};
+}
+json::Object closedSourceWork(const language::ClosedEntry &entry) {
+  auto result = sourceWorkObservation(entry.workObservation());
+  result["entry"] = entry.name();
+  json::Array children;
+  for (const auto &invocation : entry.invocations())
+    children.push_back(closedSourceWork(*invocation.deployment));
+  result["children"] = std::move(children);
+  return result;
+}
+} // namespace
 int runLanguageCompiler(int argc, char **argv) {
   using namespace language;
   std::vector<SourceBuffer> sources;
@@ -48,6 +77,8 @@ int runLanguageCompiler(int argc, char **argv) {
   std::unique_ptr<CompilationObservation> observation;
   json::Array structuredDiagnostics;
   json::Object identities;
+  json::Object sourceWork{
+      {"check", nullptr}, {"check_completed", false}, {"closure", nullptr}};
   auto started = std::chrono::steady_clock::now();
   auto publishObservation = [&](bool completed) {
     if (observationPath.empty())
@@ -63,6 +94,7 @@ int runLanguageCompiler(int argc, char **argv) {
             .count();
     object["diagnostics"] = std::move(structuredDiagnostics);
     object["identities"] = std::move(identities);
+    object["source_work"] = std::move(sourceWork);
     if (captured) {
       object["capture"] = captured->identity();
       json::Array sources;
@@ -368,6 +400,8 @@ int runLanguageCompiler(int argc, char **argv) {
   captured = std::move(*captureResult);
   diagnosticSources = captured->sources();
   auto analysis = analyze(*captured);
+  if (!observationPath.empty())
+    sourceWork["check"] = sourceWorkObservation(analysis.workObservation());
   diagnosticSources = analysis.sources();
   if (!analysis.diagnostics().empty()) {
     for (const auto &d : analysis.diagnostics())
@@ -379,6 +413,7 @@ int runLanguageCompiler(int argc, char **argv) {
   auto project = analysis.checkedProject();
   if (!project)
     return refuse(project.takeError());
+  sourceWork["check_completed"] = true;
   json::Object checked{{"format", "zkc.source-check/0"},
                        {"status", "checked"},
                        {"phase", "complete"},
@@ -481,6 +516,8 @@ int runLanguageCompiler(int argc, char **argv) {
                       : closeSubject(*project, subject, limits);
   if (!selected)
     return refuse(selected.takeError());
+  if (!observationPath.empty())
+    sourceWork["closure"] = closedSourceWork(*selected);
   auto original = prepareOriginal(*selected);
   if (!original)
     return refuse(original.takeError());

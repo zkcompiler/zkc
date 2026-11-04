@@ -12,6 +12,10 @@ namespace zkc::language {
 class Layouts;
 }
 namespace zkc::language::detail {
+/// Shared by copies and retained syntax. It denotes an authored node, not its
+/// byte range; one node can contain several typed reference-position slots.
+struct ReferenceNode {};
+using ReferenceSite = std::shared_ptr<const ReferenceNode>;
 /// A label belongs to an authored argument position, not to the value's type.
 struct ArgumentLabel {
   unsigned index;
@@ -41,6 +45,7 @@ struct SyntaxType {
   std::optional<std::vector<std::string>> roles;
   std::optional<std::vector<std::string>> components;
   std::optional<std::string> oracleHolder;
+  ReferenceSite referenceSite = std::make_shared<ReferenceNode>();
 };
 struct EntrySelector {
   SyntaxType target;
@@ -85,6 +90,7 @@ struct SyntaxSelector {
   std::vector<std::string> path;
   std::optional<std::string> role;
   Span span;
+  ReferenceSite referenceSite = std::make_shared<ReferenceNode>();
 };
 struct SyntaxItemOrigin {
   std::string input, domain;
@@ -112,6 +118,7 @@ struct SyntaxPort {
   bool unnamed = false;
   /// Installed declaration selected by name resolution, never by the parser.
   std::optional<std::string> serviceConstructor;
+  std::optional<ResolvedReference> serviceReference;
   std::optional<std::string> oracleHolder;
   std::optional<SyntaxType> oracleMaximum;
 };
@@ -200,6 +207,7 @@ struct Expression {
   std::vector<std::string> labels;
   // Authored constructor occurrences for nominal match resolution/navigation.
   std::vector<Span> constructorSpans;
+  std::vector<ReferenceSite> constructorSites;
   /// Kernel parameter positions written as asset terms instead of literals.
   std::map<unsigned, SyntaxType> assetParameters;
   std::optional<std::vector<std::string>> roles;
@@ -223,6 +231,7 @@ struct Expression {
   /// written tree has no node for it. Its operations originate from the
   /// enclosing written expression.
   bool synthesized = false;
+  ReferenceSite referenceSite = std::make_shared<ReferenceNode>();
 };
 struct Statement {
   enum class Kind {
@@ -358,6 +367,8 @@ struct Import {
   bool explicitAlias = false;
   std::vector<std::string> operators, notations, reductions;
   bool isPublic = false, indexing = false;
+  std::optional<ResolvedReference> reference;
+  ReferenceSite referenceSite = std::make_shared<ReferenceNode>();
 };
 struct SyntaxSourceClaimBlock {
   SourceClaimBlock value;
@@ -465,6 +476,7 @@ struct SyntaxDeclaration {
   std::vector<SyntaxSetupSlot> setups;
   bool entryBlock = false;
   EntryKind entryKind = EntryKind::Run;
+  ReferenceSite referenceSite = std::make_shared<ReferenceNode>();
 };
 /// Static source arrays project a literal element. Receiver typing belongs to
 /// each caller; this predicate only reads retained authored syntax.

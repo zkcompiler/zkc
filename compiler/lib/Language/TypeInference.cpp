@@ -69,14 +69,16 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
                             depth + 1);
     auto result = fresh(span);
     nodes[result].origin = origin;
-    auto name = type.kind == Type::Kind::OracleProjection
-                    ? type.domain
-                    : StringRef(type.domain).rsplit("::").second.str();
-    defer([this, base, result, name, span, origin] {
+    if (!types.chargeType(type, span))
+      return result;
+    // Preserve the resolved projection, including its required declaration.
+    // Normalization selects its recorded edge once the base becomes known.
+    defer([this, base, result, projection = type, span, origin]() mutable {
       auto input = get(base, span);
       if (!input)
         return false;
-      auto output = types.associated(*input, name, span);
+      projection.arguments.front() = *input;
+      auto output = types.substitute(projection, {}, span);
       if (output)
         equal(result, instantiate(*output, {}, span, origin), span);
       return true;

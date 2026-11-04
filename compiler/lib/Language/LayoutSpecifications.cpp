@@ -17,6 +17,7 @@ bool Checker::layoutSpecifications() {
       auto span = tree.span(formal.node);
       if (!types.charge(1, span))
         return false;
+      SaveAndRestore site(referenceSite, formal.subject->referenceSite);
       auto target = resolve(module, formal.subject->name, formal.subject->span);
       if (!target)
         return false;

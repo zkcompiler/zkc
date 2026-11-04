@@ -2,6 +2,7 @@
 #include "BodyCheck.h"
 #include "CallableConstraints.h"
 #include "DataRequirements.h"
+#include "ManagedServices.h"
 #include "OperatorInference.h"
 #include "RecordIntrinsics.h"
 #include "TypeInference.h"
@@ -37,7 +38,7 @@ class ExpressionInference {
   std::unique_ptr<OperatorInference> operators;
   std::map<BindingId, Variable> bindings, domains;
   std::map<uint32_t, Variable> domainExpressions;
-  std::map<BindingId, Type> services;
+  std::map<BindingId, ServicePort> services;
   std::map<uint32_t, Result> expressions;
   std::vector<uint32_t> expressionOrder;
   std::vector<Call> calls;
@@ -264,7 +265,7 @@ class ExpressionInference {
     auto kind = values.empty() ? T::Unit : T::Tuple;
     return aggregate(kind, std::move(values), span);
   }
-  std::optional<Type> service(uint32_t id) {
+  std::optional<ServicePort> servicePort(uint32_t id) {
     const auto &expr = syntax.expressions[id];
     if (expr.binding)
       if (auto it = services.find(*expr.binding); it != services.end())
@@ -272,19 +273,26 @@ class ExpressionInference {
     if (expr.binding)
       if (auto it = owner.services.find(*expr.binding);
           it != owner.services.end())
-        return owner.body.services[it->second.index].field;
+        return owner.body.services[it->second.index];
     fail("source.service", "expected a managed service binding", expr.span);
     return {};
+  }
+  std::optional<Type> service(uint32_t id) {
+    auto port = servicePort(id);
+    return port ? std::optional(port->field) : std::nullopt;
   }
   /// An operator or notation use records its route once its callee is fixed.
   bool recordNotation(uint32_t id, DeclarationId provider,
                       const CallableReference &target) {
     const auto &expr = syntax.expressions[id];
+    SaveAndRestore site(checker.referenceSite, expr.referenceSite);
+    auto reference = target.reference;
+    // The notation provider and the callable's original route are distinct.
+    // Keep the latter in CallableReference and add the authored notation owner.
+    reference.provider = provider;
     return checker.recordReference(
-        decl, ReferenceRoute::Notation, provider, target.declaration,
-        expr.notation->symbol + expr.notation->closing, expr.span,
-        target.module ? std::optional(formatType(*target.module))
-                      : std::nullopt);
+        decl, ReferenceRoute::Notation, reference,
+        expr.notation->symbol + expr.notation->closing, expr.span);
   }
   bool finishCalls(unsigned begin, unsigned firstExpression, Span span) {
     std::optional<Diagnostic> incompleteCall;
@@ -569,9 +577,9 @@ class ExpressionInference {
       const auto &expr = syntax.expressions[statement.expression];
       if (expr.binding && syntax.bindings[expr.binding->index].service &&
           statement.kind == Statement::Kind::Let) {
-        auto field = service(statement.expression);
-        if (field)
-          services.emplace(*statement.pattern.binding, *field);
+        auto port = servicePort(statement.expression);
+        if (port)
+          services.emplace(*statement.pattern.binding, *port);
         continue;
       }
       if (statement.kind == Statement::Kind::Let && statement.pattern.binding &&
@@ -814,6 +822,7 @@ class ExpressionInference {
     if (auto it = expressions.find(id); it != expressions.end())
       return it->second;
     const auto &expr = syntax.expressions[id];
+    SaveAndRestore site(checker.referenceSite, expr.referenceSite);
     contexts.emplace(
         id, CallContext{scopedMode.value_or(owner.body.mode), scopedDepth});
     Result result{types.fresh(expr.span)};
@@ -1041,6 +1050,8 @@ class ExpressionInference {
                                 : expr.constructorSpans[i];
           if (label.contains("::")) {
             auto [qualifier, alternative] = label.rsplit("::");
+            SaveAndRestore constructorSite(checker.referenceSite,
+                                           expr.constructorSites.at(i));
             auto target = checker.resolve(decl, qualifier, occurrence);
             if (!target)
               break;
@@ -1255,23 +1266,54 @@ class ExpressionInference {
       const auto &receiver = syntax.expressions[expr.children.front()];
       if (receiver.binding && (services.count(*receiver.binding) ||
                                owner.services.count(*receiver.binding))) {
-        auto field = service(expr.children.front());
-        auto methods = protocol::serviceMethodDeclarations();
-        auto method = llvm::find_if(
-            methods, [&](const auto &row) { return row.name == expr.text; });
-        if (method == methods.end()) {
-          fail("source.service", "unknown installed service member", expr.span);
+        auto port = servicePort(expr.children.front());
+        if (!port)
+          break;
+        auto target =
+            resolveServiceMethod(checker.types, checker.index(), decl.id,
+                                 port->constructor, expr.text, expr.span);
+        if (!target)
+          break;
+        auto *method = checker.index().serviceAssociation(target->declaration);
+        if (expr.children.size() != 1 || !expr.callLabels.empty() ||
+            !expr.staticLabels.empty() || expr.roles ||
+            expr.arguments.size() != serviceStaticCount(method->signature)) {
+          fail("source.service",
+               "managed request differs from its installed signature",
+               expr.span);
           break;
         }
-        if (field)
-          constrain(result.type,
-                    method->signature == protocol::ServiceSignature::RandomIndex
-                        ? Type(T::Index)
-                    : method->signature ==
-                            protocol::ServiceSignature::RandomIndices
-                        ? *builtinType("indices", {})
-                        : *field,
-                    expr.span);
+        SaveAndRestore site(checker.referenceSite, expr.referenceSite);
+        if (!checker.recordReference(decl, ReferenceRoute::Method,
+                                     target->reference, expr.text, expr.span))
+          break;
+        output.callees.emplace(id, *target);
+        std::vector<Type> arguments{port->field};
+        for (const auto &term : expr.arguments) {
+          auto value = checker.type(decl, term);
+          if (!value)
+            break;
+          if (value->kind != T::Natural ||
+              (value->dimension.isClosed() &&
+               !protocol::uniformIndexBound(value->dimension.closedValue()))) {
+            fail("source.service",
+                 "managed request requires positive static u64 naturals",
+                 expr.span);
+            break;
+          }
+          arguments.push_back(*value);
+        }
+        if (checker.types.diagnostic)
+          break;
+        output.arguments.emplace(id, std::move(arguments));
+        if (!method->capability.empty() &&
+            !checker.types.entails(
+                &decl,
+                CapabilityBound{method->capability, {port->field}, expr.span},
+                "source.service"))
+          break;
+        constrain(result.type, serviceResult(method->signature, port->field),
+                  expr.span);
       } else
         call(id, depth, result);
       break;

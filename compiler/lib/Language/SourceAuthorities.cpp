@@ -54,12 +54,12 @@ Error computeSourceAuthorities(CheckedStorage &storage,
       depend(parent, child);
     }
   // Every recorded route of a declaration defined in a unit adds the units of
-  // its provider and target. An abstract reference adds only the interface
-  // member's unit, never a module that a closed instance later substitutes.
+  // its authored provider and target. Import records retain intermediate
+  // routes. Abstract references keep the interface's authored facade, never a
+  // consumer's later substituted module.
   for (const auto &reference : references) {
     auto owner = unit(reference.owner);
-    if (!reference.abstractModule)
-      depend(owner, unit(reference.provider));
+    depend(owner, unit(reference.provider));
     depend(owner, unit(reference.target));
   }
   std::vector<std::set<unsigned>> assets(count);

@@ -1,7 +1,12 @@
+#include "../lib/Language/ScopedWitness.h"
+#include "../lib/Language/State.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "zkc/Language/DeclarationIndex.h"
 #include "zkc/Language/Project.h"
 #include <algorithm>
+#include <set>
+#include <type_traits>
 using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;
@@ -37,6 +42,63 @@ protocol Run roles(P)(left:bool@P,right:bool@P,first:Random<F>@P,second:Random<F
 } // namespace
 int main() {
   Cases cases;
+  for (unsigned collection = 0; collection < 5; ++collection)
+    for (bool syntax : {false, true})
+      cases.run(
+          "malformed retained source " + Twine(collection) + " " +
+              Twine(syntax),
+          [&] {
+            auto project = checked(R"(
+module m;
+fn identity(x:bool)->bool{return x;}
+fn apply(x:bool,callback:fn(bool)->bool effects())->bool effects(){return callback(x);}
+fn dormant(x:bool)->bool effects(){return apply(identity(x),fn(y)=>y);}
+#[linear] struct Ticket{value:bool}
+fn observe(x:Ticket)->(Ticket,bool){let pair=inspect_record(x);return(pair.0,pair.1.0);}
+)");
+            accepted(project);
+            auto &storage = const_cast<zkc::language::detail::CheckedStorage &>(
+                zkc::language::detail::DeclarationAccess::storage(project));
+            auto remove = [&](auto &handle) {
+              require(bool(handle), "missing positive source handle");
+              if (!syntax) {
+                handle.reset();
+                return;
+              }
+              using Source = std::remove_const_t<
+                  typename std::decay_t<decltype(handle)>::element_type>;
+              auto copy = std::make_shared<Source>(*handle);
+              copy->syntax.reset();
+              handle = std::move(copy);
+            };
+            StringRef diagnostic = "source.binding-witness";
+            if (collection == 0) {
+              require(!storage.scopedCalls.empty(), "missing ordinary call");
+              remove(storage.scopedCalls.front());
+            } else if (collection == 1) {
+              require(!storage.intrinsicCalls.empty(),
+                      "missing intrinsic call");
+              remove(storage.intrinsicCalls.front());
+            } else if (collection == 2) {
+              require(!storage.scopedInvocations.empty(),
+                      "missing scoped invocation");
+              remove(storage.scopedInvocations.front());
+              diagnostic = "source.scoped-witness";
+            } else if (collection == 3) {
+              require(!storage.scopedSources.empty(),
+                      "missing callback source");
+              remove(storage.scopedSources.front());
+              diagnostic = "source.scoped-witness";
+            } else {
+              require(!storage.bodySources.empty(), "missing body source");
+              remove(storage.bodySources.begin()->second);
+            }
+            auto error = checkScopedElaboration(project);
+            require(bool(error), "malformed source handle passed replay");
+            auto message = toString(std::move(error));
+            require(namesIdentifier(message, diagnostic),
+                    "unexpected malformed-source refusal: " + message);
+          });
   for (unsigned mutation = 0; mutation < 3; ++mutation)
     cases.run("protocol coordinated mutation " + Twine(mutation), [&] {
       auto project = checked(protocol);
@@ -414,5 +476,323 @@ protocol Run roles(P)(x:F@P)->(out:F@P){return named(x);}
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
   });
+  const char *queries = R"(
+module m;domain F=field("koala-bear.ext4-binomial3");
+protocol Run roles(P,V)(first:Random<F>@V,second:Random<F>@V)->(){
+ let alias=first;let forwarded=alias;
+ let a=forwarded.draw();let b=first.index<8>();let c=first.indices(8,3);
+ let d=second.draw();return ();
+}
+)";
+  auto queriesIn = [](Body &checkedBody) {
+    std::vector<Operation *> result;
+    for (auto &op : checkedBody.operations)
+      if (std::holds_alternative<ServiceQuery>(op.action))
+        result.push_back(&op);
+    return result;
+  };
+  cases.run(
+      "indexed queries retain one normal binding per authored occurrence", [&] {
+        auto project = checked(queries);
+        accepted(project);
+        auto operations = queriesIn(body(project, "Run"));
+        require(operations.size() == 4, "missing managed operations");
+        std::set<unsigned> occurrences;
+        for (auto *op : operations) {
+          require(op->binding && op->binding->scopedSource &&
+                      op->binding->target.reference.category ==
+                          ResolutionCategory::ServiceMethod,
+                  "managed query lacks an indexed call occurrence");
+          require(occurrences.insert(*op->binding->scopedSource).second,
+                  "managed source occurrence was reused");
+          const auto &target =
+              project.declarations()[op->binding->target.declaration.index];
+          const auto *method =
+              project.declarationIndex().serviceAssociation(target.id);
+          require(method && method->name == target.name && target.parent &&
+                      project.declarationIndex()
+                              .association(*target.parent)
+                              ->identity == method->constructor,
+                  "managed declaration has the wrong constructor association");
+        }
+        auto closed = take(closeNativeRun(project, "m::Run"));
+        if (auto error = checkScopedSpecialization(closed))
+          throw std::runtime_error(toString(std::move(error)));
+      });
+  for (unsigned mutation = 0; mutation < 17; ++mutation)
+    cases.run("managed authored query mutation " + Twine(mutation), [&] {
+      auto project = checked(queries);
+      accepted(project);
+      auto &run = body(project, "Run");
+      auto operations = queriesIn(run);
+      auto &draw = *operations[0];
+      auto &index = *operations[1];
+      auto &block = *operations[2];
+      if (mutation == 0) {
+        std::get<ServiceQuery>(draw.action).service = {1};
+        draw.binding->services[0] = {1};
+      } else if (mutation == 1) {
+        std::get<ServiceQuery>(index.action).bound = Natural::constant(9);
+        index.binding->arguments[1].dimension = Natural::constant(9);
+      } else if (mutation == 2) {
+        std::get<ServiceQuery>(block.action).count = Natural::constant(4);
+        block.binding->arguments[2].dimension = Natural::constant(4);
+      } else if (mutation == 3) {
+        draw.binding->target = index.binding->target;
+      } else if (mutation == 4) {
+        draw.binding->target.reference.provider =
+            project.declarations().front().id;
+      } else if (mutation == 5) {
+        draw.binding.reset();
+      } else if (mutation == 6) {
+        index.binding->scopedSource = draw.binding->scopedSource;
+      } else if (mutation == 7) {
+        run.operations.erase(llvm::find_if(run.operations, [](const auto &op) {
+          return std::holds_alternative<ServiceQuery>(op.action);
+        }));
+      } else if (mutation == 8) {
+        run.services[0].constructor = {};
+      } else if (mutation == 9) {
+        std::swap(run.services[0], run.services[1]);
+        for (const auto &decl : project.declarations())
+          if (decl.name == "Run")
+            std::swap(const_cast<Declaration &>(decl).services[0],
+                      const_cast<Declaration &>(decl).services[1]);
+        for (auto *op : operations) {
+          auto &query = std::get<ServiceQuery>(op->action);
+          query.service.index = 1 - query.service.index;
+          op->binding->services[0] = query.service;
+        }
+      } else if (mutation == 10) {
+        std::get<ServiceQuery>(block.action).bound = Natural::constant(9);
+        block.binding->arguments[1].dimension = Natural::constant(9);
+      } else {
+        auto &result =
+            run.values[operations[(mutation - 11) / 2]->results.front().index];
+        if ((mutation - 11) % 2 == 0) {
+          require(result.type != Type{}, "query result already Boolean");
+          result.type = Type{};
+        } else {
+          require(result.components == std::vector<unsigned>{1},
+                  "query result must belong to V");
+          result.components = {0};
+        }
+      }
+      rejected(project);
+    });
+  cases.run(
+      "generic managed bound and count close through normal bindings", [] {
+        auto project = checked(R"(
+module m;domain F=field("koala-bear.ext4-binomial3");
+protocol sample<N:nat,Q:nat> roles(V)(coins:Random<F>@V)->(){
+ let a=coins.index<N>();let b=coins.indices(N,Q);return ();
+}
+protocol Run roles(V)(coins:Random<F>@V)->(){sample<8,3>(coins);return ();}
+)");
+        accepted(project);
+        auto closed = take(closeNativeRun(project, "m::Run"));
+        if (auto error = checkScopedSpecialization(closed))
+          throw std::runtime_error(toString(std::move(error)));
+        bool saw = false;
+        for (const auto &decl : closed.declarations())
+          if (decl.body)
+            for (const auto &op : decl.body->operations)
+              if (const auto *query = std::get_if<ServiceQuery>(&op.action);
+                  query && query->count) {
+                require(op.binding && op.binding->arguments.size() == 3 &&
+                            op.binding->arguments[1].dimension ==
+                                Natural::constant(8) &&
+                            op.binding->arguments[2].dimension ==
+                                Natural::constant(3),
+                        "query call statics did not close");
+                saw = true;
+              }
+        require(saw, "missing closed block query");
+      });
+  for (unsigned mutation = 0; mutation < 4; ++mutation)
+    cases.run("nested managed root capture mutation " + Twine(mutation), [&] {
+      auto project = checked(R"(
+module m;domain F=field("koala-bear.ext4-binomial3");
+protocol Run roles(P,V)(go:bool@V,n:index@V,first:Random<F>@V,second:Random<F>@V)->(){
+ let alias=second;
+ for i in 0..n roles(V) max 2 {
+   let local=alias;
+   if go roles(V) {let a=local.draw();let b=first.index<8>();let c=local.indices(8,3);}
+   else {let a=first.draw();let b=local.index<8>();let c=first.indices(8,3);}
+ }
+ return ();
+}
+)");
+      accepted(project);
+      auto closed = take(closeNativeRun(project, "m::Run"));
+      if (auto error = checkScopedSpecialization(closed))
+        throw std::runtime_error(toString(std::move(error)));
+      bool changed = false;
+      for (auto &op : body(project, "Run").operations)
+        if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+          auto &region = const_cast<Body &>(*repeat->region);
+          if (mutation == 0) {
+            std::swap(repeat->services[0], repeat->services[1]);
+            std::swap(region.services[0], region.services[1]);
+            changed = true;
+          }
+          for (auto &nested : region.operations)
+            if (auto *control = std::get_if<Control>(&nested.action)) {
+              if (mutation == 1) {
+                std::swap(control->services[0], control->services[1]);
+                for (const auto &arm : control->regions)
+                  std::swap(const_cast<Body &>(*arm).services[0],
+                            const_cast<Body &>(*arm).services[1]);
+                changed = true;
+              } else if (mutation >= 2) {
+                auto &arm = const_cast<Body &>(*control->regions.front());
+                auto at = llvm::find_if(arm.operations, [](const auto &op) {
+                  return std::holds_alternative<ServiceQuery>(op.action);
+                });
+                require(at != arm.operations.end(), "missing captured query");
+                if (mutation == 2) {
+                  auto &query = std::get<ServiceQuery>(at->action);
+                  query.service.index = 1 - query.service.index;
+                  at->binding->services[0] = query.service;
+                } else {
+                  arm.services[0].name = "forged";
+                  arm.services[0].owner = 0;
+                }
+                changed = true;
+              }
+            }
+        }
+      require(changed, "missing nested managed control");
+      rejected(project);
+    });
+  for (unsigned mutation = 0; mutation < 3; ++mutation)
+    cases.run("region-relative root is reconstructed from ordered captures " +
+                  Twine(mutation),
+              [&] {
+                auto project = checked(R"(
+module m;domain F=field("koala-bear.ext4-binomial3");
+protocol Run roles(P,V)(go:bool@V,n:index@V,first:Random<F>@P,second:Random<F>@V)->(){
+ let alias=second;
+ for i in 0..n roles(V) max 2 {
+   let inner=alias;
+   if go roles(V) {let a=inner.draw();let b=inner.index<8>();let c=inner.indices(8,3);}
+   else {let a=inner.draw();}
+ }
+ return ();
+}
+)");
+                accepted(project);
+                auto closed = take(closeNativeRun(project, "m::Run"));
+                if (auto error = checkScopedSpecialization(closed))
+                  throw std::runtime_error(toString(std::move(error)));
+                bool changed = false;
+                auto &run = body(project, "Run");
+                for (auto &op : run.operations)
+                  if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+                    require(
+                        repeat->services.size() == 1 &&
+                            repeat->services[0].index == 1,
+                        "repeat did not remap the second declaration input");
+                    auto &region = const_cast<Body &>(*repeat->region);
+                    if (mutation == 0) {
+                      repeat->services[0] = {0};
+                      region.services[0] = run.services[0];
+                      changed = true;
+                    } else if (mutation == 1) {
+                      region.services[0].owner = 0;
+                      changed = true;
+                    } else {
+                      auto &decl = *llvm::find_if(
+                          project.declarations(),
+                          [](const auto &decl) { return decl.name == "Run"; });
+                      const_cast<Declaration &>(decl).services[1].owner = 0;
+                      run.services[1].owner = 0;
+                      region.services[0].owner = 0;
+                      changed = true;
+                    }
+                  }
+                require(changed, "missing one-root repeat");
+                rejected(project);
+              });
+  cases.run("ordinary home methods retain identity beside managed row names",
+            [] {
+              auto project = checked(R"(
+module m;struct Box{pub value:bool}
+math fn draw(self:Box)->bool{return self.value;}
+math fn indices(self:Box)->bool{return self.value;}
+protocol Run roles(P)(box:Box@P)->(out:bool@P){return box.draw()&&box.indices();}
+)");
+              accepted(project);
+              for (const auto &op : body(project, "Run").operations)
+                require(!std::holds_alternative<ServiceQuery>(op.action),
+                        "ordinary homonym became a service query");
+            });
+  for (bool coordinated : {false, true})
+    cases.run(
+        coordinated ? "managed facade provider cannot be relabeled"
+                    : "managed facade provider is source identity",
+        [&] {
+          auto project = take(
+              analyze(
+                  take(capture(
+                      {{"facade",
+                        "module facade;pub use zkc::prelude::{Random};",
+                        "facade.zkc"},
+                       {"other", "module other;pub use zkc::prelude::{Random};",
+                        "other.zkc"},
+                       {"m",
+                        R"(module m;domain F=field("koala-bear.ext4-binomial3");
+protocol Run roles(V)(coins:facade::Random<F>@V)->(){let a=coins.draw();return ();})",
+                        "m.zkc"}})))
+                  .checkedProject());
+          accepted(project);
+          auto owner =
+              llvm::find_if(project.declarations(), [](const auto &decl) {
+                return decl.name == "Run";
+              });
+          require(owner != project.declarations().end(),
+                  "missing facade query owner");
+          auto method = project.declarationIndex().lookup(
+              SourceAccess{owner->id}, "other::Random::draw");
+          auto constructor = project.declarationIndex().lookup(
+              SourceAccess{owner->id}, "other::Random");
+          require(std::holds_alternative<ResolvedReference>(method) &&
+                      std::holds_alternative<ResolvedReference>(constructor),
+                  "missing alternate facade path");
+          auto &run = body(project, "Run");
+          auto operations = queriesIn(run);
+          operations.front()->binding->target.reference =
+              std::get<ResolvedReference>(method);
+          if (coordinated) {
+            run.services.front().constructor =
+                std::get<ResolvedReference>(constructor);
+            const_cast<Declaration &>(*owner).services.front().constructor =
+                std::get<ResolvedReference>(constructor);
+          }
+          rejected(project);
+        });
+  cases.run(
+      "closed managed statics have an independent specialization check", [&] {
+        auto project = checked(queries);
+        accepted(project);
+        auto closed = take(closeNativeRun(project, "m::Run"));
+        if (auto error = checkScopedSpecialization(closed))
+          throw std::runtime_error(toString(std::move(error)));
+        bool changed = false;
+        for (const auto &decl : closed.declarations())
+          if (decl.body)
+            for (auto &op : const_cast<Body &>(*decl.body).operations)
+              if (auto *query = std::get_if<ServiceQuery>(&op.action);
+                  query && query->count) {
+                query->count = Natural::constant(4);
+                op.binding->arguments[2].dimension = Natural::constant(4);
+                changed = true;
+              }
+        require(changed, "missing specialized managed query");
+        auto error = checkScopedSpecialization(closed);
+        require(bool(error) && namesIdentifier(toString(std::move(error)),
+                                               "source.scoped-specialization"),
+                "closed managed statics certified one another");
+      });
   return cases.result();
 }

@@ -3,48 +3,85 @@
 #include "zkc/Language/Diagnostics.h"
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<DeclarationId>
+std::optional<CallableReference>
 Checker::constructionMember(const Declaration &owner, const Type &provider,
-                            StringRef name, Span span) {
+                            StringRef name, Span span,
+                            std::optional<ResolvedReference> selectedProvider) {
   const Declaration *contract = nullptr;
-  std::optional<DeclarationId> source;
+  std::optional<ResolvedReference> reference = std::move(selectedProvider);
+  auto binderOwner = owner.id;
+  uint32_t slot = UINT32_MAX;
   if (provider.symbolic) {
     auto *parameter = types.parameter(provider.domain);
     if (parameter && parameter->interface) {
       contract = &output.declarations[parameter->interface->index];
-      // A symbolic provider keeps the written route of its interface bound.
-      if (auto found = moduleParameterProviders.find(parameter->atom);
-          found != moduleParameterProviders.end())
-        source = found->second;
+      auto found = moduleParameterReferences.find(parameter->atom);
+      if (found != moduleParameterReferences.end()) {
+        reference = found->second.reference;
+        binderOwner = found->second.owner;
+        slot = found->second.slot;
+      }
     }
   } else if (auto *module = types.typeDeclaration(provider);
              module && module->implementation) {
     contract = types.typeDeclaration(*module->implementation);
-    source = module->id;
+    if (!reference) {
+      auto selected =
+          index().lookup(accessFor(owner), "::" + module->qualifiedName,
+                         {[&] { return types.charge(1, span); }, {}});
+      if (auto *ref = std::get_if<ResolvedReference>(&selected))
+        reference = *ref;
+      else if (!acceptFailure(std::get<LookupFailure>(selected), span, true))
+        return {};
+    }
   }
-  if (!contract || contract->kind != Declaration::Kind::Interface) {
+  if (!contract || contract->kind != Declaration::Kind::Interface ||
+      !reference) {
     types.fail("source.construction", "provider must implement an interface",
                span);
     return {};
   }
-  if (!types.charge(contract->members.size(), span))
+  auto selected = index().member(accessFor(owner), contract->id, name,
+                                 {[&] { return types.charge(1, span); }, {}});
+  if (auto *failure = std::get_if<LookupFailure>(&selected)) {
+    if (failure->kind != LookupFailureKind::NotFound)
+      acceptFailure(*failure, span, true);
+    else
+      types.fail("source.construction", "provider interface requires " + name,
+                 span);
     return {};
-  for (auto id : contract->members)
-    if (output.declarations[id.index].name == name) {
-      if (!signature(id))
-        return {};
-      if (!source)
-        source = contract->module;
-      if (!recordReference(
-              owner, ReferenceRoute::Construction, *source, id, name, span,
-              provider.symbolic ? std::optional(formatType(provider))
-                                : std::nullopt))
-        return {};
-      return id;
-    }
-  types.fail("source.construction", "provider interface requires " + name,
-             span);
-  return {};
+  }
+  const auto &member = std::get<ResolvedReference>(selected);
+  reference->target = member.target;
+  reference->category = member.category;
+  reference->path.insert(reference->path.end(), member.path.begin(),
+                         member.path.end());
+  // Concrete providers also retain the exact module term; the binder slot is
+  // absent (UINT32_MAX), rather than inferred later from a display string.
+  reference->abstract =
+      AbstractMemberContext{provider, contract->id, binderOwner, slot};
+  if (!signature(member.target) ||
+      !recordReference(owner, ReferenceRoute::Construction, *reference, name,
+                       span))
+    return {};
+  const auto &site =
+      referenceSite ? referenceSite : sources[owner.id.index]->referenceSite;
+  const auto node = referenceNodes.find(site);
+  if (node == referenceNodes.end()) {
+    types.fail("source.binding-witness", "missing construction reference node",
+               span);
+    return {};
+  }
+  const auto occurrence = recordedReferences.find(
+      std::make_tuple(owner.id.index, node->second.index,
+                      ReferenceRoute::Construction, name.str(), 0));
+  if (occurrence == recordedReferences.end()) {
+    types.fail("source.binding-witness", "missing construction occurrence",
+               span);
+    return {};
+  }
+  return CallableReference{member.target, provider, *reference,
+                           occurrence->second};
 }
 bool Checker::constructionCodec(Declaration &decl,
                                 const SyntaxConstruction &syntax,
@@ -56,15 +93,22 @@ bool Checker::constructionCodec(Declaration &decl,
     return types.fail("source.construction",
                       "an inherited record format cannot be replaced",
                       syntax.codec->span);
+  SaveAndRestore site(referenceSite, syntax.codec->referenceSite);
   auto provider = type(decl, *syntax.codec);
   if (!provider)
     return false;
   if (provider->kind != Type::Kind::Module)
     return types.fail("source.construction", "record format requires a module",
                       syntax.codec->span);
-  if (!constructionMember(decl, *provider, "Record", syntax.codec->span))
+  auto member = constructionMember(
+      decl, *provider, "Record", syntax.codec->span,
+      typeReferences.count(syntax.codec->referenceSite)
+          ? std::optional(typeReferences.at(syntax.codec->referenceSite))
+          : std::nullopt);
+  if (!member)
     return false;
-  auto record = types.associated(*provider, "Record", syntax.codec->span);
+  auto record =
+      types.associated(*provider, member->declaration, syntax.codec->span);
   if (!record || !types.executableType(*record, syntax.codec->span))
     return false;
   auto permissions = types.permissions(*record, decl.span, &decl);
@@ -107,10 +151,14 @@ bool Checker::constructionCodec(Declaration &decl,
   }
   auto method = [&](StringRef name, ArrayRef<Type> inputs,
                     ArrayRef<Type> outputs, ConstructionMethod &selected) {
-    auto found = constructionMember(decl, *provider, name, decl.span);
+    auto found = constructionMember(
+        decl, *provider, name, decl.span,
+        typeReferences.count(syntax.codec->referenceSite)
+            ? std::optional(typeReferences.at(syntax.codec->referenceSite))
+            : std::nullopt);
     if (!found)
       return false;
-    const auto &function = output.declarations[found->index];
+    const auto &function = output.declarations[found->declaration.index];
     if (function.kind != Declaration::Kind::Local ||
         function.parameters.size() !=
             output.declarations[function.parent->index].parameters.size() ||
@@ -136,7 +184,7 @@ bool Checker::constructionCodec(Declaration &decl,
                             "codec method type differs: " + name.str(),
                             decl.span);
       }
-    selected.target = {*found, *provider};
+    selected.target = *found;
     for (const auto &parameter : function.parameters)
       selected.arguments.push_back(bindings->at(parameter.atom));
     return true;

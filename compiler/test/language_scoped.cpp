@@ -1154,5 +1154,45 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })"));
     require(bool(error), "open dependency accepted in closed effect summary");
     consumeError(std::move(error));
   });
+  cases.run("two recorded implementations retain callback result dependencies",
+            [] {
+              succeeds(R"(
+interface Choice<F:Field> {
+ math fn choose(left:F,right:F,body:math fn(F)->F)->F;
+}
+module First<F:Field>:Choice<F> {
+ math fn choose(left:F,right:F,body:math fn(F)->F)->F {return body(left);}
+}
+module Last<F:Field>:Choice<F> {
+ math fn choose(left:F,right:F,body:math fn(F)->F)->F {return body(right);}
+}
+math fn through<F:Field,C:Choice<F>>(left:F,right:F,body:math fn(F)->F)->F {
+ return C::choose(left,right,body);
+}
+protocol Demo roles(P,V)(left:Fr@P,right:Fr@V)->(a:Fr@P,b:Fr@V) {
+ return (a=through<Fr,First<Fr>>(left,right,fn(x)=>x),
+         b=through<Fr,Last<Fr>>(left,right,fn(x)=>x));
+}
+entry fn Run(inputs:Demo::Inputs) {return Demo::run(inputs);}
+)");
+            });
+  cases.run(
+      "source conformance witness rejects bilateral callback ceiling forgery",
+      [] {
+        auto project = take(check(R"(
+interface I {fn run(x:bool,body:fn(bool)->bool effects())->bool effects();}
+module Implementation:I {fn run(x:bool,body:fn(bool)->bool effects())->bool {return body(x);}}
+)"));
+        for (const auto &declaration : project.declarations())
+          if (declaration.name == "run")
+            const_cast<Declaration &>(declaration)
+                .scopedInputs.front()
+                .signature.allowance.mayStop = true;
+        auto error = checkScopedElaboration(project);
+        require(bool(error), "bilateral callback forgery was accepted");
+        require(namesIdentifier(toString(std::move(error)),
+                                "source.scoped-witness"),
+                "wrong conformance callback witness diagnostic");
+      });
   return cases.result();
 }
