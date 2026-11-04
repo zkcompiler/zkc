@@ -219,6 +219,49 @@ struct ContractHeaders {
     return true;
   }
 };
+// All header consumers start from the same authored parameter indexing and
+// signature inference/admission lifecycle. Candidate parameter atoms must not
+// enter the reader's semantic index before these telescopes are reconstructed.
+std::unique_ptr<Checker> reconstructHeaders(const CheckedStorage &storage,
+                                            CheckedStorage &replay,
+                                            const ContractHeaders &headers,
+                                            Semantics &types, Work &work) {
+  if (auto error = chargeSemanticIndex(storage.declarations, work)) {
+    types.accept(std::move(error));
+    return {};
+  }
+  replay.declarations = storage.declarations;
+  replay.assets = storage.assets;
+  replay.sources = storage.sources;
+  replay.declarationIndex = storage.declarationIndex;
+  for (const auto &[index, source] : headers.sources) {
+    auto &decl = replay.declarations[index];
+    for (const auto &parameter : decl.parameters) {
+      if (!types.charge(parameter.name.size() + parameter.atom.size() + 1,
+                        source->span))
+        return {};
+      for (const auto &argument : parameter.arguments)
+        if (!types.chargeType(argument, source->span))
+          return {};
+    }
+    decl.parameters.clear();
+  }
+  auto reader = std::make_unique<Checker>(replay, work, SourceAccess{{0}});
+  // Register all dependencies before reading a signature; complete them in
+  // declaration order, matching the producer's lazy signature lifecycle.
+  for (const auto &[index, source] : headers.sources)
+    if (!reader->prepareSignatureReconstruction(DeclarationId{index},
+                                                *source)) {
+      types.accept(reader->types.takeError());
+      return {};
+    }
+  for (const auto &[index, source] : headers.sources)
+    if (!reader->reconstructSignature(DeclarationId{index})) {
+      types.accept(reader->types.takeError());
+      return {};
+    }
+  return reader;
+}
 bool reconstructInferredResult(Semantics &types, const CheckedStorage &storage,
                                const SyntaxDeclaration &source,
                                Declaration &written) {
@@ -552,26 +595,13 @@ replayServicePorts(const CheckedStorage &storage, Work &work) {
                              "managed constructor lookup differs", port.span);
     }
   }
-  if (auto error = chargeSemanticIndex(storage.declarations, work))
-    return std::move(error);
   CheckedStorage replay(storage.capture, storage.installation);
-  replay.declarations = storage.declarations;
-  replay.assets = storage.assets;
-  replay.sources = storage.sources;
-  replay.declarationIndex = storage.declarationIndex;
-  Checker reader(replay, work, SourceAccess{{0}});
-  // Shared signature reconstruction must assign parameter indices from the
-  // immutable header before substituting service fields and static terms.
-  // Service replay deliberately has no separate parameter-indexing authority.
+  auto reader = reconstructHeaders(storage, replay, headers, types, work);
+  if (!reader)
+    return types.takeError();
   for (const auto &[id, source] : headers.sources)
-    if (!reader.prepareSignatureReconstruction(DeclarationId{id}, *source))
-      return reader.types.takeError();
-  for (const auto &[id, source] : headers.sources) {
-    if (!reader.reconstructSignature(DeclarationId{id}))
-      return reader.types.takeError();
     if (source->kind == Declaration::Kind::Protocol)
       ports.emplace(id, replay.declarations[id].services);
-  }
   return ports;
 }
 llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
@@ -657,41 +687,10 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
     if (!storage.declarationIndex)
       return types.fail("source.scoped-witness",
                         "missing conformance namespaces", {});
-    if (auto error = chargeSemanticIndex(storage.declarations, work))
-      return types.accept(std::move(error));
     CheckedStorage replay(storage.capture, storage.installation);
-    replay.declarations = storage.declarations;
-    replay.assets = storage.assets;
-    replay.sources = storage.sources;
-    replay.declarationIndex = storage.declarationIndex;
-    // The replay reader indexes parameters at construction. Do not seed that
-    // index with candidate atoms/slots before authored telescopes replace them.
-    for (const auto &[index, source] : headers.sources) {
-      auto &decl = replay.declarations[index];
-      for (const auto &parameter : decl.parameters) {
-        if (!types.charge(parameter.name.size() + parameter.atom.size() + 1,
-                          source->span))
-          return false;
-        for (const auto &argument : parameter.arguments)
-          if (!types.chargeType(argument, source->span))
-            return false;
-      }
-      decl.parameters.clear();
-    }
-    Checker reader(replay, work, SourceAccess{{0}});
-    // Register dependencies before reading any signature. Replaying only the
-    // two selected members would trust mutable aliases and associated domains
-    // on which both authored signatures depend.
-    for (const auto &[index, source] : headers.sources)
-      if (!reader.prepareSignatureReconstruction(DeclarationId{index}, *source))
-        return types.accept(reader.types.takeError());
-    // Match the producer's declaration order so an already completed earlier
-    // alias does not become a new deep dependency chain in the witness.
-    for (const auto &[index, source] : headers.sources) {
-      (void)source;
-      if (!reader.reconstructSignature(DeclarationId{index}))
-        return types.accept(reader.types.takeError());
-    }
+    auto reader = reconstructHeaders(storage, replay, headers, types, work);
+    if (!reader)
+      return false;
     for (const auto &[index, source] : headers.sources)
       if (!reconstructInferredResult(types, storage, *source,
                                      replay.declarations[index]))
@@ -735,14 +734,14 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
                           "cached module owner differs", actual.span);
       if (actual.parent && !reconstruct(*actual.parent))
         return false;
-      if (!reader.reconstructSignature(id)) {
-        if (reader.types.diagnostic)
-          return types.accept(reader.types.takeError());
+      if (!reader->reconstructSignature(id)) {
+        if (reader->types.diagnostic)
+          return types.accept(reader->types.takeError());
         return types.fail("source.scoped-witness", "invalid authored contract",
                           actual.span);
       }
       if (!signatureAgrees(premises, actual, replay.declarations[id.index],
-                           reader.permitsContractInference(id)))
+                           reader->permitsContractInference(id)))
         return types.accept(premises.takeError());
       return true;
     };
