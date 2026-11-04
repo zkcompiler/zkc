@@ -190,8 +190,10 @@ solc pin, verifier ABI, deployment ceilings and revert classes. The compiler,
 SDK and CLI read its generated tables, and the deployed runner and harness read
 and check the declaration itself. Authored empty transcripts and managed
 constructions over a transcript suite whose facts the target realizes, the BLS
-Fr Keccak hash chain among the installed suites, use the common framed proof
-format. The maintained
+Fr and KoalaBear quartic/octic Keccak hash chains among the installed suites,
+use the common framed proof format. Managed index requests and native index
+blocks, including verifier grinding checks, retain the shared request bytes;
+nonce search remains native prover work. The maintained
 [Sumcheck project](../examples/projects/sumcheck-keccak/README.md) uses the native
 prover and EVM verifier over identical framed proof bytes. The
 [deployed tests](../common/tests/evm/README.md) compare complete primitive traces

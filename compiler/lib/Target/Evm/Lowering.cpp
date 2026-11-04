@@ -5,7 +5,9 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/RegionUtils.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/ResourceUnit.h"
@@ -254,13 +256,18 @@ struct PreparedEndpoint {
                                       "index.wrapping_add",
                                       "index.wrapping_sub",
                                       "indices.append",
+                                      "indices.at",
                                       "indices.empty",
+                                      "indices.length",
                                       "sequence.append",
                                       "sequence.at",
                                       "sequence.empty",
                                       "sequence.get",
                                       "sequence.length",
                                       "transcript.native.indexed.challenge",
+                                      "transcript.native.indexed.index",
+                                      "transcript.native.indexed.indices",
+                                      "transcript.native.indexed.indices.gated",
                                       "transcript.native.indexed.observe.data",
                                       "vector.append",
                                       "vector.at",
@@ -284,6 +291,9 @@ struct PreparedEndpoint {
             return WalkResult::interrupt();
           }
           if (contract == "transcript.native.indexed.challenge" ||
+              contract == "transcript.native.indexed.index" ||
+              contract == "transcript.native.indexed.indices" ||
+              contract == "transcript.native.indexed.indices.gated" ||
               contract == "transcript.native.indexed.observe.data") {
             auto origin = runtime::exportNativeOrigin(
                 cast<runtime::NativeOriginAttr>(parameters[0]));
@@ -299,11 +309,15 @@ struct PreparedEndpoint {
             bool observe = contract.ends_with("observe.data");
             auto *query =
                 std::get_if<protocol::NativeQueryOrigin>(&origin->event);
+            StringRef method =
+                contract == "transcript.native.indexed.index"       ? "index"
+                : contract == "transcript.native.indexed.challenge" ? "draw"
+                                                                    : "indices";
             if (selected ||
                 (observe
                      ? !std::holds_alternative<protocol::NativeMessageOrigin>(
                            origin->event)
-                     : !query || query->method != "draw")) {
+                     : !query || query->method != method)) {
               op->emitError("[evm.unsupported-operation] unsupported "
                             "transcript occurrence kind or selected control");
               return WalkResult::interrupt();
@@ -725,7 +739,12 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
   if (name.starts_with("transcript.native.indexed.")) {
     bool observe = name == "transcript.native.indexed.observe.data";
     bool challenge = name == "transcript.native.indexed.challenge";
-    if ((!observe && !challenge) || !parameters || parameters.size() != 1)
+    bool index = name == "transcript.native.indexed.index";
+    bool indices = name == "transcript.native.indexed.indices";
+    bool gated = name == "transcript.native.indexed.indices.gated";
+    unsigned parameterCount = gated ? 4 : indices ? 3 : 1;
+    if ((!observe && !challenge && !index && !indices && !gated) ||
+        !parameters || parameters.size() != parameterCount)
       return refuse(op, "unsupported managed transcript transition");
     auto origin = dyn_cast<runtime::NativeOriginAttr>(parameters[0]);
     auto neutral = runtime::exportNativeOrigin(origin);
@@ -735,16 +754,35 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
     }
     Values args{get(op->getOperand(0))[0]};
     append_range(args, operands);
-    SmallVector<NamedAttribute> attrs{
-        builder.getNamedAttr("origin", origin),
-        builder.getNamedAttr(
-            "value_type",
-            TypeAttr::get(observe ? op->getOperand(2).getType()
-                                  : admitted.valueType.getResult(0)))};
+    SmallVector<NamedAttribute> attrs{builder.getNamedAttr("origin", origin)};
+    if (observe || challenge) {
+      attrs.push_back(builder.getNamedAttr(
+          "value_type",
+          TypeAttr::get(observe ? op->getOperand(2).getType()
+                                : admitted.valueType.getResult(0))));
+      return bind(
+          op, observe
+                  ? emit<TranscriptObserveOp>(op, *resultTypes, args, attrs)
+                  : emit<TranscriptChallengeOp>(op, *resultTypes, args, attrs));
+    }
+    auto suite = cast<runtime::CapabilityType>(op->getOperand(1).getType());
+    attrs.push_back(builder.getNamedAttr(
+        "suite", builder.getStringAttr(suite.getIdentity())));
+    if (index)
+      return bind(op, emit<TranscriptIndexOp>(op, *resultTypes, args, attrs));
+    for (auto [position, key] :
+         enumerate(ArrayRef<StringRef>{"bound", "count", "difficulty"})) {
+      if (position + 1 == parameters.size())
+        break;
+      attrs.push_back(builder.getNamedAttr(
+          key, builder.getIntegerAttr(
+                   builder.getI64Type(),
+                   cast<IntegerAttr>(parameters[position + 1]).getValue())));
+    }
     return bind(
-        op, observe
-                ? emit<TranscriptObserveOp>(op, *resultTypes, args, attrs)
-                : emit<TranscriptChallengeOp>(op, *resultTypes, args, attrs));
+        op, gated
+                ? emit<TranscriptIndicesGatedOp>(op, *resultTypes, args, attrs)
+                : emit<TranscriptIndicesOp>(op, *resultTypes, args, attrs));
   }
   SmallVector<NamedAttribute> attributes;
   if (name.starts_with("vector.") || name.starts_with("sequence.") ||
@@ -773,8 +811,10 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
       name = "vector.get";
     } else if (!parameters || !parameters.empty())
       return refuse(op, "unsupported collection invocation parameters");
-    if (name == "sequence.at")
+    if (name == "sequence.at" || name == "indices.at")
       name = "sequence.get";
+    if (name == "indices.length")
+      name = "sequence.length";
     if (name == "bytes.at")
       name = "bytes.get";
   } else if (!parameters || !parameters.empty())
@@ -1815,7 +1855,8 @@ LogicalResult checkTarget(ModuleOp module) {
   target.addDynamicallyLegalOp<
       func::CallOp, func::ReturnOp, arith::ConstantOp, arith::CmpIOp,
       arith::AddIOp, arith::SubIOp, arith::MulIOp, arith::AndIOp, arith::OrIOp,
-      arith::XOrIOp, arith::SelectOp, arith::ExtUIOp, arith::ExtSIOp,
+      arith::XOrIOp, arith::SelectOp, arith::MinUIOp, arith::MaxUIOp,
+      arith::MinSIOp, arith::MaxSIOp, arith::ExtUIOp, arith::ExtSIOp,
       arith::TruncIOp, arith::IndexCastOp, arith::IndexCastUIOp, scf::ForOp,
       scf::IfOp, scf::WhileOp, scf::ConditionOp, scf::YieldOp,
       scf::IndexSwitchOp,
@@ -1908,6 +1949,14 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
       return zkc::error("evm.control-flow",
                         "could not structure checked endpoint");
   }
+  // Fold redundant SCF arguments/results and inactive control lanes. This is
+  // best-effort optimization; target legality must not depend on convergence.
+  // Checked EVM operations retain their ordered effects even for unused
+  // results.
+  PassManager cleanup(context);
+  cleanup.addNestedPass<func::FuncOp>(createCanonicalizerPass());
+  if (failed(cleanup.run(*target)))
+    return zkc::error("evm.lowering", "EVM structured control cleanup failed");
   if (failed(checkTarget(*target)))
     return zkc::error("evm.target-legality", "EVM full conversion failed");
   return target;

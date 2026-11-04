@@ -139,13 +139,13 @@ fn source_options(value: &Value) -> Result<crate::entry::CompileOptions> {
     Ok(options)
 }
 
-/// Whether the target realizes a managed construction over `suite`, selected
-/// by the installed suite's transcript facts and never by its spelling: the
-/// `hash-chain` family over `keccak256`, binding the suite identity, with the
-/// `fr64be` decoder over a prime challenge field below 2^256
-/// (`docs/spec/targets/evm.md`).
+/// Whether the target realizes the installed suite's declared hash-chain,
+/// decoder and field layout. This independently mirrors the compiler's
+/// supported contract, never a protocol or suite-name allowlist.
 fn realized_suite(suite: &str) -> bool {
-    use zkc_catalog::{ByteHash, ChallengeDecoder, DomainFacts, FieldStructure, TranscriptFamily};
+    use zkc_catalog::{
+        ByteHash, ChallengeDecoder, DomainFacts, ExtensionBase, FieldStructure, TranscriptFamily,
+    };
     // 2^256 in decimal.
     const BOUND: &str =
         "115792089237316195423570985008687907853269984665640564039457584007913129639936";
@@ -156,21 +156,63 @@ fn realized_suite(suite: &str) -> bool {
     let DomainFacts::Transcript(facts) = row.facts else {
         return false;
     };
-    let realized = facts.family == TranscriptFamily::HashChain
-        && facts.hash == Some(ByteHash::Keccak256)
-        && facts.binds_suite
-        && facts.decoder == ChallengeDecoder::Fr64Be;
-    let challenge = row
+    if facts.family != TranscriptFamily::HashChain
+        || facts.hash != Some(ByteHash::Keccak256)
+        || !facts.binds_suite
+    {
+        return false;
+    }
+    let Some(challenge) = row
         .members
         .iter()
         .find(|(member, _)| *member == "ChallengeField")
-        .map(|(_, field)| zkc_catalog::installed_domain(*field).facts);
-    realized
-        && matches!(challenge, Some(DomainFacts::Field(field))
-            if field.structure == FieldStructure::Prime
+        .map(|(_, field)| zkc_catalog::installed_domain(*field))
+    else {
+        return false;
+    };
+    let DomainFacts::Field(field) = challenge.facts else {
+        return false;
+    };
+    match (facts.decoder, field.structure) {
+        (ChallengeDecoder::Fr64Be, FieldStructure::Prime) => {
+            challenge.capabilities.contains(&"PrimeField")
                 && (field.characteristic.len() < BOUND.len()
-                    || (field.characteristic.len() == BOUND.len()
-                        && field.characteristic < BOUND)))
+                    || (field.characteristic.len() == BOUND.len() && field.characteristic < BOUND))
+        }
+        (
+            ChallengeDecoder::Rejection31Le,
+            FieldStructure::Extension {
+                over: ExtensionBase::BaseField,
+                degree: 2..=8,
+                reduction: [(0, beta)],
+            },
+        ) => {
+            let Some(base) = challenge
+                .members
+                .iter()
+                .find(|(member, _)| *member == "BaseField")
+                .map(|(_, identity)| zkc_catalog::installed_domain(*identity))
+            else {
+                return false;
+            };
+            let DomainFacts::Field(base_field) = base.facts else {
+                return false;
+            };
+            let (Ok(prime), Ok(beta)) = (
+                base_field.characteristic.parse::<u32>(),
+                beta.parse::<u32>(),
+            ) else {
+                return false;
+            };
+            challenge.capabilities.contains(&"ExtensionField")
+                && base.capabilities.contains(&"PrimeField")
+                && base_field.structure == FieldStructure::Prime
+                && field.characteristic == base_field.characteristic
+                && (2..1 << 31).contains(&prime)
+                && (1..prime).contains(&beta)
+        }
+        _ => false,
+    }
 }
 
 fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) -> Result<()> {

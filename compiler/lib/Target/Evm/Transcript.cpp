@@ -22,7 +22,7 @@ Expected<TranscriptRealization> realizeTranscript(NativeLayouts &layouts,
   if (!facts.bindsSuite)
     return zkc::error("evm.construction",
                       "EVM transcript initialization binds the suite identity");
-  if (facts.decoder != "fr64be")
+  if (facts.decoder != "fr64be" && facts.decoder != "rejection31le")
     return zkc::error("evm.construction", "EVM has no realization of the " +
                                               facts.decoder +
                                               " challenge decoder");
@@ -35,11 +35,22 @@ Expected<TranscriptRealization> realizeTranscript(NativeLayouts &layouts,
       layouts.field(algebra::FieldType::get(&context, StringRef(field)));
   if (!challenge)
     return challenge.takeError();
-  // The decoder reduces a 512-bit answer modulo one prime word.
-  if ((*challenge)->degree != 1)
+  bool rejection = facts.decoder == "rejection31le";
+  if (!rejection && (*challenge)->degree != 1)
     return zkc::error("evm.construction",
                       "the fr64be decoder requires a prime challenge field");
-  return TranscriptRealization{row->identity, *challenge};
+  if (rejection && ((*challenge)->degree < 2 ||
+                    (*challenge)->modulus.uge(uint64_t(1) << 31)))
+    return zkc::error("evm.construction",
+                      "the rejection31le decoder requires an ascending "
+                      "extension over a prime below 2^31");
+  const auto &catalog = protocol::installedDomains();
+  return TranscriptRealization{
+      row->identity, *challenge,
+      rejection ? TranscriptRealization::Decoder::Rejection31Le
+                : TranscriptRealization::Decoder::Fr64Be,
+      catalog.hasFact("IndexTranscript", {row->identity}),
+      catalog.hasFact("IndexBlockTranscript", {row->identity})};
 }
 
 bool realizedChallengeField(NativeLayouts &layouts, mlir::MLIRContext &context,

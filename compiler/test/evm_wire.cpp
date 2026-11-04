@@ -128,6 +128,90 @@ NativeProofPolicy boundaryPolicy(bool managed) {
     policy.suite = "hash-chain.keccak256.bls12-381.fr64be/0";
   return policy;
 }
+// Preserve the production request preimages and successor before overwriting
+// its answer with explicit calldata. These isolated helper fixtures are never
+// source compilations or native proofs. A zero answer count selects real bytes.
+std::string transcriptProbeHelpers() {
+  EvmLimits limits;
+  APInt prime(256, 2130706433);
+  std::string helpers = evm::detail::runtimeHelpers(limits, &prime);
+  constexpr StringLiteral provider = "function evm_transcript_request(";
+  size_t start = helpers.find(provider.str());
+  require(start != std::string::npos &&
+              helpers.find(provider.str(), start + 1) == std::string::npos,
+          "expected one production transcript answer provider");
+  helpers.replace(start, provider.size(),
+                  "function evm_transcript_request_production(");
+  helpers += R"YUL(
+function evm_transcript_request(label, labelLength, n, destination) {
+  evm_transcript_request_production(label, labelLength, n, destination)
+  let attempt := mload(0x240)
+  if calldataload(0) {
+    if iszero(eq(n, calldataload(32))) { evm_fault(90) }
+    if iszero(lt(attempt, calldataload(0))) { evm_fault(91) }
+    let offset := add(256, mul(attempt, n))
+    evm_calldata(offset, n)
+    evm_memory(destination, n)
+    calldatacopy(destination, offset, n)
+  }
+  mstore(0x240, add(attempt, 1))
+}
+)YUL";
+  return helpers;
+}
+void emitTranscriptSampler() {
+  outs() << R"YUL(object "SamplerProbe" {
+  code {
+    datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
+    return(0, datasize("Runtime"))
+  }
+  object "Runtime" { code { {
+    let base := memoryguard(0x400)
+    mstore(0x40, base) mstore(0x200, base)
+    mstore(0x80, 1) mstore(0xa0, 1) mstore(0x100, 1)
+    evm_calldata(0, 256)
+    let originData := evm_alloc(32)
+    mstore(originData, "sampler-origin")
+    let result, next := evm_transcript_challenge_rejection31(1, 0, originData, 14, 4)
+    mstore(0, mload(0x240)) mstore(32, next)
+    mstore(64, mload(0xe0)) mstore(96, mload(0x100))
+    mstore(128, mload(0x120))
+    mcopy(160, result, 128)
+    return(0, 288)
+  }
+)YUL" << transcriptProbeHelpers()
+         << "} } }\n";
+}
+void emitTranscriptBlock() {
+  outs() << R"YUL(object "BlockProbe" {
+  code {
+    datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
+    return(0, datasize("Runtime"))
+  }
+  object "Runtime" { code { {
+    let base := memoryguard(0x400)
+    mstore(0x40, base) mstore(0x200, base)
+    mstore(0x80, 1) mstore(0xa0, 1) mstore(0x100, 1)
+    mstore(0x120, 7)
+    evm_calldata(0, 256)
+    let count := calldataload(64)
+    let bits := calldataload(96)
+    let witness := calldataload(128)
+    evm_transcript_block_preflight(1, 0, 256, count, bits, witness)
+    let originData := evm_alloc(32)
+    mstore(originData, "block-origin")
+    let result := evm_alloc(mul(count, 32))
+    let next := evm_transcript_indices(1, 0, 256, count, bits, witness,
+                                      result, originData, 12)
+    mstore(0, mload(0x240)) mstore(32, next)
+    mstore(64, mload(0xe0)) mstore(96, mload(0x100))
+    mstore(128, mload(0x120))
+    mcopy(160, result, mul(count, 32))
+    return(0, add(160, mul(count, 32)))
+  }
+)YUL" << transcriptProbeHelpers()
+         << "} } }\n";
+}
 void emitStore(MLIRContext &context, unsigned ceiling) {
   evm::NativeLayouts layouts(context);
   EvmLimits limits;
@@ -293,6 +377,24 @@ int main(int argc, char **argv) {
   registry.insert<evm::EvmDialect>();
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  if (argc == 2 && StringRef(argv[1]) == "--emit-transcript-sampler") {
+    try {
+      emitTranscriptSampler();
+    } catch (const std::exception &failure) {
+      errs() << failure.what() << '\n';
+      return 1;
+    }
+    return 0;
+  }
+  if (argc == 2 && StringRef(argv[1]) == "--emit-transcript-block") {
+    try {
+      emitTranscriptBlock();
+    } catch (const std::exception &failure) {
+      errs() << failure.what() << '\n';
+      return 1;
+    }
+    return 0;
+  }
   if (argc == 2 && StringRef(argv[1]) == "--emit-append") {
     try {
       emitAppend(context);

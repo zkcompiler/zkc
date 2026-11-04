@@ -307,7 +307,32 @@ def Evm_TranscriptChallengeOp : Evm_OrderedOp<"transcript.challenge"> {
   let summary = "EVM transcript.challenge with exact physical lanes";
   let arguments = (ins I64:$scope, I64:$generation, I64:$coordinates,
       I64:$coordinate_count, TypeAttr:$value_type, Evm_NativeOrigin:$origin);
-  let results = (outs I256:$challenge, I64:$next_generation);
+  let results = (outs Evm_FieldLane:$challenge, I64:$next_generation);
+  let hasVerifier = 1;
+}
+def Evm_TranscriptIndexOp : Evm_OrderedOp<"transcript.index"> {
+  let summary = "One checked power-of-two transcript index request";
+  let arguments = (ins I64:$scope, I64:$generation, I64:$bound,
+      I64:$coordinates, I64:$coordinate_count, StrAttr:$suite,
+      Evm_NativeOrigin:$origin);
+  let results = (outs I64:$index, I64:$next_generation);
+  let hasVerifier = 1;
+}
+def Evm_TranscriptIndicesOp : Evm_OrderedOp<"transcript.indices"> {
+  let summary = "One ordered native index block request";
+  let arguments = (ins I64:$scope, I64:$generation,
+      I64:$coordinates, I64:$coordinate_count, StrAttr:$suite,
+      I64Attr:$bound, I64Attr:$count, Evm_NativeOrigin:$origin);
+  let results = (outs I64:$indices, I64:$index_count, I64:$next_generation);
+  let hasVerifier = 1;
+}
+def Evm_TranscriptIndicesGatedOp : Evm_OrderedOp<"transcript.indices_gated"> {
+  let summary = "Check one native gated index block without searching";
+  let arguments = (ins I64:$scope, I64:$generation, I64:$witness,
+      I64:$coordinates, I64:$coordinate_count, StrAttr:$suite,
+      I64Attr:$bound, I64Attr:$count, I64Attr:$difficulty,
+      Evm_NativeOrigin:$origin);
+  let results = (outs I64:$indices, I64:$index_count, I64:$next_generation);
   let hasVerifier = 1;
 }
 def Evm_ScopeCurrentOp : Evm_OrderedOp<"scope.current"> {

@@ -5,8 +5,7 @@
 namespace zkc::evm::detail {
 namespace {
 // The transcript helpers of the realized suite: the keccak256 hash-chain
-// absorb and request frames and the fr64be reduction modulo the challenge
-// field's modulus.
+// absorb/request frames, declared challenge decoding and native index checks.
 constexpr llvm::StringLiteral transcriptHelpers =
     R"YUL(// Hash preimages use temporary exact-sized buffers. The fixed header is 73
 // bytes, plus the label and payload, including the domain's terminal NUL.
@@ -80,6 +79,149 @@ function evm_transcript_challenge(scope, generation, occurrenceData, originLengt
   mstore(0x40, p)
   evm_absorb(2, 0x6368616c6c656e6765, 9, lengthData, 8)
   mstore(0x40, lengthData)
+}
+function evm_transcript_request(label, labelLength, n, destination) {
+  if gt(labelLength, 32) { evm_fault(1) }
+  // The last digest may write padding, outside the observable answer prefix.
+  evm_memory(destination, and(add(n, 31), not(31)))
+  let lengthData := evm_alloc(32)
+  evm_write_be(lengthData, n, 8)
+  let size := add(90, labelLength)
+  let p := evm_alloc(size)
+  mstore(p, "zkc.hash-chain.request/0")
+  mstore(add(p, 25), mload(0x120))
+  mstore8(add(p, 57), 2)
+  evm_write_be(add(p, 58), labelLength, 8)
+  evm_write_be(add(p, 66), label, labelLength)
+  evm_write_be(add(p, add(66, labelLength)), 8, 8)
+  evm_write_be(add(p, add(74, labelLength)), n, 8)
+  for { let offset := 0 } lt(offset, n) { offset := add(offset, 32) } {
+    evm_write_be(add(p, add(82, labelLength)), div(offset, 32), 8)
+    let digest := keccak256(p, size)
+    verbatim_1i_0o(hex"50", digest)
+    mstore(add(destination, offset), digest)
+  }
+  mstore(0x40, p)
+  evm_absorb(2, label, labelLength, lengthData, 8)
+  mstore(0x40, lengthData)
+}
+function evm_transcript_challenge_rejection31(scope, generation, occurrenceData,
+                                            originLength, degree)
+  -> result, next {
+  next := evm_transcript_debit(scope, generation)
+  evm_absorb(1, 0x6f726967696e, 6, occurrenceData, originLength)
+  // Scalar sampling retains consume-first allocation, unlike block preflight.
+  result := evm_alloc(mul(degree, 32))
+  let answer := evm_alloc(64)
+  let accepted := 0
+  for { let attempt := 0 } lt(attempt, 16) { attempt := add(attempt, 1) } {
+    evm_transcript_request(0x6368616c6c656e6765, 9, 64, answer)
+    for { let offset := 0 } lt(offset, 64) { offset := add(offset, 4) } {
+      let candidate := and(evm_le(add(answer, offset), 4), 0x7fffffff)
+      if lt(candidate, evm_challenge_prime()) {
+        mstore(add(result, mul(accepted, 32)), candidate)
+        accepted := add(accepted, 1)
+        if eq(accepted, degree) { break }
+      }
+    }
+    if eq(accepted, degree) { break }
+  }
+  // Exhaustion retains all reached requests and the single logical debit.
+  if iszero(eq(accepted, degree)) { evm_resource(15) }
+  mstore(0x40, answer)
+}
+function evm_transcript_index(scope, generation, bound, occurrenceData, originLength)
+  -> value, next {
+  if or(iszero(bound), and(bound, sub(bound, 1))) { evm_source(5) }
+  next := evm_transcript_debit(scope, generation)
+  evm_absorb(1, 0x6f726967696e, 6, occurrenceData, originLength)
+  let data := evm_alloc(32)
+  evm_write_le(data, bound, 8)
+  evm_absorb(1, 0x626f756e64, 5, data, 8)
+  let answer := evm_alloc(64)
+  evm_transcript_request(0x696e646578, 5, 64, answer)
+  value := and(evm_le(answer, 8), sub(bound, 1))
+  mstore(0x40, data)
+}
+function evm_transcript_block_check(scope, generation) {
+  evm_scope_check(scope)
+  if or(iszero(eq(scope, mload(0xa0))), iszero(eq(generation, mload(0xc0)))) {
+    evm_fault(5)
+  }
+  // Native block preflight checks budget, generation, then draw count.
+  if iszero(mload(0x100)) { evm_resource(8) }
+  if iszero(lt(generation, 0xfffffffffffffffe)) { evm_resource(7) }
+  if eq(mload(0xe0), 0xffffffffffffffff) { evm_resource(7) }
+}
+function evm_transcript_block_validate(bound, count, gateBits, witness) {
+  if or(or(iszero(bound), gt(bound, 0x8000000000000000)),
+        and(bound, sub(bound, 1))) { evm_source(5) }
+  if or(or(iszero(count), gt(count, 1048576)), gt(gateBits, 64)) {
+    evm_source(5)
+  }
+  // A canonical zero witness is required even though the gate window is absent.
+  if and(iszero(gateBits), iszero(iszero(witness))) { evm_source(5) }
+  if gt(count, @ELEMENTS@) { evm_resource(2) }
+}
+function evm_transcript_block_preflight(scope, generation, bound, count,
+                                       gateBits, witness) {
+  evm_transcript_block_validate(bound, count, gateBits, witness)
+  evm_transcript_block_check(scope, generation)
+}
+function evm_transcript_block_debit(scope, generation) -> next {
+  evm_transcript_block_check(scope, generation)
+  next := add(generation, 1)
+  mstore(0xc0, next)
+  mstore(0xe0, add(mload(0xe0), 1))
+  mstore(0x100, sub(mload(0x100), 1))
+}
+function evm_transcript_indices(scope, generation, bound, count, gateBits,
+                                witness, result, occurrenceData, originLength)
+  -> next {
+  evm_transcript_block_preflight(scope, generation, bound, count, gateBits, witness)
+  evm_memory(result, mul(count, 32))
+  let data := evm_alloc(32)
+  let positive := iszero(iszero(gateBits))
+  let length := mul(add(count, positive), 8)
+  let answer := evm_alloc(length)
+  // Reserve the full numerical workspace before consuming any authority.
+  // Absorb(origin) needs 79+originLength; request temporaries need 160 bytes.
+  let temporaryBytes := add(79, originLength)
+  if lt(temporaryBytes, 160) { temporaryBytes := 160 }
+  let workspace := evm_alloc(temporaryBytes)
+  mstore(0x40, workspace)
+  next := evm_transcript_block_debit(scope, generation)
+  evm_absorb(1, 0x6f726967696e, 6, occurrenceData, originLength)
+  evm_write_le(data, bound, 8)
+  evm_absorb(1, 0x626f756e64, 5, data, 8)
+  evm_write_le(data, count, 8)
+  evm_absorb(1, 0x636f756e74, 5, data, 8)
+  let label := 0x696e6469636573
+  let labelLength := 7
+  if positive {
+    evm_write_le(data, gateBits, 8)
+    evm_absorb(1, 0x646966666963756c7479, 10, data, 8)
+    mstore(data, hex"5a4b4356001f")
+    evm_write_le(add(data, 6), witness, 8)
+    evm_absorb(1, 0x676174652d7769746e657373, 12, data, 14)
+    label := 0x67617465642d696e6469636573
+    labelLength := 13
+  }
+  // Hash the complete requested answer and its successor even on rejection.
+  evm_transcript_request(label, labelLength, length, answer)
+  if positive {
+    let gate := evm_le(answer, 8)
+    let failed := 0
+    switch gateBits
+    case 64 { failed := iszero(iszero(gate)) }
+    default { failed := iszero(iszero(and(gate, sub(shl(gateBits, 1), 1)))) }
+    if failed { evm_source(0) }
+  }
+  for { let i := 0 } lt(i, count) { i := add(i, 1) } {
+    let index := and(evm_le(add(answer, mul(add(i, positive), 8)), 8), sub(bound, 1))
+    mstore(add(result, mul(i, 32)), index)
+  }
+  mstore(0x40, data)
 }
 )YUL";
 } // namespace
