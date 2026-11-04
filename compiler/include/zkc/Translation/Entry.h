@@ -19,12 +19,15 @@ llvm::Expected<HostAnalysis>
 analyzeHostOriginal(const ClosedEntry &, mlir::ModuleOp, const Limits & = {});
 std::string entryDeploymentId(HostInvocation::Kind, llvm::StringRef target,
                               llvm::ArrayRef<Type> arguments);
-llvm::json::Value encodeEntrySchema(const Layout &);
+llvm::Expected<llvm::json::Value> encodeEntrySchema(const Layout &);
 /// Render the checked source signature inventory at the interface boundary.
 llvm::Expected<llvm::json::Array> renderHostSignatures(const ClosedEntry &,
                                                        const Limits & = {});
 llvm::Expected<std::string>
 emitHostOriginal(const ClosedEntry &, mlir::MLIRContext &, const Limits & = {});
+llvm::Expected<EmittedOriginal> emitNativeHostOriginal(const ClosedEntry &,
+                                                       mlir::MLIRContext &,
+                                                       const Limits & = {});
 llvm::Expected<Correspondence>
 compareHostOriginal(const ClosedEntry &, mlir::ModuleOp, const Limits & = {});
 llvm::Expected<std::vector<Declaration>>

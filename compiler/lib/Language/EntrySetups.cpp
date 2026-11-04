@@ -26,19 +26,8 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
     for (const auto &leaf : observed->leaves) {
       if (!leaf.leaf.data() || leaf.custody)
         continue;
-      protocol::TypeParseBudget budget;
-      budget.remaining =
-          std::min<uint64_t>(budget.remaining, work.limits.work - work.used);
-      auto before = budget.remaining;
-      auto type =
-          protocol::parseBoundType(*leaf.leaf.data(), false, 0, &budget);
-      if (!type) {
-        consumeError(type.takeError());
-        return failure(budget.remaining ? "source.entry" : "source.limit",
-                       "setup input type admission failed", input.span);
-      }
-      if (auto e = work.charge(before - budget.remaining + leaf.leaf.cost(),
-                               input.span))
+      const auto *type = leaf.leaf.data();
+      if (auto e = work.charge(leaf.leaf.cost(), input.span))
         return e;
       auto roles = leaf.roles();
       auto key = protocol::setupKey(type->kind);

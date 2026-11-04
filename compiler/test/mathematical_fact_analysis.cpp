@@ -66,6 +66,187 @@ int main() {
     return module;
   };
   cases.run(
+      "word ranges discharge actual bounded access and preserve strictness",
+      [&] {
+        auto declarations = [](unsigned extent) {
+          return "func.func private "
+                 "@subject(%x:ui64,%a:!data.field_array<\"bls12-381.fr\", " +
+                 std::to_string(extent) + R"mlir(>)->!F {
+        %mask = "data.index"() {value=7 : ui64} : ()->ui64
+        %one = "data.index"() {value=1 : ui64} : ()->ui64
+        %low = "data.index_bit_and"(%x,%mask) : (ui64,ui64)->ui64
+        %i = "data.index_wrapping_add"(%low,%one) : (ui64,ui64)->ui64
+        %r = "data.bounded_at"(%a,%i) : (!data.field_array<"bls12-381.fr", )mlir" +
+                 std::to_string(extent) + ">,ui64)->!F\nfunc.return %r : !F\n}";
+        };
+        auto module = parse(declarations(9));
+        require(succeeded(admitStage(*module)),
+                "numerical range did not reach the production bound consumer");
+        auto subject = helper(*module, "subject");
+        data::BoundedAtOp access;
+        subject.walk([&](data::BoundedAtOp op) { access = op; });
+        MathematicalFactAnalysis analysis(*module);
+        uint64_t remaining = 65536;
+        facts::Work work(remaining);
+        auto range = analysis.wordRange(access.getIndex(), work);
+        require(range.value && range.value->minimum == 1 &&
+                    range.value->maximum == 8,
+                "mask/add range is incorrect");
+        auto cost = [&](uint64_t allowance) {
+          facts::Work query(allowance);
+          auto status =
+              analysis.bound(access.getIndex(), access.getInput(), 0, query);
+          return std::make_pair(status, allowance);
+        };
+        auto cold = cost(65536), warm = cost(65536);
+        require(cold == warm && cold.first == Status::Proven,
+                "range allowance depends on cache warmth");
+        auto spent = 65536 - cold.second;
+        require(cost(spent) == std::make_pair(Status::Proven, uint64_t(0)) &&
+                    cost(spent - 1) ==
+                        std::make_pair(Status::Capacity, uint64_t(0)),
+                "range consumer lost the exact capacity boundary");
+        for (unsigned extent : {0u, 8u}) {
+          ScopedDiagnosticHandler silence(
+              &context, [](Diagnostic &) { return success(); });
+          auto invalid = parseSourceString<ModuleOp>(
+              source(declarations(extent)), &context);
+          require(!invalid || failed(admitStage(*invalid)),
+                  "zero or adjacent out-of-bounds extent was admitted");
+        }
+        auto mask = access.getIndex()
+                        .getDefiningOp()
+                        ->getOperand(0)
+                        .getDefiningOp()
+                        ->getOperand(1)
+                        .getDefiningOp<data::IndexOp>();
+        mask.setValue(15);
+        analysis.clear();
+        require(cost(65536).first == Status::Unknown,
+                "mutated word expression retained old bound evidence");
+      });
+  cases.run("constant dispatch range preserves every capacity boundary", [&] {
+    auto module = parse(R"mlir(
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+)mlir");
+    auto unit = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+    OpBuilder builder(&context);
+    auto scope = runtime::ScopeType::get(&context);
+    auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
+    auto outcome = exec::OutcomeType::get(&context, {index});
+    builder.setInsertionPointToEnd(&unit.getBody().front());
+    auto subject =
+        func::FuncOp::create(builder, unit.getLoc(), "constant_result",
+                             builder.getFunctionType({scope}, {outcome}));
+    subject.setPrivate();
+    subject.setNoInline(true);
+    subject->setAttr(
+        "runtime.origin",
+        builder.getArrayAttr({builder.getStringAttr("constant_result"),
+                              builder.getArrayAttr({})}));
+    builder.setInsertionPointToEnd(subject.addEntryBlock());
+    exec::ScopedExecutionBuilder control(builder, subject);
+    auto values = control.invoke(
+        "exec.apply", {index}, control.scoped({}),
+        {builder.getNamedAttr("binding",
+                              FlatSymbolRefAttr::get(&context, "constant")),
+         builder.getNamedAttr("site", builder.getStringAttr("constant")),
+         builder.getNamedAttr(
+             "parameters",
+             builder.getArrayAttr({builder.getIntegerAttr(index, 7)}))});
+    control.returned(values);
+    require(values.size() == 1 && succeeded(verify(*module)),
+            "invalid constant dispatch fixture");
+    MathematicalFactAnalysis analysis(*module);
+    uint64_t remaining = 65536;
+    facts::Work initial(remaining);
+    auto exact = analysis.wordRange(values.front(), initial);
+    require(exact.value && exact.value->minimum == 7 &&
+                exact.value->maximum == 7,
+            "constant dispatch lost its exact range");
+    uint64_t cost = 65536 - remaining;
+    for (uint64_t allowance = 0; allowance <= cost; ++allowance) {
+      remaining = allowance;
+      facts::Work query(remaining);
+      auto range = analysis.wordRange(values.front(), query);
+      require(range.status ==
+                      (allowance == cost ? Status::Proven : Status::Capacity) &&
+                  query.exhausted() == (allowance != cost) && remaining == 0 &&
+                  bool(range.value) == (allowance == cost),
+              "exhausted constant inspection became a proven full range");
+    }
+  });
+  cases.run("shared ranges cannot bypass the inherited depth limit", [&] {
+    std::string declarations = R"mlir(
+      func.func private @subject(%x:ui64,%a:!data.field_array<"bls12-381.fr", 8>)->ui64 {
+        %mask = "data.index"() {value=7 : ui64} : ()->ui64
+        %shared = "data.index_bit_and"(%x,%mask) : (ui64,ui64)->ui64
+    )mlir";
+    std::string previous = "%shared";
+    for (unsigned i = 0; i < 255; ++i) {
+      auto next = "%v" + std::to_string(i);
+      declarations += next + " = \"data.index_bit_and\"(" + previous +
+                      ",%shared) : (ui64,ui64)->ui64\n";
+      previous = next;
+    }
+    declarations += "%result = \"data.index_bit_and\"(%shared," + previous +
+                    ") : (ui64,ui64)->ui64\nfunc.return %result : ui64\n}";
+    auto module = parse(declarations);
+    auto value = returned(helper(*module, "subject")).front();
+    auto *operation = value.getDefiningOp();
+    for (unsigned order = 0; order < 2; ++order) {
+      MathematicalFactAnalysis analysis(*module);
+      uint64_t remaining = 1000000;
+      facts::Work work(remaining);
+      auto range = analysis.wordRange(value, work);
+      require(range.status == Status::Capacity && !range.value &&
+                  work.exhausted(),
+              "shallow cache reuse hid an over-depth expression");
+      remaining = 1000000;
+      facts::Work bounded(remaining);
+      require(analysis.bound(value, helper(*module, "subject").getArgument(1),
+                             0, bounded) == Status::Capacity &&
+                  bounded.exhausted(),
+              "bounded-read consumer bypassed dependency-depth capacity");
+      auto left = operation->getOperand(0);
+      operation->setOperand(0, operation->getOperand(1));
+      operation->setOperand(1, left);
+    }
+  });
+  cases.run("word inference substitutes complete helper actuals", [&] {
+    auto module = parse(R"mlir(
+      func.func private @mask(%x:ui64,%m:ui64)->ui64 {
+        %r = "data.index_bit_and"(%x,%m) : (ui64,ui64)->ui64
+        func.return %r : ui64
+      }
+      func.func private @subject(%x:ui64)->(ui64,ui64,ui64,ui64) {
+        %seven = "data.index"() {value=7 : ui64} : ()->ui64
+        %fifteen = "data.index"() {value=15 : ui64} : ()->ui64
+        %sixtyfour = "data.index"() {value=64 : ui64} : ()->ui64
+        %a = func.call @mask(%x,%seven) : (ui64,ui64)->ui64
+        %b = func.call @mask(%x,%fifteen) : (ui64,ui64)->ui64
+        %shift = "data.index_logical_shift_right"(%x,%sixtyfour) : (ui64,ui64)->ui64
+        %wrap = "data.index_wrapping_subtract"(%shift,%seven) : (ui64,ui64)->ui64
+        func.return %a,%b,%shift,%wrap : ui64,ui64,ui64,ui64
+      }
+    )mlir");
+    MathematicalFactAnalysis analysis(*module);
+    auto values = returned(helper(*module, "subject"));
+    uint64_t remaining = 65536;
+    facts::Work work(remaining);
+    for (unsigned i = 0; i < 2; ++i) {
+      auto range = analysis.wordRange(values[i], work);
+      require(range.value && range.value->minimum == 0 &&
+                  range.value->maximum == (i ? 15 : 7),
+              "one helper invocation contaminated another");
+      require(analysis.integer(values[i], work).status == Status::Unknown,
+              "a range became an exact integer");
+    }
+    require(analysis.integer(values[2], work).value == 0 &&
+                analysis.integer(values[3], work).value == UINT64_MAX - 6,
+            "large total shift or exact wrapping subtraction changed meaning");
+  });
+  cases.run(
       "many formation premises retain direct and transferred bounds", [&] {
         constexpr unsigned count = 256;
         std::string declarations = "func.func private @subject(%i:ui64";

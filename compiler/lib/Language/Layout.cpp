@@ -102,7 +102,11 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
     }
     if (!leaf.data())
       return error("source.formal", "relation schema contains a formal leaf");
-    hash.frame(*leaf.data());
+    auto encoded = leaf.data()->spelling();
+    if (encoded.empty())
+      return error("source.limit",
+                   "published schema leaf exceeds encoding limits");
+    hash.frame(encoded);
   }
   // A product formula node frames its schema's published identity, the same
   // value an external placement carries, so readers hash what they read.
@@ -322,11 +326,8 @@ Expected<PackedLayout> Layouts::pack(std::shared_ptr<const Layout> flat) {
   if (!product) {
     if (flat->leaves.size() != 1 || !flat->leaves.front().data())
       return error("source.layout", "native element requires one data leaf");
-    auto carrier =
-        protocol::parseBoundType(*flat->leaves.front().data(), false);
-    if (!carrier)
-      return carrier.takeError();
-    return PackedLayout{std::move(flat), std::move(*carrier), false, {}};
+    auto carrier = *flat->leaves.front().data();
+    return PackedLayout{std::move(flat), std::move(carrier), false, {}};
   }
   const auto &identity = flat->identity.key;
   if (identity.size() > protocol::VariantSpellingBytes / 2)
@@ -343,13 +344,10 @@ Expected<PackedLayout> Layouts::pack(std::shared_ptr<const Layout> flat) {
     alternative.payload.push_back(*leaf.data());
   }
   protocol::VariantDescriptor descriptor{
-      json::Array{"zkc.language.pack", encodeNominalIdentity(identity)},
+      protocol::VariantIdentity::Tuple{"zkc.language.pack",
+                                       encodeNominalIdentity(identity)},
       {alternative}};
-  auto encoded = protocol::encodeVariant(descriptor);
-  if (!encoded)
-    return error("source.limit",
-                 "packed product exceeds native descriptor limits");
-  auto carrier = protocol::parseBoundType(*encoded, false);
+  auto carrier = protocol::variantType(std::move(descriptor));
   if (!carrier)
     return carrier.takeError();
   return PackedLayout{std::move(flat), std::move(*carrier), true,
@@ -453,7 +451,11 @@ observeProtocolPort(std::shared_ptr<const Layout> body,
         result.size() + (leaf.oracle() ? 2 : 1) > limits.aggregateLeaves)
       return error("source.limit",
                    "expanded protocol layout exceeds leaf limit");
-    if (auto e = charge(leaf.cost() + path.size() + 1))
+    if (leaf.cost() == UINT64_MAX)
+      return error("source.limit", "invalid leaf work estimate");
+    if (auto e = charge(leaf.cost()))
+      return e;
+    if (auto e = charge(path.size() + 1))
       return e;
     if (!materialized)
       return Error::success();
@@ -953,7 +955,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
                                  ? std::max<size_t>(1, decl->roles.size())
                                  : 1;
       for (unsigned i = 0; i < result->custodyCount; ++i)
-        result->leaves.push_back("resource_unit:" + slot);
+        result->leaves.emplace_back(
+            protocol::BoundType{"resource_unit", slot, {}});
     }
   }
   auto addField = [&](StringRef name, const Type &field,
@@ -995,13 +998,13 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     return Error::success();
   };
   if (type.kind == K::Boolean)
-    result->leaves = {"bool"};
+    result->leaves = {protocol::BoundType{"bool", {}, {}}};
   else if (type.kind == K::Index)
-    result->leaves = {"index"};
+    result->leaves = {protocol::BoundType{"index", {}, {}}};
   else if (type.kind == K::Field)
-    result->leaves = {"field:" + type.domain};
+    result->leaves = {protocol::BoundType{"field", type.domain, {}}};
   else if (type.kind == K::Group)
-    result->leaves = {"group:" + type.domain};
+    result->leaves = {protocol::BoundType{"group", type.domain, {}}};
   else if (isOracleHandle(type)) {
     auto formed = builtinType(oracleConstructor(type), type.arguments);
     if (!formed)
@@ -1069,7 +1072,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     if (!policy)
       return error("source.builtin",
                    "native data lacks an installed type policy");
-    result->leaves = {native->spelling()};
+    result->leaves = {std::move(*native)};
 
   } else if (type.kind == K::Unit) {
   } else if (type.kind == K::Tuple) {
@@ -1139,7 +1142,9 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     if (auto e = charge(2 * canonical.size()))
       return e;
     protocol::VariantDescriptor descriptor{
-        json::Array{"zkc.language", encodeNominalIdentity(canonical)}, {}};
+        protocol::VariantIdentity::Tuple{"zkc.language",
+                                         encodeNominalIdentity(canonical)},
+        {}};
     for (unsigned i = 0; i < decl->alternatives.size(); ++i) {
       const auto &alt = decl->alternatives[i];
       LayoutAlternative logical{alt.name, {}};
@@ -1163,10 +1168,10 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       result->alternatives.push_back(std::move(logical));
       descriptor.alternatives.push_back(std::move(native));
     }
-    auto encoded = protocol::encodeVariant(descriptor);
-    if (!encoded)
-      return error("source.layout", "variant exceeds native descriptor limits");
-    result->leaves.push_back(std::move(*encoded));
+    auto carrier = protocol::variantType(std::move(descriptor));
+    if (!carrier)
+      return carrier.takeError();
+    result->leaves.emplace_back(std::move(*carrier));
   } else
     return error("source.layout", "type has no closed native layout");
   if (result->formal && result->custody)
@@ -1174,9 +1179,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
                  "formal values cannot have executable custody");
   for (auto &leaf : result->leaves)
     if (const auto *data = leaf.data()) {
-      auto bound = protocol::parseBoundType(*data, false);
-      if (!bound)
-        return bound.takeError();
+      if (auto e = protocol::checkBoundType(*data, false))
+        return e;
     }
   if (type.kind == K::LogicalRecord && decl && !decl->roles.empty()) {
     for (const auto &field : result->fields) {

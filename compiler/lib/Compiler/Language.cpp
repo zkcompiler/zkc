@@ -101,6 +101,8 @@ struct CheckedOriginal::Storage {
   std::unique_ptr<SourceMgr> sourceManager;
   std::unique_ptr<mlir::AsmParserState> parser;
   mlir::OwningOpRef<mlir::ModuleOp> module;
+  llvm::DenseMap<mlir::Operation *, protocol::StructuredSourceTextRange>
+      written;
   std::string identity, interface, toolchain, locationsIdentity;
   Correspondence report;
   LanguageInterface interfaceView;
@@ -108,6 +110,12 @@ struct CheckedOriginal::Storage {
   /// Generated definitions and emitted sites of the emission that printed
   /// these exact bytes.
   EmissionRecord emission;
+};
+struct CheckedOriginal::PreparedNative {
+  // Retain the context until its emitted module has been destroyed, including
+  // early refusals before admission transfers the module into Storage.
+  std::unique_ptr<mlir::MLIRContext> context;
+  EmittedOriginal emission;
 };
 const Limits &CheckedOriginal::admissionLimits() const {
   return storage->limits;
@@ -168,19 +176,24 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
     return std::move(error);
   mlir::DialectRegistry registry;
   registerDialects(registry);
-  mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
+  auto native = std::make_unique<CheckedOriginal::PreparedNative>();
+  native->context = std::make_unique<mlir::MLIRContext>(
+      registry, mlir::MLIRContext::Threading::DISABLED);
+  auto &context = *native->context;
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
   EmissionRecord record;
-  auto emitted = emitOriginal(entry, context, limits, &record);
+  auto emitted = emitNativeOriginal(entry, context, limits, &record);
   if (!emitted)
     return emitted.takeError();
-  auto encoded = detail::emitInterface(entry, digest(*emitted),
+  auto encoded = detail::emitInterface(entry, digest(emitted->bytes),
                                        compilerToolchainIdentity(), limits);
   if (!encoded)
     return encoded.takeError();
-  return CheckedOriginal::admit(entry, *emitted, *encoded, limits, false,
-                                std::move(record));
+  native->emission = std::move(*emitted);
+  StringRef bytes = native->emission.bytes;
+  return CheckedOriginal::admit(entry, bytes, *encoded, limits, false,
+                                std::move(record), std::move(native));
 }
 Expected<CheckedOriginal> admitOriginal(const ClosedEntry &entry,
                                         StringRef original, StringRef interface,
@@ -190,7 +203,8 @@ Expected<CheckedOriginal> admitOriginal(const ClosedEntry &entry,
 Expected<CheckedOriginal>
 CheckedOriginal::admit(const ClosedEntry &entry, StringRef original,
                        StringRef interface, const Limits &limits,
-                       bool requireCanonical, EmissionRecord prepared) {
+                       bool requireCanonical, EmissionRecord prepared,
+                       std::unique_ptr<PreparedNative> native) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (original.size() > limits.irBytes ||
@@ -204,9 +218,11 @@ CheckedOriginal::admit(const ClosedEntry &entry, StringRef original,
     return parsedInterface.takeError();
   mlir::DialectRegistry registry;
   registerDialects(registry);
-  auto ownedContext = std::make_unique<mlir::MLIRContext>(
-      registry, mlir::MLIRContext::Threading::DISABLED);
-  auto &context = *ownedContext;
+  auto ownedContext =
+      native ? std::unique_ptr<mlir::MLIRContext>()
+             : std::make_unique<mlir::MLIRContext>(
+                   registry, mlir::MLIRContext::Threading::DISABLED);
+  auto &context = native ? *native->context : *ownedContext;
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
   std::string diagnostics;
@@ -230,15 +246,19 @@ CheckedOriginal::admit(const ClosedEntry &entry, StringRef original,
                              SMLoc());
   // Parsing verifies syntax only; whole-module admission runs once below.
   mlir::ParserConfig config(&context, false);
-  auto parser = std::make_unique<mlir::AsmParserState>();
-  mlir::Block parsed;
-  mlir::OwningOpRef<mlir::ModuleOp> module;
-  if (mlir::succeeded(
-          mlir::parseAsmSourceFile(manager, &parsed, config, parser.get())))
-    module =
-        mlir::detail::constructContainerOpForParserIfNecessary<mlir::ModuleOp>(
-            &parsed, &context,
-            mlir::FileLineColLoc::get(&context, filename, 1, 1));
+  std::unique_ptr<mlir::AsmParserState> parser;
+  mlir::OwningOpRef<mlir::ModuleOp> module =
+      native ? std::move(native->emission.module)
+             : mlir::OwningOpRef<mlir::ModuleOp>();
+  if (!native) {
+    parser = std::make_unique<mlir::AsmParserState>();
+    mlir::Block parsed;
+    if (mlir::succeeded(
+            mlir::parseAsmSourceFile(manager, &parsed, config, parser.get())))
+      module = mlir::detail::constructContainerOpForParserIfNecessary<
+          mlir::ModuleOp>(&parsed, &context,
+                          mlir::FileLineColLoc::get(&context, filename, 1, 1));
+  }
   if (!module)
     return make_error<CompilationError>(
         diagnostics,
@@ -325,11 +345,17 @@ CheckedOriginal::admit(const ClosedEntry &entry, StringRef original,
   }
   storage->interfaceView = std::move(*interfaceView);
   storage->emission = std::move(prepared);
+  if (native)
+    for (const auto &[op, range] : native->emission.operations)
+      storage->written.try_emplace(
+          op, protocol::StructuredSourceTextRange{range.begin, range.end,
+                                                  range.line, range.column});
   // Retained immutable originals may be read concurrently. Clones still share
   // MLIR's uniqued types/attributes, so their context must support those
   // readers.
   context.enableMultithreading();
-  storage->context = std::move(ownedContext);
+  storage->context =
+      native ? std::move(native->context) : std::move(ownedContext);
   storage->sourceManager = std::move(ownedManager);
   storage->parser = std::move(parser);
   storage->module = std::move(module);
@@ -363,6 +389,9 @@ detail::OriginalAccess::read(const CheckedOriginal &original) {
       storage.parser.get(), storage.sourceManager.get(), &written);
   if (!result)
     return result.takeError();
+  for (const auto &[op, range] : storage.written)
+    if (auto *copy = mapping.lookupOrNull(op))
+      result->written.try_emplace(copy, range);
   result->originalOwner = original;
   return std::move(*result);
 }

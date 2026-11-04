@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/VariantFixture.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -132,7 +133,7 @@ int main(int argc, char **argv) {
       });
   cases.run("equal payloads retain different nominal row identities", [&] {
     auto kind = [&](StringRef identity) {
-      auto nominal = data::importVariantIdentity(
+      auto nominal = zkc::test::importVariantIdentityFixture(
           &context, json::Array{"oracle-row-test/0", identity.str()});
       auto arm = data::AlternativeAttr::get(
           &context, StringAttr::get(&context, "Record"),
@@ -171,7 +172,7 @@ int main(int argc, char **argv) {
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
-    auto nominal = data::importVariantIdentity(
+    auto nominal = zkc::test::importVariantIdentityFixture(
         &context, json::Array{"oracle-row-test/0", "inactive"});
     auto affine = runtime::CapabilityType::get(
         &context, runtime::CapabilityKind::Random, "bls12-381.fr");

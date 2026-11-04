@@ -42,19 +42,28 @@ strings and keys before leaving the source/context lifetime; copying an LLVM
 JSON value alone does not detach borrowed `StringRef` storage. Tests must alter both records and actual
 programs, including well-formed programs with a different meaning.
 
-Retaining a parsed original has a cost: its context and module stay alive beside
-the authenticated byte buffer, and independent analyses use temporary clones.
-The admitted source-profile visitor still constructs the bounded semantic
-projection and its correspondence coordinates. Native consumers of that view
-therefore remain subject to the structured-source profile and publication size
-ceiling, even when they do not publish JSON. Separating native formation from
-publication must preserve explicit profile admission and source coordinates;
-skipping the exporter must not silently admit more programs. Eliminating
-reparsing does not mean that projection is free, or establish a net memory or
-speed improvement.
-The owner is intentionally local to a compilation; no global mutable IR cache is
-introduced. Any later caching or lazy projection must preserve the same admission,
-source-association and invalidation rules.
+Retaining an original has a cost: its context and module stay alive beside the
+authenticated byte buffer, and independent analyses use temporary clones. The
+frontend transfers its emitted module directly into admission. Canonical
+printing records operation-name ranges in those exact bytes; it does not
+reparse the printout to recover the program. Imported originals are parsed once
+and must reproduce the supplied canonical bytes. Both paths retain the same
+independent source comparison and immutable ownership rules.
+
+Native source admission checks the complete profile, declarations, references
+and closed control structure before constructing a borrowed operation index.
+Its shared work allowance bounds expanded uses and retained metadata. The index
+stores actual operations, bindings and regions; it does not construct JSON
+descriptors or format-local synthetic computations. Coordinate construction
+keeps prepend offsets instead of repeatedly shifting every earlier binding.
+
+Structured publication is an explicit projection from that admitted view. It
+enforces its own text, table, nesting and encoded-size bounds and may refuse an
+otherwise admitted native source. Per-operation descriptors are constructed
+only for reports that request them. Native facts cannot depend on publication
+succeeding. This separation does not establish a net memory or speed improvement.
+The owner remains local to a compilation; no global mutable IR cache is
+introduced.
 
 Fresh target compilation admits the authenticated original bytes into an isolated
 compilation context. Target installations, diagnostics and rewriting then belong

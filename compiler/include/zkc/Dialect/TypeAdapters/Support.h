@@ -11,15 +11,6 @@
 namespace zkc::protocol::type_adapters {
 // Translation never initializes the caller's context. A loaded namespace is
 // insufficient if it has not registered the expected native type.
-template <typename T, typename... Args>
-mlir::Type loadedType(mlir::MLIRContext *context, Args &&...args) {
-  if (!context || !context->getLoadedDialect(T::dialectName))
-    return {};
-  auto registered = mlir::AbstractType::lookup(T::name, context);
-  if (!registered || registered->get().getTypeID() != T::getTypeID())
-    return {};
-  return T::get(context, std::forward<Args>(args)...);
-}
 
 template <typename T, typename... Args>
 using NativeVerification = decltype(T::verify(
@@ -42,6 +33,17 @@ loadedCheckedType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
     if (mlir::failed(T::verify(emit, args...)))
       return {};
   return T::get(context, std::forward<Args>(args)...);
+}
+
+// Structured boundary formation and native metadata formation have different
+// depth accounting. Always run native verification before an asserting builder.
+template <typename T, typename... Args>
+mlir::Type loadedType(mlir::MLIRContext *context, Args &&...args) {
+  if (!context)
+    return {};
+  return loadedCheckedType<T>(
+      [&] { return mlir::emitError(mlir::UnknownLoc::get(context)); }, context,
+      std::forward<Args>(args)...);
 }
 
 template <typename T>

@@ -124,28 +124,29 @@ struct Emitter {
           auto childKind = kind(query.kind);
           if (!childKind)
             return childKind.takeError();
-          std::vector<std::string> fields(4 + previous.size(), "index");
-          VariantDescriptor descriptor{
-              json::Array{"zkc.oracle.continuation/0",
-                          toHex(storage.entry, true), toHex(result.role, true),
-                          std::to_string(source), std::to_string(ordinal)},
-              {{"Record", std::move(fields)}}};
-          auto spelling = encodeVariant(descriptor);
-          if (!spelling)
-            return error("oracle-controller-layout");
-          if (spelling->size() > metadataRemaining)
+          VariantIdentity identity(VariantIdentity::Tuple{
+              "zkc.oracle.continuation/0", toHex(storage.entry, true),
+              toHex(result.role, true), std::to_string(source),
+              std::to_string(ordinal)});
+          // Bound actual identity metadata and payload slots, independently of
+          // whether a portable descriptor could encode this native carrier.
+          uint64_t metadata = 128 +
+                              2 * (storage.entry.size() + result.role.size()) +
+                              8 * (4 + previous.size());
+          if (metadata > metadataRemaining)
             return error("oracle-controller-limit");
-          metadataRemaining -= spelling->size();
+          metadataRemaining -= metadata;
           auto *context = candidate.getContext();
-          auto nominal =
-              data::importVariantIdentity(context, descriptor.nominal);
-          auto arm = data::AlternativeAttr::get(
-              context, builder.getStringAttr("Record"),
-              Types(4 + previous.size(), index));
-          Type record = nominal ? data::VariantType::getChecked(
-                                      loc, context, nominal,
-                                      ArrayRef<data::AlternativeAttr>{arm})
-                                : data::VariantType{};
+          auto nominal = data::importVariantIdentity(context, identity);
+          Types fields(4 + previous.size(), index);
+          auto arm = data::AlternativeAttr::getChecked(
+              loc, context, builder.getStringAttr("Record"),
+              ArrayRef<Type>(fields));
+          Type record = nominal && arm
+                            ? data::VariantType::getChecked(
+                                  loc, context, nominal,
+                                  ArrayRef<data::AlternativeAttr>{arm})
+                            : data::VariantType{};
           if (!record)
             return error("oracle-controller-layout");
           auto arena = sequence(record);

@@ -1,4 +1,5 @@
 #include "zkc/Analysis/NativeTypes.h"
+#include "zkc/Contracts/TypePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -11,10 +12,6 @@ bool isFormalType(Type type) {
   return isa_and_nonnull<poly::PolynomialType, poly::QuotientType>(type);
 }
 namespace {
-struct TypeFacts {
-  NativeTypePolicy policy;
-  bool copy, message;
-};
 struct PolicyInspection {
   unsigned &remaining;
   size_t &remainingBytes;
@@ -41,92 +38,60 @@ struct PolicyInspection {
     }
     return true;
   }
-  std::optional<TypeFacts> inspect(Type type, unsigned depth = 0) {
-    if (depth >= 64 || !charge()) {
+  bool enter(unsigned depth) {
+    if (depth >= 64) {
       limited = true;
-      return std::nullopt;
+      return false;
     }
-    bool childrenCopy = true, childrenTotal = true, childrenShared = true,
-         protocolPort = true, childrenConstructible = true,
-         childrenMessage = true;
-    auto include = [&](Type child) {
-      auto facts = inspect(child, depth + 1);
-      if (!facts)
-        return false;
-      childrenCopy &= facts->copy;
-      childrenTotal &= facts->policy.total;
-      childrenShared &= facts->policy.shared;
-      protocolPort &= facts->policy.protocolPort;
-      childrenConstructible &= facts->policy.constructible;
-      childrenMessage &= facts->message;
-      return true;
-    };
-    auto aggregate = [&] {
-      return TypeFacts{{childrenCopy && childrenTotal,
-                        childrenCopy && childrenShared, !childrenCopy,
-                        childrenCopy && protocolPort, childrenMessage,
-                        childrenConstructible},
-                       childrenCopy,
-                       childrenMessage};
-    };
+    return charge();
+  }
+  std::optional<protocol::detail::PolicyNode> head(Type type) {
     if (auto variant = dyn_cast<data::VariantType>(type)) {
       if (!metadata(variant.getIdentity()))
         return std::nullopt;
-      for (auto arm : variant.getAlternatives()) {
+      for (auto arm : variant.getAlternatives())
         if (!metadata(arm.getLabel()))
           return std::nullopt;
-        for (auto payload : arm.getPayload())
-          if (!include(payload))
-            return std::nullopt;
-      }
-      return aggregate();
+      return protocol::detail::PolicyNode{"variant", {}, false, false};
     }
     auto interface = dyn_cast<CatalogTypeInterface>(type);
     auto application =
         interface ? interface.getCatalogApplication() : std::nullopt;
     if (!application)
       return std::nullopt;
-    auto kind = application->constructor;
-    auto constructor = protocol::nativeTypeConstructorPolicy(kind);
-    auto *permissions = protocol::typePermissions(kind);
-    if (!constructor || !permissions)
-      return std::nullopt;
-    for (auto argument : application->arguments) {
-      if (auto nested = dyn_cast<TypeAttr>(argument)) {
-        if (!charge() || !include(nested.getValue()))
-          return std::nullopt;
-      } else if (!metadata(argument))
+    for (auto argument : application->arguments)
+      if (!metadata(argument))
         return std::nullopt;
-    }
-    if (kind == "sequence")
-      return aggregate();
-    // Atomic codecs are selected by the nominal domain, never by the printed
-    // type. Complete-type containers do not inherit an element's codec.
+    bool applied = !application->arguments.empty();
     StringRef identity;
-    bool atomic = application->arguments.empty();
     if (application->arguments.size() == 1)
       if (auto domain = dyn_cast<StringAttr>(application->arguments.front())) {
         identity = domain.getValue();
-        atomic = true;
+        applied = false;
       }
-    bool message = atomic && protocol::nativeMessageAtom(kind, identity);
-    bool wire = constructor->shared && atomic &&
-                permissions->custody == protocol::Custody::PublicValue &&
-                protocol::installedDomains().defaultCodec(kind, identity);
-    if (kind == "field_array") {
-      // Logical formation has already checked Domain/Nat argument kinds and
-      // extent bounds. The catalog's aggregate frame names the exact field.
-      wire = protocol::nativeFieldArrayFrame(
-          cast<StringAttr>(application->arguments[0]).getValue());
-      message = wire;
+    return protocol::detail::PolicyNode{
+        application->constructor, identity, applied,
+        application->constructor == "field_array" &&
+            protocol::nativeFieldArrayFrame(
+                cast<StringAttr>(application->arguments[0]).getValue())};
+  }
+  template <class Include> bool children(Type type, Include include) {
+    if (auto variant = dyn_cast<data::VariantType>(type)) {
+      for (auto arm : variant.getAlternatives())
+        for (auto payload : arm.getPayload())
+          if (!include(payload))
+            return false;
+      return true;
     }
-    return TypeFacts{
-        {constructor->total, constructor->shared,
-         permissions->custody == protocol::Custody::Affine || !childrenCopy,
-         protocolPort, wire,
-         constructor->constructible && childrenConstructible},
-        permissions->copy && childrenCopy,
-        message};
+    auto application = cast<CatalogTypeInterface>(type).getCatalogApplication();
+    for (auto argument : application->arguments)
+      if (auto child = dyn_cast<TypeAttr>(argument))
+        if (!include(child.getValue()))
+          return false;
+    return true;
+  }
+  std::optional<protocol::TypePolicyFacts> inspect(Type type) {
+    return protocol::detail::walkTypePolicy(*this, type);
   }
 };
 bool formed(Type type) {
@@ -145,17 +110,22 @@ bool formed(Type type) {
       type));
 }
 } // namespace
+std::optional<protocol::TypePolicyFacts> nativeTypeFacts(Type type,
+                                                         unsigned &remaining,
+                                                         size_t &remainingBytes,
+                                                         bool &limited) {
+  if (limited || !formed(type))
+    return std::nullopt;
+  return PolicyInspection{remaining, remainingBytes, limited}.inspect(type);
+}
 std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
   if (isFormalType(type))
     return NativeTypePolicy{true, false, false, false, false, false};
-  if (!formed(type))
-    return std::nullopt;
   unsigned remaining = 200000;
   size_t remainingBytes = 1024 * 1024;
   bool limited = false;
-  auto facts =
-      PolicyInspection{remaining, remainingBytes, limited}.inspect(type);
-  return facts ? std::optional(facts->policy) : std::nullopt;
+  auto facts = nativeTypeFacts(type, remaining, remainingBytes, limited);
+  return facts ? facts->native : std::nullopt;
 }
 std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
   if (isFormalType(type))
@@ -165,10 +135,8 @@ std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
   if (limited)
     return std::nullopt;
   std::optional<NativeTypePolicy> result;
-  if (formed(type))
-    if (auto facts =
-            PolicyInspection{remaining, remainingBytes, limited}.inspect(type))
-      result = facts->policy;
+  if (auto facts = nativeTypeFacts(type, remaining, remainingBytes, limited))
+    result = facts->native;
   if (limited)
     (void)diagnostics::emit(owner->emitOpError(), "native-type-policy-limit",
                             "closed type analysis exceeds its node, depth or "

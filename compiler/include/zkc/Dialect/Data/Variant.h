@@ -9,8 +9,8 @@ namespace zkc::data {
 /// Translation at neutral declaration and program-format boundaries. Internal
 /// operations inspect the structured identity and payload types directly.
 IdentityAttr importVariantIdentity(mlir::MLIRContext *,
-                                   const llvm::json::Value &);
-llvm::json::Value exportVariantIdentity(IdentityAttr);
+                                   const protocol::VariantIdentity &);
+protocol::VariantIdentity exportVariantIdentity(IdentityAttr);
 VariantType importVariantType(mlir::MLIRContext *,
                               const protocol::VariantDescriptor &);
 /// Exact flattened payload of a declared nominal alternative, including the

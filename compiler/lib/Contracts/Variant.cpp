@@ -139,13 +139,13 @@ descriptor(const json::Value &tree, unsigned depth, TypeParseBudget &budget) {
   auto *root = tree.getAsArray();
   if (depth >= 8 || !budget.consume() || !root || root->size() != 2)
     return std::nullopt;
-  const auto &nominal = (*root)[0];
-  if (auto s = nominal.getAsString(); s && s->empty())
+  auto nominal = decodeVariantIdentity((*root)[0], budget);
+  if (!nominal)
     return std::nullopt;
   auto *arms = (*root)[1].getAsArray();
   if (!arms || arms->empty() || arms->size() > VariantDescriptorAlternatives)
     return std::nullopt;
-  VariantDescriptor result{nominal, {}};
+  VariantDescriptor result{std::move(*nominal), {}};
   std::set<std::string> labels;
   for (const auto &value : *arms) {
     auto *arm = value.getAsArray();
@@ -166,21 +166,86 @@ descriptor(const json::Value &tree, unsigned depth, TypeParseBudget &budget) {
           consumeError(parsed.takeError());
           return std::nullopt;
         }
-        alternative.payload.push_back(leaf->str());
+        alternative.payload.push_back(std::move(*parsed));
       } else {
-        if (!descriptor(entry, depth + 1, budget))
+        auto nested = descriptor(entry, depth + 1, budget);
+        if (!nested)
           return std::nullopt;
         auto encoded = pack(entry);
-        if (!encoded)
+        if (!encoded || !unpack(*encoded))
           return std::nullopt;
-        alternative.payload.push_back(std::move(*encoded));
+        BoundType type{"variant", {}, {}};
+        type.variant =
+            std::make_shared<const VariantDescriptor>(std::move(*nested));
+        alternative.payload.push_back(std::move(type));
       }
     }
     result.alternatives.push_back(std::move(alternative));
   }
   return result;
 }
+std::optional<json::Value> descriptorTree(const VariantDescriptor &descriptor,
+                                          unsigned depth) {
+  if (depth >= 8 || descriptor.alternatives.empty() ||
+      descriptor.alternatives.size() > VariantDescriptorAlternatives)
+    return std::nullopt;
+  json::Array arms;
+  for (const auto &arm : descriptor.alternatives) {
+    if (arm.payload.size() > 128)
+      return std::nullopt;
+    json::Array payload;
+    for (const auto &type : arm.payload) {
+      if (type.kind == "variant") {
+        if (!type.variant)
+          return std::nullopt;
+        auto tree = descriptorTree(*type.variant, depth + 1);
+        auto encoded = tree ? pack(*tree) : std::nullopt;
+        if (!encoded || !unpack(*encoded))
+          return std::nullopt;
+        payload.push_back(std::move(*tree));
+      } else {
+        auto spelling = type.spelling();
+        if (spelling.empty())
+          return std::nullopt;
+        payload.push_back(std::move(spelling));
+      }
+    }
+    arms.push_back(json::Array{arm.label, std::move(payload)});
+  }
+  return json::Value(
+      json::Array{encodeVariantIdentity(descriptor.nominal), std::move(arms)});
+}
 } // namespace
+std::optional<VariantIdentity> decodeVariantIdentity(const json::Value &value,
+                                                     TypeParseBudget &budget,
+                                                     unsigned depth) {
+  if (depth >= 64 || !budget.consume())
+    return std::nullopt;
+  if (auto atom = value.getAsString()) {
+    if (atom->empty() || !budget.charge(atom->size()) || !json::isUTF8(*atom))
+      return std::nullopt;
+    return VariantIdentity(atom->str());
+  }
+  auto *array = value.getAsArray();
+  if (!array || array->size() > budget.remaining)
+    return std::nullopt;
+  VariantIdentity::Tuple children;
+  for (const auto &item : *array) {
+    auto child = decodeVariantIdentity(item, budget, depth + 1);
+    if (!child)
+      return std::nullopt;
+    children.push_back(std::move(*child));
+  }
+  return VariantIdentity(std::move(children));
+}
+json::Value encodeVariantIdentity(const VariantIdentity &identity) {
+  if (auto *atom = identity.atom())
+    return *atom;
+  json::Array tuple;
+  for (const auto &child : *identity.tuple())
+    tuple.push_back(encodeVariantIdentity(child));
+  return tuple;
+}
 std::optional<VariantDescriptor>
 decodeVariant(std::string_view type, unsigned depth, TypeParseBudget *budget) {
   TypeParseBudget localBudget;
@@ -192,25 +257,14 @@ decodeVariant(std::string_view type, unsigned depth, TypeParseBudget *budget) {
   return tree ? descriptor(*tree, depth, *budget) : std::nullopt;
 }
 std::optional<std::string> encodeVariant(const VariantDescriptor &d) {
-  if (d.alternatives.size() > VariantDescriptorAlternatives)
+  BoundType type{"variant", {}, {}};
+  type.variant = std::make_shared<const VariantDescriptor>(d);
+  if (auto e = checkBoundType(type, false)) {
+    consumeError(std::move(e));
     return std::nullopt;
-  json::Array arms;
-  for (const auto &arm : d.alternatives) {
-    if (arm.payload.size() > 128)
-      return std::nullopt;
-    json::Array payload;
-    for (const auto &type : arm.payload) {
-      if (StringRef(type).starts_with("variant:")) {
-        auto tree = unpack(type);
-        if (!tree)
-          return std::nullopt;
-        payload.push_back(std::move(*tree));
-      } else
-        payload.push_back(type);
-    }
-    arms.push_back(json::Array{arm.label, std::move(payload)});
   }
-  auto encoded = pack(json::Array{d.nominal, std::move(arms)});
+  auto tree = descriptorTree(d, 0);
+  auto encoded = tree ? pack(*tree) : std::nullopt;
   return encoded && decodeVariant(*encoded) ? encoded : std::nullopt;
 }
 } // namespace zkc::protocol

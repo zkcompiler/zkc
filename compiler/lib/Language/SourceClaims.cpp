@@ -406,14 +406,13 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
     // prefixes them.
     json::Value slot = nullptr;
     if (declaration.resource) {
-      constexpr StringLiteral unit = "resource_unit:";
       const auto *leaf = (*layout)->custody && !(*layout)->leaves.empty()
                              ? (*layout)->leaves.front().data()
                              : nullptr;
-      if (!leaf || !StringRef(*leaf).starts_with(unit))
+      if (!leaf || leaf->kind != "resource_unit")
         return detail::failure("component-declaration",
                                "resource row has no custody slot");
-      slot = StringRef(*leaf).drop_front(unit.size());
+      slot = leaf->identity;
     }
     records.push_back(json::Array{std::move(*term),
                                   !declaration.resource ? "ordinary"

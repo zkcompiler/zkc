@@ -294,17 +294,16 @@ class Comparator {
             if (!row || !argument.type)
               return fail("oracle row layout differs");
             auto logical =
-                take(protocol::encodeBoundType(row.getValue(), false));
-            if (!logical || !(*logical == *argument.type))
+                protocol::decodeBoundType(row.getContext(), *argument.type);
+            if (!logical || logical != row.getValue())
               return fail("oracle row layout differs");
           }
         }
         continue;
       }
-      auto type = take(protocol::encodeBoundType(actual[i], false));
-      if (!type)
-        return false;
-      if (type->spelling() != *expected[i].data())
+      auto type = protocol::decodeBoundType(actual[i].getContext(),
+                                            *expected[i].data());
+      if (!type || type != actual[i])
         return fail("native layout type differs");
     }
     return true;
@@ -561,10 +560,7 @@ class Comparator {
       fail("mapped auxiliary definition or scalar layout differs");
       return {};
     }
-    auto bound = take(
-        protocol::parseBoundType(*(*layout)->leaves.front().data(), false));
-    if (!bound)
-      return {};
+    const auto *bound = (*layout)->leaves.front().data();
     auto scalar = protocol::decodeBoundType(module.getContext(), *bound);
     if (!scalar) {
       fail("mapped scalar type is unavailable");
@@ -1264,8 +1260,7 @@ class Comparator {
         if (!observed)
           return false;
         for (const auto &leaf : observed->leaves)
-          if (leaf.leaf.data() &&
-              StringRef(*leaf.leaf.data()).starts_with("resource_unit:") &&
+          if (leaf.leaf.data() && leaf.leaf.data()->kind == "resource_unit" &&
               !custodyPrimitive(block, cursor, "resource_unit.consume",
                                 values[consume->input.index][leaf.bodyOffset],
                                 {}, leaf, op.span,
@@ -1371,8 +1366,7 @@ class Comparator {
         } else if (!attributes(*actual))
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());
-        if (packed &&
-            !types(actual->getResultTypes(), {packed->carrier.spelling()}))
+        if (packed && !types(actual->getResultTypes(), {packed->carrier}))
           return fail("total sequence result carrier differs");
         if (packed && packed->product) {
           auto flat = unpackMathematical(block, cursor, result.front(), leaves,
@@ -1393,16 +1387,16 @@ class Comparator {
             return false;
           if (local->contract == "sequence.append" && packed->product) {
             const auto &fields = values[local->operands[1].index];
-            auto packedValue = variant(block, cursor, op.span, fields,
-                                       packed->carrier.spelling(),
-                                       packed->alternative, site + "_pack");
+            auto packedValue =
+                variant(block, cursor, op.span, fields, packed->carrier,
+                        packed->alternative, site + "_pack");
             if (!packedValue)
               return false;
             operands = values[local->operands[0].index];
             operands.push_back(packedValue->front());
           }
           if (local->contract == "sequence.at")
-            outputs = {packed->carrier.spelling()};
+            outputs = {packed->carrier};
         }
         auto checked =
             primitive(block, cursor, *local, operands, outputs, op.span, site);

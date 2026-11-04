@@ -8,5 +8,7 @@ namespace zkc {
 /// named arguments. Only the protocol template path has a 2048-byte allowance.
 llvm::Error checkStaticTerm(const llvm::json::Value &);
 llvm::Error checkProtocolOrigin(const llvm::json::Value &);
+/// Semantic path grammar and NFC, independent of an enclosing wire capacity.
+bool staticTermPath(llvm::StringRef);
 } // namespace zkc
 #endif

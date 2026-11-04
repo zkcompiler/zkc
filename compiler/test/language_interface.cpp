@@ -1,6 +1,7 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/NativeLanguage.h"
@@ -170,10 +171,10 @@ CheckedOriginal compileNative(StringRef code) {
 std::pair<std::string, json::Value>
 variantDocument(StringRef nominal, StringRef first = "case00000000",
                 StringRef second = "case00000001") {
-  zkc::protocol::VariantDescriptor descriptor{
+  zkc::test::VariantFixtureDescriptor descriptor{
       json::Array{"zkc.language", nominal.str()},
       {{first.str(), {"bool"}}, {second.str(), {"bool"}}}};
-  auto encoded = zkc::protocol::encodeVariant(descriptor);
+  auto encoded = zkc::test::encodeVariantFixture(descriptor);
   require(bool(encoded), "invalid native variant fixture");
   std::string type = zkc::test::variantAssembly(*encoded);
   std::string native =

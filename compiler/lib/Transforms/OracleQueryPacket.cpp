@@ -65,9 +65,9 @@ struct Emitter {
         answer.getAlternatives().size() != model.arms.size())
       return refuse();
     auto identity = data::importVariantIdentity(
-        unit.getContext(),
-        json::Array{"zkc.oracle.checked-answer/0",
-                    data::exportVariantIdentity(opened.getIdentity())});
+        unit.getContext(), VariantIdentity::Tuple{"zkc.oracle.checked-answer/0",
+                                                  data::exportVariantIdentity(
+                                                      opened.getIdentity())});
     if (!identity || answer.getIdentity() != identity)
       return refuse();
     auto signature = [&](func::FuncOp helper) -> FunctionType {
@@ -125,8 +125,9 @@ struct Emitter {
     }
     auto keyIdentity = data::importVariantIdentity(
         unit.getContext(),
-        json::Array{"zkc.oracle.physical-query-key/0",
-                    data::exportVariantIdentity(request.getIdentity())});
+        VariantIdentity::Tuple{
+            "zkc.oracle.physical-query-key/0",
+            data::exportVariantIdentity(request.getIdentity())});
     if (!keyIdentity)
       return refuse();
     auto alternative = data::AlternativeAttr::get(

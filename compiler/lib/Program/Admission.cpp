@@ -92,7 +92,7 @@ class Admission {
       return found->second;
     uint64_t units = 0;
     if (type.kind == "variant") {
-      auto descriptor = decodeVariant(spelling);
+      const auto &descriptor = type.variant;
       if (!descriptor)
         return UINT64_MAX;
       units = 512 + 4 * uint64_t(spelling.size()) +
@@ -100,12 +100,7 @@ class Admission {
       for (const auto &alternative : descriptor->alternatives) {
         units = sum(units, 256 * uint64_t(alternative.payload.size()));
         for (const auto &payload : alternative.payload) {
-          auto parsed = parseBoundType(payload, false);
-          if (!parsed) {
-            consumeError(parsed.takeError());
-            return UINT64_MAX;
-          }
-          units = sum(units, logicalUnits(*parsed));
+          units = sum(units, logicalUnits(payload));
         }
       }
     } else if (!type.arguments.empty()) {
@@ -379,17 +374,16 @@ class Admission {
     if (!operands({match.input}, env, input, consumed) ||
         !captures(match.captures, env, consumed, captured))
       return false;
-    auto descriptor =
-        decodeVariant(StringRef(input[0].type).split('@').first.str());
-    if (!descriptor)
-      return fail(RC::Types, "variant-type");
-    if (match.arms.size() != descriptor->alternatives.size())
-      return fail(RC::Types, "local-match-arms");
     auto complete = parseBoundType(input[0].type, physical);
     if (!complete) {
       consumeError(complete.takeError());
       return fail(RC::Types, "variant-type");
     }
+    const auto *descriptor = complete->variant.get();
+    if (!descriptor)
+      return fail(RC::Types, "variant-type");
+    if (match.arms.size() != descriptor->alternatives.size())
+      return fail(RC::Types, "local-match-arms");
     size_t payloadOffset = 0;
     std::optional<std::vector<Port>> outputs;
     for (size_t i = 0; i < match.arms.size(); ++i) {
@@ -400,7 +394,7 @@ class Admission {
         return fail(RC::Types, "local-match-arm");
       Env inner;
       for (size_t j = 0; j < arm.payload.size(); ++j) {
-        std::string leaf = alternative.payload[j];
+        std::string leaf = alternative.payload[j].spelling();
         if (physical) {
           if (!complete->physicalChildren ||
               payloadOffset + j >= complete->physicalChildren->size())
@@ -713,8 +707,12 @@ class Admission {
           return fail(RC::Syntax, "local-control-context");
         if (!type(pack->type))
           return false;
-        auto descriptor =
-            decodeVariant(StringRef(pack->type).split('@').first.str());
+        auto complete = parseBoundType(pack->type, physical);
+        if (!complete) {
+          consumeError(complete.takeError());
+          return fail(RC::Types, "variant-type");
+        }
+        const auto *descriptor = complete->variant.get();
         if (!descriptor)
           return fail(RC::Types, "variant-type");
         auto arm = llvm::find_if(descriptor->alternatives, [&](const auto &a) {
@@ -723,11 +721,6 @@ class Admission {
         if (arm == descriptor->alternatives.end())
           return fail(RC::Types, "variant-alternative");
         std::vector<Port> payload, expected;
-        auto complete = parseBoundType(pack->type, physical);
-        if (!complete) {
-          consumeError(complete.takeError());
-          return fail(RC::Types, "variant-type");
-        }
         size_t offset = 0;
         for (auto previous = descriptor->alternatives.begin(); previous != arm;
              ++previous)
@@ -740,7 +733,7 @@ class Admission {
             expected.push_back(
                 {(*complete->physicalChildren)[offset + i].spelling()});
           } else
-            expected.push_back({leaf});
+            expected.push_back({leaf.spelling()});
         }
         if (!operands(pack->payload, env, payload, consumed))
           return false;

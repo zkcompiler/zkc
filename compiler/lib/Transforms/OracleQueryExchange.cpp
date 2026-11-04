@@ -20,7 +20,7 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
   result.state = receiver.state;
   result.receiverStores = receiver.stores;
   SmallVector<data::AlternativeAttr> alternatives;
-  json::Array constructors;
+  VariantIdentity::Tuple constructors;
   for (auto [slot, item] : enumerate(receiver.constructors)) {
     const auto &anchor = storage.constructors[item.source];
     if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual)
@@ -83,9 +83,9 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
   if (result.arms.empty())
     return refuse();
   auto nominal = [&](StringRef family) {
-    return json::Array{family, toHex(storage.entry, true),
-                       toHex(receiver.role, true), toHex(holder.role, true),
-                       json::Array(constructors)};
+    return VariantIdentity::Tuple{
+        family.str(), toHex(storage.entry, true), toHex(receiver.role, true),
+        toHex(holder.role, true), VariantIdentity::Tuple(constructors)};
   };
   if (alternatives.size() > oracleExchangeConstructorLimit)
     return refuse();

@@ -3,6 +3,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -35,6 +36,56 @@ int main() {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run("boundary policy rejects malformed structured types", [&] {
+    protocol::BoundType missingElement{"sequence", {}, {}};
+    protocol::BoundType nullElement{
+        "sequence", {}, {}, {{protocol::TypeArgument::Kind::Type, {}, {}, 0}}};
+    protocol::BoundType wrongKind{
+        "sequence", {}, {}, {protocol::TypeArgument::naturalArgument(0)}};
+    protocol::BoundType unknownDomain{"field", "uninstalled.field", {}};
+    protocol::BoundType encodedIdentity{
+        "variant", "encoded-is-not-structure", {}};
+    for (const auto &type : {missingElement, nullElement, wrongKind,
+                             unknownDomain, encodedIdentity}) {
+      require(!protocol::nativeTypePolicy(type),
+              "malformed type acquired native policy");
+      require(!protocol::duplicable(type) && !protocol::discardable(type) &&
+                  !protocol::programPort(type) &&
+                  !protocol::nativeMessageData(type),
+              "malformed type acquired structural permission");
+      require(type.spelling().empty(), "malformed type acquired a spelling");
+    }
+  });
+  cases.run("structured boundary variants do not inherit portable width", [&] {
+    protocol::VariantDescriptor descriptor{
+        protocol::VariantIdentity::Tuple{"Wide", "nominal"}, {}};
+    for (unsigned i = 0; i < 65; ++i)
+      descriptor.alternatives.push_back(
+          {"arm" + std::to_string(i), {{"bool", {}, {}}}});
+    auto type = take(protocol::variantType(descriptor));
+    require(type.identity.empty() && type.variant &&
+                type.variant->alternatives.size() == 65,
+            "variant retained an encoded authority");
+    auto boundary = protocol::nativeTypePolicy(type);
+    auto nativeType = protocol::decodeBoundType(&context, type);
+    auto native = mathematical::nativeTypePolicy(nativeType);
+    require(boundary && native && boundary->total && native->total &&
+                boundary->shared && native->shared && boundary->wire &&
+                native->wire,
+            "portable width restricted structured policy");
+    require(!protocol::encodeVariant(descriptor) && type.spelling().empty(),
+            "portable descriptor width was relaxed");
+    protocol::BoundType sequence{
+        "sequence", {}, {}, {protocol::TypeArgument::typeArgument(type)}};
+    require(sequence.spelling().empty(),
+            "unspellable child became an empty applied argument");
+    descriptor.alternatives.back().payload = {{"resource_unit", "Guard", {}}};
+    auto affine = take(protocol::variantType(std::move(descriptor)));
+    auto policy = protocol::nativeTypePolicy(affine);
+    require(policy && policy->affine && !policy->protocolPort &&
+                !policy->wire && !protocol::duplicable(affine),
+            "inactive affine payload disappeared from structured policy");
+  });
   // Cross-check every installed nominal type against the explicit design table.
   const llvm::StringSet<> totals{"bool",   "field",   "group",
                                  "index",  "indices", "vector",
@@ -110,7 +161,7 @@ int main() {
              {"table:bls12-381.fr", false},
              {"rng:bls12-381.fr", false},
              {"verifier_key:multilinear.kzg.bls12-381/0", false}}) {
-      auto encoded = protocol::encodeVariant(
+      auto encoded = zkc::test::encodeVariantFixture(
           {"Optional", {{"None", {}}, {"Some", {leaf.str()}}}});
       require(bool(encoded), "closed grammar fixture failed");
       auto type = take(protocol::parseBoundType(*encoded, false));
@@ -130,7 +181,7 @@ int main() {
     }
   });
   cases.run("variant recursive policy", [&] {
-    auto spelling = protocol::encodeVariant(
+    auto spelling = zkc::test::encodeVariantFixture(
         {"Result", {{"Value", {"bool"}}, {"Guard", {"resource_unit:Guard"}}}});
     require(bool(spelling), "variant fixture failed");
     auto type = take(protocol::parseBoundType(*spelling, false));
@@ -141,10 +192,11 @@ int main() {
             "variant lost recursive affine custody");
   });
   cases.run("copyable variants retain non-affine custody recursively", [&] {
-    auto inner = protocol::encodeVariant(
+    auto inner = zkc::test::encodeVariantFixture(
         {"Inner", {{"Empty", {}}, {"Value", {"bool"}}}});
     require(bool(inner), "copyable variant fixture failed");
-    auto outer = protocol::encodeVariant({"Outer", {{"Nested", {*inner}}}});
+    auto outer =
+        zkc::test::encodeVariantFixture({"Outer", {{"Nested", {*inner}}}});
     require(bool(outer), "nested variant fixture failed");
     for (const auto &spelling :
          {*inner, *outer, "fixed_vector<" + *inner + ",2>"}) {
@@ -159,7 +211,7 @@ int main() {
     }
   });
   cases.run("recursive native protocol boundaries", [&] {
-    auto encoded = protocol::encodeVariant(
+    auto encoded = zkc::test::encodeVariantFixture(
         {"Local", {{"Empty", {}}, {"Value", {"resource_unit:Guard"}}}});
     require(bool(encoded), "variant fixture failed");
     auto spelling = *encoded;
@@ -205,7 +257,7 @@ int main() {
                                     &context);
     require(bool(module), "boundary fixture refused");
     run(*module, protocol::createProjectProtocolPass());
-    auto encoded = protocol::encodeVariant(
+    auto encoded = zkc::test::encodeVariantFixture(
         {"Local", {{"Guard", {"resource_unit:Guard"}}}});
     require(bool(encoded), "variant fixture failed");
     for (bool bound : {false, true}) {
@@ -303,7 +355,7 @@ int main() {
     OwningOpRef<ModuleOp> anchor(ModuleOp::create(UnknownLoc::get(&context)));
     mathematical::NativeTypePolicies types(*anchor);
     auto make = [&](unsigned i) {
-      auto spelling = protocol::encodeVariant(
+      auto spelling = zkc::test::encodeVariantFixture(
           {"Type" + std::to_string(i),
            {{"Values", std::vector<std::string>(128, "bool")}}});
       require(bool(spelling), "budget fixture failed");

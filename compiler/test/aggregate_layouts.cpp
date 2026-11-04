@@ -11,6 +11,7 @@
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -322,7 +323,7 @@ std::string cyclicSequenceSource(MLIRContext &context, bool seeded) {
       });
 }
 std::string inferredSequenceSource(MLIRContext &context, StringRef kind) {
-  auto descriptor = *encodeVariant(
+  auto descriptor = *zkc::test::encodeVariantFixture(
       {"Inferred", {{"none", {}}, {"some", {"sequence<field:bls12-381.fr>"}}}});
   return authoredSource(
       context, R"(!F = !algebra.field<"bls12-381.fr">
@@ -1001,10 +1002,10 @@ int main(int argc, char **argv) {
     publish(*module, take(validatePhysical(*module, plan)));
   });
   cases.run("variant payload constraints solve independently", [&] {
-    auto variant =
-        *encodeVariant({"IndependentPayloads",
-                        {{"left", {"sequence<field:bls12-381.fr>"}},
-                         {"right", {"sequence<field:bls12-381.fr>"}}}});
+    auto variant = *zkc::test::encodeVariantFixture(
+        {"IndependentPayloads",
+         {{"left", {"sequence<field:bls12-381.fr>"}},
+          {"right", {"sequence<field:bls12-381.fr>"}}}});
     auto source = independentVariantSource(context, variant);
     auto module = take(executableFixture(source, context));
     PhysicalPlanOptions options;
@@ -1200,10 +1201,11 @@ int main(int argc, char **argv) {
             "binding-type-limit");
       });
   cases.run("inactive variant children are identity and admission", [&] {
-    auto spelling = *encodeVariant({"Complete",
-                                    {{"none", {}},
-                                     {"value", {"field:bls12-381.fr"}},
-                                     {"unused", {"group:bls12-381.g2"}}}});
+    auto spelling = *zkc::test::encodeVariantFixture(
+        {"Complete",
+         {{"none", {}},
+          {"value", {"field:bls12-381.fr"}},
+          {"unused", {"group:bls12-381.g2"}}}});
     auto schema = take(parseBoundType(spelling, false));
     auto physical = take(physicalType(
         schema, "logical.variant/0",
@@ -1226,10 +1228,10 @@ int main(int argc, char **argv) {
             "binding-representation");
   });
   cases.run("canonical boundary preserves nested nominal byte contracts", [&] {
-    auto inner = *encodeVariant(
+    auto inner = *zkc::test::encodeVariantFixture(
         {json::Array{"Inner", json::Array{"ordered", "identity"}},
          {{"empty", {}}, {"value", {"field:bls12-381.fr"}}}});
-    auto outer = *encodeVariant(
+    auto outer = *zkc::test::encodeVariantFixture(
         {"Outer",
          {{"none", {}}, {"nested", {inner, "sequence<field:koala-bear>"}}}});
     auto logical = zkc::test::variantType(&context, outer);
@@ -1244,7 +1246,8 @@ int main(int argc, char **argv) {
     for (size_t count : {size_t(64), size_t(65)}) {
       auto wide = data::VariantType::get(
           &context,
-          data::importVariantIdentity(&context, json::Value("WideChoice")),
+          zkc::test::importVariantIdentityFixture(&context,
+                                                  json::Value("WideChoice")),
           ArrayRef<data::AlternativeAttr>(wideArms).take_front(count));
       auto widePhysical = take(defaultPlanType(wide));
       require(logicalValueType(widePhysical) == wide,
@@ -1261,7 +1264,7 @@ int main(int argc, char **argv) {
             "direct export changed the independent byte contract");
     require(nativeType(context, expected) == native,
             "direct import lost complete nominal source structure");
-    auto swapped = *encodeVariant(
+    auto swapped = *zkc::test::encodeVariantFixture(
         {"Outer",
          {{"nested", {inner, "sequence<field:koala-bear>"}}, {"none", {}}}});
     auto different = nativeType(
@@ -1281,7 +1284,7 @@ int main(int argc, char **argv) {
        {"missing child", "reordered children", "inactive logical child",
         "unknown inactive layout"})
     cases.run("native layout formation refuses " + mutation, [&] {
-      auto spelling = *encodeVariant(
+      auto spelling = *zkc::test::encodeVariantFixture(
           {"FormationChoice",
            {{"none", {}},
             {"some", {"sequence<field:bls12-381.fr>"}},
@@ -1319,11 +1322,11 @@ int main(int argc, char **argv) {
   for (StringRef mutation : {"inactive representation", "inactive extent",
                              "nominal identity", "alternative order"})
     cases.run("native physical reader refuses " + mutation, [&] {
-      auto spelling =
-          *encodeVariant({"ReaderChoice",
-                          {{"none", {}},
-                           {"some", {"sequence<field:bls12-381.fr>"}},
-                           {"unused", {"field_array<bls12-381.fr,2>"}}}});
+      auto spelling = *zkc::test::encodeVariantFixture(
+          {"ReaderChoice",
+           {{"none", {}},
+            {"some", {"sequence<field:bls12-381.fr>"}},
+            {"unused", {"field_array<bls12-381.fr,2>"}}}});
       auto schema = take(parseBoundType(spelling, false));
       auto full = take(physicalType(
           schema, "logical.variant/0",
@@ -1366,8 +1369,8 @@ int main(int argc, char **argv) {
       } else if (mutation == "nominal identity")
         logical = data::VariantType::get(
             &context,
-            data::importVariantIdentity(&context,
-                                        json::Value("ForgedReaderChoice")),
+            zkc::test::importVariantIdentityFixture(
+                &context, json::Value("ForgedReaderChoice")),
             logical.getAlternatives());
       else {
         SmallVector<data::AlternativeAttr> alternatives(
@@ -1491,7 +1494,7 @@ int main(int argc, char **argv) {
   });
   cases.run(
       "selected variant includes inactive children without defaults", [&] {
-        auto variant = *encodeVariant(
+        auto variant = *zkc::test::encodeVariantFixture(
             {"SelectedChoice",
              {{"none", {}},
               {"some", {"sequence<field:bls12-381.fr>"}},
@@ -1682,18 +1685,19 @@ int main(int argc, char **argv) {
     publish(*module, take(validatePhysical(*module, plan)), "dense");
   });
   cases.run("complete layout wire permissions and logical custody", [&] {
-    auto descriptor = *encodeVariant({"WireChoice",
-                                      {{"none", {}},
-                                       {"some", {"field:bls12-381.fr"}},
-                                       {"unused", {"group:bls12-381.g2"}}}});
+    auto descriptor = *zkc::test::encodeVariantFixture(
+        {"WireChoice",
+         {{"none", {}},
+          {"some", {"field:bls12-381.fr"}},
+          {"unused", {"group:bls12-381.g2"}}}});
     auto selected = descriptor + "@logical.variant/0[blst/fr,blst/g2]";
-    auto localDescriptor =
-        *encodeVariant({"LocalChoice",
-                        {{"some", {"field:bls12-381.fr"}},
-                         {"unused", {"fixed_vector<field:bls12-381.fr,2>"}}}});
+    auto localDescriptor = *zkc::test::encodeVariantFixture(
+        {"LocalChoice",
+         {{"some", {"field:bls12-381.fr"}},
+          {"unused", {"fixed_vector<field:bls12-381.fr,2>"}}}});
     auto local = localDescriptor +
                  "@logical.variant/0[blst/fr,blst/fixed-vector[blst/fr]]";
-    auto affineDescriptor = *encodeVariant(
+    auto affineDescriptor = *zkc::test::encodeVariantFixture(
         {"AffineChoice",
          {{"some", {"field:bls12-381.fr"}}, {"unused", {"rng:bls12-381.fr"}}}});
     auto affine =

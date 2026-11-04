@@ -1,5 +1,6 @@
 #include "zkc/Dialect/Bindings.h"
 #include "mlir/IR/SymbolTable.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
@@ -349,44 +350,40 @@ StringRef atomicDomain(Type type) {
   return {};
 }
 
-// Formation is mandatory before this profile query. Unlike local Copy, the
-// closed message grammar covers every inactive variant arm and physical child.
-bool messageType(Type type) {
+// Physical installation is a separate judgment from the complete logical
+// message grammar. Formation has already checked child/layout correspondence.
+bool messageLayout(Type type) {
   auto represented = dyn_cast<runtime::RepresentedType>(type);
-  Type logical = logicalValueType(type);
-  auto kind = constructorOf(logical);
-  if (kind == "variant" || kind == "sequence") {
-    if (represented)
-      return all_of(represented.getChildren(), messageType);
-    if (auto variant = dyn_cast<data::VariantType>(logical))
-      return all_of(variant.getAlternatives(), [](auto arm) {
-        return all_of(arm.getPayload(), messageType);
-      });
-    return messageType(
-        cast<TypeAttr>(applicationOf(logical)->arguments[0]).getValue());
-  }
-  if (kind == "field_array") {
-    auto application = applicationOf(logical);
-    if (cast<StringAttr>(application->arguments[0]).getValue() !=
-        "bls12-381.fr")
-      return false;
-    return !represented ||
-           ((represented.getRepresentation() == "arkworks.field-array/0" ||
-             represented.getRepresentation() == "blst/field-array") &&
-            all_of(represented.getChildren(), messageType));
-  }
-  auto application = applicationOf(logical);
-  if (!application || application->arguments.size() > 1 ||
-      !protocol::nativeMessageAtom(kind, atomicDomain(logical)))
-    return false;
   if (!represented)
     return true;
+  Type logical = represented.getLogical();
+  auto kind = constructorOf(logical);
+  if (kind == "variant" || kind == "sequence")
+    return all_of(represented.getChildren(), messageLayout);
+  if (kind == "field_array") {
+    auto application = applicationOf(logical);
+    return protocol::nativeFieldArrayRepresentation(
+               cast<StringAttr>(application->arguments[0]).getValue(),
+               cast<IntegerAttr>(application->arguments[1])
+                   .getValue()
+                   .getZExtValue(),
+               represented.getRepresentation()) &&
+           all_of(represented.getChildren(), messageLayout);
+  }
   StringRef representation = represented.getRepresentation();
   auto *ordinary = protocol::installedDomains().defaultRepresentation(
       kind, atomicDomain(logical));
   return (ordinary && ordinary->identity == representation) ||
          protocol::canonicalRepresentation(kind, atomicDomain(logical),
                                            representation);
+}
+bool messageType(Type type) {
+  unsigned remaining = 200000;
+  size_t bytes = 1024 * 1024;
+  bool limited = false;
+  auto facts = mathematical::nativeTypeFacts(logicalValueType(type), remaining,
+                                             bytes, limited);
+  return facts && facts->message && messageLayout(type);
 }
 
 LogicalResult callAttributes(llvm::function_ref<InFlightDiagnostic()> emit,

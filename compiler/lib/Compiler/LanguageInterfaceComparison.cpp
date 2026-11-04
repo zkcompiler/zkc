@@ -145,7 +145,7 @@ class Comparison {
     } else if (!logical) {
       for (unsigned i = 0; i < source.leaves.size(); ++i)
         if (!source.leaves[i].data() ||
-            !text(*source.leaves[i].data(), actual.leaves[i]))
+            !text(source.leaves[i].data()->spelling(), actual.leaves[i]))
           return fail("logical source leaf differs");
     }
     if (!fields(source.fields, actual.fields, depth))

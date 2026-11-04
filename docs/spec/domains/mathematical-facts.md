@@ -1,7 +1,8 @@
 # Mathematical facts
 
 The shared fact vocabulary describes exact value origins, selected container
-extents, strict index bounds and collection cardinality. It supplies premises
+extents, strict index bounds, unsigned word ranges and collection cardinality.
+It supplies premises
 for [finite formation](../ir/finite.md) and mathematical analysis. It does not
 define another program representation or change a collection's nominal type.
 
@@ -94,6 +95,41 @@ premise. An unrepresentable count is unknown, never a wrapped count.
 
 ## Work and independent extraction
 
+### Unsigned word ranges
+
+A word range is a closed interval `[minimum, maximum]` within `0..2^64-1`.
+It bounds the results of total word operations; it is distinct from the checked
+arithmetic used for counts. The full interval is a completed, uninformative
+range, while an unsupported expression is Unknown. A singleton also establishes
+an exact integer. Malformed intervals establish nothing.
+
+The shared transfers follow the actual unsigned word semantics:
+
+| Operation | Conservative result |
+|---|---|
+| Wrapping addition | Add the extreme endpoints modulo `2^64`; retain their interval only if both sums have the same carry, otherwise use the full interval |
+| Wrapping subtraction | Subtract the opposite endpoints modulo `2^64`; retain their interval only if both differences have the same borrow, otherwise use the full interval |
+| Bitwise AND | Compute exact singleton operands; otherwise use `[0, min(left.maximum, right.maximum)]` |
+| Logical right shift | Counts at least 64 produce zero; smaller counts shift the value endpoints, using zero as the lower bound when the count interval includes 64 or more |
+
+The SSA adapter reads actual `data.index` constants, unsigned arguments, the
+four total Data word operations and supported helper returns. It substitutes
+each call's actual arguments. Query-local memoization excludes values under a
+helper's argument environment, so one call cannot supply a range for another
+call with different actuals. Reached constant results are interpreted only
+through their supported successful dispatch. Unsupported operations, branch
+conditions and undisclosed guard premises do not become range assumptions.
+
+The concrete formation consumer is a bounded element read: a completed range
+whose maximum is strictly less than an **exact** selected container extent
+establishes the read's index premise. An upper count cannot establish this
+premise. Empty extents admit no index. This rule admits expressions such as
+`(x & 7) + 1` for an extent of 9, but not an extent of 8; it does not erase an
+ordered execution check or make the bounded-read operation unconditionally
+speculatable.
+
+### Allowance and outcomes
+
 Queries return one of three outcomes:
 
 - **Proven:** the requested property follows from the admitted premises.
@@ -104,6 +140,16 @@ Unknown is not a proof of falsity. Capacity is not permission to infer an unmet
 precondition, assert an equation, or publish an unchecked transformation. Every
 nested query and extraction charges the same enclosing allowance. Exhaustion
 remains visible even if an algebraic shortcut would otherwise yield zero.
+Spending the last available unit may complete a result; requesting another
+unit produces Capacity. Cached extraction retains its charge, so repeated
+queries have the same allowance requirement as the first query. Helper
+substitution, origin extraction, range transfers and extent comparison share
+that requirement.
+Native extraction memoization includes the consumed dependency depth. Reusing a
+shallow result cannot hide an over-depth path through a shared expression, an
+origin or a forwarded argument. A failed extraction charge produces Capacity
+without a value, including when an unsigned argument otherwise admits the full
+word range.
 Optional callers may retain the ordered path. Mandatory formation checks report
 `finite-analysis-limit` on capacity and use the corresponding missing-evidence
 diagnostic on unknown; source checks report `source.limit` on capacity.

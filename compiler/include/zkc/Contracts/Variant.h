@@ -1,20 +1,12 @@
 #ifndef ZKC_CONTRACTS_VARIANT_H
 #define ZKC_CONTRACTS_VARIANT_H
+#include "zkc/Contracts/Bindings.h"
 #include "llvm/Support/JSON.h"
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 namespace zkc::protocol {
-struct TypeParseBudget;
-struct VariantAlternative {
-  std::string label;
-  std::vector<std::string> payload;
-};
-struct VariantDescriptor {
-  llvm::json::Value nominal;
-  std::vector<VariantAlternative> alternatives;
-};
 inline constexpr size_t VariantSpellingBytes = 256 * 1024;
 /// The portable descriptor's own alternative limit: the largest power of two
 /// for which a variant with that many alternatives can still be spelled within
@@ -28,5 +20,11 @@ std::optional<VariantDescriptor>
 decodeVariant(std::string_view, unsigned depth = 0,
               TypeParseBudget *budget = nullptr);
 std::optional<std::string> encodeVariant(const VariantDescriptor &);
+/// JSON is used only by the portable identity boundary. Native policy and
+/// equality inspect VariantIdentity directly.
+std::optional<VariantIdentity> decodeVariantIdentity(const llvm::json::Value &,
+                                                     TypeParseBudget &,
+                                                     unsigned depth = 0);
+llvm::json::Value encodeVariantIdentity(const VariantIdentity &);
 } // namespace zkc::protocol
 #endif

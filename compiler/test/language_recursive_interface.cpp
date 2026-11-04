@@ -398,13 +398,13 @@ void schemaHashParity() {
   identify(*scalar);
   scalar->permissions = {true, true};
   scalar->constructible = true;
-  scalar->leaves = {"bool"};
+  scalar->leaves = {zkc::protocol::BoundType{"bool", {}, {}}};
   auto element = std::make_shared<Layout>();
   element->type = elementType;
   identify(*element);
   element->permissions = {true, true};
   element->constructible = false;
-  element->leaves = {"bool"};
+  element->leaves = {zkc::protocol::BoundType{"bool", {}, {}}};
   element->fields = {{"hidden", scalar, 0, {}, false, {}}};
   auto array = std::make_shared<Layout>();
   array->type = arrayType;
@@ -418,7 +418,7 @@ void schemaHashParity() {
   root.generatedIdentity = digest("captured generated family");
   root.permissions = {true, true};
   root.constructible = false;
-  root.leaves = {"bool"};
+  root.leaves = {zkc::protocol::BoundType{"bool", {}, {}}};
   root.fields = {{"flag", scalar, 0, {}, true, {}},
                  {"empty", array, 1, {}, true, {}}};
   auto scalarSchema = schema(Type(K::Boolean), {"bool"});
@@ -469,13 +469,14 @@ void logicalSchemaHashParity() {
   identify(*scalar);
   scalar->permissions = {true, true};
   scalar->constructible = true;
-  scalar->leaves = {"bool"};
+  scalar->leaves = {zkc::protocol::BoundType{"bool", {}, {}}};
   auto child = std::make_shared<Layout>();
   child->type = childType;
   identify(*child);
   child->roleParameters = {"A", "B"};
   child->permissions = {true, true};
-  child->leaves = {"bool", "bool"};
+  child->leaves = {zkc::protocol::BoundType{"bool", {}, {}},
+                   zkc::protocol::BoundType{"bool", {}, {}}};
   child->fields = {{"first", scalar, 0, {}, true, DataPlacement{{0}}},
                    {"second", scalar, 1, {}, false, DataPlacement{{1}}}};
   auto array = std::make_shared<Layout>();
@@ -488,7 +489,8 @@ void logicalSchemaHashParity() {
   identify(root);
   root.roleParameters = {"P", "V"};
   root.permissions = {true, true};
-  root.leaves = {"bool", "bool"};
+  root.leaves = {zkc::protocol::BoundType{"bool", {}, {}},
+                 zkc::protocol::BoundType{"bool", {}, {}}};
   ValuePlacement childFormula =
       ProductPlacement{typeIdentity(childType),
                        {1, 0},

@@ -73,20 +73,29 @@ Expected<View> readView(StringRef bytes, StringRef entry, MLIRContext &context,
   auto source = readSourceView(bytes, entry, context, profile);
   if (!source)
     return source.takeError();
-  View result;
-  result.native = std::move(source->native);
-  result.identity = std::move(source->identity);
-  result.entry = std::move(source->entry);
-  result.names = std::move(source->names);
-  result.publication = std::move(source->publication);
-  auto unit =
-      cast<protocol_ir::ProtocolModuleOp>(result.native->getBody()->front());
+  // Native MLIR permits byte strings. This report publishes textual names,
+  // roles and sites, so refuse an unrepresentable subject before constructing
+  // any JSON string. This is a report boundary, not native source admission.
+  bool text = json::isUTF8(source->entry);
+  source->native->walk([&](Operation *op) {
+    for (auto attr : op->getAttrs())
+      attr.getValue().walk(
+          [&](StringAttr value) { text &= json::isUTF8(value.getValue()); });
+  });
+  if (!text)
+    return error("application-map-string");
+  View result(std::move(*source));
+  result.identity = result.source.identity;
+  result.entry = result.source.entry;
+  result.names = result.source.names;
+  auto unit = cast<protocol_ir::ProtocolModuleOp>(
+      result.source.native->getBody()->front());
   mathematical::NativeTypePolicies policies(unit);
-  for (auto &value : source->definitions) {
+  for (const auto &value : result.source.definitions) {
     if (!budget.charge())
       return error("application-map-limit");
     Definition definition;
-    static_cast<SourceDefinition &>(definition) = std::move(value);
+    static_cast<SourceDefinition &>(definition) = value;
     if (definition.kind == "protocol") {
       auto restricts = [&](Type type) -> Expected<bool> {
         if (isa<protocol_ir::ServiceReferenceType>(type))
@@ -132,9 +141,9 @@ Expected<WrittenLinks> WrittenLinks::read(StringRef bytes, const View &source,
     return error("application-map-written", detail.str());
   };
   // The correspondence has its own publication ceiling and traversal budget.
-  if (!source.publication.getAsArray() ||
-      source.publication.getAsArray()->size() != 11)
-    return refuse("original has no structured export");
+  auto publication = publishSource(source.source);
+  if (!publication)
+    return refuse(toString(publication.takeError()));
   auto parsed =
       parseNaturalJson(bytes, 8 * 1024 * 1024, 4 * 64 + 32,
                        "application-map-written", "application-map-limit");
@@ -158,7 +167,7 @@ Expected<WrittenLinks> WrittenLinks::read(StringRef bytes, const View &source,
   if (admission->getString("original_sha256") != sha256(originalBytes) ||
       admission->getString("protocol_symbol") != source.entry)
     return refuse("correspondence names another original or entry");
-  if (!equalNaturalJson(*root->get("snapshot"), source.publication))
+  if (!equalNaturalJson(*root->get("snapshot"), publication->snapshot))
     return refuse("correspondence snapshot is not this original's export");
   if (auto e = language::checkCorrespondenceInventory(*parsed))
     return refuse(toString(std::move(e)));
@@ -205,7 +214,7 @@ Expected<WrittenLinks> WrittenLinks::read(StringRef bytes, const View &source,
   }
   // Inventory symbols resolve to exactly their snapshot rows.
   std::map<std::string, json::Array> rows;
-  const auto &tables = *source.publication.getAsArray();
+  const auto &tables = *publication->snapshot.getAsArray();
   for (unsigned table : {4, 5, 6, 7})
     for (unsigned i = 0; i < tables[table].getAsArray()->size(); ++i) {
       const auto &row = *(*tables[table].getAsArray())[i].getAsArray();
@@ -301,8 +310,8 @@ Expected<json::Value> WrittenLinks::link(const Definition &callee,
 }
 Error compareInventory(const View &source, const View &candidate) {
   if (source.entry != candidate.entry ||
-      source.native.get()->getAttrDictionary() !=
-          candidate.native.get()->getAttrDictionary() ||
+      source.source.native.get()->getAttrDictionary() !=
+          candidate.source.native.get()->getAttrDictionary() ||
       source.definitions.size() != candidate.definitions.size())
     return error("application-map-correspondence", "definition inventory");
   for (auto [left, right] : zip(source.definitions, candidate.definitions)) {
@@ -316,10 +325,10 @@ Error compareInventory(const View &source, const View &candidate) {
   return Error::success();
 }
 Error compareNative(View &source, View &candidate) {
-  auto before =
-      cast<protocol_ir::ProtocolModuleOp>(source.native->getBody()->front());
-  auto after =
-      cast<protocol_ir::ProtocolModuleOp>(candidate.native->getBody()->front());
+  auto before = cast<protocol_ir::ProtocolModuleOp>(
+      source.source.native->getBody()->front());
+  auto after = cast<protocol_ir::ProtocolModuleOp>(
+      candidate.source.native->getBody()->front());
   auto &a = before.getBody().front();
   auto &b = after.getBody().front();
   if (before->getAttrDictionary() != after->getAttrDictionary() ||

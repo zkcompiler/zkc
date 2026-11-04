@@ -61,9 +61,7 @@ class Emitter {
         return error("entry.value", "Host layout contains a nondata leaf");
       // This is the checked-language/native lowering boundary. Native layouts
       // thereafter retain actual Types; no JSON schema is built or imported.
-      auto bound = protocol::parseBoundType(*leaf.data(), false);
-      if (!bound)
-        return bound.takeError();
+      const auto *bound = leaf.data();
       auto native = protocol::decodeBoundType(context, *bound);
       if (!native)
         return error("entry.value", "Host leaf has no native owner");

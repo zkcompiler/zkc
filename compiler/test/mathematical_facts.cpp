@@ -688,6 +688,62 @@ void concreteCardinalityModels() {
           }
         }
 }
+// Enumerate represented concrete values, including unsigned wrap and the
+// non-monotone interior of AND intervals; no transfer formula is the oracle.
+void concreteWordRanges() {
+  Fixture f;
+  std::vector<WordRange> ranges{{0, UINT64_MAX}, {8, 16}, {63, 65}};
+  for (uint64_t start : {uint64_t(0), uint64_t(7), UINT64_MAX - 4})
+    for (uint64_t width = 0; width <= 4; ++width)
+      ranges.push_back({start, start + width});
+  for (auto operation :
+       {WordOperation::WrappingAdd, WordOperation::WrappingSubtract,
+        WordOperation::BitAnd, WordOperation::ShiftRight})
+    for (auto a : ranges)
+      for (auto b : ranges) {
+        auto range = value(transferWordRange(f.work, operation, a, b));
+        auto samples = [](WordRange r) {
+          std::vector<uint64_t> result{r.minimum, r.maximum};
+          if (r.maximum - r.minimum <= 16)
+            for (auto i = r.minimum; i != r.maximum; ++i)
+              result.push_back(i);
+          else
+            result.push_back(r.minimum + (r.maximum - r.minimum) / 2);
+          return result;
+        };
+        for (auto x : samples(a))
+          for (auto y : samples(b)) {
+            uint64_t actual = 0;
+            switch (operation) {
+            case WordOperation::WrappingAdd:
+              actual = x + y;
+              break;
+            case WordOperation::WrappingSubtract:
+              actual = x - y;
+              break;
+            case WordOperation::BitAnd:
+              actual = x & y;
+              break;
+            case WordOperation::ShiftRight:
+              actual = y >= 64 ? 0 : x >> y;
+              break;
+            }
+            expect(range.minimum <= actual && actual <= range.maximum,
+                   "word interval excludes a concrete result");
+          }
+      }
+  uint64_t remaining = 1;
+  Work last(remaining);
+  auto exact = value(transferWordRange(last, WordOperation::WrappingAdd,
+                                       {UINT64_MAX, UINT64_MAX}, {1, 1}));
+  expect(exact.minimum == 0 && exact.maximum == 0 && remaining == 0 &&
+             !last.exhausted(),
+         "wrapping singleton or final charge is wrong");
+  absent(transferWordRange(last, WordOperation::BitAnd, {}, {}),
+         Status::Capacity);
+  absent(transferWordRange(f.work, WordOperation::BitAnd, {2, 1}, {}),
+         Status::Unknown);
+}
 } // namespace
 
 int main() {
@@ -706,6 +762,7 @@ int main() {
   deterministicQueryWork();
   exhaustiveEqualityGraphs();
   concreteCardinalityModels();
+  concreteWordRanges();
   std::cout << checks << " mathematical fact checks, " << failures
             << " failures\n";
   return failures ? 1 : 0;

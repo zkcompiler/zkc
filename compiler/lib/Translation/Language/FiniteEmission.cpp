@@ -88,9 +88,7 @@ class FiniteEmitter {
             error("source.layout", "finite inputs require native data layouts");
         return {};
       }
-      auto bound = take(protocol::parseBoundType(*leaf.data(), false));
-      if (!bound)
-        return {};
+      const auto *bound = leaf.data();
       auto native = protocol::decodeBoundType(builder.getContext(), *bound);
       if (!native) {
         failure = error("source.layout", "finite data dialect unavailable");

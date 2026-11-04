@@ -11,11 +11,11 @@
 #include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
-#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include <algorithm>
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -88,11 +88,16 @@ J contractTerm(mlir::Attribute attr) {
 const A &array(const J &value) { return *value.getAsArray(); }
 StringRef string(const J &value) { return *value.getAsString(); }
 unsigned number(const J &value) { return *value.getAsUINT64(); }
-std::string key(const J &value) {
-  std::string result;
-  raw_string_ostream out(result);
-  out << value;
-  return result;
+mlir::ArrayAttr array(mlir::Attribute value) {
+  return mlir::cast<mlir::ArrayAttr>(value);
+}
+StringRef string(mlir::Attribute value) {
+  if (auto symbol = mlir::dyn_cast<mlir::FlatSymbolRefAttr>(value))
+    return symbol.getValue();
+  return mlir::cast<mlir::StringAttr>(value).getValue();
+}
+unsigned number(mlir::Attribute value) {
+  return mlir::cast<mlir::IntegerAttr>(value).getValue().getZExtValue();
 }
 enum class RouteKind { Input, Result, RepeatInput, RepeatResult, Pure, Action };
 struct Route {
@@ -112,6 +117,7 @@ class Routes {
                          std::vector<unsigned>>;
   std::map<Key, unsigned> names;
   std::vector<Route> nodes{{RouteKind::Input, {}, {}, 0, nullptr, {}, {}}};
+  std::map<mlir::Operation *, J> descriptors;
 
 public:
   unsigned intern(Route route) {
@@ -126,8 +132,8 @@ public:
     auto kind = nodes.at(id).kind;
     return kind != RouteKind::Pure && kind != RouteKind::Action;
   }
-  J encode(unsigned id, const SourceView &source,
-           bool acceptance = false) const {
+  Expected<J> encode(unsigned id, const SourceView &source,
+                     bool acceptance = false) {
     const auto &route = nodes.at(id);
     StringRef tag;
     switch (route.kind) {
@@ -151,19 +157,28 @@ public:
               route.operation))
         tag = "terminal";
       A operands, position;
-      for (unsigned child : route.operands)
-        operands.push_back(
+      for (unsigned child : route.operands) {
+        auto value =
             encode(child, source,
                    acceptance && pure &&
-                       mlir::isa<mlir::arith::AndIOp>(route.operation)));
+                       mlir::isa<mlir::arith::AndIOp>(route.operation));
+        if (!value)
+          return value.takeError();
+        operands.push_back(std::move(*value));
+      }
       for (unsigned part : route.position)
         position.push_back(part);
-      return A{tag,
-               source.descriptors.at(route.operation),
-               std::move(position),
-               route.result,
-               route.role,
-               std::move(operands)};
+      auto found = descriptors.find(route.operation);
+      if (found == descriptors.end()) {
+        auto descriptor =
+            protocol::publishSourceDescriptor(source, *route.operation);
+        if (!descriptor)
+          return descriptor.takeError();
+        found =
+            descriptors.emplace(route.operation, std::move(*descriptor)).first;
+      }
+      return A{tag,          found->second, std::move(position),
+               route.result, route.role,    std::move(operands)};
     }
     }
     return A{tag, route.site, route.result, route.role};
@@ -179,16 +194,15 @@ struct Flow {
   bool acceptance = false;
 };
 using Family = std::map<std::string, Flow>;
-using Environment = std::vector<Family>;
+using Environment = std::deque<Family>;
 struct Deriver {
   const SourceView &program;
   std::shared_ptr<Routes> routes;
   std::map<std::string, const SourceDefinition *> functions;
-  std::map<std::string, A> ownedContracts;
-  J declarations = A{A{}, A{}};
-  std::map<std::string, const A *> contracts, sources;
+  std::map<std::string, mlir::ArrayAttr> contracts;
+  std::map<std::string, mlir::ArrayAttr> sources;
   std::map<std::string, relation::DeclareOp> relations;
-  std::set<std::string> linear;
+  std::set<const void *> linear;
   struct Visible {
     std::string site;
     std::vector<mlir::Type> types;
@@ -212,36 +226,29 @@ struct Deriver {
       functions.emplace(definition.name, &definition);
       if (auto protocol = mlir::dyn_cast<protocol_ir::MathematicalOp>(
               definition.operation)) {
-        auto terms = protocol.getContractsAttr()
-                         ? contractTerm(protocol.getContractsAttr())
-                         : J(A{});
-        ownedContracts.emplace(definition.name, std::move(*terms.getAsArray()));
+        contracts.emplace(
+            definition.name,
+            protocol.getContractsAttr()
+                ? protocol.getContractsAttr()
+                : mlir::ArrayAttr::get(protocol.getContext(), {}));
       }
     }
-    for (const auto &[name, clauses] : ownedContracts)
-      contracts.emplace(name, &clauses);
     auto unit = mlir::cast<protocol_ir::ProtocolModuleOp>(
         value.native.get().getBody()->front());
     for (auto declaration :
          unit.getBody().front().getOps<relation::DeclareOp>())
       relations.emplace(declaration.getSymName().str(), declaration);
-    if (auto attr = unit->getAttr("source_declarations")) {
-      auto data = exportDeclarationData(attr);
-      if (!data) {
-        failure = data.takeError();
-        return;
-      }
-      declarations = std::move(*data);
-    }
-    const auto &tables = array(declarations);
+    auto tables = unit->getAttrOfType<mlir::ArrayAttr>("source_declarations");
+    if (!tables)
+      return;
     for (const auto &value : array(tables[0])) {
-      const auto &record = array(value);
+      auto record = array(value);
       if (string(record[1]) == "linear")
-        linear.insert(key(record[0]));
+        linear.insert(termKey(record[0]));
     }
     for (const auto &value : array(tables[1])) {
-      const auto &source = array(value);
-      sources.emplace(string(source[0]), &source);
+      auto source = array(value);
+      sources.emplace(string(source[0]), source);
     }
   }
   bool refuse(StringRef code) {
@@ -255,7 +262,20 @@ struct Deriver {
     visits += work;
     return true;
   }
-  bool pendingPort(const A &port) { return linear.count(key(port[1])); }
+  const void *termKey(mlir::Attribute term) {
+    uint64_t remaining = 100000 - visits;
+    auto normalized = canonicalDeclarationTerm(term, remaining);
+    visits = 100000 - remaining;
+    if (!normalized) {
+      consumeError(normalized.takeError());
+      refuse("component-seam-limit");
+      return nullptr;
+    }
+    return normalized->getAsOpaquePointer();
+  }
+  bool pendingPort(mlir::ArrayAttr port) {
+    return linear.count(termKey(port[1]));
+  }
   Flow leaf(RouteKind kind, StringRef site, unsigned result, StringRef role,
             bool pending = false) {
     unsigned id =
@@ -263,7 +283,8 @@ struct Deriver {
     return {
         id, pending ? std::set<unsigned>{id} : std::set<unsigned>{}, {}, false};
   }
-  bool read(const Environment &environment, unsigned index, StringRef role,
+  template <typename Sequence>
+  bool read(const Sequence &environment, unsigned index, StringRef role,
             Flow &flow) {
     if (index >= environment.size())
       return refuse("component-seam-reference");
@@ -307,11 +328,17 @@ struct Deriver {
   }
   void row(StringRef caller, J endpoint, const std::vector<Flow> &flows,
            StringRef explicitKind = {}) {
+    if (failure)
+      return;
     A routes;
     bool direct = true, method = false;
     for (const auto &flow : flows) {
-      routes.push_back(
-          this->routes->encode(flow.route, program, flow.acceptance));
+      auto encoded = this->routes->encode(flow.route, program, flow.acceptance);
+      if (!encoded) {
+        failure = encoded.takeError();
+        return;
+      }
+      routes.push_back(std::move(*encoded));
       direct &= this->routes->direct(flow.route);
       method |= !flow.effect.empty();
     }
@@ -330,12 +357,12 @@ struct Deriver {
     StringRef name = function.name;
     const auto &types = function.body.inputs;
     const auto &scopes = function.inputRoles;
-    const A *source =
-        sources.count(name.str()) ? sources.at(name.str()) : nullptr;
+    auto source =
+        sources.count(name.str()) ? sources.at(name.str()) : mlir::ArrayAttr();
     for (unsigned i = 0; i < types.size(); ++i) {
       bool pending = false;
       if (source)
-        for (const auto &value : array((*source)[1])) {
+        for (auto value : array(source[1])) {
           const auto &port = array(value);
           if (number(port[3]) <= i && i < number(port[3]) + number(port[4]))
             pending = pendingPort(port);
@@ -389,7 +416,7 @@ struct Deriver {
         auto source = sources.find(callee.name);
         if (source != sources.end()) {
           unsigned portIndex = 0;
-          for (const auto &value : array((*source->second)[1])) {
+          for (auto value : array(source->second[1])) {
             const auto &port = array(value);
             if (pendingPort(port)) {
               std::vector<Flow> flows;
@@ -411,27 +438,28 @@ struct Deriver {
         for (unsigned i = 0; i < results.size(); ++i) {
           bool pending = false, decision = false;
           if (source != sources.end())
-            for (const auto &value : array((*source->second)[2])) {
+            for (auto value : array(source->second[2])) {
               const auto &port = array(value);
               if (number(port[3]) <= i && i < number(port[3]) + number(port[4]))
                 pending = pendingPort(port);
             }
-          for (const auto &value : *contracts.at(callee.name)) {
+          for (const auto &value : contracts.at(callee.name)) {
             const auto &clause = array(value);
-            if (!clause[4].getAsNull() && number(array(clause[4])[1]) == i)
+            if (!mlir::isa<mlir::UnitAttr>(clause[4]) &&
+                number(array(clause[4])[1]) == i)
               decision = true;
           }
           for (const auto &role : outputScopes[i]) {
             auto flow = leaf(RouteKind::Result, site, i, actual(role), pending);
             flow.decision =
                 decision &&
-                std::any_of(contracts.at(callee.name)->begin(),
-                            contracts.at(callee.name)->end(),
-                            [&](const J &value) {
+                std::any_of(contracts.at(callee.name).begin(),
+                            contracts.at(callee.name).end(),
+                            [&](mlir::Attribute value) {
                               const auto &clause = array(value);
-                              return !clause[4].getAsNull() &&
+                              return !mlir::isa<mlir::UnitAttr>(clause[4]) &&
                                      number(array(clause[4])[1]) == i &&
-                                     array(clause[4])[2] == J(role);
+                                     string(array(clause[4])[2]) == role;
                             });
             live.insert(flow.pending.begin(), flow.pending.end());
             results[i].emplace(actual(role), std::move(flow));
@@ -440,10 +468,10 @@ struct Deriver {
         // Proposals are per actual call, even when the callee has no logical
         // slots.
         A slots;
-        for (const auto &value : *contracts.at(callee.name)) {
+        for (const auto &value : contracts.at(callee.name)) {
           const auto &clause = array(value);
           for (unsigned side : {2u, 3u}) {
-            if (clause[side].getAsNull())
+            if (mlir::isa<mlir::UnitAttr>(clause[side]))
               continue;
             const auto &application = array(clause[side]);
             auto found = relations.find(string(application[0]).str());
@@ -456,7 +484,7 @@ struct Deriver {
                   "statement")
                 continue;
               J slot = A{mlir::cast<mlir::StringAttr>(purposes[i]).getValue(),
-                         selectors[i], A{"open"}};
+                         contractTerm(selectors[i]), A{"open"}};
               if (std::find(slots.begin(), slots.end(), slot) == slots.end()) {
                 if (slots.size() == 512)
                   return refuse("component-instantiation-limit");
@@ -759,7 +787,7 @@ struct Deriver {
       auto source = sources.find(caller.str());
       if (source != sources.end()) {
         unsigned portIndex = 0;
-        for (const auto &value : array((*source->second)[2])) {
+        for (auto value : array(source->second[2])) {
           const auto &port = array(value);
           if (pendingPort(port)) {
             std::vector<Flow> flows;
@@ -779,9 +807,9 @@ struct Deriver {
       }
       unsigned clauseIndex = 0;
       std::set<std::pair<unsigned, std::string>> acceptedOutputs;
-      for (const auto &value : *contracts.at(caller.str())) {
+      for (const auto &value : contracts.at(caller.str())) {
         const auto &clause = array(value);
-        if (!clause[4].getAsNull()) {
+        if (!mlir::isa<mlir::UnitAttr>(clause[4])) {
           const auto &decision = array(clause[4]);
           Flow flow;
           if (!read(returned, number(decision[1]), string(decision[2]), flow))
@@ -818,15 +846,15 @@ struct Deriver {
     // Anchor contracts require the oracle-store interpretation. Refuse them
     // before any data-only slot traversal; a data ABI cannot resolve an anchor.
     for (const auto &[name, clauses] : contracts)
-      for (const auto &value : *clauses) {
+      for (auto value : clauses) {
         const auto &clause = array(value);
         for (unsigned side : {2u, 3u}) {
-          if (clause[side].getAsNull())
+          if (mlir::isa<mlir::UnitAttr>(clause[side]))
             continue;
           for (const auto &value : array(array(clause[side])[1])) {
             if (!charge())
               return false;
-            if (array(value)[0] == J("anchor"))
+            if (string(array(value)[0]) == "anchor")
               return refuse("component-seam-oracle");
           }
         }
@@ -834,10 +862,10 @@ struct Deriver {
 
     if (linear.empty())
       return true;
-    std::map<std::string, J> meanings;
+    std::map<const void *, std::string> meanings;
     for (const auto &[name, source] : sources) {
       for (unsigned side : {1u, 2u})
-        for (const auto &value : array((*source)[side])) {
+        for (auto value : array(source[side])) {
           const auto &port = array(value);
           if (!pendingPort(port))
             continue;
@@ -847,18 +875,18 @@ struct Deriver {
           // Concrete Entry target/acceptance checks belong to claim selection.
           // Clause-free wrappers assert no relation; their resource ownership
           // is still checked by the traversal below.
-          if (contracts.at(name)->empty())
+          if (contracts.at(name).empty())
             continue;
           std::set<std::string> relations;
-          for (const auto &value : *contracts.at(name)) {
+          for (const auto &value : contracts.at(name)) {
             const auto &clause = array(value);
             for (unsigned part : {2u, 3u}) {
-              if (clause[part].getAsNull())
+              if (mlir::isa<mlir::UnitAttr>(clause[part]))
                 continue;
               const auto &application = array(clause[part]);
               for (const auto &value : array(application[1])) {
                 const auto &selector = array(value);
-                if (selector[0] == J(side == 1 ? "input" : "output") &&
+                if (string(selector[0]) == (side == 1 ? "input" : "output") &&
                     number(port[3]) <= number(selector[1]) &&
                     number(selector[1]) < number(port[3]) + number(port[4]))
                   relations.insert(string(application[0]).str());
@@ -868,8 +896,8 @@ struct Deriver {
           if (relations.size() != 1)
             return refuse("component-claim-relation");
           auto [previous, added] =
-              meanings.emplace(key(port[1]), *relations.begin());
-          if (!added && previous->second != J(*relations.begin()))
+              meanings.emplace(termKey(port[1]), *relations.begin());
+          if (!added && previous->second != *relations.begin())
             return refuse("component-claim-relation");
         }
     }
@@ -888,10 +916,10 @@ struct Deriver {
   }
   bool logicalSlot(const SourceDefinition &owner, StringRef purpose,
                    const J &selector) {
-    for (const auto &value : *contracts.at(owner.name)) {
+    for (const auto &value : contracts.at(owner.name)) {
       const auto &clause = array(value);
       for (unsigned side : {2u, 3u}) {
-        if (clause[side].getAsNull())
+        if (mlir::isa<mlir::UnitAttr>(clause[side]))
           continue;
         const auto &application = array(clause[side]);
         auto found = relations.find(string(application[0]).str());
@@ -900,7 +928,7 @@ struct Deriver {
         const auto &selectors = array(application[1]);
         auto purposes = found->second.getPurposes();
         for (unsigned i = 0; i < selectors.size(); ++i)
-          if (selectors[i] == selector &&
+          if (contractTerm(selectors[i]) == selector &&
               mlir::cast<mlir::StringAttr>(purposes[i]).getValue() == purpose)
             return true;
       }
@@ -1021,10 +1049,10 @@ struct Deriver {
         const auto &types = selector[0] == J("input") ? callee.body.inputs
                                                       : callee.body.outputs;
         std::vector<std::set<std::string>> allowed;
-        for (const auto &value : *contracts.at(callee.name)) {
+        for (const auto &value : contracts.at(callee.name)) {
           const auto &clause = array(value);
           for (unsigned side : {2u, 3u}) {
-            if (clause[side].getAsNull())
+            if (mlir::isa<mlir::UnitAttr>(clause[side]))
               continue;
             const auto &application = array(clause[side]);
             auto found = relations.find(string(application[0]).str());
@@ -1035,7 +1063,7 @@ struct Deriver {
             bool relevant = false;
             for (unsigned k = 0; k < selectors.size(); ++k)
               relevant |=
-                  selectors[k] == (*slot)[1] &&
+                  contractTerm(selectors[k]) == (*slot)[1] &&
                   mlir::cast<mlir::StringAttr>(purposes[k]).getValue() ==
                       string((*slot)[0]);
             if (!relevant)
@@ -1131,7 +1159,7 @@ struct Deriver {
 } // namespace
 Expected<json::Object> deriveComponentContracts(const SourceView &source) {
   Deriver derive(source);
-  if (!derive.run())
+  if (!derive.run() || derive.failure)
     return std::move(derive.failure);
   json::Value result = json::Object{{"proposals", std::move(derive.proposals)},
                                     {"seams", std::move(derive.rows)}};
@@ -1141,398 +1169,8 @@ Expected<json::Object> deriveComponentContracts(const SourceView &source) {
 Error checkComponentContracts(const SourceView &source,
                               const json::Object &actual) {
   Deriver derive(source);
-  if (!derive.run() || !derive.check(actual))
+  if (!derive.run() || derive.failure || !derive.check(actual))
     return std::move(derive.failure);
-  return Error::success();
-}
-Error checkComponentDeclarations(const J &value) {
-  auto rows = value.getAsArray();
-  if (!rows || rows->size() != 3 || !(*rows)[0].getAsArray() ||
-      !(*rows)[1].getAsArray() || !(*rows)[2].getAsArray())
-    return error("component-declaration");
-  auto validString = [](const J &value) {
-    auto text = value.getAsString();
-    return text && !text->empty() && text->size() <= 512 &&
-           json::isUTF8(*text) && !text->contains('\0');
-  };
-  unsigned remaining = 1048576;
-  std::function<bool(const J &, unsigned)> bounded = [&](const J &value,
-                                                         unsigned depth) {
-    if (!remaining || depth > 128)
-      return false;
-    --remaining;
-    if (const auto *items = value.getAsArray())
-      for (const auto &item : *items)
-        if (!bounded(item, depth + 1))
-          return false;
-    return true;
-  };
-  if (!bounded(value, 0))
-    return error("component-declaration-limit");
-  std::set<std::string> types, owners;
-  std::map<std::string, StringRef> nominalKinds;
-  std::map<std::string, const A *> declarations;
-  // A placement names roles. A record member's formula ranges over its row's
-  // telescope; a port's tree ranges over its protocol's roster, which only
-  // the exporter knows. Product arguments are an injective substitution in
-  // telescope order. `used` receives the top-level participant summary.
-  std::function<Error(const J &, const std::set<std::string> *,
-                      std::set<std::string> *, unsigned)>
-      placement = [&](const J &value, const std::set<std::string> *telescope,
-                      std::set<std::string> *used, unsigned depth) -> Error {
-    if (!remaining || depth > 64)
-      return error("component-declaration-limit");
-    --remaining;
-    auto node = value.getAsArray();
-    if (!node || node->empty() || !(*node)[0].getAsString())
-      return error("component-declaration-placement");
-    auto names = [&](const J &list, bool injective,
-                     bool summary) -> Expected<std::set<std::string>> {
-      auto items = list.getAsArray();
-      if (!items || items->size() > protocol::instances::protocolRoleLimit)
-        return error("component-declaration-placement");
-      std::set<std::string> result;
-      for (const auto &item : *items) {
-        if (!validString(item) ||
-            (telescope && !telescope->count(string(item).str())))
-          return error("component-declaration-role");
-        if (!result.insert(string(item).str()).second && injective)
-          return error("component-declaration-role");
-        if (summary && used)
-          used->insert(string(item).str());
-      }
-      return result;
-    };
-    auto tag = string((*node)[0]);
-    if (tag == "data") {
-      if (node->size() != 2)
-        return error("component-declaration-placement");
-      auto roles = names((*node)[1], true, true);
-      return roles ? Error::success() : roles.takeError();
-    }
-    if (tag == "oracle") {
-      if (node->size() != 3)
-        return error("component-declaration-placement");
-      const auto &holder = (*node)[1];
-      if (!validString(holder) ||
-          (telescope && !telescope->count(string(holder).str())))
-        return error("component-declaration-role");
-      auto receivers = names((*node)[2], true, true);
-      if (!receivers)
-        return receivers.takeError();
-      if (receivers->count(string(holder).str()))
-        return error("component-declaration-role");
-      if (used)
-        used->insert(string(holder).str());
-      return Error::success();
-    }
-    if (tag != "product" || node->size() != 3 || !(*node)[2].getAsArray() ||
-        array((*node)[2]).size() > 512)
-      return error("component-declaration-placement");
-    auto arguments = names((*node)[1], true, true);
-    if (!arguments)
-      return arguments.takeError();
-    for (const auto &field : array((*node)[2]))
-      if (auto e = placement(field, telescope, nullptr, depth + 1))
-        return e;
-    return Error::success();
-  };
-  auto fields = [&](const A &members, bool placed,
-                    const std::set<std::string> &telescope) -> Error {
-    if (members.size() > 512)
-      return error("component-declaration-limit");
-    std::set<std::string> names;
-    for (const auto &value : members) {
-      auto field = value.getAsArray();
-      if (!field || field->size() != 3 || !validString((*field)[0]))
-        return error("component-declaration");
-      if (!names.insert(string((*field)[0]).str()).second)
-        return error("component-declaration-duplicate");
-      if (auto e = checkStaticTerm((*field)[1]))
-        return e;
-      // Placement is present exactly for the members of a logical record
-      // with a role telescope; its formula ranges over that telescope.
-      if (((*field)[2].kind() == J::Null) == placed)
-        return error("component-declaration-placement");
-      if (placed)
-        if (auto e = placement((*field)[2], &telescope, nullptr, 0))
-          return e;
-    }
-    return Error::success();
-  };
-  if (array((*rows)[0]).size() > 128 || array((*rows)[1]).size() > 128)
-    return error("component-declaration-limit");
-  for (const auto &value : array((*rows)[0])) {
-    auto record = value.getAsArray();
-    if (!record || record->size() != 6 || !(*record)[1].getAsString() ||
-        !(*record)[2].getAsBoolean() || !(*record)[3].getAsArray() ||
-        !(*record)[4].getAsArray())
-      return error("component-declaration");
-    if (auto e = checkStaticTerm((*record)[0]))
-      return e;
-    auto type = (*record)[0].getAsArray();
-    if (!type || type->size() != 4 || (*type)[0] != J("nominal") ||
-        ((*type)[1] != J("record") && (*type)[1] != J("logical_record") &&
-         (*type)[1] != J("variant")))
-      return error("component-declaration-record");
-    auto kind = string((*type)[1]);
-    auto [nominal, added] =
-        nominalKinds.emplace(string((*type)[2]).str(), kind);
-    if (!added && nominal->second != kind)
-      return error("component-declaration-record");
-    if (!types.insert(key((*record)[0])).second)
-      return error("component-declaration-duplicate");
-    declarations.emplace(key((*record)[0]), record);
-    auto resource = string((*record)[1]);
-    if (resource != "ordinary" && resource != "affine" && resource != "linear")
-      return error("component-declaration");
-    // A custody slot names the resource units of exactly the affine and linear
-    // rows.
-    const auto &slot = (*record)[5];
-    if ((resource == "ordinary") != (slot.kind() == J::Null) ||
-        (slot.kind() != J::Null &&
-         (!slot.getAsString() || !string(slot).starts_with("zkl_resource_") ||
-          !protocol::resourceUnitDomain(string(slot)))))
-      return error("component-declaration-slot");
-    // The telescope is the row's own roles in declaration order; only a
-    // logical record has one.
-    const auto &roles = array((*record)[4]);
-    if (roles.size() > protocol::instances::recordRoleLimit)
-      return error("component-declaration-limit");
-    if (kind != "logical_record" && !roles.empty())
-      return error("component-declaration-role");
-    std::set<std::string> telescope;
-    for (const auto &role : roles)
-      if (!validString(role) || !telescope.insert(string(role).str()).second)
-        return error("component-declaration-role");
-    if (array((*record)[3]).size() > 512)
-      return error("component-declaration-limit");
-    if (kind != "variant") {
-      if (auto e = fields(array((*record)[3]), !telescope.empty(), telescope))
-        return e;
-      continue;
-    }
-    std::set<std::string> alternatives;
-    for (const auto &value : array((*record)[3])) {
-      auto alternative = value.getAsArray();
-      if (!alternative || alternative->size() != 2 ||
-          !validString((*alternative)[0]) || !(*alternative)[1].getAsArray())
-        return error("component-declaration");
-      if (!alternatives.insert(string((*alternative)[0]).str()).second)
-        return error("component-declaration-duplicate");
-      if (auto e = fields(array((*alternative)[1]), false, telescope))
-        return e;
-    }
-  }
-  // Retain every nominal child, including children with no physical leaves.
-  std::function<Error(const J &, unsigned)> referenced =
-      [&](const J &value, unsigned depth) -> Error {
-    if (!remaining || depth > 64)
-      return error("component-declaration-limit");
-    --remaining;
-    const auto &term = array(value);
-    auto tag = string(term[0]);
-    const A *arguments = nullptr;
-    if (tag == "nominal") {
-      auto kind = string(term[1]);
-      if ((kind == "record" || kind == "logical_record" || kind == "variant") &&
-          !declarations.count(key(value)))
-        return error("component-declaration-record");
-      arguments = &array(term[3]);
-    } else if (tag == "array")
-      return referenced(term[1], depth + 1);
-    else if (tag == "tuple")
-      arguments = &array(term[1]);
-    else if (tag == "builtin" || tag == "formal")
-      arguments = &array(term[2]);
-    if (arguments)
-      for (const auto &argument : *arguments)
-        if (auto e = referenced(argument, depth + 1))
-          return e;
-    return Error::success();
-  };
-  for (const auto &[identity, declaration] : declarations) {
-    if (auto e = referenced((*declaration)[0], 0))
-      return e;
-    bool variant = array((*declaration)[0])[1] == J("variant");
-    for (const auto &member : array((*declaration)[3])) {
-      if (variant) {
-        for (const auto &field : array(array(member)[1]))
-          if (auto e = referenced(array(field)[1], 0))
-            return e;
-      } else if (auto e = referenced(array(member)[1], 0))
-        return e;
-    }
-  }
-  // Ordinary carriers cannot hide distributed logical category, including
-  // children erased by zero-length layouts. Distributed records may contain
-  // nested records and restrictions; source comparison checks their authority.
-  std::set<std::string> checkedOrdinary;
-  std::function<Error(const J &, unsigned)> ordinaryCategory =
-      [&](const J &value, unsigned depth) -> Error {
-    if (!remaining || depth > 64)
-      return error("component-declaration-limit");
-    --remaining;
-    const auto &term = array(value);
-    auto tag = string(term[0]);
-    const A *arguments = nullptr;
-    if (tag == "nominal") {
-      auto kind = string(term[1]);
-      if (kind == "logical_record")
-        return error("component-declaration-record");
-      if (kind == "record" || kind == "variant") {
-        auto identity = key(value);
-        auto found = declarations.find(identity);
-        if (found == declarations.end())
-          return error("component-declaration-record");
-        if (!checkedOrdinary.insert(identity).second)
-          return Error::success();
-        const auto &members = array((*found->second)[3]);
-        if (kind == "variant") {
-          for (const auto &alternative : members)
-            for (const auto &field : array(array(alternative)[1]))
-              if (auto e = ordinaryCategory(array(field)[1], depth + 1))
-                return e;
-        } else
-          for (const auto &field : members)
-            if (auto e = ordinaryCategory(array(field)[1], depth + 1))
-              return e;
-        // Logical category is checked before physical expansion, including
-        // phantom arguments. An ordinary carrier cannot erase that category.
-        for (const auto &argument : array(term[3]))
-          if (auto e = ordinaryCategory(argument, depth + 1))
-            return e;
-        return Error::success();
-      }
-      arguments = &array(term[3]);
-    } else if (tag == "array") {
-      return ordinaryCategory(term[1], depth + 1);
-    } else if (tag == "tuple")
-      arguments = &array(term[1]);
-    else if (tag == "builtin" || tag == "formal") {
-      // A head that a frontend constructor row spells is a logical handle.
-      if (tag == "builtin" && protocol::frontendConstructor(string(term[1])))
-        return error("component-declaration-record");
-      arguments = &array(term[2]);
-    }
-    if (arguments)
-      for (const auto &argument : *arguments)
-        if (auto e = ordinaryCategory(argument, depth + 1))
-          return e;
-    return Error::success();
-  };
-  for (const auto &[identity, declaration] : declarations)
-    if (array((*declaration)[0])[1] != J("logical_record"))
-      if (auto e = ordinaryCategory((*declaration)[0], 0))
-        return e;
-  for (const auto &value : array((*rows)[1])) {
-    auto owner = value.getAsArray();
-    if (!owner || owner->size() != 3 || !validString((*owner)[0]))
-      return error("component-declaration");
-    if (!owners.insert(string((*owner)[0]).str()).second)
-      return error("component-declaration-duplicate");
-    for (unsigned side : {1u, 2u}) {
-      auto ports = (*owner)[side].getAsArray();
-      if (!ports || ports->size() > 512)
-        return error("component-declaration");
-      std::set<std::string> names;
-      for (const auto &value : *ports) {
-        auto port = value.getAsArray();
-        if (!port || port->size() != 6 || !validString((*port)[0]) ||
-            !(*port)[2].getAsArray() || !(*port)[3].getAsUINT64() ||
-            !(*port)[4].getAsUINT64() || *(*port)[3].getAsUINT64() > 512 ||
-            *(*port)[4].getAsUINT64() > 512)
-          return error("component-declaration");
-        if (!names.insert(string((*port)[0]).str()).second)
-          return error("component-declaration-duplicate");
-        if (auto e = checkStaticTerm((*port)[1]))
-          return e;
-        if (auto e = referenced((*port)[1], 0))
-          return e;
-        if (array((*port)[2]).size() > protocol::instances::protocolRoleLimit)
-          return error("component-declaration-limit");
-        std::set<std::string> roles;
-        for (const auto &role : array((*port)[2])) {
-          if (!validString(role))
-            return error("component-declaration-role");
-          if (!roles.insert(string(role).str()).second)
-            return error("component-declaration-role");
-        }
-        // The participant list is a derived summary of the placement tree.
-        std::set<std::string> placed;
-        if (auto e = placement((*port)[5], nullptr, &placed, 0))
-          return e;
-        if (placed != roles)
-          return error("component-declaration-placement");
-      }
-    }
-  }
-  // One authority row per nominal record, logical record, variant and module
-  // path in any carrier term, sorted by path. A revision is a SHA-256 hex
-  // digest; null marks a generated declaration.
-  std::set<std::string> paths;
-  std::function<Error(const J &, unsigned)> nominal =
-      [&](const J &value, unsigned depth) -> Error {
-    if (!remaining || depth > 64)
-      return error("component-declaration-limit");
-    --remaining;
-    const auto &term = array(value);
-    auto tag = string(term[0]);
-    const A *arguments = nullptr;
-    if (tag == "nominal") {
-      auto kind = string(term[1]);
-      if (kind == "record" || kind == "logical_record" || kind == "variant" ||
-          kind == "module")
-        paths.insert(string(term[2]).str());
-      arguments = &array(term[3]);
-    } else if (tag == "array")
-      return nominal(term[1], depth + 1);
-    else if (tag == "tuple")
-      arguments = &array(term[1]);
-    else if (tag == "builtin" || tag == "formal")
-      arguments = &array(term[2]);
-    if (arguments)
-      for (const auto &argument : *arguments)
-        if (auto e = nominal(argument, depth + 1))
-          return e;
-    return Error::success();
-  };
-  for (const auto &[identity, declaration] : declarations) {
-    if (auto e = nominal((*declaration)[0], 0))
-      return e;
-    bool variant = array((*declaration)[0])[1] == J("variant");
-    for (const auto &member : array((*declaration)[3])) {
-      if (variant) {
-        for (const auto &field : array(array(member)[1]))
-          if (auto e = nominal(array(field)[1], 0))
-            return e;
-      } else if (auto e = nominal(array(member)[1], 0))
-        return e;
-    }
-  }
-  for (const auto &value : array((*rows)[1]))
-    for (unsigned side : {1u, 2u})
-      for (const auto &port : array(array(value)[side]))
-        if (auto e = nominal(array(port)[1], 0))
-          return e;
-  const auto &authorities = array((*rows)[2]);
-  if (authorities.size() != paths.size())
-    return error("component-declaration-authority");
-  auto expected = paths.begin();
-  for (const auto &value : authorities) {
-    auto row = value.getAsArray();
-    if (!row || row->size() != 2 || !validString((*row)[0]) ||
-        string((*row)[0]) != *expected++)
-      return error("component-declaration-authority");
-    const auto &revision = (*row)[1];
-    if (revision.kind() == J::Null)
-      continue;
-    auto digest = revision.getAsString();
-    if (!digest || digest->size() != 64 || !llvm::all_of(*digest, [](char c) {
-          return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-        }))
-      return error("component-declaration-authority");
-  }
   return Error::success();
 }
 } // namespace zkc::language
