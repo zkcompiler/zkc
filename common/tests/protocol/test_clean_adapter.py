@@ -351,7 +351,7 @@ def test_compile_once_prepares_independent_instances_and_witnesses(toolchain, jo
 def test_source_retains_explicit_interpretation_contracts():
     source, _ = extraction('femtocairo')
     compiled = compile_relation(source)
-    assert compiled.source.origin == 'TestsClean.NativeClients.Machine.machine'
+    assert compiled.source.origin == 'CleanExamples.NativeClients.Machine.machine'
     assert compiled.source.public_origin == 'InductiveTable.tableConstraints'
     assert compiled.source.lookups[1].source.definition == 'Examples.FemtoCairo.MemoryTable'
     assert compiled.source.lookups[1].source.arity == 2
