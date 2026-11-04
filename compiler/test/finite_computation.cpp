@@ -861,43 +861,62 @@ int main(int argc, char **argv) {
                    "input_roles=[[\"P\"],[\"P\"],[\"P\"]]");
     refusesIR(text, context, "finite-bound");
   });
-  cases.run("forwarding evidence reuses a shared helper graph", [&] {
-    std::string helpers;
-    for (unsigned level = 0; level < 9; ++level) {
-      helpers += " func.func private @forward_" + std::to_string(level) +
-                 "(%x:ui64)->ui64 {\n";
-      std::string value = "%x";
-      if (level < 8)
-        for (unsigned call = 0; call < 63; ++call) {
-          auto next = "%v" + std::to_string(call);
-          helpers += "  " + next + " = func.call @forward_" +
-                     std::to_string(level + 1) + "(" + value +
-                     ") : (ui64)->ui64\n";
-          value = next;
-        }
-      helpers += "  func.return " + value + " : ui64\n }\n";
-    }
-    auto text = replace(fixture("total-state"), " func.func private @step",
-                        helpers + " func.func private @step");
-    text = replace(
-        text, "   %v =",
-        "   %forward = func.call @forward_0(%i) : (ui64)->ui64\n   %v =");
-    text = replace(text, "(%xs,%i) :", "(%xs,%forward) :");
-    // Exercise the evidence query itself. Whole-unit expanded analysis has a
-    // separate operation budget and intentionally rejects this helper graph.
-    ParserConfig config(&context, false);
-    auto module = parseSourceString<ModuleOp>(text, config);
-    require(bool(module), "forwarding graph did not parse");
-    bool checked = false;
-    module->walk([&](data::BoundedAtOp access) {
-      require(
-          finite::provesBound(access->getOperand(1), access->getOperand(0), 0),
-          "shared forwarding evidence exhausted work");
-      checked = true;
-    });
-    require(checked, "missing forwarding access");
-    refusesIR(text, context, "mathematical-analysis-limit");
-  });
+  for (auto [levels, calls] : {std::pair{5u, 32u}, std::pair{9u, 63u}})
+    cases.run(
+        levels == 5 ? "forwarding evidence reuses a shared helper graph"
+                    : "forwarding evidence preserves complete path depth",
+        [&, levels = levels, calls = calls] {
+          std::string helpers;
+          for (unsigned level = 0; level < levels; ++level) {
+            helpers += " func.func private @forward_" + std::to_string(level) +
+                       "(%x:ui64)->ui64 {\n";
+            std::string value = "%x";
+            if (level + 1 < levels)
+              for (unsigned call = 0; call < calls; ++call) {
+                auto next = "%v" + std::to_string(call);
+                helpers += "  " + next + " = func.call @forward_" +
+                           std::to_string(level + 1) + "(" + value +
+                           ") : (ui64)->ui64\n";
+                value = next;
+              }
+            helpers += "  func.return " + value + " : ui64\n }\n";
+          }
+          auto text =
+              replace(fixture("total-state"), " func.func private @step",
+                      helpers + " func.func private @step");
+          text = replace(
+              text, "   %v =",
+              "   %forward = func.call @forward_0(%i) : (ui64)->ui64\n   %v =");
+          text = replace(text, "(%xs,%i) :", "(%xs,%forward) :");
+          // Exercise the evidence query itself. Whole-unit admission rejects
+          // the smaller graph's expansion and the larger graph's fact depth.
+          ParserConfig config(&context, false);
+          auto module = parseSourceString<ModuleOp>(text, config);
+          require(bool(module), "forwarding graph did not parse");
+          bool checked = false;
+          module->walk([&](data::BoundedAtOp access) {
+            if (levels == 5)
+              require(finite::provesBound(access->getOperand(1),
+                                          access->getOperand(0), 0),
+                      "bounded shared forwarding evidence exhausted work");
+            else {
+              // The original nine-level graph exceeds 256 along a complete
+              // forwarding dependency path. A shallow cache entry must not hide
+              // it.
+              uint64_t remaining = 1000000;
+              auto status = finite::boundStatus(
+                  access->getOperand(1), access->getOperand(0), 0, remaining);
+              require(status == facts::Status::Capacity && remaining > 0,
+                      "shared forwarding graph bypassed the dependency depth "
+                      "limit");
+            }
+            checked = true;
+          });
+          require(checked, "missing forwarding access");
+          refusesIR(text, context,
+                    levels == 5 ? "mathematical-analysis-limit"
+                                : "finite-analysis-limit");
+        });
   cases.run("fixed Sequence extent is checked through ordinary returns", [&] {
     std::string helpers = R"mlir(
  func.func private @make()->!data.sequence<i1> {
