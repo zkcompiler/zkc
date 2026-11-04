@@ -15,7 +15,6 @@ def failures(needs, event, scope):
             "optional": {"optional"},
             "fresh": {"fresh"},
             "cache": {"main"},
-            "compiler-cache": {"compiler_cache"},
             "all": {"quick", "main", "optional", "fresh"},
         }
         if scope not in scopes:

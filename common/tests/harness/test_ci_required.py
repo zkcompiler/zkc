@@ -48,7 +48,6 @@ def test_automatic_success_with_unselected_manual_jobs(event):
     ("quick", ["quick"]), ("main", ["main"]), ("cache", ["main"]),
     ("optional", ["optional"]), ("fresh", ["fresh"]),
     ("all", ["quick", "main", "optional", "fresh"]),
-    ("compiler-cache", ["compiler_cache"]),
 ])
 def test_manual_scope_requires_its_whole_selection(scope, jobs):
     needs = {name: {"result": "success"} for name in jobs}

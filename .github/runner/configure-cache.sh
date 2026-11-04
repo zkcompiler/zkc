@@ -19,7 +19,7 @@ if [[ $mode == restart ]]; then
   trap 'systemctl start "$runner_unit"' EXIT
 fi
 
-install -d -m 2770 -o root -g zkc-ci-build "$ci_root/cache/ccache"
+install -d -m 2770 -o zkc-ci -g zkc-ci-build "$ci_root/cache/ccache"
 entry="extra-sandbox-paths = /var/cache/zkc-ccache=$ci_root/cache/ccache"
 # This file belongs exclusively to this installer. Retain every other setting.
 sed -i '/^extra-sandbox-paths = /d' "$ci_root/config/nix.conf"

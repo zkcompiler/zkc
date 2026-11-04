@@ -10,7 +10,7 @@ on:
         description: Validation scope
         type: choice
         default: quick
-        options: [quick, all, main, optional, fresh, cache, compiler-cache]
+        options: [quick, all, main, optional, fresh, cache]
 
 permissions:
   contents: read
@@ -83,6 +83,7 @@ jobs:
         run: |
           mkdir -p build/reports
           nix build -L --keep-going --no-link \
+            .#compiler-cache-check \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
             .#checks.x86_64-linux.rust-consumer \
@@ -206,30 +207,10 @@ jobs:
           path: build/reports/
           retention-days: 30
 
-  compiler_cache:
-    name: Compiler cache mutation acceptance
-    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'compiler-cache'
-    runs-on: [self-hosted, linux, x64, zkc-ci]
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: ./.github/actions/nix
-      - name: Measure and validate changed compiler inputs
-        run: python3 .github/scripts/check-compiler-cache.py
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: compiler-cache-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/reports/compiler-cache/
-          retention-days: 14
-
   required:
     name: ${{ github.event_name == 'workflow_dispatch' && 'Selected manual checks' || 'Required CI' }}
     if: always()
-    needs: [quick, native, main, optional, fresh, compiler_cache]
+    needs: [quick, native, main, optional, fresh]
     runs-on: [self-hosted, linux, x64, zkc-ci]
     timeout-minutes: 5
     steps:

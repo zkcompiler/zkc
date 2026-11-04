@@ -140,14 +140,10 @@ developer caches or resource budgets, and refuses while a runner worker is
 active. Administrative sudo is needed because daemon configuration and mount
 permissions are root-owned.
 
-The manual `compiler-cache` workflow scope exercises source/header/compiler-flag
-invalidation, compilation failures and Nix wrapper flags. It measures two actual
-one-file compiler changes in a disposable Git worktree, validates installed
-consumers and all compact protocol families for each, and compares an uncached
-compiler build on the same source. Rust input equality is checked at each
-mutation. The original PR source stays unchanged; timings and logs are uploaded.
-This explicit experiment is separate from ordinary PR validation. Times are
-observations under the fixed resource budget, not general performance guarantees.
+The native job includes a small cached Nix check for source, header, compiler-flag
+and Nix wrapper-flag invalidation, unchanged-input hits and compilation failures.
+Installed consumers and selected protocol checks run once through their ordinary
+Nix checks. CI does not add separate performance benchmarks or uncached rebuilds.
 
 ## Required checks and acceptance
 
