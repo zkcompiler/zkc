@@ -244,36 +244,41 @@ class ServiceRoots {
   struct Entry {
     std::optional<BindingId> source;
     std::optional<unsigned> root;
-    unsigned depth = 0, scope = 0;
+    unsigned scope = 0;
     uint32_t visibleAfter = 0;
     bool active = false;
   };
   std::vector<Entry> entries;
-  bool resolve(BindingId binding, unsigned depth) {
-    if (!types.charge(1, syntax.span))
+  bool resolve(BindingId binding) {
+    // Flat alias chains are bindings, not expression nesting. Resolve each
+    // edge once under the shared work budget and retain its canonical root.
+    std::vector<BindingId> path;
+    unsigned root;
+    for (;;) {
+      if (!types.charge(1, syntax.span))
+        return false;
+      if (binding.index >= entries.size())
+        return types.fail("source.binding-witness", "unknown managed alias",
+                          syntax.span);
+      auto &entry = entries[binding.index];
+      if (entry.root) {
+        root = *entry.root;
+        break;
+      }
+      if (entry.active || !entry.source)
+        return types.fail("source.binding-witness",
+                          "invalid managed alias graph",
+                          syntax.bindings[binding.index].span);
+      entry.active = true;
+      path.push_back(binding);
+      binding = *entry.source;
+    }
+    if (!types.charge(path.size(), syntax.span))
       return false;
-    if (binding.index >= entries.size())
-      return types.fail("source.binding-witness", "unknown managed alias",
-                        syntax.span);
-    auto &entry = entries[binding.index];
-    if (entry.root)
-      return true;
-    if (entry.active || !entry.source)
-      return types.fail("source.binding-witness", "invalid managed alias graph",
-                        syntax.bindings[binding.index].span);
-    if (depth > types.work.limits.expressionDepth)
-      return types.fail("source.limit", "managed alias depth exceeded",
-                        syntax.bindings[binding.index].span);
-    entry.active = true;
-    if (!resolve(*entry.source, depth + 1))
-      return false;
-    const auto &parent = entries[entry.source->index];
-    entry.depth = parent.depth + 1;
-    if (entry.depth > types.work.limits.expressionDepth)
-      return types.fail("source.limit", "managed alias depth exceeded",
-                        syntax.bindings[binding.index].span);
-    entry.root = parent.root;
-    entry.active = false;
+    for (auto id : path) {
+      entries[id.index].root = root;
+      entries[id.index].active = false;
+    }
     return true;
   }
 
@@ -320,7 +325,7 @@ public:
         entries[binding.index].visibleAfter = statement.span.end;
       }
     for (unsigned i = 0; i < entries.size(); ++i)
-      if (syntax.bindings[i].service && !resolve(BindingId{i}, 1))
+      if (syntax.bindings[i].service && !resolve(BindingId{i}))
         return false;
     return true;
   }

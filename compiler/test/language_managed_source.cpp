@@ -55,7 +55,8 @@ std::vector<Control *> controls(Body &candidate) {
   }
   return result;
 }
-std::string aliases(unsigned count, bool managed) {
+std::string aliases(unsigned count, bool managed, bool used = true,
+                    bool control = true) {
   std::string source =
       "protocol Run roles(V)(go:bool@V,coins:facade::Random<F>@V)->(){";
   std::string previous = managed ? "coins" : "go";
@@ -64,10 +65,13 @@ std::string aliases(unsigned count, bool managed) {
     source += "let " + name + "=" + previous + ";";
     previous = name;
   }
-  source += "if go roles(V) {";
-  if (managed)
+  if (control)
+    source += "if go roles(V) {";
+  if (managed && used)
     source += "let unused=" + previous + ".draw();";
-  return source + "} else {} return ();}";
+  if (control)
+    source += "} else {}";
+  return source + "return ();}";
 }
 std::string inventory(unsigned ports, unsigned queries, unsigned aliasCount,
                       unsigned controlCount, bool managedAliases) {
@@ -226,10 +230,13 @@ oracle def Identity(source:O)->O {
   });
   cases.run("unused ordinary chain does not consume managed depth",
             [&] { replay(take(check(aliases(65, false)))); });
-  cases.run("managed alias depth boundary",
-            [&] { replay(take(check(aliases(64, true)))); });
-  cases.run("managed alias depth overflow",
-            [&] { refuses(check(aliases(65, true)), "source.limit"); });
+  for (unsigned count : {64, 65, 256})
+    for (bool used : {false, true})
+      for (bool control : {false, true})
+        cases.run(
+            "flat managed aliases " + Twine(count) + "/" + Twine(used) + "/" +
+                Twine(control),
+            [&] { replay(take(check(aliases(count, true, used, control)))); });
   // Cross differences cancel unrelated linear setup and per-query costs.
   // These are deterministic charged-work checks, not timing benchmarks.
   cases.run("ports and queries have additive replay work", [&] {
