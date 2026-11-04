@@ -646,6 +646,17 @@ cover sums, nested allowances, real checking refusals and child totals;
 output. This surface grants no admission or formal evidence. See the
 [accounting contract](spec/language/definitions.md#bounds-and-scope).
 
+The frontend uses recorded implementation edges and one declaration index for
+source paths, installed methods and provider routes. Invocation-local dependency
+and common-control summaries retain exact contexts and caller limits; closed
+Entries retain their common-input inventories for publication while native
+comparison derives them independently. Independent source witnesses reconstruct
+headers, exact construction occurrences, managed query roots and authored lexical
+regions. The [construction controls](../compiler/test/language_construction_witness.cpp)
+and [region controls](../compiler/test/language_managed_source.cpp) cover candidate
+mutations and source compatibility. These checks do not establish a formal
+source-correspondence theorem or complete the later language migration.
+
 The total Math operation `multilinear.restrict_prefix` is available through
 both `primitive` and `intrinsic` authoring, original structured export and the
 strict Lean reader. Its Kernel recipe and native field-family implementation

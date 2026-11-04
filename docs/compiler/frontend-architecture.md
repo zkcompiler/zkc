@@ -117,6 +117,14 @@ method, bound and count against the authored occurrence. Header reconstruction
 shares the parameter, inference and admission lifecycle used for interface
 conformance; candidate ports cannot establish their own authority. Nominal
 selection does not establish provider/root admission or random sampling.
+Source replay also carries the expected authored region into each selected arm,
+repeat and extracted callback. Transparent blocks and eager Boolean expressions
+preserve their enclosing checked region. A valid call occurrence in the wrong
+arm still refuses. One retained lexical-scope index supplies region membership
+and visibility; one binding-to-root index resolves managed aliases. Flat aliases
+use an iterative, cycle-checked walk under the shared work budget, so unrelated
+aliases and ports do not multiply each root lookup or control membership query.
+
 New service families require an explicit typed adapter until a probe establishes
 that a more general signature algebra covers them. Installation identity binds
 the method identity, constructor, signature, capability and prelude membership.

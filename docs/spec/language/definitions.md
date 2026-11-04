@@ -2085,7 +2085,8 @@ its parent's total. Each parse invocation stays within the
 [layout syntax ceiling](layout-syntax.md#syntax-environments-and-recovery) and
 is charged to the phase. File, type, instance, operation and output ceilings
 remain independent; a higher work allowance does not admit a larger type or
-deeper call.
+deeper call. Flat managed aliases resolve through a binding graph under the
+work allowance; their count does not consume expression-nesting depth.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
 trees, including operator chains. [Notation limits](notation.md#bounds) also

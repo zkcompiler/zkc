@@ -333,6 +333,19 @@ origin against the frozen declaration index. An association slot and a matching
 signature shape do not establish that identity. Missing retained occurrence
 handles or syntax refuse with a witness diagnostic.
 
+Construction initializer and codec references retain their exact authored
+occurrence, including inherited references and substituted arguments. A valid
+provider at another occurrence cannot authorize a changed projection. Replaying
+a generic construction must preserve its deferred boundary requirements; it does
+not infer concrete admission from a symbolic provider.
+
+Body replay binds each selected arm, repeat and extracted callback to its
+expected authored lexical region and mode. Moving an otherwise valid occurrence
+to another arm refuses. Transparent blocks share their enclosing checked region;
+eager Boolean operands and Local short-circuit arms follow their respective
+source evaluation rules. Managed roots come from authored service inputs and
+lexically visible aliases, independently of candidate capture slots.
+
 `route` names the resolution route:
 
 | Route | Records |
