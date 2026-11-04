@@ -21,7 +21,7 @@ struct CommonControlRequirement {
   bool tagOnly = false;
   /// Observe only this collection extent; never combined with tagOnly.
   std::optional<unsigned> extentAxis;
-  /// The actual common control that first required this association.
+  /// The actual common action that first required this association.
   mlir::Operation *control = nullptr;
 };
 /// Derive obligations from an admitted, immutable Protocol declaration and its

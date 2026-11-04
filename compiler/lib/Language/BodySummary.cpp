@@ -269,6 +269,9 @@ struct BodySummaryCache::Storage {
     const Body *body;
     bool completedDependencies;
     unsigned height = 1, callHeight = 1;
+    // Local region nesting composes through region edges. A callee starts its
+    // own region stack, whose maximum must not be shifted by caller nesting.
+    unsigned regionHeight = 1, calledRegionHeight = 1;
     uint64_t typeDepth = 0, typeNodes = 0, operations = 0;
   };
   struct Instance {
@@ -291,9 +294,14 @@ struct BodySummaryCache::Storage {
   std::set<const Body *> formingTemplates;
   std::vector<Construction> constructing;
 
-  bool bounds(Semantics &types, const Template &body, unsigned depth) {
+  bool bounds(Semantics &types, const Template &body, unsigned depth,
+              unsigned regionDepth = 1) {
     return (depth && depth <= types.work.limits.callDepth &&
             body.height <= types.work.limits.callDepth - depth + 1 &&
+            regionDepth && regionDepth <= types.work.limits.expressionDepth &&
+            body.regionHeight <=
+                types.work.limits.expressionDepth - regionDepth + 1 &&
+            body.calledRegionHeight <= types.work.limits.expressionDepth &&
             body.typeDepth <= types.work.limits.typeDepth &&
             body.typeNodes <= types.work.limits.typeNodes &&
             body.operations <= types.work.limits.operations) ||
@@ -302,8 +310,11 @@ struct BodySummaryCache::Storage {
   }
   const Template *getTemplate(Semantics &types,
                               ArrayRef<Declaration> declarations,
-                              const Body &body, unsigned depth) {
-    if (!depth || depth > types.work.limits.callDepth || !types.charge(1, {})) {
+                              const Body &body, unsigned depth,
+                              unsigned regionDepth = 1) {
+    if (!depth || depth > types.work.limits.callDepth || !regionDepth ||
+        regionDepth > types.work.limits.expressionDepth ||
+        !types.charge(1, {})) {
       if (!types.diagnostic)
         types.fail("source.limit", "body template depth exceeded", {});
       return nullptr;
@@ -313,7 +324,8 @@ struct BodySummaryCache::Storage {
       return nullptr;
     }
     if (auto found = templates.find(&body); found != templates.end())
-      return bounds(types, found->second, depth) ? &found->second : nullptr;
+      return bounds(types, found->second, depth, regionDepth) ? &found->second
+                                                              : nullptr;
     formingTemplates.insert(&body);
     auto leave = llvm::scope_exit([&] { formingTemplates.erase(&body); });
     Template result{
@@ -343,10 +355,22 @@ struct BodySummaryCache::Storage {
       return true;
     };
     auto child = [&](const Body &nested, unsigned callEdge = 1) {
-      const auto *summary = getTemplate(types, declarations, nested, depth + 1);
+      // A region remains inside its callable. A call starts a new body's
+      // expression nesting while consuming exactly one callable frame.
+      const auto *summary =
+          getTemplate(types, declarations, nested, depth + callEdge,
+                      callEdge ? 1 : regionDepth + 1);
       if (!summary)
         return false;
-      result.height = std::max(result.height, summary->height + 1);
+      result.height = std::max(result.height, summary->height + callEdge);
+      if (callEdge)
+        result.calledRegionHeight =
+            std::max(result.calledRegionHeight, summary->regionHeight);
+      else
+        result.regionHeight =
+            std::max(result.regionHeight, summary->regionHeight + 1);
+      result.calledRegionHeight =
+          std::max(result.calledRegionHeight, summary->calledRegionHeight);
       result.callHeight =
           std::max(result.callHeight, summary->callHeight + callEdge);
       result.typeDepth = std::max(result.typeDepth, summary->typeDepth);
@@ -426,7 +450,7 @@ struct BodySummaryCache::Storage {
                  std::holds_alternative<OracleSourceQuery>(op.action))
         result.completedDependencies = false;
     }
-    if (!bounds(types, result, depth))
+    if (!bounds(types, result, depth, regionDepth))
       return nullptr;
     return &templates.emplace(&body, std::move(result)).first->second;
   }
@@ -528,6 +552,9 @@ BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
       target.typeDepth = std::max(target.typeDepth, requirements.typeDepth);
       target.typeNodes = std::max(target.typeNodes, requirements.typeNodes);
       target.operations = std::max(target.operations, requirements.operations);
+      target.calledRegionHeight =
+          std::max({target.calledRegionHeight, requirements.regionHeight,
+                    requirements.calledRegionHeight});
     }
   };
   observeRequirements(*definition);

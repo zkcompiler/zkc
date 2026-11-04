@@ -152,6 +152,23 @@ void DeclarationIndex::finish(ArrayRef<Declaration> declarations,
         moduleMembers[module->index].push_back(*target);
     }
   }
+  for (const auto &[path, root] : roots)
+    if (nodes[root.index].origin == SourceOrigin::Captured)
+      externalBindings[path].emplace(
+          root.index,
+          ResolvedReference{root, root, nodes[root.index].category, {}, {}});
+  for (unsigned i = 0; i < nodes.size(); ++i) {
+    if (nodes[i].kind != Declaration::Kind::Module ||
+        nodes[i].origin != SourceOrigin::Captured)
+      continue;
+    for (const auto &[name, binding] : namespaces[i]) {
+      auto reference =
+          member(ExternalSelectionAccess{}, DeclarationId{i}, name);
+      externalBindings[name].emplace(
+          binding.target.index,
+          std::get<ResolvedReference>(std::move(reference)));
+    }
+  }
   frozen = true;
 }
 std::optional<DeclarationId>
@@ -268,34 +285,13 @@ LookupResult DeclarationIndex::lookup(const AccessContext &access,
       if (auto failure = select(scopeBinding(access, head, traversal)))
         return *failure;
     } else if (std::holds_alternative<ExternalSelectionAccess>(access)) {
-      std::map<uint32_t, ResolvedReference> candidates;
-      for (const auto &[path, root] : roots) {
-        if (!charge(traversal))
-          return LookupFailure{LookupFailureKind::Limit, {}, head.str()};
-        if (nodes[root.index].origin != SourceOrigin::Captured)
-          continue;
-        if (path == head)
-          candidates.emplace(
-              root.index, ResolvedReference{
-                              root, root, nodes[root.index].category, {}, {}});
-      }
-      for (unsigned i = 0; i < nodes.size(); ++i) {
-        if (!charge(traversal))
-          return LookupFailure{LookupFailureKind::Limit, {}, head.str()};
-        if (nodes[i].kind != Declaration::Kind::Module ||
-            nodes[i].origin != SourceOrigin::Captured)
-          continue;
-        auto result = member(access, DeclarationId{i}, head, traversal);
-        if (auto *ref = std::get_if<ResolvedReference>(&result))
-          candidates.emplace(ref->target.index, *ref);
-        else if (auto failure = std::get<LookupFailure>(result);
-                 failure.kind != LookupFailureKind::NotFound)
-          return failure;
-      }
-      if (candidates.size() > 1)
-        return LookupFailure{LookupFailureKind::Ambiguous, {}, head.str()};
-      if (!candidates.empty())
+      auto found = externalBindings.find(head.str());
+      if (found != externalBindings.end()) {
+        const auto &candidates = found->second;
+        if (candidates.size() > 1)
+          return LookupFailure{LookupFailureKind::Ambiguous, {}, head.str()};
         selected = candidates.begin()->second;
+      }
     }
   }
   if (!selected)
@@ -377,6 +373,8 @@ uint64_t DeclarationIndex::bindingCount() const {
   uint64_t count = prelude.size();
   for (const auto &scope : namespaces)
     count += scope.size();
+  for (const auto &[name, candidates] : externalBindings)
+    count += 1 + candidates.size();
   return count;
 }
 const protocol::FrontendDeclaration *

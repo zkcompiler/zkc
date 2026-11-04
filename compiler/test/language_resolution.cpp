@@ -83,6 +83,31 @@ std::vector<SourceBuffer> service(StringRef spelling, StringRef comment = "",
 } // namespace
 int main() {
   Cases cases;
+  cases.run("external short-name lookup ignores unrelated declarations", [] {
+    auto cost = [&](unsigned padding) {
+      std::string source = "module m;type A=bool;";
+      for (unsigned i = 0; i < padding; ++i)
+        source += "type Unrelated" + std::to_string(i) + "=bool;";
+      auto project = take(check(source));
+      uint64_t work = 0;
+      LookupTraversal traversal{[&] {
+                                  ++work;
+                                  return true;
+                                },
+                                {}};
+      for (unsigned i = 0; i < 64; ++i) {
+        auto result = project.declarationIndex().lookup(
+            ExternalSelectionAccess{}, "A", traversal);
+        require(std::holds_alternative<ResolvedReference>(result) &&
+                    std::get<ResolvedReference>(result).target.index ==
+                        named(project, "m::A").id.index,
+                "external index lost its exact target");
+      }
+      return work;
+    };
+    require(cost(0) == cost(128),
+            "each external argument rescanned unrelated declarations");
+  });
   for (StringRef member : {"", "math fn f()->bool{return false;}"})
     cases.run("selected imported root is terminal: " + member, [&] {
       auto sources = [&](StringRef path) {

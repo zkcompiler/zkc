@@ -2048,6 +2048,19 @@ class Requirements {
               environment(callee, call->arguments, {}, context.statics),
               op.span, callDepth, &callee));
         }
+      } else if (const auto *selection =
+                     std::get_if<OracleSequenceAt>(&op.action)) {
+        // Selecting one logical anchor is a common action. Availability of an
+        // ordinary index does not establish agreement between its components.
+        std::vector<Node> selected;
+        for (auto role : mappedRoles(selection->roles))
+          selected.push_back(at(values[selection->position.index], role,
+                                valueTypes[selection->position.index]));
+        if (!demand(std::move(selected), false, op.span))
+          return {};
+        each([&](unsigned, unsigned, const Type &type) {
+          return unknown(type);
+        });
       } else if (const auto *control = std::get_if<Control>(&op.action)) {
         if (source.mode == Body::Mode::Local ||
             control->kind == Control::Kind::For) {

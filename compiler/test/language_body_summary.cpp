@@ -226,6 +226,59 @@ std::string controlExpression(StringRef control, const std::string &value) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("cached control regions do not consume callable frames", [] {
+    constexpr StringLiteral source = R"(
+math fn leaf(x:bool)->bool {
+  return if x { if x { x } else { x } } else { x };
+}
+math fn relay(x:bool)->bool { return leaf(x); }
+math fn caller(x:bool)->bool { return relay(x); }
+)";
+    Limits limits;
+    limits.callDepth = 3;
+    take(check(source, limits));
+    limits.callDepth = 2;
+    refuses(check(source, limits), "source.limit");
+  });
+  cases.run(
+      "callee region bounds reset across calls on cold and warm paths", [] {
+        auto region = [](std::shared_ptr<Body> nested) {
+          auto body = inputs(1);
+          Control control;
+          control.kind = Control::Kind::If;
+          control.operands = {{0}, {0}};
+          control.regions = {nested, nested};
+          body->results = {operation(*body, std::move(control), {0})};
+          return body;
+        };
+        auto declarations = graph(0, false);
+        declarations[0].body = region(region(identityBody()));
+        auto call = inputs(1);
+        call->results = {
+            operation(*call, HelperCall{{0}, {{0}}, {}, {}, {}}, {0})};
+        auto outer = region(call);
+        for (bool warm : {false, true}) {
+          Limits limits;
+          limits.callDepth = 2;
+          limits.expressionDepth = 3;
+          Work work{limits};
+          Semantics types(declarations, {}, work);
+          BodySummaryCache cache;
+          if (warm)
+            require(cache
+                        .staticIndependent(types, declarations,
+                                           *declarations[0].body, 1)
+                        .has_value(),
+                    "callee template did not form");
+          require(cache.staticIndependent(types, declarations, *outer, 1)
+                      .has_value(),
+                  "caller region nesting shifted a callee's expression bound");
+          limits.expressionDepth = 2;
+          require(!cache.staticIndependent(types, declarations, *outer, 1),
+                  "warm template bypassed its callee's lower expression bound");
+          refused(types, "source.limit");
+        }
+      });
   for (bool nested : {false, true})
     cases.run(
         nested ? "source calls in captured nested callbacks ignore history"

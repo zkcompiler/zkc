@@ -579,6 +579,16 @@ struct Derivation {
         for (auto [role, input] : zip(*selected, assembly.getInputs()))
           values[role] = components(environment, input)[role];
         environment[assembly.getOutput()] = std::move(values);
+      } else if (auto selection = dyn_cast<pir::OracleSequenceAtOp>(op)) {
+        auto selected = roster(selection.getRoles(), mapping);
+        if (!selected)
+          return selected.takeError();
+        if (auto e =
+                common(op, selection.getPosition(), *selected, environment))
+          return std::move(e);
+        // Agreement of the ordinary coordinate does not make the selected
+        // handle ordinary data or establish equality of opaque histories.
+        environment[selection.getHandle()] = absent();
       } else if (mathematical::isTotal(op)) {
         for (auto [index, result] : enumerate(op->getResults())) {
           Components values = absent();

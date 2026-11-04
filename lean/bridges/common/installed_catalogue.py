@@ -75,9 +75,15 @@ def service_methods(declarations):
     use the same method names, and their rows must not enter Random's profile.
     The signature rows describe gates; they install no new Lean interpretation.
     """
-    tables = ("frontendDeclarations", "serviceSignatures", "serviceMethods")
+    tables = ("frontendRules", "frontendDeclarations", "serviceSignatures", "serviceMethods")
     require(all(table in declarations for table in tables), "missing catalog tables")
     require(all(isinstance(declarations[table], list) for table in tables), "expected catalog rows")
+    rules = {}
+    for row in declarations["frontendRules"]:
+        object_fields(row, ("name", "kind", "statics", "inputs", "output"))
+        name = source_name(row["name"])
+        require(name not in rules, "duplicate frontend rule")
+        rules[name] = row
     identities, names, prelude, constructors = set(), set(), set(), set()
     for row in declarations["frontendDeclarations"]:
         object_fields(row, ("identity", "owner", "name", "kind", "statics", "inputs",
@@ -120,7 +126,14 @@ def service_methods(declarations):
         object_fields(association, ("kind", "target"))
         require(association["kind"] in ("primitive", "rule"), "invalid frontend association")
         schema.string(association["target"])
+        if association["kind"] == "rule":
+            require(association["target"] in rules, "unknown frontend rule")
         if association == {"kind": "rule", "target": "RandomConstructor"}:
+            require(rules["RandomConstructor"] == {
+                "name": "RandomConstructor", "kind": "Interface",
+                "statics": [{"kind": "Domain", "sort": "Field"}],
+                "inputs": [], "output": None,
+            }, "unsupported RandomConstructor rule")
             require(row["kind"] == "Interface" and not row["inputs"] and row["output"] is None
                     and [s["parameter"] for s in row["statics"]] == [{"kind": "Domain", "sort": "Field"}],
                     "invalid RandomConstructor shape")
@@ -153,6 +166,16 @@ def service_methods(declarations):
         require(signature in signatures and signatures[signature] == capability,
                 "service method capability mismatch")
         if constructor == "service.random":
+            # The formal consumer interprets these method names with fixed
+            # signatures. Validate that profile before projecting names only;
+            # a new catalog signature does not install a Lean interpretation.
+            supported = {"draw": ("RandomDraw", ""),
+                         "index": ("RandomIndex", "IndexRandomness"),
+                         "indices": ("RandomIndices", "IndexBlockRandomness")}
+            # Other names remain catalog data; the operation reader has no
+            # rule for them. A canonical name cannot acquire another meaning.
+            require(name not in supported or supported[name] == (signature, capability),
+                    "unsupported formal service method profile")
             selected.append(row)
     return selected
 

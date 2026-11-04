@@ -4,8 +4,10 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Compiler/StructuredSource.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/CommonControl.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -174,6 +176,67 @@ int main() {
       ->(out:Oracles<Fixed<F,16>,2>@V->P){return(out=words);})"),
                       "source.placement");
             });
+  cases.run("selection derives and independently checks index agreement", [] {
+    auto source = original(selectionSubject);
+    auto requirements =
+        take(source.entry().commonInputs(source.entry().protocol().id));
+    require(requirements.size() == 1 &&
+                requirements.front().components.size() == 2 &&
+                !requirements.front().tagOnly &&
+                !requirements.front().extentAxis,
+            "selection lost its ordinary common-coordinate obligation");
+    for (const auto &component : requirements.front().components)
+      require(component.input == 2 && component.path.empty(),
+              "selection obligation names a handle instead of its coordinate");
+    auto changed = take(json::parse(source.interfaceJson()));
+    bool removed = false;
+    for (auto &decl : *changed.getAsObject()->getArray("protocols")) {
+      auto *inventory =
+          decl.getAsObject()->getArray("common_input_requirements");
+      if (inventory && !inventory->empty()) {
+        inventory->clear();
+        removed = true;
+      }
+    }
+    require(removed, "interface omitted selection agreement");
+    refuses(readInterface(source.bytes(), printJson(changed)),
+            "source.interface");
+  });
+  cases.run("native selection refuses divergent participant coordinates", [] {
+    auto source = original(selectionSubject);
+    mlir::DialectRegistry registry;
+    registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    auto module =
+        mlir::parseSourceString<mlir::ModuleOp>(source.bytes(), &context);
+    require(bool(module), "original failed to parse");
+    protocol_ir::OracleSequenceAtOp selection;
+    module->walk([&](protocol_ir::OracleSequenceAtOp op) { selection = op; });
+    require(bool(selection), "missing selection");
+    mlir::OpBuilder builder(selection);
+    auto index = selection.getPosition().getType();
+    auto constant = [&](uint64_t value) {
+      mlir::OperationState state(selection.getLoc(), "data.index");
+      state.addTypes(index);
+      state.addAttribute("value", builder.getIntegerAttr(index, value));
+      return builder.create(state)->getResult(0);
+    };
+    auto zero = constant(0), one = constant(1);
+    mlir::OperationState state(selection.getLoc(), "protocol.assemble_roles");
+    state.addOperands({zero, one});
+    state.addTypes(index);
+    state.addAttribute("roles", selection.getRoles());
+    selection.getPositionMutable().assign(builder.create(state)->getResult(0));
+    bool refused = false;
+    mlir::ScopedDiagnosticHandler diagnostics(
+        &context, [&](mlir::Diagnostic &d) {
+          refused |= namesIdentifier(d.str(), "common-control-provenance");
+          return mlir::success();
+        });
+    require(mlir::failed(admitStage(*module)) && refused,
+            "native admission accepted distinct selection coordinates");
+  });
   cases.run("runtime selection retains the selected actual anchor", [] {
     auto source = original(selectionSubject);
     require(source.bytes().contains("protocol.oracle_sequence_at") &&

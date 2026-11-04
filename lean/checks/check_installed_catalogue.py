@@ -191,6 +191,29 @@ class Generated(unittest.TestCase):
             method["constructor"] = "service.replacement"
         self.assertEqual(installed_catalogue.service_methods(changed), [])
 
+    def test_service_signature_drift_refuses_before_name_projection(self):
+        changed = copy.deepcopy(self.declarations)
+        method = next(value for value in changed["serviceMethods"]
+                      if value["identity"] == "service.random.index")
+        method.update(signature="RandomIndices", capability="IndexBlockRandomness")
+        with self.assertRaisesRegex(Refused, "unsupported formal service method profile"):
+            installed_catalogue.render(changed)
+
+    def test_constructor_rule_must_exist_and_match_formal_profile(self):
+        for mutation in ("missing", "signature", "duplicate"):
+            with self.subTest(mutation=mutation):
+                changed = copy.deepcopy(self.declarations)
+                rule = next(value for value in changed["frontendRules"]
+                            if value["name"] == "RandomConstructor")
+                if mutation == "missing":
+                    changed["frontendRules"].remove(rule)
+                elif mutation == "signature":
+                    rule["kind"] = "Local"
+                else:
+                    changed["frontendRules"].append(copy.deepcopy(rule))
+                with self.assertRaises(Refused):
+                    installed_catalogue.render(changed)
+
     def test_duplicate_json_members_refuse_in_cli(self):
         source = self.directory / "duplicate.json"
         encoded = json.dumps(self.declarations)

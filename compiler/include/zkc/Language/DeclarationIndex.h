@@ -105,6 +105,9 @@ private:
   std::map<uint32_t, const protocol::ServiceMethodDeclaration *>
       serviceAssociations;
   std::map<std::string, DeclarationId> canonicalDeclarations, roots;
+  /// Frozen cross-module selection inventory, deduplicated by actual target.
+  /// Repeated static arguments do not rescan unrelated declarations.
+  std::map<std::string, std::map<uint32_t, ResolvedReference>> externalBindings;
   /// Only installed rows with explicit prelude membership enter this scope.
   Namespace prelude;
   std::map<std::string, DeclarationId> nominalHomes, constructorHomes;
