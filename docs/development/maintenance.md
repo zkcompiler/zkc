@@ -118,13 +118,14 @@ when diagnosing a disagreement.
 
 ## Workflow scopes and reports
 
+[Self-hosted CI](self-hosted-ci.md) defines server isolation, persistent caches, required checks, installation and operational validation.
+
 The [test guide](../../common/tests/README.md) and CI manifests own current scopes.
 Automatic CI checks source hygiene, docs and the Python harness. Changes to
-native code, libraries or build configuration also run cached Nix checks for
-Rust tests/Clippy, the installed CLI, SDK discovery fixtures, an installed C++ SDK consumer, source boundaries and C++ formatting. Full CTest and protocol integration suites, sanitizers and optional
+native code, libraries or build configuration also run incremental Rust tests/Clippy and cached Nix checks for the installed CLI, SDK discovery fixtures, detached C++ and Rust SDK consumers, source boundaries and C++ formatting. Full CTest and protocol integration suites, sanitizers and optional
 formal/external integrations remain explicit workflow scopes.
 
-The Rust check runs Clippy and workspace tests directly, without building the release CLI or depending on C++ tools and release test drivers. Source style checks own Cargo formatting. The application and project checks own those execution boundaries. Keep these derivations independent so Rust checks can run alongside the compiler build and reuse their result after unrelated C++ changes.
+The Rust check runs Clippy and workspace tests directly, without building the release CLI or depending on C++ tools and release test drivers. Source style checks own Cargo formatting. The application and project checks own those execution boundaries. The automatic runner serializes Rust validation and package builds within its resource budget. The independent Rust derivation remains part of the manual main package checks.
 
 The installed compiler package builds the CLI and SDK with `BUILD_TESTING=OFF`. `checks.compiler` builds and runs the full CTest suite and exports its test helpers for the project integration check. Sanitizers use that testing configuration; domain installation checks use the installed compiler configuration.
 
