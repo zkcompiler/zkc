@@ -816,10 +816,10 @@ int main() {
                   "conformance mutation did not name its witness refusal");
         });
   for (StringRef constructor :
-       {"Random", "zkc::prelude::Random", "facade::Coins"}) {
+       {"Random", "zkc::prelude::Random", "facade::Random"}) {
     auto sources = [&](const std::string &body) {
       return std::vector<SourceBuffer>{
-          {"facade", "module facade;pub use zkc::prelude::{Random as Coins};",
+          {"facade", "module facade;pub use zkc::prelude::{Random};",
            "facade.zkc"},
           {"m",
            "module m;domain F=field(\"koala-bear.ext4-binomial3\");" + body,

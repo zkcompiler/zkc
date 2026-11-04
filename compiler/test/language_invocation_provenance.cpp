@@ -725,15 +725,13 @@ protocol Run roles(P)(box:Box@P)->(out:bool@P){return box.draw()&&box.indices();
               analyze(
                   take(capture(
                       {{"facade",
-                        "module facade;pub use zkc::prelude::{Random as "
-                        "Coins};",
+                        "module facade;pub use zkc::prelude::{Random};",
                         "facade.zkc"},
-                       {"other",
-                        "module other;pub use zkc::prelude::{Random as Coins};",
+                       {"other", "module other;pub use zkc::prelude::{Random};",
                         "other.zkc"},
                        {"m",
                         R"(module m;domain F=field("koala-bear.ext4-binomial3");
-protocol Run roles(V)(coins:facade::Coins<F>@V)->(){let a=coins.draw();return ();})",
+protocol Run roles(V)(coins:facade::Random<F>@V)->(){let a=coins.draw();return ();})",
                         "m.zkc"}})))
                   .checkedProject());
           accepted(project);

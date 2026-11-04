@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Language/Diagnostics.h"
+#include "zkc/Language/Names.h"
 #include <algorithm>
 #include <numeric>
 using namespace llvm;
@@ -567,13 +568,25 @@ bool Checker::collect() {
                            (*output.sources)[decl.span.source.index].origin))
       return types.fail("source.duplicate",
                         "duplicate declaration: " + decl.name, decl.span);
-    auto symbol =
-        decl.anonymous
-            ? Expected<std::string>("zki_" + digest(decl.qualifiedName))
-            : encodeSymbol(decl.qualifiedName, work.limits);
-    if (!symbol)
-      return types.accept(symbol.takeError(), decl.span);
-    decl.symbol = std::move(*symbol);
+    if (formingIndex->serviceAssociation(decl.id)) {
+      // Catalog-owned method names may coincide with source type keywords
+      // (index). Only an exact installed association takes this path; authored
+      // declaration names still pass encodeSymbol's reserved-word checks.
+      auto symbol =
+          encodeSourceSymbol(decl.qualifiedName, work.limits.symbolBytes);
+      if (!symbol)
+        return types.fail("source.limit", "symbol byte limit exceeded",
+                          decl.span);
+      decl.symbol = std::move(*symbol);
+    } else {
+      auto symbol =
+          decl.anonymous
+              ? Expected<std::string>("zki_" + digest(decl.qualifiedName))
+              : encodeSymbol(decl.qualifiedName, work.limits);
+      if (!symbol)
+        return types.accept(symbol.takeError(), decl.span);
+      decl.symbol = std::move(*symbol);
+    }
     types.indexDeclaration(decl);
     if (source.kind == Declaration::Kind::Domain && source.assetDomain) {
       // The declaration denotes the captured asset's canonical identity, so

@@ -50,6 +50,13 @@ int main() {
                 read("zkc::records").members.size() == 3,
             "installed inventory differs");
   });
+  cases.run("catalog methods do not relax authored reserved names", [] {
+    auto symbol = encodeSymbol("m::index");
+    require(!symbol, "reserved authored declaration name was admitted");
+    require(toString(symbol.takeError()).find("source.name") !=
+                std::string::npos,
+            "reserved name refusal lost its diagnostic");
+  });
   cases.run("managed methods are installed beneath their constructor row", [] {
     for (const auto &constructor : zkc::protocol::frontendDeclarations()) {
       if (constructor.rule !=

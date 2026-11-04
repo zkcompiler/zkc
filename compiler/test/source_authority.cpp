@@ -701,12 +701,11 @@ int main() {
         auto sources = [](StringRef comment) {
           return std::vector<SourceBuffer>{
               {"facade",
-               "module facade;pub use zkc::prelude::{Random as Coins};" +
-                   comment.str(),
+               "module facade;pub use zkc::prelude::{Random};" + comment.str(),
                "facade.zkc"},
               {"client",
                R"(module client;domain F=field("koala-bear.ext4-binomial3");
-protocol Run roles(V)(coins:facade::Coins<F>@V)->(){
+protocol Run roles(V)(coins:facade::Random<F>@V)->(){
  let alias=coins;let a=alias.draw();let b=alias.index<8>();let c=alias.indices(8,3);return ();})",
                "client.zkc"}};
         };
