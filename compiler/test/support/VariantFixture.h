@@ -4,6 +4,14 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Registry.h"
 namespace zkc::test {
+inline data::IdentityAttr
+importVariantIdentityFixture(mlir::MLIRContext *context,
+                             const llvm::json::Value &value) {
+  protocol::TypeParseBudget budget;
+  auto identity = protocol::decodeVariantIdentity(value, budget);
+  return identity ? data::importVariantIdentity(context, *identity)
+                  : data::IdentityAttr{};
+}
 /// Import a program-format fixture at the neutral boundary, then exercise the
 /// production structural type. No legacy MLIR parser is retained.
 inline data::VariantType variantType(mlir::MLIRContext *context,

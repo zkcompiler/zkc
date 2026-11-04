@@ -280,6 +280,7 @@ def main():
         ROOT / "lib/Compiler/ComponentContracts.h",
         ROOT / "lib/Compiler/SourceArtifacts.h",
         ROOT / "lib/Compiler/SourceView.h",
+        ROOT / "lib/Compiler/SourceCoordinates.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/ApplicationMapData.h",
         ROOT / "lib/Compiler/LanguageInterface.h",

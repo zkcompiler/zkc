@@ -16,15 +16,18 @@ using namespace llvm;
 namespace zkc::protocol {
 namespace {
 namespace pir = protocol_ir;
-Expected<Type> product(MLIRContext *context, json::Value identity,
+Expected<Type> product(MLIRContext *context, VariantIdentity identity,
                        ArrayRef<Type> fields) {
   if (!context->getLoadedDialect<data::DataDialect>())
     return error("oracle-storage-type");
   auto nominal = data::importVariantIdentity(context, identity);
-  if (!nominal || fields.size() > 128)
+  if (!nominal)
     return error("oracle-storage-type-limit");
-  auto arm = data::AlternativeAttr::get(
-      context, StringAttr::get(context, "Record"), fields);
+  auto arm = data::AlternativeAttr::getChecked(
+      UnknownLoc::get(context), context, StringAttr::get(context, "Record"),
+      fields);
+  if (!arm)
+    return error("oracle-storage-type-limit");
   auto result =
       data::VariantType::getChecked(UnknownLoc::get(context), context, nominal,
                                     ArrayRef<data::AlternativeAttr>{arm});
@@ -55,17 +58,17 @@ struct Planner {
     if (storage.fields.size() > remaining)
       return error("oracle-storage-limit");
     remaining -= storage.fields.size();
-    json::Array path;
+    VariantIdentity::Tuple path;
     for (unsigned step : constructor.path)
       path.push_back(std::to_string(step));
     SmallVector<Type> types;
     for (const auto &field : storage.fields)
       types.push_back(field.type);
-    auto record =
-        product(context,
-                json::Array{"zkc.oracle.storage/0", toHex(result.entry, true),
-                            std::move(path), toHex(owner, true)},
-                types);
+    auto record = product(context,
+                          VariantIdentity::Tuple{
+                              "zkc.oracle.storage/0", toHex(result.entry, true),
+                              std::move(path), toHex(owner, true)},
+                          types);
     if (!record)
       return record.takeError();
     storage.record = *record;
@@ -218,7 +221,7 @@ Expected<Type> oracleReferenceType(pir::OracleKindAttr kind) {
   if (!kind ||
       failed(pir::OracleKindAttr::verify(
           [&]() { return emitError(UnknownLoc::get(kind.getContext())); },
-          kind.getIdentity(), kind.getArguments())))
+          kind.getIdentity().str(), kind.getArguments())))
     return error("oracle-storage-kind");
   if (!kind.getContext()->getLoadedDialect<data::DataDialect>())
     return error("oracle-storage-type");
@@ -235,12 +238,18 @@ Expected<Type> oracleReferenceType(pir::OracleKindAttr kind) {
   auto answer = encodeBoundType(kind.getAnswerType(), false);
   if (!answer)
     return answer.takeError();
+  auto dataSpelling = data->spelling();
+  auto querySpelling = query->spelling();
+  auto answerSpelling = answer->spelling();
+  if (dataSpelling.empty() || querySpelling.empty() || answerSpelling.empty())
+    return error("oracle-storage-type-limit");
   auto index = IntegerType::get(kind.getContext(), 64, IntegerType::Unsigned);
-  return product(kind.getContext(),
-                 json::Array{"zkc.oracle.reference/0", kind.getIdentity(),
-                             data->spelling(), query->spelling(),
-                             answer->spelling()},
-                 {index, index});
+  return product(
+      kind.getContext(),
+      VariantIdentity::Tuple{"zkc.oracle.reference/0", kind.getIdentity().str(),
+                             std::move(dataSpelling), std::move(querySpelling),
+                             std::move(answerSpelling)},
+      {index, index});
 }
 Expected<OracleAnchorStorage>
 planOracleAnchorStorage(ModuleOp prepared, StringRef entry,

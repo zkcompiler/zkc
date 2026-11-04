@@ -1,4 +1,5 @@
 #include "zkc/Contracts/Generic.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
 #include "llvm/Support/raw_ostream.h"
@@ -28,7 +29,7 @@ template <typename T> void refuse(Expected<T> value, StringRef expected) {
 }
 
 void constantKinds() {
-  auto variant = zkc::protocol::encodeVariant(
+  auto variant = zkc::test::encodeVariantFixture(
       {std::string(160, 'x'), {{"value", {"bool"}}}});
   require(bool(variant), "long Type fixture refused");
   std::string spelling = "fixed_vector<" + *variant + ",4>";
@@ -63,7 +64,7 @@ void constantKinds() {
     bad.scope.constants[0] = invalid;
     refuse(instantiate(bad, {}, {}), "generic-constant-type");
   }
-  auto largeVariant = zkc::protocol::encodeVariant(
+  auto largeVariant = zkc::test::encodeVariantFixture(
       {std::string(2100, 'x'), {{"value", {"bool"}}}});
   require(bool(largeVariant), "large variant fixture refused");
   auto tooLarge = "fixed_vector<" + *largeVariant + ",4>";

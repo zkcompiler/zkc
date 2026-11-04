@@ -38,11 +38,13 @@ public:
 
 private:
   friend struct detail::OriginalAccess;
+  struct PreparedNative;
   /// A canonical admission re-emits and keeps that emission's record; a
   /// prepared original keeps the record of the emission that printed it.
   static llvm::Expected<CheckedOriginal>
   admit(const ClosedEntry &, llvm::StringRef, llvm::StringRef, const Limits &,
-        bool requireCanonical, EmissionRecord prepared = {});
+        bool requireCanonical, EmissionRecord prepared = {},
+        std::unique_ptr<PreparedNative> = {});
   friend llvm::Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &,
                                                          const Limits &);
   struct Storage;

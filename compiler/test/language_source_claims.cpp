@@ -1228,7 +1228,8 @@ int main() {
               : mutation == 2 ? "component-claim-role"
                               : "component-claim-relation");
     }
-    auto declarations = (*baseline.publication.getAsArray())[10];
+    auto publication = take(zkc::protocol::publishSource(baseline));
+    auto declarations = (*publication.snapshot.getAsArray())[10];
     auto &records = *(*declarations.getAsArray())[0].getAsArray();
     (*records[0].getAsArray())[2] = false;
     cantFail(checkComponentDeclarations(declarations));
@@ -1405,8 +1406,6 @@ int main() {
           last.operation->replaceAllUsesWith(replacement);
           last.operation->erase();
           last.operation = replacement;
-          snapshot.descriptors.insert_or_assign(replacement.getOperation(),
-                                                json::Array{"bool.equal"});
         }
       }
       // Scanner controls are intentionally separate from whole-unit admission.

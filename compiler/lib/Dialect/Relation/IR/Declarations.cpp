@@ -1,5 +1,5 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
-#include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -85,18 +85,6 @@ bool sameSchema(DeclareOp a, DeclareOp b) {
       return false;
   return true;
 }
-bool relationData(Type type) {
-  if (auto variant = dyn_cast<data::VariantType>(type)) {
-    for (auto arm : variant.getAlternatives())
-      if (!all_of(arm.getPayload(), relationData))
-        return false;
-    return true;
-  }
-  auto application = cast<CatalogTypeInterface>(type).getCatalogApplication();
-  if (application->constructor == "sequence")
-    return relationData(cast<TypeAttr>(application->arguments[0]).getValue());
-  return protocol::logicalRelationAtom(application->constructor);
-}
 bool logicalInputs(DeclareOp declaration) {
   auto inputs = declaration.getSignature().getInputs();
   if (inputs.size() > 100000 || failed(verifyLogicalTypes(
@@ -108,7 +96,13 @@ bool logicalInputs(DeclareOp declaration) {
                                     },
                                     inputs)))
     return false;
-  return all_of(inputs, relationData);
+  unsigned remaining = 200000;
+  size_t bytes = 1024 * 1024;
+  bool limited = false;
+  return all_of(inputs, [&](Type type) {
+    auto facts = mathematical::nativeTypeFacts(type, remaining, bytes, limited);
+    return facts && facts->relation;
+  });
 }
 } // namespace
 Expected<json::Value> readStaticArguments(ArrayAttr arguments) {

@@ -55,6 +55,38 @@ struct Fact {
 };
 } // namespace
 
+Result<WordRange> transferWordRange(Work &work, WordOperation operation,
+                                    WordRange a, WordRange b) {
+  if (!work.charge())
+    return absent<WordRange>(Status::Capacity);
+  if (a.minimum > a.maximum || b.minimum > b.maximum)
+    return absent<WordRange>();
+  switch (operation) {
+  case WordOperation::WrappingAdd: {
+    uint64_t lower = a.minimum + b.minimum, upper = a.maximum + b.maximum;
+    bool lowerWraps = lower < a.minimum, upperWraps = upper < a.maximum;
+    return proven(lowerWraps == upperWraps ? WordRange{lower, upper}
+                                           : WordRange{});
+  }
+  case WordOperation::WrappingSubtract:
+    return proven((a.minimum < b.maximum) == (a.maximum < b.minimum)
+                      ? WordRange{a.minimum - b.maximum, a.maximum - b.minimum}
+                      : WordRange{});
+  case WordOperation::BitAnd:
+    if (a.minimum == a.maximum && b.minimum == b.maximum)
+      return proven(WordRange{a.minimum & b.minimum, a.minimum & b.minimum});
+    // AND is bounded by either operand, but is not monotone on an interval:
+    // [8,16] & 7 contains 7 even though both endpoint samples are zero.
+    return proven(WordRange{0, std::min(a.maximum, b.maximum)});
+  case WordOperation::ShiftRight:
+    if (b.minimum >= 64)
+      return proven(WordRange{0, 0});
+    return proven(WordRange{b.maximum >= 64 ? 0 : a.minimum >> b.maximum,
+                            a.maximum >> b.minimum});
+  }
+  return absent<WordRange>();
+}
+
 Work::Work(uint64_t &remaining)
     : Work([&remaining](uint64_t amount) {
         if (amount > remaining) {

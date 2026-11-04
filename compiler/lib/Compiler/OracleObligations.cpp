@@ -5,6 +5,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/TypeSwitch.h"
+#include <deque>
 #include <optional>
 using namespace llvm;
 namespace zkc::protocol {
@@ -31,7 +32,7 @@ struct Deriver {
               unsigned sources = 0, unsigned inputs = 0, A *queries = nullptr) {
     if (!depth)
       return error("oracle-obligations-limit");
-    std::vector<std::optional<unsigned>> parameters;
+    std::deque<std::optional<unsigned>> parameters;
     for (unsigned i = 0; i < inputs; ++i)
       parameters.push_back(i);
     for (unsigned i = 0; i < body.instructions.size(); ++i) {
@@ -80,6 +81,8 @@ struct Deriver {
     return Error::success();
   }
   Expected<J> run(const SourceView &source) {
+    if (!json::isUTF8(source.entry))
+      return error("oracle-obligations-source");
     for (unsigned i = 0; i < source.definitions.size(); ++i) {
       const auto &definition = source.definitions[i];
       if (!definition.hasBody)

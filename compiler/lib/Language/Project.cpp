@@ -669,17 +669,10 @@ Error validateClosedData(const ClosedEntry &entry, const Limits &limits,
           budget.remaining =
               std::min<uint64_t>(budget.remaining, limits.work - work.used);
           auto before = budget.remaining;
-          auto native =
-              protocol::parseBoundType(*leaf.data(), false, 0, &budget);
-          if (!native) {
-            consumeError(native.takeError());
-            return detail::failure(
-                budget.remaining ? "source.relation" : "source.limit",
-                "relation native type admission failed", port.span);
-          }
-          auto result = protocol::logicalRelationData(*native, budget);
-          if (auto error = work.charge(before - budget.remaining + leaf.cost(),
-                                       port.span))
+          auto result = protocol::logicalRelationData(*leaf.data(), budget);
+          if (auto error = work.charge(before - budget.remaining, port.span))
+            return error;
+          if (auto error = work.charge(leaf.cost(), port.span))
             return error;
           if (result == protocol::RelationData::Limit)
             return detail::failure("source.limit",

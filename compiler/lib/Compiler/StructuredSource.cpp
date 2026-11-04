@@ -1,5 +1,6 @@
 #include "zkc/Compiler/StructuredSource.h"
 #include "ComponentContracts.h"
+#include "SourceCoordinates.h"
 #include "SourceView.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/AsmParser/AsmParserState.h"
@@ -508,15 +509,12 @@ class Exporter {
   llvm::DenseMap<Operation *, SmallVector<Operation *>> dependencies;
   unsigned instructions = 0;
   UsedIdentities used;
-  SourceExecutionClosure execution;
+  const SourceExecutionClosure &execution;
   // Private declaration identities belong to this wire format, never native
   // admission. Multiple actual compute occurrences can name one declaration.
   std::vector<std::pair<std::string, Operation *>> computationOrigins;
   llvm::DenseMap<Operation *, std::string> computationNames;
-  const AsmParserState *parser;
-  const SourceMgr *sourceManager;
-  const llvm::DenseMap<Operation *, Operation *> *writtenOperations;
-  SourceView &view;
+  const SourceView &view;
   std::vector<StructuredSourceAssociation> &associations;
   uint64_t associationBytes = 0;
   StructuredSourceProfile profile;
@@ -538,17 +536,8 @@ class Exporter {
       return error("structured-source-limit");
     associationBytes += size;
     std::optional<StructuredSourceTextRange> original;
-    auto *sourceOp = writtenOperations ? writtenOperations->lookup(&op) : &op;
-    if (const auto *written =
-            parser && sourceOp ? parser->getOpDef(sourceOp) : nullptr) {
-      auto buffer =
-          sourceManager->getMemoryBuffer(sourceManager->getMainFileID());
-      const char *begin = buffer->getBufferStart();
-      auto [line, column] = sourceManager->getLineAndColumn(written->loc.Start);
-      original = StructuredSourceTextRange{
-          unsigned(written->loc.Start.getPointer() - begin),
-          unsigned(written->loc.End.getPointer() - begin), line, column};
-    }
+    if (auto found = view.written.find(&op); found != view.written.end())
+      original = found->second;
     associations.push_back({std::vector<unsigned>(row.begin(), row.end()),
                             op.getName().getStringRef().str(), derivation,
                             original});
@@ -772,18 +761,16 @@ class Exporter {
     auto arguments = function.getArguments().drop_front();
     if (arguments.size() > signatureLimit || forwarded > arguments.size())
       return error("structured-source-limit");
-    llvm::DenseMap<Value, unsigned> refs;
-    for (auto [i, argument] : llvm::enumerate(arguments))
-      refs[argument] = i;
+    SourceCoordinates refs(arguments);
     auto indices = [&](ValueRange values) -> Expected<json::Array> {
       json::Array result;
       for (Value value : values) {
-        auto ref = refs.find(value);
-        if (ref == refs.end())
+        auto ref = refs.lookup(value);
+        if (!ref)
           return error("structured-source-reference");
-        if (ref->second > instructionLimit)
+        if (*ref > instructionLimit)
           return error("structured-source-limit");
-        result.push_back(ref->second);
+        result.push_back(*ref);
       }
       return result;
     };
@@ -836,7 +823,6 @@ class Exporter {
       auto desc = scopedDescriptor(step);
       if (!desc)
         return desc.takeError();
-      view.descriptors.try_emplace(&op, *desc);
       auto occurrence = site(op);
       if (!occurrence)
         return occurrence.takeError();
@@ -873,10 +859,7 @@ class Exporter {
       encoded.push_back(json::Array{std::move(*desc), std::move(*args),
                                     std::move(*results), std::move(regions),
                                     *occurrence});
-      for (auto &entry : refs)
-        entry.second += step.outputs.size();
-      for (auto [i, result] : llvm::enumerate(step.outputs))
-        refs[result] = i;
+      refs.prepend(step.outputs);
     }
     return error("structured-source-region");
   }
@@ -1299,18 +1282,16 @@ class Exporter {
     Block &body = region.front();
     if (body.getNumArguments() > signatureLimit)
       return error("structured-source-limit");
-    llvm::DenseMap<Value, unsigned> refs;
-    for (auto [i, arg] : llvm::enumerate(body.getArguments()))
-      refs[arg] = i;
+    SourceCoordinates refs(body.getArguments());
     auto operands = [&](Operation &op) -> Expected<json::Array> {
       json::Array result;
       for (Value value : op.getOperands()) {
-        auto found = refs.find(value);
-        if (found == refs.end())
+        auto ref = refs.lookup(value);
+        if (!ref)
           return error("structured-source-reference");
-        if (found->second > instructionLimit)
+        if (*ref > instructionLimit)
           return error("structured-source-limit");
-        result.push_back(found->second);
+        result.push_back(*ref);
       }
       return result;
     };
@@ -1352,7 +1333,6 @@ class Exporter {
       auto desc = descriptor(op, owner);
       if (!desc)
         return desc.takeError();
-      view.descriptors.try_emplace(&op, *desc);
       StringRef occurrence;
       if (op.hasAttr("site") ||
           isa<protocol_ir::ExchangeOp, protocol_ir::QueryOp,
@@ -1420,12 +1400,7 @@ class Exporter {
       encoded.push_back(json::Array{std::move(*desc), std::move(*args),
                                     std::move(*results), std::move(regions),
                                     occurrence});
-      // Prepend the complete result list once. Incremental single-result
-      // insertion would reverse a multi-result operation's coordinates.
-      for (auto &entry : refs)
-        entry.second += op.getNumResults();
-      for (auto [i, result] : llvm::enumerate(op.getResults()))
-        refs[result] = i;
+      refs.prepend(op.getResults());
     }
     return error("structured-source-region");
   }
@@ -1445,7 +1420,7 @@ class Exporter {
         return error("structured-source-domain");
       return argument.getArgNumber();
     };
-    llvm::DenseMap<Value, unsigned> refs;
+    SourceCoordinates coordinates({});
     json::Array constructors;
     for (Operation &constructor : body.without_terminator()) {
       if (++instructions > instructionLimit)
@@ -1493,10 +1468,10 @@ class Exporter {
           return std::move(e);
         json::Array operands;
         for (Value value : constructor.getOperands()) {
-          auto found = refs.find(value);
-          if (found == refs.end())
+          auto coordinate = coordinates.lookup(value);
+          if (!coordinate)
             return error("structured-source-domain");
-          operands.push_back(found->second);
+          operands.push_back(*coordinate);
         }
         desc =
             json::Array{isa<data::DomainZipOp>(constructor) ? "zip" : "product",
@@ -1509,23 +1484,21 @@ class Exporter {
                              constructor))
         return std::move(e);
       constructors.push_back(std::move(desc));
-      for (auto &entry : refs)
-        ++entry.second;
-      refs[constructor.getResult(0)] = 0;
+      coordinates.prepend(constructor.getResults());
     }
     Operation &yield = body.back();
     if (auto e = attributes(yield, {}))
       return std::move(e);
     if (auto e = associate(child(path, {4}), yield))
       return std::move(e);
-    auto returned = refs.find(yield.getOperand(0));
-    if (returned == refs.end())
+    auto returned = coordinates.lookup(yield.getOperand(0));
+    if (!returned)
       return error("structured-source-domain");
     auto inputs = sorts(signature(*op).getInputs());
     if (!inputs)
       return inputs.takeError();
     return json::Array{"domain", op.getSymName(), std::move(*inputs),
-                       std::move(constructors), returned->second};
+                       std::move(constructors), *returned};
   }
 
   // Whole-unit bodies have already passed ordinary instruction admission and
@@ -1878,22 +1851,42 @@ class Exporter {
   }
 
 public:
-  Exporter(protocol_ir::ProtocolModuleOp unit,
-           protocol_ir::MathematicalOp selected, const AsmParserState *parser,
-           const SourceMgr *sourceManager,
-           const llvm::DenseMap<Operation *, Operation *> *writtenOperations,
-           SourceView &view, StructuredSourceProfile profile)
-      : unit(unit), selected(selected), symbols(unit), parser(parser),
-        sourceManager(sourceManager), writtenOperations(writtenOperations),
-        view(view), associations(view.associations), profile(profile) {}
+  Exporter(const SourceView &view,
+           std::vector<StructuredSourceAssociation> &associations)
+      : unit(cast<protocol_ir::ProtocolModuleOp>(
+            view.native.get().getBody()->front())),
+        selected(cast<protocol_ir::MathematicalOp>(
+            SymbolTable::lookupSymbolIn(unit, view.entry))),
+        symbols(unit), execution(view.execution), view(view),
+        associations(associations), profile(view.profile) {}
 
-  Expected<json::Value> run(StringRef bytes) {
+  Expected<json::Value> operation(Operation &op) {
+    auto *owner = op.getParentOp();
+    while (owner && owner->getParentOp() != unit.getOperation())
+      owner = owner->getParentOp();
+    if (!owner)
+      return error("structured-source-operation");
+    definition = owner;
+    if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(owner))
+      roles = protocol.getRoles();
+    if (auto function = dyn_cast<func::FuncOp>(owner);
+        function && isScopedExecutionFunction(function)) {
+      if (isa<exec::ComputeOp, exec::FoldOp, exec::CollectOp>(op))
+        if (auto e = indexComputations())
+          return std::move(e);
+      auto found = execution.bodies.find(function.getSymName().str());
+      if (found != execution.bodies.end())
+        for (const auto &step : found->second)
+          if (step.operation == &op)
+            return scopedDescriptor(step);
+      return error("structured-source-operation");
+    }
+    return descriptor(op, kind(*owner));
+  }
+
+  Expected<json::Value> run() {
     if (auto e = attributes(*unit))
       return std::move(e);
-    auto admitted = readSourceExecutionClosure(unit);
-    if (!admitted)
-      return admitted.takeError();
-    execution = std::move(*admitted);
     if (auto e = indexComputations())
       return std::move(e);
     json::Array domains, relations, bindings, definitions, contracts;
@@ -1984,13 +1977,6 @@ public:
             declaration ? oracle(declaration, path) : function(op, path);
         if (!encoded)
           return encoded.takeError();
-        auto native = buildSourceDefinition(
-            op, SymbolTable::getSymbolName(&op).getValue(), kind(op),
-            execution);
-        if (!native)
-          return native.takeError();
-        view.names.emplace(native->name, view.definitions.size());
-        view.definitions.push_back(std::move(*native));
         definitions.push_back(std::move(*encoded));
         if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(op)) {
           if (protocol.getContractsAttr() &&
@@ -2015,16 +2001,6 @@ public:
       auto encoded = computation(name, *origin);
       if (!encoded)
         return encoded.takeError();
-      auto native =
-          buildSourceDefinition(*origin, name,
-                                isa<exec::ComputeOp>(origin)   ? "realize"
-                                : isa<exec::CollectOp>(origin) ? "collect"
-                                                               : "finite",
-                                execution);
-      if (!native)
-        return native.takeError();
-      view.names.emplace(native->name, view.definitions.size());
-      view.definitions.push_back(std::move(*native));
       definitions.push_back(std::move(*encoded));
     }
     if (auto e = closure())
@@ -2082,10 +2058,9 @@ public:
             return std::move(e);
       declarations = std::move(*parsed);
     }
-    auto digest = SHA256::hash(arrayRefFromStringRef(bytes));
     return json::Array{"zkc.structured-source/0",
                        "original",
-                       "sha256:" + toHex(digest, true),
+                       view.identity,
                        selected.getSymName(),
                        std::move(domains),
                        std::move(relations),
@@ -2141,83 +2116,39 @@ json::Value exportCatalogueRows(const llvm::StringSet<> &domains,
   return json::Array{std::move(nominals), std::move(serviceRows)};
 }
 
-Expected<SourceView> readSourceView(StringRef bytes, StringRef name,
-                                    MLIRContext &context,
-                                    StructuredSourceProfile profile) {
-  bool bytecode = isBytecode(MemoryBufferRef(bytes, "original"));
-  if (bytes.size() > 16 * 1024 * 1024 ||
-      (!bytecode && !mlirNestingWithinLimit(bytes)))
-    return error("structured-source-limit");
-  SourceMgr manager;
-  manager.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(bytes, "original"),
-                             SMLoc());
-  if (bytecode) {
-    // The const SourceMgr overload copies any retained resources into context
-    // ownership. No operation range is invented from bytecode loc attributes.
-    auto original =
-        parseSourceFile<ModuleOp>(manager, ParserConfig(&context, false));
-    if (!original)
-      return error("structured-source-original");
-    return readSourceView(std::move(original), bytes, name, nullptr, nullptr,
-                          nullptr, profile);
-  }
-  AsmParserState parser;
-  Block parsed;
-  if (failed(parseAsmSourceFile(manager, &parsed, ParserConfig(&context, false),
-                                &parser)))
-    return error("structured-source-original");
-  auto original =
-      mlir::detail::constructContainerOpForParserIfNecessary<ModuleOp>(
-          &parsed, &context, FileLineColLoc::get(&context, "original", 1, 1));
-  return readSourceView(std::move(original), bytes, name, &parser, &manager,
-                        nullptr, profile);
-}
-Expected<SourceView> readSourceView(
-    OwningOpRef<ModuleOp> original, StringRef bytes, StringRef name,
-    const AsmParserState *parser, const SourceMgr *manager,
-    const llvm::DenseMap<Operation *, Operation *> *writtenOperations,
-    StructuredSourceProfile profile) {
-  if (!original || failed(zkc::admitStage(*original)))
-    return error("structured-source-original");
-  // The original is one unadorned module.
-  if (!(*original)->getAttrs().empty())
-    return error("structured-source-attribute",
-                 (*original)->getAttrs().front().getName().getValue());
-  if (!llvm::hasSingleElement(original->getBody()->getOperations()))
-    return error("structured-source-module");
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(original->getBody()->front());
-  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
-    return error("structured-source-profile");
-  SymbolTable symbols(unit);
-  auto selected = symbols.lookup<protocol_ir::MathematicalOp>(name);
-  if (!selected)
-    return error("structured-source-symbol");
-  SourceView result;
-  result.entry = name.str();
-  result.identity =
-      "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-  auto exported = Exporter(unit, selected, parser, manager, writtenOperations,
-                           result, profile)
-                      .run(bytes);
+Expected<SourcePublication> publishSource(const SourceView &view) {
+  SourcePublication publication;
+  auto exported = Exporter(view, publication.associations).run();
   if (!exported)
     return exported.takeError();
-  if (!boundedSourceWire(*exported, profile))
+  if (!boundedSourceWire(*exported, view.profile))
     return error("structured-source-limit");
-  // Own framing and its byte budget together: callers emit these exact bytes.
   if (!jsonWithinByteLimit(*exported, 1024 * 1024 - 1))
     return error("structured-source-limit", "publication exceeds 1 MiB");
-  result.publication = std::move(*exported);
-  result.native = std::move(original);
-  return result;
+  ownJsonStrings(*exported);
+  publication.snapshot = std::move(*exported);
+  return publication;
 }
+Expected<json::Value> publishSourceDescriptor(const SourceView &view,
+                                              Operation &operation) {
+  std::vector<StructuredSourceAssociation> unused;
+  auto descriptor = Exporter(view, unused).operation(operation);
+  if (!descriptor)
+    return descriptor.takeError();
+  ownJsonStrings(*descriptor);
+  return std::move(*descriptor);
+}
+
 Expected<StructuredSource>
 exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context,
                        StructuredSourceProfile profile) {
   auto view = readSourceView(bytes, name, context, profile);
   if (!view)
     return view.takeError();
-  return StructuredSource{printJson(view->publication) + '\n',
-                          std::move(view->associations)};
+  auto publication = publishSource(*view);
+  if (!publication)
+    return publication.takeError();
+  return StructuredSource{printJson(publication->snapshot) + '\n',
+                          std::move(publication->associations)};
 }
 } // namespace zkc::protocol

@@ -83,7 +83,7 @@ class Reader {
       if (!value)
         return value.takeError();
       auto spelling = value->spelling();
-      if (!bytes(spelling.size()))
+      if (spelling.empty() || !bytes(spelling.size()))
         return fail("Host native leaves exceed export bytes");
       leaves.push_back(std::move(spelling));
     }
@@ -139,7 +139,8 @@ class Reader {
         toHex(SHA256::hash(arrayRefFromStringRef(layout.identity.key)), true);
     layout.permissions = {true, true};
     layout.constructible = true;
-    layout.leaves = {type.isSignlessInteger(1) ? "bool" : "index"};
+    layout.leaves = {protocol::BoundType{
+        type.isSignlessInteger(1) ? "bool" : "index", {}, {}}};
     return encodeEntrySchema(layout);
   }
   Expected<json::Array> definitions(mlir::ValueRange values, Environment &env) {

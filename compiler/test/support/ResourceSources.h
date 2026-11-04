@@ -4,6 +4,7 @@
 // tests. The builder supplies CFG mechanics; the tests supply all programs.
 #include "NativeCases.h"
 #include "VariantFixture.h"
+#include "VariantSpelling.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Contracts/Variant.h"
@@ -335,8 +336,8 @@ inline void simple(Source &s, StringRef name, bool outside) {
         });
     result = results[name == "unknown-wrong" ? 1 : 0];
   } else if (name == "box") {
-    auto description =
-        protocol::encodeVariant({"Box", {{"box", {"rng:bls12-381.fr"}}}});
+    auto description = zkc::test::encodeVariantFixture(
+        {"Box", {{"box", {"rng:bls12-381.fr"}}}});
     require(bool(description), "box descriptor refused");
     auto type = zkc::test::variantType(&s.context, *description);
     auto box = control.invoke(

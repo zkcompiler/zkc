@@ -14,11 +14,18 @@ OracleKindAttr getOracleFamilyKind(Type type) {
 }
 Type getOracleFamilyDataType(Type type) {
   auto kind = getOracleFamilyKind(type);
-  if (!kind || !kind.getDataType())
+  auto data = kind ? kind.getDataType() : Type{};
+  if (!data)
     return {};
   if (isa<OracleSequenceType>(type))
-    return data::SequenceType::get(type.getContext(), kind.getDataType());
-  return kind.getDataType();
+    return data::SequenceType::getChecked(
+        [&] {
+          auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
+          diagnostic.abandon();
+          return diagnostic;
+        },
+        type.getContext(), data);
+  return data;
 }
 LogicalResult OracleSendOp::verify() {
   auto kind = getHandle().getType().getKind();

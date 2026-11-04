@@ -2,6 +2,7 @@
 #include "mlir/IR/AttrTypeSubElements.h"
 #include "support/NativeCases.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -262,7 +263,7 @@ int main() {
         kind.str() + ":" + oracle,
         zkc::commitment::VectorObjectType::get(&context, oracle, kind));
   cases.run("variant native carrier and physical wrapper", [&] {
-    auto descriptor = encodeVariant(
+    auto descriptor = zkc::test::encodeVariantFixture(
         {"Result", {{"Value", {"bool"}}, {"Guard", {"resource_unit:Guard"}}}});
     require(bool(descriptor), "variant fixture refused");
     auto bound = take(parseBoundType(*descriptor, false));
@@ -372,7 +373,8 @@ int main() {
   cases.run("loaded Data namespace without registered variant", [&] {
     MLIRContext fresh;
     fresh.loadDialect<EmptyDataDialect>();
-    auto spelling = protocol::encodeVariant({"Choice", {{"empty", {}}}});
+    auto spelling =
+        zkc::test::encodeVariantFixture({"Choice", {{"empty", {}}}});
     require(bool(spelling), "invalid boundary fixture");
     require(!decodeBoundType(&fresh, take(parseBoundType(*spelling, false))),
             "namespace without registered aggregate accepted");
@@ -576,9 +578,9 @@ int main() {
       "structural variants preserve complete identity and traversal", [&] {
         auto field = algebra::FieldType::get(&context, "bls12-381.fr");
         auto other = algebra::FieldType::get(&context, "koala-bear");
-        auto name = data::importVariantIdentity(
+        auto name = zkc::test::importVariantIdentityFixture(
             &context, json::Array{"Claim", "phantom-A"});
-        auto different = data::importVariantIdentity(
+        auto different = zkc::test::importVariantIdentityFixture(
             &context, json::Array{"Claim", "phantom-B"});
         auto arm = data::AlternativeAttr::get(
             &context, StringAttr::get(&context, "present"),
@@ -614,9 +616,9 @@ int main() {
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
     auto emit = [&]() { return mlir::emitError(UnknownLoc::get(&context)); };
-    require(!data::importVariantIdentity(&context, ""),
+    require(!zkc::test::importVariantIdentityFixture(&context, ""),
             "empty nominal identity atom admitted");
-    auto name = data::importVariantIdentity(&context, "Claim");
+    auto name = zkc::test::importVariantIdentityFixture(&context, "Claim");
     auto arm = data::AlternativeAttr::get(
         &context, StringAttr::get(&context, "present"), {});
     require(
@@ -747,12 +749,14 @@ int main() {
   });
   cases.run(
       "structural export freezes nested variant bytes and every layout", [&] {
-        auto inner = *encodeVariant({json::Array{"Inner", "phantom"},
-                                     {{"present", {"bool"}}, {"none", {}}}});
-        auto outer = *encodeVariant({"Outer",
-                                     {{"none", {}},
-                                      {"active", {inner}},
-                                      {"inactive", {"field:bls12-381.fr"}}}});
+        auto inner = *zkc::test::encodeVariantFixture(
+            {json::Array{"Inner", "phantom"},
+             {{"present", {"bool"}}, {"none", {}}}});
+        auto outer = *zkc::test::encodeVariantFixture(
+            {"Outer",
+             {{"none", {}},
+              {"active", {inner}},
+              {"inactive", {"field:bls12-381.fr"}}}});
         auto bound = take(parseBoundType(outer, false));
         auto logical = decodeBoundType(&context, bound);
         require(
@@ -787,9 +791,40 @@ int main() {
                               "binding-representation");
 #endif
       });
+  cases.run("structured decoding checks combined native metadata depth", [&] {
+    protocol::VariantIdentity identity("Deep");
+    for (unsigned i = 0; i < 20; ++i)
+      identity = protocol::VariantIdentity::Tuple{std::move(identity)};
+    auto type =
+        take(protocol::variantType({std::move(identity), {{"none", {}}}}));
+    for (unsigned i = 0; i < 24; ++i)
+      type = {
+          "sequence", {}, {}, {TypeArgument::typeArgument(std::move(type))}};
+    if (auto e = protocol::checkBoundType(type, false))
+      throw std::runtime_error(toString(std::move(e)));
+    ScopedDiagnosticHandler silence(
+        &context, [](Diagnostic &) { return mlir::success(); });
+    require(!decodeBoundType(&context, type),
+            "structured decoder returned excessive native metadata");
+  });
+  cases.run("inline variants retain independent expansion admission", [&] {
+    protocol::VariantIdentity identity = protocol::VariantIdentity::Tuple(
+        500, protocol::VariantIdentity(std::string(1000, 'a')));
+    for (unsigned i = 0; i < 5; ++i)
+      identity = protocol::VariantIdentity::Tuple{std::move(identity)};
+    protocol::VariantDescriptor inner{std::move(identity), {{"none", {}}}};
+    require(!encodeVariant(inner),
+            "oversized standalone expansion was admitted");
+    auto child = take(protocol::variantType(inner));
+    protocol::VariantDescriptor outer{std::string(4000, 'b'),
+                                      {{"nested", {child}}}};
+    require(!encodeVariant(outer),
+            "outer descriptor laundered an invalid standalone expansion");
+  });
   cases.run("native formation retains its wider variant shape allowance", [&] {
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
-    auto identity = data::importVariantIdentity(&context, "BoundaryWidth");
+    auto identity =
+        zkc::test::importVariantIdentityFixture(&context, "BoundaryWidth");
     auto boolean = IntegerType::get(&context, 1);
     // Formation admits 512 alternatives; the portable spelling admits 64.
     for (unsigned count : {64u, 65u, 512u, 513u}) {
@@ -849,8 +884,8 @@ int main() {
       "a formed large variant cannot bypass a nonvariant spelling cap", [&] {
         auto arm = data::AlternativeAttr::get(
             &context, StringAttr::get(&context, "none"), {});
-        auto identity =
-            data::importVariantIdentity(&context, std::string(2048, 'a'));
+        auto identity = zkc::test::importVariantIdentityFixture(
+            &context, std::string(2048, 'a'));
         auto native = data::VariantType::get(&context, identity, {arm});
         auto bound = take(encodeBoundType(native, false));
         require(bound.spelling().size() > 4096,
@@ -864,7 +899,8 @@ int main() {
         &context, StringAttr::get(&context, "none"), {});
     for (StringRef name :
          {StringRef("line\nbreak"), StringRef("caf\xc3\xa9")}) {
-      auto identity = data::importVariantIdentity(&context, name.str());
+      auto identity =
+          zkc::test::importVariantIdentityFixture(&context, name.str());
       auto native = data::VariantType::get(&context, identity, {arm});
       auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
       require(succeeded(verifyLogicalType(emit, native)),
@@ -876,14 +912,14 @@ int main() {
     json::Value nominal = json::Array{};
     for (unsigned i = 0; i < 5000; ++i)
       nominal.getAsArray()->push_back(std::string(1024, 'a'));
-    auto identity = data::importVariantIdentity(&context, nominal);
+    auto identity = zkc::test::importVariantIdentityFixture(&context, nominal);
     auto arm = data::AlternativeAttr::get(
         &context, StringAttr::get(&context, "none"), {});
     auto native = data::VariantType::get(&context, identity, {arm});
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
     require(succeeded(verifyLogicalType(emit, native)),
             "table amplification fixture is not natively formed");
-    require(!encodeVariant({nominal, {{"none", {}}}}),
+    require(!zkc::test::encodeVariantFixture({nominal, {{"none", {}}}}),
             "independent byte reader admitted the amplification fixture");
     refuses(encodeBoundType(native, false), "variant-type");
   });

@@ -50,8 +50,9 @@ bool layout(const OracleVerificationContext &context,
       answer.getAlternatives().size() != model.arms.size())
     return false;
   auto answerIdentity = data::importVariantIdentity(
-      ctx, json::Array{"zkc.oracle.checked-answer/0",
-                       data::exportVariantIdentity(opened.getIdentity())});
+      ctx, VariantIdentity::Tuple{
+               "zkc.oracle.checked-answer/0",
+               data::exportVariantIdentity(opened.getIdentity())});
   if (!answerIdentity || answer.getIdentity() != answerIdentity)
     return false;
   auto signature = [&](func::FuncOp helper) -> FunctionType {
@@ -104,8 +105,9 @@ bool layout(const OracleVerificationContext &context,
       return false;
   }
   auto identity = data::importVariantIdentity(
-      ctx, json::Array{"zkc.oracle.physical-query-key/0",
-                       data::exportVariantIdentity(request.getIdentity())});
+      ctx, VariantIdentity::Tuple{
+               "zkc.oracle.physical-query-key/0",
+               data::exportVariantIdentity(request.getIdentity())});
   if (!identity)
     return false;
   auto alternative = data::AlternativeAttr::get(

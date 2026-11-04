@@ -5,11 +5,13 @@
 #include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
+#include "llvm/ADT/StringExtras.h"
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -748,6 +750,106 @@ module { "protocol.module"() ({
                                   "oracle-controller-body"),
                   "unexpected controller refusal");
         });
+  cases.run(
+      "independent controller refuses an oversized derived continuation", [&] {
+        std::string text = R"mlir(
+#K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
+!H = !protocol.oracle<#K>
+!D = !data.indices
+module { "protocol.module"() ({
+ relation.declare @admissible {kind="external",key="test/wide-controller",revision="0",signature=(!D)->i1,purposes=["witness"]}
+ "protocol.oracle"() ({ ^entry(%a:!H,%position:ui64):
+)mlir";
+        for (unsigned i = 0; i < 510; ++i)
+          text += "%q" + std::to_string(i) +
+                  " = \"protocol.oracle_query\"(%a,%position) {site=\"query" +
+                  std::to_string(i) + "\"} : (!H,ui64)->ui64\n";
+        text += R"mlir(
+  "protocol.oracle_yield"(%q0) : (ui64)->()
+ }) {sym_name="wide",function_type=(!H,ui64)->ui64,kind=#K,shape_arguments={},shape_bounds={},admissibility=@admissible} : ()->()
+ "protocol.func"() ({ ^entry(%data:!D,%rows:ui64):
+  %a = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="table",shape_names=["rows"],shape_bounds={}} : (!D,ui64)->!H
+  %virtual = "protocol.oracle_virtual"(%a) {callee=@wide,holder="P",receivers=["V"]} : (!H)->!H
+  "protocol.return"() : ()->()
+ }) {sym_name="main",function_type=(!D,ui64)->(),roles=["P","V"],input_roles=[["P"],["P","V"]],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+        auto original = parse(context, text);
+        auto plan = take(planOracleAnchorStorage(
+            *original, "main", [](const auto &) -> Expected<std::string> {
+              return std::string();
+            }));
+        auto candidate = fresh(context);
+        OracleQueryController model;
+        model.role = "V";
+        model.capacity = {510, 511};
+        auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
+        model.kinds = {plan.constructors.back().kind};
+        model.answers = {data::SequenceType::get(&context, index)};
+        model.state = {
+            index}; // A forged small state cannot authorize derived width.
+        auto unit = cast<pir::ProtocolModuleOp>(original->getBody()->front());
+        auto definition = cast<pir::OracleDefinitionOp>(
+            SymbolTable::lookupSymbolIn(unit, "wide"));
+        OracleVirtualFunctionWork work;
+        for (unsigned i = 0; i < plan.constructors.size(); ++i) {
+          const auto &anchor = plan.constructors[i];
+          unsigned role =
+              find_if(anchor.roles,
+                      [](const auto &role) { return role.role == "V"; }) -
+              anchor.roles.begin();
+          OracleQueryControllerConstructor item{
+              i,
+              role,
+              0,
+              0,
+              take(emitOracleAnchorLookup(*candidate, plan, i, role)),
+              {}};
+          model.stores.push_back(anchor.roles[role].sequence);
+          if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual) {
+            item.functions =
+                take(emitOracleVirtualFunctions(*candidate, definition, work));
+            require(item.functions.queries.size() == 510,
+                    "wide query inventory was truncated");
+            for (unsigned query = 0; query < 510; ++query) {
+              Type record, sequence;
+              if (query < 509) {
+                auto nominal = data::importVariantIdentity(
+                    &context,
+                    VariantIdentity::Tuple{
+                        "zkc.oracle.continuation/0", toHex(plan.entry, true),
+                        toHex(model.role, true), std::to_string(i),
+                        std::to_string(query)});
+                auto arm = data::AlternativeAttr::get(
+                    &context, StringAttr::get(&context, "Record"),
+                    SmallVector<Type>(4 + query, index));
+                record = data::VariantType::get(&context, nominal, {arm});
+                sequence = data::SequenceType::get(&context, record);
+              } else {
+                // The checker must refuse before comparing this last forged
+                // frame.
+                record = model.continuations.back().record;
+                sequence = model.continuations.back().sequence;
+              }
+              model.continuations.push_back({i, query, record, sequence,
+                                             std::vector<unsigned>(query, 0)});
+            }
+          }
+          model.constructors.push_back(std::move(item));
+        }
+        require(succeeded(zkc::admitStage(*candidate)),
+                "wide controller helper candidate was not admitted: " +
+                    diagnostics);
+        diagnostics.clear();
+        auto refusal = checkOracleQueryController(*candidate, *original, plan,
+                                                  "V", model.kinds.front(),
+                                                  model.capacity, model);
+        require(bool(refusal) && namesIdentifier(toString(std::move(refusal)),
+                                                 "oracle-controller-body"),
+                "oversized derived continuation was not refused");
+        require(!diagnostics.empty(),
+                "controller refused before checking the derived native type");
+      });
   cases.run(
       "controller generation refuses unsupported capacity and malformed inputs",
       [&] {

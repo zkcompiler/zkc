@@ -42,15 +42,16 @@ struct OracleLayout {
 /// string.
 class LayoutLeaf {
 public:
-  LayoutLeaf(std::string data) : value(std::move(data)) {}
-  LayoutLeaf(const char *data) : value(std::string(data)) {}
+  LayoutLeaf(protocol::BoundType data) : value(std::move(data)) {}
   LayoutLeaf(PolynomialLayout polynomial) : value(std::move(polynomial)) {}
   LayoutLeaf(QuotientLayout quotient) : value(quotient) {}
   LayoutLeaf(OracleLayout oracle) : value(std::move(oracle)) {}
   const OracleLayout *oracle() const {
     return std::get_if<OracleLayout>(&value);
   }
-  const std::string *data() const { return std::get_if<std::string>(&value); }
+  const protocol::BoundType *data() const {
+    return std::get_if<protocol::BoundType>(&value);
+  }
   const PolynomialLayout *polynomial() const {
     return std::get_if<PolynomialLayout>(&value);
   }
@@ -58,15 +59,18 @@ public:
     return std::get_if<QuotientLayout>(&value);
   }
   uint64_t cost() const {
-    if (const auto *logical = oracle())
-      return logical->kind.signature.answer.spelling().size() + 8;
-    return data()         ? data()->size() + 1
+    if (const auto *logical = oracle()) {
+      auto work = protocol::boundTypeWork(logical->kind.signature.answer);
+      return work > UINT64_MAX - 8 ? UINT64_MAX : work + 8;
+    }
+    return data()         ? protocol::boundTypeWork(*data())
            : polynomial() ? polynomial()->field.size() + 2
                           : 3;
   }
 
 private:
-  std::variant<std::string, PolynomialLayout, QuotientLayout, OracleLayout>
+  std::variant<protocol::BoundType, PolynomialLayout, QuotientLayout,
+               OracleLayout>
       value;
 };
 struct Layout;

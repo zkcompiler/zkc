@@ -325,7 +325,10 @@ static Expected<json::Value> correspondenceData(const CheckedOriginal &original,
   auto structured = detail::OriginalAccess::read(original);
   if (!structured)
     return structured.takeError();
-  auto &snapshot = structured->publication;
+  auto publication = protocol::publishSource(*structured);
+  if (!publication)
+    return publication.takeError();
+  auto &snapshot = publication->snapshot;
   auto instances = sourceInstancesData(entry, limits);
   if (!instances)
     return instances.takeError();
@@ -446,7 +449,7 @@ static Expected<json::Value> correspondenceData(const CheckedOriginal &original,
                                        {"nodes", std::move((*nodes)[i])}});
   }
   auto rows =
-      Associations(original, limits).run(*ast, structured->associations);
+      Associations(original, limits).run(*ast, publication->associations);
   if (!rows)
     return rows.takeError();
   json::Value document =

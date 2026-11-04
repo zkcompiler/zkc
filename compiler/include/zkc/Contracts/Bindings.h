@@ -4,10 +4,12 @@
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Generic.h"
 #include <memory>
+#include <variant>
 
 namespace zkc::protocol {
 
 struct TypeArgument;
+struct VariantDescriptor;
 class ImplementationCatalog;
 /// Closed nominal type. Atomic constructors retain the compact identity slot;
 /// an applied constructor instead owns kinded arguments and has no atomic
@@ -16,7 +18,11 @@ struct BoundType {
   std::string kind, identity, representation;
   std::vector<TypeArgument> arguments = {};
   std::shared_ptr<const std::vector<BoundType>> physicalChildren = {};
+  /// Variants own their nominal structure and ordered logical payloads. The
+  /// atomic identity slot is empty; no encoded spelling is authoritative.
+  std::shared_ptr<const VariantDescriptor> variant = {};
   bool operator==(const BoundType &other) const;
+  bool operator!=(const BoundType &other) const { return !(*this == other); }
   std::string spelling() const;
 };
 
@@ -33,19 +39,53 @@ struct TypeArgument {
   std::string spelling() const;
 };
 
+/// A nominal atom or an ordered tuple of nominal terms. Empty tuples are
+/// meaningful; atoms must be nonempty UTF-8. Formation bounds expanded work.
+struct VariantIdentity {
+  using Tuple = std::vector<VariantIdentity>;
+  std::variant<std::string, Tuple> value;
+  VariantIdentity(std::string atom) : value(std::move(atom)) {}
+  VariantIdentity(const char *atom) : value(std::string(atom)) {}
+  VariantIdentity(Tuple tuple) : value(std::move(tuple)) {}
+  const std::string *atom() const { return std::get_if<std::string>(&value); }
+  const Tuple *tuple() const { return std::get_if<Tuple>(&value); }
+  bool operator==(const VariantIdentity &other) const {
+    return value == other.value;
+  }
+};
+struct VariantAlternative {
+  std::string label;
+  std::vector<BoundType> payload;
+  bool operator==(const VariantAlternative &other) const {
+    return label == other.label && payload == other.payload;
+  }
+};
+struct VariantDescriptor {
+  VariantIdentity nominal;
+  std::vector<VariantAlternative> alternatives;
+  bool operator==(const VariantDescriptor &other) const {
+    return nominal == other.nominal && alternatives == other.alternatives;
+  }
+};
+
 /// Shared across structural arguments and variant payloads during admission.
 struct TypeParseBudget {
   size_t remaining = 200000;
   size_t metadataRemaining = 64 * 1024 * 1024;
+  bool limited = false;
   bool charge(size_t bytes) {
-    if (bytes > metadataRemaining)
+    if (bytes > metadataRemaining) {
+      limited = true;
       return false;
+    }
     metadataRemaining -= bytes;
     return true;
   }
   bool consume() {
-    if (!remaining)
+    if (!remaining) {
+      limited = true;
       return false;
+    }
     --remaining;
     return true;
   }
@@ -53,6 +93,16 @@ struct TypeParseBudget {
 llvm::Expected<BoundType> parseBoundType(llvm::StringRef spelling,
                                          bool physical, unsigned depth = 0,
                                          TypeParseBudget *budget = nullptr);
+/// Validate actual structure, including caller-constructed values, without
+/// a spelling round trip. Native structure and portable encoding have separate
+/// allowances. A logical value has neither representation nor layout children.
+llvm::Error checkBoundType(const BoundType &, bool physical,
+                           TypeParseBudget *budget = nullptr,
+                           unsigned depth = 0);
+llvm::Expected<BoundType> variantType(VariantDescriptor);
+/// Expanded nodes plus actual metadata bytes, or UINT64_MAX for malformed or
+/// over-limit structure. This never builds a portable spelling.
+uint64_t boundTypeWork(const BoundType &);
 /// Syntactic head and immediate arguments; arguments may name scoped statics.
 /// Does not confer closed admission or capability facts.
 struct TypeApplication {

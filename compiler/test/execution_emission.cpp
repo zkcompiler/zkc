@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -140,7 +141,7 @@ std::string physical(StringRef logical) {
 program::LocalDefinitions nested(bool conditional, bool reject = false) {
   auto field = physical("field:bls12-381.fr");
   auto boolean = physical("bool"), index = physical("index");
-  auto variant = physical(*protocol::encodeVariant(
+  auto variant = physical(*zkc::test::encodeVariantFixture(
       {"ExecutionChoice",
        {{"left", {"field:bls12-381.fr"}}, {"right", {"field:bls12-381.fr"}}}}));
   program::LocalDefinitions model;

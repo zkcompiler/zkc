@@ -42,29 +42,52 @@ std::string entryDeploymentId(HostInvocation::Kind kind, StringRef target,
   }
   return id;
 }
-json::Value encodeEntrySchema(const Layout &layout) {
-  auto fields = [](ArrayRef<LayoutField> fields) {
+Expected<json::Value> encodeEntrySchema(const Layout &layout) {
+  auto fields = [](ArrayRef<LayoutField> fields) -> Expected<json::Array> {
     json::Array result;
-    for (const auto &field : fields)
-      result.push_back(
-          json::Object{{"name", field.name},
-                       {"offset", field.offset},
-                       {"public", field.isPublic},
-                       {"placement", nullptr},
-                       {"schema", encodeEntrySchema(*field.layout)}});
+    for (const auto &field : fields) {
+      if (!field.layout)
+        return error("source.layout", "Host field has no layout");
+      auto schema = encodeEntrySchema(*field.layout);
+      if (!schema)
+        return schema.takeError();
+      result.push_back(json::Object{{"name", field.name},
+                                    {"offset", field.offset},
+                                    {"public", field.isPublic},
+                                    {"placement", nullptr},
+                                    {"schema", std::move(*schema)}});
+    }
     return result;
   };
   json::Array alternatives, permissions, leaves;
-  for (const auto &alternative : layout.alternatives)
-    alternatives.push_back(json::Object{
-        {"name", alternative.name}, {"fields", fields(alternative.fields)}});
+  for (const auto &alternative : layout.alternatives) {
+    auto members = fields(alternative.fields);
+    if (!members)
+      return members.takeError();
+    alternatives.push_back(json::Object{{"name", alternative.name},
+                                        {"fields", std::move(*members)}});
+  }
   if (layout.permissions.copy)
     permissions.push_back("Copy");
   if (layout.permissions.drop)
     permissions.push_back("Drop");
   for (const auto &leaf : layout.leaves) {
-    if (leaf.data())
-      leaves.push_back(*leaf.data());
+    if (leaf.data()) {
+      auto spelling = leaf.data()->spelling();
+      if (spelling.empty())
+        return error("source.limit", "Host leaf has no portable spelling");
+      leaves.push_back(std::move(spelling));
+    }
+  }
+  auto members = fields(layout.fields);
+  if (!members)
+    return members.takeError();
+  json::Value element = nullptr;
+  if (layout.element) {
+    auto schema = encodeEntrySchema(*layout.element);
+    if (!schema)
+      return schema.takeError();
+    element = std::move(*schema);
   }
   return json::Object{
       {"kind", typeKindName(layout.type.kind)},
@@ -76,11 +99,10 @@ json::Value encodeEntrySchema(const Layout &layout) {
       {"custody", layout.custodyCount},
       {"sealed", layout.sealed},
       {"roles", json::Array{}},
-      {"element", layout.element ? encodeEntrySchema(*layout.element)
-                                 : json::Value(nullptr)},
+      {"element", std::move(element)},
       {"constructible", layout.constructible},
       {"permissions", std::move(permissions)},
-      {"fields", fields(layout.fields)},
+      {"fields", std::move(*members)},
       {"alternatives", std::move(alternatives)},
       {"leaves", std::move(leaves)}};
 }
@@ -579,6 +601,14 @@ numericalDefinitions(const ClosedEntry &entry, const Declaration &fragment) {
 Expected<std::string> emitHostOriginal(const ClosedEntry &entry,
                                        mlir::MLIRContext &context,
                                        const Limits &limits) {
+  auto emitted = emitNativeHostOriginal(entry, context, limits);
+  if (!emitted)
+    return emitted.takeError();
+  return std::move(emitted->bytes);
+}
+Expected<EmittedOriginal> emitNativeHostOriginal(const ClosedEntry &entry,
+                                                 mlir::MLIRContext &context,
+                                                 const Limits &limits) {
   auto native = entry_detail::emitNativeHost(entry, context, limits);
   if (!native)
     return native.takeError();
@@ -594,14 +624,7 @@ Expected<std::string> emitHostOriginal(const ClosedEntry &entry,
   }
   if (mlir::failed(zkc::admitStage(*module)))
     return error("target.admission", "Host original failed MLIR verification");
-  std::string text;
-  BoundedStream stream(text, limits.irBytes);
-  mlir::AsmState state(*module, canonicalPrintingFlags());
-  module->print(stream, state);
-  stream << '\n';
-  if (stream.overflow())
-    return error("source.limit", "Host original byte limit");
-  return text;
+  return printEmittedOriginal(std::move(module), limits);
 }
 Expected<json::Array> readHostFunctions(mlir::ModuleOp module,
                                         const Limits &limits) {

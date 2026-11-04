@@ -78,17 +78,17 @@ LogicalResult VariantType::verify(function_ref<InFlightDiagnostic()> emit,
   return detail::verifyStructure(emit, attrs);
 }
 namespace {
-ArrayAttr identityTerm(Builder &builder, const llvm::json::Value &value,
+ArrayAttr identityTerm(Builder &builder, const protocol::VariantIdentity &value,
                        unsigned depth, unsigned &remaining) {
   if (depth >= 64 || !remaining--)
     return {};
-  if (auto atom = value.getAsString()) {
+  if (auto atom = value.atom()) {
     if (atom->empty())
       return {};
     return builder.getArrayAttr(
         {builder.getStringAttr("atom"), builder.getStringAttr(*atom)});
   }
-  auto *array = value.getAsArray();
+  auto *array = value.tuple();
   if (!array)
     return {};
   SmallVector<Attribute> children;
@@ -101,24 +101,24 @@ ArrayAttr identityTerm(Builder &builder, const llvm::json::Value &value,
   return builder.getArrayAttr(
       {builder.getStringAttr("tuple"), builder.getArrayAttr(children)});
 }
-llvm::json::Value identityValue(ArrayAttr term) {
+protocol::VariantIdentity identityValue(ArrayAttr term) {
   if (cast<StringAttr>(term[0]).getValue() == "atom")
     return cast<StringAttr>(term[1]).getValue().str();
-  llvm::json::Array children;
+  protocol::VariantIdentity::Tuple children;
   for (auto child : cast<ArrayAttr>(term[1]))
     children.push_back(identityValue(cast<ArrayAttr>(child)));
   return children;
 }
 } // namespace
 IdentityAttr importVariantIdentity(MLIRContext *context,
-                                   const llvm::json::Value &value) {
+                                   const protocol::VariantIdentity &value) {
   Builder builder(context);
   unsigned remaining = 200000;
   auto term = identityTerm(builder, value, 0, remaining);
   return term ? IdentityAttr::getChecked(builder.getUnknownLoc(), context, term)
               : IdentityAttr{};
 }
-llvm::json::Value exportVariantIdentity(IdentityAttr identity) {
+protocol::VariantIdentity exportVariantIdentity(IdentityAttr identity) {
   return identityValue(identity.getTerm());
 }
 VariantType importVariantType(MLIRContext *context,
@@ -130,13 +130,8 @@ VariantType importVariantType(MLIRContext *context,
   SmallVector<AlternativeAttr> alternatives;
   for (const auto &arm : descriptor.alternatives) {
     SmallVector<Type> payload;
-    for (const auto &spelling : arm.payload) {
-      auto bound = protocol::parseBoundType(spelling, false);
-      if (!bound) {
-        llvm::consumeError(bound.takeError());
-        return {};
-      }
-      auto type = protocol::decodeBoundType(context, *bound);
+    for (const auto &bound : arm.payload) {
+      auto type = protocol::decodeBoundType(context, bound);
       if (!type)
         return {};
       payload.push_back(type);

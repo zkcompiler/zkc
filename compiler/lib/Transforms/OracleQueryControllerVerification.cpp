@@ -123,21 +123,23 @@ Error layout(const OracleVerificationContext &targetContext,
         if (frame.constructor != constructorCount ||
             frame.query != queryIndex || frame.previousKinds != previous)
           return refuse();
-        std::vector<std::string> fields(4 + previous.size(), "index");
-        VariantDescriptor descriptor{
-            json::Array{"zkc.oracle.continuation/0", toHex(storage.entry, true),
-                        toHex(role, true), std::to_string(ordinal),
-                        std::to_string(queryIndex)},
-            {{"Record", std::move(fields)}}};
-        auto spelling = encodeVariant(descriptor);
-        if (!spelling || spelling->size() > metadataRemaining)
+        VariantIdentity identity(VariantIdentity::Tuple{
+            "zkc.oracle.continuation/0", toHex(storage.entry, true),
+            toHex(role, true), std::to_string(ordinal),
+            std::to_string(queryIndex)});
+        // Bound actual identity metadata and payload slots, independently of
+        // whether a portable descriptor could encode this native carrier.
+        uint64_t metadata = 128 + 2 * (storage.entry.size() + role.size()) +
+                            8 * (4 + previous.size());
+        if (metadata > metadataRemaining)
           return refuse();
-        metadataRemaining -= spelling->size();
-        auto nominal = data::importVariantIdentity(context, descriptor.nominal);
-        auto arm = data::AlternativeAttr::get(
-            context, StringAttr::get(context, "Record"),
-            Types(4 + previous.size(), index));
-        Type record = nominal
+        metadataRemaining -= metadata;
+        auto nominal = data::importVariantIdentity(context, identity);
+        Types fields(4 + previous.size(), index);
+        auto arm = data::AlternativeAttr::getChecked(
+            targetContext.getModule().getLoc(), context,
+            StringAttr::get(context, "Record"), ArrayRef<Type>(fields));
+        Type record = nominal && arm
                           ? data::VariantType::getChecked(
                                 targetContext.getModule().getLoc(), context,
                                 nominal, ArrayRef<data::AlternativeAttr>{arm})

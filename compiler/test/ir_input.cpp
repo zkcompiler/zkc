@@ -42,6 +42,16 @@ zkc::language::CheckedOriginal original(StringRef expression = "x") {
                .checkedProject());
   return take(prepareOriginal(take(closeSubject(project, "source::P"))));
 }
+std::string nativeSource(StringRef declarations, StringRef body) {
+  return ("module { \"protocol.module\"() ({\n" + declarations +
+          "\n\"protocol.func\"() ({ ^entry(%flag:i1):\n" + body +
+          "\n\"protocol.return\"(%flag) : (i1)->()\n}) "
+          "{sym_name=\"main\",origin=[\"main\",[]],function_type=(i1)->i1,"
+          "roles=[\"P\"],input_roles=[[\"P\"]],output_roles=[[\"P\"]]} : "
+          "()->()\n"
+          "}) {profile=#protocol.profile<protocol>} : ()->() }")
+      .str();
+}
 } // namespace
 int main() {
   Cases cases;
@@ -99,6 +109,142 @@ int main() {
                   StringRef(binary).take_front(8), "main", context),
               "structured-source-original");
     });
+  cases.run("native coordinates preserve complete result tuple order", [&] {
+    auto file = MemoryBuffer::getFile(
+        ZKC_INPUT_FIXTURES "/structured-source/math-operations.mlir");
+    require(bool(file), "could not read multiple-result fixture");
+    auto source = take(
+        zkc::protocol::readSourceView((*file)->getBuffer(), "main", context));
+    const auto *main = source.find("main");
+    require(main && main->body.instructions.size() == 2,
+            "expected two calls with multiple results");
+    require(main->body.instructions[0].operands ==
+                    std::vector<unsigned>({0, 1, 2}) &&
+                main->body.instructions[1].operands ==
+                    std::vector<unsigned>({3, 2, 4}) &&
+                main->body.returned == std::vector<unsigned>({2, 0, 3, 1}),
+            "source coordinates changed operand or result tuple order");
+  });
+  cases.run(
+      "native instruction and reference counts exceed the wire limits", [&] {
+        std::string body;
+        for (unsigned i = 0; i < 4097; ++i)
+          body += "%v" + std::to_string(i) + " = arith.xori %flag,%flag : i1\n";
+        auto view = take(zkc::protocol::readSourceView(nativeSource({}, body),
+                                                       "main", context));
+        const auto &block = view.find("main")->body;
+        require(block.instructions.size() == 4097 &&
+                    block.returned == std::vector<unsigned>{4097},
+                "native indexing inherited the wire instruction limit");
+        refuses(zkc::protocol::publishSource(view), "structured-source-limit");
+        body.clear();
+        for (unsigned i = 0; i < 2050; ++i)
+          body += "%v" + std::to_string(i) +
+                  ":2 = func.call @pair(%flag) : (i1)->(i1,i1)\n";
+        auto pairs = take(zkc::protocol::readSourceView(
+            nativeSource("func.func private @pair(%x:i1)->(i1,i1) { return "
+                         "%x,%x : i1,i1 }",
+                         body),
+            "main", context));
+        require(pairs.find("main")->body.returned ==
+                    std::vector<unsigned>{4100},
+                "native multi-result coordinate was truncated");
+        refuses(zkc::protocol::publishSource(pairs), "structured-source-limit");
+      });
+  cases.run("native definitions and signatures exceed the wire limits", [&] {
+    std::string declarations;
+    for (unsigned i = 0; i < 129; ++i)
+      declarations += "func.func private @h" + std::to_string(i) +
+                      "(%x:i1)->i1 { return %x : i1 }\n";
+    auto view = take(zkc::protocol::readSourceView(
+        nativeSource(declarations, {}), "main", context));
+    require(view.definitions.size() == 130,
+            "native definitions were limited by publication");
+    refuses(zkc::protocol::publishSource(view), "structured-source-limit");
+    declarations = "func.func private @wide(";
+    for (unsigned i = 0; i < 513; ++i)
+      declarations += (i ? ",%a" : "%a") + std::to_string(i) + ":i1";
+    declarations += ")->i1 { return %a0 : i1 }";
+    auto wide = take(zkc::protocol::readSourceView(
+        nativeSource(declarations, {}), "main", context));
+    require(wide.find("wide")->body.inputs.size() == 513,
+            "native signature was limited by publication");
+    refuses(zkc::protocol::publishSource(wide), "structured-source-limit");
+  });
+  cases.run("native byte strings refuse at textual report boundaries", [&] {
+    auto bytes = nativeSource(
+        R"(func.func private @"\FF"(%x:i1)->i1 { return %x : i1 })", {});
+    auto view = take(zkc::protocol::readSourceView(bytes, "main", context));
+    require(view.definitions.size() == 2, "native byte name was not retained");
+    refuses(zkc::protocol::publishSource(view), "structured-source-string");
+    refuses(zkc::protocol::produceApplicationMap(bytes, bytes, "main", context),
+            "application-map-string");
+  });
+  cases.run("retained declarations do not impose publication row limits", [&] {
+    std::string definitions, metadata = "[[], [";
+    for (unsigned i = 0; i < 129; ++i) {
+      auto name = "p" + std::to_string(i);
+      definitions += "\"protocol.func\"() ({ \"protocol.return\"() : ()->() }) "
+                     "{sym_name=\"" +
+                     name + "\",origin=[\"" + name +
+                     "\",[]],function_type=()->(),roles=[\"P\"],"
+                     "input_roles=[],output_roles=[]} : ()->()\n";
+      metadata += (i ? "," : "") + std::string("[\"") + name + "\",[],[]]";
+    }
+    metadata += "], []]";
+    auto bytes =
+        "module { \"protocol.module\"() ({" + definitions +
+        "}) {profile=#protocol.profile<protocol>, source_declarations=" +
+        metadata + "} : ()->() }";
+    auto view = take(zkc::protocol::readSourceView(bytes, "p0", context));
+    require(view.definitions.size() == 129,
+            "retained declarations restricted native admission");
+    take(zkc::protocol::produceApplicationMap(bytes, bytes, "p0", context));
+    refuses(zkc::protocol::publishSource(view), "structured-source-limit");
+    auto at = bytes.find("[\"p128\",[],[]]");
+    require(at != std::string::npos, "metadata fixture is incomplete");
+    bytes.replace(at, std::string("[\"p128\",[],[]]").size(),
+                  "[\"absent\",[],[]]");
+    refuses(zkc::protocol::readSourceView(bytes, "p0", context),
+            "component-declaration-role");
+  });
+  cases.run("native declaration keys use semantic string identity", [&] {
+    auto bytes = R"(module {
+      "protocol.module"() ({
+        "protocol.func"() ({ "protocol.return"() : ()->() })
+          {sym_name="main", origin=["main",[]], function_type=()->(),
+           roles=["P"], input_roles=[], output_roles=[]} : ()->()
+      }) {profile=#protocol.profile<protocol>, source_declarations=[[
+        [["nominal","record","R",[]],"ordinary",false,[],[],unit],
+        [["nominal","record","R" : i8,[]],"ordinary",false,[],[],unit]
+      ], [], [["R",unit]]]} : ()->()
+    })";
+    refuses(zkc::protocol::readSourceView(bytes, "main", context),
+            "component-declaration-duplicate");
+  });
+  cases.run(
+      "deferred publication owns its lexical associations and strings", [&] {
+        auto view = [] {
+          auto checked = original();
+          return take(zkc::language::detail::OriginalAccess::read(checked));
+        }();
+        auto publication = take(zkc::protocol::publishSource(view));
+        require(!publication.associations.empty(),
+                "deferred publication lost its source ranges");
+        require(llvm::any_of(
+                    publication.associations,
+                    [](const auto &row) { return row.original.has_value(); }),
+                "local parser lifetime erased lexical association");
+        auto detached = [] {
+          auto checked = original();
+          auto view =
+              take(zkc::language::detail::OriginalAccess::read(checked));
+          return take(zkc::protocol::publishSource(view));
+        }();
+        require(zkc::printJson(publication.snapshot) ==
+                    zkc::printJson(detached.snapshot),
+                "publication strings borrowed a destroyed context");
+      });
   cases.run("source admission rejects unknown effects and bindings", [&] {
     auto file = MemoryBuffer::getFile(ZKC_INPUT_FIXTURES "/finite/order.mlir");
     require(bool(file), "could not read primitive source fixture");
@@ -124,6 +270,32 @@ int main() {
                                          value.interfaceJson()),
             "target.admission");
   });
+  cases.run(
+      "direct frontend and imported original retain identical evidence", [&] {
+        auto direct = original("true");
+        auto imported = take(zkc::language::admitOriginal(
+            direct.entry(), direct.bytes(), direct.interfaceJson()));
+        require(imported.identity() == direct.identity() &&
+                    imported.locationsIdentity() == direct.locationsIdentity(),
+                "direct emission changed original or location identity");
+        require(take(zkc::language::exportSourceCorrespondence(imported)) ==
+                    take(zkc::language::exportSourceCorrespondence(direct)),
+                "direct and parsed originals have different associations");
+        auto native = take(zkc::language::detail::OriginalAccess::read(direct));
+        auto parsed = take(zkc::protocol::readSourceView(
+            direct.bytes(), direct.entry().protocol().symbol, context));
+        auto binary = take(zkc::protocol::readSourceView(
+            bytecode(direct.bytes(), context), direct.entry().protocol().symbol,
+            context));
+        require(native.identity == parsed.identity &&
+                    native.identity != binary.identity,
+                "semantic admission conflated byte identities");
+        require(native.definitions.size() == parsed.definitions.size() &&
+                    parsed.definitions.size() == binary.definitions.size(),
+                "ingress changed the native definition inventory");
+        require(binary.written.empty(),
+                "bytecode fabricated lexical provenance");
+      });
   cases.run("bytecode identity does not authorize a changed actual body", [&] {
     auto source = original("true");
     auto symbol = source.entry().protocol().symbol;

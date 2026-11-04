@@ -1,6 +1,7 @@
 #include "mlir/Interfaces/CallInterfaces.h"
 #include "mlir/Parser/Parser.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
@@ -111,8 +112,9 @@ relation.declare @predicate {
     return text;
   };
   auto variant = [&](llvm::StringRef name,
-                     std::vector<protocol::VariantAlternative> arms) {
-    auto encoded = protocol::encodeVariant({name.str(), std::move(arms)});
+                     std::vector<zkc::test::VariantFixtureAlternative> arms) {
+    auto encoded =
+        zkc::test::encodeVariantFixture({name.str(), std::move(arms)});
     require(bool(encoded), "variant fixture failed");
     return zkc::test::variantAssembly(*encoded);
   };
@@ -193,11 +195,11 @@ relation.declare @predicate {
                      "Family", llvm::json::Array{"Field", "koala-bear"}})
                : llvm::json::Value(
                      llvm::json::Array{"Family", "Field", "koala-bear"});
-    std::vector<protocol::VariantAlternative> arms{{"None", {}},
-                                                   {"Some", {"index"}}};
+    std::vector<zkc::test::VariantFixtureAlternative> arms{{"None", {}},
+                                                           {"Some", {"index"}}};
     if (reverse)
       std::reverse(arms.begin(), arms.end());
-    auto encoded = protocol::encodeVariant({std::move(identity), arms});
+    auto encoded = zkc::test::encodeVariantFixture({std::move(identity), arms});
     require(bool(encoded), "structured nominal fixture refused");
     return zkc::test::variantAssembly(*encoded);
   };

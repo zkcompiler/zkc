@@ -31,12 +31,11 @@ struct Definition : SourceDefinition {
   std::vector<bool> restrictInputs, restrictOutputs;
 };
 struct View {
-  mlir::OwningOpRef<mlir::ModuleOp> native;
+  explicit View(SourceView &&source) : source(std::move(source)) {}
+  SourceView source;
   std::string identity, entry;
   std::vector<Definition> definitions;
   std::map<std::string, unsigned> names;
-  /// The structured export of these exact bytes.
-  llvm::json::Value publication = nullptr;
   const Definition *find(llvm::StringRef name) const;
 };
 /// The written links a supplied `zkc.source-correspondence/0` grants. It is

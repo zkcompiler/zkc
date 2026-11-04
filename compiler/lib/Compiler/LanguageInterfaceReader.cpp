@@ -4,9 +4,9 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Instances.h"
-#include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/TypePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/Construction.h"
@@ -185,18 +185,18 @@ class Reader {
         fail("invalid logical leaf type");
       return {};
     }
-    auto policy = protocol::nativeTypePolicy(*type);
-    if (!policy || type->spelling() != spelling) {
+    auto facts = protocol::typePolicy(*type, typeBudget);
+    if (!facts || !facts->native || type->spelling() != spelling) {
       fail("noncanonical or unsupported logical leaf type");
       return {};
     }
-    Permissions result{protocol::duplicable(*type),
-                       protocol::discardable(*type)};
+    const auto &policy = facts->native;
+    Permissions result{facts->copy, facts->drop};
     nativeLeaves.emplace(
         spelling.str(),
         NativeLeaf{
             result, policy->shared, policy->constructible, policy->total,
-            protocol::nativeSetupType(*type),
+            facts->setup,
             protocol::setupKey(type->kind) == protocol::SetupKey::Verifier,
             protocol::setupKey(type->kind) == protocol::SetupKey::Prover});
     return result;
@@ -954,11 +954,12 @@ class Reader {
         fail("variant alternatives differ");
         return {};
       }
-      auto *nominal = descriptor->nominal.getAsArray();
-      auto encoded = nominal && nominal->size() == 2 &&
-                             (*nominal)[0].getAsString() == "zkc.language"
-                         ? (*nominal)[1].getAsString()
-                         : std::nullopt;
+      const auto *nominal = descriptor->nominal.tuple();
+      const auto *encoded = nominal && nominal->size() == 2 &&
+                                    (*nominal)[0].atom() &&
+                                    *(*nominal)[0].atom() == "zkc.language"
+                                ? (*nominal)[1].atom()
+                                : nullptr;
       if (!encoded || !charge(encoded->size() + 1)) {
         if (!failure)
           fail("variant lacks a source nominal identity");
@@ -987,7 +988,10 @@ class Reader {
           return {};
         }
         InterfaceAlternative arm{name->str(), {}};
-        if (!fields(*payload, expected.payload, 0, depth, *caps, arm.fields))
+        std::vector<std::string> payloadSpellings;
+        for (const auto &type : expected.payload)
+          payloadSpellings.push_back(type.spelling());
+        if (!fields(*payload, payloadSpellings, 0, depth, *caps, arm.fields))
           return {};
         result->alternatives.push_back(std::move(arm));
       }

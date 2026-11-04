@@ -209,7 +209,12 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
             formal = true;
             break;
           }
-          out.value(*data);
+          auto encoded = data->spelling();
+          if (encoded.empty()) {
+            limited = true;
+            break;
+          }
+          out.value(encoded);
         }
       });
     });

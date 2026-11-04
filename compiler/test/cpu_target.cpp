@@ -9,6 +9,7 @@
 #include "support/ProtocolDeployment.h"
 #include "support/ScopedFixture.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeLanguage.h"
@@ -315,12 +316,12 @@ int main() {
     reject(small.checkType(halo));
   });
   cases.run("inactive nested variant payloads require their provider", [&] {
-    auto spelling = encodeVariant(
+    auto spelling = zkc::test::encodeVariantFixture(
         {"TargetChoice",
          {{"empty", {}}, {"hidden", {"sequence<field:bls12-381.fr>"}}}});
     require(bool(spelling), "variant formation");
     reject(small.checkType(ordinary(*spelling)));
-    auto supported = encodeVariant(
+    auto supported = zkc::test::encodeVariantFixture(
         {"TargetChoice",
          {{"empty", {}}, {"hidden", {"sequence<field:koala-bear>"}}}});
     require(bool(supported), "variant formation");
@@ -435,7 +436,7 @@ int main() {
   cases.run("native dormant payloads require their own storage provider", [&] {
     MLIRContext context(registry);
     context.loadAllAvailableDialects();
-    auto spelling = *encodeVariant(
+    auto spelling = *zkc::test::encodeVariantFixture(
         {"CpuDormant",
          {{"none", {}}, {"hidden", {"sequence<field:bls12-381.fr>"}}}});
     auto logical = zkc::test::variantType(&context, spelling);
@@ -459,8 +460,8 @@ int main() {
       [&] {
         MLIRContext context(registry);
         context.loadAllAvailableDialects();
-        auto identity =
-            data::importVariantIdentity(&context, json::Value("NativeWide"));
+        auto identity = zkc::test::importVariantIdentityFixture(
+            &context, json::Value("NativeWide"));
         auto flag = IntegerType::get(&context, 1);
         // The byte profile bounds immediate payload entries more tightly than
         // native formation does.

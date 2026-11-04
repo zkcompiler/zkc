@@ -40,14 +40,10 @@ Error layout(const OracleVerificationContext &target,
       controller.kinds.begin();
   auto *context = target.getModule().getContext();
   auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
-  VariantDescriptor descriptor{
-      json::Array{"zkc.oracle.demand-frame/0", toHex(storage.entry, true),
-                  toHex(controller.role, true)},
-      {{"Record", std::vector<std::string>(Demand::FrameSize, "index")}}};
-  auto spelling = encodeVariant(descriptor);
-  if (!spelling || spelling->size() > 4 * 1024 * 1024)
-    return refuse();
-  auto nominal = data::importVariantIdentity(context, descriptor.nominal);
+  VariantIdentity nominalIdentity(VariantIdentity::Tuple{
+      "zkc.oracle.demand-frame/0", toHex(storage.entry, true),
+      toHex(controller.role, true)});
+  auto nominal = data::importVariantIdentity(context, nominalIdentity);
   auto arm =
       data::AlternativeAttr::get(context, StringAttr::get(context, "Record"),
                                  Types(Demand::FrameSize, index));

@@ -120,7 +120,10 @@ Expected<std::string> kernelArgument(const Type &type, StringRef sort) {
     auto layout = builtinLayout(type);
     if (!layout)
       return layout.takeError();
-    return layout->spelling();
+    auto spelling = layout->spelling();
+    if (spelling.empty())
+      return error("source.limit", "installed static has no portable spelling");
+    return spelling;
   }
   if (sort == "Nat") {
     if (type.kind != K::Natural || !type.dimension.isClosed() ||
@@ -237,41 +240,71 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
 }
 Expected<protocol::BoundType>
 builtinLayout(const Type &type, const NativeLayoutResolver &resolve) {
-  if (type.symbolic)
-    return error("source.builtin", "native data layout requires a closed type");
-  if (type.kind == K::Boolean)
-    return protocol::parseBoundType("bool", false);
-  if (type.kind == K::Index)
-    return protocol::parseBoundType("index", false);
-  if (type.kind == K::Field || type.kind == K::Group)
-    return protocol::parseBoundType(
-        (type.kind == K::Field ? "field:" : "group:") + type.domain, false);
-  if (type.kind != K::Builtin)
-    return error("source.builtin",
-                 "source nominal or product requires its own layout");
-  auto formed = builtinType(type.domain, type.arguments);
-  if (!formed)
-    return formed.takeError();
-  if (type.domain == "sequence" && resolve) {
-    auto element = resolve(type.arguments.front());
-    if (!element)
-      return element.takeError();
-    return protocol::applyBoundType("sequence", {element->spelling()});
-  }
-  const auto *constructor = protocol::typeDeclaration(type.domain);
-  std::vector<std::string> arguments;
-  for (unsigned i = 0; i < type.arguments.size(); ++i) {
-    const auto &parameter = constructor->parameters[i];
-    auto argument = kernelArgument(
-        type.arguments[i], parameter.kind == protocol::StaticKind::Type ? "Type"
-                           : parameter.kind == protocol::StaticKind::Nat
-                               ? "Nat"
-                               : parameter.sort);
-    if (!argument)
-      return argument.takeError();
-    arguments.push_back(std::move(*argument));
-  }
-  return protocol::applyBoundType(type.domain, arguments);
+  using protocol::BoundType;
+  using protocol::StaticKind;
+  using protocol::TypeArgument;
+  protocol::TypeParseBudget budget;
+  std::function<Expected<BoundType>(const Type &, unsigned)> build;
+  build = [&](const Type &source, unsigned depth) -> Expected<BoundType> {
+    if (depth >= 64 || !budget.consume() ||
+        !budget.charge(source.domain.size()))
+      return error("binding-type-limit");
+    if (source.symbolic)
+      return error("source.builtin",
+                   "native data layout requires a closed type");
+    if (source.kind == K::Boolean || source.kind == K::Index)
+      return BoundType{source.kind == K::Boolean ? "bool" : "index", {}, {}};
+    if (source.kind == K::Field || source.kind == K::Group)
+      return BoundType{
+          source.kind == K::Field ? "field" : "group", source.domain, {}};
+    if (source.kind != K::Builtin)
+      return error("source.builtin",
+                   "source nominal or product requires its own layout");
+    auto formed = builtinType(source.domain, source.arguments);
+    if (!formed)
+      return formed.takeError();
+    const auto *constructor = protocol::typeDeclaration(source.domain);
+    BoundType result{source.domain, {}, {}};
+    for (auto [argument, parameter] :
+         zip(source.arguments, constructor->parameters)) {
+      if (parameter.kind == StaticKind::Type) {
+        auto child = source.domain == "sequence" && resolve
+                         ? resolve(argument)
+                         : build(argument, depth + 1);
+        if (!child)
+          return child.takeError();
+        // Resolver products are already structured. Charge their complete
+        // expansion before retaining them in this enclosing constructor.
+        if (source.domain == "sequence" && resolve)
+          if (auto e =
+                  protocol::checkBoundType(*child, false, &budget, depth + 1))
+            return e;
+        result.arguments.push_back(
+            TypeArgument::typeArgument(std::move(*child)));
+      } else {
+        auto atom = kernelArgument(argument, parameter.kind == StaticKind::Nat
+                                                 ? StringRef("Nat")
+                                                 : StringRef(parameter.sort));
+        if (!atom)
+          return atom.takeError();
+        if (parameter.kind == StaticKind::Nat)
+          result.arguments.push_back(
+              TypeArgument::naturalArgument(argument.dimension.closedValue()));
+        else if (constructor->parameters.size() == 1)
+          result.identity = std::move(*atom);
+        else
+          result.arguments.push_back(
+              TypeArgument::domainArgument(std::move(*atom)));
+      }
+    }
+    return result;
+  };
+  auto result = build(type, 0);
+  if (!result)
+    return result.takeError();
+  if (auto e = protocol::checkBoundType(*result, false))
+    return e;
+  return result;
 }
 Expected<std::vector<std::string>>
 kernelArguments(StringRef contract, ArrayRef<Type> arguments,
@@ -299,7 +332,11 @@ kernelArguments(StringRef contract, ArrayRef<Type> arguments,
                         : builtinLayout(argument, resolve);
       if (!layout)
         return layout.takeError();
-      return layout->spelling();
+      auto spelling = layout->spelling();
+      if (spelling.empty())
+        return error("source.limit",
+                     "installed static has no portable spelling");
+      return spelling;
     }();
     if (!value)
       return value.takeError();

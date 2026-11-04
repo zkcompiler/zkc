@@ -1,9 +1,30 @@
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/MathematicalFacts.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/TypePolicy.h"
 
 int main() {
   using namespace zkc::protocol;
+  VariantDescriptor descriptor{"Installed", {}};
+  for (unsigned i = 0; i < 65; ++i)
+    descriptor.alternatives.push_back({"arm" + std::to_string(i), {}});
+  auto variant = variantType(std::move(descriptor));
+  if (!variant) {
+    llvm::consumeError(variant.takeError());
+    return 5;
+  }
+  auto policy = typePolicy(*variant);
+  if (!policy || !policy->copy || !policy->drop || !policy->message ||
+      !variant->spelling().empty())
+    return 6;
+  uint64_t remaining = 1;
+  zkc::facts::Work work(remaining);
+  auto range = zkc::facts::transferWordRange(
+      work, zkc::facts::WordOperation::BitAnd, {8, 16}, {7, 7});
+  if (range.status != zkc::facts::Status::Proven || !range.value ||
+      range.value->minimum != 0 || range.value->maximum != 7 || remaining)
+    return 7;
   const auto *addition =
       mathematicalMeaning(zkc::MathematicalIdentity::FieldAdd);
   if (!addition || !addition->law.associative || !addition->law.commutative ||

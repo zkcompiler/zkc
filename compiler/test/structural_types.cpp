@@ -1,3 +1,4 @@
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/TypeRepresentations.h"
@@ -27,6 +28,8 @@ void refuses(StringRef spelling, StringRef code = {}) {
   auto type = parseBoundType(spelling, false);
   check(!type, "malformed structural type accepted");
   auto error = toString(type.takeError());
+  if (!code.empty() && code != error)
+    errs() << spelling << ": expected " << code << ", got " << error << '\n';
   check(code.empty() || code == error, "unexpected structural refusal");
 }
 void representationPatterns() {
@@ -247,6 +250,19 @@ int main() {
   auto sequence = accepts(nested);
   check(bool(defaultRepresentation(sequence)),
         "nested sequence representation");
+  // A compact shared descriptor expands through every logical and physical
+  // occurrence. Default selection must not reset its allowance per child.
+  BoundType branching{"bool", {}, {}};
+  for (unsigned i = 0; i < 13; ++i) {
+    auto outer = variantType({"Repeated", {{"pair", {branching, branching}}}});
+    check(bool(outer), "bounded logical variant tree did not form");
+    branching = std::move(*outer);
+  }
+  auto expanded = defaultRepresentation(branching);
+  check(!expanded, "default layout reset its expanded-structure allowance");
+  check(toString(expanded.takeError()).find("binding-type-limit") !=
+            std::string::npos,
+        "default layout expansion did not report its capacity limit");
   refuses("sequence<" + nested + ">", "binding-type-limit");
   for (unsigned i = 0; i < 40; ++i)
     nested = "sequence<" + nested + ">";
@@ -267,16 +283,19 @@ int main() {
   auto applied = applyBoundType("fixed_vector", {"field:koala-bear", "4"});
   check(bool(applied), "kinded application failed");
   check(*applied == type, "direct application differs from parsed type");
-  auto inner = encodeVariant({"Inner", {{"value", {"bool"}}}});
+  auto inner =
+      zkc::test::encodeVariantFixture({"Inner", {{"value", {"bool"}}}});
   check(bool(inner), "inner variant refused");
-  auto outer =
-      encodeVariant({"Outer", {{"value", {"fixed_vector<" + *inner + ",0>"}}}});
+  auto outer = zkc::test::encodeVariantFixture(
+      {"Outer", {{"value", {"fixed_vector<" + *inner + ",0>"}}}});
   check(bool(outer), "mixed variant and structural fixture refused");
-  TypeParseBudget enough{5};
+  // Five type/static nodes and the two retained nominal atoms share the
+  // parser's allowance. Identity structure is no longer an opaque spelling.
+  TypeParseBudget enough{7};
   auto mixed = parseBoundType(*outer, false, 0, &enough);
   check(bool(mixed) && enough.remaining == 0,
         "mixed parser did not share budget");
-  TypeParseBudget shortBudget{4};
+  TypeParseBudget shortBudget{6};
   auto exhausted = parseBoundType(*outer, false, 0, &shortBudget);
   check(!exhausted, "mixed parser reset its budget");
   consumeError(exhausted.takeError());

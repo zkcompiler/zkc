@@ -433,7 +433,8 @@ int main(int argc, char **argv) {
     Source source;
     Type variant = data::importVariantType(
         &source.context,
-        {"Payload", {{"value", {"field:bls12-381.fr"}}, {"empty", {}}}});
+        {"Payload",
+         {{"value", {{"field", "bls12-381.fr", {}}}}, {"empty", {}}}});
     auto caller =
         source.function("match", {variant, source.field}, source.field);
     exec::ScopedExecutionBuilder control(source.builder, caller);

@@ -92,7 +92,12 @@ json::Array schemas(ArrayRef<Port> ports, Layouts &layouts, Error &failure) {
       failure = layout.takeError();
       return {};
     }
-    out.push_back(encodeEntrySchema(**layout));
+    auto schema = encodeEntrySchema(**layout);
+    if (!schema) {
+      failure = schema.takeError();
+      return {};
+    }
+    out.push_back(std::move(*schema));
   }
   return out;
 }
@@ -108,10 +113,7 @@ class HostTargetCheck {
       return Error::success();
     for (const auto &leaf : layout.leaves)
       if (const auto *data = leaf.data()) {
-        auto logical = protocol::parseBoundType(*data, false);
-        if (!logical)
-          return logical.takeError();
-        auto physical = protocol::defaultRepresentation(*logical);
+        auto physical = protocol::defaultRepresentation(*data);
         if (!physical)
           return physical.takeError();
         if (auto e = cpuTarget.checkType(*physical))

@@ -28,6 +28,24 @@ struct EmissionRecord {
   std::vector<GeneratedDefinition> generated;
   std::vector<EmittedSite> sites;
 };
+struct EmittedOperationRange {
+  unsigned begin, end, line, column;
+};
+/// Exact output and operation-name coordinates of one native emission. The
+/// module borrows the caller's context. Coordinates come from the printer,
+/// never from source locations or a second parse of the emitted bytes.
+struct EmittedOriginal {
+  mlir::OwningOpRef<mlir::ModuleOp> module;
+  std::string bytes;
+  llvm::DenseMap<mlir::Operation *, EmittedOperationRange> operations;
+};
+llvm::Expected<EmittedOriginal> emitNativeOriginal(const ClosedEntry &,
+                                                   mlir::MLIRContext &,
+                                                   const Limits & = {},
+                                                   EmissionRecord * = nullptr);
+/// Print one freshly emitted module and retain its exact operation ranges.
+llvm::Expected<EmittedOriginal>
+printEmittedOriginal(mlir::OwningOpRef<mlir::ModuleOp>, const Limits &);
 /// Direct, unsimplified Protocol IR. The caller supplies native dialects. A
 /// supplied record receives the generated definitions and emitted sites.
 llvm::Expected<std::string> emitOriginal(const ClosedEntry &,
@@ -39,7 +57,8 @@ struct Correspondence {
   std::vector<SourceLocation> locations;
 };
 /// Verify the module once, then compare actual SSA with the checked source.
-/// Locations come from compared operations in the reparsed original. No
+/// Locations come from compared operations in the original, either parsed from
+/// exact input or assigned from the emitter's actual printed coordinates. No
 /// mutation, re-emission, canonicalization, or executable lowering occurs in
 /// this check.
 llvm::Expected<Correspondence>
