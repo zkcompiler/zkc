@@ -57,6 +57,41 @@ the remaining virtual-definition and logical-record integration boundaries.
 Protocol oracle calls and returns already decompose/rejoin their components
 through the existing checked ABI; no separate source keyword is needed.
 
+## Resolution and reusable analyses
+
+`DeclarationIndex` owns declaration and import namespaces. Source lookup,
+import authorization and external selection supply explicit access contexts to
+that owner. A selected root is terminal: a private, missing or wrong-category
+member cannot trigger another namespace search. Retained references identify
+both the selected provider route and the canonical target. Authored occurrence
+identity distinguishes repeated type, call and notation uses; a name or span
+alone is insufficient.
+
+An implementing module records one edge from each required interface member to
+its direct provided member. Dispatch uses those edges with the actual module
+instance. Independent source checking reconstructs the authored headers and
+judges implementation obligations against reconstructed premises. Candidate
+inference flags do not authorize stronger module or interface assumptions.
+
+Source analyses retain different products for different questions. Body
+summaries compose logical dependencies and formation requirements; common-control
+summaries retain typed expressions, role bindings and recurrence obligations.
+Neither dependency membership nor shared placement establishes value agreement.
+Completed products belong to a checking invocation and its immutable bodies,
+with exact lexical static, callback and domain contexts. Applications rebind
+caller values and allocate fresh recurrence subjects. Only demanded recurrence
+slots allocate per-application maps. Cache hits still obey the current depth,
+type and work limits; an in-progress recurrence hypothesis is not a reusable
+agreement fact.
+
+Closure derives each concrete Protocol's common-input inventory once and retains
+it in `ClosedEntry`. Publication borrows that inventory while charging its own
+layout, projection and normalization work. Native analysis independently derives
+obligations from the actual candidate and compares the complete inventory.
+This reuse changes neither the interface schema nor the formal interpretation
+boundary. Diagnostic work ledgers expose charged construction and application
+costs without serving as admission evidence.
+
 ## Catalog selection and four faces
 
 The shared catalog is an installation contract, not a parser keyword table.
