@@ -37,6 +37,53 @@ Checker::Checker(CheckedStorage &output, Work &work, AccessContext policy)
   access = std::move(policy);
   types.completeDispatchBody = {};
 }
+void Checker::registerContractInference(Declaration &decl,
+                                        const SyntaxDeclaration &source) {
+  // Rule associations have catalog contracts; installed primitives infer
+  // theirs like any primitive declaration.
+  if (!source.abstract && !source.explicitRequirements &&
+      !index().ruleAssociation(decl.id) &&
+      (source.kind == Declaration::Kind::Oracle ||
+       source.kind == Declaration::Kind::Math ||
+       source.kind == Declaration::Kind::Local ||
+       source.kind == Declaration::Kind::EntryFunction ||
+       source.kind == Declaration::Kind::DomainFunction ||
+       source.kind == Declaration::Kind::Protocol ||
+       source.kind == Declaration::Kind::Construction))
+    inferredContracts.insert(&decl);
+}
+void Checker::installContractInference(bool signaturesOnly) {
+  auto eligible = [this, signaturesOnly](const Declaration *scope) {
+    return inferredContracts.count(scope) &&
+           (!signaturesOnly || signatureState[scope->id.index] == 1);
+  };
+  types.inferCapability = [this, eligible](const Declaration *scope,
+                                           const CapabilityBound &bound) {
+    if (!eligible(scope))
+      return false;
+    auto requirement = bound;
+    requirement.inferred = true;
+    output.declarations[scope->id.index].capabilityBounds.push_back(
+        std::move(requirement));
+    return true;
+  };
+  types.inferNatural = [this, eligible](const Declaration &scope,
+                                        const NaturalBound &bound) {
+    if (!eligible(&scope))
+      return false;
+    auto requirement = bound;
+    requirement.inferred = true;
+    output.declarations[scope.id.index].bounds.push_back(
+        std::move(requirement));
+    return true;
+  };
+  types.collectUsage =
+      [this, eligible](const Declaration &scope, const Type &type, Usage usage,
+                       Span span, StringRef code, StringRef message) {
+        return eligible(&scope) &&
+               collectUsage(scope, type, usage, span, code, message);
+      };
+}
 bool Checker::prepareSignatureReconstruction(DeclarationId id,
                                              const SyntaxDeclaration &source) {
   auto &decl = output.declarations[id.index];
@@ -99,6 +146,9 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
       decl.domain = domainType(*sort, source.domain);
     }
   }
+  if (reconstructedSources.empty())
+    installContractInference(/*signaturesOnly=*/true);
+  registerContractInference(decl, source);
   auto &written = reconstructedSources[id.index];
   // Body trees and nested declarations are not part of a signature replay.
   written.kind = source.kind;
@@ -110,6 +160,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   written.oracleShapes = source.oracleShapes;
   written.parameters = source.parameters;
   written.requirements = source.requirements;
+  written.explicitRequirements = source.explicitRequirements;
   written.inputs = source.inputs;
   written.outputs = source.outputs;
   written.scopedInputs = source.scopedInputs;
@@ -174,47 +225,9 @@ Error Checker::run() {
       return error;
     output.writtenSources = std::move(*written);
   }
-  // Rule associations have catalog contracts; installed primitives infer
-  // theirs like any primitive declaration.
-  auto ruled = [&](const Declaration &decl) {
-    return output.declarationIndex->ruleAssociation(decl.id) != nullptr;
-  };
   for (auto &decl : output.declarations)
-    if (!decl.abstract && !ruled(decl) &&
-        !sources[decl.id.index]->explicitRequirements &&
-        (decl.kind == Declaration::Kind::Oracle ||
-         decl.kind == Declaration::Kind::Math ||
-         decl.kind == Declaration::Kind::Local ||
-         decl.kind == Declaration::Kind::EntryFunction ||
-         decl.kind == Declaration::Kind::DomainFunction ||
-         decl.kind == Declaration::Kind::Protocol ||
-         decl.kind == Declaration::Kind::Construction))
-      inferredContracts.insert(&decl);
-  types.inferCapability = [this](const Declaration *scope,
-                                 const CapabilityBound &bound) {
-    if (!inferredContracts.count(scope))
-      return false;
-    auto requirement = bound;
-    requirement.inferred = true;
-    output.declarations[scope->id.index].capabilityBounds.push_back(
-        std::move(requirement));
-    return true;
-  };
-  types.inferNatural = [this](const Declaration &scope,
-                              const NaturalBound &bound) {
-    if (!inferredContracts.count(&scope))
-      return false;
-    auto requirement = bound;
-    requirement.inferred = true;
-    output.declarations[scope.id.index].bounds.push_back(
-        std::move(requirement));
-    return true;
-  };
-  types.collectUsage = [this](const Declaration &scope, const Type &type,
-                              Usage usage, Span span, StringRef code,
-                              StringRef message) {
-    return collectUsage(scope, type, usage, span, code, message);
-  };
+    registerContractInference(decl, *sources[decl.id.index]);
+  installContractInference(/*signaturesOnly=*/false);
   // The vector is the checked contract; this index only accelerates collection.
   // Repeated sites need one condition, with one representative origin chain.
   // Keyed by lookup key; local to this one checking pass.

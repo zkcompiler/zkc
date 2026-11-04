@@ -217,7 +217,7 @@ struct ContractHeaders {
   }
 };
 bool signatureAgrees(Semantics &types, const Declaration &actual,
-                     const Declaration &written) {
+                     const Declaration &written, bool permitsInference) {
   auto refuse = [&] {
     return types.fail("source.scoped-witness",
                       "conformance signature differs from authored header",
@@ -247,8 +247,7 @@ bool signatureAgrees(Semantics &types, const Declaration &actual,
         a.domainSort != b.domainSort || a.arguments != b.arguments ||
         bool(a.interface) != bool(b.interface) ||
         (a.interface && a.interface->index != b.interface->index) ||
-        !a.permissions.includes(b.permissions) ||
-        (actual.abstract && !(a.permissions == b.permissions)))
+        !(a.permissions == b.permissions))
       return refuse();
   }
   for (bool input : {true, false}) {
@@ -260,40 +259,40 @@ bool signatureAgrees(Semantics &types, const Declaration &actual,
   }
   if (!checkMemberInputs(types, written, actual, {}))
     return false;
-  // Inferred requirements are re-judged against the interface below. Authored
-  // requirements, including inherited requirements, must remain exact.
-  unsigned next = 0;
-  for (const auto &bound : actual.bounds) {
-    if (bound.inferred)
-      continue;
-    if (next == written.bounds.size() ||
-        bound.lhs != written.bounds[next].lhs ||
-        bound.rhs != written.bounds[next++].rhs)
-      return refuse();
-  }
-  if (next != written.bounds.size())
-    return refuse();
-  next = 0;
-  for (const auto &bound : actual.permissionBounds) {
-    if (bound.inferred)
-      continue;
-    if (next == written.permissionBounds.size() ||
-        bound.type != written.permissionBounds[next].type ||
-        !(bound.permissions == written.permissionBounds[next++].permissions))
-      return refuse();
-  }
-  if (next != written.permissionBounds.size())
-    return refuse();
-  next = 0;
-  for (const auto &bound : actual.capabilityBounds) {
-    if (bound.inferred)
-      continue;
-    if (next == written.capabilityBounds.size() ||
-        bound.predicate != written.capabilityBounds[next].predicate ||
-        bound.arguments != written.capabilityBounds[next++].arguments)
-      return refuse();
-  }
-  if (next != written.capabilityBounds.size())
+  // Replay includes signature inference, not just written bounds. Bodies can
+  // append obligations (or strengthen an inferred usage leaf) only where the
+  // authored declaration permits inference. Such additions are goals below,
+  // never assumptions. Modules, interfaces and abstract/explicit contracts
+  // must match the independently reconstructed product exactly.
+  auto boundsAgree = [&](const auto &candidate, const auto &expected,
+                         auto agrees) {
+    if (candidate.size() < expected.size())
+      return false;
+    for (unsigned i = 0; i < expected.size(); ++i)
+      if (candidate[i].inferred != expected[i].inferred ||
+          !agrees(candidate[i], expected[i]))
+        return false;
+    for (unsigned i = expected.size(); i < candidate.size(); ++i)
+      if (!permitsInference || !candidate[i].inferred)
+        return false;
+    return true;
+  };
+  if (!boundsAgree(actual.bounds, written.bounds,
+                   [](const auto &a, const auto &b) {
+                     return a.lhs == b.lhs && a.rhs == b.rhs;
+                   }) ||
+      !boundsAgree(actual.permissionBounds, written.permissionBounds,
+                   [&](const auto &a, const auto &b) {
+                     return a.type == b.type &&
+                            (permitsInference && b.inferred
+                                 ? a.permissions.includes(b.permissions)
+                                 : a.permissions == b.permissions);
+                   }) ||
+      !boundsAgree(actual.capabilityBounds, written.capabilityBounds,
+                   [](const auto &a, const auto &b) {
+                     return a.predicate == b.predicate &&
+                            a.arguments == b.arguments;
+                   }))
     return refuse();
   // Defined Local effects may be inferred from their independently checked
   // body. Explicit and abstract ceilings must equal the authored ceiling.
@@ -301,6 +300,13 @@ bool signatureAgrees(Semantics &types, const Declaration &actual,
       actual.effectAllowance != written.effectAllowance)
     return refuse();
   return true;
+}
+// Permission caches in a candidate obligation are not premises, including
+// caches nested in a product. The caller charges and bounds the tree first.
+void clearPermissionAssumptions(Type &type) {
+  type.assumptions = {};
+  for (auto &argument : type.arguments)
+    clearPermissionAssumptions(argument);
 }
 bool implementationAgrees(Semantics &types, const Declaration &module,
                           const Declaration &interface,
@@ -407,8 +413,10 @@ bool implementationAgrees(Semantics &types, const Declaration &module,
     if (!types.assumptions(available, bound, {}, provided.span))
       return false;
   for (const auto &bound : provided.permissionBounds) {
+    if (!types.chargeType(bound.type, provided.span))
+      return false;
     Type requirement = bound.type;
-    requirement.assumptions = {};
+    clearPermissionAssumptions(requirement);
     auto value = types.substitute(requirement, {}, provided.span);
     auto caps = value ? types.permissions(*value, provided.span, &available)
                       : std::nullopt;
@@ -525,6 +533,20 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
     replay.assets = storage.assets;
     replay.sources = storage.sources;
     replay.declarationIndex = storage.declarationIndex;
+    // The replay reader indexes parameters at construction. Do not seed that
+    // index with candidate atoms/slots before authored telescopes replace them.
+    for (const auto &[index, source] : headers.sources) {
+      auto &decl = replay.declarations[index];
+      for (const auto &parameter : decl.parameters) {
+        if (!types.charge(parameter.name.size() + parameter.atom.size() + 1,
+                          source->span))
+          return false;
+        for (const auto &argument : parameter.arguments)
+          if (!types.chargeType(argument, source->span))
+            return false;
+      }
+      decl.parameters.clear();
+    }
     Checker reader(replay, work, SourceAccess{{0}});
     // Register dependencies before reading any signature. Replaying only the
     // two selected members would trust mutable aliases and associated domains
@@ -539,6 +561,12 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
       if (!reader.reconstructSignature(DeclarationId{index}))
         return types.accept(reader.types.takeError());
     }
+    // Conformance is a proof query over reconstructed premises. In particular,
+    // it has no inference hooks and cannot consult candidate alias, permission
+    // or interface bounds to justify a candidate implementation requirement.
+    if (auto error = chargeSemanticIndex(replay.declarations, work))
+      return types.accept(std::move(error));
+    Semantics premises(replay.declarations, replay.assets, work);
     std::set<uint32_t> reconstructed;
     std::function<bool(DeclarationId)> reconstruct = [&](DeclarationId id) {
       if (!reconstructed.insert(id.index).second)
@@ -578,7 +606,10 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
         return types.fail("source.scoped-witness", "invalid authored contract",
                           actual.span);
       }
-      return signatureAgrees(types, actual, replay.declarations[id.index]);
+      if (!signatureAgrees(premises, actual, replay.declarations[id.index],
+                           reader.permitsContractInference(id)))
+        return types.accept(premises.takeError());
+      return true;
     };
     for (auto id : implementations) {
       const auto &module = storage.declarations[id.index];
@@ -611,10 +642,12 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
         return types.fail("source.scoped-witness",
                           "conformance edge coverage differs", module.span);
       std::set<uint32_t> providedIds;
-      auto bindings =
-          types.substitution(interface, module.implementation->arguments);
-      Type self(Type::Kind::Module, module.qualifiedName);
-      for (const auto &p : module.parameters)
+      const auto &writtenModule = replay.declarations[id.index];
+      const auto &writtenContract = replay.declarations[contract->index];
+      auto bindings = premises.substitution(
+          writtenContract, writtenModule.implementation->arguments);
+      Type self(Type::Kind::Module, writtenModule.qualifiedName);
+      for (const auto &p : writtenModule.parameters)
         self.arguments.push_back(parameterType(p));
       bindings.emplace("self:" + interface.qualifiedName, std::move(self));
       for (unsigned i = 0; i < requiredSources.size(); ++i) {
@@ -653,10 +686,12 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
           return types.fail("source.scoped-witness",
                             "conformance member owner or kind differs",
                             module.span);
-        if (!reconstruct(*requiredId) || !reconstruct(*providedId) ||
-            !implementationAgrees(types, module, interface, required, provided,
-                                  bindings))
+        if (!reconstruct(*requiredId) || !reconstruct(*providedId))
           return false;
+        if (!implementationAgrees(premises, writtenModule, writtenContract,
+                                  replay.declarations[requiredId->index],
+                                  provided, bindings))
+          return types.accept(premises.takeError());
       }
     }
     return true;

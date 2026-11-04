@@ -47,6 +47,10 @@ public:
   /// Dependencies use the same signature cycle checks; bodies are not checked.
   bool prepareSignatureReconstruction(DeclarationId, const SyntaxDeclaration &);
   bool reconstructSignature(DeclarationId id) { return signature(id); }
+  /// Eligibility is derived from authored headers, never candidate bound flags.
+  bool permitsContractInference(DeclarationId id) const {
+    return inferredContracts.count(&output.declarations[id.index]);
+  }
   CheckedStorage &output;
   Work &work;
   Semantics types;
@@ -205,6 +209,8 @@ private:
       operatorWitnessFamilies;
   std::vector<unsigned> signatureState;
   std::set<const Declaration *> inferredContracts;
+  void registerContractInference(Declaration &, const SyntaxDeclaration &);
+  void installContractInference(bool signaturesOnly);
   unsigned signatureDepth = 0;
   std::optional<DeclarationId> activeBody;
   unsigned activeBodyDepth = 0;
