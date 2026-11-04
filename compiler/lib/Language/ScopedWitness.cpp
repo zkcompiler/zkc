@@ -2,6 +2,7 @@
 #include "Arguments.h"
 #include "BindingWitness.h"
 #include "CallResolution.h"
+#include "ConstructionWitness.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "FiniteDomains.h"
@@ -466,6 +467,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   if (auto error = checkModuleContracts(storage, work))
     return error;
   if (auto error = checkSignatureSources(storage, work))
+    return error;
+  if (auto error = checkConstructionSources(storage, work))
     return error;
   auto servicePorts = replayServicePorts(storage, work);
   if (!servicePorts)
