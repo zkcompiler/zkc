@@ -211,6 +211,9 @@ private:
   std::set<const Declaration *> inferredContracts;
   void registerContractInference(Declaration &, const SyntaxDeclaration &);
   void installContractInference(bool signaturesOnly);
+  void installAdmissionCollection(bool signaturesOnly);
+  std::map<unsigned, std::map<std::pair<Boundary, std::string>, unsigned>>
+      admissionIndices;
   unsigned signatureDepth = 0;
   std::optional<DeclarationId> activeBody;
   unsigned activeBodyDepth = 0;

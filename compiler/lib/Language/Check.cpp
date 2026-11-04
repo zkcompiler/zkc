@@ -84,6 +84,29 @@ void Checker::installContractInference(bool signaturesOnly) {
                collectUsage(scope, type, usage, span, code, message);
       };
 }
+void Checker::installAdmissionCollection(bool signaturesOnly) {
+  // The vector is the checked contract; this pass-local index only coalesces
+  // repeated requirements and retains a shortest representative origin chain.
+  types.recordAdmission = [this,
+                           signaturesOnly](const Declaration &scope,
+                                           AdmissionObligation obligation) {
+    if (signaturesOnly && signatureState[scope.id.index] != 1)
+      return false;
+    if (!types.chargeType(obligation.type, obligation.span) ||
+        !types.charge(obligation.calls.size() + 1, obligation.span))
+      return false;
+    auto &admissions = output.declarations[scope.id.index].admissions;
+    auto key =
+        std::make_pair(obligation.boundary, typeIdentity(obligation.type));
+    auto [at, inserted] = admissionIndices[scope.id.index].emplace(
+        std::move(key), admissions.size());
+    if (inserted)
+      admissions.push_back(std::move(obligation));
+    else if (obligation.calls.size() < admissions[at->second].calls.size())
+      admissions[at->second] = std::move(obligation);
+    return true;
+  };
+}
 bool Checker::prepareSignatureReconstruction(DeclarationId id,
                                              const SyntaxDeclaration &source) {
   auto &decl = output.declarations[id.index];
@@ -97,6 +120,11 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   decl.permissionBounds.clear();
   decl.capabilityBounds.clear();
   decl.dataPreconditions.clear();
+  for (const auto &obligation : decl.admissions)
+    if (!types.chargeType(obligation.type, obligation.span) ||
+        !types.charge(obligation.calls.size() + 1, obligation.span))
+      return false;
+  decl.admissions.clear();
   decl.inputs.clear();
   decl.outputs.clear();
   decl.scopedInputs.clear();
@@ -146,8 +174,10 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
       decl.domain = domainType(*sort, source.domain);
     }
   }
-  if (reconstructedSources.empty())
+  if (reconstructedSources.empty()) {
     installContractInference(/*signaturesOnly=*/true);
+    installAdmissionCollection(/*signaturesOnly=*/true);
+  }
   registerContractInference(decl, source);
   auto &written = reconstructedSources[id.index];
   // Body trees and nested declarations are not part of a signature replay.
@@ -228,28 +258,7 @@ Error Checker::run() {
   for (auto &decl : output.declarations)
     registerContractInference(decl, *sources[decl.id.index]);
   installContractInference(/*signaturesOnly=*/false);
-  // The vector is the checked contract; this index only accelerates collection.
-  // Repeated sites need one condition, with one representative origin chain.
-  // Keyed by lookup key; local to this one checking pass.
-  std::map<unsigned, std::map<std::pair<Boundary, std::string>, unsigned>>
-      admissionIndices;
-  types.recordAdmission = [this,
-                           &admissionIndices](const Declaration &scope,
-                                              AdmissionObligation obligation) {
-    if (!types.chargeType(obligation.type, obligation.span) ||
-        !types.charge(obligation.calls.size() + 1, obligation.span))
-      return false;
-    auto &admissions = output.declarations[scope.id.index].admissions;
-    auto key =
-        std::make_pair(obligation.boundary, typeIdentity(obligation.type));
-    auto [at, inserted] = admissionIndices[scope.id.index].emplace(
-        std::move(key), admissions.size());
-    if (inserted)
-      admissions.push_back(std::move(obligation));
-    else if (obligation.calls.size() < admissions[at->second].calls.size())
-      admissions[at->second] = std::move(obligation);
-    return true;
-  };
+  installAdmissionCollection(/*signaturesOnly=*/false);
   phase.enter(SourceWorkPhase::Signatures);
   signatureState.resize(output.declarations.size());
   bodyState.resize(output.declarations.size());
