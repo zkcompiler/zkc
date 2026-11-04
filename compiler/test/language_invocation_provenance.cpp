@@ -519,7 +519,7 @@ protocol Run roles(P,V)(first:Random<F>@V,second:Random<F>@V)->(){
         if (auto error = checkScopedSpecialization(closed))
           throw std::runtime_error(toString(std::move(error)));
       });
-  for (unsigned mutation = 0; mutation < 11; ++mutation)
+  for (unsigned mutation = 0; mutation < 17; ++mutation)
     cases.run("managed authored query mutation " + Twine(mutation), [&] {
       auto project = checked(queries);
       accepted(project);
@@ -563,9 +563,20 @@ protocol Run roles(P,V)(first:Random<F>@V,second:Random<F>@V)->(){
           query.service.index = 1 - query.service.index;
           op->binding->services[0] = query.service;
         }
-      } else {
+      } else if (mutation == 10) {
         std::get<ServiceQuery>(block.action).bound = Natural::constant(9);
         block.binding->arguments[1].dimension = Natural::constant(9);
+      } else {
+        auto &result =
+            run.values[operations[(mutation - 11) / 2]->results.front().index];
+        if ((mutation - 11) % 2 == 0) {
+          require(result.type != Type{}, "query result already Boolean");
+          result.type = Type{};
+        } else {
+          require(result.components == std::vector<unsigned>{1},
+                  "query result must belong to V");
+          result.components = {0};
+        }
       }
       rejected(project);
     });
