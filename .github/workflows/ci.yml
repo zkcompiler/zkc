@@ -65,6 +65,9 @@ jobs:
         run: python3 .github/scripts/select-native-changes.py
       - uses: ./.github/actions/nix
         if: steps.changes.outputs.native == 'true'
+      - name: Verify compiler cache correctness
+        if: steps.changes.outputs.native == 'true'
+        run: nix build -L --no-link .#compiler-cache-check
       - name: Select Rust checks from package inputs
         id: rust
         if: steps.changes.outputs.native == 'true'
@@ -83,7 +86,6 @@ jobs:
         run: |
           mkdir -p build/reports
           nix build -L --keep-going --no-link \
-            .#compiler-cache-check \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
             .#checks.x86_64-linux.rust-consumer \

@@ -32,21 +32,28 @@ let
   sources = import ./sources.nix { inherit lib; };
   # Put ccache inside Nix's compiler wrapper so it sees the actual expanded
   # compiler flags, including hardening and dependency search paths.
-  compilerStdenv = pkgs.ccacheStdenv.override {
-    stdenv = llvm.stdenv;
-    extraConfig = ''
-      export CCACHE_CONFIGPATH=${./ccache.conf}
-      if [[ -d /var/cache/zkc-ccache ]]; then
-        test -w /var/cache/zkc-ccache
-        export CCACHE_DIR=/var/cache/zkc-ccache
-        export CCACHE_NAMESPACE=zkc-${builtins.hashString "sha256" (toString llvm.stdenv.cc)}
-        export CCACHE_STATSLOG="$TMPDIR/ccache-stats.log"
-      else
-        # The cache is an optional acceleration of the same package build.
-        export CCACHE_DISABLE=1
-      fi
-    '';
-  };
+  cachedCompiler =
+    (pkgs.ccache.links {
+      unwrappedCC = llvm.stdenv.cc.cc;
+      extraConfig = ''
+        export CCACHE_CONFIGPATH=${./ccache.conf}
+        if [[ -d /var/cache/zkc-ccache ]]; then
+          test -w /var/cache/zkc-ccache
+          export CCACHE_DIR=/var/cache/zkc-ccache
+          export CCACHE_NAMESPACE=zkc-${builtins.hashString "sha256" (toString llvm.stdenv.cc)}
+          export CCACHE_STATSLOG="$TMPDIR/ccache-stats.log"
+        else
+          # The cache is an optional acceleration of the same package build.
+          export CCACHE_DISABLE=1
+        fi
+      '';
+    })
+    // {
+      # The pinned ccache links omit this upstream compiler capability. Clang's
+      # standard wrapper uses it to add the C++ standard-library include paths.
+      inherit (llvm.stdenv.cc.cc) langCC;
+    };
+  compilerStdenv = pkgs.overrideCC llvm.stdenv (llvm.stdenv.cc.override { cc = cachedCompiler; });
   compiler = pkgs.callPackage ./compiler.nix {
     inherit llvm utf8proc;
     source = sources.compiler;
