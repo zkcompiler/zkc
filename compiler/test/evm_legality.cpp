@@ -433,6 +433,69 @@ int main() {
   auto compileSource = [&](StringRef text) {
     return take(compileEvmEntry(originalSource(text)));
   };
+  for (StringRef domain :
+       {"koala-bear", "koala-bear.ext4-binomial3", "koala-bear.ext8-binomial3"})
+    cases.run(
+        "logical polynomial consumer lowers each exact operation: " + domain,
+        [&] {
+          auto text = replaceFixture(R"zkc(module scalar;
+domain F=field("FIELD");
+type Vector<E:Field> = builtin("vector",E);
+type Polynomial<E:Field> = builtin("polynomial",E);
+fn normalized(xs:Vector<F>)->Polynomial<F>{return kernel<F>("poly.from_coefficients",xs);}
+fn eval(p:Polynomial<F>,x:F)->F{return kernel<F>("poly.univariate_evaluate",p,x);}
+fn root(n:index)->F=primitive("poly.domain_root");
+fn point(shift:F,n:index,i:index)->F=primitive("poly.domain_point");
+fn choose(b:bool,a:index,c:index)->index=primitive("index.select");
+protocol Work roles(P,V)(xs:Vector<F>@P,shift:F@V,n:index@V,i:index@V,
+  flag:bool@V,expected_root:F@V,expected:F@V)->(accepted:bool@V){
+ let received=send P->V(xs);
+ let p@V=normalized(received);
+ let g@V=root(n);
+ let x@V=point(shift,n,choose(flag,i,0));
+ let value@V=eval(p,x);
+ return(accepted=value==expected && g==expected_root);
+}
+proof Proof=Work{prover P;verifier V;public{shift,n,i,flag,expected_root,expected};accept accepted;construction authored;}
+)zkc",
+                                     "FIELD", domain);
+          auto compiled = compileSource(text);
+          auto target = compiled.targetSnapshot();
+          unsigned from = 0, evaluate = 0, root = 0, point = 0, select = 0;
+          target->walk([&](Operation *op) {
+            from += isa<evm::PolyFromCoefficientsOp>(op);
+            evaluate += isa<evm::PolyEvaluateOp>(op);
+            root += isa<evm::PolyDomainRootOp>(op);
+            point += isa<evm::PolyDomainPointOp>(op);
+            select += isa<arith::SelectOp>(op);
+          });
+          require(from && evaluate && root && point && select &&
+                      succeeded(evm::checkTarget(*target)),
+                  "logical polynomial/select closure escaped typed conversion");
+        });
+  cases.run(
+      "logical raw Merkle consumer retains repeated physical authentication",
+      [&] {
+        auto compiled = compileSource(R"zkc(module scalar;
+domain C=commitment("rows.merkle-keccak256.koala-bear.ext4-binomial3/0");
+domain F=field("koala-bear.ext4-binomial3");
+type Root=builtin("commitment",C);type Path=builtin("proof",C);
+type Vector<E:Field> = builtin("vector",E);
+fn check(root:Root,w:index,h:index,i:index,row:Vector<F>,path:Path)->bool=primitive("oracle.check");
+protocol Work roles(P,V)(root:Root@P,row:Vector<F>@P,path:Path@P,
+  w:index@V,h:index@V,i:index@V)->(accepted:bool@V){
+ let received=send P->V((root,row,path));
+ let first@V=check(received.0,w,h,i,received.1,received.2);
+ let second@V=check(received.0,w,h,i,received.1,received.2);
+ return(accepted=first&&second);
+}
+proof Proof=Work{prover P;verifier V;public{w,h,i};accept accepted;construction authored;}
+)zkc");
+        unsigned checks = 0;
+        auto target = compiled.targetSnapshot();
+        target->walk([&](evm::OracleCheckOp) { ++checks; });
+        require(checks == 2, "repeated authentication was dropped or cached");
+      });
   cases.run("typed target round trip retains origins and identical Yul", [&] {
     auto compiled = compileSource(proofSource(
         "fn work(a:Fr,b:Fr,c:Fr)->bool{return a*b==c;}", "accepted:bool@V",

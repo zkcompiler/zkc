@@ -197,11 +197,18 @@ nonce search remains native prover work. The maintained
 [Sumcheck project](../examples/projects/sumcheck-keccak/README.md) uses the native
 prover and EVM verifier over identical framed proof bytes. The
 [deployed tests](../common/tests/evm/README.md) compare complete primitive traces
-and failure frontiers. Root/path envelopes can be transported without
-authentication, and every path envelope is bounded by the declared path ceiling,
-whose maximum admits every path native admits; cryptographic Merkle operations, curve operations, transcript
-families and decoders other than the realized ones and full STARK verifier
-deployment need additional target support. Conditional participant completion
+and failure frontiers. Target source now includes typed single-row Keccak
+authentication for installed base/quartic/octic KoalaBear schemes, exact installed
+coset roots and points, internal normalized univariate polynomials with Horner
+evaluation, and index selection. Common oracle realization retains query history,
+anchors, extents, packet deduplication and repeated authentication semantics.
+Focused Direct quartic Keccak FRI fixtures and malformed physical-operation
+controls are authored; this addition has no build, native or deployed validation
+receipt yet. The small FRI geometry is a closure control, not a security profile.
+Every path envelope remains bounded by the declared path ceiling. Other Merkle
+schemes, multiproofs, curve operations, transcript families and decoders other
+than the realized ones and full STARK verifier deployment need additional
+target support. Conditional participant completion
 in the verifier refuses with `evm.completion`. These checks are bounded
 execution evidence, not a formal lowering or cryptographic theorem.
 

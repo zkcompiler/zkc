@@ -496,6 +496,8 @@ add_zkc_component(EvmTarget
   lib/Target/Evm/Compilation.cpp
   lib/Target/Evm/Layout.cpp
   lib/Target/Evm/Arithmetic.cpp
+  lib/Target/Evm/Authentication.cpp
+  lib/Target/Evm/Polynomial.cpp
   lib/Target/Evm/Lowering.cpp
   lib/Target/Evm/Runtime.cpp
   lib/Target/Evm/Transcript.cpp

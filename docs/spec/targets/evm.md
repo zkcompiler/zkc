@@ -61,8 +61,74 @@ a nonzero witness refuses before transcript consumption. For positive
 difficulty, the complete request and its atomic transition precede a failed
 gate; no result or successor is published on that failure. The existing target
 transition, element and memory ceilings and EVM gas remain separate from the
-native numerical-work allowance. External services, curve operations, Merkle
-authentication and full FRI/STARK deployment require further target support.
+native numerical-work allowance. External services, curve operations, other
+authentication schemes and full STARK deployment require further target support.
+
+### Authenticated rows and univariate polynomials
+
+`oracle.check` realizes the installed base, quartic and octic KoalaBear Keccak
+row commitments. The exact root domain selects its installed `ValueField`,
+Keccak scheme, 32-byte digest and native root/path codec facts. Poseidon roots
+remain transportable but do not acquire Keccak authentication. The operation
+consumes the existing complete root/path frames and the ordinary field-vector
+layout. Common oracle realization continues to own anchors, immutable extents,
+physical layout selection, history, packet deduplication and release order.
+Each logical authentication occurrence executes, including repeated positions
+whose physical response is shared.
+
+The native leaf preimage is the NUL-terminated ASCII prefix
+`zkc.oracle.keccak256.leaf/0`, u64 little-endian byte length of the native
+element codec identity, that ASCII identity, u64 little-endian width and height,
+then ascending canonical u32 little-endian field coordinates. The identities
+are `koala-bear.canonical-u32le/0`,
+`koala-bear.ext4-binomial3.ascending-u32le/0` and
+`koala-bear.ext8-binomial3.ascending-u32le/0`; these differ from native frame
+codec identities. Each node hashes the NUL-terminated ASCII prefix
+`zkc.oracle.keccak256.node/0` followed by the left and right 32-byte digests.
+Sibling orientation follows physical position bits from least significant
+upwards. Non-power-of-two heights use the native cap-zero binary-tree path
+depth, `ceil(log2(height))`; padded leaves are zero digests.
+
+Shape admission precedes coordinate admission: width and height must be
+positive, height at most `2^24`, and checked width times height at most `2^20`.
+The product limit is a resource refusal. An out-of-range coordinate is a source
+stop. Once admitted, wrong row width, wrong path depth or root mismatch returns
+false. A common authenticated-query consumer requires that Boolean at its
+existing source guard. Canonical decode errors remain decode refusals. The
+opened row, path and temporary hash buffer retain their separate target limits;
+the committed shape does not materialize a table in EVM. All temporary hash
+storage is admitted before the first ordered hash.
+
+`poly.domain_root` and `poly.domain_point` use the installed coset convention's
+exact maximal root and base-subgroup order, inherited through `BaseField`.
+They embed roots into extensions and multiply every shift coefficient by the
+selected root power. Domain admission checks a positive power-of-two size and
+the installed order, then the native `2^20` element cap, then nonzero shift,
+then coordinate. These are source stops, including the native
+`refused:coset-element-limit` mapping. Extension output allocation precedes
+domain admission, preserving scalar-output preflight.
+
+Source codes 10/11 identify oracle shape/coordinate failures; 12/13/14/15
+identify coset size/zero-shift/coordinate/element-limit failures. Oracle element
+exhaustion uses resource code 16. Row/path length and root mismatches return the
+Boolean result and use no failure code.
+
+Internal `poly::UnivariateType` values use the shared coefficient layout as an
+immutable pointer/count pair. `poly.from_coefficients` trims trailing zero
+field elements and copies the normalized prefix with checked allocation; the
+zero polynomial has no coefficients. `poly.univariate_evaluate` uses Horner
+evaluation with the existing installed field arithmetic. This internal layout
+grants no public or proof wire ingress. `index.select` converts to standard
+`arith.select` over the existing Boolean and index lanes.
+
+These operation implementations permit generic FRI verifier closure without
+recognizing a protocol name. The focused Direct quartic Keccak fixtures in
+`common/tests/evm/fixtures/` explicitly select their transcript and row scheme.
+The `(LogSize=5, TerminalLog=0, Rounds=3, Queries=8)` fixtures are structural
+controls. Scalar and product-block query policies are separate authored
+applications. Their source implementations do not establish deployed closure,
+production security or a FRI soundness theorem. Unchanged participant-loop,
+transcript, proof, allocation, deployment-size and gas ceilings still apply.
 
 Target MLIR combines exact standard Func, SCF and Arith operations with
 separate ODS-defined EVM operations for checked arithmetic, collections, wire
@@ -195,8 +261,8 @@ the codec row's tag and element width, the aggregate frame's tag, and the
 commitment row's digest and digest-word widths. A field coordinate has its
 base field's codec width. A codec whose widths the target's layouts do not
 realize refuses Yul export; its diagnostic carries the `evm.wire-type` code.
-Sequences and variants compose these leaves. Root/path support preserves their
-canonical envelopes; it performs no authentication. Unsupported inactive arms
+Sequences and variants compose these leaves. Root/path wire handling preserves
+canonical envelopes; authentication is the separate typed operation above. Unsupported inactive arms
 and empty-container element types still refuse compilation.
 
 Each reached value is preflighted before materialization, sharing node, element,
@@ -235,7 +301,7 @@ verification decision. Reverts have a four-byte declared class followed by one
 | Source stop | `ZKCS` | Reached protocol or numerical failure |
 | Decode refusal | `ZKCD` | Invalid ABI, public wire, proof header or reached frame |
 | Target fault | `ZKCT` | Violated target ownership or internal representation contract |
-| Resource refusal | `ZKCR` | Exceeded an immutable deployment ceiling or the declared sampler limit |
+| Resource refusal | `ZKCR` | Exceeded an immutable deployment ceiling, reached native operation allowance or the declared sampler limit |
 
 EVM out-of-gas is a machine halt, separate from these structured outcomes. EVM
 gas does not implement native VM instruction fuel.

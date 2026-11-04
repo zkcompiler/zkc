@@ -120,6 +120,7 @@ Expected<Frame> frame(NativeLayouts &layouts, Type type) {
     return result;
   }
   case Kind::FixedVector:
+  case Kind::Univariate:
     return zkc::error("evm.wire-type",
                       "no supported complete native codec for this collection");
   case Kind::Root:

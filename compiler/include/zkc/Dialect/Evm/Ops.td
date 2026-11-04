@@ -403,4 +403,39 @@ def Evm_SourceGuardOp : Evm_OrderedOp<"source.guard"> {
   let arguments = (ins I1:$condition, OptionalAttr<StrAttr>:$site);
   let hasVerifier = 1;
 }
+def Evm_OracleCheckOp : Evm_OrderedOp<"oracle.check"> {
+  let summary = "Authenticate one complete row using an installed Keccak scheme";
+  // Root and path lanes retain the existing complete native frame envelopes.
+  let arguments = (ins I64:$root_data, I64:$root_bytes,
+      I64:$width, I64:$height, I64:$position, I64:$row_data, I64:$row_count,
+      I64:$path_data, I64:$path_bytes, TypeAttr:$value_type);
+  let results = (outs I1:$result);
+  let hasVerifier = 1;
+}
+def Evm_PolyDomainRootOp : Evm_OrderedOp<"poly.domain_root"> {
+  let summary = "Exact installed base-subgroup root embedded in a field";
+  let arguments = (ins I64:$size, TypeAttr:$value_type);
+  let results = (outs Evm_FieldLane:$result);
+  let hasVerifier = 1;
+}
+def Evm_PolyDomainPointOp : Evm_OrderedOp<"poly.domain_point"> {
+  let summary = "Ordered checked coset coordinate with the installed root";
+  let arguments = (ins Evm_FieldLane:$shift, I64:$size, I64:$position,
+      TypeAttr:$value_type);
+  let results = (outs Evm_FieldLane:$result);
+  let hasVerifier = 1;
+}
+def Evm_PolyFromCoefficientsOp : Evm_OrderedOp<"poly.from_coefficients"> {
+  let summary = "Allocate a normalized immutable ascending coefficient prefix";
+  let arguments = (ins I64:$data, I64:$count, TypeAttr:$value_type);
+  let results = (outs I64:$result_data, I64:$result_count);
+  let hasVerifier = 1;
+}
+def Evm_PolyEvaluateOp : Evm_OrderedOp<"poly.univariate_evaluate"> {
+  let summary = "Horner evaluation of an internal normalized polynomial";
+  let arguments = (ins I64:$data, I64:$count, Evm_FieldLane:$point,
+      TypeAttr:$value_type);
+  let results = (outs Evm_FieldLane:$result);
+  let hasVerifier = 1;
+}
 #endif

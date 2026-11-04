@@ -1,0 +1,17 @@
+module authenticated_read;
+type Vector<E: Field> = builtin("vector", E);
+domain F = field("koala-bear.ext4-binomial3");
+type FieldTable = builtin("oracle.table", F);
+protocol Read roles(P,V)(word: Vector<F> @P, rows: index @(P,V),
+    position: index @V, expected: F @V) -> (accepted: bool @V) {
+  let table <- send P -> V(word) as oracle<FieldTable>(rows = rows) max 64;
+  let first @V <- query table at position;
+  let second @V <- query table at position;
+  return (accepted = first == expected && second == expected);
+}
+proof Proof = Read {
+  prover P; verifier V;
+  public { rows, position, expected };
+  accept accepted;
+  construction authored;
+}

@@ -365,3 +365,72 @@ The maximum-count helper does not test compiled output compaction or lifetime.
 Refusal precedence, internal preflight atomicity and an honest passing b=64
 compiled proof remain outside these added controls. No native
 b=64 witness search is attempted.
+
+## Authenticated rows, polynomials and FRI closure
+
+The following are authored controls awaiting parent execution. No validation
+receipt for these additions is recorded here. Build the compiler, `evm_fixture`
+native driver and runner separately through the normal development workflow.
+
+```sh
+python3 common/tests/evm/authentication_controls.py \
+ --compiler /path/to/zkc-compile --native-driver /path/to/evm_fixture \
+ --solc /path/to/pinned/solc --runner /path/to/zkc-evm-test-runner \
+ --output build/evm-research/authentication-controls
+```
+
+Use `--suite authentication`, `--suite polynomial` or `--suite logical` to
+select affected checks. The harness reuses `Subjects`, the positional native
+proof driver, canonical ABI helpers and the existing complete-trace oracle.
+Each execution deploys once and calls twice. It retains compiler products,
+native requests/reports, exact expected hashes and deployed reports.
+
+Raw row controls cover installed base/quartic/octic Keccak commitments, width
+and height one, both orientations, non-power-of-two height with zero-digest
+padding, wrong roots/rows/siblings, short and extra rows/paths, shape/product/
+coordinate precedence, canonical decode failures, and a tiny opening of a
+`2^20`-row shape. Independent integer Keccak constructs expected preimages;
+every repeated authentication must execute again. Polynomial controls cover
+empty, zero, trailing-zero and extension-valued coefficients, installed roots,
+Horner evaluation, dynamic index selection, and ordered domain failures.
+Logical controls use the existing common query controller with individual
+natural/per-query and paired bit-reversed/atomic selections. Source tests in
+`evm-layout` and `evm-legality` add malformed ODS operations and real logical
+consumers; the internal polynomial layout remains refused at wire ingress.
+
+`fixtures/fri_keccak.zkc` explicitly authors
+`ScalarLowDegree<Direct<koala-bear.ext4-binomial3>,5,0,3,8>` with the installed
+quartic Keccak transcript. Its row scheme is explicitly selected by the harness.
+`fri_keccak_block.zkc` separately authors `BlockLowDegree` with the same tuple;
+it has a different product-block sampling law. Neither fixture replaces the
+existing Merlin or converted-challenge library clients. Neither is a production
+security profile.
+
+```sh
+python3 common/tests/evm/fri_closure.py \
+ --compiler /path/to/zkc-compile --native-driver /path/to/evm_fixture \
+ --solc /path/to/pinned/solc --runner /path/to/zkc-evm-test-runner \
+ --output build/evm-research/fri-scalar
+```
+
+The default selects individual natural leaves and `per-query` authentication.
+`--sampling block` selects the separate block fixture. Explicit `--grouping`,
+`--table-order` and `--authentication` arguments select other common physical
+realizations. The adapter prepares a real native proof and independently checks
+returned values against an extension-valued degree-seven polynomial. Without
+`--expected` it reports preparation only and performs no deployed call.
+
+The parent supplies a complete independently reconstructed primitive trace as
+`--expected FILE`, containing exactly `proof_sha256`, `fork`, `trace` and
+`evm_revert` (null or `[class,code]`). The trace must include invocation SHA-256,
+all construction Keccak calls and every row/path hash in executed order. A
+Merkle-only list or a trace copied from Yul/revm is insufficient. The existing
+oracle recomputes every supplied hash and checks exact count, order and bytes.
+This adapter does not supply a full independent FRI/transcript replay itself;
+independent origins, query/fold scheduling and stopping-prefix review remain
+parent acceptance work. A source-derived estimate is 74 transcript transitions
+for scalar/per-query and 60 for block/per-query at the small tuple. Confirm the
+actual endpoint counts; the unchanged target ceiling is 64. Native preparation
+uses a separate budget of 4096. An exact target resource stop is useful evidence
+but does not establish successful FRI deployment. Keep fixed-strength flagship
+parameters unchanged throughout feasibility attempts.

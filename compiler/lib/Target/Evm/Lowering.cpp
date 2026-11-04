@@ -20,6 +20,7 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Target/Evm/Authentication.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Target.h"
 #include "zkc/Target/Evm/Transcript.h"
@@ -252,6 +253,7 @@ struct PreparedEndpoint {
                                       "index.mod",
                                       "index.mul",
                                       "index.power_of_two",
+                                      "index.select",
                                       "index.sub",
                                       "index.wrapping_add",
                                       "index.wrapping_sub",
@@ -259,6 +261,11 @@ struct PreparedEndpoint {
                                       "indices.at",
                                       "indices.empty",
                                       "indices.length",
+                                      "oracle.check",
+                                      "poly.domain_root",
+                                      "poly.domain_point",
+                                      "poly.from_coefficients",
+                                      "poly.univariate_evaluate",
                                       "sequence.append",
                                       "sequence.at",
                                       "sequence.empty",
@@ -289,6 +296,14 @@ struct PreparedEndpoint {
                           "runtime realization: ")
                 << contract;
             return WalkResult::interrupt();
+          }
+          if (contract == "oracle.check") {
+            auto rows = realizeKeccakRows(layouts, admitted->valueType.getInput(0));
+            if (!rows) {
+              consumeError(rows.takeError());
+              op->emitError("[evm.unsupported-operation] no exact installed Keccak row realization");
+              return WalkResult::interrupt();
+            }
           }
           if (contract == "transcript.native.indexed.challenge" ||
               contract == "transcript.native.indexed.index" ||
@@ -735,6 +750,29 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
                                           : arith::CmpIPredicate::eq;
     return bind(op, {arith::CmpIOp::create(builder, op->getLoc(), predicate,
                                            operands[0], operands[1])});
+  }
+  if (name == "index.select")
+    return bind(op, {arith::SelectOp::create(builder, op->getLoc(), operands[0],
+                                           operands[1], operands[2])});
+  if (name == "oracle.check" || name == "poly.domain_root" ||
+      name == "poly.domain_point" || name == "poly.from_coefficients" ||
+      name == "poly.univariate_evaluate") {
+    if (!parameters || !parameters.empty())
+      return refuse(op, "authentication/polynomial operation requires empty parameters");
+    Type type = name == "oracle.check" || name == "poly.univariate_evaluate"
+                    ? admitted.valueType.getInput(0)
+                    : admitted.valueType.getResult(0);
+    SmallVector<NamedAttribute> attrs{
+        builder.getNamedAttr("value_type", TypeAttr::get(type))};
+    if (name == "oracle.check")
+      return bind(op, emit<OracleCheckOp>(op, *resultTypes, operands, attrs));
+    if (name == "poly.domain_root")
+      return bind(op, emit<PolyDomainRootOp>(op, *resultTypes, operands, attrs));
+    if (name == "poly.domain_point")
+      return bind(op, emit<PolyDomainPointOp>(op, *resultTypes, operands, attrs));
+    if (name == "poly.from_coefficients")
+      return bind(op, emit<PolyFromCoefficientsOp>(op, *resultTypes, operands, attrs));
+    return bind(op, emit<PolyEvaluateOp>(op, *resultTypes, operands, attrs));
   }
   if (name.starts_with("transcript.native.indexed.")) {
     bool observe = name == "transcript.native.indexed.observe.data";

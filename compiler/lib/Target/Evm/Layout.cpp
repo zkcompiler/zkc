@@ -3,6 +3,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
@@ -128,6 +129,15 @@ Expected<const ValueLayout *> NativeLayouts::get(Type type) {
       return facts.takeError();
     result->kind =
         isa<data::FieldVectorType>(type) ? Kind::FieldVector : Kind::FieldArray;
+    result->lanes.append({i64, i64});
+    result->collection = CollectionLayout{element, Cells::FieldCoefficients,
+                                          (*facts)->coefficientBytes()};
+  } else if (auto polynomial = dyn_cast<poly::UnivariateType>(type)) {
+    auto element = algebra::FieldType::get(&storage->context, polynomial.getDomain());
+    auto facts = field(element);
+    if (!facts)
+      return facts.takeError();
+    result->kind = Kind::Univariate;
     result->lanes.append({i64, i64});
     result->collection = CollectionLayout{element, Cells::FieldCoefficients,
                                           (*facts)->coefficientBytes()};

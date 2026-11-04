@@ -1,6 +1,9 @@
 #include "zkc/Dialect/Evm/Evm.h"
 #include "mlir/IR/Builders.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
+#include "zkc/Target/Evm/Authentication.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
@@ -162,6 +165,86 @@ LogicalResult FieldConstantOp::verify() {
   if (!c.literal(getValueAttr()))
     return emitOpError("[evm.literal] requires exact canonical field literal");
   return c.signature({}, c.layout->lanes);
+}
+LogicalResult OracleCheckOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  auto rows = realizeKeccakRows(c.layouts, c.type);
+  if (!rows) {
+    llvm::consumeError(rows.takeError());
+    return emitOpError(
+        "[evm.authentication] requires exact installed Keccak row root type");
+  }
+  return c.signature(
+      {c.i64, c.i64, c.i64, c.i64, c.i64, c.i64, c.i64, c.i64, c.i64}, {c.i1});
+}
+namespace {
+LogicalResult coset(LayoutCheck &c) {
+  if (failed(c.load()) || failed(c.field()))
+    return failure();
+  auto field = c.layouts.field(cast<algebra::FieldType>(c.type));
+  if (!field) {
+    llvm::consumeError(field.takeError());
+    return failure();
+  }
+  const auto *convention =
+      protocol::cosetConvention(cast<algebra::FieldType>(c.type).getDomain());
+  llvm::APInt root;
+  if (!convention || convention->rootField != (*field)->base.getDomain() ||
+      !convention->maxLogSize || convention->maxLogSize > 64 ||
+      llvm::StringRef(convention->maximalRoot).getAsInteger(10, root) ||
+      root.getActiveBits() > 256 || root.isZero() ||
+      root.zextOrTrunc(256).uge((*field)->modulus))
+    return c.op->emitOpError(
+        "[evm.polynomial] requires exact installed base-subgroup roots");
+  return success();
+}
+LogicalResult univariate(LayoutCheck &c) {
+  if (failed(c.load()))
+    return failure();
+  if (!isa<poly::UnivariateType>(c.type))
+    return c.op->emitOpError(
+        "[evm.value-type] requires internal UnivariateType");
+  return success();
+}
+} // namespace
+LogicalResult PolyDomainRootOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(coset(c)))
+    return failure();
+  return c.signature({c.i64}, c.layout->lanes);
+}
+LogicalResult PolyDomainPointOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(coset(c)))
+    return failure();
+  return c.signature({c.layout->lanes[0], c.i64, c.i64}, c.layout->lanes);
+}
+LogicalResult PolyFromCoefficientsOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(univariate(c)))
+    return failure();
+  return c.signature({c.i64, c.i64}, c.layout->lanes);
+}
+LogicalResult PolyEvaluateOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(univariate(c)))
+    return failure();
+  auto element = c.element();
+  if (failed(element))
+    return failure();
+  return c.signature({c.i64, c.i64, (*element)[0]}, *element);
 }
 LogicalResult FieldAddOp::verify() {
   if (failed(attributes(*this)))
