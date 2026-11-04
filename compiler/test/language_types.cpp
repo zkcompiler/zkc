@@ -405,7 +405,7 @@ void typing() {
           "source.type");
   refuses(prefix + "interface Eat<X:Type>{type T;fn eat(x:X)->() effects(stop, "
                    "opaque);}module "
-                   "Sink<T:Type>:Eat<T>{type T=();fn eat(x:T)->(){consume "
+                   "Sink<T:Type>:Eat<T>{type T:Type=();fn eat(x:T)->(){consume "
                    "x;return ();}}",
           "source.shadow");
   refuses(prefix + "interface I{fn f()->bool effects(stop, opaque);}fn "

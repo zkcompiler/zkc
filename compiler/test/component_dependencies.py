@@ -187,7 +187,7 @@ def main():
     private_headers = {
         "ZkcSource": set(),
         "ZkcSyntax": {ROOT / "lib/Syntax/Storage.h"},
-        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan", "LexicalRecords", "WrittenSource", "WrittenSourceIndex")},
+        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "CommonSummary", "ConstructionWitness", "ManagedServices", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan", "LexicalRecords", "WrittenSource", "WrittenSourceIndex")},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
