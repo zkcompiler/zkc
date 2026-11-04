@@ -510,8 +510,12 @@ is a valid empty container, so append always stops. The maximum does not grant
 allocation capacity or a native execution budget.
 
 Append and selection name a nonempty, distinct role set and an ordered site.
-Each role must have every operand. The result is available precisely at those
-roles. Their stopping checks are ordered effects even when their results are
+Each role must have every operand. Selection also demands common provenance
+of its ordinary index across that role set. Native admission derives the
+coordinate obligation from the actual call closure, independently of the
+source interface; availability alone cannot establish it. This does not turn
+logical handles or their histories into ordinary equality data. The result is
+available precisely at those roles. Their stopping checks are ordered effects even when their results are
 unused; generic simplification must preserve them. They neither send a handle
 as a message nor perform an oracle query. Realization must preserve their order,
 checks and dynamic anchor choice before projection. A static set of possible

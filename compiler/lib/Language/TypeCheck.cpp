@@ -67,9 +67,79 @@ Checker::arguments(const Declaration &context, const Declaration &target,
   return result;
 }
 
+std::optional<Type>
+Checker::associated(const Declaration &context, const Type &base,
+                    StringRef path, Span span,
+                    std::optional<ResolvedReference> reference) {
+  Type current = base;
+  unsigned depth = 0;
+  std::string written;
+  while (!path.empty()) {
+    if (++depth > work.limits.typeDepth) {
+      types.fail("source.limit", "associated reference depth", span);
+      return {};
+    }
+    auto [name, tail] = path.split("::");
+    written += (written.empty() ? "" : "::") + name.str();
+    if (current.kind == Type::Kind::Module) {
+      const Declaration *owner = nullptr;
+      uint32_t slot = UINT32_MAX;
+      auto binderOwner = context.id;
+      if (current.symbolic) {
+        if (auto *parameter = types.parameter(current.domain);
+            parameter && parameter->interface) {
+          owner = &output.declarations[parameter->interface->index];
+          auto selected = moduleParameterReferences.find(parameter->atom);
+          if (selected != moduleParameterReferences.end()) {
+            reference = selected->second.reference;
+            binderOwner = selected->second.owner;
+            slot = selected->second.slot;
+          }
+        } else if (StringRef(current.domain).starts_with("self:")) {
+          if (auto id =
+                  index().canonical(StringRef(current.domain).drop_front(5)))
+            owner = &output.declarations[id->index];
+        }
+      } else
+        owner = types.typeDeclaration(current);
+      if (!owner) {
+        types.fail("source.type", "unknown associated module", span);
+        return {};
+      }
+      auto result = index().member(accessFor(context), owner->id, name,
+                                   {[&] { return types.charge(1, span); }, {}});
+      auto *member = std::get_if<ResolvedReference>(&result);
+      if (!member) {
+        acceptFailure(std::get<LookupFailure>(result), span, true);
+        return {};
+      }
+      if (!reference)
+        reference = *member;
+      else {
+        reference->target = member->target;
+        reference->category = member->category;
+        reference->path.insert(reference->path.end(), member->path.begin(),
+                               member->path.end());
+      }
+      reference->abstract =
+          AbstractMemberContext{current, owner->id, binderOwner, slot};
+      if (!recordReference(context, ReferenceRoute::ModuleMember, *reference,
+                           written, span))
+        return {};
+    }
+    auto next = types.associated(current, name, span);
+    if (!next)
+      return {};
+    current = std::move(*next);
+    path = tail;
+  }
+  return current;
+}
+
 std::optional<Type> Checker::type(const Declaration &context,
                                   const SyntaxType &s, unsigned depth,
                                   bool allowPlacement) {
+  SaveAndRestore site(referenceSite, s.referenceSite);
   auto result = elaborateType(context, s, depth, allowPlacement);
   if (result && !types.chargeType(*result, s.span))
     return {};
@@ -177,8 +247,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     return result;
   }
   if (s.kind == S::Array) {
-    auto element =
-        elaborateType(context, s.arguments[0], depth + 1, allowPlacement);
+    auto element = type(context, s.arguments[0], depth + 1, allowPlacement);
     auto count = type(context, s.arguments[1], depth + 1);
     if (!element || !count)
       return {};
@@ -211,7 +280,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
   if (s.kind == S::Tuple) {
     Type result(s.arguments.empty() ? K::Unit : K::Tuple);
     for (auto &child : s.arguments) {
-      auto t = elaborateType(context, child, depth + 1, allowPlacement);
+      auto t = type(context, child, depth + 1, allowPlacement);
       if (!t)
         return {};
       if (!valueType(*t)) {
@@ -232,26 +301,43 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     }
     return result;
   }
+  if (!StringRef(s.name).starts_with("::")) {
+    if (!types.charge(context.parameters.size(), s.span))
+      return {};
+    auto [head, tail] = StringRef(s.name).split("::");
+    for (const auto &parameter : context.parameters)
+      if (parameter.name == head) {
+        if (!s.arguments.empty()) {
+          types.fail("source.generic",
+                     "a selected static binder cannot take static arguments",
+                     s.span);
+          return {};
+        }
+        if (tail.empty())
+          return parameterType(parameter);
+        return associated(context, parameterType(parameter), tail, s.span);
+      }
+  }
   if (s.arguments.empty()) {
     if (s.name == "bool")
       return Type{};
     if (s.name == "index")
       return Type(K::Index);
-    for (auto &p : context.parameters)
-      if (p.name == s.name)
-        return parameterType(p);
-    auto split = StringRef(s.name).split("::");
-    if (!split.second.empty())
-      for (auto &p : context.parameters)
-        if (p.name == split.first) {
-          auto result =
-              types.associated(parameterType(p), split.second, s.span);
-          return result;
-        }
   }
-  if (s.arguments.empty()) {
-    // Prefer the longest resolvable declaration prefix. Module qualification
-    // and a chain of catalog projections use the same source path syntax.
+  auto selection =
+      index().lookup(accessFor(context), s.name, lookupTraversal(s.span));
+  auto *selected = std::get_if<ResolvedReference>(&selection);
+  if (!selected &&
+      std::get<LookupFailure>(selection).kind != LookupFailureKind::NotFound) {
+    acceptFailure(std::get<LookupFailure>(selection), s.span, true);
+    return {};
+  }
+  if (!selected && s.arguments.empty()) {
+    // A complete declaration route wins before considering projections. In
+    // particular, an exact external qualified root must not be reclassified
+    // through an ambiguous short-name probe of its prefix.
+    // Module qualification and catalog projections share path syntax; only an
+    // absent declaration tail may be elaborated as a projection.
     StringRef prefix = s.name;
     while (prefix.contains("::")) {
       prefix = prefix.rsplit("::").first;
@@ -268,18 +354,33 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
           decl.kind != Declaration::Kind::Alias)
         continue;
       SyntaxType syntax;
+      syntax.referenceSite = s.referenceSite;
       syntax.name = prefix.str();
       syntax.span = s.span;
       auto base = type(context, syntax, depth + 1);
       if (!base)
         return {};
-      return types.associated(
-          *base, StringRef(s.name).drop_front(prefix.size() + 2), s.span);
+      return associated(context, *base,
+                        StringRef(s.name).drop_front(prefix.size() + 2), s.span,
+                        typeReferences.count(s.referenceSite)
+                            ? std::optional(typeReferences.at(s.referenceSite))
+                            : std::nullopt);
     }
   }
-  auto id = resolve(context, s.name, s.span);
-  if (!id || !signature(*id, depth + 1))
+  if (!selected) {
+    acceptFailure(std::get<LookupFailure>(selection), s.span, true);
     return {};
+  }
+  auto reference = std::optional(*selected);
+  auto id = std::optional(reference->target);
+  if (!signature(*id, depth + 1))
+    return {};
+  if (auto *row = index().association(*id);
+      row && row->rule == protocol::FrontendSignature::RandomConstructor) {
+    types.fail("source.service",
+               "managed constructor requires a protocol service port", s.span);
+    return {};
+  }
   auto &decl = output.declarations[id->index];
   if (decl.kind == Declaration::Kind::Associated) {
     auto &parent = output.declarations[decl.parent->index];
@@ -316,8 +417,18 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       for (const auto &parameter : parent.parameters)
         base.arguments.push_back(parameterType(parameter));
     }
-    return types.associated(base, decl.name, s.span);
+    reference->abstract =
+        AbstractMemberContext{base, parent.id, context.id, UINT32_MAX};
+    if (!recordReference(context, ReferenceRoute::Path, *reference, s.name,
+                         s.span))
+      return {};
+    typeReferences.insert_or_assign(s.referenceSite, *reference);
+    return types.associated(base, decl.id, s.span);
   }
+  if (!recordReference(context, ReferenceRoute::Path, *reference, s.name,
+                       s.span))
+    return {};
+  typeReferences.insert_or_assign(s.referenceSite, *reference);
   auto args = arguments(context, decl, s.arguments, s.span, s.labels);
   if (!args)
     return {};

@@ -172,12 +172,27 @@ for default output paths.
 
 Qualified references first resolve their root in the nearest lexical scope,
 then each enclosing module, including imports. A resolved lexical
-root owns the rest of the path: a missing or private member does not fall back
+root owns the rest of the path: a wrong category, missing or private member does not fall back
 to an unrelated captured module. If no lexical root exists, a qualified module
 path is considered. A leading `::` explicitly selects an absolute module path,
 for example `::algebra::Fr`. It is reference syntax, not part of module or
 canonical declaration names. Optional prefix lookup preserves privacy and
 resource-limit diagnostics.
+
+`DeclarationIndex` owns the declaration/import namespaces during formation and
+freezes them after import authorization. Source checking, external static-term
+selection, authoring and independent witness replay use that index with an
+explicit access context. Lexical frames remain lexical state. Static binders
+select their root before declaration and prelude lookup; a non-callable binder
+named `unpack`, for example, refuses with `source.call` instead of selecting the
+installed intrinsic. Absolute qualification can select that intrinsic directly.
+
+Lookup returns either a provider-bearing reference or a typed failure: absence,
+inaccessibility, ambiguity, wrong category, cycle or limit. Category checks do
+not restart root selection. References retain project-local provider and target
+IDs, the owner/name/import steps of the selected route, and typed module,
+interface and binder context for abstract members. Exact canonical-name joins
+are internal identity operations and do not authorize source access.
 
 ### Module imports and operator scope
 
@@ -215,8 +230,14 @@ read directly into the declaration index; they have no written source text, and
 every row is included in installation identity. Captures cannot supply either
 name or claim an installation origin. Installed modules cannot be linked as
 external children. The prelude's public scalar operator bindings
-are visible by default; its function names require qualification or explicit
-import. The prelude itself has no imports or inherited operator environment.
+are visible by default; scalar function names require qualification or explicit
+import. The catalog `prelude` flag admits only its marked declarations
+into an explicit prelude namespace. That namespace is considered only after no
+source root was selected; it supplies no fallback for an invalid selected root.
+Managed constructors selected through it or through an ordinary qualified or
+imported facade retain the same constructor category. They are legal only in
+managed-port positions; ordinary type positions, interface constraints and module
+implementations refuse them with `source.service`. The prelude itself has no imports or inherited operator environment.
 There is no runtime source-file lookup. Capture identity and captured file/byte
 limits exclude installed modules; declaration and work limits include reading
 and checking them. `Analysis::sources()` and `CheckedProject::sources()` include
@@ -238,9 +259,9 @@ route, with its route kind, as published in the
 is discarded records nothing. The dependencies of a unit `u` are its parent
 file, its linked child files, and, for every recorded reference whose owner is
 defined in `u`, the defining units of the reference's provider and target. An
-abstract interface reference contributes only the interface member's unit, so
-a closed instance's concrete dispatch never enters a generic library's
-closure. The closure of `u` is the least set of units that contains `u` and is
+abstract interface reference contributes its authored interface provider and
+member units, including a facade selected by the bound. A closed instance's
+concrete dispatch never enters a generic library's closure. The closure of `u` is the least set of units that contains `u` and is
 closed under dependencies. The assets of `u` are the captured assets named by
 asset domains and captured relations declared in its closure. Unrelated units,
 consumer Entry names, diagnostic paths and source ordering do not enter it.
@@ -1449,6 +1470,18 @@ its implementation must explicitly declare a nominal type with `:` or a resource
 or sealing attribute. Interface
 membership never changes an alias's meaning. The module path and canonical static
 arguments determine nominal identity, independent of imports or file layout.
+The checked implementing module retains one required-member to provided-member
+edge per interface member, in interface order. Selection uses direct authored
+members and includes associated types and domain factories. Imports and members
+of other modules cannot supply an edge. The implementing module's exact static
+arguments and selected interface instance supply its substitution context;
+identical member names in two implementations do not identify one dispatch.
+Checking forms the edges before dependent signatures and bodies, and validates
+all obligations before admitting a checked project. A source witness reconstructs
+the expected edges and signatures from retained authored headers and refuses
+missing, extra, forged, reordered or cross-module edges with
+`source.scoped-witness`. Runtime publication formats do not carry this checking
+record.
 Records and variants are ordinary module declarations. An abstract call or type projection
 requires a bound module; a free interface name cannot select an implementation.
 
@@ -1944,15 +1977,77 @@ Requests can lower these ceilings, never raise them. Checks refuse before charge
 work or recursive-depth budgets are exceeded; no truncated result is returned.
 Capture lexing, parsing and definition checking share one work budget.
 Specialization, layouts, emission, comparison, predicate admission and interface
-serialization each have a separate work budget. Within the common-input
-interface inventory, retained Protocol derivation, semantic-index setup,
-layout observation and normalization share the enclosing allowance, including
-work preceding a failed observation. Native common-input derivation likewise
-shares one API allowance with its layout and component-mapping stages.
+serialization each have a separate work budget. Closure's common-input analysis
+shares the closure allowance and retains immutable Protocol inventories.
+Interface publication borrows those inventories and charges its current
+allowance for layout observation, component mapping and normalization, including
+work preceding a failed observation. Publication does not charge a second source
+body derivation. Independent native common-input derivation shares its enclosing
+API allowance with its layout and component-mapping stages.
 Nested placement validation, role remapping and alias generation use the current
 remaining allowance and debit performed work on both success and refusal.
 Semantic native-layout and port observations reconcile their bounded work before
 the enclosing query continues, including failed observations.
+
+Source checking and closure retain diagnostic work observations. A `WorkLedger`
+records the existing charged total and exclusive `SourceWorkPhase` counters;
+their sum equals the total. A charge belongs only to the innermost active scope,
+which restores its predecessor on exit. Rejected charges and cancellation add
+nothing. This observation introduces no charges, allowances or admission rules.
+Nested semantic layout work is reconciled once into the caller's active phase,
+including partial work before a refusal; it does not create an extra debit of
+the enclosing allowance. A work-budget refusal keeps `source.limit` and names
+the active subphase in its diagnostic message. Other structural/depth limits
+keep their own diagnostics.
+
+Checking distinguishes parsing (both header and body parsing), installed
+declarations, written retention, declaration preparation (collection, imports,
+index, notation and predicate preparation), signatures, conformance,
+representations, permissions, bodies, common inputs, constructions/Entries/claims,
+retained views, scoped sources and source authorities. Retained views include
+the editor snapshot copied after checking or recovery. Closure distinguishes
+specialization, assets, closed data, common inputs and Host children. These are
+execution scopes: recursive work requested within a scope lands there, rather
+than being relabelled by the helper it calls. `unscoped` is always exposed; it
+is zero for completed checking and closure, not an omitted residual bucket.
+
+The complete diagnostic phase names are `unscoped`, `parsing`,
+`installed_declarations`, `written_retention`, `declarations`, `signatures`,
+`conformance`, `representations`, `permissions`, `bodies`, `common_inputs`,
+`entries_and_claims`, `retained_views`, `scoped_sources`, `source_authorities`,
+`entry_selection`, `specialization`, `assets`, `closed_data`, `host_children`,
+`scoped_elaboration` and `scoped_specialization`.
+
+`Analysis::workObservation()` includes performed work even after refusal;
+`CheckedProject::workObservation().charged.total` equals `checkedWork()`.
+`ClosedEntry::workObservation().charged.total` equals `closedWork()`, the
+existing closure charge total. Closure also retains `separateBudgets` for each
+independently bounded scoped-elaboration check, scoped-specialization check and
+generic Entry selector. Repeated checks remain separate in execution order;
+their work is not added to the original closure total or its allowance. Scoped
+specialization performs another scoped-elaboration check, which is retained
+separately. These optional observations do not skip or memoize checks.
+Each Host child retains its own observation. The parent's existing aggregate
+charge for that child's primary closure total belongs to `host_children`, along
+with invocation traversal. Child subphase counters and independent checks are
+not merged into the parent's ledger. Summing parent and child primary totals
+would therefore count the existing child charge twice.
+
+The source driver publishes `source_work` in untruncated
+`zkc.compilation-observation/0` records,
+for both observations and diagnostics. Its fields are `check` (observation or
+null), `check_completed` (Boolean), and `closure` (completed observation or null).
+An observation has `charged` and `separate_budgets`; each ledger has `total`
+and `subphases`, an object containing every phase name from the public
+`sourceWorkPhaseName` API, including zero counters. A separate-budget item has
+`phase` and `work` (its ledger). A closure also has `entry` and `children`, an
+array of child closure observations. Unavailable checking or closure data is
+null, never a synthesized zero ledger. A failed closure has no published closure
+observation; completed checking remains available. Capture and later layout,
+emission, comparison or publication queries are outside this observation's
+scope. Observations grant no evidence, source authority, admission or formal
+support, and are not part of source/artifact identity.
+
 The capture-wide specification inventory has a separate phase budget from
 per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.
@@ -1979,15 +2074,19 @@ notation environments, including lexical parents and the installed prelude.
 Bodies in one source file share its filtered token stream, with a separate
 notation environment for each module.
 
-The work ceiling accommodates composed source libraries while preserving charges
-for each traversal. Project checking derives every concrete Protocol's
-common-input requirements and checks record placement; the ceiling is twice the
-work of the largest maintained closure, the STARK library with its AIR
-relations. Each parse invocation stays within the
+The work ceiling bounds actual checking, including summary construction and
+application, record placement and independent witnesses. Maintained Schnorr,
+Sumcheck, GKR, FRI/STARK and accumulator closures must fit within 16,000,000
+charged units for each independent source allowance, leaving at least half of
+the implementation ceiling available. This is a charged-work capacity policy,
+not a wall-clock performance claim or a native preparation bound. Diagnostic
+work ledgers report exclusive subphases; Host child work is already included in
+its parent's total. Each parse invocation stays within the
 [layout syntax ceiling](layout-syntax.md#syntax-environments-and-recovery) and
 is charged to the phase. File, type, instance, operation and output ceilings
 remain independent; a higher work allowance does not admit a larger type or
-deeper call.
+deeper call. Flat managed aliases resolve through a binding graph under the
+work allowance; their count does not consume expression-nesting depth.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
 trees, including operator chains. [Notation limits](notation.md#bounds) also

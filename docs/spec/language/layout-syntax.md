@@ -115,7 +115,10 @@ outer declaration. No partial result can serve as a checked project.
 Invocation budgets can lower, but cannot raise, the implementation ceilings:
 1 MiB source, 1,000,000 tokens/nodes/child entries, 4,096 bytes per code token,
 128 identifier bytes, depth 64, 8,000,000 work units, 100 diagnostics and 1,024
-missing-node insertions. Notation environments admit at most 4,096 descriptors
+missing-node insertions. Each effective limit is the minimum of its requested
+value and its implementation ceiling. A larger enclosing allowance does not
+itself exhaust parsing; callers debit the actual reported parser work.
+Notation environments admit at most 4,096 descriptors
 with at most 64 holes. Both recursive descent and constructed node height are
 bounded. Cancellation is shared by the request and its computation. A stopped
 parse retains the remaining bytes in an invalid token, an end token and a

@@ -1,4 +1,5 @@
 #include "Internal.h"
+#include "ManagedServices.h"
 #include "zkc/Contracts/Declarations.h"
 #include "llvm/ADT/STLExtras.h"
 
@@ -148,6 +149,44 @@ readInstalledModule(const SourceBuffer &source, SourceId id, Work &work,
     auto member = declaration(row, span, work);
     if (!member)
       return member.takeError();
+    for (const auto &method : protocol::serviceMethodDeclarations()) {
+      if (method.constructor != row.identity)
+        continue;
+      if (row.rule != protocol::FrontendSignature::RandomConstructor ||
+          row.statics.size() != 1)
+        return refuse("managed method requires a service constructor", span);
+      if (auto error = work.count(work.declarations, work.limits.declarations,
+                                  "declaration count", span))
+        return std::move(error);
+      if (auto error = work.charge(1, span))
+        return std::move(error);
+      SyntaxDeclaration operation;
+      operation.kind = Declaration::Kind::Local;
+      operation.name = method.name;
+      operation.isPublic = operation.explicitPublic = true;
+      operation.span = span;
+      for (unsigned i = 0; i < serviceStaticCount(method.signature); ++i) {
+        SyntaxParameter parameter;
+        parameter.name = i == 0 ? "bound" : "count";
+        parameter.constraint = named("nat", span);
+        parameter.span = span;
+        operation.parameters.push_back(std::move(parameter));
+      }
+      SyntaxPort output;
+      output.name = "result";
+      output.span = span;
+      output.type =
+          named(method.signature == protocol::ServiceSignature::RandomDraw
+                    ? row.statics.front().name
+                    : "index",
+                span);
+      if (method.signature == protocol::ServiceSignature::RandomIndices) {
+        output.type.kind = SyntaxType::Kind::Builtin;
+        output.type.name = "indices";
+      }
+      operation.outputs.push_back(std::move(output));
+      member->members.push_back(std::move(operation));
+    }
     result.members.push_back(std::move(*member));
   }
   for (const auto &row : notations) {

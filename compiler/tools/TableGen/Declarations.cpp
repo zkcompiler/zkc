@@ -39,6 +39,12 @@ void require(bool valid, const Record *r, const Twine &message) {
   if (!valid)
     PrintFatalError(r, message);
 }
+void exactFields(const Record *r, ArrayRef<StringRef> fields) {
+  for (const auto &value : r->getValues())
+    require(value.getName() == "ordinal" ||
+                is_contained(fields, value.getName()),
+            r, "unknown field " + value.getName());
+}
 bool identifier(StringRef value) {
   return !value.empty() && (isAlpha(value.front()) || value.front() == '_') &&
          all_of(value, [](char c) { return isAlnum(c) || c == '_'; });
@@ -342,9 +348,12 @@ void Model::validate() {
     intrinsicNames.insert(name(r));
   for (const auto *r : operations)
     operationNames.insert(name(r));
-  std::set<StringRef> frontendIds, implicitNames, homes, methods;
+  std::set<StringRef> frontendIds, preludeNames, homes, serviceConstructors;
+  std::set<std::pair<StringRef, StringRef>> methods;
   std::set<std::pair<StringRef, StringRef>> declared;
   for (const auto *r : frontendDeclarations) {
+    exactFields(r, {"identity", "module", "name", "kind", "statics", "inputs",
+                    "output", "association", "target", "prelude"});
     auto identity = r->getValueAsString("identity");
     require(!identity.empty() && frontendIds.insert(identity).second, r,
             "duplicate frontend identity");
@@ -368,6 +377,8 @@ void Model::validate() {
                              r->getValueAsListOfDefs("output"));
     auto association = r->getValueAsString("association");
     auto target = r->getValueAsString("target");
+    if (association == "rule" && target == "RandomConstructor")
+      serviceConstructors.insert(identity);
     if (association == "rule") {
       auto rule = ruleShapes.find(target);
       require(rule != ruleShapes.end() && rule->second == shape, r,
@@ -377,9 +388,9 @@ void Model::validate() {
           association == "primitive" && kind != "Interface" &&
               (kind == "Math" ? intrinsicNames : operationNames).count(target),
           r, "frontend primitive kind mismatch");
-    if (r->getValueAsBit("implicit"))
-      require(implicitNames.insert(name(r)).second, r,
-              "duplicate implicit frontend name");
+    if (r->getValueAsBit("prelude"))
+      require(preludeNames.insert(name(r)).second, r,
+              "duplicate prelude frontend name");
   }
   std::set<std::tuple<StringRef, StringRef, StringRef>> notations;
   for (const auto *r : frontendNotations) {
@@ -450,10 +461,18 @@ void Model::validate() {
             r, "unknown service capability");
   }
   for (const auto *r : serviceMethods) {
+    exactFields(r,
+                {"identity", "constructor", "name", "signature", "capability"});
     auto rule = r->getValueAsString("signature"),
          cap = r->getValueAsString("capability");
-    require(identifier(name(r)) && methods.insert(name(r)).second, r,
-            "invalid or duplicate service method");
+    auto identity = r->getValueAsString("identity"),
+         constructor = r->getValueAsString("constructor");
+    require(!identity.empty() && frontendIds.insert(identity).second, r,
+            "duplicate service method identity");
+    require(serviceConstructors.count(constructor), r,
+            "invalid service method constructor");
+    require(identifier(name(r)) && methods.emplace(constructor, name(r)).second,
+            r, "invalid or duplicate service method");
     require(serviceRules.count(rule) && serviceRules.at(rule) == cap, r,
             "service method capability mismatch");
     require(cap.empty() ||
@@ -1164,7 +1183,7 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     os << (rule ? "FrontendSignature::" + r->getValueAsString("target").str()
                 : std::string("std::nullopt"))
        << ", " << quote(rule ? "" : r->getValueAsString("target")) << ", "
-       << boolean(r->getValueAsBit("implicit")) << "},\n";
+       << boolean(r->getValueAsBit("prelude")) << "},\n";
   }
   os << "}; return rows; }\n"
         "const FrontendDeclaration *frontendDeclaration(llvm::StringRef "
@@ -1204,7 +1223,8 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
         "{\n"
         "static const std::vector<ServiceMethodDeclaration> rows = {\n";
   for (const auto *r : m.serviceMethods)
-    os << "{" << quote(name(r))
+    os << "{" << quote(r->getValueAsString("identity")) << ", "
+       << quote(r->getValueAsString("constructor")) << ", " << quote(name(r))
        << ", ServiceSignature::" << r->getValueAsString("signature") << ", "
        << quote(r->getValueAsString("capability")) << "},\n";
   os << "}; return rows; }\n";
@@ -1623,7 +1643,7 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
                      {"association",
                       json::Object{{"kind", r->getValueAsString("association")},
                                    {"target", r->getValueAsString("target")}}},
-                     {"implicit", r->getValueAsBit("implicit")}});
+                     {"prelude", r->getValueAsBit("prelude")}});
   }
   for (const auto *r : m.frontendNotations) {
     json::Value fixity = nullptr;
@@ -1654,7 +1674,9 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
                                   }()}});
   for (const auto *r : m.serviceMethods)
     services.push_back(
-        json::Object{{"name", name(r)},
+        json::Object{{"identity", r->getValueAsString("identity")},
+                     {"constructor", r->getValueAsString("constructor")},
+                     {"name", name(r)},
                      {"signature", r->getValueAsString("signature")},
                      {"capability", r->getValueAsString("capability")}});
   result["frontendRules"] = std::move(frontendRules);

@@ -99,7 +99,9 @@ Authoring::Authoring(const Analysis &analysis)
     view = std::make_shared<detail::AuthoringStorage>();
   initializeSelections();
 }
-bool Authoring::hasSemanticContext() const { return bool(view->names); }
+bool Authoring::hasSemanticContext() const {
+  return bool(view->declarationIndex);
+}
 std::string Authoring::detail(const Declaration &declaration) const {
   return view->signatures[declaration.id.index]
              ? signature(declaration)
@@ -228,20 +230,15 @@ std::vector<SourceCompletion> Authoring::completion(SourceId source,
     if (!decl.generated && contains(decl.span, source, offset) &&
         (!context || narrower(decl.span, context->span)))
       context = &decl;
-  if (context && view->names) {
-    auto owner = (context->kind == Declaration::Kind::Module ||
-                  context->kind == Declaration::Kind::Interface)
-                     ? std::optional(context->id)
-                     : context->parent;
-    for (; owner; owner = view->declarations[owner->index].parent)
-      for (const auto &[name, binding] : view->names->visible[owner->index]) {
-        if (!StringRef(name).starts_with(prefix))
-          continue;
-        const auto &decl = view->declarations[binding.target.index];
-        candidates.emplace(
-            name, SourceCompletion{name, detail(decl), selection(decl)});
-      }
-  }
+  if (context && view->declarationIndex)
+    for (const auto &[name, reference] :
+         view->declarationIndex->accessible(SourceAccess{context->id})) {
+      if (!StringRef(name).starts_with(prefix))
+        continue;
+      const auto &decl = view->declarations[reference.target.index];
+      candidates.emplace(name,
+                         SourceCompletion{name, detail(decl), selection(decl)});
+    }
   std::map<std::string, unsigned> depths;
   std::map<uint32_t, std::string> localTypes;
   if (context && context->body)

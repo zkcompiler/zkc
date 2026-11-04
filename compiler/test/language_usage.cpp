@@ -32,7 +32,7 @@ int main() {
     auto checked = take(check(text));
     const Declaration *target = nullptr;
     for (const auto &decl : checked.declarations())
-      if (decl.name == name)
+      if (decl.qualifiedName == ("m::" + name).str())
         target = &decl;
     require(target, "missing declaration");
     require(target->permissionBounds.size() == (drop ? 1u : 0u),

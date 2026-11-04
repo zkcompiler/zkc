@@ -35,9 +35,17 @@ and statement boundary.
 ## Derived admission obligations
 
 `zkc/Language/CommonControl.h` owns the immutable source API.
-`deriveCommonControlRequirements` recomputes from a checked declaration or
-closed Entry and the actual helper closure. It returns requirements, not
-agreement certificates. A component is an input ordinal, role ordinal and a
+`deriveCommonControlRequirements` derives from a checked declaration and its
+actual helper closure. Closing an Entry derives each retained concrete Protocol's
+inventory once and stores it with that immutable closed environment.
+`ClosedEntry::commonInputs` borrows that inventory by local declaration identity;
+non-Protocol, open, and absent targets refuse with `source.common-provenance`.
+It returns requirements, not agreement certificates. Borrowing is not source
+re-admission under a different allowance. Derivation pays the closure's current
+source limits; publication and comparison pay their own current projection,
+layout, normalization and capacity limits. They never reconstruct source bodies.
+Native analysis independently derives candidate obligations and compares the
+complete inventory; retention does not authenticate a native candidate. A component is an input ordinal, role ordinal and a
 sequence of typed `Field`, `Alternative`, `Payload` steps. Variant alternative
 and payload steps occur in pairs. Root identities and full paths survive
 projection, actual helper arguments and ordered role substitutions.
@@ -118,6 +126,17 @@ Protocol and scoped calls. Nested control regions retain that callable depth
 and use the expression-depth ceiling separately, with the same cumulative work
 allowance.
 
+Source common-control analysis retains a typed expression instance for each
+checked callable and exact lexical specialization. Calls retain shared edges;
+applications bind actual values and roles and allocate fresh recurrence subjects.
+Only demanded carry slots receive application-local component maps. Snapshotting
+those maps debits the current work allowance before copying. Dormant branches
+and zero-trip bodies still contribute source-formation demands. Completed
+agreement memoization never treats a provisional recurrence hypothesis as an
+established premise. Cache reuse enforces the retained callable, region and
+expression heights under the current limits. These source summaries do not
+supply acceptance evidence to the independent native analysis.
+
 The interface publishes these requirements in source coordinates for every
 closed concrete Protocol: a Protocol with a body that is not abstract and has no
 open static, scoped or domain parameter. Closed derivation, interface
@@ -128,12 +147,16 @@ role and native variant `(alternative,payload)` path, and compares it with
 native derivation from the actual original. Physical types come from checked
 layouts. A missing or non-data component, or any difference, refuses with
 `source.interface`; logical anchors and custody are not canonical input bytes.
-The closed overload taking a `DeclarationId` applies to that closed concrete
-Protocol, with coordinates relative to its own input and role telescopes.
-One API work allowance covers derivation, layout observation (including nested
-semantic queries), participant-index setup and component mapping together.
-These stages cannot each restart the requested allowance.
-Natural normalization admits each operation against that allowance before work;
+Closure derives and retains one immutable inventory per closed concrete
+Protocol under the closure's allowance. `ClosedEntry::commonInputs` borrows that
+inventory by `DeclarationId`, with coordinates relative to that Protocol's input
+and role telescopes. The closed entry owns the borrowed rows; publication does
+not derive them again. Publication uses its current allowance for layout
+observation (including nested semantic queries), participant-index setup,
+component mapping and normalization. These publication stages cannot each
+restart the requested allowance. Independent native derivation still reads the
+actual original and uses its own enclosing comparison allowance.
+Natural normalization admits each operation against the current allowance before work;
 placement helpers use its current remaining value and retain partial spending
 on validation errors. Arithmetic overflow still refuses with `source.natural`
 when sufficient work is available; earlier exhaustion refuses with `source.limit`.

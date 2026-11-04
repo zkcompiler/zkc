@@ -30,6 +30,7 @@ struct SourceCall {
   std::shared_ptr<const SyntaxDeclaration> syntax;
   std::optional<Type> module = {};
   std::vector<Type> arguments = {};
+  ResolvedReference reference = {};
 };
 struct DomainCallSource {
   CallableReference target;

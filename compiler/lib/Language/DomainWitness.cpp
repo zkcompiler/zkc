@@ -164,28 +164,11 @@ class DomainCheck {
           type(*binding.factory->module, context.statics, binding.span);
       if (!module)
         return {};
-      const auto *owner = types.typeDeclaration(*module);
-      const auto &abstract = declarations[target.index];
-      if (!owner || owner->kind != Declaration::Kind::Module ||
-          !abstract.parent ||
-          !types.charge(owner->members.size(), binding.span)) {
-        if (!types.diagnostic)
-          refuse(binding.span, "factory module selection differs");
+      auto selected = types.dispatch(*module, target, arguments, binding.span);
+      if (!selected)
         return {};
-      }
-      auto member = llvm::find_if(owner->members, [&](DeclarationId id) {
-        return declarations[id.index].name == abstract.name;
-      });
-      unsigned inherited =
-          declarations[abstract.parent->index].parameters.size();
-      if (member == owner->members.end() || arguments.size() < inherited) {
-        refuse(binding.span, "factory member selection differs");
-        return {};
-      }
-      auto own = ArrayRef(arguments).drop_front(inherited).vec();
-      target = *member;
-      arguments = module->arguments;
-      arguments.insert(arguments.end(), own.begin(), own.end());
+      target = selected->declaration;
+      arguments = std::move(selected->arguments);
     }
     const auto &callee = declarations[target.index];
     if (callee.kind != Declaration::Kind::DomainFunction || callee.abstract ||

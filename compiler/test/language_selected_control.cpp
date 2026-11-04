@@ -33,6 +33,14 @@ ClosedEntry closed(const CheckedProject &project) {
   // including oracle handles and private record fields.
   return take(closeSubject(project, "m::Run"));
 }
+Expected<std::vector<zkc::language::CommonControlRequirement>>
+retainedRequirements(const ClosedEntry &entry) {
+  auto requirements = entry.commonInputs(entry.protocol().id);
+  if (!requirements)
+    return requirements.takeError();
+  return std::vector<zkc::language::CommonControlRequirement>(
+      requirements->begin(), requirements->end());
+}
 /// Publish through the production comparison, which maps every published
 /// inventory through the component map and compares it with the actual native
 /// analysis; return that analysis for the selected Protocol.
@@ -86,7 +94,7 @@ pub protocol Run roles(P)(flag: bool @P, x: bool @P, y: bool @P) -> bool @P:
                 selected.regions[0]->mode == Body::Mode::Math,
             "Math control mode or arm coverage lost");
     auto entry = closed(project);
-    require(take(deriveCommonControlRequirements(entry)).empty(),
+    require(take(retainedRequirements(entry)).empty(),
             "role-local control needs no agreement");
   });
   cases.run("dormant Math arms are typechecked", [] {
@@ -119,7 +127,7 @@ pub def value(x: bool) -> bool:
         x
     return result
 )"));
-    auto requirements = take(deriveCommonControlRequirements(closed(project)));
+    auto requirements = take(retainedRequirements(closed(project)));
     require(requirements.size() == 1 && !requirements.front().tagOnly,
             "missing exact Boolean admission obligation");
     const auto &components = requirements.front().components;
@@ -137,7 +145,7 @@ pub def value(x: bool) -> bool:
         x
     return result
 )"));
-    require(take(deriveCommonControlRequirements(closed(project))).empty(),
+    require(take(retainedRequirements(closed(project))).empty(),
             "static selector acquired an obligation");
   });
   cases.run("role-local control accepts nonuniform selectors", [] {
@@ -191,7 +199,7 @@ pub protocol Run roles(P,V)(value: Choice @(P,V)) -> bool @(P,V):
     return result
 )"));
     auto entry = closed(project);
-    auto requirements = take(deriveCommonControlRequirements(entry));
+    auto requirements = take(retainedRequirements(entry));
     require(requirements.size() == 1 && requirements.front().tagOnly,
             "enum header required payload equality instead of tag equality");
     auto &selected = control(named(project, "Run"));
@@ -225,7 +233,7 @@ pub protocol Run roles(P)(value: Choice @P) -> bool @P:
         x
     return result
 )"));
-    require(!take(deriveCommonControlRequirements(closed(project))).empty(),
+    require(!take(retainedRequirements(closed(project))).empty(),
             "shared input selector lost requirement");
   });
   cases.run("payload selectors require their own exact enum components", [] {
@@ -243,7 +251,7 @@ pub protocol Run roles(P,V)(value: Choice @(P,V)) -> bool @(P,V):
             false
     return result
 )"));
-    auto requirements = take(deriveCommonControlRequirements(closed(project)));
+    auto requirements = take(retainedRequirements(closed(project)));
     require(requirements.size() == 2 && requirements[0].tagOnly &&
                 !requirements[1].tagOnly,
             "common tag was reused as payload agreement");
@@ -311,8 +319,7 @@ pub protocol Run roles(P,V)(state: State @(P,V), x: bool @(P,V)) -> bool @(P,V):
     result <- Choose(state, x) @(V,P)
     return result
 )"));
-        auto requirements =
-            take(deriveCommonControlRequirements(closed(project)));
+        auto requirements = take(retainedRequirements(closed(project)));
         require(requirements.size() == 1 &&
                     requirements[0].components[0].role == 1 &&
                     requirements[0].components[1].role == 0 &&
@@ -336,7 +343,7 @@ pub protocol Run roles(P,V)(state: State @(P,V), x: bool @(P,V)) -> bool @(P,V):
         x
     return result
 )"));
-    auto requirements = take(deriveCommonControlRequirements(closed(project)));
+    auto requirements = take(retainedRequirements(closed(project)));
     require(llvm::any_of(requirements,
                          [](const auto &requirement) {
                            return requirement.components.front().input == 1;
@@ -465,7 +472,7 @@ protocol Run roles(P,V)(xs:Vector<Fr>@(P,V),value:bool@(P,V))->(r:bool@(P,V)) {
                                    "extent.zkc"}}));
     auto project = take(analyze(captured).checkedProject());
     auto entry = closed(project);
-    auto requirements = take(deriveCommonControlRequirements(entry));
+    auto requirements = take(retainedRequirements(entry));
     require(requirements.size() == 1 && requirements[0].extentAxis == 0 &&
                 !requirements[0].tagOnly &&
                 requirements[0].components[0].input == 0,

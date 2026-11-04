@@ -103,8 +103,6 @@ StringRef referenceRouteName(ReferenceRoute route) {
     return "method";
   case ReferenceRoute::ModuleMember:
     return "module-member";
-  case ReferenceRoute::Implicit:
-    return "implicit";
   case ReferenceRoute::Service:
     return "service";
   case ReferenceRoute::Notation:

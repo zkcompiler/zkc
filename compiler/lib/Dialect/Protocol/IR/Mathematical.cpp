@@ -845,7 +845,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
     auto walked = program.walk([&](Operation *op) {
       if (!commonWork.charge())
         return WalkResult::interrupt();
-      if (isa<protocol_ir::BranchOp>(op))
+      if (isa<protocol_ir::BranchOp, protocol_ir::OracleSequenceAtOp>(op))
         select(program);
       if (auto call = dyn_cast<protocol_ir::ApplyOp>(op)) {
         auto callee =
@@ -868,7 +868,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       select(caller);
     }
   }
-  // Wrappers inherit actual callee requirements, even without a lexical branch.
+  // Wrappers inherit callee requirements even without a lexical common action.
   for (auto program :
        module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
     if (!selected.contains(program))

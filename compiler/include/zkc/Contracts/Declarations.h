@@ -110,7 +110,7 @@ struct FrontendDeclaration {
   std::optional<SourceTerm> output;
   std::optional<FrontendSignature> rule;
   std::string primitive;
-  bool implicit;
+  bool prelude;
 };
 /// An installed notation of a declaration of its module. An empty fixity keeps
 /// the symbol's fixed syntax.
@@ -137,7 +137,7 @@ struct FrontendHome {
 };
 enum class ServiceSignature { RandomDraw, RandomIndex, RandomIndices };
 struct ServiceMethodDeclaration {
-  std::string name;
+  std::string identity, constructor, name;
   ServiceSignature signature;
   std::string capability;
 };

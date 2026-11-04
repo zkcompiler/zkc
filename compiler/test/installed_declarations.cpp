@@ -1,7 +1,9 @@
 #include "../lib/Language/Internal.h"
+#include "../lib/Language/State.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/DeclarationIndex.h"
 #include "zkc/Language/Types.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/raw_ostream.h"
@@ -48,6 +50,87 @@ int main() {
                 read("zkc::records").members.size() == 3,
             "installed inventory differs");
   });
+  cases.run("catalog methods do not relax authored reserved names", [] {
+    auto symbol = encodeSymbol("m::index");
+    require(!symbol, "reserved authored declaration name was admitted");
+    require(toString(symbol.takeError()).find("source.name") !=
+                std::string::npos,
+            "reserved name refusal lost its diagnostic");
+  });
+  cases.run("managed methods are installed beneath their constructor row", [] {
+    for (const auto &constructor : zkc::protocol::frontendDeclarations()) {
+      if (constructor.rule !=
+          zkc::protocol::FrontendSignature::RandomConstructor)
+        continue;
+      auto module = read(constructor.module);
+      auto owner = llvm::find_if(module.members, [&](const auto &decl) {
+        return decl.name == constructor.name;
+      });
+      require(owner != module.members.end(), "missing managed constructor");
+      unsigned count = 0;
+      for (const auto &row : zkc::protocol::serviceMethodDeclarations()) {
+        if (row.constructor != constructor.identity)
+          continue;
+        ++count;
+        auto method = llvm::find_if(owner->members, [&](const auto &decl) {
+          return decl.name == row.name;
+        });
+        require(method != owner->members.end() &&
+                    method->kind == Declaration::Kind::Local &&
+                    method->isPublic && method->outputs.size() == 1,
+                "missing installed managed method signature");
+      }
+      require(owner->members.size() == count,
+              "managed constructor has extra members");
+    }
+  });
+  for (StringRef target :
+       {"zkc::records::unpack", "zkc::records", "zkc::prelude::Random",
+        "zkc::prelude::Random::draw"})
+    for (unsigned mutation = 0; mutation < 8; ++mutation)
+      cases.run(
+          "installed identity replay " + target + " " + Twine(mutation), [&] {
+            auto project =
+                take(analyze(take(capture({{"m", "module m;",
+                                            "installed-identity.zkc"}})))
+                         .checkedProject());
+            if (auto error = checkScopedElaboration(project))
+              throw std::runtime_error(toString(std::move(error)));
+            auto &storage = const_cast<CheckedStorage &>(
+                DeclarationAccess::storage(project));
+            auto selected = project.declarationIndex().canonical(target);
+            auto module = project.declarationIndex().canonical("m");
+            require(selected && module, "missing identity control");
+            auto &decl = storage.declarations[selected->index];
+            if (mutation == 0) {
+              decl.name = "forged";
+              decl.qualifiedName = "m::forged";
+            } else if (mutation == 1) {
+              decl.module = *module;
+            } else if (mutation == 2) {
+              decl.parent = *module;
+            } else if (mutation == 3) {
+              decl.span.source =
+                  storage.declarations[module->index].span.source;
+            } else if (mutation == 4) {
+              decl.id = *module;
+            } else if (mutation == 5) {
+              decl.anonymous = true;
+            } else if (mutation == 6) {
+              decl.name = "forged";
+            } else {
+              auto sources =
+                  std::make_shared<std::vector<SourceBuffer>>(*storage.sources);
+              (*sources)[decl.span.source.index].origin =
+                  SourceOrigin::Captured;
+              storage.sources = std::move(sources);
+            }
+            auto error = checkScopedElaboration(project);
+            require(bool(error), "forged installation metadata passed replay");
+            auto message = toString(std::move(error));
+            require(namesIdentifier(message, "source.installation"),
+                    "unexpected installation refusal: " + message);
+          });
   cases.run("each frontend constructor row forms and spells its head", [] {
     // The rows own the spellings; the frontend gives each form its meaning.
     auto kind = take(builtinType("oracle.table", {Type(Type::Kind::Index)}));

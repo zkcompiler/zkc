@@ -7,7 +7,8 @@ bool isRecordIntrinsic(protocol::FrontendSignature);
 /// A declaration associated with a record rule.
 bool isRecordIntrinsic(const protocol::FrontendDeclaration *);
 bool checkDeclarationAssociations(Semantics &, llvm::ArrayRef<Declaration>,
-                                  const DeclarationIndex &);
+                                  const DeclarationIndex &,
+                                  llvm::ArrayRef<SourceBuffer>);
 std::optional<Type> recordPayload(Semantics &, const Declaration &,
                                   const Type &, protocol::FrontendSignature,
                                   Span);

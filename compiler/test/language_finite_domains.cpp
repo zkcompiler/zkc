@@ -1688,5 +1688,45 @@ protocol Demo roles(P,V)(xs:Vector<Fr>@V,x:Fr@P,n:index@(P,V))->(r:Fr@P){
 )"),
                       "source.roles");
             });
+  cases.run("recorded domain dispatch distinguishes two factory recipes", [] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+interface Grid<F:Field>{domain fn cells(xs:Matrix<F>,i:index)->domain<F>;}
+module Rows<F:Field>:Grid<F>{
+ domain fn cells(xs:Matrix<F>,i:index)->domain<F>=domain("matrix.row");
+}
+module Columns<F:Field>:Grid<F>{
+ domain fn cells(xs:Matrix<F>,i:index)->domain<F>=domain("matrix.column");
+}
+domain fn selected<F:Field,C:Grid<F>>(xs:Matrix<F>,i:index)->domain<F>{return C::cells(xs,i);}
+fn example(xs:Matrix<Fr>,i:index)->bool {
+ let row=selected<Fr,Rows<Fr>>(xs,i);
+ let column=selected<Fr,Columns<Fr>>(xs,i);
+ return true;
+}
+)"));
+    const auto &body = *declarationNamed(project, "m::example").body;
+    std::vector<Declaration> declarations(project.declarations().begin(),
+                                          project.declarations().end());
+    Limits limits;
+    zkc::language::detail::Work work{limits};
+    zkc::language::detail::Semantics types(declarations, project.assets(),
+                                           work);
+    auto row = zkc::language::detail::closeDomain(types, declarations, body, 0,
+                                                  {}, {});
+    auto column = zkc::language::detail::closeDomain(types, declarations, body,
+                                                     1, {}, {});
+    require(row && column && row->shape->identity != column->shape->identity,
+            types.diagnostic ? types.diagnostic->message
+                             : "factory recipes collapsed");
+    require(zkc::language::detail::checkDomainClosure(types, declarations, body,
+                                                      0, {}, {}, *row) &&
+                zkc::language::detail::checkDomainClosure(
+                    types, declarations, body, 1, {}, {}, *column),
+            "independent domain witness rejected recorded dispatch");
+    require(!zkc::language::detail::checkDomainClosure(
+                types, declarations, body, 0, {}, {}, *column),
+            "independent domain witness accepted a different implementation");
+  });
   return cases.result();
 }

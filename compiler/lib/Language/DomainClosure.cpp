@@ -147,29 +147,12 @@ class Closure {
           type(*binding.factory->module, context.statics, binding.span);
       if (!componentType)
         return {};
-      const auto *module = types.typeDeclaration(*componentType);
-      const auto &abstract = declarations[target.index];
-      if (!module || module->kind != Declaration::Kind::Module ||
-          !abstract.parent ||
-          !types.charge(module->members.size(), binding.span)) {
-        if (!types.diagnostic)
-          refuse(binding.span,
-                 "domain factory dispatch needs a concrete module");
+      auto selected =
+          types.dispatch(*componentType, target, arguments, binding.span);
+      if (!selected)
         return {};
-      }
-      auto selected = llvm::find_if(module->members, [&](DeclarationId id) {
-        return declarations[id.index].name == abstract.name;
-      });
-      const auto inherited =
-          declarations[abstract.parent->index].parameters.size();
-      if (selected == module->members.end() || arguments.size() < inherited) {
-        refuse(binding.span, "domain factory module member differs");
-        return {};
-      }
-      target = *selected;
-      auto own = ArrayRef(arguments).drop_front(inherited).vec();
-      arguments = componentType->arguments;
-      arguments.insert(arguments.end(), own.begin(), own.end());
+      target = selected->declaration;
+      arguments = std::move(selected->arguments);
     }
     const auto &callee = declarations[target.index];
     if (callee.kind != Declaration::Kind::DomainFunction || callee.abstract ||

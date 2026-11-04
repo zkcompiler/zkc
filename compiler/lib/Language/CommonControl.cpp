@@ -1,11 +1,15 @@
 #include "zkc/Language/CommonControl.h"
 #include "CommonRequirements.h"
+#include "CommonSummary.h"
 #include "Semantics.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
+#include <cstdint>
+#include <deque>
 #include <numeric>
 #include <set>
 #include <tuple>
+#include <unordered_map>
 
 using namespace llvm;
 namespace zkc::language {
@@ -35,6 +39,7 @@ struct LexicalStatics {
   std::shared_ptr<const StaticEnvironment> environment;
 };
 struct Provenance;
+struct CommonCall;
 using Node = std::shared_ptr<const Provenance>;
 struct Provenance {
   enum class Kind {
@@ -49,7 +54,15 @@ struct Provenance {
     Exit,
     Iteration,
     Inactive,
-    Unknown
+    Unknown,
+    Formal,
+    Call,
+    Field,
+    Payload,
+    Facet,
+    Branch,
+    RepeatResult,
+    Deferred
   } kind;
   Type type;
   std::string identity;
@@ -60,27 +73,119 @@ struct Provenance {
   std::optional<unsigned> extentAxis = {};
   std::optional<uint64_t> constantCount = {};
   std::shared_ptr<const LexicalStatics> statics = {};
+  // Recipe coordinates have meaning only in their immutable instance.
+  unsigned slot = 0, role = 0, alternative = 0;
+  Span span = {};
+  std::shared_ptr<const CommonCall> call = {};
 };
 using Components = std::map<unsigned, Node>;
+struct CommonLoop {
+  Components counts;
+  std::vector<Components> initial, transition;
+  bool atMostOne;
+  Natural maximum;
+};
+struct CommonDemand {
+  std::vector<Node> values;
+  bool tagOnly;
+  Span control;
+  std::vector<Span> calls;
+  std::shared_ptr<const CommonCall> call = {};
+};
+// A checked body is the template authority. Instances contain its immutable
+// products in a lexical specialization, never the first caller's judgment.
+struct CommonTemplate {
+  const Body *body;
+  const Declaration *declaration;
+  const ScopedComputation *computation;
+};
+struct CommonInstance {
+  std::shared_ptr<const CommonTemplate> source;
+  std::vector<Components> results;
+  std::vector<CommonLoop> loops;
+  std::vector<CommonDemand> demands;
+  unsigned operands = 0, callHeight = 1, regionHeight = 1;
+  // Recurrence subjects and newly produced unknown values belong to a call
+  // occurrence. Propagate this conservatively through every retained edge,
+  // including unused results and dormant regions.
+  bool fresh = false;
+};
+struct CommonCall {
+  std::shared_ptr<const CommonInstance> instance;
+  std::vector<Components> operands;
+  std::vector<unsigned> roles;
+  Span span;
+};
 class Requirements {
   const std::vector<Declaration> &declarations;
   detail::Work &work;
   detail::Semantics types;
+  detail::CommonSummaryObservation &observation;
   std::vector<CommonControlRequirement> requirements;
   std::vector<Span> callSites;
-  struct Loop {
+  std::vector<CommonLoop> loops;
+  std::vector<CommonDemand> demands;
+  using TemplateKey =
+      std::tuple<const Body *, const Declaration *, const ScopedComputation *>;
+  std::map<TemplateKey, std::shared_ptr<const CommonTemplate>> templates;
+  using InstanceKey =
+      std::tuple<TemplateKey, const StaticEnvironment *, unsigned, std::string>;
+  std::map<InstanceKey, std::shared_ptr<const CommonInstance>> instances;
+  std::set<InstanceKey> constructing;
+  std::map<std::string, std::shared_ptr<const StaticEnvironment>> staticFrames;
+  CommonInstance *building = nullptr;
+  struct Evaluated {
+    Node value;
+    unsigned height;
+  };
+  struct Application {
+    // Semantic bindings are immutable; only demanded-product caches grow.
+    const std::shared_ptr<const CommonInstance> instance;
+    const std::vector<Components> operands;
+    const std::vector<unsigned> roles, loops;
+    const std::vector<Span> sites;
+    const unsigned callDepth, occurrence;
+    std::unordered_map<const Provenance *, Evaluated> memo;
+    std::unordered_map<const Provenance *, Node> deferred;
+    std::map<const CommonCall *, std::shared_ptr<Application>> calls;
+    Application(std::shared_ptr<const CommonInstance> instance,
+                std::vector<Components> operands, std::vector<unsigned> roles,
+                std::vector<unsigned> loops, std::vector<Span> sites,
+                unsigned callDepth, unsigned occurrence)
+        : instance(std::move(instance)), operands(std::move(operands)),
+          roles(std::move(roles)), loops(std::move(loops)),
+          sites(std::move(sites)), callDepth(callDepth),
+          occurrence(occurrence) {}
+  };
+  using ApplicationKey =
+      std::tuple<const CommonInstance *, std::vector<const Provenance *>,
+                 std::vector<unsigned>>;
+  std::map<ApplicationKey, std::shared_ptr<Application>> applications;
+  // Deferred nodes contain an owner-relative index, never a shared_ptr back
+  // into their application. This arena makes ownership acyclic and explicit.
+  // Recursive evaluation may append applications while borrowing an owner.
+  std::deque<std::shared_ptr<Application>> activeApplications;
+  std::vector<std::pair<std::shared_ptr<Application>, unsigned>> loopOwners;
+  struct AppliedLoop {
     Components counts;
-    std::vector<Components> initial, transition;
-    bool atMostOne;
+    std::map<unsigned, Components> initial, transition;
+    bool countsBound = false, atMostOne = false;
   };
-  struct Demand {
-    std::vector<Node> values;
-    bool tagOnly;
-    Span control;
-    std::vector<Span> calls;
-  };
-  std::vector<Loop> loops;
-  std::vector<Demand> demands;
+  // Only demanded carry slots allocate application-local component maps.
+  std::vector<AppliedLoop> appliedLoops;
+  std::vector<unsigned> expressionHeights;
+  uint64_t applicationCount = 0;
+  // These caches own their nodes until the current root completes. Reusable
+  // agreement is published only after the enclosing demand is grounded.
+  using Agreement = std::vector<Node>;
+  std::map<Agreement, unsigned> established, pending;
+  std::vector<unsigned> agreementHeights;
+  std::vector<bool> conditionalAgreement;
+  Agreement completedDemand;
+  unsigned completedDemandHeight = 0;
+  using RequirementKey = std::tuple<std::string, bool, std::optional<unsigned>,
+                                    std::string, std::string>;
+  std::set<RequirementKey> requirementIndex;
   using Equation =
       std::tuple<Provenance::Kind, unsigned, unsigned, unsigned, unsigned,
                  std::string, bool, std::optional<unsigned>>;
@@ -121,6 +226,13 @@ class Requirements {
           detail::failure("source.common-provenance", message, span, callSites);
     return false;
   }
+  // Fixed-width snapshot-local identities keep charged key size independent
+  // of allocator addresses. The pointed-to objects outlive this owner.
+  void identity(std::string &key, const void *pointer) {
+    auto bits = reinterpret_cast<uintptr_t>(pointer);
+    for (unsigned i = 0; i < sizeof(bits); ++i)
+      key.push_back(char(bits >> (i * 8)));
+  }
   Node node(Provenance::Kind kind, const Type &type, StringRef identity = {},
             std::vector<Node> operands = {},
             std::optional<CommonControlComponent> input = {},
@@ -140,7 +252,26 @@ class Requirements {
                    constantCount, std::move(statics)});
   }
   Node unknown(const Type &type) {
+    // Unknown is not a total expression: Local, received and service results
+    // must not acquire a shared identity merely because their inputs match.
+    // Forwarding an existing unknown formal does not mint a new occurrence.
+    if (building)
+      building->fresh = true;
     return node(Provenance::Kind::Unknown, type);
+  }
+  Node recipe(Provenance::Kind kind, const Type &type,
+              std::vector<Node> operands = {}, unsigned slot = 0,
+              unsigned role = 0, unsigned alternative = 0, Span span = {},
+              std::shared_ptr<const CommonCall> call = {}, bool tag = false,
+              std::optional<unsigned> axis = {}) {
+    auto result = std::make_shared<Provenance>(
+        *node(kind, type, {}, std::move(operands), {}, {}, tag, axis));
+    result->slot = slot;
+    result->role = role;
+    result->alternative = alternative;
+    result->span = span;
+    result->call = std::move(call);
+    return result;
   }
   Node at(const Components &components, unsigned role, const Type &type) {
     auto found = components.find(role);
@@ -275,41 +406,63 @@ class Requirements {
     // Eagerly composing unused actuals can leave the bounded natural algebra
     // even though each declaration and its eventual specialization are valid.
     if (!bindings.empty()) {
+      std::string key;
+      bool closed = true;
       for (const auto &[name, type] : bindings)
         if (!charge(name.size() + 1, callee.span) ||
             !types.chargeType(type, callee.span)) {
           if (types.diagnostic && !failure)
             failure = make_error<DiagnosticError>(*types.diagnostic);
           break;
+        } else {
+          std::set<std::string> references;
+          staticReferences(type, references, callee.span);
+          closed &= references.empty();
+          detail::frame(key, name);
+          detail::frame(key, typeIdentity(type));
         }
-      parent = std::make_shared<StaticEnvironment>(
-          StaticEnvironment{std::move(bindings), std::move(parent)});
+      if (failure)
+        return {};
+      if (closed)
+        parent.reset();
+      identity(key, parent.get());
+      if (!charge(key.size() + 1, callee.span))
+        return {};
+      auto found = staticFrames.find(key);
+      if (found != staticFrames.end())
+        parent = found->second;
+      else {
+        parent = std::make_shared<StaticEnvironment>(
+            StaticEnvironment{std::move(bindings), std::move(parent)});
+        staticFrames.emplace(std::move(key), parent);
+      }
     }
     return {std::move(parent), {}, {}, callee.qualifiedName};
   }
-  DeclarationId target(DeclarationId known, std::vector<Type> &arguments,
-                       const std::optional<Type> &module, Span span) {
-    if (!module || declarations[known.index].origin)
-      return known;
-    const auto *definition = types.typeDeclaration(*module);
-    if (!definition || definition->kind != Declaration::Kind::Module)
-      return known;
-    const auto &formal = declarations[known.index];
-    for (auto member : definition->members) {
-      if (!charge(1, span))
-        return known;
-      if (declarations[member.index].name != formal.name)
-        continue;
-      unsigned inherited =
-          formal.parent ? declarations[formal.parent->index].parameters.size()
-                        : 0;
-      std::vector<Type> selected = module->arguments;
-      if (arguments.size() >= inherited)
-        llvm::append_range(selected, ArrayRef(arguments).drop_front(inherited));
-      arguments = std::move(selected);
-      return member;
+  std::optional<DeclarationId> target(DeclarationId known,
+                                      std::vector<Type> &arguments,
+                                      const std::optional<Type> &module,
+                                      const Environment &context, Span span) {
+    auto actual = arguments;
+    const auto parent = declarations[known.index].parent;
+    if (module && !module->symbolic && parent &&
+        declarations[parent->index].kind == Declaration::Kind::Interface) {
+      // Only the inherited interface prefix participates in dispatch. Own
+      // statics retain their lexical frame until an observation needs them.
+      const auto inherited = declarations[parent->index].parameters.size();
+      for (unsigned i = 0; i < std::min(inherited, actual.size()); ++i)
+        actual[i] = substitute(actual[i], context, span);
     }
-    return known;
+    if (failure)
+      return {};
+    auto selected = types.dispatch(module, known, actual, span);
+    if (!selected) {
+      if (types.diagnostic && !failure)
+        failure = make_error<DiagnosticError>(*types.diagnostic);
+      return {};
+    }
+    arguments = std::move(selected->arguments);
+    return selected->declaration;
   }
   std::optional<StringRef> staticAlias(const Type &type) {
     if (type.symbolic && !type.domain.empty())
@@ -545,6 +698,8 @@ class Requirements {
   // obligations and never unfolds a loop equation or assumes commonness.
   bool same(Node left, Node right, Span span, unsigned depth,
             std::set<std::pair<Node, Node>> &seen) {
+    left = force(left, depth);
+    right = force(right, depth);
     if (!charge(left->identity.size() + left->operands.size() +
                     (left->input ? left->input->path.size() : 0) +
                     (left->loop ? left->loop->path.size() : 0) + 1,
@@ -577,12 +732,12 @@ class Requirements {
     return true;
   }
   Node selection(const Type &type, StringRef identity,
-                 std::vector<Node> children, Span span) {
+                 std::vector<Node> children, Span span, unsigned depth = 0) {
     if (children.size() > 1) {
       std::set<std::pair<Node, Node>> seen;
       bool identical = true;
       for (unsigned i = 2; i < children.size(); ++i)
-        identical &= same(children[1], children[i], span, 0, seen);
+        identical &= same(children[1], children[i], span, depth, seen);
       if (identical)
         return children[1];
     }
@@ -595,6 +750,8 @@ class Requirements {
   Components domain(ArrayRef<DomainBinding> bindings, unsigned index,
                     ArrayRef<Components> data, const Environment &context,
                     ArrayRef<unsigned> roles, unsigned depth) {
+    if (building)
+      building->callHeight = std::max(building->callHeight, depth);
     if (!charge(1, {}) || depth > work.limits.callDepth) {
       capacity({}, "common domain environment depth exceeded");
       return {};
@@ -627,9 +784,11 @@ class Requirements {
       std::optional<Type> module;
       if (binding.factory->module)
         module = substitute(*binding.factory->module, context, binding.span);
-      auto selected =
-          target(binding.factory->declaration, statics, module, binding.span);
-      const auto &callee = declarations[selected.index];
+      auto selected = target(binding.factory->declaration, statics, module,
+                             context, binding.span);
+      if (!selected)
+        return {};
+      const auto &callee = declarations[selected->index];
       if (!callee.domainDefinition) {
         if (callee.kind != Declaration::Kind::DomainFunction ||
             !callee.abstract) {
@@ -699,6 +858,8 @@ class Requirements {
   Scoped scoped(const Body &source, unsigned index, ArrayRef<Components> values,
                 const Environment &context, ArrayRef<unsigned> roles,
                 unsigned depth) {
+    if (building)
+      building->callHeight = std::max(building->callHeight, depth);
     if (!charge(1, {}) || depth > work.limits.callDepth) {
       capacity({}, "common scoped environment depth exceeded");
       return {};
@@ -757,6 +918,8 @@ class Requirements {
         std::move(captures), std::move(identity), std::move(statics)});
   }
   Node scopedValue(const Scoped &binding, unsigned role, unsigned depth) {
+    if (building)
+      building->callHeight = std::max(building->callHeight, depth);
     if (!binding || !charge(1, {}) || depth > work.limits.callDepth) {
       if (depth > work.limits.callDepth)
         capacity({}, "common scoped observation depth exceeded");
@@ -776,7 +939,488 @@ class Requirements {
                 binding->identity, std::move(operands), {}, {}, false, {}, {},
                 binding->statics);
   }
-  Node field(Node value, unsigned index, Span span, unsigned depth) {
+  Components formals(const Components &actual,
+                     std::vector<Components> &operands,
+                     ArrayRef<unsigned> roles, std::string &key, Span span) {
+    if (!charge(actual.size() + roles.size() + 1, span))
+      return {};
+    unsigned slot = operands.size();
+    operands.push_back(actual);
+    Components result;
+    detail::frame(key, std::to_string(actual.size()));
+    for (unsigned r = 0; r < roles.size(); ++r) {
+      auto found = actual.find(roles[r]);
+      if (found == actual.end())
+        continue;
+      const auto &type = found->second->type;
+      if (!chargeStaticType(type, span))
+        return {};
+      detail::frame(key, std::to_string(r));
+      detail::frame(key, typeIdentity(type));
+      result[r] = recipe(Provenance::Kind::Formal, type, {}, slot, r);
+    }
+    detail::frame(key, "end");
+    return result;
+  }
+  Environment formalEnvironment(const Environment &context,
+                                std::vector<Components> &operands,
+                                ArrayRef<unsigned> roles, std::string &key,
+                                Span span, unsigned depth = 0) {
+    Environment result{context.statics, {}, {}, context.identity};
+    if (!charge(context.scoped.size() + context.domains.size() + 1, span) ||
+        depth > work.limits.callDepth) {
+      capacity(span, "common summary environment depth exceeded");
+      return result;
+    }
+    identity(key, context.statics.get());
+    detail::frame(key, std::to_string(context.domains.size()));
+    for (const auto &domain : context.domains)
+      result.domains.push_back(formals(domain, operands, roles, key, span));
+    detail::frame(key, std::to_string(context.scoped.size()));
+    for (const auto &binding : context.scoped) {
+      if (!binding) {
+        detail::frame(key, "absent");
+        result.scoped.push_back({});
+        continue;
+      }
+      identity(key, binding->computation);
+      detail::frame(key, std::to_string(unsigned(binding->signature.mode)));
+      detail::frame(key, std::to_string(binding->signature.allowance.mayStop));
+      detail::frame(key, std::to_string(binding->signature.allowance.opaque));
+      detail::frame(key, std::to_string(binding->signature.inputs.size()));
+      for (const auto &type : binding->signature.inputs) {
+        if (!chargeStaticType(type, span))
+          return result;
+        detail::frame(key, typeIdentity(type));
+      }
+      if (!chargeStaticType(binding->signature.result, span))
+        return result;
+      detail::frame(key, typeIdentity(binding->signature.result));
+      detail::frame(key, binding->statics ? "statics" : "no-statics");
+      if (binding->statics) {
+        identity(key, binding->statics->environment.get());
+        detail::frame(key, std::to_string(binding->statics->parameters.size()));
+        for (const auto &type : binding->statics->parameters) {
+          if (!chargeStaticType(type, span))
+            return result;
+          detail::frame(key, typeIdentity(type));
+        }
+      }
+      auto nested = formalEnvironment(binding->environment, operands, roles,
+                                      key, span, depth + 1);
+      std::vector<Components> captures;
+      detail::frame(key, std::to_string(binding->captures.size()));
+      for (const auto &capture : binding->captures)
+        captures.push_back(formals(capture, operands, roles, key, span));
+      result.scoped.push_back(std::make_shared<ScopedEnvironment>(
+          ScopedEnvironment{binding->computation, binding->signature,
+                            std::move(nested), std::move(captures),
+                            binding->identity, binding->statics}));
+    }
+    return result;
+  }
+  std::shared_ptr<const CommonCall>
+  summarize(const Body &source, ArrayRef<Components> inputs,
+            ArrayRef<unsigned> roles, const Environment &context, Span span,
+            unsigned callDepth, const Declaration *declaration,
+            const ScopedComputation *computation = nullptr) {
+    if (!charge(inputs.size() + roles.size() + 1, span))
+      return {};
+    std::vector<Components> operands, parameters;
+    std::string shape;
+    for (const auto &input : inputs)
+      parameters.push_back(formals(input, operands, roles, shape, span));
+    auto nested = formalEnvironment(context, operands, roles, shape, span);
+    // Formal construction already charges each structural type and operand.
+    // A coefficient's decimal spelling must not price unobserved capacity.
+    if (failure || !charge(1, span))
+      return {};
+    TemplateKey templateKey{&source, declaration, computation};
+    InstanceKey key{templateKey, context.statics.get(), roles.size(),
+                    std::move(shape)};
+    auto found = instances.find(key);
+    std::shared_ptr<const CommonInstance> instance;
+    if (found != instances.end()) {
+      ++observation.instanceHits;
+      instance = found->second;
+    } else {
+      if (constructing.size() >= work.limits.callDepth) {
+        capacity(span, "common callable depth exceeded");
+        return {};
+      }
+      if (!constructing.insert(key).second) {
+        refuse(span, "common summary requires an acyclic checked call closure");
+        return {};
+      }
+      auto remove = llvm::scope_exit([&] { constructing.erase(key); });
+      if (instances.size() + constructing.size() > work.limits.instances) {
+        capacity(span, "common summary instance limit exceeded");
+        return {};
+      }
+      auto &sourceTemplate = templates[templateKey];
+      if (!sourceTemplate) {
+        ++observation.templates;
+        sourceTemplate = std::make_shared<CommonTemplate>(
+            CommonTemplate{&source, declaration, computation});
+      }
+      ++observation.instances;
+      auto product = std::make_shared<CommonInstance>();
+      product->source = sourceTemplate;
+      product->operands = operands.size();
+      auto *parent = building;
+      auto outerLoops = std::move(loops);
+      auto outerDemands = std::move(demands);
+      auto outerSites = std::move(callSites);
+      loops.clear();
+      demands.clear();
+      callSites.clear();
+      building = product.get();
+      std::vector<unsigned> localRoles(roles.size());
+      std::iota(localRoles.begin(), localRoles.end(), 0);
+      product->results = body(source, parameters, localRoles, 1, nested);
+      product->loops = std::move(loops);
+      product->demands = std::move(demands);
+      product->fresh |= !product->loops.empty();
+      loops = std::move(outerLoops);
+      demands = std::move(outerDemands);
+      callSites = std::move(outerSites);
+      building = parent;
+      if (failure)
+        return {};
+      instance = std::move(product);
+      // Keep the active key intact until the scope guard removes it.
+      instances.emplace(key, instance);
+    }
+    if (callDepth + instance->callHeight > work.limits.callDepth ||
+        instance->regionHeight > work.limits.expressionDepth) {
+      capacity(span, "common cached callable or region depth exceeded");
+      return {};
+    }
+    if (building) {
+      building->callHeight =
+          std::max(building->callHeight, callDepth + instance->callHeight);
+      building->regionHeight =
+          std::max(building->regionHeight, instance->regionHeight);
+      building->fresh |= instance->fresh;
+    }
+    return std::make_shared<CommonCall>(
+        CommonCall{std::move(instance), std::move(operands),
+                   std::vector<unsigned>(roles.begin(), roles.end()), span});
+  }
+  std::vector<Components>
+  delayed(const std::shared_ptr<const CommonCall> &call) {
+    if (!call)
+      return {};
+    // A call's demand edge is retained once, without flattening its closure.
+    if (!call->instance->demands.empty())
+      demands.push_back({{}, false, call->span, callSites, call});
+    std::vector<Components> results(call->instance->results.size());
+    for (unsigned i = 0; i < results.size(); ++i)
+      for (auto [role, value] : call->instance->results[i])
+        results[i][call->roles[role]] =
+            recipe(Provenance::Kind::Call, value->type, {}, i, role, 0,
+                   call->span, call);
+    return results;
+  }
+  std::vector<Components> evaluate(ArrayRef<Components> values,
+                                   const std::shared_ptr<Application> &app,
+                                   unsigned depth) {
+    std::vector<Components> result;
+    for (const auto &components : values) {
+      Components mapped;
+      for (auto [role, value] : components)
+        mapped[app->roles.at(role)] = defer(value, app);
+      result.push_back(std::move(mapped));
+    }
+    (void)depth;
+    return result;
+  }
+  std::shared_ptr<Application>
+  apply(const std::shared_ptr<const CommonInstance> &instance,
+        std::vector<Components> operands, std::vector<unsigned> roles,
+        unsigned callDepth, std::vector<Span> sites) {
+    Span span = sites.empty() ? Span{} : sites.back();
+    if (!charge(operands.size() + roles.size() + sites.size() +
+                    instance->loops.size() + 1,
+                span))
+      return {};
+    if (callDepth == 0 ||
+        callDepth - 1 + instance->callHeight > work.limits.callDepth ||
+        instance->regionHeight > work.limits.expressionDepth) {
+      capacity(span, "common applied callable or region depth exceeded");
+      return {};
+    }
+    if (operands.size() != instance->operands) {
+      refuse(span, "common summary operand association differs");
+      return {};
+    }
+    ApplicationKey key;
+    // Reuse the binding and its complete demand graph, never an agreement
+    // judgment. Exact actual origins, missing components and ordered roles
+    // distinguish callers. Occurrence-sensitive products remain unshared.
+    bool reusable = !instance->fresh;
+    if (reusable) {
+      std::vector<const Provenance *> nodes;
+      for (const auto &components : operands) {
+        // Include missing-role coordinates as well as exact actual origins.
+        for (auto role : roles) {
+          auto found = components.find(role);
+          nodes.push_back(found == components.end() ? nullptr
+                                                    : found->second.get());
+        }
+      }
+      if (!charge(nodes.size() + 1, span))
+        return {};
+      key = {instance.get(), std::move(nodes), roles};
+      auto found = applications.find(key);
+      if (found != applications.end()) {
+        ++observation.applicationHits;
+        // The first occurrence already retained every formation demand with
+        // a valid source path. It will still be checked against these actuals;
+        // no successful premise is assumed here. Heights were checked above
+        // even when this edge reaches the binding at a different call depth.
+        return found->second;
+      }
+    }
+    if (applicationCount >= work.limits.operations) {
+      capacity(span, "common summary application limit exceeded");
+      return {};
+    }
+    ++applicationCount;
+    ++observation.applications;
+    std::vector<unsigned> loopBindings(instance->loops.size());
+    std::iota(loopBindings.begin(), loopBindings.end(), appliedLoops.size());
+    auto app = std::make_shared<Application>(
+        instance, std::move(operands), std::move(roles),
+        std::move(loopBindings), std::move(sites), callDepth,
+        activeApplications.size());
+    activeApplications.push_back(app);
+    for (unsigned i = 0; i < instance->loops.size(); ++i) {
+      if (!charge(1, span) || appliedLoops.size() >= work.limits.operations) {
+        capacity(span, "common fresh recurrence limit exceeded");
+        return {};
+      }
+      ++observation.loopNamespaces;
+      appliedLoops.emplace_back();
+      loopOwners.emplace_back(app, i);
+    }
+    if (reusable)
+      applications.emplace(std::move(key), app);
+    // Source formation demands include dormant arms and zero-trip regions.
+    for (const auto &demand : instance->demands) {
+      if (!charge(demand.values.size() + demand.calls.size() + 1,
+                  demand.control))
+        return {};
+      if (demand.call) {
+        if (!application(demand.call, app, 0))
+          return {};
+        continue;
+      }
+      std::vector<Node> values;
+      for (const auto &value : demand.values)
+        values.push_back(defer(value, app));
+      auto calls = app->sites;
+      llvm::append_range(calls, demand.calls);
+      demands.push_back({std::move(values), demand.tagOnly, demand.control,
+                         std::move(calls)});
+    }
+    return app;
+  }
+  std::shared_ptr<Application>
+  application(const std::shared_ptr<const CommonCall> &call,
+              const std::shared_ptr<Application> &parent, unsigned depth) {
+    if (!charge(1, call->span))
+      return {};
+    auto found = parent->calls.find(call.get());
+    if (found != parent->calls.end())
+      return found->second;
+    auto operands = evaluate(call->operands, parent, depth);
+    std::vector<unsigned> roles;
+    for (auto role : call->roles)
+      roles.push_back(parent->roles.at(role));
+    auto sites = parent->sites;
+    sites.push_back(call->span);
+    auto result = apply(call->instance, std::move(operands), std::move(roles),
+                        parent->callDepth + 1, std::move(sites));
+    if (result)
+      parent->calls.emplace(call.get(), result);
+    return result;
+  }
+  void bindLoop(unsigned invocation, unsigned slot, unsigned depth,
+                bool needTransition = false) {
+    if (failure || !charge(1, {}))
+      return;
+    auto [app, local] = loopOwners.at(invocation);
+    const auto &source = app->instance->loops[local];
+    if (!appliedLoops[invocation].countsBound) {
+      auto values = evaluate({source.counts}, app, depth);
+      bool small = true;
+      for (auto [role, value] : values.front()) {
+        (void)role;
+        value = force(value);
+        small &= value->constantCount && *value->constantCount <= 1;
+      }
+      bool atMostOne = small || (source.maximum.isClosed() &&
+                                 source.maximum.closedValue() <= 1);
+      appliedLoops[invocation].counts = std::move(values.front());
+      appliedLoops[invocation].atMostOne = atMostOne;
+      appliedLoops[invocation].countsBound = true;
+    }
+    if (!appliedLoops[invocation].initial.count(slot)) {
+      auto initial = evaluate({source.initial.at(slot)}, app, depth);
+      appliedLoops[invocation].initial.emplace(slot,
+                                               std::move(initial.front()));
+      ++observation.boundCarrySlots;
+    }
+    if (needTransition && !appliedLoops[invocation].transition.count(slot)) {
+      auto transition = evaluate({source.transition.at(slot)}, app, depth);
+      appliedLoops[invocation].transition.emplace(
+          slot, std::move(transition.front()));
+      ++observation.boundCarrySlots;
+    }
+  }
+  Node branch(const Type &type, Node subject, std::vector<Node> arms,
+              bool match, Span span, unsigned depth) {
+    subject = force(subject, depth + 1);
+    std::optional<unsigned> selected;
+    if (subject->kind == Provenance::Kind::Static) {
+      auto boolean =
+          "math:" +
+          std::to_string(unsigned(MathematicalIdentity::BooleanConstant)) + ":";
+      if (subject->identity == boolean + "true")
+        selected = 0;
+      else if (subject->identity == boolean + "false")
+        selected = 1;
+    } else if (subject->kind == Provenance::Kind::Variant) {
+      unsigned ordinal;
+      if (!StringRef(subject->identity).getAsInteger(10, ordinal))
+        selected = ordinal;
+    }
+    if (selected && *selected < arms.size())
+      return arms[*selected];
+    std::vector<Node> children{facet(subject, match, {}, span, depth + 1)};
+    llvm::append_range(children, arms);
+    return selection(type, match ? "match" : "if", std::move(children), span,
+                     depth + 1);
+  }
+  Node defer(Node value, const std::shared_ptr<Application> &app) {
+    if (!charge(1, value->span))
+      return unknown(value->type);
+    if (value->kind == Provenance::Kind::Formal)
+      return at(app->operands.at(value->slot), app->roles.at(value->role),
+                value->type);
+    auto found = app->deferred.find(value.get());
+    if (found != app->deferred.end())
+      return found->second;
+    auto result = recipe(Provenance::Kind::Deferred, value->type, {value},
+                         app->occurrence);
+    app->deferred.emplace(value.get(), result);
+    return result;
+  }
+  Node force(Node value, unsigned depth = 0) {
+    while (!failure && value->kind == Provenance::Kind::Deferred)
+      value = evaluate(value->operands.front(),
+                       activeApplications.at(value->slot), depth);
+    return value;
+  }
+  Node evaluate(Node value, const std::shared_ptr<Application> &app,
+                unsigned depth) {
+    if (!charge(1, value->span) || failure)
+      return unknown(value->type);
+    if (depth > work.limits.expressionDepth) {
+      capacity(value->span, "common applied expression depth exceeded");
+      return unknown(value->type);
+    }
+    auto found = app->memo.find(value.get());
+    if (found != app->memo.end()) {
+      if (found->second.height > work.limits.expressionDepth - depth) {
+        capacity(value->span, "common cached expression depth exceeded");
+        return unknown(value->type);
+      }
+      if (!expressionHeights.empty())
+        expressionHeights.back() =
+            std::max(expressionHeights.back(), depth + found->second.height);
+      return found->second.value;
+    }
+    ++observation.expressions;
+    expressionHeights.push_back(depth);
+    auto restore = llvm::scope_exit([&] {
+      auto height = expressionHeights.back();
+      expressionHeights.pop_back();
+      if (!expressionHeights.empty())
+        expressionHeights.back() = std::max(expressionHeights.back(), height);
+    });
+    using K = Provenance::Kind;
+    Node result;
+    if (value->kind == K::Formal)
+      result = at(app->operands.at(value->slot), app->roles.at(value->role),
+                  value->type);
+    else if (value->kind == K::Call) {
+      auto child = application(value->call, app, depth);
+      if (!child)
+        return unknown(value->type);
+      result =
+          evaluate(child->instance->results.at(value->slot).at(value->role),
+                   child, depth);
+    } else if (value->kind == K::RepeatResult) {
+      unsigned invocation = app->loops.at(value->slot);
+      const auto &source = app->instance->loops.at(value->slot);
+      auto role = app->roles.at(value->role);
+      auto sourceCount =
+          at(source.counts, value->role, Type(Type::Kind::Index));
+      auto count = force(defer(sourceCount, app), depth + 1)->constantCount;
+      if (value->alternative >= source.transition.size())
+        result = unknown(value->type);
+      else if ((count && *count == 0) ||
+               (source.maximum.isClosed() && source.maximum.closedValue() == 0))
+        result = defer(
+            at(source.initial[value->alternative], value->role, value->type),
+            app);
+      else if (count && *count == 1)
+        result = defer(
+            at(source.transition[value->alternative], value->role, value->type),
+            app);
+      else
+        result = node(K::Exit, value->type, {}, {}, {},
+                      LoopSubject{invocation, value->alternative, role, {}});
+    } else if (value->loop) {
+      auto subject = *value->loop;
+      subject.invocation = app->loops.at(subject.invocation);
+      subject.role = app->roles.at(subject.role);
+      result = node(value->kind, value->type, value->identity, {}, {},
+                    std::move(subject), value->tagOnly, value->extentAxis,
+                    value->constantCount, value->statics);
+    } else {
+      std::vector<Node> operands;
+      for (const auto &operand : value->operands)
+        operands.push_back(defer(operand, app));
+      if (value->kind == K::Field)
+        result =
+            field(operands.front(), value->slot, value->span, 0, depth + 1);
+      else if (value->kind == K::Payload)
+        result = payload(operands.front(), value->alternative, value->slot,
+                         value->type, value->span, 0, depth + 1);
+      else if (value->kind == K::Facet)
+        result = facet(operands.front(), value->tagOnly, value->extentAxis,
+                       value->span, depth + 1);
+      else if (value->kind == K::Branch) {
+        auto subject = operands.front();
+        operands.erase(operands.begin());
+        result = branch(value->type, subject, std::move(operands),
+                        value->tagOnly, value->span, depth);
+      } else
+        result = node(value->kind, value->type, value->identity,
+                      std::move(operands), value->input, {}, value->tagOnly,
+                      value->extentAxis, value->constantCount, value->statics);
+    }
+    if (!failure)
+      app->memo.emplace(value.get(),
+                        Evaluated{result, expressionHeights.back() - depth});
+    return result;
+  }
+  Node field(Node value, unsigned index, Span span, unsigned depth,
+             unsigned expressionDepth = 0) {
+    value = force(value, expressionDepth);
     if (!charge(1, span) || depth > work.limits.typeDepth) {
       capacity(span, "common component projection depth exceeded");
       return unknown(value->type);
@@ -808,6 +1452,8 @@ class Requirements {
       }
       type = (*fields)[index].type;
     }
+    if (building)
+      return recipe(Provenance::Kind::Field, type, {value}, index, 0, 0, span);
     if (value->kind == Provenance::Kind::Product &&
         index < value->operands.size())
       return value->operands[index];
@@ -826,8 +1472,10 @@ class Requirements {
     if (value->kind == Provenance::Kind::Selection) {
       auto children = value->operands;
       for (unsigned i = 1; i < children.size(); ++i)
-        children[i] = field(children[i], index, span, depth + 1);
-      return selection(type, value->identity, std::move(children), span);
+        children[i] =
+            field(children[i], index, span, depth + 1, expressionDepth + 1);
+      return selection(type, value->identity, std::move(children), span,
+                       expressionDepth);
     }
     if (value->kind == Provenance::Kind::Inactive)
       return node(value->kind, type, value->identity);
@@ -837,11 +1485,16 @@ class Requirements {
                 {value});
   }
   Node payload(Node value, unsigned alternative, unsigned index,
-               const Type &type, Span span, unsigned depth = 0) {
+               const Type &type, Span span, unsigned depth = 0,
+               unsigned expressionDepth = 0) {
+    value = force(value, expressionDepth);
     if (!charge(1, span) || depth > work.limits.typeDepth) {
       capacity(span, "common payload projection depth exceeded");
       return unknown(type);
     }
+    if (building)
+      return recipe(Provenance::Kind::Payload, type, {value}, index, 0,
+                    alternative, span);
     if (value->kind == Provenance::Kind::Variant) {
       if (value->identity != std::to_string(alternative))
         return node(Provenance::Kind::Inactive, type,
@@ -865,9 +1518,10 @@ class Requirements {
     if (value->kind == Provenance::Kind::Selection) {
       auto children = value->operands;
       for (unsigned i = 1; i < children.size(); ++i)
-        children[i] =
-            payload(children[i], alternative, index, type, span, depth + 1);
-      return selection(type, value->identity, std::move(children), span);
+        children[i] = payload(children[i], alternative, index, type, span,
+                              depth + 1, expressionDepth + 1);
+      return selection(type, value->identity, std::move(children), span,
+                       expressionDepth);
     }
     if (value->kind == Provenance::Kind::Inactive)
       return node(value->kind, type, value->identity);
@@ -882,10 +1536,14 @@ class Requirements {
              unsigned depth = 0) {
     if (!tagOnly && !axis)
       return value;
+    value = force(value, depth);
     if (!charge(1, span) || depth > work.limits.expressionDepth) {
       capacity(span, "common observation depth exceeded");
       return unknown(value->type);
     }
+    if (building)
+      return recipe(Provenance::Kind::Facet, value->type, {value}, 0, 0, 0,
+                    span, {}, tagOnly, axis);
     if (value->kind == Provenance::Kind::Input ||
         value->kind == Provenance::Kind::Carry ||
         value->kind == Provenance::Kind::Exit)
@@ -898,7 +1556,8 @@ class Requirements {
       auto children = value->operands;
       for (unsigned i = 1; i < children.size(); ++i)
         children[i] = facet(children[i], tagOnly, axis, span, depth + 1);
-      return selection(value->type, value->identity, std::move(children), span);
+      return selection(value->type, value->identity, std::move(children), span,
+                       depth);
     }
     if (value->kind == Provenance::Kind::Unknown ||
         value->kind == Provenance::Kind::Inactive)
@@ -906,12 +1565,14 @@ class Requirements {
     return node(Provenance::Kind::Total, value->type,
                 tagOnly ? "tag" : "extent:" + std::to_string(*axis), {value});
   }
-  Node observe(Node value, const Provenance &observation, Span span) {
+  Node observe(Node value, const Provenance &observation, Span span,
+               unsigned depth) {
     for (const auto &step : observation.loop->path)
       value = step.payload ? payload(value, step.alternative, step.index,
-                                     step.type, span)
-                           : field(value, step.index, span, 0);
-    return facet(value, observation.tagOnly, observation.extentAxis, span);
+                                     step.type, span, 0, depth)
+                           : field(value, step.index, span, 0, depth);
+    return facet(value, observation.tagOnly, observation.extentAxis, span,
+                 depth);
   }
   bool demand(std::vector<Node> values, bool tagOnly, Span span) {
     if (!charge(values.size() + callSites.size() + 1, span))
@@ -921,6 +1582,55 @@ class Requirements {
   }
   bool agree(ArrayRef<Node> values, Span span, std::set<Equation> &hypotheses,
              unsigned depth = 0) {
+    if (!charge(values.size() + 1, span))
+      return false;
+    Agreement key;
+    for (const auto &value : values)
+      key.push_back(force(value, depth));
+    auto completed = established.find(key);
+    auto local = pending.find(key);
+    auto height = completed != established.end()
+                      ? std::optional<unsigned>(completed->second)
+                  : local != pending.end()
+                      ? std::optional<unsigned>(local->second)
+                      : std::nullopt;
+    if (depth > work.limits.expressionDepth)
+      return capacity(span, "common cached derivation depth exceeded");
+    if (height && *height <= work.limits.expressionDepth - depth) {
+      if (!agreementHeights.empty())
+        agreementHeights.back() =
+            std::max(agreementHeights.back(), *height + 1);
+      else {
+        completedDemand = key;
+        completedDemandHeight = *height;
+      }
+      return true;
+    }
+    // A current recurrence context can have a shorter grounded derivation.
+    // Recheck it instead of either hiding cached height or over-refusing.
+    agreementHeights.push_back(0);
+    conditionalAgreement.push_back(false);
+    bool success = agreeImpl(key, span, hypotheses, depth);
+    unsigned used = agreementHeights.back();
+    bool conditional = conditionalAgreement.back();
+    agreementHeights.pop_back();
+    conditionalAgreement.pop_back();
+    if (!agreementHeights.empty())
+      agreementHeights.back() = std::max(agreementHeights.back(), used + 1);
+    if (!conditionalAgreement.empty())
+      conditionalAgreement.back() = conditionalAgreement.back() || conditional;
+    if (success && agreementHeights.empty()) {
+      completedDemand = key;
+      completedDemandHeight = used;
+    }
+    // A cycle-closing hypothesis is not a completed subproof, including for
+    // depth accounting. Only the entire grounded demand may publish it.
+    if (success && !conditional)
+      pending.emplace(std::move(key), used);
+    return success;
+  }
+  bool agreeImpl(ArrayRef<Node> values, Span span,
+                 std::set<Equation> &hypotheses, unsigned depth = 0) {
     if (!charge(values.size() + 1, span))
       return false;
     if (depth > work.limits.expressionDepth)
@@ -956,30 +1666,44 @@ class Requirements {
       }
       CommonControlRequirement requirement{
           {}, first.type, first.tagOnly, span, first.extentAxis};
-      for (const auto &value : values)
-        if (!llvm::is_contained(requirement.components, *value->input))
-          requirement.components.push_back(*value->input);
-      for (unsigned i = 1; i < requirement.components.size(); ++i) {
-        CommonControlRequirement pair{
-            {requirement.components.front(), requirement.components[i]},
-            first.type,
-            first.tagOnly,
-            span,
-            first.extentAxis};
-        bool known = false;
-        for (const auto &prior : requirements) {
-          if (!charge(prior.components.size() + 1, span))
-            return false;
-          known |= prior.type == pair.type && prior.tagOnly == pair.tagOnly &&
-                   prior.extentAxis == pair.extentAxis &&
-                   prior.components.size() == 2 &&
-                   ((prior.components[0] == pair.components[0] &&
-                     prior.components[1] == pair.components[1]) ||
-                    (prior.components[0] == pair.components[1] &&
-                     prior.components[1] == pair.components[0]));
+      std::set<std::string> components;
+      std::vector<std::string> componentKeys;
+      for (const auto &value : values) {
+        const auto &component = *value->input;
+        std::string key;
+        detail::frame(key, std::to_string(component.input));
+        detail::frame(key, std::to_string(component.role));
+        for (const auto &step : component.path) {
+          detail::frame(key, std::to_string(unsigned(step.kind)));
+          detail::frame(key, std::to_string(step.index));
         }
-        if (!known)
-          requirements.push_back(std::move(pair));
+        if (!charge(key.size() + 1, span))
+          return false;
+        if (components.insert(key).second) {
+          requirement.components.push_back(component);
+          componentKeys.push_back(std::move(key));
+        }
+      }
+      if (!chargeStaticType(first.type, span))
+        return false;
+      auto type = typeIdentity(first.type);
+      for (unsigned i = 1; i < requirement.components.size(); ++i) {
+        auto left = componentKeys.front();
+        auto right = componentKeys[i];
+        if (right < left)
+          std::swap(left, right);
+        if (!charge(type.size() + left.size() + right.size() + 1, span))
+          return false;
+        if (requirementIndex
+                .emplace(type, first.tagOnly, first.extentAxis, std::move(left),
+                         std::move(right))
+                .second)
+          requirements.push_back(
+              {{requirement.components.front(), requirement.components[i]},
+               first.type,
+               first.tagOnly,
+               span,
+               first.extentAxis});
       }
       return true;
     }
@@ -1016,27 +1740,53 @@ class Requirements {
                           first.tagOnly,    first.extentAxis};
         if (!charge(hypotheses.size() + 1, span))
           return false;
-        if (!hypotheses.insert(std::move(equation)).second)
+        if (!hypotheses.insert(std::move(equation)).second) {
+          conditionalAgreement.back() = true;
           continue;
+        }
         // Introduce the complete base and transition obligations before any
         // repeated subject is allowed to close a simultaneous hypothesis.
-        const auto &loop = loops[first.loop->invocation];
+        bindLoop(first.loop->invocation, first.loop->slot, 0);
+        if (failure)
+          return false;
+        if (first.kind == Provenance::Kind::Exit ||
+            !appliedLoops[first.loop->invocation].atMostOne)
+          bindLoop(first.loop->invocation, first.loop->slot, 0, true);
+        if (failure)
+          return false;
+        const auto &bound = appliedLoops[first.loop->invocation];
+        const bool transitionNeeded =
+            first.kind == Provenance::Kind::Exit || !bound.atMostOne;
+        const bool countsNeeded = first.kind == Provenance::Kind::Exit;
+        const auto &initialSource = bound.initial.at(first.loop->slot);
+        if (!charge(initialSource.size() +
+                        (transitionNeeded
+                             ? bound.transition.at(first.loop->slot).size()
+                             : 0) +
+                        (countsNeeded ? bound.counts.size() : 0) + 1,
+                    span))
+          return false;
+        // Recursive agreement may add loop applications. Snapshot only this
+        // demanded slot and its count, never all private carry slots.
+        const auto initial = initialSource;
+        const auto transition = transitionNeeded
+                                    ? bound.transition.at(first.loop->slot)
+                                    : Components{};
+        const auto loopCounts = countsNeeded ? bound.counts : Components{};
         auto check = [&](const Components &components) {
           std::vector<Node> pair{
-              observe(at(components, first.loop->role, first.type), first,
-                      span),
-              observe(at(components, other.loop->role, other.type), other,
-                      span)};
+              observe(at(components, first.loop->role, first.type), first, span,
+                      depth + 1),
+              observe(at(components, other.loop->role, other.type), other, span,
+                      depth + 1)};
           return agree(pair, span, hypotheses, depth + 1);
         };
-        if (!check(loop.initial[first.loop->slot]) ||
-            ((first.kind == Provenance::Kind::Exit || !loop.atMostOne) &&
-             !check(loop.transition[first.loop->slot])))
+        if (!check(initial) || (transitionNeeded && !check(transition)))
           return false;
         if (first.kind == Provenance::Kind::Exit) {
           std::vector<Node> counts{
-              at(loop.counts, first.loop->role, Type(Type::Kind::Index)),
-              at(loop.counts, other.loop->role, Type(Type::Kind::Index))};
+              at(loopCounts, first.loop->role, Type(Type::Kind::Index)),
+              at(loopCounts, other.loop->role, Type(Type::Kind::Index))};
           if (!agree(counts, span, hypotheses, depth + 1))
             return false;
         }
@@ -1046,9 +1796,10 @@ class Requirements {
     for (unsigned i = 0; i < first.operands.size(); ++i) {
       std::vector<Node> operands;
       for (const auto &value : values)
-        operands.push_back(first.kind == Provenance::Kind::Extent
-                               ? facet(value->operands[i], false, 0, span)
-                               : value->operands[i]);
+        operands.push_back(
+            first.kind == Provenance::Kind::Extent
+                ? facet(value->operands[i], false, 0, span, depth + 1)
+                : value->operands[i]);
       if (!agree(operands, span, hypotheses, depth + 1))
         return false;
     }
@@ -1058,6 +1809,7 @@ class Requirements {
                                ArrayRef<unsigned> roles, unsigned callDepth,
                                const Environment &context,
                                unsigned regionDepth = 1) {
+    ++observation.bodyTraversals;
     if (!charge(source.values.size() + source.operations.size() + 1, {}))
       return {};
     if (callDepth > work.limits.callDepth) {
@@ -1068,6 +1820,8 @@ class Requirements {
       capacity({}, "common region depth exceeded");
       return {};
     }
+    if (building)
+      building->regionHeight = std::max(building->regionHeight, regionDepth);
     if (inputs.size() != source.inputs) {
       refuse({}, "common body input association differs");
       return {};
@@ -1183,8 +1937,9 @@ class Requirements {
         } else {
           auto inputs = gather(invoke->operands);
           llvm::append_range(inputs, binding->captures);
-          results = body(*binding->computation->body, inputs, roles,
-                         callDepth + 1, binding->environment);
+          results = delayed(summarize(
+              *binding->computation->body, inputs, roles, binding->environment,
+              op.span, callDepth, nullptr, binding->computation));
         }
       } else if (const auto *finite =
                      std::get_if<FiniteApplication>(&op.action)) {
@@ -1239,8 +1994,10 @@ class Requirements {
         std::optional<Type> module;
         if (call->module)
           module = substitute(*call->module, context, op.span);
-        auto selected = target(call->callee, statics, module, op.span);
-        const auto &callee = declarations.at(selected.index);
+        auto selected = target(call->callee, statics, module, context, op.span);
+        if (!selected)
+          return {};
+        const auto &callee = declarations.at(selected->index);
         auto nested = environment(callee, statics, module, context.statics);
         for (auto index : call->scopedArguments)
           nested.scoped.push_back(
@@ -1251,8 +2008,9 @@ class Requirements {
         if (callee.kind == Declaration::Kind::Math && callee.body) {
           callSites.push_back(op.span);
           auto restore = llvm::scope_exit([&] { callSites.pop_back(); });
-          results = body(*callee.body, gather(call->operands), roles,
-                         callDepth + 1, nested);
+          results =
+              delayed(summarize(*callee.body, gather(call->operands), roles,
+                                nested, op.span, callDepth, &callee));
         } else if (callee.kind == Declaration::Kind::Math && callee.abstract) {
           auto payload = lexicalStatics(statics, context, op.span, module);
           each([&](unsigned, unsigned role, const Type &type) {
@@ -1285,10 +2043,24 @@ class Requirements {
           auto selected = mappedRoles(call->roles);
           callSites.push_back(op.span);
           auto restore = llvm::scope_exit([&] { callSites.pop_back(); });
-          results = body(
-              *callee.body, gather(call->operands), selected, callDepth + 1,
-              environment(callee, call->arguments, {}, context.statics));
+          results = delayed(summarize(
+              *callee.body, gather(call->operands), selected,
+              environment(callee, call->arguments, {}, context.statics),
+              op.span, callDepth, &callee));
         }
+      } else if (const auto *selection =
+                     std::get_if<OracleSequenceAt>(&op.action)) {
+        // Selecting one logical anchor is a common action. Availability of an
+        // ordinary index does not establish agreement between its components.
+        std::vector<Node> selected;
+        for (auto role : mappedRoles(selection->roles))
+          selected.push_back(at(values[selection->position.index], role,
+                                valueTypes[selection->position.index]));
+        if (!demand(std::move(selected), false, op.span))
+          return {};
+        each([&](unsigned, unsigned, const Type &type) {
+          return unknown(type);
+        });
       } else if (const auto *control = std::get_if<Control>(&op.action)) {
         if (source.mode == Body::Mode::Local ||
             control->kind == Control::Kind::For) {
@@ -1326,32 +2098,14 @@ class Requirements {
           each([&](unsigned result, unsigned role, const Type &type) {
             auto subject =
                 at(values[selector.index], role, valueTypes[selector.index]);
-            std::optional<unsigned> selected;
-            if (subject->kind == Provenance::Kind::Static) {
-              auto boolean = "math:" +
-                             std::to_string(unsigned(
-                                 MathematicalIdentity::BooleanConstant)) +
-                             ":";
-              if (subject->identity == boolean + "true")
-                selected = 0;
-              else if (subject->identity == boolean + "false")
-                selected = 1;
-            } else if (subject->kind == Provenance::Kind::Variant) {
-              unsigned ordinal;
-              if (!StringRef(subject->identity).getAsInteger(10, ordinal))
-                selected = ordinal;
-            }
-            if (selected && *selected < arms.size() &&
-                result < arms[*selected].size())
-              return at(arms[*selected][result], role, type);
-            std::vector<Node> children{facet(subject, match, {}, op.span)};
+            std::vector<Node> children{subject};
             for (const auto &arm : arms) {
               if (result >= arm.size())
                 return unknown(type);
               children.push_back(at(arm[result], role, type));
             }
-            return selection(type, match ? "match" : "if", std::move(children),
-                             op.span);
+            return recipe(Provenance::Kind::Branch, type, std::move(children),
+                          0, 0, 0, op.span, {}, match);
           });
         }
       } else if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
@@ -1375,10 +2129,14 @@ class Requirements {
                     op.span))
           return {};
         unsigned invocation = loops.size();
-        loops.push_back({values[repeat->count.index],
+        Components loopCounts;
+        for (auto role : selected)
+          loopCounts[role] = at(values[repeat->count.index], role, countType);
+        loops.push_back({std::move(loopCounts),
                          gather(repeat->carried),
                          {},
-                         atMostOne});
+                         atMostOne,
+                         maximum});
         Components index;
         for (auto role : selected)
           index[role] =
@@ -1400,17 +2158,8 @@ class Requirements {
           return {};
         loops[invocation].transition = std::move(successors);
         each([&](unsigned slot, unsigned role, const Type &type) {
-          const auto &loop = loops[invocation];
-          if (slot >= loop.transition.size())
-            return unknown(type);
-          auto count = at(loop.counts, role, countType)->constantCount;
-          if ((count && *count == 0) ||
-              (maximum.isClosed() && maximum.closedValue() == 0))
-            return at(loop.initial[slot], role, type);
-          if (count && *count == 1)
-            return at(loop.transition[slot], role, type);
-          return node(Provenance::Kind::Exit, type, {}, {}, {},
-                      LoopSubject{invocation, slot, role, {}});
+          return recipe(Provenance::Kind::RepeatResult, type, {}, invocation,
+                        role, slot, op.span);
         });
       } else if (const auto *completion =
                      std::get_if<ProtocolCompletion>(&op.action)) {
@@ -1445,15 +2194,26 @@ class Requirements {
 
 public:
   Requirements(const std::vector<Declaration> &declarations,
-               ArrayRef<Asset> assets, detail::Work &work)
+               ArrayRef<Asset> assets, detail::Work &work,
+               detail::CommonSummaryObservation &observation)
       : declarations(declarations), work(work),
-        types(declarations, assets, work) {
+        types(declarations, assets, work), observation(observation) {
     (void)!!failure;
   }
   /// One semantic index may serve several targets; each run starts from an
   /// empty requirement, call-site, loop and demand state.
   Expected<std::vector<CommonControlRequirement>> run(DeclarationId target) {
     requirements.clear();
+    requirementIndex.clear();
+    established.clear();
+    pending.clear();
+    completedDemand.clear();
+    applications.clear();
+    activeApplications.clear();
+    loopOwners.clear();
+    appliedLoops.clear();
+    expressionHeights.clear();
+    applicationCount = 0;
     callSites.clear();
     loops.clear();
     demands.clear();
@@ -1474,19 +2234,27 @@ public:
           return std::move(failure);
         inputs[i].emplace(role, std::move(value));
       }
-    body(*decl.body, inputs, roles, 1, environment(decl, {}));
+    auto root = summarize(*decl.body, inputs, roles, environment(decl, {}),
+                          decl.span, 0, &decl);
+    if (root)
+      apply(root->instance, root->operands, root->roles, 1, {});
     if (failure)
       return std::move(failure);
     if (types.diagnostic)
       return make_error<DiagnosticError>(*types.diagnostic);
-    for (const auto &demand : demands) {
+    for (unsigned i = 0; i < demands.size(); ++i) {
+      const auto demand = demands[i];
       callSites = demand.calls;
       std::vector<Node> observed;
       for (const auto &value : demand.values)
         observed.push_back(facet(value, demand.tagOnly, {}, demand.control));
       std::set<Equation> hypotheses;
+      pending.clear();
       if (!agree(observed, demand.control, hypotheses))
         return std::move(failure);
+      // Every base and sibling transition opened by this demand succeeded.
+      established.merge(pending);
+      established.emplace(std::move(completedDemand), completedDemandHeight);
     }
     if (failure)
       return std::move(failure);
@@ -1500,13 +2268,28 @@ deriveRequirements(const std::vector<Declaration> &declarations,
                    DeclarationId target) {
   if (auto e = detail::chargeSemanticIndex(declarations, work))
     return e;
-  return Requirements(declarations, assets, work).run(target);
+  detail::CommonSummaryObservation observation;
+  return Requirements(declarations, assets, work, observation).run(target);
 }
 } // namespace
 namespace detail {
 Error checkCommonControlRequirements(
     const std::vector<Declaration> &declarations, ArrayRef<Asset> assets,
     Work &work) {
+  CommonSummaryObservation observation;
+  return checkCommonSummaryRequirements(declarations, assets, work,
+                                        observation);
+}
+Expected<std::vector<CommonControlRequirement>> deriveCommonSummaryRequirements(
+    const std::vector<Declaration> &declarations, ArrayRef<Asset> assets,
+    Work &work, DeclarationId target, CommonSummaryObservation &observation) {
+  if (auto e = chargeSemanticIndex(declarations, work))
+    return e;
+  return Requirements(declarations, assets, work, observation).run(target);
+}
+Error checkCommonSummaryRequirements(
+    const std::vector<Declaration> &declarations, ArrayRef<Asset> assets,
+    Work &work, CommonSummaryObservation &observation) {
   // The semantic index is built and charged once for the whole project; each
   // Protocol then pays only for its own derivation.
   std::optional<Requirements> derivation;
@@ -1520,7 +2303,7 @@ Error checkCommonControlRequirements(
     if (!derivation) {
       if (auto e = chargeSemanticIndex(declarations, work))
         return e;
-      derivation.emplace(declarations, assets, work);
+      derivation.emplace(declarations, assets, work, observation);
     }
     auto requirements = derivation->run(decl.id);
     if (!requirements)
@@ -1528,13 +2311,28 @@ Error checkCommonControlRequirements(
   }
   return Error::success();
 }
-Error checkCommonControlRequirements(const ClosedEntry &entry, Work &work) {
-  if (!entry.protocolOrNull())
-    return Error::success();
+Error retainCommonControlRequirements(const ClosedEntry &entry,
+                                      ClosedStorage &storage, Work &work) {
   const auto &declarations = detail::DeclarationAccess::get(entry);
-  auto requirements = deriveRequirements(declarations, entry.project().assets(),
-                                         work, entry.protocol().id);
-  return requirements ? Error::success() : requirements.takeError();
+  CommonSummaryObservation observation;
+  std::optional<Requirements> derivation;
+  for (const auto &decl : declarations) {
+    if (auto error = work.charge(1, decl.span))
+      return error;
+    if (!isClosedConcreteProtocol(decl))
+      continue;
+    if (!derivation) {
+      if (auto error = chargeSemanticIndex(declarations, work))
+        return error;
+      derivation.emplace(declarations, entry.project().assets(), work,
+                         observation);
+    }
+    auto requirements = derivation->run(decl.id);
+    if (!requirements)
+      return requirements.takeError();
+    storage.commonInputs.emplace(decl.id.index, std::move(*requirements));
+  }
+  return Error::success();
 }
 } // namespace detail
 Expected<std::vector<CommonControlRequirement>>
@@ -1550,40 +2348,6 @@ bool isClosedConcreteProtocol(const Declaration &decl) {
   return decl.kind == Declaration::Kind::Protocol && decl.body &&
          !decl.abstract && decl.parameters.empty() &&
          decl.scopedInputs.empty() && decl.domainInputs.empty();
-}
-Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &entry,
-                                const Limits &limits) {
-  if (auto error = checkLimits(limits))
-    return error;
-  if (!entry.protocolOrNull())
-    return detail::failure(
-        "source.common-provenance",
-        "Host entry requires its selected Protocol invocation");
-  return deriveCommonControlRequirements(entry, entry.protocol().id, limits);
-}
-Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &entry, DeclarationId target,
-                                const Limits &limits) {
-  uint64_t remaining = limits.work;
-  return deriveCommonControlRequirements(entry, target, limits, remaining);
-}
-Expected<std::vector<CommonControlRequirement>>
-deriveCommonControlRequirements(const ClosedEntry &entry, DeclarationId target,
-                                const Limits &limits, uint64_t &remaining) {
-  if (auto error = checkLimits(limits))
-    return error;
-  Limits bounded = limits;
-  bounded.work = std::min(remaining, limits.work);
-  if (target.index >= entry.declarations().size() ||
-      !isClosedConcreteProtocol(entry.declarations()[target.index]))
-    return detail::failure("source.common-provenance",
-                           "common target is not a closed concrete Protocol");
-  const auto &declarations = detail::DeclarationAccess::get(entry);
-  detail::Work work{bounded};
-  work.allowance = &remaining;
-  return deriveRequirements(declarations, entry.project().assets(), work,
-                            target);
 }
 
 } // namespace zkc::language

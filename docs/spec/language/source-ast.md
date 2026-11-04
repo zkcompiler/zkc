@@ -317,19 +317,46 @@ Private and installation references are not filtered through the public API
 view.
 
 Every successful declaration-resolution route records exactly one record per
-written occurrence, in resolver order; a lookup whose result is discarded
-records nothing. `route` names the resolution route:
+written occurrence and reference position, in resolver order; a lookup whose
+result is discarded records nothing. Internally an occurrence uses a retained
+syntax-node identity and a position slot, rather than a byte span. Copies used
+by inference and replay preserve that identity. Distinct nodes may share a span.
+Repeated selected names in one import have distinct ordinal slots.
+The checked reference retains typed provider/target/category, binding steps and
+abstract context; `abstract_module` is only a presentation projection. Before
+independent witness checking, the authored occurrence inventory is frozen.
+Replay reauthorizes its routes using source access and rejects changed or missing
+candidate references, including provider changes accompanied by changed candidate
+metadata. It never appends reference records. Installed declaration replay also
+checks exact name, canonical identity, parent, owning module and installation
+origin against the frozen declaration index. An association slot and a matching
+signature shape do not establish that identity. Missing retained occurrence
+handles or syntax refuse with a witness diagnostic.
+
+Construction initializer and codec references retain their exact authored
+occurrence, including inherited references and substituted arguments. A valid
+provider at another occurrence cannot authorize a changed projection. Replaying
+a generic construction must preserve its deferred boundary requirements; it does
+not infer concrete admission from a symbolic provider.
+
+Body replay binds each selected arm, repeat and extracted callback to its
+expected authored lexical region and mode. Moving an otherwise valid occurrence
+to another arm refuses. Transparent blocks share their enclosing checked region;
+eager Boolean operands and Local short-circuit arms follow their respective
+source evaluation rules. Managed roots come from authored service inputs and
+lexically visible aliases, independently of candidate capture slots.
+
+`route` names the resolution route:
 
 | Route | Records |
 |---|---|
-| `path` | A written path in a signature, associated type, constraint, conformance contract, construction provider, body callee or type, including qualified paths without an import |
+| `path` | A written path in a signature, associated type, constraint, conformance contract, construction provider, body callee or type, including qualified paths without an import and names selected from the explicit prelude |
 | `import`, `import-name` | An import's module and each selected name; a facade keeps its facade provider |
-| `method` | A home method; the provider is the method's module |
-| `module-member` | A member of a bound module parameter; `abstract_module` is its binder |
-| `implicit` | An installed declaration selected without a written path |
-| `service` | A managed service constructor in a protocol port |
+| `method` | A home method keeps its selected home provider, including a catalog-authorized forwarding home, and canonical implementation target. A managed method keeps its constructor's authored provider route, including a facade, and its indexed installed method target |
+| `module-member` | An associated type or callable member of a bound module parameter; the interface-bound route keeps its provider and `abstract_module` is its binder |
+| `service` | A managed service constructor in a protocol port; the port retains its selected provider and canonical installed constructor even through an import-free facade path |
 | `notation` | An operator, delimiter, indexing or reduction use, once its callee is fixed. The provider is the module whose declaration or body introduces the selected binding, which is the installed module for prelude operators; the target is the selected, or filtered, callable |
-| `construction` | A construction provider's interface member: `State`, `initialize`, `Record`, `write` and `finish`. The provider is the implementing module; a symbolic provider keeps the written route of its interface bound and its binder as `abstract_module` |
+| `construction` | A construction provider's interface member: `State`, `initialize`, `Record`, `write` and `finish`. The provider is the selected implementing-module route; a symbolic provider keeps the written route of its interface bound and its binder as `abstract_module` |
 
 Records are source occurrences. They stay separate from the deduplicated unit
 dependencies in `units`, which has one row per captured unit, sorted by module

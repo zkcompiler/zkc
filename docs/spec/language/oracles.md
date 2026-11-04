@@ -94,8 +94,13 @@ answer <- query selected at row
 
 The empty sequence's role tuple gives holder first, followed by receivers.
 Append and selection are ordered checked operations. Selection requires its
-index to be available to the whole family; it cannot let each receiver choose
-a different anchor. Appended handles must preserve kind and custody family.
+index to be available to the whole family and to have common provenance; it
+cannot let each receiver choose a different anchor. An ordinary input index
+creates a `common_input_requirements` value obligation for that family. Source
+checking and native admission derive it independently; opaque Local, service,
+or received provenance cannot supply agreement. This coordinate obligation
+does not equate handles or discharge ordered anchor-history coherence.
+Appended handles must preserve kind and custody family.
 The static sequence capacity is independent of each table's row shape.
 Sequences can cross internal protocol inputs and results with the same holder
 arrow as single handles. An alias `Oracles<K, Capacity> =

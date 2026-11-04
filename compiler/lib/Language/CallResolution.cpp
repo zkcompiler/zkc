@@ -72,7 +72,19 @@ resolveHomeMethod(Semantics &types, ArrayRef<Declaration> declarations,
                span, {target.span});
     return {};
   }
-  return CallableReference{*selected, {}};
+  auto resolved = index.homeMember(SourceAccess{context.id}, *home, name,
+                                   {[&] { return types.charge(1, span); }, {}});
+  auto *reference = std::get_if<ResolvedReference>(&resolved);
+  if (!reference || reference->target.index != selected->index) {
+    if (auto *failure = std::get_if<LookupFailure>(&resolved);
+        failure && failure->kind == LookupFailureKind::Inaccessible)
+      types.fail("source.private", "cannot reference private method", span);
+    else if (!types.diagnostic)
+      types.fail("source.method", "home member is not an eligible declaration",
+                 span);
+    return {};
+  }
+  return CallableReference{*selected, {}, *reference};
 }
 std::optional<CallableReference> Checker::method(const Declaration &context,
                                                  const Type &receiver,
@@ -80,10 +92,8 @@ std::optional<CallableReference> Checker::method(const Declaration &context,
   auto target =
       resolveHomeMethod(types, output.declarations, *output.declarationIndex,
                         context, receiver, name, span);
-  if (target &&
-      !recordReference(context, ReferenceRoute::Method,
-                       output.declarations[target->declaration.index].module,
-                       target->declaration, name, span))
+  if (target && !recordReference(context, ReferenceRoute::Method,
+                                 target->reference, name, span))
     return {};
   return target;
 }
@@ -103,70 +113,87 @@ bool Checker::domainExpression(const Declaration &decl,
 std::optional<CallableReference> Checker::callable(const Declaration &decl,
                                                    StringRef name, Span span,
                                                    bool record) {
+  if (!types.charge(decl.parameters.size() + 1, span))
+    return {};
   auto parts = name.split("::");
-  if (!parts.second.empty())
-    for (auto &parameter : decl.parameters) {
-      if (parameter.name != parts.first || !parameter.interface)
+  // Static binders select the root before a declaration or prelude lookup.
+  // An uncallable selected binder must never expose an intrinsic homonym.
+  if (!name.starts_with("::"))
+    for (unsigned slot = 0; slot < decl.parameters.size(); ++slot) {
+      const auto &parameter = decl.parameters[slot];
+      if (parameter.name != parts.first)
         continue;
-      SyntaxType term;
-      term.name = parameter.name;
-      term.span = span;
-      auto module = type(decl, term);
-      if (!module)
+      if (parts.second.empty() || !parameter.interface) {
+        types.fail("source.call", "selected static binder is not callable",
+                   span);
         return {};
-      auto &interface = output.declarations[parameter.interface->index];
-      for (auto id : interface.members)
-        if (output.declarations[id.index].name == parts.second) {
-          if (!signature(id))
-            return {};
-          if (record &&
-              !recordReference(decl, ReferenceRoute::ModuleMember,
-                               moduleParameterProviders.at(parameter.atom), id,
-                               name, span, formatType(*module)))
-            return {};
-          return CallableReference{id, *module};
-        }
-      types.fail("source.call", "unknown interface member", span);
-      return {};
+      }
+      auto module = parameterType(parameter);
+      auto result =
+          index().member(accessFor(decl), *parameter.interface, parts.second,
+                         {[&] { return types.charge(1, span); }, {}});
+      auto *selected = std::get_if<ResolvedReference>(&result);
+      if (!selected) {
+        if (auto *failure = std::get_if<LookupFailure>(&result);
+            failure && failure->kind != LookupFailureKind::NotFound)
+          acceptFailure(*failure, span, true);
+        else
+          types.fail("source.call", "unknown interface member", span);
+        return {};
+      }
+      const auto &bound = moduleParameterReferences.at(parameter.atom);
+      auto reference = bound.reference;
+      reference.target = selected->target;
+      reference.category = selected->category;
+      reference.path.insert(reference.path.end(), selected->path.begin(),
+                            selected->path.end());
+      reference.abstract = AbstractMemberContext{module, *parameter.interface,
+                                                 bound.owner, bound.slot};
+      if (!signature(reference.target) ||
+          (record && !recordReference(decl, ReferenceRoute::ModuleMember,
+                                      reference, name, span)))
+        return {};
+      return CallableReference{reference.target, module, reference};
     }
-  // A bound module member takes precedence over a nominal alternative.
+  // Variant alternatives select their nominal declaration as the callee.
   auto alternative = name.rsplit("::");
   if (!alternative.second.empty()) {
-    std::optional<DeclarationId> provider;
-    auto nominal = probe(decl, alternative.first, span, &provider);
+    auto nominal = select(decl, alternative.first, span, false);
     if (types.diagnostic)
       return {};
-    if (nominal && output.declarations[nominal->index].kind ==
+    if (nominal && output.declarations[nominal->target.index].kind ==
                        Declaration::Kind::Variant) {
-      if (record && !recordReference(decl, ReferenceRoute::Path, *provider,
-                                     *nominal, alternative.first, span))
+      if (record && !recordReference(decl, ReferenceRoute::Path, *nominal,
+                                     alternative.first, span))
         return {};
-      return CallableReference{*nominal, {}};
+      return CallableReference{nominal->target, {}, *nominal};
     }
   }
-  auto id = record ? resolve(decl, name, span, false)
-                   : probe(decl, name, span, nullptr);
-  if (!id && !types.diagnostic && output.declarationIndex) {
-    id = output.declarationIndex->implicit(name);
-    if (id && record &&
-        !recordReference(decl, ReferenceRoute::Implicit,
-                         output.declarations[id->index].module, *id, name,
-                         span))
-      return {};
-  }
-  if (!id && !types.diagnostic)
-    types.fail("source.name", "unknown declaration: " + name, span);
-  if (!id || !signature(*id))
+  auto reference = select(decl, name, span);
+  if (!reference)
     return {};
-  if (output.declarations[id->index].abstract &&
-      output.declarations[id->index].kind != Declaration::Kind::Associated) {
+  if (reference->category == ResolutionCategory::ServiceConstructor ||
+      reference->category == ResolutionCategory::ServiceMethod) {
+    types.fail("source.service",
+               "managed declarations require a borrowed service receiver",
+               span);
+    return {};
+  }
+  if (!signature(reference->target))
+    return {};
+  const auto &target = output.declarations[reference->target.index];
+  if (target.abstract && target.kind != Declaration::Kind::Associated) {
     types.fail("source.call", "abstract call requires a bound module", span);
     return {};
   }
-  return CallableReference{*id, {}};
+  if (record &&
+      !recordReference(decl, ReferenceRoute::Path, *reference, name, span))
+    return {};
+  return CallableReference{reference->target, {}, *reference};
 }
 std::optional<ExpressionTypes::Callable>
 BodyChecker::callable(const Expression &expr) {
+  SaveAndRestore site(checker.referenceSite, expr.referenceSite);
   return checker.callable(decl, expr.text, expr.span);
 }
 } // namespace zkc::language::detail

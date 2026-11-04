@@ -1,5 +1,6 @@
 #include "BindingWitness.h"
 #include "Checker.h"
+#include "ManagedServices.h"
 #include "RecordIntrinsics.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
@@ -12,7 +13,8 @@ bool sameOperands(ArrayRef<ValueId> a, ArrayRef<ValueId> b) {
                     [](ValueId x, ValueId y) { return x.index == y.index; });
 }
 bool sameTarget(const CallableReference &a, const CallableReference &b) {
-  return a.declaration.index == b.declaration.index && a.module == b.module;
+  return a.declaration.index == b.declaration.index && a.module == b.module &&
+         a.reference == b.reference;
 }
 bool sameSpan(Span a, Span b) {
   return a.source.index == b.source.index && a.begin == b.begin &&
@@ -547,6 +549,16 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return refuse();
   const auto &binding = *operation.binding;
   const auto &callee = declarations[binding.target.declaration.index];
+  if (std::holds_alternative<ServiceQuery>(operation.action) ||
+      binding.target.reference.category == ResolutionCategory::ServiceMethod ||
+      (index && index->serviceAssociation(binding.target.declaration)))
+    return index ? checkServiceInvocation(types, declarations, *index, body,
+                                          operation)
+                 : refuse();
+  if (index && index->association(binding.target.declaration) &&
+      index->association(binding.target.declaration)->rule ==
+          protocol::FrontendSignature::RandomConstructor)
+    return refuse();
   if (binding.installedSignature || binding.lexicalOwner ||
       binding.intrinsicSource ||
       (index && index->ruleAssociation(binding.target.declaration)))

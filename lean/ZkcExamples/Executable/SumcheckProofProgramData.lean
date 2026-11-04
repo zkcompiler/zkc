@@ -13,18 +13,18 @@ namespace ZkcExamples.Executable.SumcheckProofProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:51ade9611dc38b2e8074da9cb92839c7b0c9eccc48ad299cb7f1b2d46a974875"
+def program : String := "sha256:27da77f6c4f6f80048be05a27b68a6b96c80d4f65b0888a9f301669cd3d1b2e1"
 
 /-- The local function `zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0`. -/
 def function0 : Function :=
-  ⟨"zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", [("v0", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), "logical.resource_unit/0"⟩, ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩, ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩], [
+  ⟨"zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", [("v0", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), "logical.resource_unit/0"⟩, ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩, ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩], [
     .operation "lc_2_s0" "zkl_binding_7" [] [] ["v1"],
     .operation "lc_11_s1_create_0" "zkl_binding_8" [] [] ["v2"],
     .ret ["v2", "v1", "v0"]]⟩
 
 /-- The local function `zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07`. -/
 def function1 : Function :=
-  ⟨"zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", [("v0", ⟨.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), "logical.resource_unit/0"⟩), ("v1", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v2", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩, ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩], [
+  ⟨"zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", [("v0", ⟨.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), "logical.resource_unit/0"⟩), ("v1", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v2", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩, ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩], [
     .operation "lc_11_s0_unpack_0" "zkl_binding_9" [] ["v0"] [],
     .ret ["v1", "v2"]]⟩
 
@@ -36,13 +36,13 @@ def function2 : Function :=
 
 /-- The local function `zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9`. -/
 def function3 : Function :=
-  ⟨"zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", [("v0", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v1", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), "logical.resource_unit/0"⟩, ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩, ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩], [
+  ⟨"zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", [("v0", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v1", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), "logical.resource_unit/0"⟩, ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩, ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩], [
     .operation "lc_11_s0_create_0" "zkl_binding_8" [] [] ["v2"],
     .ret ["v2", "v0", "v1"]]⟩
 
 /-- The local function `zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc`. -/
 def function4 : Function :=
-  ⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", [("v0", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v1", ⟨.data (.resourceUnit "zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"), "logical.resource_unit/0"⟩), ("v2", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v3", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data .boolean, "native.bool/0"⟩], [
+  ⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", [("v0", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v1", ⟨.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), "logical.resource_unit/0"⟩), ("v2", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v3", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data .boolean, "native.bool/0"⟩], [
     .operation "lc_11_s0_unpack_0" "zkl_binding_9" [] ["v1"] [],
     .operation "lc_2_s3" "zkl_binding_1" [] ["v2"] ["v4"],
     .operation "lc_2_s4" "zkl_binding_0" [.text "1"] [] ["v5"],
@@ -135,8 +135,8 @@ def validator : Validator where
     ⟨"zkl_binding_12", "index.sub", [], "native/index.sub", []⟩,
     ⟨"zkl_binding_11", "vector.split", ["bls12-381.fr"], "arkworks/vector.split", []⟩,
     ⟨"zkl_binding_10", "vector.sum", ["bls12-381.fr"], "arkworks/vector.sum", []⟩,
-    ⟨"zkl_binding_9", "resource_unit.consume", ["zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"], "logical/resource_unit.consume", []⟩,
-    ⟨"zkl_binding_8", "resource_unit.create", ["zkl_resource_924693d979af232703fc6e9fd8f77bb89ef5ead67a2d4c10d4a54c14b3839992"], "logical/resource_unit.create", []⟩,
+    ⟨"zkl_binding_9", "resource_unit.consume", ["zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"], "logical/resource_unit.consume", []⟩,
+    ⟨"zkl_binding_8", "resource_unit.create", ["zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"], "logical/resource_unit.create", []⟩,
     ⟨"zkl_binding_7", "vector.empty", ["bls12-381.fr"], "arkworks/vector.empty", []⟩,
     ⟨"zkl_binding_6", "index.mul", [], "native/index.mul", []⟩,
     ⟨"zkl_binding_5", "index.less", [], "native/index.less", []⟩,

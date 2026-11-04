@@ -72,7 +72,8 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
   checked->mode = signature.mode == ScopedSignature::Mode::Math
                       ? Body::Mode::Math
                       : Body::Mode::Local;
-  BodyChecker nested(checker, decl, syntax, *checked, callDepth + 1);
+  BodyChecker nested(checker, decl, syntax, *checked, callDepth + 1,
+                     lexicalCallbackDepth + 1);
   nested.usageGuard = usageGuard;
   nested.inference = inference;
   nested.retainExpressionValues = true;

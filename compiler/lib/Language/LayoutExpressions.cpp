@@ -426,6 +426,7 @@ Expected<uint32_t> LayoutReader::expression(Id id, SyntaxDeclaration &decl) {
           auto label = std::move(*projected59);
           result.labels.push_back(std::move(label));
           result.constructorSpans.push_back(span(match));
+          result.constructorSites.push_back(std::make_shared<ReferenceNode>());
           result.payloads.push_back(std::move(payload));
           if (auto error = region(armNodes[1]))
             return error;

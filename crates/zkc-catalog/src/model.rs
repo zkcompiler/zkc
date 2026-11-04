@@ -394,7 +394,7 @@ pub struct FrontendDeclaration {
     pub inputs: &'static [SourceInput],
     pub output: Option<SourceTerm>,
     pub association: FrontendAssociation,
-    pub implicit: bool,
+    pub prelude: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NotationAssociativity {
@@ -430,6 +430,8 @@ pub enum ServiceSignature {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ServiceMethodDeclaration {
+    pub identity: &'static str,
+    pub constructor: &'static str,
     pub name: &'static str,
     pub signature: ServiceSignature,
     pub capability: &'static str,

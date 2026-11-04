@@ -87,7 +87,8 @@ changing them.
 of the two documents that each validator must accept, and edits that each must
 refuse, with the diagnostic each one gives. It owns the refusal cases of every
 rule of both chapters; a validator's own tests cover only what the edits cannot
-express or project, such as JSON syntax, key order and TableGen spelling. `validation_cases.py` specifies and
+express or project, such as JSON syntax, key order, missing or unknown source-row
+JSON fields and TableGen spelling. `validation_cases.py` specifies and
 applies the edits. `test_instances.py` runs them against the generator, the
 compiler's `catalog-source` test against the generator and `zkc-tblgen`, and
 `crates/zkc-catalog/tests/validation_cases.rs` against the Rust build.
@@ -120,5 +121,15 @@ associations against the declaration kind, static, member and notation
 references, home constructors against the type and frontend-constructor rows,
 one frontend-constructor row per form,
 unknown fields, duplicate owners and capability drift.
+`frontendDeclarations.prelude` is explicit prelude scope membership; the former
+`implicit` field is refused and selected bindings never gain fallback permission.
+Every service method has explicit `identity` and `constructor` fields, in
+addition to `name`, `signature` and `capability`. The constructor references a
+frontend declaration associated with the `RandomConstructor` semantic rule,
+independently of its spelling. Identities are unique across frontend declarations
+and service methods; names are unique within a constructor. Random-service
+consumers select the nominal owner `service.random` before matching a method
+name or capability. The independent Lean Python reader validates these source
+rows separately; this migration preserves its generated module byte for byte.
 Captured homonyms grant no authority.
 See [frontend associations](../../docs/spec/formats/contract-declarations.md#frontend-declaration-associations).

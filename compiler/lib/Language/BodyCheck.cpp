@@ -16,10 +16,11 @@ bool BodyChecker::fail(StringRef code, const Twine &message, Span span) {
 
 BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
                          const SyntaxDeclaration &syntax, Body &body,
-                         unsigned depth)
+                         unsigned depth, unsigned lexicalCallbackDepth)
     : checker(checker), decl(decl), syntax(syntax), body(body),
       plan(checker.bodyPlan(decl.id)),
-      witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth) {
+      witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth),
+      lexicalCallbackDepth(lexicalCallbackDepth) {
   retainExpressionValues = true;
 }
 bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {
@@ -822,7 +823,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
   // A rule association has no body; an installed primitive keeps its own.
   if ((decl.generated && decl.generated->operation) ||
-      (output.declarationIndex && output.declarationIndex->ruleAssociation(id)))
+      (output.declarationIndex &&
+       (output.declarationIndex->ruleAssociation(id) ||
+        output.declarationIndex->serviceAssociation(id))))
     return true;
   if (sources[id.index]->invalidBody)
     return types.fail("source.dependency", "body depends on malformed source",
@@ -840,6 +843,14 @@ bool Checker::body(DeclarationId id, unsigned depth) {
            types.fail("source.limit", "helper call depth limit exceeded",
                       decl.span);
   bodyState[id.index] = 1;
+  auto previousBody = activeBody;
+  auto previousDepth = activeBodyDepth;
+  activeBody = id;
+  activeBodyDepth = depth;
+  auto restoreBody = llvm::scope_exit([&] {
+    activeBody = previousBody;
+    activeBodyDepth = previousDepth;
+  });
   auto finishState = llvm::scope_exit([&] {
     if (bodyState[id.index] == 1)
       bodyState[id.index] = 3;
