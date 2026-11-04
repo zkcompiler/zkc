@@ -87,6 +87,18 @@ challenge, change the first failure, or remove a reached charge. Use a shared
 ordering resource alongside finer storage effects if a real consumer needs the
 precision. A new effect-token dialect is not required.
 
+Unsigned word inference currently uses a bounded demanded-expression query
+over actual SSA. It shares the mathematical-fact work allowance and substitutes
+helper actuals at each call; the immediate consumer establishes bounded-read
+formation from an exact extent. The query intentionally has no CFG or loop
+fixed point. Upstream [data-flow analysis](https://mlir.llvm.org/docs/Tutorials/DataFlowAnalysis/)
+provides lattice propagation and solver infrastructure for a future consumer
+that needs those joins, while [interfaces](https://mlir.llvm.org/docs/Interfaces/)
+allow transfers to remain with the operation owner. Adopting a whole-program
+solver here would introduce reachability and iteration policy without a
+consumer needing them. The small range kernel exposes explicit Proven, Unknown
+and Capacity outcomes instead; unsupported expressions retain the ordered path.
+
 Data owns both generic `data.sequence<T>` and specialized vectors, matrices and
 arrays. These carry distinct observable admission and layout contracts: a
 mathematical field array is not a private fixed vector, and a matrix retains

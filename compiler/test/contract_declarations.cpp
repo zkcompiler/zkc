@@ -346,16 +346,22 @@ int main() {
         "source History admission changed");
   check(duplicable("indices") && discardable("indices"),
         "external snapshots stopped being copyable values");
-  for (auto t : {"rng", "nonce", "transcript"})
-    check(!duplicable(t) && !discardable(t) && custody(t) == Custody::Affine,
+  for (auto t : {"rng", "nonce", "transcript"}) {
+    const auto *permissions = typePermissions(t);
+    check(permissions && !permissions->copy && !permissions->drop &&
+              permissions->custody == Custody::Affine,
           "linear provider permissions changed");
-  check(!duplicable("resource_unit") && discardable("resource_unit"),
+  }
+  check(!duplicable("resource_unit:Guard") &&
+            discardable("resource_unit:Guard"),
         "resource unit drop permission lost");
   for (auto t :
-       {"opening_state", "opening_states", "prover_key", "verifier_key"})
-    check(duplicable(t) && discardable(t) &&
-              custody(t) == Custody::PrivateImmutable,
+       {"opening_state", "opening_states", "prover_key", "verifier_key"}) {
+    const auto *permissions = typePermissions(t);
+    check(permissions && permissions->copy && permissions->drop &&
+              permissions->custody == Custody::PrivateImmutable,
           "private immutable custody changed");
+  }
   check(!typePermissions("fixture_array"),
         "Type/Nat fixture installed in production");
   check(!parameterContract("unknown.call") &&

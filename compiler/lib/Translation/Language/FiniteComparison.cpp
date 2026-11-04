@@ -107,9 +107,7 @@ class FiniteCheck {
         fail("finite layout contains formal data");
         return {};
       }
-      auto bound = take(protocol::parseBoundType(*leaf.data(), false));
-      if (!bound)
-        return {};
+      const auto *bound = leaf.data();
       auto decoded = protocol::decodeBoundType(context, *bound);
       if (!decoded) {
         fail("finite native type unavailable");

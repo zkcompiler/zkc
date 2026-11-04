@@ -288,12 +288,28 @@ Native binding installation checks, physical candidate choices, numerical
 recipes and storage permissions inspect native types and kinded attributes.
 Neutral declaration conversion occurs only at explicit program boundaries.
 Compiler source analyses now read bounded native views of admitted MLIR.
-Checked originals retain their parsed module and textual associations, with
-independent clones for analysis and no shared mutable module handle. Application
+Checked originals retain an emitted or imported module and exact textual
+associations, with independent clones for analysis and no shared mutable module
+handle. Direct frontend admission transfers the emitted module without a print
+and reparse cycle; imported canonical bytes retain their independent admission.
+Native source indexing checks the full profile under its own work allowance.
+Structured-source publication and per-operation report descriptors are explicit
+projections with separate encoding limits. Application
 maps, oracle obligations and component provenance no longer decode structured
 source JSON. Realization checking accepts typed proposals; native observation,
 request counts and event origins use facts derived from the actual-body reader.
 External reports compose owned data and retain their strict record readers.
+
+Neutral types and variants now retain structured identities, alternatives and
+payloads. Native MLIR and neutral type adapters share policy traversal;
+Language layouts, oracle construction and Program admission consume those
+structured facts. Portable spelling is required only at explicit interfaces,
+reference identities and execution-byte boundaries. Unsigned range inference
+covers total wrapping add/subtract, AND and logical right shift, including
+actual helper arguments. Bounded-read formation consumes the inferred range
+only against an exact extent. Generic optimizer controls check preservation of
+reached instructions under CSE, canonicalization and loop-invariant motion;
+they do not establish a new executable profile or a formal correspondence.
 
 The structured-source and application-map ingress accepts MLIR assembly or
 upstream bytecode. Equal IR in different encodings has different byte identities;

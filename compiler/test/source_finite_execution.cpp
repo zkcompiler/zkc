@@ -72,8 +72,7 @@ public:
     auto layout = take(layouts.get(type));
     for (const auto &leaf : layout->leaves) {
       require(leaf.data(), "fixture needs native data");
-      result.push_back(protocol::decodeBoundType(
-          &context, take(protocol::parseBoundType(*leaf.data(), false))));
+      result.push_back(protocol::decodeBoundType(&context, *leaf.data()));
     }
     return result;
   }

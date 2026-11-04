@@ -17,7 +17,12 @@ bool text(const json::Value &value, size_t limit = 512) {
 bool path(const json::Value &value, size_t limit = 512) {
   if (!text(value, limit))
     return false;
-  auto s = *value.getAsString();
+  return staticTermPath(*value.getAsString());
+}
+} // namespace
+bool staticTermPath(StringRef s) {
+  if (s.empty() || !json::isUTF8(s) || s.contains('\0'))
+    return false;
   utf8proc_uint8_t *normalized = nullptr;
   auto size = utf8proc_map(
       reinterpret_cast<const utf8proc_uint8_t *>(s.data()), s.size(),
@@ -36,6 +41,7 @@ bool path(const json::Value &value, size_t limit = 512) {
     }) && !(part.front() >= '0' && part.front() <= '9');
   });
 }
+namespace {
 bool decimal(const json::Value &value) {
   auto s = value.getAsString();
   return text(value) && (s->size() == 1 || s->front() != '0') &&

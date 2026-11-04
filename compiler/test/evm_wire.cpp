@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/VariantFixture.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
 #include "zkc/Dialect/Data/Variant.h"
@@ -39,7 +40,8 @@ data::VariantType variant(MLIRContext &context, StringRef name,
         &context, StringAttr::get(&context, "arm" + std::to_string(i)),
         payload));
   return data::VariantType::get(
-      &context, data::importVariantIdentity(&context, json::Value(name)),
+      &context,
+      zkc::test::importVariantIdentityFixture(&context, json::Value(name)),
       alternatives);
 }
 Type fixture(MLIRContext &context, StringRef name) {

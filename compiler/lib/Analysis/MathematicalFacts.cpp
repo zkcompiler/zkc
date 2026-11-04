@@ -20,6 +20,7 @@ using facts::Cardinality;
 using facts::Precision;
 using facts::Result;
 using facts::Status;
+using facts::WordRange;
 using Count = Result<Cardinality>;
 using KnownCount = llvm::function_ref<Count(Value, unsigned)>;
 Operation *owner(Value value) {
@@ -111,9 +112,15 @@ struct MathematicalFactAnalysis::Impl {
   // independent of previous queries on the reusable immutable helper view.
   struct Extraction {
     Impl &analysis;
-    llvm::DenseMap<std::pair<Operation *, unsigned>, std::optional<unsigned>>
+    llvm::DenseMap<std::pair<std::pair<Operation *, unsigned>, unsigned>,
+                   std::optional<unsigned>>
         inputs;
-    llvm::DenseMap<Value, Value> origins;
+    llvm::DenseMap<std::pair<Value, unsigned>, Value> origins;
+    // Only closure-level values are cached. Helper locals depend on the full
+    // call environment and must never reuse another invocation's facts.
+    // Consumed depth is part of each query key. A result computed on a short
+    // path cannot hide an over-depth dependency on a later, longer path.
+    llvm::DenseMap<std::pair<Value, unsigned>, Result<WordRange>> ranges;
     explicit Extraction(Impl &analysis) : analysis(analysis) {}
     bool contains(Operation *op) const { return analysis.contains(op); }
     bool contains(Value value) const { return analysis.contains(value); }
@@ -130,7 +137,7 @@ struct MathematicalFactAnalysis::Impl {
                                            facts::Work &work, unsigned depth) {
       if (!enter(work, depth))
         return std::nullopt;
-      auto key = std::make_pair(op, result);
+      auto key = std::make_pair(std::make_pair(op, result), depth);
       if (auto found = inputs.find(key); found != inputs.end())
         return found->second;
       auto *view = helper(op, work);
@@ -166,11 +173,11 @@ struct MathematicalFactAnalysis::Impl {
         return missing<Value>(work);
       if (!contains(value))
         return missing<Value>(work);
-      if (auto found = origins.find(value); found != origins.end())
+      auto key = std::make_pair(value, depth);
+      if (auto found = origins.find(key); found != origins.end())
         return {Status::Proven, found->second};
-      auto original = value;
       auto finish = [&]() -> Result<Value> {
-        origins.try_emplace(original, value);
+        origins.try_emplace(key, value);
         return {Status::Proven, value};
       };
       for (; enter(work, depth); ++depth) {
@@ -188,25 +195,23 @@ struct MathematicalFactAnalysis::Impl {
       }
       return missing<Value>(work);
     }
-    Result<uint64_t> integer(Value value, const Environment *env,
-                             facts::Work &work, unsigned depth) {
-      if (!enter(work, depth))
-        return missing<uint64_t>(work);
+    Result<WordRange> rangeExpression(Value value, const Environment *env,
+                                      facts::Work &work, unsigned depth) {
       if (auto arg = dyn_cast<BlockArgument>(value);
           arg && env && arg.getOwner() == env->body) {
         if (arg.getArgNumber() >= env->actuals.size())
           return {};
-        return integer(env->actuals[arg.getArgNumber()], env->parent, work,
-                       depth + 1);
+        return wordRange(env->actuals[arg.getArgNumber()], env->parent, work,
+                         depth + 1);
       }
       if (!env) {
         auto forwarded = origin(value, work, depth);
         if (!forwarded.value)
-          return missing<uint64_t>(work);
+          return missing<WordRange>(work);
         value = *forwarded.value;
       }
       if (auto index = value.getDefiningOp<data::IndexOp>())
-        return {Status::Proven, index.getValue()};
+        return {Status::Proven, WordRange{index.getValue(), index.getValue()}};
       // A returned payload of the exact index.constant invocation retains its
       // value. This observes a successful result, not a reached guard or an
       // assumption about arbitrary CFG block arguments. Multiple predecessors
@@ -233,7 +238,9 @@ struct MathematicalFactAnalysis::Impl {
               outcome.getPayload().size() == 1 &&
               outcome.getPayload()[0] == value.getType() && parameter &&
               parameter.getType().isUnsignedInteger(64))
-            return {Status::Proven, parameter.getValue().getZExtValue()};
+            return {Status::Proven,
+                    WordRange{parameter.getValue().getZExtValue(),
+                              parameter.getValue().getZExtValue()}};
         }
       }
       auto *call = value.getDefiningOp();
@@ -242,9 +249,50 @@ struct MathematicalFactAnalysis::Impl {
         unsigned result = cast<OpResult>(value).getResultNumber();
         if (view && result < view->returned.size()) {
           Environment nested{view->body, call->getOperands(), env};
-          return integer(view->returned[result], &nested, work, depth + 1);
+          return wordRange(view->returned[result], &nested, work, depth + 1);
         }
       }
+      if (isa<BlockArgument>(value))
+        return {Status::Proven, WordRange{}};
+      std::optional<facts::WordOperation> operation;
+      if (isa_and_nonnull<data::IndexWrappingAddOp>(call))
+        operation = facts::WordOperation::WrappingAdd;
+      else if (isa_and_nonnull<data::IndexWrappingSubtractOp>(call))
+        operation = facts::WordOperation::WrappingSubtract;
+      else if (isa_and_nonnull<data::IndexBitAndOp>(call))
+        operation = facts::WordOperation::BitAnd;
+      else if (isa_and_nonnull<data::IndexLogicalShiftRightOp>(call))
+        operation = facts::WordOperation::ShiftRight;
+      if (operation) {
+        auto left = wordRange(call->getOperand(0), env, work, depth + 1);
+        auto right = wordRange(call->getOperand(1), env, work, depth + 1);
+        if (work.exhausted() || !left.value || !right.value)
+          return missing<WordRange>(work);
+        return facts::transferWordRange(work, *operation, *left.value,
+                                        *right.value);
+      }
+      return missing<WordRange>(work);
+    }
+    Result<WordRange> wordRange(Value value, const Environment *env,
+                                facts::Work &work, unsigned depth) {
+      if (!enter(work, depth))
+        return missing<WordRange>(work);
+      auto key = std::make_pair(value, depth);
+      if (!env)
+        if (auto found = ranges.find(key); found != ranges.end())
+          return found->second;
+      auto result = rangeExpression(value, env, work, depth);
+      if (work.exhausted())
+        return missing<WordRange>(work);
+      if (!env)
+        ranges.try_emplace(key, result);
+      return result;
+    }
+    Result<uint64_t> integer(Value value, const Environment *env,
+                             facts::Work &work, unsigned depth) {
+      auto range = wordRange(value, env, work, depth);
+      if (range.value && range.value->minimum == range.value->maximum)
+        return {Status::Proven, range.value->minimum};
       return missing<uint64_t>(work);
     }
     Count domain(Value descriptor, const Environment &env, facts::Work &work,
@@ -533,6 +581,16 @@ Result<Value> MathematicalFactAnalysis::origin(Value value, facts::Work &work,
                                                unsigned depth) {
   return Impl::Extraction(*impl_).origin(value, work, depth);
 }
+Result<WordRange> MathematicalFactAnalysis::wordRange(Value value,
+                                                      facts::Work &work,
+                                                      unsigned depth) {
+  if (!enterExtraction(work, depth))
+    return missing<WordRange>(work);
+  if (!impl_->contains(value) || !value.getType().isUnsignedInteger(64))
+    return {};
+  Impl::Extraction extraction(*impl_);
+  return extraction.wordRange(value, nullptr, work, depth);
+}
 Result<uint64_t> MathematicalFactAnalysis::integer(Value value,
                                                    facts::Work &work,
                                                    unsigned depth) {
@@ -582,10 +640,12 @@ Status MathematicalFactAnalysis::bound(Value i, Value a, unsigned axis,
   if (established != Status::Unknown)
     return established;
   query.extent(a, axis);
-  auto n = query.analysis.integer(i, nullptr, work, depth);
-  if (n.value)
-    query.kernel.addInteger(query.scope, index, *n.value,
-                            facts::Premise::Result);
+  auto range = query.analysis.wordRange(i, nullptr, work, depth);
+  auto count = query.kernel.cardinality(query.scope, target);
+  if (!work.exhausted() && range.value && count.value &&
+      count.value->precision == Precision::Exact &&
+      range.value->maximum < count.value->value)
+    query.kernel.addBound(query.scope, index, target, facts::Premise::Result);
   return query.kernel.bound(query.scope, index, target);
 }
 Result<Cardinality> MathematicalFactAnalysis::cardinality(Value value,

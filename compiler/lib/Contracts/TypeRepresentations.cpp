@@ -33,13 +33,10 @@ llvm::Error validateAppliedTypeRepresentations(
             !value.domain.empty() || value.natural || pattern.maximum ||
             pattern.minimum)
           return error("representation-pattern");
-        auto type = parseBoundType(value.type->spelling(), false);
-        if (!type) {
-          llvm::consumeError(type.takeError());
+        if (auto e = checkBoundType(*value.type, false)) {
+          llvm::consumeError(std::move(e));
           return error("representation-pattern");
         }
-        if (!(*type == *value.type))
-          return error("representation-pattern");
         break;
       }
       case StaticKind::Domain:
@@ -56,26 +53,25 @@ llvm::Error validateAppliedTypeRepresentations(
         break;
       }
     }
-    std::vector<std::string> arguments;
+    BoundType logical{entry.constructor.str(), {}, {}};
     for (const auto &pattern : entry.arguments)
-      arguments.push_back(pattern.argument.kind == TypeArgument::Kind::Nat
-                              ? std::to_string(pattern.minimum)
-                              : pattern.argument.spelling());
-    auto logical = applyBoundType(entry.constructor, arguments);
-    if (!logical) {
-      llvm::consumeError(logical.takeError());
+      logical.arguments.push_back(
+          pattern.argument.kind == TypeArgument::Kind::Nat
+              ? TypeArgument::naturalArgument(pattern.minimum)
+              : pattern.argument);
+    if (auto e = checkBoundType(logical, false)) {
+      llvm::consumeError(std::move(e));
       return error("representation-pattern");
     }
-    auto schemas = logicalChildren(*logical);
+    auto schemas = logicalChildren(logical);
     if (!schemas)
       return schemas.takeError();
-    auto child = parseBoundType(entry.childType.spelling(), true);
-    if (!child) {
-      llvm::consumeError(child.takeError());
+    if (auto e = checkBoundType(entry.childType, true)) {
+      llvm::consumeError(std::move(e));
       return error("representation-pattern");
     }
-    if (!(*child == entry.childType) || schemas->size() != 1 ||
-        !(erasePhysicalType(*child) == schemas->front()))
+    if (schemas->size() != 1 ||
+        !(erasePhysicalType(entry.childType) == schemas->front()))
       return error("representation-pattern");
   }
   for (auto [index, entry] : llvm::enumerate(representations)) {

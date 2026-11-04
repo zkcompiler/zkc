@@ -102,15 +102,11 @@ struct Emitter {
       return error("oracle-demand-limit");
     work.operations -= operations;
     work.slots -= operations * (ports + width + 16);
-    VariantDescriptor descriptor{
-        json::Array{"zkc.oracle.demand-frame/0", toHex(storage.entry, true),
-                    toHex(controller.role, true)},
-        {{"Record", std::vector<std::string>(Demand::FrameSize, "index")}}};
-    auto spelling = encodeVariant(descriptor);
-    if (!spelling || spelling->size() > 4 * 1024 * 1024)
-      return error("oracle-demand-layout");
+    VariantIdentity nominalIdentity(VariantIdentity::Tuple{
+        "zkc.oracle.demand-frame/0", toHex(storage.entry, true),
+        toHex(controller.role, true)});
     auto nominal =
-        data::importVariantIdentity(candidate.getContext(), descriptor.nominal);
+        data::importVariantIdentity(candidate.getContext(), nominalIdentity);
     auto arm = data::AlternativeAttr::get(candidate.getContext(),
                                           builder.getStringAttr("Record"),
                                           Types(Demand::FrameSize, index));

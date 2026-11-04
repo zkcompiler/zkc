@@ -1,3 +1,5 @@
+#include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 // The installed owners are built from the generated installed-instance and
 // native installation tables. The retained ordered dump records those owners
 // and the facts their consumers derive, in declared order; its fixture makes
@@ -187,7 +189,8 @@ data::VariantType variantType(mlir::MLIRContext &context) {
     alternatives.push_back(data::AlternativeAttr::get(
         &context, mlir::StringAttr::get(&context, label), {}));
   return data::VariantType::get(
-      &context, data::importVariantIdentity(&context, json::Value("Choice")),
+      &context,
+      zkc::test::importVariantIdentityFixture(&context, json::Value("Choice")),
       alternatives);
 }
 
@@ -356,8 +359,8 @@ std::vector<Table> dump() {
   }
   // Constructor defaults, and the frames of array samples over every field.
   json::Array defaults, arrays;
-  auto variant =
-      *encodeVariant({"Choice", {{"left", {}}, {"right", {"bool"}}}});
+  auto variant = *zkc::test::encodeVariantFixture(
+      {"Choice", {{"left", {}}, {"right", {"bool"}}}});
   std::vector<std::string> samples = {"fixed_vector<field:koala-bear,0>",
                                       "fixed_vector<field:koala-bear,1048576>",
                                       "fixed_vector<field:bls12-381.fr,4>",
@@ -563,9 +566,10 @@ int main(int argc, char **argv) {
       ++rows;
       BoundType logical;
       if (row.constructor == "variant")
-        logical = take(parseBoundType(
-            *encodeVariant({"Choice", {{"left", {}}, {"right", {"bool"}}}}),
-            false));
+        logical = take(
+            parseBoundType(*zkc::test::encodeVariantFixture(
+                               {"Choice", {{"left", {}}, {"right", {"bool"}}}}),
+                           false));
       else {
         std::vector<std::string> arguments;
         for (const auto &parameter :

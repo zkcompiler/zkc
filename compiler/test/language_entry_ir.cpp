@@ -86,10 +86,9 @@ entry fn 公開(inputs: 実行::Inputs) { return 実行::run(inputs); })zkc",
                 "native case labels did not use declaration order");
         // The nested enum's identity, including its Unicode module, is
         // authenticated.
-        require((*descriptor->nominal.getAsArray())[0].getAsString() ==
-                    "zkc.language",
+        require(*(*descriptor->nominal.tuple())[0].atom() == "zkc.language",
                 "variant nominal namespace differs");
-        auto hex = *(*descriptor->nominal.getAsArray())[1].getAsString();
+        auto hex = *(*descriptor->nominal.tuple())[1].atom();
         require(hex == toHex(fromHex(hex), true) &&
                     StringRef(fromHex(hex)).contains("数学::Choice") &&
                     toHex(SHA256::hash(arrayRefFromStringRef(fromHex(hex))),

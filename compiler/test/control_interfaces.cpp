@@ -1,6 +1,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
@@ -142,6 +144,59 @@ int main() {
     return module;
   };
   Cases cases;
+  cases.run(
+      "generic optimization retains reached instructions in control", [&] {
+        // Exercise the registered interfaces under upstream loop/branch
+        // control. This is an optimizer-permission probe, not an executable
+        // stage profile.
+        auto module = parse(R"mlir(
+module {
+  func.func @ordered(%scope:!runtime.scope,%condition:i1,%n:index,%word:ui64) {
+    %zero = arith.constant 0 : index
+    %one = arith.constant 1 : index
+    scf.for %i = %zero to %n step %one {
+      %twice = "data.index_wrapping_add"(%word,%word) : (ui64,ui64)->ui64
+      %a = "exec.complete"(%scope,%twice) : (!runtime.scope,ui64)->!exec.outcome<(ui64)>
+      %b = "exec.complete"(%scope,%twice) : (!runtime.scope,ui64)->!exec.outcome<(ui64)>
+      %decision = "exec.test"(%scope,%condition) {site="test"} : (!runtime.scope,i1)->!exec.outcome<(i1)>
+    }
+    scf.if %condition {
+      %stop = "exec.reject"(%scope) {reason="first",site="reject"} : (!runtime.scope)->!exec.stop
+    }
+    return
+  }
+})mlir");
+        SmallVector<std::pair<Operation *, Operation *>> actions;
+        module->walk([&](Operation *op) {
+          if (op->getName().getDialectNamespace() != "exec")
+            return;
+          require(!isMemoryEffectFree(op) && !wouldOpBeTriviallyDead(op) &&
+                      !isSpeculatable(op),
+                  "reached instruction grants erasure or speculation");
+          actions.emplace_back(op, op->getParentOp());
+        });
+        require(actions.size() == 4, "missing reached instruction coverage");
+        PassManager manager(&context);
+        manager.addPass(createLoopInvariantCodeMotionPass());
+        manager.addPass(createCSEPass());
+        manager.addPass(createCanonicalizerPass());
+        require(succeeded(manager.run(*module)),
+                "generic optimizer probe failed");
+        SmallVector<std::pair<Operation *, Operation *>> after;
+        module->walk([&](Operation *op) {
+          if (op->getName().getDialectNamespace() == "exec")
+            after.emplace_back(op, op->getParentOp());
+        });
+        require(actions == after, "optimization erased, merged, reordered or "
+                                  "moved a reached instruction");
+        unsigned total = 0;
+        module->walk([&](data::IndexWrappingAddOp op) {
+          ++total;
+          require(isa<func::FuncOp>(op->getParentOp()) && isPure(op),
+                  "total word mathematics lost lawful invariant motion");
+        });
+        require(total == 1, "missing total-expression positive control");
+      });
   cases.run("exec match edges have independent mutable operands", [&] {
     auto module = parse(matching);
     mutateEdges<exec::MatchOp>(*module);
@@ -203,7 +258,7 @@ int main() {
   // Formation, selected regions and the portable descriptor each own an
   // alternative limit and refuse one alternative beyond it.
   auto descriptor = [](size_t count) {
-    protocol::VariantDescriptor result{llvm::json::Value("Wide"), {}};
+    protocol::VariantDescriptor result{"Wide", {}};
     for (size_t i = 0; i < count; ++i)
       result.alternatives.push_back({"a" + std::to_string(i), {}});
     return result;

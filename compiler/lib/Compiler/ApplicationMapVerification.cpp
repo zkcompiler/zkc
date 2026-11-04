@@ -402,7 +402,7 @@ public:
     // Enumerate the actual candidate inventory, including every domain
     // constructor and every terminal row. Inventory equality was checked first.
     auto unit = mlir::cast<protocol_ir::ProtocolModuleOp>(
-        candidate.native->getBody()->front());
+        candidate.source.native->getBody()->front());
     for (auto domain : unit.getBody().front().getOps<data::DomainOp>()) {
       auto name = domain.getSymName();
       for (unsigned i = 0; i < domain.getBody().front().getOperations().size();

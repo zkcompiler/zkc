@@ -14,7 +14,7 @@ using Schema = std::shared_ptr<Layout>;
 Schema scalar() {
   auto result = std::make_shared<Layout>();
   result->type.kind = Type::Kind::Index;
-  result->leaves = {"index"};
+  result->leaves = {zkc::protocol::BoundType{"index", {}, {}}};
   return result;
 }
 Schema product(StringRef name, ArrayRef<Schema> fields, unsigned custody = 0) {
@@ -24,7 +24,8 @@ Schema product(StringRef name, ArrayRef<Schema> fields, unsigned custody = 0) {
   result->custody = custody != 0;
   result->custodyCount = custody;
   for (unsigned i = 0; i < custody; ++i)
-    result->leaves.push_back("resource_unit:test");
+    result->leaves.emplace_back(
+        zkc::protocol::BoundType{"resource_unit", "test", {}});
   for (auto field : fields) {
     result->fields.push_back({std::to_string(result->fields.size()),
                               field,
@@ -63,7 +64,7 @@ Schema oracle() {
   auto type = take(builtinType("oracle", {kind}));
   auto data = scalar();
   data->type = take(builtinType("vector", {rowType}));
-  data->leaves = {take(builtinLayout(data->type)).spelling()};
+  data->leaves = {take(builtinLayout(data->type))};
   auto result = std::make_shared<Layout>();
   result->type = type;
   result->oracleData = data;
@@ -78,6 +79,18 @@ Schema oracle() {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("malformed leaf work cannot wrap into a cheap observation", [] {
+    auto schema = scalar();
+    schema->leaves = {zkc::protocol::BoundType{"sequence", {}, {}}};
+    refuses(observe(schema, DataPlacement{{0}}), "source.limit");
+    auto logical = oracle();
+    auto leaf = *logical->leaves.front().oracle();
+    leaf.kind.signature.answer = {"sequence", {}, {}};
+    logical->leaves = {leaf};
+    require(logical->leaves.front().cost() == UINT64_MAX,
+            "oracle leaf work overflowed its failure sentinel");
+    refuses(observe(logical, OraclePlacement{0, {1}}), "source.limit");
+  });
   cases.run("ordinary structural schemas retain field-specific placement", [] {
     auto tuple = product("", {scalar(), scalar()});
     tuple->type = Type(Type::Kind::Tuple);
@@ -286,7 +299,7 @@ protocol Run roles(P)(x:[Empty<index>;0]@P)->(out:[Empty<index>;0]@P){
     schema->type = Type(Type::Kind::Record, "Permit");
     schema->custody = true;
     schema->custodyCount = 1;
-    schema->leaves = {"resource_unit:permit"};
+    schema->leaves = {zkc::protocol::BoundType{"resource_unit", "permit", {}}};
     refuses(observe(schema, DataPlacement{{0, 1}}), "source.placement");
   });
   cases.run("missing custody fragment refuses", [] {

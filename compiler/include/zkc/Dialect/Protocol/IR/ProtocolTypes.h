@@ -10,6 +10,8 @@
 namespace zkc::protocol_ir {
 // Shape observations for the closed handle/sequence family. These do not
 // establish custody, availability or admission; other types return null.
+// Data derivation also returns null if the added collection exceeds native
+// type formation limits.
 OracleKindAttr getOracleFamilyKind(mlir::Type type);
 mlir::Type getOracleFamilyDataType(mlir::Type type);
 } // namespace zkc::protocol_ir

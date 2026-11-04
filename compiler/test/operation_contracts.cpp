@@ -260,7 +260,7 @@ int main() {
               "contraction ports outside signature");
   }
   for (const auto &type : boundTypeConstructors())
-    require(hasTypeProperties(type.name),
+    require(typePermissions(type.name) != nullptr,
             "registered type lacks custody facts");
   require(!operationContracts("unknown.sample") &&
               !isConstructionDraw("unknown.sample") &&
@@ -270,15 +270,19 @@ int main() {
   require(!serializable("unknown:domain") && !discardable("unknown:domain") &&
               !duplicable("unknown:domain"),
           "unknown type acquired positive custody facts");
-  for (const auto *kind :
-       {"opening_state", "opening_states", "prover_key", "verifier_key"})
+  for (const auto *kind : {"opening_state:multilinear.kzg.bls12-381/0",
+                           "opening_states:rows.merkle-keccak256.koala-bear/0",
+                           "prover_key:multilinear.kzg.bls12-381/0",
+                           "verifier_key:multilinear.kzg.bls12-381/0"})
     require(!serializable(kind) && discardable(kind) && duplicable(kind),
             "immutable local custody confused with transport");
-  for (const auto *kind : {"rng", "nonce", "transcript"})
+  for (const auto *kind : {"rng:bls12-381.fr", "nonce:bls12-381.fr",
+                           "transcript:merlin3.bls12-381.fr64be/0"})
     require(affine(kind) && !serializable(kind) && !discardable(kind) &&
                 !duplicable(kind),
             "provider token acquired immutable custody permissions");
-  for (const auto *kind : {"scalar:custom", "capability:custom"})
+  for (const auto *kind : {"scalar:custom", "capability:custom", "rng",
+                           "opening_state", "resource_unit"})
     require(!hasTypeProperties(kind) && !serializable(kind) &&
                 !discardable(kind) && !duplicable(kind),
             "native container spelling acquired logical permissions");

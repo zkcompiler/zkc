@@ -112,9 +112,9 @@ struct Emitter {
           ArrayRef<Type>{answer}));
     }
     auto identity = data::importVariantIdentity(
-        unit.getContext(),
-        json::Array{"zkc.oracle.checked-answer/0",
-                    data::exportVariantIdentity(response.getIdentity())});
+        unit.getContext(), VariantIdentity::Tuple{"zkc.oracle.checked-answer/0",
+                                                  data::exportVariantIdentity(
+                                                      response.getIdentity())});
     result.answer = identity
                         ? data::VariantType::getChecked(
                               unit.getLoc(), unit.getContext(), identity,

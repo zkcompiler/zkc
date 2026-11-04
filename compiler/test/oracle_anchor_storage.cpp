@@ -6,6 +6,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -91,6 +92,63 @@ int main(int argc, char **argv) {
   };
   auto ideal = take(selects(""));
   Cases cases;
+  cases.run(
+      "native storage width refuses before constructing an invalid attribute",
+      [&] {
+        for (unsigned count : {510u, 511u}) {
+          std::string arguments, types, values, purposes;
+          for (unsigned i = 0; i < count; ++i) {
+            if (i) {
+              arguments += ',';
+              types += ',';
+              values += ',';
+              purposes += ',';
+            }
+            arguments += "%p" + std::to_string(i) + ":ui64";
+            types += "ui64";
+            values += "%x";
+            purposes += "\"parameter\"";
+          }
+          auto text =
+              std::string(R"mlir(
+#K = #protocol.oracle_kind<"table", [ui64,16:ui64]>
+!H = !protocol.oracle<#K>
+module { "protocol.module"() ({
+ relation.declare @admissible {kind="external",key="storage/wide",revision="0",signature=(
+)mlir") + types +
+              ")->i1,purposes=[" + purposes + R"mlir(]}
+ "protocol.oracle"() ({ ^entry()mlir" +
+              arguments + R"mlir(,%position:ui64):
+  "protocol.oracle_yield"(%p0) : (ui64)->()
+ }) {sym_name="wide",function_type=()mlir" +
+              types +
+              R"mlir(,ui64)->ui64,kind=#K,shape_arguments={},shape_bounds={},admissibility=@admissible} : ()->()
+ "protocol.func"() ({ ^entry(%x:ui64):
+  %handle = "protocol.oracle_virtual"()mlir" +
+              values +
+              R"mlir() {callee=@wide,holder="P",receivers=["V"]} : ()mlir" +
+              types + R"mlir()->!H
+  "protocol.return"() : ()->()
+ }) {sym_name="main",function_type=(ui64)->(),roles=["P","V"],input_roles=[["P","V"]],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+          auto candidate = parseSourceString<ModuleOp>(text, &context);
+          require(bool(candidate) && succeeded(zkc::admitStage(*candidate)),
+                  "wide virtual source was not admitted: " + diagnostics);
+          auto plan = planOracleAnchorStorage(
+              *candidate, "main", [](const auto &) -> Expected<std::string> {
+                return std::string();
+              });
+          if (count == 510) {
+            auto storage = take(std::move(plan));
+            require(storage.constructors.size() == 1 &&
+                        storage.constructors[0].roles.size() == 2 &&
+                        storage.constructors[0].roles[0].fields.size() == 512,
+                    "native maximum storage width was refused");
+          } else
+            refuses(std::move(plan), "oracle-storage-type-limit");
+        }
+      });
   cases.run(
       "native store planning preserves rows beyond byte-profile depth", [&] {
         std::string row = "i1";
@@ -216,10 +274,11 @@ module { "protocol.module"() ({
       }
     auto payload =
         decodeVariant(take(encodeBoundType(reference, false)).spelling());
-    require(payload && payload->alternatives.size() == 1 &&
-                payload->alternatives[0].payload ==
-                    std::vector<std::string>({"index", "index"}),
-            "reference hides an oracle runtime object");
+    require(
+        payload && payload->alternatives.size() == 1 &&
+            payload->alternatives[0].payload ==
+                std::vector<BoundType>({{"index", {}, {}}, {"index", {}, {}}}),
+        "reference hides an oracle runtime object");
   });
   cases.run("wrong schemes and source selections refuse without mutation", [&] {
     refuses(selects("rows.merkle-poseidon2-16.koala-bear/0"),

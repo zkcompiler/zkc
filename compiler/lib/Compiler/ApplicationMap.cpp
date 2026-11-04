@@ -233,7 +233,7 @@ public:
     // Domain constructors have a separate logical row grammar and are retained
     // exactly. Their instruction-count ordinal addresses the domain yield.
     auto unit = mlir::cast<protocol_ir::ProtocolModuleOp>(
-        source.native.get().getBody()->front());
+        source.source.native.get().getBody()->front());
     for (auto domain : unit.getBody().front().getOps<data::DomainOp>()) {
       auto name = domain.getSymName();
       for (unsigned i = 0; i < domain.getBody().front().getOperations().size();

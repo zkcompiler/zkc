@@ -97,8 +97,9 @@ bool layout(const OracleVerificationContext &context,
         ctx, StringAttr::get(ctx, arm.alternative), ArrayRef<Type>{answer}));
   }
   auto identity = data::importVariantIdentity(
-      ctx, json::Array{"zkc.oracle.checked-answer/0",
-                       data::exportVariantIdentity(response.getIdentity())});
+      ctx, VariantIdentity::Tuple{
+               "zkc.oracle.checked-answer/0",
+               data::exportVariantIdentity(response.getIdentity())});
   if (!identity)
     return false;
   auto answer = data::VariantType::getChecked(

@@ -1,7 +1,7 @@
 #ifndef ZKC_ANALYSIS_NATIVETYPES_H
 #define ZKC_ANALYSIS_NATIVETYPES_H
 #include "mlir/IR/Types.h"
-#include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/TypePolicy.h"
 #include "llvm/ADT/DenseMap.h"
 #include <optional>
 namespace mlir {
@@ -11,6 +11,12 @@ namespace zkc::mathematical {
 using NativeTypePolicy = protocol::NativeTypePolicy;
 /// Mathematical descriptors cannot cross executable ports or messages.
 bool isFormalType(mlir::Type type);
+/// Bounded complete structural facts; the MLIR adapter borrows actual native
+/// children and validates formation, without going through portable types.
+std::optional<protocol::TypePolicyFacts> nativeTypeFacts(mlir::Type,
+                                                         unsigned &remaining,
+                                                         size_t &remainingBytes,
+                                                         bool &limited);
 // Closed native-local/0 vocabulary. Nominal formation is checked before any
 // use permission is returned; containers recursively check their leaves.
 std::optional<NativeTypePolicy> nativeTypePolicy(mlir::Type type);

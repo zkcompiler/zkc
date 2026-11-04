@@ -48,9 +48,8 @@ Type decodeVariantType(MLIRContext *context, const BoundType &type) {
   if (!registered ||
       registered->get().getTypeID() != zkc::data::VariantType::getTypeID())
     return {};
-  auto descriptor = decodeVariant("variant:" + type.identity);
-  return descriptor ? zkc::data::importVariantType(context, *descriptor)
-                    : Type{};
+  return type.variant ? zkc::data::importVariantType(context, *type.variant)
+                      : Type{};
 }
 std::optional<BoundType> encodeVariantType(Type type,
                                            llvm::StringRef constructor) {

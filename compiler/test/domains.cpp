@@ -408,7 +408,11 @@ void installedInventory() {
       require(catalog.admitsLogicalType(constructor.name, identity) == admitted,
               "only exact declared logical pairs are admitted");
       BoundType logical{constructor.name, identity, ""};
-      auto parsed = parseBoundType(logical.spelling(), false);
+      // Author malformed boundary input directly: the native spelling writer
+      // now refuses malformed structures before they reach this parser.
+      auto spelling =
+          constructor.name + (identity.empty() ? "" : ":" + identity);
+      auto parsed = parseBoundType(spelling, false);
       if (admitted)
         require(accept(std::move(parsed)) == logical,
                 "every installed logical spelling is unchanged");

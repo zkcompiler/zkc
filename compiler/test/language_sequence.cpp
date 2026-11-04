@@ -9,6 +9,7 @@
 #include "support/InterfaceSupply.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Contracts/Domains.h"
@@ -170,7 +171,8 @@ protocol Run roles(P)(x:Pair@P)->(r:Pair@P){
     auto old = must(zkc::protocol::encodeBoundType(oldType, false)).spelling();
     auto descriptor = zkc::protocol::decodeVariant(old);
     require(bool(descriptor), "missing packed descriptor");
-    descriptor->nominal = json::Array{"another.nominal.record"};
+    descriptor->nominal =
+        zkc::protocol::VariantIdentity::Tuple{"another.nominal.record"};
     auto encoded = zkc::protocol::encodeVariant(*descriptor);
     require(bool(encoded), "cannot encode replacement nominal");
     auto replacement = zkc::protocol::decodeBoundType(
@@ -224,7 +226,13 @@ struct Phantom<T:Type>{pub value:bool}
   Type oversized(Type::Kind::Array);
   oversized.arguments = {Type{}};
   oversized.dimension = Natural::constant(129);
-  zkc::test::refuses(layouts.packed(oversized), "source.limit");
+  auto native = must(layouts.packed(oversized));
+  require(native.carrier.variant &&
+              native.carrier.variant->alternatives[0].payload.size() == 129 &&
+              native.carrier.spelling().empty(),
+          "native product still inherits the publication payload limit");
+  oversized.dimension = Natural::constant(513);
+  zkc::test::refuses(layouts.packed(oversized), "variant-type");
 }
 
 void kernelProducts() {
@@ -355,6 +363,33 @@ void mathematicalPacking() {
   auto wrong = emitMathematicalPack(builder, ret->getLoc(), packed, {});
   zkc::test::refuses(std::move(wrong), "source.layout");
 }
+void nativeBuiltinLayout() {
+  zkc::protocol::VariantDescriptor descriptor{"Wide", {}};
+  for (unsigned i = 0; i < 65; ++i)
+    descriptor.alternatives.push_back({"Arm" + std::to_string(i), {}});
+  auto element = must(zkc::protocol::variantType(std::move(descriptor)));
+  require(element.spelling().empty(), "fixture unexpectedly fits publication");
+  Type source(Type::Kind::Record, "Wide");
+  NativeLayoutResolver resolve = [&](const Type &) { return element; };
+  auto sequence = must(builtinType("sequence", {source}));
+  auto layout = must(builtinLayout(sequence, resolve));
+  require(layout.kind == "sequence" && layout.arguments.size() == 1 &&
+              layout.arguments[0].type && *layout.arguments[0].type == element,
+          "native builtin layout lost its structured element");
+  require(layout.spelling().empty(), "native formation widened publication");
+  zkc::test::refuses(kernelArguments("sequence.empty", {source}, resolve),
+                     "source.limit");
+
+  Type nested(Type::Kind::Index);
+  for (unsigned i = 0; i < 12; ++i)
+    nested = must(builtinType("sequence", {nested}));
+  require(must(builtinLayout(nested)).spelling().empty(),
+          "native nested builtin construction depends on wire depth");
+  zkc::test::refuses(kernelArgument(nested, "Type"), "source.limit");
+  for (unsigned i = 12; i < 64; ++i)
+    nested = must(builtinType("sequence", {nested}));
+  zkc::test::refuses(builtinLayout(nested), "binding-type-limit");
+}
 void refusals() {
   refuses(prefix + "type Bad<T:Type>=builtin(\"sequence\",T);" + unit,
           "source.sequence");
@@ -409,6 +444,8 @@ int main() {
   cases.run("nominal layout identities", identities);
   cases.run("private authority and export aliases", authority);
   cases.run("definition refusals", refusals);
+  cases.run("native builtin layout and explicit publication",
+            nativeBuiltinLayout);
   cases.run("mathematical packing API", mathematicalPacking);
   return cases.result();
 }

@@ -9,6 +9,7 @@
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include <functional>
+#include <set>
 
 using namespace llvm;
 namespace zkc::protocol {
@@ -64,6 +65,8 @@ bool BoundType::operator==(const BoundType &other) const {
   return kind == other.kind && identity == other.identity &&
          representation == other.representation &&
          arguments == other.arguments &&
+         (variant == other.variant ||
+          (variant && other.variant && *variant == *other.variant)) &&
          (physicalChildren == other.physicalChildren ||
           (physicalChildren && other.physicalChildren &&
            *physicalChildren == *other.physicalChildren));
@@ -105,18 +108,53 @@ std::string TypeArgument::spelling() const {
 }
 
 std::string BoundType::spelling() const {
+  if (auto e = checkBoundType(*this, !representation.empty())) {
+    consumeError(std::move(e));
+    return {};
+  }
+  // Portable depth includes mixed constructor/variant nesting. Native
+  // structure can be wider/deeper and need not have a portable spelling.
+  std::function<bool(const BoundType &, unsigned)> portable =
+      [&](const BoundType &type, unsigned depth) {
+        if (depth > 8 ||
+            (depth == 8 && (type.variant || !type.arguments.empty())))
+          return false;
+        for (const auto &argument : type.arguments)
+          if (argument.type && !portable(*argument.type, depth + 1))
+            return false;
+        if (type.variant)
+          for (const auto &arm : type.variant->alternatives)
+            for (const auto &child : arm.payload)
+              if (!portable(child, depth + 1))
+                return false;
+        return true;
+      };
+  if (!portable(*this, 0))
+    return {};
   std::string result = kind;
-  if (arguments.empty())
+  if (kind == "variant") {
+    if (!variant)
+      return {};
+    auto encoded = encodeVariant(*variant);
+    if (!encoded)
+      return {};
+    result = std::move(*encoded);
+  } else if (arguments.empty())
     result += identity.empty() ? "" : ":" + identity;
   else {
     result += '<';
     for (auto [i, argument] : enumerate(arguments)) {
       if (i)
         result += ',';
-      result += argument.spelling();
+      auto spelling = argument.spelling();
+      if (spelling.empty())
+        return {};
+      result += spelling;
     }
     result += '>';
   }
+  if (result.size() > (kind == "variant" ? VariantSpellingBytes : 4096))
+    return {};
   if (representation.empty())
     return result;
   std::function<std::string(const BoundType &)> layout =
@@ -136,7 +174,8 @@ std::string BoundType::spelling() const {
         }
         return out;
       };
-  return result + "@" + layout(*this);
+  result += "@" + layout(*this);
+  return result.size() <= PhysicalSpellingBytes ? result : std::string{};
 }
 
 Expected<TypeApplication> splitTypeApplication(StringRef text) {
@@ -360,20 +399,23 @@ Expected<BoundType> parseBoundType(StringRef spelling, bool physical,
       }
       }
     }
-    if (result.spelling() != spelling)
-      return error("binding-type-identity");
     if (head == "sequence") {
       auto &element = *result.arguments.front().type;
       if (!duplicable(element) || !discardable(element))
         return error("sequence-element-permission");
     }
+    if (result.spelling() != spelling)
+      return error("binding-type-identity");
     return result;
   }
   if (kind == "variant") {
     auto descriptor = decodeVariant(logical.str(), depth, budget);
     if (!descriptor)
       return error("variant-type");
-    return BoundType{kind.str(), identity.str(), {}};
+    BoundType result{kind.str(), {}, {}};
+    result.variant =
+        std::make_shared<const VariantDescriptor>(std::move(*descriptor));
+    return result;
   }
   if (kind == "resource_unit") {
     if (!resourceUnitDomain(identity))
@@ -421,21 +463,15 @@ Expected<std::vector<BoundType>> logicalChildren(const BoundType &logical) {
   } else if (logical.kind == "field_array") {
     if (logical.arguments.empty())
       return error("binding-type-identity");
-    auto field = parseBoundType("field:" + logical.arguments[0].domain, false);
-    if (!field)
-      return field.takeError();
-    result.push_back(std::move(*field));
+    BoundType field{"field", logical.arguments[0].domain, {}};
+    if (auto e = checkBoundType(field, false))
+      return e;
+    result.push_back(std::move(field));
   } else if (logical.kind == "variant") {
-    auto descriptor = decodeVariant(logical.spelling());
-    if (!descriptor)
+    if (!logical.variant)
       return error("variant-type");
-    for (const auto &arm : descriptor->alternatives)
-      for (const auto &payload : arm.payload) {
-        auto type = parseBoundType(payload, false);
-        if (!type)
-          return type.takeError();
-        result.push_back(std::move(*type));
-      }
+    for (const auto &arm : logical.variant->alternatives)
+      llvm::append_range(result, arm.payload);
   }
   return result;
 }
@@ -479,43 +515,35 @@ Expected<BoundType> formPhysicalType(const BoundType &logical,
 Expected<BoundType> physicalType(const BoundType &logical,
                                  StringRef representation,
                                  std::vector<BoundType> children) {
-  auto checked = parseBoundType(logical.spelling(), false);
-  if (!checked)
-    return checked.takeError();
-  if (!(*checked == logical))
-    return error("binding-type-identity");
+  TypeParseBudget budget;
+  if (auto e = checkBoundType(logical, false, &budget))
+    return e;
   for (const auto &child : children) {
-    auto admitted = parseBoundType(child.spelling(), true);
-    if (!admitted)
-      return admitted.takeError();
-    if (!(*admitted == child))
-      return error("binding-representation");
+    if (auto e = checkBoundType(child, true, &budget, 1))
+      return e;
   }
   auto result = formPhysicalType(logical, representation, std::move(children));
   if (!result)
     return result.takeError();
-  auto admitted = parseBoundType(result->spelling(), true);
-  if (!admitted)
-    return admitted.takeError();
-  if (!(*admitted == *result))
-    return error("binding-representation");
   return result;
 }
 
-Expected<BoundType> defaultRepresentation(const BoundType &logical) {
+namespace {
+Expected<BoundType> defaultRepresentation(const BoundType &logical,
+                                          TypeParseBudget &budget,
+                                          unsigned depth) {
   if (!logical.representation.empty() || logical.physicalChildren)
     return error("binding-physical-type-at-logical-stage");
-  auto checked = parseBoundType(logical.spelling(), false);
-  if (!checked)
-    return checked.takeError();
-  if (!(*checked == logical))
-    return error("binding-type-identity");
+  // Each physical node repeats its logical schema. Account for those expanded
+  // occurrences with one allowance while constructing the complete layout.
+  if (auto e = checkBoundType(logical, false, &budget, depth))
+    return e;
   auto schemas = logicalChildren(logical);
   if (!schemas)
     return schemas.takeError();
   std::vector<BoundType> children;
   for (const auto &schema : *schemas) {
-    auto child = defaultRepresentation(schema);
+    auto child = defaultRepresentation(schema, budget, depth + 1);
     if (!child)
       return child.takeError();
     children.push_back(std::move(*child));
@@ -523,7 +551,184 @@ Expected<BoundType> defaultRepresentation(const BoundType &logical) {
   auto representation = defaultRepresentationIdentity(logical);
   if (!representation)
     return representation.takeError();
+  if (!budget.charge(representation->size()))
+    return error("binding-type-limit");
   return formPhysicalType(logical, *representation, std::move(children));
+}
+} // namespace
+Expected<BoundType> defaultRepresentation(const BoundType &logical) {
+  TypeParseBudget budget;
+  return defaultRepresentation(logical, budget, 0);
+}
+
+namespace {
+struct BoundFormation {
+  TypeParseBudget &budget;
+  Error limit() {
+    budget.limited = true;
+    return error("binding-type-limit");
+  }
+  struct Permissions {
+    bool copy = true, drop = true;
+  };
+  Error identity(const VariantIdentity &term, unsigned depth = 0) {
+    if (depth >= 64 || !budget.consume())
+      return limit();
+    if (const auto *atom = term.atom()) {
+      if (!budget.charge(atom->size()))
+        return limit();
+      if (atom->empty() || !json::isUTF8(*atom))
+        return error("variant-type");
+    } else {
+      if (term.tuple()->size() > budget.remaining)
+        return limit();
+      for (const auto &child : *term.tuple())
+        if (auto e = identity(child, depth + 1))
+          return e;
+    }
+    return Error::success();
+  }
+  Expected<Permissions> inspect(const BoundType &type, bool physical,
+                                unsigned depth) {
+    if (depth >= 64 || !budget.consume() ||
+        !budget.charge(type.kind.size() + type.identity.size() +
+                       type.representation.size()))
+      return limit();
+    if (physical != !type.representation.empty() ||
+        (!physical && type.physicalChildren))
+      return error("binding-representation");
+    Permissions permissions;
+    auto include = [&](const BoundType &child) -> Error {
+      auto result = inspect(child, false, depth + 1);
+      if (!result)
+        return result.takeError();
+      permissions.copy &= result->copy;
+      permissions.drop &= result->drop;
+      return Error::success();
+    };
+    if (type.kind == "variant") {
+      if (!type.variant || !type.identity.empty() || !type.arguments.empty())
+        return error("variant-type");
+      if (auto e = identity(type.variant->nominal))
+        return e;
+      const auto &alternatives = type.variant->alternatives;
+      if (alternatives.empty() || alternatives.size() > 512)
+        return error("variant-type");
+      std::set<StringRef> labels;
+      for (const auto &arm : alternatives) {
+        if (!budget.consume() || !budget.charge(arm.label.size()))
+          return limit();
+        StringRef label = arm.label;
+        if (label.empty() || label.size() > 128 ||
+            !(isAlpha(label.front()) || label.front() == '_') ||
+            !all_of(label,
+                    [](char c) {
+                      return isAlnum(c) || c == '_' || c == '-' || c == '.';
+                    }) ||
+            !labels.insert(label).second || arm.payload.size() > 512)
+          return error("variant-type");
+        for (const auto &child : arm.payload)
+          if (auto e = include(child))
+            return e;
+      }
+    } else {
+      if (type.variant)
+        return error("binding-type-identity");
+      const auto *declaration = typeDeclaration(type.kind);
+      const auto *head = typePermissions(type.kind);
+      if (!declaration || !head)
+        return error("binding-type");
+      permissions = {head->copy, head->drop};
+      bool atomic = declaration->parameters.empty() ||
+                    (declaration->parameters.size() == 1 &&
+                     declaration->parameters[0].kind == StaticKind::Domain);
+      if (atomic) {
+        if (!type.arguments.empty() ||
+            (type.kind == "resource_unit"
+                 ? !resourceUnitDomain(type.identity)
+                 : !installedDomains().admitsLogicalType(type.kind,
+                                                         type.identity)))
+          return error("binding-type-identity");
+      } else {
+        if (!type.identity.empty() ||
+            type.arguments.size() != declaration->parameters.size())
+          return error("binding-type-identity");
+        for (const auto &[argument, parameter] :
+             zip(type.arguments, declaration->parameters)) {
+          if (!budget.consume() || !budget.charge(argument.domain.size()))
+            return limit();
+          switch (parameter.kind) {
+          case StaticKind::Domain:
+            if (argument.kind != TypeArgument::Kind::Domain || argument.type ||
+                argument.natural ||
+                installedIdentitySort(argument.domain) != parameter.sort)
+              return error("binding-type-identity");
+            break;
+          case StaticKind::Nat:
+            if (argument.kind != TypeArgument::Kind::Nat || argument.type ||
+                !argument.domain.empty() || argument.natural > 1048576)
+              return error("binding-type-identity");
+            break;
+          case StaticKind::Type:
+            if (argument.kind != TypeArgument::Kind::Type || !argument.type ||
+                !argument.domain.empty() || argument.natural)
+              return error("binding-type-identity");
+            if (auto e = include(*argument.type))
+              return e;
+            break;
+          }
+        }
+        if (type.kind == "sequence" && (!permissions.copy || !permissions.drop))
+          return error("sequence-element-permission");
+      }
+    }
+    if (physical) {
+      std::vector<BoundType> children;
+      if (type.physicalChildren) {
+        if (type.physicalChildren->size() > budget.remaining)
+          return limit();
+        for (const auto &child : *type.physicalChildren) {
+          auto checked = inspect(child, true, depth + 1);
+          if (!checked)
+            return checked.takeError();
+          children.push_back(child);
+        }
+      }
+      auto formed = formPhysicalType(erasePhysicalType(type),
+                                     type.representation, std::move(children));
+      if (!formed)
+        return formed.takeError();
+      if (!(*formed == type))
+        return error("binding-representation");
+    }
+    return permissions;
+  }
+};
+} // namespace
+Error checkBoundType(const BoundType &type, bool physical,
+                     TypeParseBudget *budget, unsigned depth) {
+  TypeParseBudget local;
+  if (!budget)
+    budget = &local;
+  auto checked = BoundFormation{*budget}.inspect(type, physical, depth);
+  return checked ? Error::success() : checked.takeError();
+}
+Expected<BoundType> variantType(VariantDescriptor descriptor) {
+  BoundType result{"variant", {}, {}};
+  result.variant =
+      std::make_shared<const VariantDescriptor>(std::move(descriptor));
+  if (auto e = checkBoundType(result, false))
+    return e;
+  return result;
+}
+uint64_t boundTypeWork(const BoundType &type) {
+  TypeParseBudget budget;
+  const auto initial = budget.remaining + budget.metadataRemaining;
+  if (auto e = checkBoundType(type, !type.representation.empty(), &budget)) {
+    consumeError(std::move(e));
+    return UINT64_MAX;
+  }
+  return initial - budget.remaining - budget.metadataRemaining;
 }
 
 Expected<BoundType> applyBoundType(StringRef constructor,

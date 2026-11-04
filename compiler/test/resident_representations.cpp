@@ -8,6 +8,7 @@
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -732,9 +733,9 @@ func.return %done : !exec.outcome<(!F)>
   });
   cases.run(
       "match captures propagate independently of default payload layout", [&] {
-        auto variant =
-            encodeVariant({"ResidentChoice",
-                           {{"none", {}}, {"some", {"field:bls12-381.fr"}}}});
+        auto variant = zkc::test::encodeVariantFixture(
+            {"ResidentChoice",
+             {{"none", {}}, {"some", {"field:bls12-381.fr"}}}});
         require(bool(variant), "variant fixture");
         auto source = variantSource(context, *variant);
         auto module = take(executableFixture(source, context));

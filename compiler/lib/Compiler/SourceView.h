@@ -56,13 +56,32 @@ struct SourceView {
   std::string identity, entry;
   std::vector<SourceDefinition> definitions;
   std::map<std::string, unsigned> names;
-  // Boundary publication, built by the profile visitor. Native analyses read
-  // operations and the typed view above, never this positional wire schema.
-  llvm::json::Value publication = nullptr;
-  // Per-operation boundary descriptors are used only when publishing routes.
-  std::map<mlir::Operation *, llvm::json::Value> descriptors;
-  std::vector<StructuredSourceAssociation> associations;
+  SourceExecutionClosure execution;
+  StructuredSourceProfile profile = StructuredSourceProfile::Original;
+  // Owned lexical ranges captured at ingress. Neither parser objects nor
+  // caller buffers are borrowed by deferred publication.
+  llvm::DenseMap<mlir::Operation *, StructuredSourceTextRange> written;
   const SourceDefinition *find(llvm::StringRef name) const;
+};
+struct SourcePublication {
+  llvm::json::Value snapshot = nullptr;
+  std::vector<StructuredSourceAssociation> associations;
+};
+// Optional, independently bounded projection. Never constructs a native view.
+llvm::Expected<SourcePublication> publishSource(const SourceView &);
+// A report may publish an admitted operation without exporting its program.
+llvm::Expected<llvm::json::Value> publishSourceDescriptor(const SourceView &,
+                                                          mlir::Operation &);
+// Whole-subject allowance for expanded native indexing. Every logical use of
+// an outlined body spends work, including repeated uses of the same body.
+struct SourceAllowance {
+  uint64_t remaining = 8000000;
+  bool charge(uint64_t amount = 1) {
+    if (amount > remaining)
+      return false;
+    remaining -= amount;
+    return true;
+  }
 };
 llvm::Expected<SourceView> readSourceView(
     llvm::StringRef bytes, llvm::StringRef entry, mlir::MLIRContext &context,
@@ -74,10 +93,12 @@ llvm::Expected<SourceView> readSourceView(
     const llvm::DenseMap<mlir::Operation *, mlir::Operation *>
         *writtenOperations,
     StructuredSourceProfile profile = StructuredSourceProfile::Original);
-// Called only by the source profile visitor after admitting the actual body.
+// Index the admitted source subset, independently of publication layout.
+llvm::Error indexSource(SourceView &, SourceAllowance &);
 llvm::Expected<SourceDefinition>
 buildSourceDefinition(mlir::Operation &, llvm::StringRef name,
-                      llvm::StringRef kind, const SourceExecutionClosure &);
+                      llvm::StringRef kind, const SourceExecutionClosure &,
+                      SourceAllowance &);
 } // namespace zkc::protocol
 namespace zkc::language::detail {
 // Private access clones the admitted module; no mutable checked handle crosses

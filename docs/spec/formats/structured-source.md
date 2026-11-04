@@ -1147,6 +1147,11 @@ nonterminators, including outcome packaging, and all domain-body operations. It
 counts actual native definitions rather than export-local derived rows. Neither tool expands calls
 for these counts. Both capacities are independent of runtime fuel; equality of
 their numeric limits does not imply identical admitted source sets.
+Native source indexing has separate admission and work bounds and does not
+invoke this writer. Native analyses may therefore accept a source that cannot
+be published under these format limits. Reports or interfaces explicitly
+requiring a structured snapshot still enforce them. Direct frontend admission
+and native declaration checks do not widen the portable reader.
 The explicitly selected `Prepared` export profile permits instruction and stop
 sites of at most 4096 UTF-8 bytes, matching preparation's expanded occurrence
 limit. The default `Original` profile retains the 512-byte site limit. This

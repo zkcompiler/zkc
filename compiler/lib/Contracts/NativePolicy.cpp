@@ -1,4 +1,4 @@
-#include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/TypePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
 using namespace llvm;
 namespace zkc::protocol {
@@ -13,93 +13,168 @@ nativeTypeConstructorPolicy(StringRef kind) {
   return NativeTypeConstructorPolicy{type->mathematical, type->participants,
                                      type->constructible, type->message};
 }
-namespace {
-std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
-                                       unsigned depth, unsigned &remaining,
-                                       bool &limited, bool &copy) {
-  if (!remaining || depth > 64) {
-    limited = true;
-    return std::nullopt;
+namespace detail {
+std::optional<TypePolicyFacts> finishPolicy(const PolicyNode &node,
+                                            const PolicyChildren &children) {
+  TypePolicyFacts result;
+  auto constructor = nativeTypeConstructorPolicy(node.kind);
+  bool aggregate = node.kind == "sequence" || node.kind == "variant";
+  if (aggregate) {
+    result.copy = children.copy;
+    result.drop = children.drop;
+    result.custody =
+        children.copy ? Custody::PrivateImmutable : Custody::Affine;
+    result.message = children.message;
+    result.protocolPort = children.copy && children.protocolPort;
+    result.relation = children.relation;
+    result.setup = children.setup;
+    if (constructor && children.supported)
+      result.native = NativeTypePolicy{children.copy && children.total,
+                                       children.copy && children.shared,
+                                       !children.copy,
+                                       result.protocolPort,
+                                       children.message,
+                                       children.constructible};
+    return result;
   }
-  --remaining;
-  StringRef kind = type.kind;
-  auto constructor = nativeTypeConstructorPolicy(kind);
-  if (!constructor)
-    return std::nullopt;
-  bool total = constructor->total, shared = constructor->shared;
-  // Accumulate custody and boundary facts once per child. Do not stringify
-  // and reparse every subtree through the generic custody helpers.
-  bool childrenCopy = true, childrenTotal = true, childrenShared = true,
-       protocolPort = true, childrenConstructible = true;
-  auto include = [&](const protocol::BoundType &child) {
-    bool childCopy = false;
-    auto facts = policy(child, depth + 1, remaining, limited, childCopy);
-    if (!facts)
-      return false;
-    childrenCopy &= childCopy;
-    childrenTotal &= facts->total;
-    childrenShared &= facts->shared;
-    childrenConstructible &= facts->constructible;
-    protocolPort &= facts->protocolPort;
-    return true;
-  };
-  for (const auto &argument : type.arguments)
-    if (argument.kind == protocol::TypeArgument::Kind::Type &&
-        !include(*argument.type))
-      return std::nullopt;
-  if (kind == "sequence") {
-    copy = childrenCopy;
-    return NativeTypePolicy{copy && childrenTotal,
-                            copy && childrenShared,
-                            !copy,
-                            copy && protocolPort,
-                            protocol::nativeMessageData(type),
-                            childrenConstructible};
-  }
-  if (kind == "variant") {
-    auto descriptor = protocol::decodeVariant(type.spelling());
-    if (!descriptor)
-      return std::nullopt;
-    for (const auto &arm : descriptor->alternatives)
-      for (const auto &leaf : arm.payload) {
-        auto parsed = protocol::parseBoundType(leaf, false);
-        if (!parsed) {
-          consumeError(parsed.takeError());
-          return std::nullopt;
-        }
-        if (!include(*parsed))
-          return std::nullopt;
-      }
-    copy = childrenCopy;
-    return NativeTypePolicy{copy && childrenTotal,
-                            copy && childrenShared,
-                            !copy,
-                            copy && protocolPort,
-                            protocol::nativeMessageData(type),
-                            childrenConstructible};
-  }
-  const auto *permissions = protocol::typePermissions(kind);
+  const auto *permissions = typePermissions(node.kind);
   if (!permissions)
     return std::nullopt;
-  copy = permissions->copy && childrenCopy;
-  bool affine =
-      permissions->custody == protocol::Custody::Affine || !childrenCopy;
-  // A structural application does not inherit its nominal head's wire codec.
-  bool wire = shared && type.arguments.empty() &&
-              permissions->custody == protocol::Custody::PublicValue &&
-              !protocol::defaultCodec(type).empty();
-  if (kind == "field_array")
-    wire = protocol::nativeFieldArrayWire(type);
-  return NativeTypePolicy{
-      total,  shared,
-      affine, protocolPort,
-      wire,   constructor->constructible && childrenConstructible};
+  result.copy = permissions->copy && children.copy;
+  result.drop = permissions->drop && children.drop;
+  result.custody =
+      node.applied ? (permissions->custody == Custody::Affine || !children.copy
+                          ? Custody::Affine
+                          : Custody::PrivateImmutable)
+                   : permissions->custody;
+  result.message =
+      node.kind == "field_array"
+          ? node.fieldArrayFrame
+          : !node.applied && nativeMessageAtom(node.kind, node.identity);
+  result.setup = setupKey(node.kind).has_value() ||
+                 setupCommitment(node.identity) || children.setup;
+  result.relation = logicalRelationAtom(node.kind);
+  result.protocolPort = children.protocolPort;
+  if (constructor && children.supported) {
+    bool wire =
+        node.kind == "field_array"
+            ? node.fieldArrayFrame
+            : constructor->shared && !node.applied &&
+                  permissions->custody == Custody::PublicValue &&
+                  installedDomains().defaultCodec(node.kind, node.identity);
+    result.native = NativeTypePolicy{
+        constructor->total,
+        constructor->shared,
+        permissions->custody == Custody::Affine || !children.copy,
+        children.protocolPort,
+        wire,
+        constructor->constructible && children.constructible};
+  }
+  return result;
+}
+} // namespace detail
+namespace {
+struct BoundPolicyAdapter {
+  TypeParseBudget &budget;
+  bool enter(unsigned depth) {
+    if (depth >= 64) {
+      budget.limited = true;
+      return false;
+    }
+    return budget.consume();
+  }
+  bool nominal(const VariantIdentity &identity, unsigned depth = 0) {
+    if (!enter(depth))
+      return false;
+    if (const auto *atom = identity.atom())
+      return budget.charge(atom->size());
+    for (const auto &child : *identity.tuple())
+      if (!nominal(child, depth + 1))
+        return false;
+    return true;
+  }
+  std::optional<detail::PolicyNode> head(const BoundType *type) {
+    if (!budget.charge(type->kind.size() + type->identity.size()))
+      return std::nullopt;
+    if (type->variant) {
+      if (!nominal(type->variant->nominal))
+        return std::nullopt;
+      for (const auto &arm : type->variant->alternatives)
+        if (!budget.consume() || !budget.charge(arm.label.size()))
+          return std::nullopt;
+    }
+    for (const auto &argument : type->arguments)
+      if (!budget.consume() || !budget.charge(argument.domain.size()))
+        return std::nullopt;
+    return detail::PolicyNode{
+        type->kind, type->identity, !type->arguments.empty(),
+        type->kind == "field_array" &&
+            nativeFieldArrayFrame(type->arguments.front().domain)};
+  }
+  template <class Include>
+  bool children(const BoundType *type, Include include) {
+    for (const auto &argument : type->arguments)
+      if (argument.kind == TypeArgument::Kind::Type &&
+          !include(argument.type.get()))
+        return false;
+    if (type->variant)
+      for (const auto &arm : type->variant->alternatives)
+        for (const auto &child : arm.payload)
+          if (!include(&child))
+            return false;
+    return true;
+  }
+};
+std::optional<TypePolicyFacts> readPolicy(StringRef spelling) {
+  auto type = parseBoundType(spelling, spelling.contains('@'));
+  if (!type) {
+    consumeError(type.takeError());
+    return std::nullopt;
+  }
+  return typePolicy(*type);
+}
+// Called only after the complete tree has passed formation and logical message
+// policy. Inspect each physical node once, without rebuilding logical schemas
+// or restarting formation/policy budgets at every child.
+bool physicalMessage(const BoundType &type) {
+  if (type.kind == "sequence" || type.kind == "variant")
+    return type.physicalChildren &&
+           all_of(*type.physicalChildren, physicalMessage);
+  if (type.kind == "field_array")
+    return nativeFieldArrayRepresentation(type.arguments[0].domain,
+                                          type.arguments[1].natural,
+                                          type.representation) &&
+           type.physicalChildren && type.physicalChildren->size() == 1 &&
+           physicalMessage(type.physicalChildren->front());
+  auto selected =
+      installedDomains().defaultRepresentation(type.kind, type.identity);
+  return (selected && selected->identity == type.representation) ||
+         canonicalRepresentation(type.kind, type.identity, type.representation);
 }
 } // namespace
+std::optional<TypePolicyFacts> typePolicy(const BoundType &type,
+                                          TypeParseBudget &budget) {
+  if (auto e = checkBoundType(type, !type.representation.empty(), &budget)) {
+    consumeError(std::move(e));
+    return std::nullopt;
+  }
+  BoundPolicyAdapter adapter{budget};
+  return detail::walkTypePolicy(adapter, &type);
+}
+std::optional<TypePolicyFacts> typePolicy(const BoundType &type) {
+  TypeParseBudget budget;
+  return typePolicy(type, budget);
+}
 std::optional<NativeTypePolicy>
 nativeTypePolicy(const BoundType &type, unsigned &remaining, bool &limited) {
-  bool copy = false;
-  return policy(type, 0, remaining, limited, copy);
+  if (!type.representation.empty())
+    return std::nullopt;
+  TypeParseBudget budget;
+  budget.remaining = remaining;
+  auto facts = typePolicy(type, budget);
+  remaining = budget.remaining;
+  limited |= budget.limited;
+  return facts ? facts->native : std::nullopt;
 }
 std::optional<NativeTypePolicy> nativeTypePolicy(const BoundType &type) {
   unsigned remaining = 200000;
@@ -114,41 +189,53 @@ bool logicalRelationAtom(StringRef kind) {
 }
 RelationData logicalRelationData(const BoundType &type, TypeParseBudget &budget,
                                  unsigned depth) {
-  using R = RelationData;
-  if (depth > 64 || !budget.consume())
-    return R::Limit;
+  if (depth >= 64) {
+    budget.limited = true;
+    return RelationData::Limit;
+  }
   if (!type.representation.empty())
-    return R::Unsupported;
-  if (type.kind == "variant") {
-    auto descriptor = decodeVariant(type.spelling(), depth, &budget);
-    if (!descriptor)
-      return budget.remaining ? R::Unsupported : R::Limit;
-    for (const auto &arm : descriptor->alternatives)
-      for (const auto &leaf : arm.payload) {
-        if (depth == 64)
-          return R::Limit;
-        auto child = parseBoundType(leaf, false, depth + 1, &budget);
-        if (!child) {
-          consumeError(child.takeError());
-          return budget.remaining ? R::Unsupported : R::Limit;
-        }
-        auto result = logicalRelationData(*child, budget, depth + 1);
-        if (result != R::Supported)
-          return result;
-      }
-    return R::Supported;
-  }
-  if (type.kind == "sequence") {
-    for (const auto &argument : type.arguments)
-      if (argument.kind == TypeArgument::Kind::Type) {
-        auto result = logicalRelationData(*argument.type, budget, depth + 1);
-        if (result != R::Supported)
-          return result;
-      }
-    return R::Supported;
-  }
-  // Copyable keys and private resources are not immutable relation data.
-  return logicalRelationAtom(type.kind) ? R::Supported : R::Unsupported;
+    return RelationData::Unsupported;
+  auto facts = typePolicy(type, budget);
+  return budget.limited             ? RelationData::Limit
+         : facts && facts->relation ? RelationData::Supported
+                                    : RelationData::Unsupported;
 }
-
+bool programPort(const BoundType &type) {
+  auto facts = typePolicy(type);
+  return facts && facts->protocolPort;
+}
+bool duplicable(const BoundType &type) {
+  auto facts = typePolicy(type);
+  return facts && facts->copy;
+}
+bool discardable(const BoundType &type) {
+  auto facts = typePolicy(type);
+  return facts && facts->drop;
+}
+bool duplicable(StringRef type) {
+  auto facts = readPolicy(type);
+  return facts && facts->copy;
+}
+bool discardable(StringRef type) {
+  auto facts = readPolicy(type);
+  return facts && facts->drop;
+}
+Custody custody(StringRef type) {
+  auto facts = readPolicy(type);
+  return facts ? facts->custody : Custody::Unknown;
+}
+bool nativeSetupType(const BoundType &type) {
+  auto facts = typePolicy(type);
+  return !facts || facts->setup;
+}
+bool nativeMessageData(const BoundType &type) {
+  auto facts = typePolicy(type);
+  return facts && facts->message &&
+         (type.representation.empty() || physicalMessage(type));
+}
+bool nativeFieldArrayWire(const BoundType &type, bool physical) {
+  if (type.kind != "field_array" || physical != !type.representation.empty())
+    return false;
+  return nativeMessageData(type);
+}
 } // namespace zkc::protocol

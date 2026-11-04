@@ -218,6 +218,8 @@ struct PlanBuilder {
       // A component view stays lazy through internal ports. Enumerate data
       // only when an ordinary consumer actually demands this projection.
       Type data = pir::getOracleFamilyDataType(view.type);
+      if (!data)
+        return error("oracle-common-limit");
       auto empty = make(block, "data.sequence_empty", data, {});
       if (!empty)
         return empty.takeError();

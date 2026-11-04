@@ -7,6 +7,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/OraclePorts.h"
@@ -394,6 +395,38 @@ module { "protocol.module"() ({
                 !getOracleFamilyDataType(Type{}),
             "closed family observations lost shape or admitted ordinary data");
       });
+  cases.run("oracle family data derivation checks added native depth", [&] {
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    OpBuilder builder(&context);
+    auto loc = builder.getUnknownLoc();
+    for (unsigned depth : {61u, 62u}) {
+      Type row = builder.getI1Type();
+      for (unsigned i = 0; i < depth; ++i)
+        row = zkc::data::SequenceType::get(&context, row);
+      auto kind = OracleKindAttr::getChecked(
+          loc, &context, llvm::StringRef("table"),
+          builder.getArrayAttr({TypeAttr::get(row)}));
+      require(bool(kind), "boundary table kind did not form");
+      auto sequence = OracleSequenceType::get(&context, kind, 1);
+      auto data = kind.getDataType();
+      require(bool(data), "boundary table data did not form");
+      if (depth == 61)
+        data = zkc::data::SequenceType::get(&context, data);
+      // The last candidate supplies the table data instead of the unformable
+      // sequence of table data. Its verifier must refuse without asserting.
+      Block block;
+      auto input = block.addArgument(sequence, loc);
+      builder.setInsertionPointToEnd(&block);
+      auto components =
+          OracleComponentsOp::create(builder, loc, data, sequence, input, "A",
+                                     builder.getStrArrayAttr({"B"}));
+      require(succeeded(components.verify()) == (depth == 61),
+              "oracle components ignored derived data depth");
+      require(bool(getOracleFamilyDataType(sequence)) == (depth == 61),
+              "oracle family observation ignored derived data depth");
+    }
+  });
   cases.run(
       "internal sequence applications and results retain complete types", [&] {
         accepted(sequenceSource(), true);

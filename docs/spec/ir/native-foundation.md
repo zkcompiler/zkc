@@ -135,6 +135,23 @@ Canonical public spellings are encoded/decoded at format boundaries once,
 under explicit work limits. Keeping a stable public spelling is not a second
 internal schema or compatibility execution route.
 
+The MLIR-free `BoundType` owns structured children and a typed variant
+descriptor. A variant identity is an atom or ordered tuple; each alternative
+retains its label and complete payload types. Native policy never decodes an
+identity string to discover those children. Layout leaves and oracle
+construction plans carry these structured types. The portable variant codec
+alone owns the canonical table spelling and its stricter expansion limits.
+An otherwise formed native type may have no portable spelling; publication
+must report that refusal rather than emit an empty or truncated child.
+
+Contracts and MLIR adapters use one borrowed policy traversal and common
+constructor rules for Copy, Drop, custody, message, setup, relation and
+protocol-port permissions. Every alternative and every child of an empty
+container participates. Logical policy and exact installed physical-layout
+checks remain distinct. Checked native conversion validates combined identity,
+type and payload depth before constructing a carrier; separately formed pieces
+do not authorize an over-deep combination.
+
 ### Field literals and selected Ring parameters
 
 The pure `data.index` operation carries an unsigned 64-bit `IntegerAttr` and
@@ -478,8 +495,11 @@ artifacts are independently rejected at admission; there is no requirement to
 reproduce a historical permissive interpreter's behavior on inadmissible input.
 
 Effect interfaces conservatively expose ordered observations, meter state,
-custody and publication. Start with a shared ordering resource for operations
-whose relative order matters. Distinct buffers do not justify swapping queries
+custody and publication. Reached Exec instructions currently retain unknown
+effects, while ordered Protocol actions expose conservative read/write effects.
+These permissions block generic erasure, commoning and speculative motion.
+A shared ordering resource is an option only when a real consumer needs finer
+effect precision. Distinct buffers do not justify swapping queries
 or first-stop behavior. Mark an operation pure/speculatable only under its
 actual totality and effect contract, not because a catalog row calls its result
 deterministic.
@@ -491,6 +511,12 @@ subtract, multiply, divide and remainder retain reached refusal on overflow,
 underflow and zero divisor. Comparisons do not reinterpret them as field
 elements or target-sized MLIR `index` values. No FRI-specific primitive is
 introduced by the foundation.
+
+Separate total Data word operations provide wrapping addition/subtraction,
+bitwise AND and a logical right shift that yields zero for counts of 64 or
+more. Their [range facts](../domains/mathematical-facts.md#unsigned-word-ranges)
+can discharge bounded-read formation from an exact extent. These transfers do
+not change checked execution arithmetic or its reached failures.
 
 For `n = 2*h`, `h > 0`, `p < n` and representable `n`, the library family
 `low = p % h`, `high = low + h` has `low < h <= high < n`. Antipodal FRI

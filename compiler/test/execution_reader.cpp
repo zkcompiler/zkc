@@ -2,6 +2,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/VariantFixture.h"
+#include "support/VariantSpelling.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -325,7 +326,7 @@ int main() {
         !model.functions.front().body.front().get<program::For>()->conditional,
         "unconditional loop gained an early decision");
   });
-  auto variant = protocol::encodeVariant(
+  auto variant = zkc::test::encodeVariantFixture(
       {"ExecutionChoice",
        {{"left", {"field:koala-bear"}}, {"right", {"field:koala-bear"}}}});
   require(bool(variant), "variant fixture descriptor refused");

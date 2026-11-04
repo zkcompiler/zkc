@@ -791,14 +791,16 @@ int main() {
                 require(wide.apps().size() == 1,
                         "the root application row is missing");
               });
-  cases.run("the source view inherits the structured publication ceiling", [&] {
-    // 80 full-roster scopes exceed only the 1 MiB publication.
-    auto bytes = rostered(1024, 80);
-    refuses(exportStructuredSource(bytes, "main", context),
-            "structured-source-limit: publication exceeds 1 MiB");
-    refuses(produceApplicationMap(bytes, bytes, "main", context),
-            "structured-source-limit: publication exceeds 1 MiB");
-  });
+  cases.run(
+      "native mapping is independent of the structured publication ceiling",
+      [&] {
+        // 80 full-roster scopes exceed only the 1 MiB publication.
+        auto bytes = rostered(1024, 80);
+        refuses(exportStructuredSource(bytes, "main", context),
+                "structured-source-limit: publication exceeds 1 MiB");
+        Fixture wide(context, bytes);
+        require(wide.apps().size() == 1, "large native root was not mapped");
+      });
   cases.run("folded arithmetic needs an owning correspondence rule", [&] {
     std::string bytes = R"(module { "protocol.module"() ({
       "protocol.func"() ({ ^entry(%a:i1):

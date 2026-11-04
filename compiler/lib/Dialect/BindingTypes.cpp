@@ -16,140 +16,42 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol {
 namespace {
-// First-use postorder interning is the /0 byte contract. Track the reader's
-// cumulative expanded table sizes as well: compact DAGs must not evade its
-// amplification allowance. This constructs bytes, never unpacks them.
-struct VariantTable {
-  struct Expansion {
-    size_t bytes, nodes, depth;
-  };
-  json::Array nodes;
-  std::map<std::string, size_t> ids;
-  std::vector<Expansion> expansions;
-  size_t visits = 0, encodedBytes = 0, expandedBytes = 0, expandedNodes = 0;
-
-  Expected<size_t> intern(const json::Value &value, unsigned depth = 0) {
-    if (depth >= 64 || ++visits > 200000)
-      return error("variant-type");
-    json::Value node = nullptr;
-    Expansion expansion{2, 1, 1};
-    if (auto text = value.getAsString()) {
-      if (text->size() > VariantSpellingBytes ||
-          !all_of(*text, [](unsigned char c) { return c >= 32 && c <= 126; }))
-        return error("variant-type");
-      node = text->str();
-      expansion.bytes = printJson(node).size();
-    } else if (auto *array = value.getAsArray()) {
-      json::Array refs;
-      for (const auto &child : *array) {
-        auto id = intern(child, depth + 1);
-        if (!id)
-          return id.takeError();
-        const auto &nested = expansions[*id];
-        expansion.bytes += nested.bytes + (refs.empty() ? 0 : 1);
-        expansion.nodes += nested.nodes;
-        expansion.depth = std::max(expansion.depth, nested.depth + 1);
-        if (expansion.bytes > 8 * 1024 * 1024 || expansion.nodes > 200000 ||
-            expansion.depth > 64)
-          return error("variant-type");
-        refs.push_back(std::to_string(*id));
-      }
-      node = std::move(refs);
-    } else
-      return error("variant-type");
-    auto key = printJson(node);
-    if (auto found = ids.find(key); found != ids.end())
-      return found->second;
-    encodedBytes += key.size() + 1;
-    expandedBytes += expansion.bytes;
-    expandedNodes += expansion.nodes;
-    if (nodes.size() >= 16384 ||
-        encodedBytes > (VariantSpellingBytes - 8) / 2 ||
-        expandedBytes > 8 * 1024 * 1024 || expandedNodes > 200000)
-      return error("variant-type");
-    size_t id = nodes.size();
-    ids.emplace(std::move(key), id);
-    expansions.push_back(expansion);
-    nodes.push_back(std::move(node));
-    return id;
-  }
-  Expected<std::string> pack(const json::Value &tree) {
-    auto root = intern(tree);
-    if (!root)
-      return root.takeError();
-    auto bytes = printJson(json::Array{"zkc.variant/0", std::move(nodes)});
-    size_t spellingBytes = 8 + 2 * bytes.size();
-    if (spellingBytes > VariantSpellingBytes ||
-        expandedBytes >
-            std::min(size_t(8 * 1024 * 1024), size_t(512) * spellingBytes) ||
-        expandedNodes > std::min(size_t(200000), size_t(512) * spellingBytes))
-      return error("variant-type");
-    return toHex(bytes, true);
-  }
-};
-
 struct TypeExport {
   TypeParseBudget budget;
-
-  Expected<json::Value> variantTree(data::VariantType variant, unsigned depth,
-                                    bool account) {
-    // Special syntax still has exactly one installed owner, even though it
-    // is not a generic catalog application.
-    if (!type_adapters::findAdapter("variant"))
-      return error("binding-type");
-    for (auto table : type_adapters::installedAdapters())
-      for (const auto &adapter : table)
-        if (adapter.arguments &&
-            adapter.arguments(variant, adapter.constructor))
-          return error("binding-type");
-    if (depth >= 8 ||
-        variant.getAlternatives().size() >
-            protocol::VariantDescriptorAlternatives ||
-        (account && !budget.consume()))
-      return error("variant-type");
-    json::Array alternatives;
-    for (auto arm : variant.getAlternatives()) {
-      if (arm.getPayload().size() > 128)
-        return error("variant-type");
-      json::Array payload;
-      for (Type child : arm.getPayload()) {
-        if (auto nested = dyn_cast<data::VariantType>(child)) {
-          auto tree = variantTree(nested, depth + 1, account);
-          if (!tree)
-            return tree.takeError();
-          // Decoding an inline arm subsequently imports its own self-contained
-          // descriptor. It must satisfy the table allowance on its own too.
-          auto spelling = VariantTable{}.pack(*tree);
-          if (!spelling)
-            return spelling.takeError();
-          payload.push_back(std::move(*tree));
-        } else {
-          auto bound = logical(child, depth + 1, account);
-          if (!bound)
-            return bound.takeError();
-          payload.push_back(bound->spelling());
-        }
-      }
-      alternatives.push_back(
-          json::Array{arm.getLabel().getValue(), std::move(payload)});
-    }
-    return json::Value(
-        json::Array{data::exportVariantIdentity(variant.getIdentity()),
-                    std::move(alternatives)});
-  }
 
   Expected<BoundType> logical(Type type, unsigned depth, bool account) {
     if (!type || depth > 8)
       return error("binding-type-limit");
     BoundType result;
     if (auto variant = dyn_cast<data::VariantType>(type)) {
-      auto tree = variantTree(variant, depth, account);
-      if (!tree)
-        return tree.takeError();
-      auto identity = VariantTable{}.pack(*tree);
-      if (!identity)
-        return identity.takeError();
-      result = {"variant", std::move(*identity), {}};
+      if (!type_adapters::findAdapter("variant") || depth >= 8 ||
+          variant.getAlternatives().size() > VariantDescriptorAlternatives ||
+          (account && !budget.consume()))
+        return error("variant-type");
+      for (auto table : type_adapters::installedAdapters())
+        for (const auto &adapter : table)
+          if (adapter.arguments &&
+              adapter.arguments(variant, adapter.constructor))
+            return error("binding-type");
+      VariantDescriptor descriptor{
+          data::exportVariantIdentity(variant.getIdentity()), {}};
+      for (auto arm : variant.getAlternatives()) {
+        if (arm.getPayload().size() > 128)
+          return error("variant-type");
+        VariantAlternative alternative{arm.getLabel().getValue().str(), {}};
+        for (Type child : arm.getPayload()) {
+          auto bound = logical(child, depth + 1, account);
+          if (!bound)
+            return bound.takeError();
+          alternative.payload.push_back(std::move(*bound));
+        }
+        descriptor.alternatives.push_back(std::move(alternative));
+      }
+      result.kind = "variant";
+      result.variant =
+          std::make_shared<const VariantDescriptor>(std::move(descriptor));
+      if (!encodeVariant(*result.variant))
+        return error("variant-type");
     } else {
       // Boundary adapters also admit builtin bool/index in a context with no
       // zkc dialect loaded. Observe the same compiled owner table directly;
@@ -198,7 +100,8 @@ struct TypeExport {
       }
     }
     size_t bytes = result.spelling().size();
-    if (bytes > (result.kind == "variant" ? VariantSpellingBytes : 4096) ||
+    if (!bytes ||
+        bytes > (result.kind == "variant" ? VariantSpellingBytes : 4096) ||
         (account && !budget.charge(sizeof(BoundType) + bytes)))
       return error("binding-type-limit");
     return result;
@@ -239,18 +142,21 @@ struct TypeExport {
 Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
   if (!ctx)
     return {};
-  auto checked = parseBoundType(t.spelling(), !t.representation.empty());
-  if (!checked) {
-    consumeError(checked.takeError());
+  if (auto e = checkBoundType(t, !t.representation.empty())) {
+    consumeError(std::move(e));
     return {};
   }
-  if (!(*checked == t))
-    return {};
   const auto *adapter = type_adapters::findAdapter(t.kind);
   if (!adapter)
     return {};
   Type result = adapter->decode(ctx, t);
   if (!result)
+    return {};
+  // Builtin bool/index translation also works without any zkc dialect (and
+  // therefore without its external catalog interface models) loaded.
+  if (!result.isSignlessInteger(1) && !result.isUnsignedInteger(64) &&
+      failed(verifyLogicalType([&] { return emitError(UnknownLoc::get(ctx)); },
+                               result)))
     return {};
   if (t.representation.empty())
     return result;
@@ -303,7 +209,8 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
   auto result = conversion.physical(represented, 0);
   if (!result)
     return result.takeError();
-  if (result->spelling().size() > PhysicalSpellingBytes)
+  auto spelling = result->spelling();
+  if (spelling.empty() || spelling.size() > PhysicalSpellingBytes)
     return error("binding-type-limit");
   return result;
 }

@@ -217,9 +217,7 @@ class Emitter {
           result.push_back(protocol_ir::OracleHandleType::get(&context, kind));
         continue;
       }
-      auto bound = take(protocol::parseBoundType(*leaf.data(), false));
-      if (!bound)
-        return {};
+      const auto *bound = leaf.data();
       auto type = protocol::decodeBoundType(&context, *bound);
       if (!type) {
         failure = error("source.layout", "native type dialect unavailable");
@@ -734,12 +732,14 @@ class Emitter {
         result.push_back(component);
         continue;
       }
+      auto data = protocol_ir::getOracleFamilyDataType(component.getType());
+      if (!data) {
+        failure = error("source.layout", "oracle data type is unavailable");
+        return {};
+      }
       auto *operation = make(
           "protocol.oracle_components",
-          SmallVector<mlir::Type>{
-              protocol_ir::getOracleFamilyDataType(component.getType()),
-              component.getType()},
-          component,
+          SmallVector<mlir::Type>{data, component.getType()}, component,
           oracleAttributes(std::get<OraclePlacement>(leaf.placement->value),
                            mapping, false));
       if (!operation)
@@ -1007,8 +1007,7 @@ class Emitter {
         if (!observed)
           return false;
         for (const auto &leaf : observed->leaves)
-          if (leaf.leaf.data() &&
-              StringRef(*leaf.leaf.data()).starts_with("resource_unit:") &&
+          if (leaf.leaf.data() && leaf.leaf.data()->kind == "resource_unit" &&
               !custodyPrimitive("resource_unit.consume",
                                 values[consume->input.index][leaf.bodyOffset],
                                 {}, leaf,
@@ -2407,7 +2406,7 @@ public:
     if (record)
       budget.observer = [this](mlir::Operation *op) { observe(op); };
   }
-  Expected<std::string> run() {
+  Expected<EmittedOriginal> run() {
     auto built = build();
     if (!built)
       return built.takeError();
@@ -2417,14 +2416,7 @@ public:
         definition.origins.erase(llvm::unique(definition.origins),
                                  definition.origins.end());
       }
-    std::string result;
-    mlir::AsmState state(**built, canonicalPrintingFlags());
-    BoundedStream stream(result, limits.irBytes);
-    (*built)->print(stream, state);
-    stream << '\n';
-    if (stream.overflow())
-      return error("source.limit", "emitted MLIR byte limit exceeded");
-    return result;
+    return printEmittedOriginal(std::move(*built), limits);
   }
 };
 } // namespace
@@ -2435,9 +2427,7 @@ Expected<SmallVector<mlir::Type>> packedLeafTypes(mlir::MLIRContext *context,
   for (const auto &leaf : layout.flat->leaves) {
     if (!leaf.data())
       return error("source.layout", "packed payload contains formal data");
-    auto bound = protocol::parseBoundType(*leaf.data(), false);
-    if (!bound)
-      return bound.takeError();
+    const auto *bound = leaf.data();
     auto type = protocol::decodeBoundType(context, *bound);
     if (!type)
       return error("source.layout", "packed payload dialect unavailable");
@@ -2499,6 +2489,15 @@ Expected<std::string> emitOriginal(const ClosedEntry &project,
                                    mlir::MLIRContext &context,
                                    const Limits &limits,
                                    EmissionRecord *record) {
+  auto emitted = emitNativeOriginal(project, context, limits, record);
+  if (!emitted)
+    return emitted.takeError();
+  return std::move(emitted->bytes);
+}
+Expected<EmittedOriginal> emitNativeOriginal(const ClosedEntry &project,
+                                             mlir::MLIRContext &context,
+                                             const Limits &limits,
+                                             EmissionRecord *record) {
   if (auto e = checkLimits(limits))
     return e;
   if (project.project().checkedWork() > limits.work ||
@@ -2515,10 +2514,54 @@ Expected<std::string> emitOriginal(const ClosedEntry &project,
     return error("source.dialects",
                  "native dialects must be loaded before source emission");
   if (project.entry().kind == Declaration::Kind::EntryFunction)
-    return emitHostOriginal(project, context, limits);
+    return emitNativeHostOriginal(project, context, limits);
   Emitter emitter(project, context, limits);
   emitter.recordInto(record);
   return emitter.run();
+}
+Expected<EmittedOriginal>
+printEmittedOriginal(mlir::OwningOpRef<mlir::ModuleOp> module,
+                     const Limits &limits) {
+  EmittedOriginal result;
+  result.module = std::move(module);
+  mlir::AsmState::LocationMap positions;
+  mlir::AsmState state(*result.module, canonicalPrintingFlags(), &positions);
+  BoundedStream stream(result.bytes, limits.irBytes);
+  result.module->print(stream, state);
+  stream << '\n';
+  if (stream.overflow())
+    return error("source.limit", "emitted MLIR byte limit exceeded");
+  SmallVector<size_t> lines{0};
+  for (size_t i = 0; i < result.bytes.size(); ++i)
+    if (result.bytes[i] == '\n')
+      lines.push_back(i + 1);
+  for (const auto &[operation, position] : positions) {
+    auto [line, column] = position;
+    // AsmState records one-based lines and zero-based columns. The position
+    // precedes the result assignment, so locate the quoted operation name.
+    if (!line || line >= lines.size())
+      return error("source.emission", "invalid printer operation position " +
+                                          Twine(line) + ":" + Twine(column) +
+                                          " for " +
+                                          operation->getName().getStringRef());
+    StringRef text(result.bytes);
+    StringRef printed = text.slice(lines[line - 1], lines[line] - 1);
+    std::string token = "\"" + operation->getName().getStringRef().str() + "\"";
+    auto offset = printed.find(token, column);
+    if (offset == StringRef::npos)
+      return error("source.emission", "printer operation name is absent");
+    size_t begin = lines[line - 1] + offset;
+    result.operations.try_emplace(
+        operation,
+        EmittedOperationRange{unsigned(begin), unsigned(begin + token.size()),
+                              line, unsigned(offset + 1)});
+    // Correspondence records the actual original assembly coordinates. These
+    // annotations cannot change the canonical bytes (debug info is disabled).
+    operation->setLoc(mlir::FileLineColLoc::get(operation->getContext(),
+                                                "zkc-language-original.mlir",
+                                                line, offset + 1));
+  }
+  return std::move(result);
 }
 Expected<mlir::OwningOpRef<mlir::ModuleOp>>
 buildNumericalOriginal(const ClosedEntry &project, const Declaration &fragment,

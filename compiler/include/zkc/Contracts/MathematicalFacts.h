@@ -36,6 +36,18 @@ private:
   bool exhausted_ = false;
 };
 
+/// Inclusive unsigned 64-bit interval. The full interval is a proven carrier
+/// bound, distinct from an unsupported expression (Unknown without a value).
+/// These laws describe total word operations, not mathematical cardinalities.
+struct WordRange {
+  uint64_t minimum = 0, maximum = UINT64_MAX;
+};
+enum class WordOperation { WrappingAdd, WrappingSubtract, BitAnd, ShiftRight };
+/// One charged transfer. Wrapping intervals crossing zero widen to the full
+/// carrier; shift counts at least 64 produce zero, never a masked shift.
+Result<WordRange> transferWordRange(Work &, WordOperation, WordRange,
+                                    WordRange);
+
 namespace detail {
 struct Identity;
 }

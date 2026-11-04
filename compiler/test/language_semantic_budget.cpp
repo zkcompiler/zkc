@@ -138,15 +138,23 @@ int main() {
     Limits limits;
     const std::vector<Declaration> declarations;
     Declaration scope;
-    for (uint64_t allowance : {uint64_t(2), uint64_t(1)}) {
+    uint64_t cost = 0;
+    for (unsigned trial = 0; trial < 3; ++trial) {
+      uint64_t allowance = trial == 0 ? limits.work : cost - (trial == 2);
       uint64_t remaining = allowance;
       Work work{limits};
       work.allowance = &remaining;
       Semantics types(declarations, {}, work);
       bool result = types.relationData(scope, Type{}, callerSpan, 1);
-      require(result == (allowance == 2), "relation admission changed");
-      require(remaining == 0 && work.used == allowance,
-              "relation parsing lost admitted work");
+      if (trial == 0) {
+        require(result, "relation admission changed");
+        cost = work.used;
+        require(cost > 0, "relation inspection was not charged");
+      } else {
+        require(result == (trial == 1), "relation admission changed");
+        require(remaining == 0 && work.used == allowance,
+                "relation inspection lost admitted work");
+      }
       if (!result)
         diagnostic(types, "source.limit");
     }

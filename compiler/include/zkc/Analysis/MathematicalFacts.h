@@ -68,7 +68,13 @@ public:
   /// origin, including distinct invocations of the same constructor helper.
   facts::Result<mlir::Value> origin(mlir::Value, facts::Work &,
                                     unsigned depth = 0);
-  /// Exact unsigned index literals and helper results; no wrapping arithmetic.
+  /// Bounded demanded-expression analysis for ui64 literals, arguments, helper
+  /// results and the four total word operations. No branch/loop assumptions,
+  /// checked arithmetic, or transfer through arbitrary execution bindings.
+  /// Unsupported expressions return Unknown; exhausted work returns Capacity.
+  facts::Result<facts::WordRange> wordRange(mlir::Value, facts::Work &,
+                                            unsigned depth = 0);
+  /// Exact singleton projection of wordRange, including wrapping arithmetic.
   facts::Result<uint64_t> integer(mlir::Value, facts::Work &,
                                   unsigned depth = 0);
   facts::Status equalExtent(mlir::Value left, unsigned leftAxis,
