@@ -62,7 +62,8 @@ void refuses(StringRef source, StringRef code, const Limits &limits = {}) {
 }
 void closureRefuses(StringRef source, StringRef code,
                     const Limits &limits = {}) {
-  auto project = check(source, limits);
+  // Isolate closure's requested allowance from the earlier checking phase.
+  auto project = check(source);
   auto selected =
       zkc::test::closeProtocolDeployment(project, "m::Demo", limits);
   require(!selected, "Entry closure unexpectedly accepted");
@@ -1066,11 +1067,12 @@ void bounds() {
           "wrong schema fanout failure");
   Limits limits;
   limits.instances = 1;
-  closureRefuses(prefix +
-                     "math fn id<F:Field>(x:F)->F{return x;}protocol Run "
-                     "roles(P)(x:Fr@P)->(r:Fr@P){return(r=id(x));}entry fn "
-                     "Demo(inputs: Run::Inputs) { return Run::run(inputs); }",
-                 "source.limit", limits);
+  const auto twoInstances =
+      prefix + "math fn id<F:Field>(x:F)->F{return x;}protocol Run "
+               "roles(P)(x:Fr@P)->(r:Fr@P){return(r=id(x));}entry fn "
+               "Demo(inputs: Run::Inputs) { return Run::run(inputs); }";
+  refuses(twoInstances, "source.limit", limits);
+  closureRefuses(twoInstances, "source.limit", limits);
   limits = {};
   limits.naturalTerms = 1;
   refuses(prefix + "type A<N:nat,M:nat>=[Fr;N+M];", "source.limit", limits);
