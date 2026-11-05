@@ -701,6 +701,9 @@ public:
         builder.getArrayAttr({interface.getDictionary(module.getContext())}));
     json::Array slots, inputs, associations;
     for (Type type : codec.record) {
+      // Reserve the actual owned type/spelling expansion independently of IR.
+      if (!capacity.type(type))
+        return error("native-proof-codec-limit");
       auto logical = protocol::encodeBoundType(type, false);
       if (!logical)
         return logical.takeError();
@@ -744,20 +747,27 @@ constructNativeCodec(ModuleOp module, const NativeProofPolicy &policy,
                      ArrayRef<NativeTranscriptEvent> events,
                      const json::Array &transcript) {
   CodecCapacity capacity;
-  if (!capacity.operation(module) ||
-      !capacity.inputs(policy, plan, events, transcript))
+  if (!capacity.operation(module))
     return error("native-proof-codec-limit");
-  // Generated fanout can exhaust the remaining allowance after setup. Publish
-  // only a complete result, so even these late capacity refusals leave the
-  // caller's IR untouched. The preflight reservation includes this clone.
-  auto original = cast<pir::ProtocolModuleOp>(module.getBody()->front());
-  OwningOpRef<pir::ProtocolModuleOp> staged(
-      cast<pir::ProtocolModuleOp>(original->clone()));
-  auto result =
-      CodecEmitter(*staged, policy, plan, capacity).run(events, transcript);
-  if (!result)
-    return result.takeError();
-  original.getBody().takeBody(staged->getBody());
-  return std::move(*result);
+  capacity.finishNativePreflight();
+  if (!capacity.inputs(policy, plan, events, transcript))
+    return error("native-proof-codec-limit");
+  return codecWithNativeWork(
+      capacity, "native-proof-codec-limit", [&]() -> Expected<json::Array> {
+        // Generated work and native callbacks can exhaust after setup. All
+        // changes remain staged until the terminal check before publication.
+        // Type/resource payloads stay stable; emission creates new handles.
+        auto original = cast<pir::ProtocolModuleOp>(module.getBody()->front());
+        OwningOpRef<pir::ProtocolModuleOp> staged(
+            cast<pir::ProtocolModuleOp>(original->clone()));
+        auto result = CodecEmitter(*staged, policy, plan, capacity)
+                          .run(events, transcript);
+        if (!result)
+          return result.takeError();
+        if (!capacity.charge(0))
+          return error("native-proof-codec-limit");
+        original.getBody().takeBody(staged->getBody());
+        return std::move(*result);
+      });
 }
 } // namespace zkc::detail

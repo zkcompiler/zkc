@@ -577,6 +577,9 @@ public:
       return false;
     json::Array recordTypes, layoutInputs;
     for (Type type : codec.record) {
+      // This produces owned spelling, even when native preflight saw the type.
+      if (!capacity.type(type))
+        return false;
       auto encoded = protocol::encodeBoundType(type, false);
       if (!encoded) {
         consumeError(encoded.takeError());
@@ -836,22 +839,26 @@ Error verifyNativeCodec(ModuleOp transcript, ModuleOp encoded,
   if (!transcript || !encoded)
     return error("native-codec-subject");
   CodecCapacity capacity;
-  if (!capacity.operation(transcript) || !capacity.operation(encoded) ||
-      !capacity.inputs(policy, plan, events, transcriptPlan) ||
+  if (!capacity.operation(transcript) || !capacity.operation(encoded))
+    return error("native-codec-limit");
+  capacity.finishNativePreflight();
+  if (!capacity.inputs(policy, plan, events, transcriptPlan) ||
       !capacity.jsonArray(codecPlan))
     return error("native-codec-limit");
-  if (failed(zkc::admitStage(transcript)) || failed(zkc::admitStage(encoded)))
-    return error("native-codec-subject");
-  auto source = cast<pir::ProtocolModuleOp>(transcript.getBody()->front());
-  auto candidate = cast<pir::ProtocolModuleOp>(encoded.getBody()->front());
-  auto execution = protocol::readSourceExecutionClosure(candidate);
-  if (!execution)
-    return execution.takeError();
-  CodecCorrespondence checker(candidate, policy, plan, *execution, capacity);
-  if (!checker.check(source, candidate, events, transcriptPlan, codecPlan))
-    return error(checker.exhausted() ? "native-codec-limit"
-                                     : "native-codec-correspondence",
-                 checker.detail());
-  return Error::success();
+  return codecWithNativeWork(capacity, "native-codec-limit", [&]() -> Error {
+    if (failed(zkc::admitStage(transcript)) || failed(zkc::admitStage(encoded)))
+      return error("native-codec-subject");
+    auto source = cast<pir::ProtocolModuleOp>(transcript.getBody()->front());
+    auto candidate = cast<pir::ProtocolModuleOp>(encoded.getBody()->front());
+    auto execution = protocol::readSourceExecutionClosure(candidate);
+    if (!execution)
+      return execution.takeError();
+    CodecCorrespondence checker(candidate, policy, plan, *execution, capacity);
+    if (!checker.check(source, candidate, events, transcriptPlan, codecPlan))
+      return error(checker.exhausted() ? "native-codec-limit"
+                                       : "native-codec-correspondence",
+                   checker.detail());
+    return Error::success();
+  });
 }
 } // namespace zkc::detail

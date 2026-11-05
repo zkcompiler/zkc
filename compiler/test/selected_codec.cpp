@@ -459,17 +459,22 @@ struct Fixture {
         !capacity.inputs(policy, plan, events, transcript) ||
         !capacity.jsonArray(codec))
       return zkc::error("native-codec-limit");
-    auto execution = protocol::readSourceExecutionClosure(unit(candidate));
-    if (!execution)
-      return execution.takeError();
-    zkc::detail::CodecCorrespondence checker(unit(candidate), policy, plan,
-                                             *execution, capacity);
-    if (!checker.check(unit(*source), unit(candidate), events, transcript,
-                       codec))
-      return zkc::error(checker.exhausted() ? "native-codec-limit"
-                                            : "native-codec-correspondence",
-                        checker.detail());
-    return Error::success();
+    return zkc::detail::codecWithNativeWork(
+        capacity, "native-codec-limit", [&]() -> Error {
+          auto execution =
+              protocol::readSourceExecutionClosure(unit(candidate));
+          if (!execution)
+            return execution.takeError();
+          zkc::detail::CodecCorrespondence checker(unit(candidate), policy,
+                                                   plan, *execution, capacity);
+          if (!checker.check(unit(*source), unit(candidate), events, transcript,
+                             codec))
+            return zkc::error(checker.exhausted()
+                                  ? "native-codec-limit"
+                                  : "native-codec-correspondence",
+                              checker.detail());
+          return Error::success();
+        });
   }
   void check(ModuleOp candidate, const json::Array &codec) {
     success(read(candidate, codec));
@@ -1371,5 +1376,285 @@ int main() {
       unchanged(*candidate, *before, first);
     }
   });
+  cases.run("completed roots share inspection across physical clones", [&] {
+    OpBuilder builder(&context);
+    OwningOpRef<ModuleOp> source(ModuleOp::create(builder.getUnknownLoc()));
+    source->getOperation()->setAttr(
+        "payload", builder.getStringAttr(std::string(32768, 's')));
+    auto type = OpaqueType::get(builder.getStringAttr("codec_test"),
+                                std::string(8192, 't'));
+    source->getBody()->addArgument(type, builder.getUnknownLoc());
+    auto cloned = copy(*source);
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.charge(900000) && capacity.operation(*source),
+            "bounded initial root inspection failed");
+    for (unsigned i = 0; i != 128; ++i)
+      require(capacity.operation(i % 2 ? *source : *cloned),
+              "same completed type/dictionary was expanded on every clone");
+    bool refused = false;
+    for (unsigned i = 0; i != 5000 && !refused; ++i)
+      refused = !capacity.operation(*cloned);
+    require(refused && capacity.exhausted(),
+            "physical clones or root lookups became free");
+    zkc::detail::CodecCapacity fresh;
+    require(fresh.charge(980000) && !fresh.operation(*cloned),
+            "root summaries escaped their original allowance");
+  });
+  cases.run("dictionary hits still charge every named attribute slot", [&] {
+    OpBuilder builder(&context);
+    OwningOpRef<ModuleOp> source(ModuleOp::create(builder.getUnknownLoc()));
+    for (unsigned i = 0; i != 128; ++i)
+      source->getOperation()->setAttr("key" + std::to_string(i),
+                                      builder.getUnitAttr());
+    auto cloned = copy(*source);
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.operation(*source) && capacity.charge(990000),
+            "wide dictionary must fit its first inspection");
+    bool refused = false;
+    for (unsigned i = 0; i != 8 && !refused; ++i)
+      refused = !capacity.operation(*cloned);
+    require(refused && capacity.exhausted(),
+            "dictionary cache waived physical NamedAttrList copies");
+  });
+  cases.run("distinct native roots consume one cumulative allowance", [&] {
+    OpBuilder builder(&context);
+    SmallVector<OwningOpRef<ModuleOp>> subjects;
+    for (char value : {'a', 'b', 'c', 'd'}) {
+      OwningOpRef<ModuleOp> subject(ModuleOp::create(builder.getUnknownLoc()));
+      subject->getOperation()->setAttr(
+          "payload", builder.getStringAttr(std::string(300000, value)));
+      subjects.push_back(std::move(subject));
+    }
+    zkc::detail::CodecCapacity cumulative;
+    for (auto [i, subject] : enumerate(subjects)) {
+      zkc::detail::CodecCapacity alone;
+      require(alone.operation(*subject), "each distinct root must fit alone");
+      require(cumulative.operation(*subject) == (i < 3),
+              "distinct equal-shaped roots did not pay cumulatively");
+    }
+    require(cumulative.exhausted(), "distinct root refusal was not sticky");
+    require(!cumulative.operation(*subjects.front()),
+            "a previously completed root revived an exhausted allowance");
+  });
+  cases.run("native cache cannot pay for raw owned expansion", [&] {
+    OpBuilder builder(&context);
+    auto type = OpaqueType::get(builder.getStringAttr("codec_test"),
+                                std::string(300000, 't'));
+    OwningOpRef<ModuleOp> subject(ModuleOp::create(builder.getUnknownLoc()));
+    subject->getBody()->addArgument(type, builder.getUnknownLoc());
+    auto attribute = builder.getStringAttr(std::string(300000, 'a'));
+    subject->getOperation()->setAttr("payload", attribute);
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.operation(*subject) && capacity.operation(*subject),
+            "bounded native roots must fit before owned expansion");
+    require(capacity.types(SmallVector<Type>{type}),
+            "first owned type occurrence should fit");
+    require(!capacity.attribute(attribute) && capacity.exhausted(),
+            "raw owned attribute occurrence reused a native root summary");
+    zkc::detail::CodecCapacity repeatedTypes;
+    require(repeatedTypes.operation(*subject), "initial native roots failed");
+    require(!repeatedTypes.types(SmallVector<Type>{type, type}),
+            "repeated owned types were deduplicated");
+  });
+  cases.run("preflight cache ends before mutable payload consumers", [&] {
+    OpBuilder builder(&context);
+    OwningOpRef<ModuleOp> subject(ModuleOp::create(builder.getUnknownLoc()));
+    subject->getOperation()->setAttr(
+        "payload", builder.getStringAttr(std::string(600000, 's')));
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.operation(*subject) && capacity.operation(*subject),
+            "read-only root sharing failed");
+    capacity.finishNativePreflight();
+    require(!capacity.operation(*subject) && capacity.exhausted(),
+            "post-preflight inspection reused roots or restarted the budget");
+  });
+  cases.run("exhaustion refuses cached roots, nulls and zero work", [&] {
+    OwningOpRef<ModuleOp> subject(ModuleOp::create(UnknownLoc::get(&context)));
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.operation(*subject), "could not warm empty native roots");
+    require(!capacity.charge(1000001), "fixture must exhaust the allowance");
+    require(!capacity.operation(*subject) && !capacity.operation(nullptr) &&
+                !capacity.type(Type{}) && !capacity.attribute(Attribute{}) &&
+                !capacity.charge(0) && !capacity.text("") &&
+                !capacity.types(SmallVector<Type>{}) &&
+                !capacity.jsonArray(json::Array{}),
+            "empty work or a cache hit bypassed terminal exhaustion");
+    capacity.finishNativePreflight();
+    require(!capacity.type(Type{}) && capacity.exhausted(),
+            "cache disposal cleared terminal exhaustion");
+  });
+  for (unsigned levels : {62u, 63u})
+    cases.run("native type and attribute root depth " + Twine(levels), [&] {
+      Type type = data::BytesType::get(&context);
+      for (unsigned i = 0; i != levels; ++i)
+        type = TupleType::get(&context, {type});
+      OwningOpRef<ModuleOp> subject(
+          ModuleOp::create(UnknownLoc::get(&context)));
+      subject->getOperation()->setAttr("type", TypeAttr::get(type));
+      zkc::detail::CodecCapacity capacity;
+      // Dictionary -> TypeAttr -> tuple chain -> leaf has depth levels + 2.
+      require(capacity.operation(*subject) == (levels == 62),
+              "cross attribute/type root depth boundary changed");
+      require(capacity.operation(*subject) == (levels == 62),
+              "cached or partially inspected root changed its depth result");
+      zkc::detail::CodecCapacity raw;
+      require(raw.type(type, 64 - levels) && !raw.type(type, 65 - levels) &&
+                  raw.exhausted(),
+              "raw type expansion lost its supplied depth boundary");
+    });
+  cases.run("affine descendants retain their complete root height", [&] {
+    auto expression = getAffineDimExpr(0, &context);
+    for (unsigned i = 0; i != 6; ++i)
+      expression = expression.floorDiv(2) + getAffineSymbolExpr(0, &context);
+    std::function<unsigned(AffineExpr)> height = [&](AffineExpr value) {
+      if (auto binary = dyn_cast<AffineBinaryOpExpr>(value))
+        return 1 + std::max(height(binary.getLHS()), height(binary.getRHS()));
+      return 0u;
+    };
+    Attribute payload = AffineMapAttr::get(AffineMap::get(1, 1, expression));
+    unsigned depth = 2 + height(expression); // Dictionary -> map -> expression.
+    require(depth < 64, "affine fixture starts too deep");
+    for (; depth < 64; ++depth)
+      payload = ArrayAttr::get(&context, {payload});
+    OwningOpRef<ModuleOp> subject(ModuleOp::create(UnknownLoc::get(&context)));
+    subject->getOperation()->setAttr("affine", payload);
+    auto deeper = copy(*subject);
+    deeper->getOperation()->setAttr("affine",
+                                    ArrayAttr::get(&context, {payload}));
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.operation(*subject) && capacity.operation(*subject),
+            "affine root at depth 64 should fit, including a cache hit");
+    require(!capacity.operation(*deeper) && capacity.exhausted(),
+            "new parent bypassed full affine depth through a cached child");
+  });
+  cases.run("native callbacks use the codec allowance and restore scope", [&] {
+    Fixture fixture(context);
+    auto before = copy(*fixture.source);
+    Operation *first = &unit(*fixture.source).getBody().front().front();
+    require(succeeded(admitStage(*fixture.source)),
+            "callback fixture must pass ordinary source admission");
+    const bool threading = context.isMultithreadingEnabled();
+    zkc::detail::NativeTypeWork outerWork;
+    uint64_t outerCharges = 0;
+    zkc::detail::NativeTypeWorkScope outer(
+        outerWork, [&](uint64_t amount) { outerCharges += amount; });
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.charge(999999), "could not reserve callback fixture");
+    bool entered = false, completed = false;
+    limit(zkc::detail::codecWithNativeWork(
+        capacity, "native-codec-limit", [&]() -> Error {
+          entered = true;
+          require(zkc::detail::NativeTypeWorkScope::current() != &outerWork,
+                  "codec borrowed the enclosing semantic facts");
+          auto admitted = admitStage(*fixture.source);
+          completed = true;
+          return succeeded(admitted) ? Error::success()
+                                     : zkc::error("native-codec-subject");
+        }));
+    require(entered && !completed && capacity.exhausted(),
+            "actual admission callback did not abort at the codec boundary");
+    require(context.isMultithreadingEnabled() == threading,
+            "callback exception lost admission's threading restoration");
+    require(zkc::detail::NativeTypeWorkScope::current() == &outerWork &&
+                outerCharges == 0,
+            "callback scope leaked or debited a different allowance");
+    zkc::detail::NativeTypeWorkScope::charge(3);
+    require(outerCharges == 3, "enclosing callback was not restored");
+    unchanged(*fixture.source, *before, first);
+  });
+  cases.run("public reader catches admission callback exhaustion", [&] {
+    Fixture fixture(context);
+    auto candidate = copy(*fixture.source);
+    auto codec = fixture.construct(*candidate);
+    auto fits = [&](size_t bytes) {
+      fixture.plan.codec->provider.assign(bytes, 'p');
+      codec[0] = fixture.plan.codec->provider;
+      zkc::detail::CodecCapacity capacity;
+      return capacity.operation(*fixture.source) &&
+             capacity.operation(*candidate) &&
+             capacity.inputs(fixture.policy, fixture.plan, fixture.events,
+                             fixture.transcript) &&
+             capacity.jsonArray(codec) && capacity.charge(8);
+    };
+    size_t low = 0, high = 1000001;
+    require(fits(low) && !fits(high), "invalid callback capacity bracket");
+    while (high - low > 1) {
+      size_t middle = low + (high - low) / 2;
+      if (fits(middle))
+        low = middle;
+      else
+        high = middle;
+    }
+    require(fits(low), "reader callback fixture must pass complete preflight");
+    auto before = copy(*candidate);
+    auto sourceBefore = copy(*fixture.source);
+    Operation *first = &unit(*candidate).getBody().front().front();
+    Operation *sourceFirst = &unit(*fixture.source).getBody().front().front();
+    limit(zkc::detail::verifyNativeCodec(
+        *fixture.source, *candidate, fixture.policy, fixture.plan,
+        fixture.events, fixture.transcript, codec));
+    unchanged(*candidate, *before, first);
+    unchanged(*fixture.source, *sourceBefore, sourceFirst);
+  });
+  cases.run("producer callback boundary discards an interrupted stage", [&] {
+    Fixture fixture(context);
+    auto candidate = copy(*fixture.source);
+    auto before = copy(*candidate);
+    Operation *first = &unit(*candidate).getBody().front().front();
+    zkc::detail::CodecCapacity capacity;
+    require(capacity.operation(*candidate), "could not inspect stage fixture");
+    bool entered = false, published = false;
+    // Inject at the same Expected/RAII boundary used by the real emitter. The
+    // unchanged public producer's late-exhaustion cases above cover emission.
+    refuses(zkc::detail::codecWithNativeWork(
+                capacity, "native-proof-codec-limit",
+                [&]() -> Expected<json::Array> {
+                  auto staged = copy(*candidate);
+                  staged->getOperation()->setAttr(
+                      "staged", fixture.builder.getUnitAttr());
+                  entered = true;
+                  zkc::detail::NativeTypeWorkScope::charge(1000001);
+                  published = true;
+                  unit(*candidate).getBody().takeBody(unit(*staged).getBody());
+                  return json::Array{};
+                }),
+            "native-proof-codec-limit");
+    require(entered && !published && capacity.exhausted(),
+            "callback cancellation escaped the producer boundary");
+    unchanged(*candidate, *before, first);
+  });
+  for (bool corruptSource : {false, true})
+    cases.run(corruptSource
+                  ? "reader independently refuses the source subject"
+                  : "reader independently refuses the encoded subject",
+              [&] {
+                Fixture fixture(context);
+                auto candidate = copy(*fixture.source);
+                auto codec = fixture.construct(*candidate);
+                require(succeeded(admitStage(*fixture.source)) &&
+                            succeeded(admitStage(*candidate)),
+                        "both baseline codec subjects must be admitted");
+                success(zkc::detail::verifyNativeCodec(
+                    *fixture.source, *candidate, fixture.policy, fixture.plan,
+                    fixture.events, fixture.transcript, codec));
+                auto invalid = corruptSource ? *fixture.source : *candidate;
+                unit(invalid)->removeAttr("profile");
+                auto before = copy(*candidate);
+                auto sourceBefore = copy(*fixture.source);
+                Operation *first = &unit(*candidate).getBody().front().front();
+                Operation *sourceFirst =
+                    &unit(*fixture.source).getBody().front().front();
+                ScopedDiagnosticHandler quiet(
+                    &context, [](Diagnostic &) { return mlir::success(); });
+                auto failure = zkc::detail::verifyNativeCodec(
+                    *fixture.source, *candidate, fixture.policy, fixture.plan,
+                    fixture.events, fixture.transcript, codec);
+                require(bool(failure), "reader accepted an unadmitted subject");
+                require(namesIdentifier(toString(std::move(failure)),
+                                        "native-codec-subject"),
+                        "ordinary admission failure changed identity");
+                unchanged(*candidate, *before, first);
+                unchanged(*fixture.source, *sourceBefore, sourceFirst);
+              });
   return cases.result();
 }

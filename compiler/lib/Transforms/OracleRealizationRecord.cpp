@@ -937,10 +937,25 @@ Expected<json::Array> declarations(ModuleOp candidate,
     size_t referenceIndex = 0;
     unsigned ordinal = 0;
     auto walked = declaration.walk<WalkOrder::PreOrder>([&](Operation *op) {
-      if (!work.charge(1 + op->getAttrs().size()))
+      if (!work.charge())
         return WalkResult::interrupt();
       unsigned current = ordinal++;
-      for (auto attribute : op->getAttrs()) {
+      auto attributes = op->getAttrDictionary();
+      if (attributes.empty())
+        return WalkResult::advance();
+      // The preflight inspected this exact immutable dictionary, including
+      // symbols nested in types. An empty summary cannot contribute a row;
+      // preserve the operation ordinal without scanning its attributes again.
+      auto symbols = preflight.borrowReferences(attributes);
+      if (!symbols) {
+        consumeError(symbols.takeError());
+        return WalkResult::interrupt();
+      }
+      if (symbols->empty())
+        return WalkResult::advance();
+      if (!work.charge(attributes.size()))
+        return WalkResult::interrupt();
+      for (auto attribute : attributes) {
         auto leaves = preflight.borrowReferences(attribute.getValue());
         if (!leaves) {
           consumeError(leaves.takeError());

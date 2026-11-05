@@ -1,6 +1,7 @@
 #ifndef ZKC_LIB_COMPILER_NATIVE_CODEC_CAPACITY_H
 #define ZKC_LIB_COMPILER_NATIVE_CODEC_CAPACITY_H
 
+#include "../Dialect/NativeTypeWork.h"
 #include "NativeProofVerification.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -15,7 +16,12 @@
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeAttrs.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Support/Refusal.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/TypeSwitch.h"
+#include <algorithm>
+#include <utility>
 
 namespace zkc::detail {
 namespace {
@@ -25,11 +31,57 @@ namespace {
 // clone / admission, symbol and site indexing, closure, comparison, rewriting
 // and output copies. These are conservative traversal costs, not allocator byte
 // counts. Variable fanout and generated work debit the same allowance at their
-// use sites.
+// use sites. Completed native roots share only their structural inspection;
+// native semantic callbacks debit this same allowance in addition to the
+// unchanged reservation. Owned expansion never uses the root cache.
 class CodecCapacity {
   uint64_t remaining = 1000000;
   bool limited = false;
   static constexpr uint64_t visits = 8;
+
+  // Native roots always start at depth zero, independently of operation or
+  // control depth. Height includes every type, attribute and affine edge.
+  struct RootSummary {
+    unsigned height;
+  };
+  llvm::DenseMap<mlir::Type, RootSummary> rootTypes;
+  llvm::DenseMap<mlir::Attribute, RootSummary> rootAttributes;
+  unsigned maximumDepth = 0;
+  bool nativePreflight = true;
+
+  // Only operation() uses these roots, during consecutive read-only preflight
+  // walks. The caller must keep the context and all inspected type/resource
+  // payloads stable until finishNativePreflight(); generic MLIR Type storage
+  // is not necessarily immutable. Descendants always use the expanded walker.
+  template <class Value, class Inspect>
+  bool root(Value value, llvm::DenseMap<Value, RootSummary> &cache,
+            Inspect inspect) {
+    if (!charge(0))
+      return false;
+    if (!value)
+      return true;
+    if (!nativePreflight)
+      return inspect();
+    if (!slots()) // Every root reference and cache lookup.
+      return false;
+    if (auto found = cache.find(value); found != cache.end())
+      return found->second.height <= 64 || refuse();
+    const unsigned outerDepth = maximumDepth;
+    maximumDepth = 0;
+    auto restore = llvm::scope_exit([&] { maximumDepth = outerDepth; });
+    if (!inspect() || !slots()) // Charge insertion before publishing a result.
+      return false;
+    // No entry iterator/reference survives inspection. Failed inspections and
+    // failed insertions publish nothing, even if some children were visited.
+    cache.try_emplace(value, RootSummary{maximumDepth});
+    return true;
+  }
+  bool root(mlir::Type value) {
+    return root(value, rootTypes, [&] { return type(value); });
+  }
+  bool root(mlir::Attribute value) {
+    return root(value, rootAttributes, [&] { return attribute(value); });
+  }
 
   bool slots(uint64_t count = 1) {
     return count <= remaining / visits ? charge(count * visits) : refuse();
@@ -64,6 +116,7 @@ class CodecCapacity {
   bool affine(mlir::AffineExpr expression, unsigned depth) {
     if (depth > 64 || !slots())
       return refuse();
+    maximumDepth = std::max(maximumDepth, depth);
     if (auto binary = mlir::dyn_cast<mlir::AffineBinaryOpExpr>(expression))
       return affine(binary.getLHS(), depth + 1) &&
              affine(binary.getRHS(), depth + 1);
@@ -78,6 +131,15 @@ class CodecCapacity {
   }
 
 public:
+  // End the stable-storage borrow before admission, callbacks or rewriting.
+  // This is one-way: later operation() calls expand afresh, without resetting
+  // either the allowance or a sticky refusal.
+  void finishNativePreflight() {
+    rootTypes.clear();
+    rootAttributes.clear();
+    nativePreflight = false;
+  }
+
   bool refuse() {
     limited = true;
     return false;
@@ -95,10 +157,13 @@ public:
 
   bool type(mlir::Type value, unsigned depth = 0) {
     using namespace mlir;
+    if (!charge(0))
+      return false;
     if (!value)
       return true;
     if (depth > 64 || !slots())
       return refuse();
+    maximumDepth = std::max(maximumDepth, depth);
     // StringRef parameters are not MLIR subelements. Inspect their native
     // accessors before a catalog adapter can intern or print them.
     bool ok =
@@ -157,10 +222,13 @@ public:
 
   bool attribute(mlir::Attribute value, unsigned depth = 0) {
     using namespace mlir;
+    if (!charge(0))
+      return false;
     if (!value)
       return true;
     if (depth > 64 || !slots())
       return refuse();
+    maximumDepth = std::max(maximumDepth, depth);
     if (auto array = dyn_cast<ArrayAttr>(value)) {
       if (!slots(array.size()))
         return false;
@@ -289,26 +357,29 @@ public:
   bool operation(mlir::Operation *op, unsigned controlDepth = 0,
                  unsigned depth = 0) {
     using namespace mlir;
-    if (controlDepth > 64 || depth > 128 ||
+    if (!charge(0) || !op || controlDepth > 64 || depth > 128 ||
         (isa<protocol_ir::ParticipantBranchOp>(op) &&
          op->getNumRegions() > 512) ||
         !slots() || !slots(op->getNumOperands()) ||
         !slots(op->getNumResults()) || !slots(op->getNumRegions()) ||
         !field(op->getName().getStringRef()) ||
-        !attribute(op->getAttrDictionary()) || !attribute(op->getLoc()))
+        // NamedAttrList copies/edits physical slots even on a dictionary hit.
+        !slots(op->getAttrs().size()) ||
+        !root(mlir::Attribute(op->getAttrDictionary())) ||
+        !root(mlir::Attribute(op->getLoc())))
       return refuse();
     for (Type t : op->getOperandTypes())
-      if (!type(t))
+      if (!root(t))
         return false;
     for (Type t : op->getResultTypes())
-      if (!type(t))
+      if (!root(t))
         return false;
     for (Region &region : op->getRegions())
       for (Block &block : region) {
         if (!slots() || !slots(block.getNumArguments()))
           return false;
         for (auto arg : block.getArguments())
-          if (!type(arg.getType()) || !attribute(arg.getLoc()))
+          if (!root(arg.getType()) || !root(mlir::Attribute(arg.getLoc())))
             return false;
         for (Operation &child : block)
           if (!operation(
@@ -406,6 +477,49 @@ public:
     return true;
   }
 };
+
+// Private terminal cancellation for native callbacks with value-returning
+// signatures. Existing NativeTypeWork facts are separate from root summaries
+// and live only for this scope; neither predicates nor stage admission migrate
+// between the two subjects. Unrelated exceptions retain their normal behavior.
+struct CodecAccountingLimit {};
+inline llvm::Error codecWorkResult(llvm::Error result, CodecCapacity &capacity,
+                                   llvm::StringRef refusal) {
+  if (capacity.exhausted()) {
+    llvm::consumeError(std::move(result));
+    return error(refusal);
+  }
+  return result;
+}
+template <class T>
+llvm::Expected<T> codecWorkResult(llvm::Expected<T> result,
+                                  CodecCapacity &capacity,
+                                  llvm::StringRef refusal) {
+  if (capacity.exhausted()) {
+    if (!result)
+      llvm::consumeError(result.takeError());
+    return error(refusal);
+  }
+  return result;
+}
+template <class F>
+auto codecWithNativeWork(CodecCapacity &capacity, llvm::StringRef refusal,
+                         F &&action) -> decltype(action()) {
+  using Result = decltype(action());
+  capacity.finishNativePreflight();
+  NativeTypeWork work;
+  try {
+    NativeTypeWorkScope scope(work, [&](uint64_t amount) {
+      if (!capacity.charge(amount))
+        throw CodecAccountingLimit{};
+    });
+    if (!capacity.charge(0))
+      return Result(error(refusal));
+    return codecWorkResult(action(), capacity, refusal);
+  } catch (const CodecAccountingLimit &) {
+    return Result(error(refusal));
+  }
+}
 } // namespace
 } // namespace zkc::detail
 #endif

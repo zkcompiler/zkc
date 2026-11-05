@@ -102,8 +102,12 @@ excluded until that scope ends. Every newly allocated spelling performs a charge
 collision check against this current inventory, including declarations inserted
 by sibling helpers. Every deduplicated binding also checks the live name and
 complete attributes against its exact created declaration before reuse.
-The owned composite producer retains its candidate and admitted source clone
-behind a closed producer interface until one independent final candidate read.
+The private consuming route transfers the prepared module into the owned
+composite producer; it does not clone an already-owned immutable source. Fresh
+preflight and ordinary source admission still use the current Oracle allowance.
+Raw caller-owned modules retain their bounded isolation clone. The producer
+keeps the candidate and admitted source behind a closed interface until one
+independent final candidate read.
 It shares identical virtual bundles, anchor lookups, table reads and count
 helpers only within that exact private insertion session. Every reuse checks the
 live symbol binding, and its keys include every semantic body input; returned
@@ -120,7 +124,10 @@ Authored bindings are not reused as implicit implementation choices. Immutable
 native reference-type construction may be cached by exact kind within the same
 allowance. Native storage inspection also collects exact immutable symbol leaves
 and full subtree heights; reference readers reuse those results while continuing
-to debit each copied leaf. Operation names use the same immutable storage cache.
+to debit each copied leaf. Declaration publication can skip per-attribute scans
+when the exact immutable dictionary summary contains no symbol; every operation
+still advances its preorder ordinal, and all declaration rows remain required.
+Operation names use the same immutable storage cache.
 Port and contract extraction debit actual native visits, selectors, role scans
 and copied rows rather than exporting unrelated type descriptors; no mutable module snapshot or symbol index acquires authority from
 that cache. Listeners charge actual native operation insertions, including scoped

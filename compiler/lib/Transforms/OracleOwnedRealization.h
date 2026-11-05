@@ -37,6 +37,9 @@ class OracleOwnedRealization {
         candidatePreflight(std::move(candidatePreflight)) {}
   static llvm::Expected<OracleOwnedRealization>
   create(mlir::ModuleOp, const OracleRealizationPolicy &, OracleNativeWork &);
+  static llvm::Expected<OracleOwnedRealization>
+  create(mlir::OwningOpRef<mlir::ModuleOp>, const OracleRealizationPolicy &,
+         OracleNativeWork &);
   llvm::Expected<OracleRealizationPublication>
   publish(OracleNativeWork &) const;
 

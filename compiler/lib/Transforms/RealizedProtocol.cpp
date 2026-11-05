@@ -32,8 +32,8 @@ RealizedProtocol::realize(PreparedProtocol prepared,
   if (!original)
     return error("oracle-realization-source");
   protocol::OracleNativeWork work;
-  auto actual =
-      protocol::OracleOwnedRealization::create(original, policy, work);
+  auto actual = protocol::OracleOwnedRealization::create(
+      std::move(prepared.module), policy, work);
   if (!actual)
     return actual.takeError();
   // Source admission and the one complete independent pair check precede

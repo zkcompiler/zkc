@@ -127,17 +127,27 @@ OracleOwnedRealization::create(ModuleOp prepared,
         if (!sourcePreflight)
           return sourcePreflight.takeError();
 
-        // This bounded traversal pays for the exact source clone before it is
-        // allocated. Admission and entry discovery run once on that retained
-        // immutable copy, which is the source used by every later consumer.
-        OracleCommonRealization result;
+        // Raw callers retain mutable ownership, so isolate their source only
+        // after reserving the exact clone. The private consuming route below
+        // still performs fresh admission under this same allowance.
         if (!sourcePreflight->reserveTraversal(prepared))
           return error("oracle-common-limit");
-        result.original =
-            OwningOpRef<ModuleOp>(cast<ModuleOp>(prepared->clone()));
-        prepared = *result.original;
-        // This second borrow names the retained clone, never the caller's
-        // module.
+        return create(OwningOpRef<ModuleOp>(cast<ModuleOp>(prepared->clone())),
+                      policy, commonWork);
+      });
+}
+Expected<OracleOwnedRealization>
+OracleOwnedRealization::create(OwningOpRef<ModuleOp> ownedSource,
+                               const OracleRealizationPolicy &policy,
+                               OracleNativeWork &commonWork) {
+  return oracleExpectedWithWork(
+      commonWork, [&]() -> Expected<OracleOwnedRealization> {
+        // Only the immutable preparation owner can transfer its module here.
+        // Keep its exact identity, but reconstruct this allowance's preflight,
+        // admission and complete independent source/candidate check.
+        OracleCommonRealization result;
+        result.original = std::move(ownedSource);
+        ModuleOp prepared = result.original.get();
         auto originalPreflight =
             OracleNativeSourcePreflight::read(prepared, commonWork);
         if (!originalPreflight)
