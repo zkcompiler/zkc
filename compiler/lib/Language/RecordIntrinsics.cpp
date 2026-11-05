@@ -101,7 +101,7 @@ bool checkDeclarationAssociations(Semantics &types,
           decl.finiteDefinition || !decl.members.empty() ||
           !decl.inputs.empty() || !decl.inputOrder.empty() ||
           !decl.roles.empty() || !decl.services.empty() ||
-          !decl.scopedInputs.empty() || !decl.descriptorInputs.empty() ||
+          !decl.scopedInputs.empty() || !decl.domainInputs.empty() ||
           !decl.permissionBounds.empty() || !decl.capabilityBounds.empty() ||
           !decl.bounds.empty() || !decl.dataPreconditions.empty() ||
           decl.effectAllowance ||
@@ -146,22 +146,10 @@ bool checkDeclarationAssociations(Semantics &types,
     if (!decl.isPublic || decl.abstract || decl.primitive ||
         decl.finiteDefinition || !decl.roles.empty() ||
         !decl.services.empty() || !decl.scopedInputs.empty() ||
-        !decl.descriptorInputs.empty() || !decl.permissionBounds.empty() ||
-        !decl.capabilityBounds.empty() || !decl.consumerRequirements.empty() ||
-        !decl.admissions.empty() || !decl.bounds.empty() ||
+        !decl.domainInputs.empty() || !decl.permissionBounds.empty() ||
+        !decl.capabilityBounds.empty() || !decl.bounds.empty() ||
         !decl.dataPreconditions.empty())
       return refuse();
-    if (row->rule == protocol::FrontendSignature::NativeMessage) {
-      if (row->kind != protocol::SourceDeclarationKind::Requirement ||
-          decl.kind != Declaration::Kind::Requirement ||
-          decl.parameters.size() != 1 ||
-          decl.parameters.front().sort != Parameter::Sort::Type ||
-          !(decl.parameters.front().permissions == Permissions{}) ||
-          !decl.inputs.empty() || !decl.outputs.empty() ||
-          !decl.members.empty())
-        return refuse();
-      continue;
-    }
     if (row->rule == protocol::FrontendSignature::RandomConstructor) {
       if (decl.kind != Declaration::Kind::Interface ||
           decl.parameters.size() != 1 ||
@@ -370,7 +358,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
       binding.notation || !binding.symbol.empty() || !binding.family.empty() ||
       binding.origin || binding.filteredReduction || binding.scopedSource ||
       !binding.roles.empty() || !binding.services.empty() ||
-      !binding.scopedArguments.empty() || !binding.descriptorArguments.empty())
+      !binding.scopedArguments.empty() || !binding.domainArguments.empty())
     return refuse();
   bool repack = row->rule == protocol::FrontendSignature::RecordRepack;
   unsigned count = repack ? 2 : 1;

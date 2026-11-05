@@ -988,18 +988,16 @@ class Emitter {
             if (!label)
               return false;
             if (!scoped) {
-              auto *formed = make("data.make", resultTypes.back(), input,
-                                  {text("alternative", *label)});
-              if (!formed)
-                return false;
-              result.push_back(formed->getResult(0));
-            } else
-              result.push_back(scoped
-                                   ->invoke("exec.variant", resultTypes.back(),
-                                            scoped->scoped(input),
-                                            {text("site", site),
-                                             text("alternative", *label)})
-                                   .front());
+              failure = error("source.mode",
+                              "variant construction requires scoped execution");
+              return false;
+            }
+            result.push_back(
+                scoped
+                    ->invoke("exec.variant", resultTypes.back(),
+                             scoped->scoped(input),
+                             {text("site", site), text("alternative", *label)})
+                    .front());
           } else
             llvm::append_range(result, input);
         }
@@ -1311,9 +1309,7 @@ class Emitter {
             attr("callee", mlir::FlatSymbolRefAttr::get(&context, callee))};
         StringRef name = "func.call";
         if (scoped) {
-          bool math = target.kind == Declaration::Kind::Math ||
-                      (target.kind == Declaration::Kind::View &&
-                       !target.descriptorResult);
+          bool math = target.kind == Declaration::Kind::Math;
           attrs.push_back(text(math ? "site" : "runtime.site", site));
           result = scoped->invoke(math ? "exec.compute" : "func.call",
                                   resultTypes, scoped->scoped(operands), attrs);

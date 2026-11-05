@@ -9,14 +9,6 @@
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
-namespace {
-bool descriptorPortHasModifiers(const SyntaxPort &port) {
-  return !port.roles.empty() || port.purpose || port.binding || port.scoped ||
-         port.serviceConstructor || port.serviceReference ||
-         port.oracleHolder || port.oracleMaximum || port.type.roles ||
-         port.type.components || port.type.oracleHolder;
-}
-} // namespace
 bool Checker::requirements(Declaration &decl) {
   for (auto &req : sources[decl.id.index]->requirements) {
     if (req.data)
@@ -26,31 +18,6 @@ bool Checker::requirements(Declaration &decl) {
         return types.fail("source.unsupported",
                           "associated members cannot declare capability bounds",
                           req.span);
-      // Consumer requirements are installed declarations, resolved with the
-      // same imports, aliases and provider routes as every other source name.
-      auto reference = select(decl, req.capability, req.span, false);
-      if (types.diagnostic)
-        return false;
-      if (reference &&
-          reference->category == ResolutionCategory::ConsumerRequirement) {
-        auto *installed = index().ruleAssociation(reference->target);
-        if (!installed ||
-            installed->kind != protocol::SourceDeclarationKind::Requirement ||
-            installed->rule != protocol::FrontendSignature::NativeMessage ||
-            req.arguments.size() != 1)
-          return types.fail("source.requirement",
-                            "expected one complete native message payload type",
-                            req.span);
-        if (!recordReference(decl, ReferenceRoute::Path, *reference,
-                             req.capability, req.span))
-          return false;
-        auto argument = type(decl, req.arguments.front());
-        if (!argument || !types.executableType(*argument, req.span))
-          return false;
-        decl.consumerRequirements.push_back(
-            {*reference, {std::move(*argument)}, req.span});
-        continue;
-      }
       auto name = StringRef(req.capability).rsplit("::");
       auto exports = protocol::sourceCapabilityExports();
       auto found = llvm::find_if(exports, [&](const auto &exported) {
@@ -144,23 +111,9 @@ bool Checker::requirements(Declaration &decl) {
       decl.bounds.push_back({lhs->dimension, rhs->dimension, req.span});
     }
   }
-  // These are caller demands, including inherited header demands, even if the
-  // implementation never uses its payload. Concrete false demands fail now.
-  for (const auto &requirement : decl.consumerRequirements)
-    for (auto boundary :
-         {Boundary::Construction, Boundary::Message, Boundary::MessagePayload})
-      if (!types.admit(requirement.arguments.front(), boundary,
-                       requirement.span, &decl))
-        return false;
   return true;
 }
 bool Checker::chargeStaticSignature(const Declaration &decl) {
-  for (const auto &requirement : decl.consumerRequirements) {
-    if (auto error = chargeConsumerRequirement(requirement, work))
-      return types.accept(std::move(error), decl.span);
-    if (!types.charge(1, decl.span))
-      return false;
-  }
   for (const auto &parameter : decl.parameters) {
     if (!types.charge(parameter.name.size() + parameter.atom.size() + 1,
                       decl.span))
@@ -270,8 +223,6 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         output.declarations[decl.parent->index].permissionBounds;
     decl.capabilityBounds =
         output.declarations[decl.parent->index].capabilityBounds;
-    decl.consumerRequirements =
-        output.declarations[decl.parent->index].consumerRequirements;
   }
   if (decl.kind == Declaration::Kind::Associated) {
     // A representation-only definition inherits its selected interface's
@@ -449,9 +400,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                     isDomainSort(decl.associatedSort);
       bool oracleKind = decl.kind == Declaration::Kind::Alias &&
                         def->kind == Type::Kind::OracleKind;
-      if (!domain && !oracleKind &&
-          !(decl.kind == Declaration::Kind::Alias && isDescriptor(*def)) &&
-          !valueType(*def))
+      if (!domain && !oracleKind && !valueType(*def))
         return types.fail("source.type",
                           "alias or representation must denote a value type",
                           decl.span);
@@ -586,92 +535,18 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
             Twine(uint64_t(protocol::VariantDescriptorAlternatives)) +
             " alternatives",
         decl.span);
-  if (!source.scopedInputs.empty() && decl.kind != Declaration::Kind::Math &&
-      decl.kind != Declaration::Kind::Local)
-    return types.fail("source.scoped",
-                      "scoped inputs require a Math or Local callable",
-                      decl.span);
   if (decl.kind == Declaration::Kind::Math ||
       decl.kind == Declaration::Kind::Local ||
       decl.kind == Declaration::Kind::EntryFunction ||
-      decl.kind == Declaration::Kind::View ||
+      decl.kind == Declaration::Kind::DomainFunction ||
       decl.kind == Declaration::Kind::Protocol ||
       decl.kind == Declaration::Kind::Oracle ||
       decl.kind == Declaration::Kind::Relation) {
-    // Construction handlers receive inferred ports from the selected protocol
-    // occurrence. Their empty syntax types are not descriptor candidates.
+    // Construction handlers receive their ports from the selected protocol
+    // occurrence before their ordinary Local body is checked.
     if (source.constructionHandler) {
       signatureState[id.index] = 2;
       return true;
-    }
-    // The installed family decides this category even through imports/aliases.
-    // Keep the authored type term for independent signature reconstruction.
-    std::vector<SyntaxPort> dataInputs;
-    std::vector<Declaration::InputSlot> remapped;
-    for (auto &port : source.inputs) {
-      auto resolved = port.binding ? std::optional<Type>(Type{})
-                                   : type(decl, port.type, depth + 1, true);
-      if (!resolved)
-        return false;
-      if (isDescriptor(*resolved)) {
-        port.domain = port.type;
-        remapped.push_back({Declaration::InputSlot::Kind::Domain,
-                            unsigned(source.descriptorInputs.size())});
-        source.descriptorInputs.push_back(std::move(port));
-      } else {
-        remapped.push_back(
-            {Declaration::InputSlot::Kind::Data, unsigned(dataInputs.size())});
-        dataInputs.push_back(std::move(port));
-      }
-    }
-    for (auto &slot : source.inputOrder)
-      if (slot.kind == Declaration::InputSlot::Kind::Data)
-        slot = remapped.at(slot.index);
-    source.inputs = std::move(dataInputs);
-    decl.inputOrder = source.inputOrder;
-    if (source.outputs.size() == 1) {
-      auto resolved = type(decl, source.outputs[0].type, depth + 1, true);
-      if (!resolved)
-        return false;
-      if (isDescriptor(*resolved)) {
-        if (decl.kind != Declaration::Kind::View)
-          return types.fail("source.descriptor",
-                            "descriptor result requires View mode", decl.span);
-        if (descriptorPortHasModifiers(source.outputs[0]))
-          return types.fail("source.descriptor",
-                            "descriptor results cannot carry port modifiers",
-                            source.outputs[0].span);
-        source.descriptorResult = source.outputs[0].type;
-        source.outputs.clear();
-      }
-    }
-    if (source.domainConstructor &&
-        (decl.kind != Declaration::Kind::View || !source.descriptorResult))
-      return types.fail(
-          "source.descriptor",
-          "finite constructor requires a Finite descriptor result", decl.span);
-    if (source.descriptorResult) {
-      auto resolved = type(decl, *source.descriptorResult, depth + 1);
-      if (!resolved)
-        return false;
-      decl.descriptorResult = descriptorContract(*resolved);
-      if (!decl.descriptorResult)
-        decl.descriptorResult =
-            DescriptorContract{DescriptorFamily::Finite, {*resolved}};
-      if (decl.descriptorResult->family == DescriptorFamily::Finite) {
-        auto *item = finiteDescriptorItem(*decl.descriptorResult);
-        if (!item)
-          return types.fail("source.descriptor", "invalid Finite result arity",
-                            decl.span);
-        if (!valueType(*item))
-          return types.fail("source.finite-domain",
-                            "domain result must be data", decl.span);
-        if (!types.executableType(*item, decl.span) ||
-            !types.requireUsage(*item, Usage::Copy, decl.span, &decl,
-                                "source.finite-domain",
-                                "domain result items require Copy"))
-          return false;
-      }
     }
     for (bool input : {true, false}) {
       std::set<std::string> names;
@@ -720,8 +595,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                   ? types.protocolValue(*t, src.span)
                   : types.executableType(*t, src.span)))
           return false;
-        if (decl.kind == Declaration::Kind::View && decl.descriptorResult &&
-            decl.descriptorResult->family == DescriptorFamily::Finite &&
+        if (decl.kind == Declaration::Kind::DomainFunction &&
             !types.requireUsage(*t, Usage::Copy, src.span, &decl,
                                 "source.finite-domain",
                                 "domain operands require Copy"))
@@ -796,46 +670,43 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }
     }
-    for (const auto &src : source.descriptorInputs) {
-      if ((decl.kind != Declaration::Kind::Math &&
-           decl.kind != Declaration::Kind::Local &&
-           decl.kind != Declaration::Kind::View) ||
-          descriptorPortHasModifiers(src))
-        return types.fail("source.descriptor",
-                          "descriptor inputs require an unplaced Math, Local "
-                          "or View helper port",
-                          src.span);
+    for (const auto &src : source.domainInputs) {
       if (!bindingName(decl, src.name, src.span) ||
           llvm::any_of(decl.inputs,
                        [&](const auto &p) { return p.name == src.name; }) ||
-          llvm::any_of(decl.descriptorInputs,
+          llvm::any_of(decl.domainInputs,
                        [&](const auto &p) { return p.name == src.name; }))
         return types.diagnostic
                    ? false
                    : types.fail("source.duplicate", "duplicate domain input",
                                 src.span);
-      auto resolved = type(decl, *src.domain, depth + 1);
-      if (!resolved)
+      auto item = type(decl, *src.domain, depth + 1);
+      if (!item)
         return false;
-      auto contract = descriptorContract(*resolved);
-      if (!contract)
-        contract = DescriptorContract{DescriptorFamily::Finite, {*resolved}};
-      // These are Finite's item rules, not universal descriptor rules.
-      if (contract->family == DescriptorFamily::Finite) {
-        auto *item = finiteDescriptorItem(*contract);
-        if (!item)
-          return types.fail("source.descriptor", "invalid Finite input arity",
-                            src.span);
-        if (!valueType(*item))
-          return types.fail("source.finite-domain", "domain item must be data",
-                            src.span);
-        if (!types.executableType(*item, src.span) ||
-            !types.requireUsage(*item, Usage::Copy, src.span, &decl,
-                                "source.finite-domain",
-                                "domain items require Copy"))
-          return false;
-      }
-      decl.descriptorInputs.push_back({src.name, *contract, src.span});
+      if (!valueType(*item))
+        return types.fail("source.finite-domain", "domain item must be data",
+                          src.span);
+      if (!types.executableType(*item, src.span))
+        return false;
+      if (!types.requireUsage(*item, Usage::Copy, src.span, &decl,
+                              "source.finite-domain",
+                              "domain items require Copy"))
+        return false;
+      decl.domainInputs.push_back({src.name, *item, src.span});
+    }
+    if (source.domainResult) {
+      decl.domainResult = type(decl, *source.domainResult, depth + 1);
+      if (!decl.domainResult)
+        return false;
+      if (!valueType(*decl.domainResult))
+        return types.fail("source.finite-domain", "domain result must be data",
+                          decl.span);
+      if (!types.executableType(*decl.domainResult, decl.span))
+        return false;
+      if (!types.requireUsage(*decl.domainResult, Usage::Copy, decl.span, &decl,
+                              "source.finite-domain",
+                              "domain result items require Copy"))
+        return false;
     }
     for (const auto &src : source.scopedInputs) {
       if (!bindingName(decl, src.name, src.span) ||
@@ -843,7 +714,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                        [&](const auto &p) { return p.name == src.name; }) ||
           llvm::any_of(decl.scopedInputs,
                        [&](const auto &p) { return p.name == src.name; }) ||
-          llvm::any_of(decl.descriptorInputs,
+          llvm::any_of(decl.domainInputs,
                        [&](const auto &p) { return p.name == src.name; }))
         return types.diagnostic
                    ? false
@@ -887,27 +758,25 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                             "duplicate callback input label", src.span);
       }
       for (const auto &condition : written.itemOrigins) {
-        if (!types.charge(decl.descriptorInputs.size() + 1, condition.span))
+        if (!types.charge(decl.domainInputs.size() + 1, condition.span))
           return false;
         auto input = labels.find(condition.input);
-        auto domain =
-            llvm::find_if(decl.descriptorInputs, [&](const auto &formal) {
-              return formal.name == condition.domain;
-            });
-        if (input == labels.end() || domain == decl.descriptorInputs.end())
+        auto domain = llvm::find_if(decl.domainInputs, [&](const auto &formal) {
+          return formal.name == condition.domain;
+        });
+        if (input == labels.end() || domain == decl.domainInputs.end())
           return types.fail("source.finite-domain",
                             "item_from requires a named callback input and an "
                             "enclosing domain formal",
                             condition.span);
-        auto *item = finiteDescriptorItem(domain->contract);
-        if (!item || signature.inputs[input->second] != *item)
+        if (signature.inputs[input->second] != domain->item)
           return types.fail(
               "source.finite-domain",
               "item_from input type differs from domain item type",
               condition.span);
         if (!itemOrigins
                  .emplace(input->second,
-                          unsigned(domain - decl.descriptorInputs.begin()))
+                          unsigned(domain - decl.domainInputs.begin()))
                  .second)
           return types.fail("source.finite-domain",
                             "callback input has more than one item_from clause",
@@ -1002,7 +871,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       return types.fail("source.effect",
                         "math callable cannot allow ordered effects",
                         decl.span);
-    if (decl.kind == Declaration::Kind::View &&
+    if (decl.kind == Declaration::Kind::DomainFunction &&
         (!decl.scopedInputs.empty() || decl.effectAllowance))
       return types.fail("source.finite-domain",
                         "domain factories compose typed constructors without "

@@ -285,7 +285,7 @@ pub protocol Run roles(P,V)(x:bool @(P,V),y:bool @(P,V))->() @(P,V):
               "shared demand lost its actual ordered role substitution");
     }
   });
-  cases.run("a warmed demand retains actual communication bindings", [&] {
+  cases.run("a valid demand cannot discharge a later received actual", [&] {
     auto source = inspectProtocol +
                   R"(pub protocol Run roles(P,V)(x:bool @(P,V))->() @(P,V):
     warm <- Inspect(x) @(P,V)
@@ -294,20 +294,15 @@ pub protocol Run roles(P,V)(x:bool @(P,V),y:bool @(P,V))->() @(P,V):
     cold <- Inspect(both) @(P,V)
     return ()
 )";
-    exactInputs(derive(take(check(source, true))).rows, {0});
-    // A warmed result never equates a changed computation at the receiver.
-    auto at = source.find("V = received");
-    require(at != std::string::npos, "missing received actual");
-    source.replace(at, std::string("V = received").size(), "V = !received");
     auto result = check(source, true);
-    require(!result, "changed receiver reused a successful demand");
+    require(!result, "received actual reused a successful formation demand");
     std::optional<Diagnostic> diagnostic;
     handleAllErrors(result.takeError(), [&](const DiagnosticError &error) {
       diagnostic = error.diagnostic();
     });
     require(diagnostic && diagnostic->code == "source.common-provenance" &&
                 diagnostic->primary && !diagnostic->related.empty(),
-            "changed receiver lost its provenance diagnostic");
+            "received demand lost its provenance diagnostic");
     auto primary = *diagnostic->primary;
     require(
         StringRef(source).slice(primary.begin, primary.end).contains("if x"),
@@ -395,11 +390,6 @@ pub protocol Run roles(P,V)(n:index @(P,V))->() @(P,V):
                               "    first <- Hidden(both) @(P,V)\n"
                               "    second <- Hidden(both) @(P,V)\n"
                               "    return ()\n";
-                require(derive(take(check(source, true))).rows.empty(),
-                        "dormant communicated demand gained a premise");
-                auto at = source.find("V = received");
-                source.replace(at, std::string("V = received").size(),
-                               "V = !received");
                 refuses(check(source, true), "source.common-provenance");
               });
   cases.run("unused helper work is constructed once across roots", [&] {
@@ -623,10 +613,6 @@ protocol Run roles(P,V)(x:bool@(P,V))->(){
               (dormant ? "if false{"
                        : "for _ in 0..index<0>() roles(P,V) max 0{") +
               region + (dormant ? "}else{()}" : "}") + "return();}";
-          require(derive(take(check(source))).rows.empty(),
-                  "dormant communication gained a premise");
-          auto at = source.find("V=received");
-          source.replace(at, std::string("V=received").size(), "V=!received");
           refuses(check(source), "source.common-provenance");
         });
   cases.run("zero-trip stop remains legal source formation", [&] {
@@ -643,13 +629,12 @@ protocol Run roles(P,V)(x:bool@(P,V),a:bool@(P,V),b:bool@(P,V))->(){
  let right=apply(x,fn(y)=>if y{b}else{false});
  if left{()}else{()}if right{()}else{()}return();})"));
     exactInputs(derive(project).rows, {0, 1, 2});
-    exactInputs(derive(take(check(finitePrelude + R"(
+    refuses(check(finitePrelude + R"(
 protocol Run roles(P,V)(x:bool@(P,V),a:bool@(P,V))->(){
  let received=send P->V(a);let both=@(P=a,V=received);
  let warm=apply(x,fn(y)=>y);if warm{()}else{()}
- let cold=apply(x,fn(y)=>if y{both}else{false});if cold{()}else{()}return();})")))
-                    .rows,
-                {0});
+ let cold=apply(x,fn(y)=>if y{both}else{false});if cold{()}else{()}return();})"),
+            "source.common-provenance");
   });
   for (StringRef difference : {"same", "domain", "callback", "capture"})
     cases.run("finite expression distinguishes " + difference, [&] {
@@ -669,10 +654,10 @@ protocol Run roles(P,V)(flag:bool@(P,V),x:bool@(P,V),cap:bool@(P,V),n:index@(P,V
  let received=send P->V(flag);let selector=@(P=flag,V=received);
  let guard=choose(selector,x,cap,n,m,other,fn(y)=>y);
  if guard{()}else{()}return();})";
-      exactInputs(derive(take(check(source))).rows,
-                  difference == "domain"    ? std::vector<unsigned>{1, 2, 3, 4}
-                  : difference == "capture" ? std::vector<unsigned>{1, 2, 3, 5}
-                                            : std::vector<unsigned>{1, 2, 3});
+      if (difference == "same")
+        exactInputs(derive(take(check(source))).rows, {1, 2, 3});
+      else
+        refuses(check(source), "source.common-provenance");
     });
   cases.run("staged lexical pow2 never normalizes unused keys eagerly", [&] {
     auto project = take(check(R"(module m;
@@ -753,14 +738,12 @@ protocol Run roles(P,V)(flag:bool@(P,V))->(){let x=helper(flag);if x{()}else{()}
                   source_detail::DeclarationAccess::get(project),
                   project.assets(), work, observation));
             });
-  // Equality is eager. Selected Boolean conjunction can hit the region-depth
-  // limit before application replay, which would not test a warm expression.
   cases.run("a warm agreement hit retains its expression height", [&] {
     auto project = take(check(R"(module m;
 math fn helper(x:bool)->bool{return !x;}
 protocol Run roles(P,V)(flag:bool@(P,V))->(){
  let a=helper(flag);let b=helper(flag);let c=helper(flag);
- let guard=a==(b==c);if guard{()}else{()}return();})"));
+ let guard=a&&(b&&c);if guard{()}else{()}return();})"));
     Limits limits;
     limits.expressionDepth = 3;
     exactInputs(derive(project, "Run", limits).rows, {0});
@@ -780,7 +763,7 @@ math fn helper(x:bool)->(bool,bool){return (x,x);}
 protocol Run roles(P,V)(flag:bool@(P,V))->(){
  let a=helper(flag);let b=helper(flag);let c=helper(flag);
  if a.0{()}else{} if b.0{()}else{}
- let guard=a.0==(b.0==c.0);if guard{()}else{()}return();})"));
+ let guard=a.0&&(b.0&&c.0);if guard{()}else{()}return();})"));
     Limits limits;
     limits.expressionDepth = 3;
     exactInputs(derive(project, "Run", limits).rows, {0});
@@ -851,58 +834,5 @@ protocol Run roles(P,V)()->(){
             requireLimit(std::move(error));
         }
       });
-  cases.run("communication summaries charge exact warm and cold work", [&] {
-    auto project =
-        take(check(R"(protocol Deliver roles(A,B)(x: bool @A) -> bool @(A,B):
-    received <- send x from A to B
-    common = @(A = x, B = received)
-    if !common:
-        ()
-    else:
-        ()
-    return common
-protocol Warm roles(P,V)(x: bool @P) -> () @(P,V):
-    value <- Deliver(x) @(P,V)
-    return ()
-pub protocol Run roles(P,V)(x: bool @P) -> () @(P,V):
-    left <- Deliver(x) @(P,V)
-    right <- Deliver(x) @(P,V)
-    return ()
-)",
-                   true));
-    auto cold = derive(project);
-    require(cold.rows.empty() && cold.observation.instanceHits > 0,
-            "communication did not reuse its checked template");
-    auto warm = all(project);
-    require(warm.observation.instanceHits > cold.observation.instanceHits,
-            "multi-root communication did not warm its templates");
-    for (bool warmed : {false, true}) {
-      auto cost = warmed ? warm.work : cold.work;
-      for (bool enough : {false, true}) {
-        Limits limits;
-        limits.work = cost - unsigned(!enough);
-        if (enough) {
-          if (warmed)
-            all(project, limits);
-          else
-            require(derive(project, "Run", limits).rows.empty(),
-                    "exact communication budget changed requirements");
-        } else {
-          source_detail::Work work{limits};
-          source_detail::CommonSummaryObservation observation;
-          if (warmed)
-            requireLimit(source_detail::checkCommonSummaryRequirements(
-                source_detail::DeclarationAccess::get(project),
-                project.assets(), work, observation));
-          else
-            refuses(source_detail::deriveCommonSummaryRequirements(
-                        source_detail::DeclarationAccess::get(project),
-                        project.assets(), work, named(project, "Run"),
-                        observation),
-                    "source.limit");
-        }
-      }
-    }
-  });
   return cases.result();
 }

@@ -46,7 +46,7 @@ entry fn Job(inputs: Run::Inputs) { return Run::run(inputs); }
 ''')
     project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'source-format': 'zkc', 'modules': {
         'main': source.name, 'formula': library.name,
-        **{name: str(path) for name, path in library_inputs(*core_packages('zkc')).items()},
+        **{name: str(path) for name, path in library_inputs(*core_packages()).items()},
         'zkc::vector': str(ROOT / 'libraries/core/collections/vector.zkc')}, 'assets': {}})
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}', f'--project={project}']
     checked = journal.json([toolchain.runtime, '--json', 'inspect', '--view=placement',
@@ -124,74 +124,6 @@ def test_source_only_check_and_selected_entry(toolchain, journal, directory):
     assert 'source.type' in failed['diagnostics']
 
 
-def test_layout_library_without_entries_can_be_inspected(toolchain, journal, directory):
-    source = directory / 'main.zkc'
-    source.write_text('pub def identity(value: bool) -> bool:\n    value\n')
-    project = write(directory, 'zkc.toml', {
-        'format': 'zkc.project/0', 'source-format': 'zkc-layout',
-        'modules': {'main': source.name},
-    })
-    inspected = journal.json([
-        toolchain.runtime, '--json', 'inspect', '--view=api',
-        f'--compiler={toolchain.compiler}', f'--project={project}',
-    ], keep='library-inspection')
-    assert inspected['status'] == 'inspected'
-    checked = inspected['checked']
-    assert checked['entries'] == [] and 'entry' not in checked
-    assert checked['source_claim_inventory'] == []
-    assert checked['assurance'] == {
-        'status': 'no-claim', 'outcome': 'unresolved', 'specifications': [],
-    }
-
-
-@pytest.mark.parametrize('specification,obligations', [
-    ('', 0),
-    ('spec for Run:\n    requires true\n', 0),
-    ('pub spec Audit for Run:\n    security: DesiredProperty()\n', 1),
-    ('spec for Run:\n    ensures named: true\n    security:\n        sound: Sound()\n', 2),
-    ('spec for Run:\n    ensures true\n    security:\n        Sound()\n', 2),
-], ids=['no-spec', 'owner-spec', 'audit', 'named', 'unlabeled'])
-def test_layout_check_retains_pending_source_diagnostics(
-        toolchain, journal, directory, specification, obligations):
-    source = directory / 'main.zkc'
-    source.write_text('''pub protocol Run roles(P)(x: bool @P) -> bool @P:
-    return x
-''' + specification)
-    project = write(directory, 'zkc.toml', {
-        'format': 'zkc.project/0', 'source-format': 'zkc-layout',
-        'modules': {'main': source.name},
-    })
-    direct = [toolchain.compiler, 'language-check', '--source-format=zkc-layout',
-              f'--module=main={source}']
-    sdk = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-           f'--project={project}']
-    for entry in [None, 'main::Run']:
-        scope = 'entry' if entry else 'definitions'
-        expected = journal.json([*direct, *([f'--entry={entry}'] if entry else [])],
-                                keep=f'compiler-{scope}')
-        checked = journal.json([*sdk, *([entry] if entry else [])], keep=f'sdk-{scope}')
-        assert checked['scope'] == ('entry' if entry else 'definitions')
-        assert checked['assurance'] == expected['assurance']
-        assert checked['source_claim_inventory'] == expected['source_claim_inventory']
-        assurance = checked['assurance']
-        assert assurance['status'] == ('open' if specification else 'no-claim')
-        assert assurance['outcome'] == 'unresolved'
-        if specification:
-            spec, = assurance['specifications']
-            assert len(spec['obligations']) == obligations
-            assert spec['owner'] == ('Audit' not in specification)
-            assert spec['name'] == ('Audit' if 'Audit' in specification else None)
-            assert all(row['status'] == 'open' for row in spec['obligations'])
-            assert all(row['reason'] == 'formal elaboration pending' for row in spec['obligations'])
-        else:
-            assert assurance['specifications'] == []
-    inspected = journal.json([
-        toolchain.runtime, '--json', 'inspect', '--view=api',
-        f'--compiler={toolchain.compiler}', f'--project={project}',
-    ], keep='layout-inspection')
-    assert inspected['checked']['assurance'] == checked['assurance']
-
-
 def test_check_requires_a_successful_compiler_report(toolchain, journal, directory):
     _, project = source_project(directory)
     compiler = directory / 'compiler'
@@ -210,10 +142,8 @@ def test_api_inventory_preserves_source_and_entry_identities(toolchain, journal,
                f'--project={project}', 'main::Job']
     baseline = journal.json(command)
     inspected = journal.json([toolchain.runtime, '--json', 'inspect', '--view=api',
-                              f'--compiler={toolchain.compiler}', f'--project={project}', 'main::Job'],
-                             keep='braced-inspection')
+                              f'--compiler={toolchain.compiler}', f'--project={project}', 'main::Job'])
     checked = inspected['checked']
-    assert 'assurance' not in baseline and 'assurance' not in checked
     assert checked['api']['format'] == 'zkc.source-api/0'
     assert checked['api']['roots'] == ['main']
     assert 'main::Job' in {item['name'] for item in checked['api']['declarations']}
@@ -250,81 +180,31 @@ def test_check_validates_requested_api_report(toolchain, journal, directory, req
     journal.json(command, refuses='source-check-format')
 
 
-@pytest.mark.parametrize('selector,mutation', [
-    pytest.param(selector, mutation, id=f'{selector or "definitions"}-{mutation}')
-    for selector in (None, 'Job', 'Alias')
-    for mutation in (
-        'missing-entries', 'unsorted-entries', 'duplicate-entries',
-        'extra-entry-field', 'unknown-kind', 'unqualified-name', 'wrong-selected-entry',
-        *(('missing-selected-entry', 'unlisted-selected-entry', 'ambiguous-selection')
-          if selector else ()),
-    )
-])
-def test_check_validates_the_compilers_selection_report(toolchain, journal, directory,
-                                                       selector, mutation):
-    source, project = source_project(directory)
-    source.write_text(source.read_text() + '''
-protocol Verify roles(P,V)(ok:bool@V)->(ok:bool@V){return ok;}
-proof Alias=Verify{prover P;verifier V;public{ok};accept ok;construction authored;}
-''')
+def test_check_validates_the_compilers_selection_report(toolchain, journal, directory):
+    _, project = source_project(directory)
     compiler = directory / 'compiler'
-    response = directory / 'response.json'
-    compiler.write_text(
-        f'#!{sys.executable}\nimport sys\nfrom pathlib import Path\n'
-        'assert sys.argv[1] == "language-check"\n'
-        f'assert [a for a in sys.argv if a.startswith("--entry=")] == '
-        f'{[f"--entry={selector}"] if selector else []!r}\n'
-        f'print(Path({str(response)!r}).read_text())\n')
-    compiler.chmod(0o755)
     job = {'name': 'main::Job', 'kind': 'function'}
     alias = {'name': 'main::Alias', 'kind': 'proof'}
-    baseline = {
-        'format': 'zkc.source-check/0', 'status': 'checked', 'phase': 'complete',
-        'scope': 'entry' if selector else 'definitions',
-        'capture': '0' * 64, 'installation': '1' * 64,
-        'entries': [alias, job, {'name': 'main::Run', 'kind': 'function'},
-                    {'name': 'main::Verify', 'kind': 'function'}],
-        'source_claim_inventory': [],
-    }
-    if selector:
-        baseline.update(entry=f'main::{selector}', original='2' * 64)
-    command = [toolchain.runtime, '--json', 'check', f'--compiler={compiler}',
-               f'--project={project}', *([selector] if selector else [])]
-    response.write_text(json.dumps(baseline))
-    accepted = journal.json(command, keep='accepted')
-    assert {key: accepted[key] for key in baseline} == baseline
-
-    # Start every refusal from its accepted envelope; mutate only selection.
-    changed = json.loads(json.dumps(baseline))
-    if mutation == 'missing-entries':
-        changed.pop('entries')
-    elif mutation == 'unsorted-entries':
-        changed['entries'][0:2] = [job, alias]
-    elif mutation == 'duplicate-entries':
-        changed['entries'].insert(0, alias)
-    elif mutation == 'extra-entry-field':
-        changed['entries'][0]['extra'] = True
-    elif mutation == 'unknown-kind':
-        changed['entries'][0]['kind'] = 'unknown'
-    elif mutation == 'unqualified-name':
-        changed['entries'][0]['name'] = 'Alias'
-    elif mutation == 'wrong-selected-entry':
-        changed['entry'] = 'main::Alias' if selector == 'Job' else 'main::Job'
-    elif mutation == 'missing-selected-entry':
-        changed.pop('entry')
-    elif mutation == 'unlisted-selected-entry':
-        changed['entries'] = [entry for entry in changed['entries']
-                              if entry['name'] != baseline['entry']]
-    elif mutation == 'ambiguous-selection':
-        changed['entries'].append({'name': f'other::{selector}',
-                                  'kind': 'function' if selector == 'Job' else 'proof'})
-    else:
-        raise AssertionError(mutation)
-    journal.write('baseline.json', baseline)
-    journal.write('mutated.json', changed)
-    response.write_text(json.dumps(changed))
-    refused = journal.json(command, refuses='source-check-format', keep='refused')
-    assert refused['code'] == 'source-check-format'
+    baseline = {'format': 'zkc.source-check/0', 'status': 'checked', 'scope': 'definitions'}
+    controls = [
+        ({}, None),
+        ({'entries': [job, alias]}, None),
+        ({'entries': [job, job]}, None),
+        ({'entries': [job | {'extra': True}]}, None),
+        ({'entries': [job | {'kind': 'unknown'}]}, None),
+        ({'entries': [job | {'name': 'Job'}]}, None),
+        ({'entries': [job], 'entry': 'main::Job'}, None),
+        ({'entries': [alias, job], 'entry': 'main::Alias', 'scope': 'entry'}, 'Job'),
+        ({'entries': [job, {'name': 'other::Job', 'kind': 'function'}],
+          'entry': 'main::Job', 'scope': 'entry'}, 'Job'),
+    ]
+    for fields, selector in controls:
+        text = json.dumps(baseline | fields)
+        compiler.write_text(f'#!{sys.executable}\nprint({text!r})\n')
+        compiler.chmod(0o755)
+        journal.run([toolchain.runtime, '--json', 'check', f'--compiler={compiler}',
+                     f'--project={project}', *([selector] if selector else [])],
+                    refuses='source-check-format')
 
 
 def test_check_inventory_reports_explicit_proof_kind(toolchain, journal, directory):

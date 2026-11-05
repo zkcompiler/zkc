@@ -70,35 +70,6 @@ It is syntactically distinct from a suffix role annotation such as
 `call(args) @(P, V)`. Assembly entries are named component selections, not
 an argument list to a user-resolved function. Formation and the absence of an
 implicit equality claim are specified in [layout execution](layout-execution.md).
-`fn(pattern, ...) => expression` retains a scoped literal with one parameter
-list and one lexical expression body. Its mode comes from its expected signature.
-`fn(A) -> B` and `local fn(A) -> B effects(...)` are signature forms, with optional
-named inputs and callback-local `where item_from(input, domain)` clauses.
-`local fn(...) => ...` is not an alternative literal spelling. A vertical-bar
-expression remains a delimiter form, not a callback alias.
-
-Declaration `where` clauses project the existing native requirements, including
-`in_bounds(index_input, collection_input[, axis])` and
-`equal_extent(left_input, right_input[, left_axis, right_axis])`.
-Selectors are input names followed by dotted record fields or decimal tuple
-indices, such as `pair.0.values`. Axes are decimal literals zero or one and
-default to zero. Arguments are positional; labels, bindings, computed selectors
-and partial axis lists are invalid. Collection types, valid axes, duplicate
-conditions, fixed extents and interface inclusion follow the
-[native data-condition contract](definitions.md), without additional inference.
-These are mathematical declaration premises, distinct from callback-local
-`item_from`, static natural inequalities, `Copy`/`Drop`, installed capabilities
-and installed type consumer requirements such as `NativeMessage(T)`.
-
-The layout grammar accepts one `where` expression: `where ()` is empty,
-`where equal_extent(xs, ys)` is a single premise, and
-`where (equal_extent(xs, ys), in_bounds(i, xs))` is a list. Parentheses around
-a single premise and a trailing comma in a parenthesized list are accepted.
-An unparenthesized comma list is invalid. Written-source export retains data
-requirements as `requirement` nodes with `input_selector` children and their
-written paths and axes; checked signatures and replay use the existing logical
-input positions.
-
 `mut` marks a mutable binding. Structured bodies include `for`, `if`, `match`
 and `return`. `if` and `match` may also produce values in expression positions;
 value-producing `if` requires an `else`. Exhaustiveness, typing, effects,
@@ -183,7 +154,7 @@ because it occurs in this table.
 
 | Context | Structural words |
 | --- | --- |
-| Declaration suite | `pub`, `use`, `section`, `module`, `interface`, `local`, `def`, `protocol`, `spec`, `relation`, `ghost`, `oracle`, `law`, `type`, `domain`, `struct`, `enum`, `notation`, `scheme`, `entry` |
+| Declaration suite | `pub`, `use`, `section`, `module`, `interface`, `local`, `def`, `protocol`, `spec`, `relation`, `ghost`, `oracle`, `law`, `type`, `domain`, `struct`, `enum`, `operator`, `notation`, `indexing`, `reduction`, `scheme`, `entry` |
 | Header continuation | `roles`, `where`, `effects`, `for`, `as`, `lean` where the owning production admits them |
 | Statement head | `return`, `for`, `if`, `else`, `match`, `mut`; `guard` has the explicit exceptions described above |
 | Ordered action | `send`, `from`, `to`, `query`, `at` |
@@ -209,6 +180,6 @@ visible binding. Empty lambdas are outside this profile.
 
 `(x)` is grouping and `(x,)` is a one-element tuple. The accepted tuple separator
 `;` also preserves tuple intent. The authored model retains this distinction,
-including in formal clauses. Formatting preserves these separators. All notation
-declarations write their operand holes and exact target call. Imports require
-a unique descriptor or an explicit position/index-arity selector.
+including in formal clauses. Formatting preserves these separators. Short
+operator bindings require a unique visible fixity; when a glyph has both prefix
+and infix syntax, write the intended fixity explicitly.

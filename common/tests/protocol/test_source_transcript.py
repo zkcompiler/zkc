@@ -51,7 +51,7 @@ def test_source_transcript_vector_and_decode_effect_order(toolchain, journal, di
     source.write_text(text)
     modules = {'sample': source, 'spongefish::duplex': ROOT / 'libraries/constructions/spongefish/duplex.zkc',
                'spongefish::bls12_381::schnorr': ROOT / 'libraries/constructions/spongefish/bls12_381/schnorr.zkc'}
-    modules.update(library_inputs(*core_packages('zkc')))
+    modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                            f'--compiler={toolchain.compiler}',

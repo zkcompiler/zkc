@@ -1,7 +1,6 @@
 #include "Checker.h"
 #include "CommonRequirements.h"
 #include "ScopedWitness.h"
-#include "SignatureWitness.h"
 #include "WrittenSource.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
@@ -50,7 +49,7 @@ void Checker::registerContractInference(Declaration &decl,
        source.kind == Declaration::Kind::Math ||
        source.kind == Declaration::Kind::Local ||
        source.kind == Declaration::Kind::EntryFunction ||
-       source.kind == Declaration::Kind::View ||
+       source.kind == Declaration::Kind::DomainFunction ||
        source.kind == Declaration::Kind::Protocol ||
        source.kind == Declaration::Kind::Construction))
     inferredContracts.insert(&decl);
@@ -122,7 +121,6 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   decl.bounds.clear();
   decl.permissionBounds.clear();
   decl.capabilityBounds.clear();
-  decl.consumerRequirements.clear();
   decl.dataPreconditions.clear();
   for (const auto &obligation : decl.admissions)
     if (!types.chargeType(obligation.type, obligation.span) ||
@@ -132,8 +130,8 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   decl.inputs.clear();
   decl.outputs.clear();
   decl.scopedInputs.clear();
-  decl.descriptorInputs.clear();
-  decl.descriptorResult.reset();
+  decl.domainInputs.clear();
+  decl.domainResult.reset();
   decl.services.clear();
   decl.fields.clear();
   decl.alternatives.clear();
@@ -199,9 +197,8 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   written.inputs = source.inputs;
   written.outputs = source.outputs;
   written.scopedInputs = source.scopedInputs;
-  written.descriptorInputs = source.descriptorInputs;
-  written.descriptorResult = source.descriptorResult;
-  written.domainConstructor = source.domainConstructor;
+  written.domainInputs = source.domainInputs;
+  written.domainResult = source.domainResult;
   written.services = source.services;
   written.effects = source.effects;
   written.effectDependencies = source.effectDependencies;
@@ -212,7 +209,6 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   written.sealed = source.sealed;
   written.abstract = source.abstract;
   written.completes = source.completes;
-  written.inputOrder = source.inputOrder;
   sources.resize(output.declarations.size());
   sources[id.index] = &written;
   signatureState[id.index] = 0;
@@ -347,7 +343,7 @@ Error Checker::run() {
          decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
          decl.kind == Declaration::Kind::EntryFunction ||
-         decl.kind == Declaration::Kind::View ||
+         decl.kind == Declaration::Kind::DomainFunction ||
          decl.kind == Declaration::Kind::Protocol ||
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
@@ -380,8 +376,6 @@ Error Checker::run() {
   output.authoredReferences =
       std::make_shared<const std::vector<ReferenceRecord>>(
           output.api.references);
-  if (auto error = retainHeaderPremises(output, work))
-    return error;
   phase.enter(SourceWorkPhase::ScopedSources);
   if (auto error = checkScopedSources(output, work))
     return error;

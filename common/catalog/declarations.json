@@ -16274,28 +16274,6 @@
         "target": "RecordRepack"
       },
       "prelude": true
-    },
-    {
-      "identity": "consumer.native-message",
-      "owner": "zkc::transport",
-      "name": "NativeMessage",
-      "kind": "Requirement",
-      "statics": [
-        {
-          "name": "T",
-          "parameter": {
-            "kind": "Type",
-            "sort": ""
-          }
-        }
-      ],
-      "inputs": [],
-      "output": null,
-      "association": {
-        "kind": "rule",
-        "target": "NativeMessage"
-      },
-      "prelude": false
     }
   ],
   "frontendRules": [
@@ -16367,18 +16345,6 @@
         {
           "kind": "Domain",
           "sort": "Field"
-        }
-      ],
-      "inputs": [],
-      "output": null
-    },
-    {
-      "name": "NativeMessage",
-      "kind": "Requirement",
-      "statics": [
-        {
-          "kind": "Type",
-          "sort": ""
         }
       ],
       "inputs": [],
@@ -16478,10 +16444,6 @@
     }
   ],
   "frontendConstructors": [
-    {
-      "name": "finite",
-      "form": "FiniteDescriptor"
-    },
     {
       "name": "oracle",
       "form": "OracleHandle"

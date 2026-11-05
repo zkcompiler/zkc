@@ -280,8 +280,8 @@ StringRef syntaxKind(Declaration::Kind value) {
   switch (value) {
   case Declaration::Kind::Domain:
     return "domain";
-  case Declaration::Kind::View:
-    return "view";
+  case Declaration::Kind::DomainFunction:
+    return "domain_function";
   case Declaration::Kind::Math:
     return "math";
   case Declaration::Kind::Local:
@@ -310,9 +310,6 @@ StringRef syntaxKind(Declaration::Kind value) {
     return "associated";
   case Declaration::Kind::Relation:
     return "relation";
-  case Declaration::Kind::Requirement:
-    llvm_unreachable(
-        "installed requirements have no authored declaration node");
   }
   llvm_unreachable("unknown syntax kind");
 }
@@ -533,10 +530,6 @@ private:
         {"target", child("target", 0, [&] { return type(value.target); })},
         {"holes", strings(value.holes)},
         {"filtered", optionalType(value.filtered, "filtered")}};
-    if (value.filteredOnly)
-      result["filtered_only"] = true;
-    if (value.reductionBinder)
-      result["binder"] = *value.reductionBinder;
     if (value.explicitNotation) {
       const auto &syntax = *value.notation;
       using P = NotationDescriptor::Position;
@@ -853,8 +846,7 @@ private:
         {"primitive", optionalString(value.primitive)},
         {"domain_constructor", optionalString(value.domainConstructor)},
         {"finite_definition", optionalString(value.finiteDefinition)},
-        {"domain_result",
-         optionalType(value.descriptorResult, "domain_result")},
+        {"domain_result", optionalType(value.domainResult, "domain_result")},
         {"target", value.target},
         {"target_arguments", list("target_argument", value.targetArguments,
                                   [&](auto &t) { return type(t); })},
@@ -872,7 +864,7 @@ private:
       auto slot = value.inputOrder.empty() ? Declaration::InputSlot{K::Data, i}
                                            : value.inputOrder[i];
       const auto &ports = slot.kind == K::Scoped    ? value.scopedInputs
-                          : slot.kind == K::Domain  ? value.descriptorInputs
+                          : slot.kind == K::Domain  ? value.domainInputs
                           : slot.kind == K::Service ? value.services
                                                     : value.inputs;
       inputs.push_back(child("input", i, [&] {
@@ -908,9 +900,6 @@ private:
     result["notations"] =
         list("notation", value.operators, [&](auto &n) { return notation(n); });
     result["imports"] = list("import", value.imports, [&](auto &i) {
-      auto notations = i.notations;
-      notations.insert(notations.end(), i.notationSelectors.begin(),
-                       i.notationSelectors.end());
       return emit(
           "import", i.span,
           json::Object{{"module", i.module},
@@ -919,7 +908,7 @@ private:
                                                  : json::Value(nullptr)},
                        {"names", strings(i.names)},
                        {"operators", strings(i.operators)},
-                       {"notations", strings(notations)},
+                       {"notations", strings(i.notations)},
                        {"reductions", strings(i.reductions)},
                        {"indexing", i.indexing}});
     });

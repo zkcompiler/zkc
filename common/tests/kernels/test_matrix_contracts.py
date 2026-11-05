@@ -11,7 +11,7 @@ from binomial_reference import FIELDS as EXTENSIONS
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules(*core_packages('zkc'))
+MODULES = library_modules(*core_packages())
 
 FIELDS = [
     ('bls12-381.fr', 23, 66, 1, 32,

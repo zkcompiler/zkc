@@ -344,11 +344,8 @@ Math or deterministic Local helper retains its actual descriptor, position,
 result, role and arguments. Direct conjunction paths may expose terminals in
 their operands; no traversal through other Boolean operations or helper bodies
 is implicit. A Math conjunction helper itself therefore needs an exact helper
-acceptance theorem. This includes the implicit Math helper emitted for selected
-pointwise Boolean composition: its exact changed body creates a different
-association, and export alone proves no acceptance theorem for it. Direct
-negation of Pending ancestry still refuses instead of becoming a terminal route.
-A Boolean output type or helper name supplies no such theorem. Several clauses may select one output; distinct outputs cannot reuse
+acceptance theorem. A Boolean output type or helper name supplies no such
+theorem. Several clauses may select one output; distinct outputs cannot reuse
 its ownership. Arbitrary Boolean operations on Pending ancestry refuse
 `component-seam-acceptance` at an acceptance sink.
 

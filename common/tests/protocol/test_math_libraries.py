@@ -7,7 +7,7 @@ from entry import Entry, joint_execution
 from source_modules import core_packages, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules(*core_packages('zkc'))
+MODULES = library_modules(*core_packages())
 
 
 def scalar(n):
@@ -150,7 +150,7 @@ protocol Check roles(P)(height:index@P)->(small:bool@P,full:bool@P,empty:bool@P)
 }
 entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
-    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages('zkc')), *flags])
+    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     for height in [0, 1, 2, 3, 16, 32, (1 << 63) - 1, 1 << 63, (1 << 64) - 1]:
         is_power = height >= 2 and height & (height - 1) == 0
         assert entry.run(f'height-{height}', {'height': str(height)}) == {
@@ -179,7 +179,7 @@ protocol Check roles(P)(columns:Vector<F>@P,selected:Indices@P,rotations:Indices
 }
 entry fn Demo(inputs: Check::Inputs) { return Check::run(inputs); }
 '''
-    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages('zkc')), *flags])
+    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     p = 2130706433
     root = pow(1791270792, (1 << 24) // 8, p)
     assert pow(root, 8, p) == 1 and pow(root, 4, p) == p - 1

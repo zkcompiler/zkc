@@ -1,4 +1,4 @@
-#include "DescriptorFactories.h"
+#include "FiniteDomains.h"
 #include "Arguments.h"
 #include "CallableConstraints.h"
 #include "Checker.h"
@@ -13,10 +13,10 @@ std::optional<Type> finiteDomainElement(const Type &type) {
              ? std::optional(type.arguments.front())
              : collectionElement(type);
 }
-std::optional<unsigned>
-collectionDomain(Semantics &types, const Type &type, ValueId value,
-                 std::vector<DescriptorBinding> &bindings, uint32_t expression,
-                 Span span) {
+std::optional<unsigned> collectionDomain(Semantics &types, const Type &type,
+                                         ValueId value,
+                                         std::vector<DomainBinding> &bindings,
+                                         uint32_t expression, Span span) {
   auto item = finiteDomainElement(type);
   if (!item) {
     types.fail("source.finite-domain",
@@ -27,22 +27,22 @@ collectionDomain(Semantics &types, const Type &type, ValueId value,
   }
   if (!types.chargeType(*item, span) || !types.charge(1, span))
     return {};
-  DescriptorBinding binding{type.kind == Type::Kind::Array
-                                ? DescriptorBinding::Kind::SourceArray
-                                : DescriptorBinding::Kind::Elements,
-                            {DescriptorFamily::Finite, {*item}},
-                            {value},
-                            {},
-                            0,
-                            {},
-                            span};
+  DomainBinding binding{type.kind == Type::Kind::Array
+                            ? DomainBinding::Kind::SourceArray
+                            : DomainBinding::Kind::Elements,
+                        *item,
+                        {value},
+                        {},
+                        0,
+                        {},
+                        span};
   binding.expression = expression;
   auto index = bindings.size();
   bindings.push_back(std::move(binding));
   return index;
 }
 namespace {
-using Kind = DescriptorBinding::Kind;
+using Kind = DomainBinding::Kind;
 struct Constructor {
   Kind kind;
   unsigned axis;
@@ -83,15 +83,12 @@ bool matrix(const Type &type) {
   return collectionElement(type, /*matrix=*/true).has_value();
 }
 bool matches(const Declaration &decl, Constructor ctor) {
-  auto *item = decl.descriptorResult
-                   ? finiteDescriptorItem(*decl.descriptorResult)
-                   : nullptr;
-  if (!item)
+  if (!decl.domainResult)
     return false;
   const Type index(Type::Kind::Index);
-  const auto &result = *item;
+  const auto &result = *decl.domainResult;
   auto data = [&](unsigned count) {
-    return decl.inputs.size() == count && decl.descriptorInputs.empty();
+    return decl.inputs.size() == count && decl.domainInputs.empty();
   };
   switch (ctor.kind) {
   case Kind::Elements:
@@ -107,15 +104,11 @@ bool matches(const Declaration &decl, Constructor ctor) {
            decl.inputs[1].type == index;
   case Kind::Zip:
   case Kind::Product: {
-    if (!decl.inputs.empty() || decl.descriptorInputs.size() != 2)
+    if (!decl.inputs.empty() || decl.domainInputs.size() != 2)
       return false;
     Type pair(Type::Kind::Tuple);
-    for (const auto &domain : decl.descriptorInputs) {
-      auto *child = finiteDescriptorItem(domain.contract);
-      if (!child)
-        return false;
-      pair.arguments.push_back(*child);
-    }
+    for (const auto &domain : decl.domainInputs)
+      pair.arguments.push_back(domain.item);
     return result == pair;
   }
   case Kind::MatrixRow:
@@ -142,7 +135,7 @@ class Composition {
   Checker &checker;
   Declaration &decl;
   const SyntaxDeclaration &syntax;
-  DescriptorDefinition &definition;
+  DomainDefinition &definition;
   std::map<BindingId, ValueId> data;
   std::map<BindingId, unsigned> domains;
   unsigned callDepth;
@@ -177,7 +170,8 @@ class Composition {
     if (!target)
       return {};
     auto &callee = checker.output.declarations[target->declaration.index];
-    if (callee.kind != Declaration::Kind::View || !callee.descriptorResult) {
+    if (callee.kind != Declaration::Kind::DomainFunction ||
+        !callee.domainResult) {
       refuse(expr.span, "domain composition requires a defined domain factory");
       return {};
     }
@@ -215,23 +209,20 @@ class Composition {
         return {};
     }
     std::vector<ValueId> operands(callee.inputs.size());
-    std::vector<unsigned> descriptorArguments(callee.descriptorInputs.size());
+    std::vector<unsigned> domainArguments(callee.domainInputs.size());
     for (unsigned i = 0; i < expr.children.size(); ++i) {
       auto slot = callee.inputOrder[(*order)[i]];
       const auto &argument = syntax.expressions[expr.children[i]];
       if (slot.kind == Declaration::InputSlot::Kind::Domain) {
         auto value = expression(expr.children[i], depth + 1);
         if (!value ||
-            !types.equal(types.instantiate(
-                             descriptorType(
-                                 callee.descriptorInputs[slot.index].contract),
-                             constraints.parameters, argument.span),
-                         types.known(descriptorType(
-                                         definition.bindings[*value].contract),
-                                     argument.span),
-                         argument.span))
+            !types.equal(
+                types.instantiate(callee.domainInputs[slot.index].item,
+                                  constraints.parameters, argument.span),
+                types.known(definition.bindings[*value].item, argument.span),
+                argument.span))
           return {};
-        descriptorArguments[slot.index] = *value;
+        domainArguments[slot.index] = *value;
       } else if (slot.kind == Declaration::InputSlot::Kind::Data) {
         auto found =
             argument.binding ? data.find(*argument.binding) : data.end();
@@ -277,20 +268,20 @@ class Composition {
     for (const auto &bound : callee.bounds)
       if (!checker.types.assumptions(decl, bound, substitution, expr.span))
         return {};
-    return instantiateDescriptor(checker.types, callee, *target, *arguments,
-                                 operands, descriptorArguments, *order,
-                                 definition.bindings, id, expr.span);
+    return instantiateDomain(checker.types, callee, *target, *arguments,
+                             operands, domainArguments, *order,
+                             definition.bindings, id, expr.span);
   }
 
 public:
-  Composition(Checker &checker, Declaration &decl,
-              DescriptorDefinition &definition, unsigned depth)
+  Composition(Checker &checker, Declaration &decl, DomainDefinition &definition,
+              unsigned depth)
       : checker(checker), decl(decl), syntax(*checker.sources[decl.id.index]),
         definition(definition), callDepth(depth) {
     for (unsigned i = 0; i < decl.inputs.size(); ++i)
       data.emplace(syntax.inputBindings[i], ValueId{i});
-    for (unsigned i = 0; i < decl.descriptorInputs.size(); ++i)
-      domains.emplace(syntax.descriptorBindings[i], i);
+    for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
+      domains.emplace(syntax.domainBindings[i], i);
   }
   bool run() {
     const auto &body = syntax.bodies.front();
@@ -311,27 +302,20 @@ public:
     auto result = expression(body.results.front().second, 1);
     if (!result)
       return false;
-    if (definition.bindings[*result].contract != *decl.descriptorResult)
-      return refuse(body.span, "descriptor factory result contract differs");
+    if (definition.bindings[*result].item != *decl.domainResult)
+      return refuse(body.span, "domain factory result item differs");
     definition.result = *result;
     return true;
   }
 };
 } // namespace
 std::optional<unsigned>
-instantiateDescriptor(Semantics &types, const Declaration &callee,
-                      const CallableReference &target, ArrayRef<Type> arguments,
-                      ArrayRef<ValueId> operands, ArrayRef<unsigned> domains,
-                      ArrayRef<unsigned> order,
-                      std::vector<DescriptorBinding> &bindings,
-                      uint32_t expression, Span span) {
-  if (!callee.descriptorResult || operands.size() != callee.inputs.size() ||
-      domains.size() != callee.descriptorInputs.size() ||
-      order.size() != callee.inputOrder.size()) {
-    types.fail("source.descriptor",
-               "factory argument or result contract differs", span);
-    return {};
-  }
+instantiateDomain(Semantics &types, const Declaration &callee,
+                  const CallableReference &target, ArrayRef<Type> arguments,
+                  ArrayRef<ValueId> operands, ArrayRef<unsigned> domains,
+                  ArrayRef<unsigned> order,
+                  std::vector<DomainBinding> &bindings, uint32_t expression,
+                  Span span) {
   if (!types.charge(operands.size() + domains.size() + order.size() + 1, span))
     return {};
   auto substitution = types.substitution(callee, arguments);
@@ -343,31 +327,18 @@ instantiateDescriptor(Semantics &types, const Declaration &callee,
     for (const auto &[name, value] : *inherited)
       substitution.insert_or_assign(name, value);
   }
-  auto contract =
-      types.substitute(*callee.descriptorResult, substitution, span);
-  if (!contract)
+  auto item = types.substitute(*callee.domainResult, substitution, span);
+  if (!item)
     return {};
-  std::vector<DescriptorEdge> children;
-  for (unsigned i = 0; i < domains.size(); ++i) {
-    auto expected = types.substitute(callee.descriptorInputs[i].contract,
-                                     substitution, span);
-    if (!expected || domains[i] >= bindings.size() ||
-        *expected != bindings[domains[i]].contract) {
-      if (!types.diagnostic)
-        types.fail("source.descriptor", "factory child contract differs", span);
-      return {};
-    }
-    children.push_back({domains[i], std::move(*expected)});
-  }
   // Keep the lexical factory boundary through checking. Specialization selects
   // abstract members and closes the complete recipe, including unused nodes
   // that belong to this factory's admission. Caller-local unused domains remain
   // separate. Eager data arguments have already executed at their call sites.
   unsigned result = bindings.size();
   bindings.push_back({Kind::Application,
-                      *contract,
+                      *item,
                       operands.vec(),
-                      std::move(children),
+                      domains.vec(),
                       0,
                       {},
                       span,
@@ -377,74 +348,21 @@ instantiateDescriptor(Semantics &types, const Declaration &callee,
                       expression});
   return result;
 }
-bool checkViewStructure(Checker &checker, const Declaration &decl,
-                        const SyntaxDeclaration &syntax) {
-  auto refuse = [&](Span span) {
-    return checker.types.fail(
-        "source.view", "View requires structural formation or exact forwarding",
-        span);
-  };
-  if (!decl.services.empty() || syntax.primitive || syntax.finiteDefinition ||
-      (decl.effectAllowance && *decl.effectAllowance != EffectSummary{}))
-    return refuse(decl.span);
-  for (const auto &region : syntax.bodies) {
-    if (!checker.types.charge(region.statements.size() +
-                                  region.operators.size() + 1,
-                              region.span))
-      return false;
-    if (region.stopped || !region.operators.empty())
-      return refuse(region.span);
-    for (const auto &statement : region.statements)
-      if (statement.kind != Statement::Kind::Let || statement.mutableBinding ||
-          statement.evaluation == Statement::Evaluation::Ordered)
-        return refuse(statement.span);
-  }
-  for (const auto &expr : syntax.expressions) {
-    if (!checker.types.charge(expr.children.size() + 1, expr.span))
-      return false;
-    switch (expr.kind) {
-    case Expression::Kind::Name:
-    case Expression::Kind::Projection:
-    case Expression::Kind::Boolean:
-    case Expression::Kind::Decimal:
-      break;
-    case Expression::Kind::Tuple:
-      if (!expr.children.empty())
-        return refuse(expr.span);
-      break;
-    case Expression::Kind::Call: {
-      if (expr.binding || expr.roles)
-        return refuse(expr.span);
-      auto target = checker.callable(decl, expr.text, expr.span);
-      if (!target)
-        return false;
-      const auto &callee =
-          checker.output.declarations[target->declaration.index];
-      if (callee.kind != Declaration::Kind::View || callee.descriptorResult)
-        return refuse(expr.span);
-      break;
-    }
-    default:
-      return refuse(expr.span);
-    }
-  }
-  return true;
-}
 bool Checker::domainBody(Declaration &decl, unsigned depth) {
   const auto &syntax = *sources[decl.id.index];
-  auto definition = std::make_shared<DescriptorDefinition>();
-  for (unsigned i = 0; i < decl.descriptorInputs.size(); ++i)
+  auto definition = std::make_shared<DomainDefinition>();
+  for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
     definition->bindings.push_back({Kind::Parameter,
-                                    decl.descriptorInputs[i].contract,
+                                    decl.domainInputs[i].item,
                                     {},
                                     {},
                                     0,
                                     i,
-                                    decl.descriptorInputs[i].span});
+                                    decl.domainInputs[i].span});
   if (!syntax.domainConstructor) {
     if (!Composition(*this, decl, *definition, depth).run())
       return false;
-    decl.descriptorDefinition = std::move(definition);
+    decl.domainDefinition = std::move(definition);
     return true;
   }
   auto selected = constructor(*syntax.domainConstructor);
@@ -454,30 +372,16 @@ bool Checker::domainBody(Declaration &decl, unsigned depth) {
                       decl.span);
   definition->constructor = selected->kind;
   definition->axis = selected->axis;
-  DescriptorBinding result{
-      selected->kind, *decl.descriptorResult, {}, {}, selected->axis, {},
+  DomainBinding result{
+      selected->kind, *decl.domainResult, {}, {}, selected->axis, {},
       decl.span};
   for (unsigned i = 0; i < decl.inputs.size(); ++i)
     result.operands.push_back({i});
-  for (unsigned i = 0; i < decl.descriptorInputs.size(); ++i)
-    result.children.push_back({i, decl.descriptorInputs[i].contract});
+  for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
+    result.children.push_back(i);
   definition->result = definition->bindings.size();
   definition->bindings.push_back(std::move(result));
-  decl.descriptorDefinition = std::move(definition);
+  decl.domainDefinition = std::move(definition);
   return true;
-}
-void Checker::beginViewReconstruction() {
-  installContractInference(/*signaturesOnly=*/false);
-  installAdmissionCollection(/*signaturesOnly=*/false);
-  bodyState.assign(output.declarations.size(), 2);
-  bodyHeights.assign(output.declarations.size(), 1);
-}
-void Checker::prepareViewReconstruction(DeclarationId id,
-                                        const SyntaxDeclaration &source) {
-  reconstructedSources[id.index] = source;
-  sources[id.index] = &reconstructedSources[id.index];
-  output.declarations[id.index].descriptorDefinition.reset();
-  output.declarations[id.index].body.reset();
-  bodyState[id.index] = 0;
 }
 } // namespace zkc::language::detail

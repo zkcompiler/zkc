@@ -8,7 +8,7 @@ libraries/
   core/
     primitives/{collections,algebra,polynomial,cryptography}/
     traversal/
-    {collections,algebra,polynomial,encoding,services,transport}/
+    {collections,algebra,polynomial,encoding,services}/
   protocols/
     sigma/{schnorr,compositions}/
     polynomial/{sumcheck,gkr,fri}/
@@ -58,9 +58,6 @@ use sumcheck::{Reduce, check};
 ```
 
 The [local catalog](../zkc.workspace.toml) selects individual leaf packages.
-The [native relay package](core/transport/README.md), catalog key
-`core.transport`, exports `zkc::relay::{Relay, NativeRelay, Forward}` for complete
-ordinary payloads satisfying the installed indexed native message requirement.
 Catalog locations use the catalog's visible parent; the workspace path uses
 the declaring manifest's visible parent. A path dependency such as
 `sumcheck = "../../../libraries/protocols/polynomial/sumcheck"` works independently

@@ -36,9 +36,8 @@ struct CommonControlRequirement {
 /// interface writer and the interface comparison select by this one predicate.
 bool isClosedConcreteProtocol(const Declaration &);
 /// Recompute from the immutable checked body and its complete call closure.
-/// Public markings and availability never establish common provenance. Actual
-/// completed sends forward the sender's immutable subject on normal paths;
-/// distinct opaque Local/service subjects refuse with source.common-provenance.
+/// Public markings and availability never establish common provenance. Unknown
+/// Local/received/service provenance refuses with source.common-provenance.
 /// Every derivation, including dormant arms and zero-trip state, debits Limits.
 /// Demanded loop observations check both initial and yielded components under
 /// grounded induction for that exact invocation, slot, role and observation.

@@ -384,16 +384,12 @@ protocol.apply @helper(%two,%c,%d) {site="second",roles=["V","P"]} : (ui64,i1,i1
         }
         require(ports == 15, "helper call input omitted");
       });
-  cases.run("received transition has its actual sender subject", [&] {
-    auto text = loop(
-        R"mlir(%next = protocol.exchange %state {site="receive",sender="P",receiver="V"} : i1
-"protocol.yield"(%next) : (i1)->())mlir");
-    require(accepted(context, text).empty(), "communicated transition refused");
-    auto wrong = replaceText(
-        text, "\"protocol.yield\"(%next)",
-        "%bad = \"protocol.assemble_roles\"(%state,%other) "
-        "{roles=[\"P\",\"V\"]} : (i1,i1)->i1\n\"protocol.yield\"(%bad)");
-    rejected(context, wrong);
+  cases.run("received transition cannot inherit its common initializer", [&] {
+    rejected(
+        context,
+        loop(
+            R"mlir(%next = protocol.exchange %state {site="receive",sender="P",receiver="V"} : i1
+"protocol.yield"(%next) : (i1)->())mlir"));
   });
   cases.run("Local transition cannot inherit its common initializer", [&] {
     auto text = loop(
@@ -582,13 +578,13 @@ func.func @local(%scope:!runtime.scope,%bit:i1)->!exec.outcome<(i1)>
             [&] { rejected(context, selectedObservation(false, true)); });
   cases.run("distinct selected payloads still require common selection",
             [&] { rejected(context, selectedObservation(true, false, true)); });
-  cases.run("identical communicated payloads establish common control", [&] {
+  cases.run("unknown identical payloads do not establish common control", [&] {
     auto text = replaceText(selectedObservation(true),
                             "(%yes,%yes) {alternative=\"some\"}",
                             "(%received,%yes) {alternative=\"some\"}");
     text = replaceText(text, "(%yes,%no) {alternative=\"some\"}",
                        "(%received,%no) {alternative=\"some\"}");
-    require(accepted(context, text).empty(), "identical delivery refused");
+    rejected(context, text);
   });
   cases.run("protocol selection still demands a common header", [&] {
     auto text = selectedObservation(false);
@@ -641,16 +637,17 @@ func.func @local(%scope:!runtime.scope,%bit:i1)->!exec.outcome<(i1)>
     require(accepted(context, text).empty(),
             "selected tag demanded unknown payload");
   });
-  cases.run("zero-trip dormant body checks actual received control", [&] {
-    auto text = loop("\"protocol.yield\"(%state) : (i1)->()", 0);
-    text = replaceText(
-        text, branch("%state"),
-        (Twine("%received = protocol.exchange %state "
-               "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n") +
-         branch("%received"))
-            .str());
-    require(accepted(context, text).empty(), "dormant delivery refused");
-  });
+  cases.run(
+      "zero-trip dormant body still refuses direct received control", [&] {
+        auto text = loop("\"protocol.yield\"(%state) : (i1)->()", 0);
+        text = replaceText(
+            text, branch("%state"),
+            (Twine("%received = protocol.exchange %state "
+                   "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n") +
+             branch("%received"))
+                .str());
+        rejected(context, text);
+      });
   cases.run("identical loop attributes cannot identify distinct dynamic clocks",
             [&] { rejected(context, differentClocks()); });
   cases.run("same alternative and ordinal preserve generic payload agreement",
@@ -720,33 +717,5 @@ func.func @local(%scope:!runtime.scope,%bit:i1)->!exec.outcome<(i1)>
                 refuses(derive(*module, limited), "common-control-capacity");
               }
             });
-  cases.run("opaque delivery retains fresh subjects and exact work refusal", [&] {
-    auto text = wrap(
-        (Twine(
-             R"mlir(%first = "protocol.local_call"(%x) {callee=@local,role="P",site="first"} : (i1)->i1
-%second = "protocol.local_call"(%x) {callee=@local,role="P",site="second"} : (i1)->i1
-%received = protocol.exchange %first {site="delivery",sender="P",receiver="V"} : i1
-%both = "protocol.assemble_roles"(%first,%received) {roles=["P","V"]} : (i1,i1)->i1
-)mlir") + branch("%both"))
-            .str(),
-        "%x:i1", "i1", "[\"P\"]", R"mlir(
-func.func @local(%scope:!runtime.scope,%bit:i1)->!exec.outcome<(i1)>
- attributes {no_inline,runtime.origin=["local",[]]} {
- %done = "exec.returned"(%bit) : (i1)->!exec.outcome<(i1)>
- func.return %done : !exec.outcome<(i1)>
-}
-)mlir");
-    require(accepted(context, text).empty(), "delivered opaque value refused");
-    rejected(context,
-             replaceText(text, "(%first,%received)", "(%second,%received)"));
-    auto module = parse(context, text);
-    uint64_t remaining = 1000000;
-    take(derive(*module, remaining));
-    uint64_t cost = 1000000 - remaining;
-    uint64_t shortBudget = cost - 1;
-    refuses(derive(*module, shortBudget), "common-control-capacity");
-    take(derive(*module, cost));
-    require(cost == 0, "opaque delivery work boundary changed");
-  });
   return cases.result();
 }

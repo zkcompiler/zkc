@@ -5,7 +5,6 @@
 #include "HelperResults.h"
 #include "MathematicalFacts.h"
 #include "llvm/ADT/ScopeExit.h"
-#include "llvm/Support/SaveAndRestore.h"
 #include <limits>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -46,13 +45,10 @@ class ContractCheck {
     std::vector<ItemBound> bounds;
     DomainEvidence evidence;
   };
-  using RecipeKey = std::tuple<unsigned, std::vector<std::string>,
-                               std::vector<ValueOrigin>, std::vector<unsigned>>;
+  using RecipeKey =
+      std::tuple<unsigned, std::vector<ValueOrigin>, std::vector<unsigned>>;
   std::map<RecipeKey, FactoryFacts> factoryFacts;
   const Declaration *owner = nullptr;
-  ArrayRef<DataPrecondition> rootAssumptions;
-  const Declaration *typeOwner = nullptr;
-  const Substitution *statics = nullptr;
   bool infer, allowAdditional;
   unsigned rootInputs = 0;
   std::vector<DataPrecondition> requirements;
@@ -75,15 +71,13 @@ class ContractCheck {
     bool resolving = false;
     std::map<unsigned, Item> forwardedItems;
     std::map<unsigned, std::pair<const HelperCall *, unsigned>> resultCalls;
-    std::map<unsigned, Type> selectedTypes;
-    std::map<const HelperCall *, DeclarationId> callees;
     unsigned base;
     unsigned depth;
     Context(Semantics &types, const Body &body, Facts inputs,
             Restrictions scoped, InputValues values, unsigned base,
             unsigned depth)
         : body(body), inputs(std::move(inputs)), scoped(std::move(scoped)),
-          domains(body.descriptorBindings.size()), origins(types, body),
+          domains(body.domainBindings.size()), origins(types, body),
           inputValues(std::move(values)), base(base), depth(depth) {}
   };
   bool refuse(Span span, StringRef message) {
@@ -93,113 +87,6 @@ class ContractCheck {
     if (depth > types.work.limits.expressionDepth)
       return types.fail("source.limit", "finite contract checking depth", span);
     return types.charge(1, span);
-  }
-  std::optional<Type> selectedType(const Type &type, Span span) {
-    if (statics)
-      return types.substitute(type, *statics, span);
-    return types.chargeType(type, span) ? std::optional<Type>(type)
-                                        : std::nullopt;
-  }
-  std::optional<Type> projectedType(const Declaration &decl, const Type &type,
-                                    ArrayRef<unsigned> path, Span span) {
-    // Natural projection bounds belong to the checked template. Project there
-    // before selecting the result, so its dimensions and premises share atoms.
-    if (!types.chargeType(type, span))
-      return {};
-    auto projected = types.projectedType(decl, type, path, span);
-    return projected ? selectedType(*projected, span) : std::nullopt;
-  }
-  const Type *valueType(Context &context, ValueId value, Span span) {
-    const auto &type = context.body.values[value.index].type;
-    if (!statics)
-      return &type;
-    auto found = context.selectedTypes.find(value.index);
-    if (found != context.selectedTypes.end())
-      return &found->second;
-    auto selected = selectedType(type, span);
-    if (!selected)
-      return nullptr;
-    return &context.selectedTypes.emplace(value.index, std::move(*selected))
-                .first->second;
-  }
-  std::optional<Semantics::Dispatch> dispatch(const std::optional<Type> &module,
-                                              DeclarationId target,
-                                              ArrayRef<Type> arguments,
-                                              Span span) {
-    if (!statics)
-      return types.dispatch(module, target, arguments, span);
-    std::optional<Type> selectedModule;
-    if (module) {
-      selectedModule = selectedType(*module, span);
-      if (!selectedModule)
-        return {};
-    }
-    std::vector<Type> selected;
-    for (const auto &argument : arguments) {
-      auto type = selectedType(argument, span);
-      if (!type)
-        return {};
-      selected.push_back(std::move(*type));
-    }
-    return types.dispatch(selectedModule, target, selected, span);
-  }
-  std::optional<Substitution> frame(const Declaration &helper,
-                                    ArrayRef<Type> arguments, Span span,
-                                    const std::optional<Type> &module = {}) {
-    if (!types.charge(helper.parameters.size() + 1, span))
-      return {};
-    for (const auto &argument : arguments)
-      if (!types.chargeType(argument, span))
-        return {};
-    auto bindings = types.substitution(helper, arguments);
-    if (module && helper.parent &&
-        declarations[helper.parent->index].kind ==
-            Declaration::Kind::Interface) {
-      auto selected = selectedType(*module, span);
-      if (!selected)
-        return {};
-      auto member = types.boundMemberSubstitution(helper, *selected, span);
-      if (!member)
-        return {};
-      bindings.insert(member->begin(), member->end());
-    }
-    auto parent = helper.parent;
-    while (parent &&
-           declarations[parent->index].kind != Declaration::Kind::Module)
-      parent = declarations[parent->index].parent;
-    if (parent) {
-      const auto &module = declarations[parent->index];
-      if (arguments.size() < module.parameters.size()) {
-        refuse(span, "named callback module arguments differ");
-        return {};
-      }
-      Type self(Type::Kind::Module, module.qualifiedName);
-      self.arguments.assign(arguments.begin(),
-                            arguments.begin() + module.parameters.size());
-      if (module.implementation)
-        bindings.emplace("self:" + module.implementation->domain,
-                         std::move(self));
-    }
-    return bindings;
-  }
-  const Declaration *callee(Context &context, const HelperCall &call,
-                            Span span) {
-    if (call.callee.index >= declarations.size()) {
-      refuse(span, "unknown finite call target");
-      return nullptr;
-    }
-    // Closed replay may borrow Semantics over the source declarations while
-    // this reader traverses the separate candidate declaration graph.
-    if (!statics)
-      return &declarations[call.callee.index];
-    if (auto found = context.callees.find(&call);
-        found != context.callees.end())
-      return &declarations[found->second.index];
-    auto selected = dispatch(call.module, call.callee, call.arguments, span);
-    if (!selected)
-      return nullptr;
-    context.callees.emplace(&call, selected->declaration);
-    return &declarations[selected->declaration.index];
   }
   std::optional<ValueOrigin> resolve(Context &context, const ValueOrigin &local,
                                      Span span) {
@@ -217,10 +104,7 @@ class ContractCheck {
     if (auto found = context.resultCalls.find(local.first);
         found != context.resultCalls.end()) {
       call = found->second.first;
-      const auto *target = callee(context, *call, span);
-      if (!target)
-        return {};
-      summary = helperResults.get(target->id.index, found->second.second,
+      summary = helperResults.get(call->callee.index, found->second.second,
                                   local.second, span);
       if (types.diagnostic)
         return {};
@@ -234,8 +118,8 @@ class ContractCheck {
         result = *actual;
       }
     }
-    auto type = projectedType(*typeOwner, context.body.values[local.first].type,
-                              local.second, span);
+    auto type = types.projectedType(
+        *owner, context.body.values[local.first].type, local.second, span);
     if (!type || !established(mathematical.record(result, *type, span), span))
       return {};
     valueTypes.emplace(result, *type);
@@ -309,10 +193,10 @@ class ContractCheck {
         count = known.value;
     }
     if (shape.domain) {
-      if (*shape.domain >= call.descriptorArguments.size())
+      if (*shape.domain >= call.domainArguments.size())
         return refuse(span, "helper result domain coverage differs");
       unsigned selected;
-      return domain(context, call.descriptorArguments[*shape.domain], selected,
+      return domain(context, call.domainArguments[*shape.domain], selected,
                     span) &&
              collectResult(context, selected, result, type, shape.filtered,
                            span);
@@ -327,12 +211,9 @@ class ContractCheck {
   }
   bool forward(Context &context, const HelperCall &call,
                ArrayRef<ValueId> outputs, Span span) {
-    const auto *target = callee(context, call, span);
-    if (!target)
-      return false;
     for (unsigned i = 0; i < outputs.size(); ++i) {
       context.resultCalls.emplace(outputs[i].index, std::make_pair(&call, i));
-      auto summary = helperResults.get(target->id.index, i, {}, span);
+      auto summary = helperResults.get(call.callee.index, i, {}, span);
       if (!summary) {
         if (types.diagnostic)
           return false;
@@ -469,16 +350,12 @@ class ContractCheck {
     domainEvidence.push_back({});
     return id;
   }
-  std::optional<unsigned> recipe(const DescriptorBinding &binding,
+  std::optional<unsigned> recipe(const DomainBinding &binding,
                                  ArrayRef<ValueOrigin> operands,
                                  ArrayRef<unsigned> children, unsigned depth) {
     if (!bounded(depth, binding.span))
       return {};
-    if (!finiteDescriptorItem(binding.contract))
-      return newDomain();
-    if (!types.chargeContract(binding.contract, binding.span))
-      return {};
-    using Kind = DescriptorBinding::Kind;
+    using Kind = DomainBinding::Kind;
     std::vector<ItemBound> facts;
     DomainEvidence evidence;
     if (binding.kind == Kind::Application) {
@@ -487,22 +364,10 @@ class ContractCheck {
         refuse(binding.span, "invalid domain factory reference");
         return {};
       }
-      auto target =
-          statics
-              ? dispatch(binding.factory->module, binding.factory->declaration,
-                         binding.arguments, binding.span)
-              : std::optional<Semantics::Dispatch>(
-                    Semantics::Dispatch{binding.factory->declaration, {}});
-      if (!target)
-        return {};
-      const auto &callee = declarations[target->declaration.index];
+      const auto &callee = declarations[binding.factory->declaration.index];
       if (!types.charge(operands.size() + children.size() + 1, binding.span))
         return {};
-      std::vector<std::string> argumentKeys;
-      for (const auto &argument : target->arguments)
-        argumentKeys.push_back(typeIdentity(argument));
-      RecipeKey key{callee.id.index, std::move(argumentKeys), operands.vec(),
-                    children.vec()};
+      RecipeKey key{callee.id.index, operands.vec(), children.vec()};
       if (auto found = factoryFacts.find(key); found != factoryFacts.end()) {
         if (!types.charge(found->second.bounds.size() +
                               found->second.evidence.children.size() + 1,
@@ -514,16 +379,8 @@ class ContractCheck {
       }
       // A generic module's implementation is not evidence available to its
       // clients. Only the checked recipe of a concrete factory supplies facts.
-      if (!callee.abstract && callee.descriptorDefinition) {
-        std::optional<Substitution> bindings;
-        if (statics) {
-          bindings = frame(callee, target->arguments, binding.span);
-          if (!bindings)
-            return {};
-        }
-        SaveAndRestore<const Substitution *> selectedStatics(
-            statics, bindings ? &*bindings : nullptr);
-        const auto &definition = *callee.descriptorDefinition;
+      if (!callee.abstract && callee.domainDefinition) {
+        const auto &definition = *callee.domainDefinition;
         std::vector<unsigned> nested;
         for (const auto &node : definition.bindings) {
           if (node.parameter) {
@@ -547,11 +404,11 @@ class ContractCheck {
             data.push_back(operands[operand.index]);
           }
           for (auto child : node.children) {
-            if (child.node >= nested.size()) {
+            if (child >= nested.size()) {
               refuse(node.span, "factory child fact coverage differs");
               return {};
             }
-            domains.push_back(nested[child.node]);
+            domains.push_back(nested[child]);
           }
           auto selected = recipe(node, data, domains, depth + 1);
           if (!selected)
@@ -599,11 +456,10 @@ class ContractCheck {
       }
     }
     if (binding.kind != Kind::Application) {
-      DescriptorBinding constructor{};
+      DomainBinding constructor{};
       constructor.kind = binding.kind;
-      constructor.contract = binding.contract;
       constructor.axis = binding.axis;
-      constructor.children = binding.children;
+      constructor.children = children.vec();
       for (const auto &operand : operands) {
         if (!types.charge(operand.second.size() + 1, binding.span))
           return {};
@@ -704,21 +560,16 @@ class ContractCheck {
   bool collectResult(Context &context, unsigned domain, ValueId output,
                      bool filtered, Span span) {
     auto result = value(context, output, span);
-    const auto *type = valueType(context, output, span);
-    return result && type &&
-           collectResult(context, domain, *result, *type, filtered, span);
+    return result && collectResult(context, domain, *result,
+                                   context.body.values[output.index].type,
+                                   filtered, span);
   }
   bool checkFixedCollection(Context &context, const HelperCall &call,
                             ArrayRef<ValueId> outputs, Span span) {
-    const auto *target = callee(context, call, span);
-    const auto *type = outputs.size() == 1
-                           ? valueType(context, outputs.front(), span)
-                           : nullptr;
-    if (!target || types.diagnostic)
-      return false;
-    const auto &callee = *target;
+    const auto &callee = declarations[call.callee.index];
     if (!mathematicalMode(context.body) || !callee.finiteDefinition ||
-        !callee.body || outputs.size() != 1 || !type || !staticExtent(*type, 0))
+        !callee.body || outputs.size() != 1 ||
+        !staticExtent(context.body.values[outputs.front().index].type, 0))
       return true;
     if (callee.body->operations.size() != 1)
       return refuse(span, "finite definition body differs");
@@ -728,16 +579,15 @@ class ContractCheck {
       return refuse(span, "finite definition action differs");
     if (finite->kind != FiniteApplication::Kind::Collect)
       return true;
-    if (finite->domain >= callee.body->descriptorBindings.size())
+    if (finite->domain >= callee.body->domainBindings.size())
       return refuse(span, "finite definition domain differs");
-    auto parameter = callee.body->descriptorBindings[finite->domain].parameter;
-    if (!parameter || *parameter >= call.descriptorArguments.size())
+    auto parameter = callee.body->domainBindings[finite->domain].parameter;
+    if (!parameter || *parameter >= call.domainArguments.size())
       return refuse(span, "finite definition parameter coverage differs");
     // A direct finite definition is specialized at the call occurrence. Check
     // fixed formation now when its actual domain already determines a count.
     unsigned selected;
-    return domain(context, call.descriptorArguments[*parameter], selected,
-                  span) &&
+    return domain(context, call.domainArguments[*parameter], selected, span) &&
            collectResult(context, selected, outputs.front(),
                          bool(finite->predicate), span);
   }
@@ -764,10 +614,7 @@ class ContractCheck {
       if (found == context.resultCalls.end())
         return true;
       const auto &call = *found->second.first;
-      const auto *target = callee(context, call, span);
-      if (!target)
-        return false;
-      auto summary = helperResults.get(target->id.index, found->second.second,
+      auto summary = helperResults.get(call.callee.index, found->second.second,
                                        origin->second, span);
       if (!summary || !summary->forwarded)
         return !types.diagnostic;
@@ -802,7 +649,7 @@ class ContractCheck {
       result = *context.domains[index];
       return true;
     }
-    const auto &binding = context.body.descriptorBindings[index];
+    const auto &binding = context.body.domainBindings[index];
     if (binding.parameter)
       return refuse(span, "missing finite domain environment");
     std::vector<ValueOrigin> data;
@@ -818,9 +665,9 @@ class ContractCheck {
     }
     for (auto child : binding.children) {
       unsigned selected;
-      if (child.node >= index)
+      if (child >= index)
         return refuse(binding.span, "domain child facts must precede use");
-      if (!domain(context, child.node, selected, binding.span, nested + 1))
+      if (!domain(context, child, selected, binding.span, nested + 1))
         return false;
       children.push_back(selected);
     }
@@ -828,62 +675,6 @@ class ContractCheck {
     if (!selected)
       return false;
     context.domains[index] = result = *selected;
-    return true;
-  }
-  bool abstractCallback(const Declaration &helper, const OriginMap &expected,
-                        Span span) {
-    if (!types.charge(helper.inputs.size() + helper.dataPreconditions.size() +
-                          expected.size() + 1,
-                      span))
-      return false;
-    if (helper.inputs.size() > std::numeric_limits<unsigned>::max() - nextValue)
-      return types.fail("source.limit", "data provenance identity limit", span);
-    const unsigned base = nextValue;
-    nextValue += helper.inputs.size();
-    const auto parentScope = mathematical.scope();
-    const auto savedAssumptions = assumptions.size();
-    if (!established(mathematical.enter(span), span))
-      return false;
-    auto restore = llvm::scope_exit([&] {
-      mathematical.restore(parentScope);
-      assumptions.resize(savedAssumptions);
-    });
-    auto input =
-        [&](const InputSelector &selector) -> std::optional<ValueOrigin> {
-      if (selector.port >= helper.inputs.size()) {
-        refuse(span, "named callback input is outside signature");
-        return {};
-      }
-      if (!types.charge(selector.path.size() + 1, span))
-        return {};
-      auto type = projectedType(helper, helper.inputs[selector.port].type,
-                                selector.path, span);
-      ValueOrigin value{base + selector.port, selector.path};
-      if (!type || !established(mathematical.record(value, *type, span), span))
-        return {};
-      valueTypes.emplace(value, *type);
-      return value;
-    };
-    for (const auto &[port, domain] : expected) {
-      if (domain >= domainBounds.size())
-        return refuse(span, "unknown item domain facts");
-      for (const auto &bound : domainBounds[domain]) {
-        auto index = input({port, bound.path, span});
-        if (!index || !assume({DataPrecondition::Kind::IndexBound, *index,
-                               bound.container, 0, bound.axis},
-                              span))
-          return false;
-      }
-    }
-    for (const auto &requirement : helper.dataPreconditions) {
-      auto left = input(requirement.left);
-      auto right = input(requirement.right);
-      if (!left || !right ||
-          !prove({requirement.kind, *left, *right, requirement.leftAxis,
-                  requirement.rightAxis},
-                 requirement.span))
-        return false;
-    }
     return true;
   }
   bool callback(Context &context, unsigned index, const OriginMap &expected,
@@ -905,37 +696,6 @@ class ContractCheck {
       }
       return true;
     }
-    if (binding.named) {
-      const auto &selection = *binding.named;
-      auto selected =
-          dispatch(selection.target.module, selection.target.declaration,
-                   selection.arguments, span);
-      if (!selected || selected->declaration.index >= declarations.size())
-        return false;
-      const auto &helper = declarations[selected->declaration.index];
-      // A named declaration has no caller captures. Its input requirements
-      // must follow from this callback contract, never strengthen the caller.
-      SaveAndRestore inference(infer, false);
-      auto bindings =
-          frame(helper, selected->arguments, span, selection.target.module);
-      if (!bindings)
-        return false;
-      // Borrow the body and observe all of its types and statics in the exact
-      // selected frame. Nested regions inherit it; nested selections replace
-      // it.
-      SaveAndRestore selectedOwner(typeOwner, &helper);
-      SaveAndRestore<const Substitution *> selectedStatics(statics, &*bindings);
-      if (!helper.body)
-        return abstractCallback(helper, expected, span);
-      Facts inputs(helper.body->inputs);
-      for (const auto &[input, domain] : expected) {
-        if (input >= inputs.size())
-          return refuse(span, "named callback item input is outside signature");
-        inputs[input] = Item{domain, {}};
-      }
-      return body(*helper.body, std::move(inputs), {}, {}, depth + 1, {},
-                  helper.dataPreconditions);
-    }
     if (!binding.computation || !binding.computation->body)
       return refuse(span, "missing scoped computation");
     const auto &computation = *binding.computation;
@@ -944,7 +704,7 @@ class ContractCheck {
     if (nested.inputs != explicitInputs + binding.captures.size())
       return refuse(span, "scoped input coverage differs");
     if (!types.charge(nested.inputs + binding.scopedCaptures.size() +
-                          binding.descriptorCaptures.size(),
+                          binding.domainCaptures.size(),
                       span))
       return false;
     Facts inputs(nested.inputs);
@@ -966,9 +726,9 @@ class ContractCheck {
     for (unsigned i = 0; i < selected.size(); ++i)
       if (!restriction(context, binding.scopedCaptures[i], selected[i], span))
         return false;
-    std::vector<unsigned> domains(binding.descriptorCaptures.size());
+    std::vector<unsigned> domains(binding.domainCaptures.size());
     for (unsigned i = 0; i < domains.size(); ++i)
-      if (!domain(context, binding.descriptorCaptures[i], domains[i], span))
+      if (!domain(context, binding.domainCaptures[i], domains[i], span))
         return false;
     return body(nested, std::move(inputs), std::move(selected), domains,
                 depth + 1, std::move(values));
@@ -977,12 +737,9 @@ class ContractCheck {
             Span span) {
     if (call.callee.index >= declarations.size())
       return refuse(span, "unknown finite call target");
-    const auto *target = callee(context, call, span);
-    if (!target)
-      return false;
-    const auto &callee = *target;
+    const auto &callee = declarations[call.callee.index];
     if (call.scopedArguments.size() != callee.scopedInputs.size() ||
-        call.descriptorArguments.size() != callee.descriptorInputs.size())
+        call.domainArguments.size() != callee.domainInputs.size())
       return refuse(span, "static call argument coverage differs");
     // Local callers must discharge the same exact formation obligations.
     // Installed reached-guard results may do so; being ordered grants none.
@@ -1001,8 +758,8 @@ class ContractCheck {
       for (const auto &[input, formal] : parameter.itemOrigins) {
         unsigned selected;
         if (input >= parameter.signature.inputs.size() ||
-            formal >= call.descriptorArguments.size() ||
-            !domain(context, call.descriptorArguments[formal], selected, span))
+            formal >= call.domainArguments.size() ||
+            !domain(context, call.domainArguments[formal], selected, span))
           return types.diagnostic ? false : refuse(span, "invalid item origin");
         expected.emplace(input, selected);
       }
@@ -1047,10 +804,7 @@ class ContractCheck {
     else if (orderedLength && orderedLength->contract == "vector.length")
       containers = &orderedLength->operands;
     else if (helperLength && helperLength->callee.index < declarations.size()) {
-      const auto *target = callee(context, *helperLength, span);
-      if (!target)
-        return false;
-      const auto &callee = *target;
+      const auto &callee = declarations[helperLength->callee.index];
       if (callee.primitive && callee.primitive->identity == "vector.length")
         containers = &helperLength->operands;
     }
@@ -1073,9 +827,9 @@ class ContractCheck {
     if (control.operands.size() < skipped)
       return refuse(span, "control operand coverage differs");
     unsigned forwarded = control.operands.size() - skipped;
-    std::vector<unsigned> domains(control.descriptorArguments.size());
+    std::vector<unsigned> domains(control.domainArguments.size());
     for (unsigned i = 0; i < domains.size(); ++i)
-      if (!domain(context, control.descriptorArguments[i], domains[i], span))
+      if (!domain(context, control.domainArguments[i], domains[i], span))
         return false;
     for (unsigned arm = 0; arm < control.regions.size(); ++arm) {
       const auto &region = control.regions[arm];
@@ -1152,11 +906,11 @@ class ContractCheck {
     });
     for (unsigned i = 0; i < explicitInputs; ++i) {
       inputs[i] = {nextValue++, {}};
-      auto type = selectedType(helper.inputs[i].type, span);
-      if (!type ||
-          !established(mathematical.record(inputs[i], *type, span), span))
+      if (!established(
+              mathematical.record(inputs[i], helper.inputs[i].type, span),
+              span))
         return false;
-      valueTypes.emplace(inputs[i], std::move(*type));
+      valueTypes.emplace(inputs[i], helper.inputs[i].type);
     }
     for (const auto &fact : domainBounds[domain]) {
       if (!types.charge(inputs[itemInput].second.size() + fact.path.size() + 1,
@@ -1180,8 +934,8 @@ class ContractCheck {
       auto result = inputs[selector.port];
       result.second.insert(result.second.end(), selector.path.begin(),
                            selector.path.end());
-      auto type = projectedType(helper, helper.inputs[selector.port].type,
-                                selector.path, span);
+      auto type = types.projectedType(helper, helper.inputs[selector.port].type,
+                                      selector.path, span);
       if (!type)
         return {};
       if (!established(mathematical.record(result, *type, span), span))
@@ -1205,7 +959,7 @@ class ContractCheck {
     if (!finite.domain || finite.domain->result >= finite.domain->nodes.size())
       return refuse(span, "invalid closed finite descriptor");
     std::vector<ValueOrigin> operands;
-    for (auto operand : finite.descriptorOperands) {
+    for (auto operand : finite.domainOperands) {
       auto origin = value(context, operand, span);
       if (!origin)
         return false;
@@ -1223,9 +977,9 @@ class ContractCheck {
         data.push_back(operands[operand.index]);
       }
       for (auto child : node.children) {
-        if (child.node >= domains.size())
+        if (child >= domains.size())
           return refuse(span, "closed descriptor child fact differs");
-        children.push_back(domains[child.node]);
+        children.push_back(domains[child]);
       }
       auto selected = recipe(node, data, children, depth + 1);
       if (!selected)
@@ -1259,9 +1013,8 @@ class ContractCheck {
                     operands[container.index], 0, axis},
                    span);
     };
-    const auto *type = valueType(context, output, span);
-    if (!type ||
-        !checkFiniteFormation(types, finite, *type,
+    if (!checkFiniteFormation(types, finite,
+                              context.body.values[output.index].type,
                               mathematicalMode(context.body), span,
                               {constant, size, same, equal, bound}) ||
         types.diagnostic)
@@ -1281,9 +1034,9 @@ class ContractCheck {
   }
   bool body(const Body &source, Facts inputs, Restrictions scoped,
             ArrayRef<unsigned> environment, unsigned depth,
-            InputValues values = {}, ArrayRef<DataPrecondition> demanded = {}) {
+            InputValues values = {}) {
     if (!bounded(depth, {}) ||
-        !types.charge(source.values.size() + source.descriptorBindings.size() +
+        !types.charge(source.values.size() + source.domainBindings.size() +
                           source.scopedBindings.size() +
                           source.operations.size(),
                       {}))
@@ -1308,11 +1061,11 @@ class ContractCheck {
       return refuse({}, "data input identity coverage differs");
     Context context(types, source, std::move(inputs), std::move(scoped),
                     std::move(values), base, depth);
-    std::vector<ValueId> arguments;
-    for (unsigned i = 0; i < source.inputs; ++i)
-      arguments.push_back({i});
     if (depth == 1) {
-      for (const auto &requirement : rootAssumptions) {
+      std::vector<ValueId> arguments;
+      for (unsigned i = 0; i < source.inputs; ++i)
+        arguments.push_back({i});
+      for (const auto &requirement : owner->dataPreconditions) {
         auto assumed =
             condition(context, arguments, requirement, requirement.span);
         if (!assumed)
@@ -1321,8 +1074,8 @@ class ContractCheck {
           return false;
       }
     }
-    for (unsigned i = 0; i < source.descriptorBindings.size(); ++i) {
-      const auto &binding = source.descriptorBindings[i];
+    for (unsigned i = 0; i < source.domainBindings.size(); ++i) {
+      const auto &binding = source.domainBindings[i];
       if (binding.parameter) {
         if (*binding.parameter >= environment.size())
           return refuse(binding.span, "missing finite domain environment");
@@ -1333,7 +1086,7 @@ class ContractCheck {
       if (!types.charge(binding.children.size() + 1, binding.span))
         return false;
       for (auto child : binding.children)
-        if (child.node >= i)
+        if (child >= i)
           return refuse(binding.span, "domain child facts must precede use");
     }
     for (unsigned i = 0; i < context.inputs.size(); ++i) {
@@ -1362,12 +1115,6 @@ class ContractCheck {
           return false;
       }
     }
-    for (const auto &requirement : demanded) {
-      auto needed =
-          condition(context, arguments, requirement, requirement.span);
-      if (!needed || !prove(*needed, requirement.span))
-        return false;
-    }
     for (const auto &op : source.operations) {
       if (!bounded(depth, op.span))
         return false;
@@ -1386,10 +1133,7 @@ class ContractCheck {
         const auto &statics = totalConstant ? mathConstant->staticArguments
                                             : localConstant->staticArguments;
         if (!statics.empty()) {
-          auto selected = selectedType(statics.front(), op.span);
-          if (!selected)
-            return false;
-          const auto &natural = selected->dimension;
+          const auto &natural = statics.front().dimension;
           if (natural.isClosed())
             constant = natural.closedValue();
         } else {
@@ -1430,19 +1174,6 @@ class ContractCheck {
         }
       }
       if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
-        if (invoke->binding >= context.body.scopedBindings.size())
-          return refuse(op.span, "scoped invocation is outside its body");
-        if (!context.body.scopedBindings[invoke->binding].parameter) {
-          // Retained selected Boolean expressions are literal, zero-argument
-          // Math computations. Their captured domain and whole-item facts
-          // enter the same callback checker as authored Math literals.
-          if (!invoke->operands.empty() ||
-              !callback(context, invoke->binding, {}, depth + 1, op.span))
-            return types.diagnostic
-                       ? false
-                       : refuse(op.span, "literal invocation operands differ");
-          continue;
-        }
         OriginMap required;
         if (!restriction(context, invoke->binding, required, op.span))
           return false;
@@ -1513,7 +1244,7 @@ class ContractCheck {
     // unchecked operation or admitting unrelated constructors at a consumer.
     for (unsigned i = 0; i < context.domains.size(); ++i) {
       unsigned selected;
-      if (!domain(context, i, selected, source.descriptorBindings[i].span))
+      if (!domain(context, i, selected, source.domainBindings[i].span))
         return false;
     }
     return true;
@@ -1529,27 +1260,18 @@ public:
   std::vector<DataPrecondition> takeRequirements() {
     return std::move(requirements);
   }
-  bool run(const Declaration &decl, const Body &source,
-           ArrayRef<DataPrecondition> assumptions) {
+  bool run(const Declaration &decl, const Body &source) {
     owner = &decl;
-    typeOwner = &decl;
     rootInputs = source.inputs;
-    rootAssumptions = assumptions;
-    // Charge retained paths before copying the caller-selected premises.
-    for (const auto &condition : assumptions)
-      if (!types.charge(condition.left.path.size() +
-                            condition.right.path.size() + 1,
-                        condition.span))
-        return false;
-    requirements.assign(assumptions.begin(), assumptions.end());
-    if (!types.charge(source.inputs + decl.descriptorInputs.size() +
+    requirements = decl.dataPreconditions;
+    if (!types.charge(source.inputs + decl.domainInputs.size() +
                           decl.scopedInputs.size(),
                       decl.span))
       return false;
     if (infer)
       return body(source, Facts(source.inputs), {}, {}, 1);
     std::vector<unsigned> domains;
-    for (unsigned i = 0; i < decl.descriptorInputs.size(); ++i)
+    for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
       domains.push_back(newDomain());
     Restrictions selected;
     for (const auto &parameter : decl.scopedInputs) {
@@ -1571,17 +1293,15 @@ public:
 bool checkFiniteContracts(Semantics &types, ArrayRef<Declaration> declarations,
                           const Declaration &decl, const Body &body,
                           HelperResults &results) {
-  return ContractCheck(types, declarations, results)
-      .run(decl, body, decl.dataPreconditions);
+  return ContractCheck(types, declarations, results).run(decl, body);
 }
 std::optional<std::vector<DataPrecondition>>
 deriveDataPreconditions(Semantics &types, ArrayRef<Declaration> declarations,
                         const Declaration &decl, const Body &body,
-                        ArrayRef<DataPrecondition> rootAssumptions,
                         bool allowAdditional) {
   HelperResults results(types, declarations);
   ContractCheck check(types, declarations, results, true, allowAdditional);
-  if (!check.run(decl, body, rootAssumptions))
+  if (!check.run(decl, body))
     return {};
   return check.takeRequirements();
 }

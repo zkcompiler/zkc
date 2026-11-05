@@ -138,7 +138,7 @@ Expected<Calculation> extractCalculation(const Declaration &owner,
           for (auto &v : a.operands)
             coordinates.push_back(&v);
         } else if constexpr (std::is_same_v<T, FiniteComputation>) {
-          for (auto &v : a.descriptorOperands)
+          for (auto &v : a.domainOperands)
             coordinates.push_back(&v);
           for (auto &v : a.operands)
             coordinates.push_back(&v);

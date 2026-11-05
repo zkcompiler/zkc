@@ -7,7 +7,7 @@ import pytest
 from entry import Entry, joint_artifact
 from source_modules import core_packages, library_modules
 
-MODULES = library_modules(*core_packages('zkc'))
+MODULES = library_modules(*core_packages())
 
 
 def selected_program(entry):

@@ -83,10 +83,9 @@ enum class FrontendSignature {
   RecordUnpack,
   RecordInspect,
   RecordRepack,
-  RandomConstructor,
-  NativeMessage
+  RandomConstructor
 };
-enum class SourceDeclarationKind { Math, Local, Interface, Requirement };
+enum class SourceDeclarationKind { Math, Local, Interface };
 /// A static parameter, optionally its associated member, or a parameterless
 /// constructor.
 struct SourceTerm {
@@ -121,14 +120,11 @@ struct FrontendNotation {
   std::string target;
   bool isPublic;
 };
-/// Frontend-owned structural forms: logical oracle handles/sequences and
-/// installed descriptor families. These forms have distinct value categories.
-enum class FrontendConstructorForm {
-  OracleHandle,
-  OracleHandleSequence,
-  FiniteDescriptor
-};
-/// A structural head the source language owns that is not a catalog data
+/// The logical meanings the frontend gives its own type heads: one logical
+/// oracle handle over an oracle kind, and a bounded ordered sequence of such
+/// handles with a static maximum.
+enum class FrontendConstructorForm { OracleHandle, OracleHandleSequence };
+/// A logical type head the source language owns that is not a catalog type
 /// constructor. The row owns the head's spelling; the frontend owns the
 /// meaning of its form. Exactly one row spells each form.
 struct FrontendConstructor {

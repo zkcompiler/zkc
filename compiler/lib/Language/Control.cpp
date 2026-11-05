@@ -220,7 +220,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     if (!inheritDomains(nested, summary->domains, selectedDomains))
       return {};
     if (ordinal == 0)
-      operation.descriptorArguments = std::move(selectedDomains);
+      operation.domainArguments = std::move(selectedDomains);
     if (loop) {
       auto value = nested.input(Type(Type::Kind::Index), {}, expr.index.span);
       if (!value)
@@ -321,19 +321,6 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
            expr.span);
       return {};
     }
-  }
-  if (!states.empty()) {
-    if (!checker.types.charge(initial.size() + joined.size() + 1, expr.span))
-      return {};
-    SourceControlSnapshot snapshot;
-    for (const auto &[id, value] : initial)
-      snapshot.initial.push_back(id);
-    snapshot.joined = joined;
-    auto &snapshots = witnesses.controlSnapshots[decl.id.index];
-    if (!snapshots)
-      snapshots = std::make_shared<SourceControlSnapshots>();
-    snapshots->emplace(uint32_t(&expr - syntax.expressions.data()),
-                       std::move(snapshot));
   }
   Type packedType(Type::Kind::Unit);
   std::vector<Type> types;

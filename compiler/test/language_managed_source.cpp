@@ -206,7 +206,7 @@ fn dormant(go:bool)->bool{return apply(go,fn(x)=>{if x {require x;x} else {requi
     std::swap(candidates[0]->regions[0], candidates[0]->regions[1]);
     rejected(project);
   });
-  cases.run("selected Boolean regions and callback modes remain valid", [&] {
+  cases.run("eager Boolean regions and callback modes remain valid", [&] {
     replay(take(check(R"(
 math fn mathematical(go:bool)->bool{return go&&{go||!go};}
 math fn math_apply(go:bool,callback:math fn(bool)->bool)->bool{return callback(go);}
@@ -219,12 +219,11 @@ protocol Run roles(V)(go:bool@V)->(out:bool@V){return go&&{go||!go};}
     replay(take(check(R"(
 type Table=builtin("oracle.table",bool,16);
 type O=builtin("oracle",Table);
-math fn conjunction(a:bool,b:bool)->bool{return intrinsic("bool.and",a,b);}
 oracle def Identity(source:O)->O {
  requires true&&true;
  query(position:index) {
   let answer <- oracle.query(source,position);
-  return conjunction(answer,true);
+  return answer&&true;
  }
 }
 )")));

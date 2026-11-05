@@ -214,15 +214,15 @@ def independent(value: bool) -> bool:
         options.format = "zkc-layout";
         auto trees = [&](StringRef fixity) {
           std::string provider =
-              "pub def first(a: bool, b: bool) -> bool:\n    a\npub notation " +
-              fixity.str() + " a ⊕ b = first(a,b)\n";
-          auto captured =
-              take(capture({{"ops", provider, "ops.zkc"},
-                            {"m",
-                             "use ops::{⊕}\ndef choose(value: bool) -> bool:\n"
-                             "    value ⊕ false ⊕ true\n",
-                             "m.zkc"}},
-                           options));
+              "pub def first(a: bool, b: bool) -> bool:\n    a\npub operator " +
+              fixity.str() + " ⊕ = first\n";
+          auto captured = take(capture(
+              {{"ops", provider, "ops.zkc"},
+               {"m",
+                "use ops::{operator ⊕}\ndef choose(value: bool) -> bool:\n"
+                "    value ⊕ false ⊕ true\n",
+                "m.zkc"}},
+              options));
           auto project = take(analyze(captured).checkedProject());
           SourceId consumer{UINT32_MAX};
           for (unsigned i = 0; i < project.sources().size(); ++i)

@@ -274,27 +274,26 @@ math fn applied(xs:Vector<Fr>)->Vector<Fr>{return from_domain(elements(xs));}
               .id.index;
       if (mutation.starts_with("factory")) {
         auto factory = named(project, "selected").id.index;
-        auto recipe = std::make_shared<DescriptorDefinition>(
-            *env.declarations[factory].descriptorDefinition);
+        auto recipe = std::make_shared<DomainDefinition>(
+            *env.declarations[factory].domainDefinition);
         require(!recipe->bindings.empty(), "missing domain recipe");
         if (mutation == "factory-data")
           recipe->bindings.front().operands = {{999999}};
         else if (mutation == "factory-parameter")
           recipe->bindings.front().parameter = 0;
         else
-          recipe->bindings.front().children = {
-              {0, recipe->bindings.front().contract}};
-        env.declarations[factory].descriptorDefinition = std::move(recipe);
+          recipe->bindings.front().children = {0};
+        env.declarations[factory].domainDefinition = std::move(recipe);
       } else {
         auto body = std::make_shared<Body>(*env.declarations[target].body);
         if (mutation == "body-domain")
-          body->descriptorBindings.clear();
+          body->domainBindings.clear();
         else {
           bool changed = false;
           for (auto &op : body->operations)
             if (auto *call = std::get_if<HelperCall>(&op.action)) {
               if (mutation == "call-domain")
-                call->descriptorArguments.clear();
+                call->domainArguments.clear();
               else
                 call->operands.clear();
               changed = true;
@@ -549,52 +548,6 @@ math fn wrong(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let
         require(adapter.prove(equal, {}) == facts::Status::Capacity,
                 "nested query renewed its allowance");
       });
-  cases.run(
-      "replay premise seeds do not come from the candidate declaration", [] {
-        auto project = take(check(""));
-        auto helper = named(project, "at");
-        const auto authenticated = helper.dataPreconditions;
-        require(authenticated.size() == 1, "missing source premise");
-        // The candidate may claim an unrelated fact; it must not become an
-        // input assumption just because the checker borrows this declaration.
-        helper.dataPreconditions.front().right.port = 1;
-        std::vector<Declaration> declarations(project.declarations().begin(),
-                                              project.declarations().end());
-        Limits limits;
-        source::Work work{limits};
-        source::Semantics semantics(declarations, {}, work);
-        auto requirements =
-            source::deriveDataPreconditions(semantics, declarations, helper,
-                                            *helper.body, authenticated, false);
-        require(requirements && *requirements == authenticated,
-                "candidate replaced the authenticated root premises");
-        source::Work independentWork{limits};
-        source::Semantics independent(declarations, {}, independentWork);
-        auto inferred = source::deriveDataPreconditions(
-            independent, declarations, helper, *helper.body, {}, true);
-        require(inferred && *inferred == authenticated,
-                "empty root premise view trusted candidate annotations");
-      });
-  cases.run("root premise paths are charged before retention", [] {
-    auto project = take(check(""));
-    const auto &helper = named(project, "at");
-    auto premises = helper.dataPreconditions;
-    require(premises.size() == 1, "missing source premise");
-    premises.front().right.path.assign(1000, 0);
-    std::vector<Declaration> declarations(project.declarations().begin(),
-                                          project.declarations().end());
-    Limits limits;
-    limits.work = 64;
-    source::Work work{limits};
-    source::Semantics semantics(declarations, {}, work);
-    require(!source::deriveDataPreconditions(semantics, declarations, helper,
-                                             *helper.body, premises, false),
-            "oversized premise retained beyond the allowance");
-    require(semantics.diagnostic &&
-                semantics.diagnostic->code == "source.limit" &&
-                work.used <= limits.work,
-            "premise path was traversed before its work check");
-  });
   cases.run("absence may infer a precondition but exhaustion cannot", [] {
     auto project = take(check(""));
     auto helper = named(project, "at");
@@ -605,7 +558,7 @@ math fn wrong(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let
     source::Work work{limits};
     source::Semantics semantics(declarations, {}, work);
     auto requirements = source::deriveDataPreconditions(
-        semantics, declarations, helper, *helper.body, {}, true);
+        semantics, declarations, helper, *helper.body, true);
     require(requirements && requirements->size() == 1,
             "missing evidence did not infer the permitted input condition");
     auto requiredWork = work.used;
@@ -613,7 +566,7 @@ math fn wrong(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let
     limited.used = limits.work - requiredWork + 1;
     source::Semantics exhausted(declarations, {}, limited);
     require(!source::deriveDataPreconditions(exhausted, declarations, helper,
-                                             *helper.body, {}, true),
+                                             *helper.body, true),
             "exhaustion returned a mathematical precondition");
     require(exhausted.diagnostic &&
                 exhausted.diagnostic->code == "source.limit",
@@ -625,31 +578,21 @@ math fn wrong(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let
              : "overflowing product cannot establish a wrapped collection size",
         [&] {
           Environment environment;
-          auto shape = std::make_shared<DescriptorShape>();
-          DescriptorBinding range{};
-          range.kind = DescriptorBinding::Kind::Range;
-          range.contract = {DescriptorFamily::Finite,
-                            {Type(Type::Kind::Index)}};
+          auto shape = std::make_shared<DomainShape>();
+          DomainBinding range{};
+          range.kind = DomainBinding::Kind::Range;
           range.operands = {{0}, {1}};
           shape->nodes.push_back(range);
           range.operands = {{0}, {2}};
           shape->nodes.push_back(range);
-          DescriptorBinding product{};
-          product.kind = DescriptorBinding::Kind::Product;
-          Type pair(Type::Kind::Tuple);
-          pair.arguments = {*finiteDescriptorItem(range.contract),
-                            *finiteDescriptorItem(range.contract)};
-          product.contract = {DescriptorFamily::Finite, {pair}};
-          product.children = {{0, range.contract}, {1, range.contract}};
+          DomainBinding product{};
+          product.kind = DomainBinding::Kind::Product;
+          product.children = {0, 1};
           shape->nodes.push_back(product);
           if (zero) {
             range.operands = {{0}, {0}};
             shape->nodes.push_back(range);
-            product.children = {{2, product.contract}, {3, range.contract}};
-            Type nestedPair(Type::Kind::Tuple);
-            nestedPair.arguments = {pair,
-                                    *finiteDescriptorItem(range.contract)};
-            product.contract = {DescriptorFamily::Finite, {nestedPair}};
+            product.children = {2, 3};
             shape->nodes.push_back(product);
           }
           shape->result = shape->nodes.size() - 1;

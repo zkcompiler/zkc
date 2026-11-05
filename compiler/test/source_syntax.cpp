@@ -322,24 +322,16 @@ void notationCases() {
             Status::Complete,
         "explicit grouping allows mixed association");
   for (StringRef declaration :
-       {"pub notation infixl(66) a ⊙ b = product(a,b)",
-        "notation infixl(65) a + b = add(a,b)", "notation ⟪a,b⟫ = pair(a,b)",
-        "notation a[i,j] = lookup(a,i,j)",
-        "notation ∑ x ∈ D, body = sum(D, fn(x) => body)",
-        "notation ∑ x ∈ D with p, body = sum_where(D, fn(x) => p, fn(x) => "
-        "body)",
-        "notation infixl(70) a ⊙ b = Module<T>::combine<F = F>(a,b)",
-        "use ops::{⊙, ⟪ ⟫, [], ∑}",
-        "use ops::{notation prefix ⊙, notation index(3)}"}) {
+       {"pub operator infixl(66) ⊙ = product", "operator + = add",
+        "notation ⟪a,b⟫ = pair(a,b)", "indexing a[i,j] = lookup(a,i,j)",
+        "reduction ∑ = sum, filtered_sum"}) {
     auto parsed = read("module m\n" + declaration.str() + "\n");
     check(parsed.status() == Status::Complete, declaration);
     if (parsed.status() != Status::Complete)
       report(parsed);
-    check(format(parsed).complete, "unified notation declaration formatting");
   }
   refused("module m\nnotation ⟪a,b⟫ = pair(b,a)\n", "syntax.notation");
-  refused("module m\nnotation infixl(101) a ⊙ b = product(a,b)\n",
-          "syntax.notation");
+  refused("module m\noperator infixl(101) ⊙ = product\n", "syntax.notation");
   auto comments = read("module m  \r\n// keep these spaces   \r\ndef f():\r\n  "
                        "  \"literal  \"  \r\n");
   auto formatted = format(comments);
@@ -355,10 +347,8 @@ void notationCases() {
         "nested scope uses and retains exact imported environment");
 }
 void descriptorDeclarations() {
-  for (StringRef declaration :
-       {"notation infixl(60) a + b = add(a,b)",
-        "notation infixl(60) a ∑ b = sum(a,b)",
-        "notation + x ∈ D, body = sum(D, fn(x) => body)"}) {
+  for (StringRef declaration : {"operator infixl(60) + = add",
+                                "operator ∑ = sum", "reduction + = sum"}) {
     refused("module m\n" + declaration.str() + "\n", "syntax.notation");
   }
 }
@@ -426,12 +416,6 @@ void limits() {
           "a larger enclosing allowance keeps small parses valid");
     check(result.workUsed() == read("module m\n").workUsed(),
           "capped parsing reports actual work without underflow");
-  }
-  std::string reduction =
-      "notation ∑ x ∈ D with p, body = sum(D, fn(x) => p, fn(x) => body)\n";
-  for (size_t i = 0; i < reduction.size(); ++i) {
-    auto partial = read(StringRef(reduction).take_front(i));
-    coverage(partial, "truncated notation preserves bytes and bounded nodes");
   }
   Budget raised;
   raised.depth = UINT64_MAX;

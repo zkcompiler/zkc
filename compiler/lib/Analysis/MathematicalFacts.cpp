@@ -8,12 +8,10 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
-#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
-#include <algorithm>
 
 using namespace mlir;
 namespace zkc {
@@ -114,21 +112,10 @@ struct MathematicalFactAnalysis::Impl {
   // independent of previous queries on the reusable immutable helper view.
   struct Extraction {
     Impl &analysis;
-    struct ForwardedInput {
-      unsigned input;
-      // Greatest dependency depth used to establish this forwarding law.
-      unsigned depth;
-    };
-    struct Origin {
-      Value value;
-      unsigned depth;
-    };
     llvm::DenseMap<std::pair<std::pair<Operation *, unsigned>, unsigned>,
-                   std::optional<ForwardedInput>>
+                   std::optional<unsigned>>
         inputs;
-    // Cache the terminal depth as well as the identity: normalization is only
-    // the prefix of a continued constructor/range/source interpretation.
-    llvm::DenseMap<std::pair<Value, unsigned>, Origin> origins;
+    llvm::DenseMap<std::pair<Value, unsigned>, Value> origins;
     // Only closure-level values are cached. Helper locals depend on the full
     // call environment and must never reuse another invocation's facts.
     // Consumed depth is part of each query key. A result computed on a short
@@ -146,9 +133,8 @@ struct MathematicalFactAnalysis::Impl {
     bool enter(facts::Work &work, unsigned depth) {
       return enterExtraction(work, depth);
     }
-    std::optional<ForwardedInput> forwardedInput(Operation *op, unsigned result,
-                                                 facts::Work &work,
-                                                 unsigned depth) {
+    std::optional<unsigned> forwardedInput(Operation *op, unsigned result,
+                                           facts::Work &work, unsigned depth) {
       if (!enter(work, depth))
         return std::nullopt;
       auto key = std::make_pair(std::make_pair(op, result), depth);
@@ -160,17 +146,11 @@ struct MathematicalFactAnalysis::Impl {
       // Copy borrowed values before nested cache insertions can rehash helpers.
       auto *body = view->body;
       Value value = view->returned[result];
-      // Nested forwarding is evidence about a shared helper graph, not an
-      // expansion of every invocation. Keep the existing path steps while
-      // retaining the deepest dependency for subsequent actual analysis.
-      unsigned consumedDepth = depth;
       for (unsigned step = depth; enter(work, step); ++step) {
         if (auto arg = dyn_cast<BlockArgument>(value)) {
-          auto input =
-              arg.getOwner() == body
-                  ? std::optional<ForwardedInput>(
-                        {arg.getArgNumber(), std::max(step, consumedDepth)})
-                  : std::nullopt;
+          auto input = arg.getOwner() == body
+                           ? std::optional<unsigned>(arg.getArgNumber())
+                           : std::nullopt;
           inputs.try_emplace(key, input);
           return input;
         }
@@ -182,39 +162,25 @@ struct MathematicalFactAnalysis::Impl {
         auto input = forwardedInput(resolve(call, "callee"),
                                     cast<OpResult>(value).getResultNumber(),
                                     work, step + 1);
-        if (!input || input->input >= call->getNumOperands())
+        if (!input || *input >= call->getNumOperands())
           return std::nullopt;
-        value = call->getOperand(input->input);
-        consumedDepth = std::max(consumedDepth, input->depth);
+        value = call->getOperand(*input);
       }
       return std::nullopt;
     }
-    Result<Origin> origin(Value value, facts::Work &work, unsigned depth) {
+    Result<Value> origin(Value value, facts::Work &work, unsigned depth) {
       if (!enter(work, depth))
-        return missing<Origin>(work);
+        return missing<Value>(work);
       if (!contains(value))
-        return missing<Origin>(work);
+        return missing<Value>(work);
       auto key = std::make_pair(value, depth);
       if (auto found = origins.find(key); found != origins.end())
         return {Status::Proven, found->second};
-      auto finish = [&]() -> Result<Origin> {
-        Origin result{value, depth};
-        origins.try_emplace(key, result);
-        return {Status::Proven, result};
+      auto finish = [&]() -> Result<Value> {
+        origins.try_emplace(key, value);
+        return {Status::Proven, value};
       };
-      for (; enter(work, depth);) {
-        // Arm captures are immutable aliases of their actual operands. Payload
-        // arguments and branch results have no such identity. The accessor
-        // preserves the payload offset and actual order, including aliases.
-        if (auto argument = dyn_cast<BlockArgument>(value);
-            argument && isa<data::BranchOp>(owner(value))) {
-          if (Value capture = selectedCapture(argument);
-              contains(capture) && capture.getType() == value.getType()) {
-            value = capture;
-            ++depth;
-            continue;
-          }
-        }
+      for (; enter(work, depth); ++depth) {
         auto *call = value.getDefiningOp();
         if (!isa_and_nonnull<func::CallOp>(call))
           return finish();
@@ -222,13 +188,12 @@ struct MathematicalFactAnalysis::Impl {
                                     cast<OpResult>(value).getResultNumber(),
                                     work, depth + 1);
         if (work.exhausted())
-          return missing<Origin>(work);
-        if (!input || input->input >= call->getNumOperands())
+          return missing<Value>(work);
+        if (!input || *input >= call->getNumOperands())
           return finish();
-        value = call->getOperand(input->input);
-        depth = input->depth;
+        value = call->getOperand(*input);
       }
-      return missing<Origin>(work);
+      return missing<Value>(work);
     }
     Result<WordRange> rangeExpression(Value value, const Environment *env,
                                       facts::Work &work, unsigned depth) {
@@ -243,8 +208,7 @@ struct MathematicalFactAnalysis::Impl {
         auto forwarded = origin(value, work, depth);
         if (!forwarded.value)
           return missing<WordRange>(work);
-        value = forwarded.value->value;
-        depth = forwarded.value->depth;
+        value = *forwarded.value;
       }
       if (auto index = value.getDefiningOp<data::IndexOp>())
         return {Status::Proven, WordRange{index.getValue(), index.getValue()}};
@@ -377,8 +341,7 @@ struct MathematicalFactAnalysis::Impl {
         auto forwarded = origin(value, work, depth);
         if (!forwarded.value)
           return missing<Cardinality>(work);
-        value = forwarded.value->value;
-        depth = forwarded.value->depth;
+        value = *forwarded.value;
       }
       if (value.getDefiningOp<data::SequenceEmptyOp>())
         return exact(0);
@@ -441,8 +404,7 @@ struct MathematicalFactAnalysis::Impl {
         auto forwarded = origin(value, work, depth);
         if (!forwarded.value)
           return {};
-        value = forwarded.value->value;
-        depth = forwarded.value->depth;
+        value = *forwarded.value;
       }
       auto *op = value.getDefiningOp();
       if (isa_and_nonnull<func::CallOp>(op)) {
@@ -503,7 +465,7 @@ struct MathematicalFactAnalysis::Impl {
       auto origin = analysis.origin(value, work, depth);
       if (!origin.value)
         return {};
-      value = origin.value->value;
+      value = *origin.value;
       if (auto found = identities.find(value); found != identities.end())
         return found->second;
       auto result = kernel.intern(
@@ -525,9 +487,9 @@ struct MathematicalFactAnalysis::Impl {
       auto result = seed(value, axis);
       if (!seeded.insert({value, axis}).second || !validAxis(value, axis))
         return result;
-      // Formal formation facts were already seeded. Captured constructors,
-      // however, can supply result cardinality through their actual operands.
-      if (isa<BlockArgument>(value) && !isa<data::BranchOp>(owner(value)))
+      // Formal formation facts were already seeded. Asking the full graph
+      // for each formal while importing premises repeats closure derivation.
+      if (isa<BlockArgument>(value))
         return result;
       auto count = analysis.cardinality(
           value, axis, nullptr, work, depth,
@@ -617,10 +579,7 @@ Operation *MathematicalFactAnalysis::rootFor(Operation *op) {
 }
 Result<Value> MathematicalFactAnalysis::origin(Value value, facts::Work &work,
                                                unsigned depth) {
-  auto result = Impl::Extraction(*impl_).origin(value, work, depth);
-  return {result.status, result.value
-                             ? std::optional<Value>(result.value->value)
-                             : std::nullopt};
+  return Impl::Extraction(*impl_).origin(value, work, depth);
 }
 Result<WordRange> MathematicalFactAnalysis::wordRange(Value value,
                                                       facts::Work &work,

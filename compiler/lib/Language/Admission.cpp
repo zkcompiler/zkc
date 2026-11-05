@@ -1,6 +1,7 @@
 #include "Semantics.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Language/Builtins.h"
 using namespace llvm;
 namespace zkc::language::detail {
 std::optional<Semantics::Admission> Semantics::admission(const Type &type,
@@ -17,25 +18,6 @@ std::optional<Semantics::Admission> Semantics::admission(const Type &type,
   if (isStaticOnly(type) || type.kind == K::Formal || isLogicalValue(type))
     return A::Rejected;
   const auto *decl = typeDeclaration(type);
-  if (boundary == Boundary::MessagePayload) {
-    // Decide known invalidity before allowing a symbolic premise. In
-    // particular, neither a codec nor a source promise exposes a constructor.
-    auto construction =
-        admission(type, Boundary::Construction, span, depth + 1);
-    auto message = admission(type, Boundary::Message, span, depth + 1);
-    if (!construction || !message)
-      return {};
-    if (*construction == A::Rejected || *message == A::Rejected)
-      return A::Rejected;
-    if (symbolic(type))
-      return A::Deferred;
-    auto payload = nativeMessagePayload(type);
-    if (!payload) {
-      accept(payload.takeError(), span);
-      return {};
-    }
-    return *payload ? A::Accepted : A::Rejected;
-  }
   if (boundary == Boundary::Construction && decl && decl->generated &&
       !decl->generated->constructible)
     return A::Rejected;
@@ -134,17 +116,13 @@ bool Semantics::admit(const Type &type, Boundary boundary, Span span,
     return recordAdmission(*scope, {type, boundary, span, calls.vec()});
   StringRef code = boundary == Boundary::Participants   ? "source.participants"
                    : boundary == Boundary::Construction ? "source.ingress"
-                   : boundary == Boundary::MessagePayload
-                       ? "source.message-payload"
-                       : "source.codec";
+                                                        : "source.codec";
   StringRef message =
       boundary == Boundary::Participants
           ? "type cannot have multiple participant components"
       : boundary == Boundary::Construction
           ? "type has no external construction authority; receive transparent "
             "data and validate it explicitly"
-      : boundary == Boundary::MessagePayload
-          ? "type has no nonempty complete native message payload"
           : "type has no admitted native message codec";
   if (*result == Admission::Deferred)
     message = "boundary admission requires a concrete type";

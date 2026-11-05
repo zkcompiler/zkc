@@ -32,30 +32,10 @@ Type assetType(StringRef sort, StringRef identity) {
 StringRef assetSort(const Type &type) {
   return type.kind == Type::Kind::Asset ? StringRef(type.sort) : StringRef();
 }
-bool isDescriptor(const Type &type) {
-  return type.kind == Type::Kind::Descriptor;
-}
-std::optional<DescriptorContract> descriptorContract(const Type &type) {
-  if (!isDescriptor(type))
-    return {};
-  return DescriptorContract{type.family, type.arguments};
-}
-Type descriptorType(const DescriptorContract &contract) {
-  Type result(Type::Kind::Descriptor);
-  result.family = contract.family;
-  result.arguments = contract.parameters;
-  return result;
-}
-const Type *finiteDescriptorItem(const DescriptorContract &contract) {
-  return contract.family == DescriptorFamily::Finite &&
-                 contract.parameters.size() == 1
-             ? &contract.parameters.front()
-             : nullptr;
-}
 bool isStaticOnly(const Type &type) {
-  return isDescriptor(type) || type.kind == Type::Kind::Natural ||
-         type.kind == Type::Kind::Module || type.kind == Type::Kind::Domain ||
-         type.kind == Type::Kind::Asset || type.kind == Type::Kind::OracleKind;
+  return type.kind == Type::Kind::Natural || type.kind == Type::Kind::Module ||
+         type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset ||
+         type.kind == Type::Kind::OracleKind;
 }
 bool isOracleHandle(const Type &type) {
   return type.kind == Type::Kind::Oracle ||
@@ -73,27 +53,19 @@ bool isLogicalValue(const PlacedType &type) {
          (type.placement &&
           std::holds_alternative<ProductPlacement>(type.placement->value));
 }
-StringRef frontendTypeConstructor(const Type &type) {
+StringRef oracleConstructor(const Type &type) {
   if (type.kind == Type::Kind::OracleKind)
     return type.domain == "table" ? "oracle.table" : "";
-  // Structural heads are spelled by installed frontend constructor forms.
-  // Descriptor family identity remains separate from logical value kinds.
-  if (isOracleHandle(type) || isDescriptor(type))
+  // A logical handle is spelled by the frontend constructor row whose form
+  // the frontend gives this kind.
+  if (isOracleHandle(type))
     for (const auto &row : protocol::frontendConstructors())
-      if (logicalHeadKind(row.form) == type.kind &&
-          (!isDescriptor(type) || type.family == DescriptorFamily::Finite))
+      if (logicalHeadKind(row.form) == type.kind)
         return row.name;
   return {};
 }
-StringRef oracleConstructor(const Type &type) {
-  return type.kind == Type::Kind::OracleKind || isOracleHandle(type)
-             ? frontendTypeConstructor(type)
-             : StringRef();
-}
 StringRef typeKindName(Type::Kind kind) {
   switch (kind) {
-  case Type::Kind::Descriptor:
-    return "descriptor";
   case Type::Kind::Boolean:
     return "boolean";
   case Type::Kind::Field:
@@ -159,12 +131,11 @@ std::string spelling(const Type &type) {
   if ((type.kind == K::Domain || type.kind == K::Asset) && !type.symbolic)
     return StringRef(type.sort).lower() + "<" + type.domain + ">";
   if (type.kind == K::Builtin || type.kind == K::Formal ||
-      (!type.symbolic && !frontendTypeConstructor(type).empty())) {
+      (!type.symbolic && !oracleConstructor(type).empty())) {
     std::string result =
         std::string(type.kind == K::Formal ? "formal(\"" : "builtin(\"") +
-        (frontendTypeConstructor(type).empty()
-             ? type.domain
-             : frontendTypeConstructor(type).str()) +
+        (oracleConstructor(type).empty() ? type.domain
+                                         : oracleConstructor(type).str()) +
         "\"";
     for (const auto &argument : type.arguments)
       result += ", " + spelling(argument);
@@ -205,8 +176,6 @@ Error typeKey(const Type &type, const NominalAuthority *authority,
     return Error::success();
   }
   out << type.symbolic << ':';
-  if (isDescriptor(type))
-    out << static_cast<unsigned>(type.family) << ':';
   frame(type.domain);
   if (authority && !type.symbolic &&
       (type.kind == Type::Kind::Record ||

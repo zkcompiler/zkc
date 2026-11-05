@@ -91,7 +91,6 @@ add_zkc_component(Language
   lib/Language/Syntax.cpp
   lib/Language/LayoutSyntax.cpp
   lib/Language/LayoutReader.cpp
-  lib/Language/LayoutScoped.cpp
   lib/Language/FormalSourceWriter.cpp
   lib/Language/FormalSource.cpp
   lib/Language/LayoutDeclarations.cpp
@@ -144,7 +143,7 @@ add_zkc_component(Language
   lib/Language/SignatureWitness.cpp
   lib/Language/ScopedValues.cpp
   lib/Language/Scoped.cpp
-  lib/Language/DescriptorFactories.cpp
+  lib/Language/FiniteDomains.cpp
   lib/Language/FiniteDefinitions.cpp
   lib/Language/FiniteContracts.cpp
   lib/Language/HelperResults.cpp
@@ -152,8 +151,8 @@ add_zkc_component(Language
   lib/Language/FiniteFormation.cpp
   lib/Language/DataRequirements.cpp
   lib/Language/FiniteDomainArguments.cpp
-  lib/Language/DescriptorClosure.cpp
-  lib/Language/DescriptorWitness.cpp
+  lib/Language/DomainClosure.cpp
+  lib/Language/DomainWitness.cpp
   lib/Language/ValueOrigins.cpp
   lib/Language/ClosureInputs.cpp
   lib/Language/FreePlaces.cpp

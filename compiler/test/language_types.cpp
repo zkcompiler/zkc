@@ -700,17 +700,14 @@ fn read<G:Group>(x:Wrapped<G>)->G::Scalar {return need(x.x);}
   require(*emptyPort->getObject("schema")->getArray("permissions") ==
               json::Array{},
           "empty array lost element permissions");
-  auto emptyCaptured =
-      must(capture({{"m",
-                     "module m;protocol Run roles(P,V)()->(x:()@V){let "
-                     "x=send P->V(());return(x=x);}entry fn Demo(inputs: "
-                     "Run::Inputs) { return Run::run(inputs); }",
-                     "empty.zkc"}}));
-  auto emptyChecked = analyze(emptyCaptured).checkedProject();
-  require(!emptyChecked, "empty source message passed checking");
+  auto emptySource = check("module m;protocol Run roles(P,V)()->(x:()@V){let "
+                           "x=send P->V(());return(x=x);}entry fn Demo(inputs: "
+                           "Run::Inputs) { return Run::run(inputs); }");
+  auto emptyClosed = zkc::test::closeProtocolDeployment(emptySource, "m::Demo");
+  require(!emptyClosed, "empty source message passed closure");
   bool located = false;
-  handleAllErrors(emptyChecked.takeError(), [&](const DiagnosticError &error) {
-    located = error.diagnostic().code == "source.message-payload" &&
+  handleAllErrors(emptyClosed.takeError(), [&](const DiagnosticError &error) {
+    located = error.diagnostic().code == "source.wire" &&
               bool(error.diagnostic().primary);
   });
   require(located, "empty message refusal lost its source location");
@@ -983,11 +980,11 @@ void sourceNotation() {
         ("module m;math fn pick(x:[bool;2])->bool{return " + bad + ";}").str(),
         "source.index");
   refuses("module m;math fn pick(x:[bool;2])->bool{return x[value];}",
-          "source.index");
+          "source.name");
   refuses(
       "module m;struct Rec{pub member:bool}math fn pick(x:Rec)->bool{return "
       "x[member];}",
-      "source.index");
+      "source.name");
   refuses("module m;math fn pick(x:(bool,bool))->bool{return x[0];}",
           "source.index");
   refuses("module m;type Bad<N:nat*2>=[bool;N];", "source.syntax");

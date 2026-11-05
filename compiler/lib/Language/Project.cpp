@@ -29,15 +29,6 @@ std::error_code DiagnosticError::convertToErrorCode() const {
 }
 
 namespace {
-llvm::Error chargeProjectSnapshot(llvm::ArrayRef<Declaration> declarations,
-                                  detail::Work &work) {
-  if (auto error = work.charge(declarations.size()))
-    return error;
-  for (const auto &declaration : declarations)
-    if (auto error = detail::chargeRequirementSnapshot(declaration, work))
-      return error;
-  return Error::success();
-}
 std::optional<StringRef> exceededLimit(const Limits &limits,
                                        const Limits &ceiling) {
 #define CHECK_LIMIT(name)                                                      \
@@ -168,44 +159,6 @@ Error Work::charge(uint64_t amount, std::optional<Span> span) {
     *allowance -= amount;
   return Error::success();
 }
-Error chargeConsumerRequirement(const ConsumerRequirement &requirement,
-                                Work &work) {
-  if (auto error = work.charge(requirement.reference.path.size() +
-                               requirement.arguments.size() + 1))
-    return error;
-  for (const auto &step : requirement.reference.path)
-    if (auto error = work.charge(step.name.size() + 1))
-      return error;
-  auto type = [&](const Type &value) -> Error {
-    auto cost =
-        typeComplexity(value, work.limits.typeNodes, work.limits.typeDepth);
-    if (!cost)
-      return cost.takeError();
-    return work.charge(*cost);
-  };
-  for (const auto &argument : requirement.arguments)
-    if (auto error = type(argument))
-      return error;
-  if (requirement.reference.abstract)
-    return type(requirement.reference.abstract->module);
-  return Error::success();
-}
-Error chargeRequirementSnapshot(const Declaration &declaration, Work &work) {
-  for (const auto &requirement : declaration.consumerRequirements)
-    if (auto error = chargeConsumerRequirement(requirement, work))
-      return error;
-  for (const auto &admission : declaration.admissions) {
-    auto cost = typeComplexity(admission.type, work.limits.typeNodes,
-                               work.limits.typeDepth);
-    if (!cost)
-      return cost.takeError();
-    if (auto error = work.charge(*cost, admission.span))
-      return error;
-    if (auto error = work.charge(admission.calls.size() + 1, admission.span))
-      return error;
-  }
-  return Error::success();
-}
 Error chargeSemanticIndex(const std::vector<Declaration> &declarations,
                           Work &work) {
   if (auto e = work.charge(declarations.size() + 1))
@@ -217,8 +170,6 @@ Error chargeSemanticIndex(const std::vector<Declaration> &declarations,
     for (const auto &parameter : decl.parameters)
       if (auto e = work.charge(parameter.atom.size() + 1, parameter.span))
         return e;
-    if (auto error = chargeRequirementSnapshot(decl, work))
-      return error;
   }
   return Error::success();
 }
@@ -239,12 +190,12 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
     return failure("source.limit", "file count limit exceeded");
   uint64_t total = 0;
   std::set<StringRef> names;
-  const auto installed = installedModules();
   for (const auto &source : sources) {
-    if (source.origin != SourceOrigin::Captured || source.module == "zkc" ||
-        llvm::is_contained(installed, source.module))
-      return failure("source.module",
-                     "installed modules are reserved for installation sources");
+    if (source.origin != SourceOrigin::Captured ||
+        (source.module == "zkc" || source.module == "zkc::prelude" ||
+         source.module == "zkc::records"))
+      return failure("source.module", "zkc, zkc::prelude and zkc::records are "
+                                      "reserved for installation sources");
     if (source.diagnosticPath.size() > 4096)
       return failure("source.limit", "diagnostic path byte limit exceeded");
     if (source.text.size() > limits.fileBytes ||
@@ -599,7 +550,7 @@ resolveEntry(const CheckedProject &project, StringRef name,
     // Template bodies and source buffers remain shared and immutable.
     detail::CheckedStorage scope(project.capture(),
                                  project.installationIdentity().str());
-    if (auto error = chargeProjectSnapshot(project.declarations(), work))
+    if (auto error = work.charge(project.declarations().size()))
       return std::move(error);
     scope.declarations.assign(project.declarations().begin(),
                               project.declarations().end());
@@ -845,7 +796,7 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
   // Metadata is bounded by definition checking. Immutable template bodies
   // are shared; specialization starts with its own phase budget.
   detail::Work::Scope phase(work, SourceWorkPhase::Specialization);
-  if (auto error = chargeProjectSnapshot(project.declarations(), work))
+  if (auto error = work.charge(project.declarations().size()))
     return error;
   storage->declarations.assign(project.declarations().begin(),
                                project.declarations().end());
@@ -957,7 +908,7 @@ Expected<ClosedEntry> ClosedEntry::closeProtocol(
                            "run invocation requires a protocol", target.span);
   detail::Work work{limits};
   detail::Work::Scope phase(work, SourceWorkPhase::Specialization);
-  if (auto error = chargeProjectSnapshot(project.declarations(), work))
+  if (auto error = work.charge(project.declarations().size()))
     return error;
   storage->declarations.assign(project.declarations().begin(),
                                project.declarations().end());

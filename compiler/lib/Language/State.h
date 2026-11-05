@@ -25,27 +25,6 @@ struct SourceCall;
 using IntrinsicCallSource = SourceCall;
 struct AuthoringStorage;
 struct ConstructionSource;
-/// Source-check inference product, frozen before candidate witness checking.
-/// Authored premises are reconstructed separately from immutable syntax.
-struct InferredHeaderPremises {
-  std::vector<NaturalBound> naturals;
-  std::vector<PermissionBound> permissions;
-  std::vector<CapabilityBound> capabilities;
-};
-/// Independently reconstructed static header product. Body results and
-/// admission-origin lists are deliberately absent from this immutable cache.
-struct AuthoredHeaderPremises {
-  DeclarationId id, module;
-  std::optional<DeclarationId> parent;
-  std::string qualifiedName;
-  Span span;
-  std::vector<Parameter> parameters;
-  std::vector<NaturalBound> bounds;
-  std::vector<PermissionBound> permissionBounds;
-  std::vector<CapabilityBound> capabilityBounds;
-  std::optional<EffectSummary> effectAllowance;
-  bool abstract = false, permitsInference = false;
-};
 /// Defining source authorities, computed once after the last checking step.
 /// A unit is one captured file, named by its module path. Installation
 /// sources are not units: installed declarations enter through the
@@ -103,10 +82,6 @@ struct CheckedStorage {
   std::vector<std::shared_ptr<const IntrinsicCallSource>> intrinsicCalls;
   std::map<uint32_t, std::shared_ptr<const ScopedSource>> bodySources;
   SourceAuthorities authorities;
-  std::shared_ptr<const std::map<uint32_t, InferredHeaderPremises>>
-      inferredHeaderPremises;
-  std::shared_ptr<const std::map<uint32_t, AuthoredHeaderPremises>>
-      authoredHeaderPremises;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;
@@ -217,10 +192,6 @@ struct Work {
 
 /// Bound all index setup before Semantics allocates names and parameter keys.
 llvm::Error chargeSemanticIndex(const std::vector<Declaration> &, Work &);
-/// Bound retained consumer indices and resolution routes before copying them.
-llvm::Error chargeConsumerRequirement(const ConsumerRequirement &, Work &);
-/// Bound consumer metadata and admission types/provenance before a deep copy.
-llvm::Error chargeRequirementSnapshot(const Declaration &, Work &);
 
 llvm::Error closeAssets(const CheckedProject &, ClosedStorage &, Work &);
 

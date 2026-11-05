@@ -442,10 +442,8 @@ int main() {
         named(project, "m::Fr").domain = named(project, "m::Fq").domain;
         named(project, "m::A::Scalar").domain = named(project, "m::Fq").domain;
       } else {
-        named(project, "m::I::rows").descriptorResult = DescriptorContract{
-            DescriptorFamily::Finite, {Type(Type::Kind::Boolean)}};
-        named(project, "m::A::rows").descriptorResult = DescriptorContract{
-            DescriptorFamily::Finite, {Type(Type::Kind::Boolean)}};
+        named(project, "m::I::rows").domainResult = Type(Type::Kind::Boolean);
+        named(project, "m::A::rows").domainResult = Type(Type::Kind::Boolean);
       }
       refusesWitness(project);
     });

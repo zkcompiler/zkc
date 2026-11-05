@@ -8,7 +8,7 @@ import pytest
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules(*core_packages('zkc'))
+MODULES = library_modules(*core_packages())
 
 
 # Extension degree of each installed KoalaBear extension; other fields have one.

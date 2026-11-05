@@ -98,12 +98,6 @@ std::optional<EffectSummary> bindingEffects(Semantics &types, const Body &body,
       result.dependencies.emplace(*binding.parameter, ceiling);
     return result;
   }
-  if (binding.named) {
-    if (!types.charge(binding.named->effects.dependencies.size() + 1,
-                      binding.span))
-      return {};
-    return binding.named->effects;
-  }
   if (!binding.computation || !binding.computation->body) {
     types.fail("source.effect", "missing callback effect evidence",
                binding.span);
@@ -144,10 +138,7 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
       actuals.push_back(std::move(*effect));
     }
     if (!callee.body && !callee.effectAllowance) {
-      // Ordinary Views are inherently total structural work, including
-      // abstract members retained by symbolic module dispatch.
-      if (callee.kind == Declaration::Kind::Math ||
-          (callee.kind == Declaration::Kind::View && !callee.descriptorResult))
+      if (callee.kind == Declaration::Kind::Math)
         return true;
       return types.fail("source.effect", "call target has no effect contract",
                         span);

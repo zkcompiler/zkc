@@ -176,7 +176,8 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
         return formatType(*node.head);
       }
       std::string choices;
-      for (unsigned kind = 0; kind <= unsigned(Type::Kind::Descriptor); ++kind)
+      for (unsigned kind = 0; kind <= unsigned(Type::Kind::LogicalRecord);
+           ++kind)
         if (node.kinds & (uint32_t(1) << kind)) {
           if (!choices.empty())
             choices += " or ";

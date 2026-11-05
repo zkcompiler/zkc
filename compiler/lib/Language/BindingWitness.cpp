@@ -199,21 +199,17 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
   if ((callee.kind != Declaration::Kind::Math &&
        callee.kind != Declaration::Kind::Local) ||
       !callee.inputs.empty() || !callee.services.empty() ||
-      callee.descriptorInputs.size() != 1 ||
-      callee.scopedInputs.size() != count || callee.outputs.size() != 1 ||
-      callee.inputOrder.size() != count + 1)
+      callee.domainInputs.size() != 1 || callee.scopedInputs.size() != count ||
+      callee.outputs.size() != 1 || callee.inputOrder.size() != count + 1)
     return refuse();
   using K = Declaration::InputSlot::Kind;
   if (callee.inputOrder[0].kind != K::Domain || callee.inputOrder[0].index != 0)
-    return refuse();
-  auto *item = finiteDescriptorItem(callee.descriptorInputs[0].contract);
-  if (!item)
     return refuse();
   for (unsigned i = 0; i < count; ++i) {
     const auto &parameter = callee.scopedInputs[i];
     const auto &signature = parameter.signature;
     if (!types.charge(parameter.itemOrigins.size(), span) ||
-        !types.chargeContract(callee.descriptorInputs[0].contract, span) ||
+        !types.chargeType(callee.domainInputs[0].item, span) ||
         !types.chargeType(signature.result, span))
       return false;
     for (const auto &input : signature.inputs)
@@ -221,7 +217,7 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
         return false;
     if (callee.inputOrder[i + 1].kind != K::Scoped ||
         callee.inputOrder[i + 1].index != i ||
-        signature.inputs != std::vector<Type>{*item} ||
+        signature.inputs != std::vector<Type>{callee.domainInputs[0].item} ||
         (!parameter.itemOrigins.empty() &&
          parameter.itemOrigins != std::map<unsigned, unsigned>{{0, 0}}))
       return refuse();
@@ -285,7 +281,6 @@ Checker::operatorWitnessFamily(const Declaration &decl,
   // Reconstruct the family from the checked lexical environment, without
   // using operatorCandidates or any candidate list produced by inference.
   std::map<std::string, OperatorBinding> family;
-  bool shadows = false;
   auto include = [&](const OperatorBinding &binding) {
     if (!binding.notation)
       return types.fail("source.binding-witness",
@@ -301,10 +296,6 @@ Checker::operatorWitnessFamily(const Declaration &decl,
         binding.target.declaration.index >= output.declarations.size())
       return types.fail("source.binding-witness",
                         "notation binding shape differs", expr.span);
-    shadows = true;
-    if ((binding.filteredOnly && !expr.filteredReduction) ||
-        (expr.filteredReduction && !binding.filtered))
-      return true;
     auto key = operatorBindingKey(binding, output.declarations);
     if (!types.charge(key.size() + 1, expr.span))
       return false;
@@ -330,24 +321,20 @@ Checker::operatorWitnessFamily(const Declaration &decl,
     const auto &region = source.bodies[*scope];
     if (!types.charge(region.resolvedOperators.size() + 1, expr.span))
       return {};
-    OperatorFamilyKey key{
-        decl.id.index, scope,
-        descriptorKey + (expr.filteredReduction ? ":filtered" : ":plain")};
+    OperatorFamilyKey key{decl.id.index, scope, descriptorKey};
     if (auto found = operatorWitnessFamilies.find(key);
         found != operatorWitnessFamilies.end())
       return ArrayRef<OperatorBinding>(found->second);
     for (const auto &binding : region.resolvedOperators)
       if (!include(binding))
         return {};
-    if (shadows)
+    if (!family.empty())
       return retain(std::move(key));
     scope = region.parent;
   }
   // All declarations in one module share its immutable imported family.
   // A lexical family above replaces that family for its descriptor.
-  OperatorFamilyKey key{decl.module.index, std::nullopt,
-                        descriptorKey +
-                            (expr.filteredReduction ? ":filtered" : ":plain")};
+  OperatorFamilyKey key{decl.module.index, std::nullopt, descriptorKey};
   if (auto found = operatorWitnessFamilies.find(key);
       found != operatorWitnessFamilies.end())
     return ArrayRef<OperatorBinding>(found->second);
@@ -455,8 +442,7 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
     if (!binding.notation || *binding.notation != notation ||
         binding.symbol != notation.symbol ||
         !sameSpan(binding.span, *witness.origin) ||
-        (witness.filteredReduction && !binding.filtered) ||
-        (binding.filteredOnly && !witness.filteredReduction))
+        (witness.filteredReduction && !binding.filtered))
       return refuse();
     const auto &target =
         witness.filteredReduction ? binding.filtered->target : binding.target;
@@ -617,16 +603,15 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
         binding.services.size() != callee.services.size() ||
         binding.roles.size() != callee.roles.size() ||
         operation.results.size() != callee.outputs.size() ||
-        !binding.scopedArguments.empty() ||
-        !binding.descriptorArguments.empty() || binding.notation ||
-        !checkCallInputMapping(types, binding.argumentOrder,
-                               callee.inputOrder.empty()
-                                   ? callee.inputs.size() +
-                                         callee.services.size() +
-                                         callee.scopedInputs.size() +
-                                         callee.descriptorInputs.size()
-                                   : callee.inputOrder.size(),
-                               operation.span))
+        !binding.scopedArguments.empty() || !binding.domainArguments.empty() ||
+        binding.notation ||
+        !checkCallInputMapping(
+            types, binding.argumentOrder,
+            callee.inputOrder.empty()
+                ? callee.inputs.size() + callee.services.size() +
+                      callee.scopedInputs.size() + callee.domainInputs.size()
+                : callee.inputOrder.size(),
+            operation.span))
       return refuse();
     std::set<unsigned> distinctRoles(binding.roles.begin(),
                                      binding.roles.end());
@@ -707,14 +692,14 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
           types, binding.argumentOrder,
           callee.inputOrder.empty()
               ? callee.inputs.size() + callee.services.size() +
-                    callee.scopedInputs.size() + callee.descriptorInputs.size()
+                    callee.scopedInputs.size() + callee.domainInputs.size()
               : callee.inputOrder.size(),
           operation.span))
     return false;
   if (binding.arguments.size() != callee.parameters.size() ||
       binding.operands.size() != callee.inputs.size() ||
       binding.scopedArguments.size() != callee.scopedInputs.size() ||
-      binding.descriptorArguments.size() != callee.descriptorInputs.size() ||
+      binding.domainArguments.size() != callee.domainInputs.size() ||
       callee.outputs.size() != 1 || operation.results.size() != 1 ||
       operation.results.front().index >= body.values.size())
     return refuse();
@@ -729,12 +714,12 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
         *expected != body.values[binding.operands[i].index].type)
       return refuse();
   }
-  for (unsigned i = 0; i < binding.descriptorArguments.size(); ++i) {
-    auto index = binding.descriptorArguments[i];
-    auto expected = types.substitute(callee.descriptorInputs[i].contract, subst,
-                                     operation.span);
-    if (!expected || index >= body.descriptorBindings.size() ||
-        *expected != body.descriptorBindings[index].contract)
+  for (unsigned i = 0; i < binding.domainArguments.size(); ++i) {
+    auto index = binding.domainArguments[i];
+    auto expected =
+        types.substitute(callee.domainInputs[i].item, subst, operation.span);
+    if (!expected || index >= body.domainBindings.size() ||
+        *expected != body.domainBindings[index].item)
       return refuse();
   }
   auto result =
@@ -794,7 +779,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
             action->arguments == binding.arguments &&
             action->module == binding.target.module &&
             action->scopedArguments == binding.scopedArguments &&
-            action->descriptorArguments == binding.descriptorArguments &&
+            action->domainArguments == binding.domainArguments &&
             sameOperands(action->operands, binding.operands)) ||
            refuse();
   }

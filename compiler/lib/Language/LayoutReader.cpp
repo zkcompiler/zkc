@@ -71,13 +71,6 @@ Error LayoutReader::runtimeArgument(Id id) const {
                 "ghost arguments require the formal interface projection; they "
                 "cannot bind runtime inputs",
                 "source.assurance-unavailable");
-  if (kind(id) == K::Parameter && !children(id).empty() &&
-      (head(id) == "statement" || head(id) == "witness" ||
-       head(id) == "parameter") &&
-      span(id).begin < span(children(id).front()).begin)
-    return fail(id,
-                "external binding modifiers have no native layout projection",
-                "source.layout-unavailable");
   return Error::success();
 }
 Expected<LayoutReader::Id> LayoutReader::argument(Id id) const {

@@ -32,9 +32,6 @@ struct CommonControlRequirement {
 /// Demanded loop observations use grounded base/transition equations at exact
 /// invocation, slot and role identities; unrelated carries stay undemanded.
 /// Tag, payload and extent observations remain separate through recurrence.
-/// Actual completed exchanges forward only the sender's immutable subject to
-/// their sender/receiver result components on normal paths. Distinct opaque
-/// Local/service occurrences never agree merely by their dependencies.
 /// Refusals: common-control-provenance and common-control-capacity.
 llvm::Expected<llvm::SmallVector<CommonControlRequirement>>
 deriveCommonControlRequirements(protocol_ir::MathematicalOp, facts::Work &);

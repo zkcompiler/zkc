@@ -237,4 +237,4 @@ use zkc::finite_math as total;
 domain F = field("{field}");
 ''' + body)
     journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
-                 f'--module=sample={source}', *library_modules(*core_packages('zkc'))], refuses='source.data-bound')
+                 f'--module=sample={source}', *library_modules(*core_packages())], refuses='source.data-bound')

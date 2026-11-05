@@ -135,7 +135,7 @@ def test_record_codec_external_schnorr(toolchain, journal, directory, flags):
     proof ExternalProof=Fixed{prover P;verifier V;public{tag,session,base,point};accept accepted;construction External;}
     ''')
     modules = {'sample': source, 'spongefish::duplex': root / 'libraries/constructions/spongefish/duplex.zkc'}
-    modules.update(library_inputs(*core_packages('zkc')))
+    modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),

@@ -222,25 +222,12 @@ int main() {
         require(requirements.size() == 1 &&
                     requirements[0].components[0].input == 0,
                 "wrapper lost its callee's actual input obligation");
-        auto delivered =
+        auto untrusted =
             replaceText(text, "   protocol.apply @child(%choice)",
                         "   %received = protocol.exchange %choice "
                         "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n "
                         "  protocol.apply @child(%received)");
-        auto received = admitted(context, delivered);
-        uint64_t receivedRemaining = 10000;
-        facts::Work receivedWork(receivedRemaining);
-        require(take(deriveCommonControlRequirements(program(*received),
-                                                     receivedWork))
-                    .empty(),
-                "delivered actual retained an external input premise");
-        auto changed = replaceText(
-            delivered, "   protocol.apply @child(%received)",
-            "   %no = arith.constant false\n"
-            "   %changed = \"protocol.assemble_roles\"(%received,%no) "
-            "{roles=[\"P\",\"V\"]} : (i1,i1)->i1\n"
-            "   protocol.apply @child(%changed)");
-        rejects(context, changed, "common-control-provenance");
+        rejects(context, untrusted, "common-control-provenance");
       });
   cases.run(
       "unrelated selected declarations preserve generic loop admission", [&] {
@@ -261,20 +248,16 @@ int main() {
             source, "}) {profile=#protocol.profile<protocol>}",
             (Twine(main) + "}) {profile=#protocol.profile<protocol>}").str());
         auto module = admitted(context, source);
-        // Named Entry reconstruction derives the completed send's actual
-        // count. An unrelated dormant declaration supplies no premise.
+        // Named Entry inventory remains strict even though generic
+        // formation does not discharge loop-count agreement.
         uint64_t remaining = 100000;
         facts::Work work(remaining);
-        require(take(deriveCommonControlRequirements(program(*module), work))
-                    .empty(),
-                "communicated loop count retained an input premise");
+        refuses(deriveCommonControlRequirements(program(*module), work),
+                "common-control-provenance");
         auto invoked =
             replaceText(source, "   %one =",
                         "   %yes = arith.constant true\n"
-                        "   %no = arith.constant false\n"
-                        "   %divergent = \"protocol.assemble_roles\"(%yes,%no) "
-                        "{roles=[\"P\",\"V\"]} : (i1,i1)->i1\n"
-                        "   protocol.apply @unused(%divergent) "
+                        "   protocol.apply @unused(%yes) "
                         "{site=\"call\",roles=[\"V\",\"P\"]} : (i1)->()\n"
                         "   %one =");
         rejects(context, invoked, "common-control-provenance");
@@ -430,11 +413,10 @@ int main() {
     require(succeeded(admitStage(*target)),
             "constructed tag projection refused");
   });
-  cases.run(
-      "communicated enum payloads agree independently of static tags", [&] {
-        auto text = replaceText(
-            fixture("constructed"), "     \"protocol.yield\"(%payload)",
-            R"mlir(     %zero = "data.index"() {value=0:ui64} : ()->ui64
+  cases.run("a static enum tag does not certify ordered payload control", [&] {
+    auto text =
+        replaceText(fixture("constructed"), "     \"protocol.yield\"(%payload)",
+                    R"mlir(     %zero = "data.index"() {value=0:ui64} : ()->ui64
      %enabled = "data.index_equal"(%payload,%zero) : (ui64,ui64)->i1
      "protocol.branch"(%enabled) ({
        "protocol.yield"() : ()->()
@@ -442,42 +424,18 @@ int main() {
        "protocol.yield"() : ()->()
      }) {site="payload_choice",roles=["P","V"],output_roles=[],alternatives=["then","else"]} : (i1)->()
      "protocol.yield"(%payload))mlir");
-        auto source = admitted(context, text);
-        uint64_t remaining = 10000;
-        facts::Work work(remaining);
-        require(take(deriveCommonControlRequirements(program(*source), work))
-                    .empty(),
-                "delivered payload gained an input premise");
-        auto changed = replaceText(text, "   %whole =",
-                                   "   %other = \"data.index\"() "
-                                   "{value=0:ui64} : ()->ui64\n   %whole =");
-        changed = replaceText(changed, "(%x,%received)", "(%x,%other)");
-        rejects(context, changed, "common-control-provenance");
-      });
-  cases.run(
-      "received role components establish only their actual common control",
-      [&] {
-        auto text =
-            replaceText(emptyBranch(), "  \"protocol.branch\"",
-                        "  %received = protocol.exchange %choice "
-                        "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n "
-                        " \"protocol.branch\"");
-        text = replaceText(text, "\"protocol.branch\"(%choice)",
-                           "\"protocol.branch\"(%received)");
-        auto source = admitted(context, text);
-        uint64_t remaining = 10000;
-        facts::Work work(remaining);
-        require(take(deriveCommonControlRequirements(program(*source), work))
-                    .empty(),
-                "delivered selector gained an input premise");
-        auto changed = replaceText(
-            text, "  \"protocol.branch\"(%received)",
-            "  %no = arith.constant false\n"
-            "  %changed = \"protocol.assemble_roles\"(%received,%no) "
-            "{roles=[\"P\",\"V\"]} : (i1,i1)->i1\n"
-            "  \"protocol.branch\"(%changed)");
-        rejects(context, changed, "common-control-provenance");
-      });
+    rejects(context, text, "common-control-provenance");
+  });
+  cases.run("received role components do not establish common control", [&] {
+    auto text =
+        replaceText(emptyBranch(), "  \"protocol.branch\"",
+                    "  %received = protocol.exchange %choice "
+                    "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n "
+                    " \"protocol.branch\"");
+    text = replaceText(text, "\"protocol.branch\"(%choice)",
+                       "\"protocol.branch\"(%received)");
+    rejects(context, text, "common-control-provenance");
+  });
   for (auto pair : std::initializer_list<std::pair<StringRef, StringRef>>{
            {"alternatives=[\"then\",\"else\"]",
             "alternatives=[\"then\",\"then\"]"},

@@ -215,10 +215,8 @@ private:
       walkType(service.field, reach);
       walkReference(service.constructor, reach, "service constructor");
     }
-    for (const auto &domain : body.descriptorBindings) {
-      walkType(descriptorType(domain.contract), reach);
-      for (const auto &edge : domain.children)
-        walkType(descriptorType(edge.contract), reach);
+    for (const auto &domain : body.domainBindings) {
+      walkType(domain.item, reach);
       if (domain.factory)
         walkCallable(*domain.factory, reach, "domain factory");
     }
@@ -288,8 +286,8 @@ private:
       walkType(decl.domain, reach);
     if (decl.implementation)
       walkType(*decl.implementation, reach);
-    if (decl.descriptorResult)
-      walkType(descriptorType(*decl.descriptorResult), reach);
+    if (decl.domainResult)
+      walkType(*decl.domainResult, reach);
     if (decl.target)
       reach(*decl.target, "target");
     walkTypes(decl.staticArguments, reach);

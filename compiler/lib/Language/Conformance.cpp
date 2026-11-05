@@ -13,8 +13,7 @@ bool memberInputs(Semantics &types, const Declaration &required,
                       "member input or result contract differs from interface",
                       provided.span);
   };
-  if (!types.charge(required.inputOrder.size() +
-                        required.descriptorInputs.size() +
+  if (!types.charge(required.inputOrder.size() + required.domainInputs.size() +
                         required.scopedInputs.size() + required.inputs.size() +
                         required.outputs.size() + required.services.size() + 1,
                     provided.span))
@@ -24,11 +23,9 @@ bool memberInputs(Semantics &types, const Declaration &required,
       required.inputs.size() != provided.inputs.size() ||
       required.outputs.size() != provided.outputs.size() ||
       required.services.size() != provided.services.size() ||
-      bool(required.descriptorResult) != bool(provided.descriptorResult) ||
-      (required.descriptorResult && required.descriptorResult->family !=
-                                        provided.descriptorResult->family) ||
+      bool(required.domainResult) != bool(provided.domainResult) ||
       required.inputOrder.size() != provided.inputOrder.size() ||
-      required.descriptorInputs.size() != provided.descriptorInputs.size() ||
+      required.domainInputs.size() != provided.domainInputs.size() ||
       required.scopedInputs.size() != provided.scopedInputs.size())
     return refuse();
   for (unsigned i = 0; i < required.inputOrder.size(); ++i)
@@ -36,13 +33,6 @@ bool memberInputs(Semantics &types, const Declaration &required,
         required.inputOrder[i].index != provided.inputOrder[i].index)
       return refuse();
   auto sameType = [&](const Type &expected, const Type &actual) {
-    auto resolved = types.substitute(expected, bindings, provided.span);
-    return resolved && (*resolved == actual || refuse());
-  };
-  auto sameContract = [&](const DescriptorContract &expected,
-                          const DescriptorContract &actual) {
-    if (!types.chargeContract(actual, provided.span))
-      return false;
     auto resolved = types.substitute(expected, bindings, provided.span);
     return resolved && (*resolved == actual || refuse());
   };
@@ -78,12 +68,11 @@ bool memberInputs(Semantics &types, const Declaration &required,
     if (!sameType(a.field, b.field))
       return false;
   }
-  if (required.descriptorResult &&
-      !sameContract(*required.descriptorResult, *provided.descriptorResult))
+  if (required.domainResult &&
+      !sameType(*required.domainResult, *provided.domainResult))
     return false;
-  for (unsigned i = 0; i < required.descriptorInputs.size(); ++i)
-    if (!sameContract(required.descriptorInputs[i].contract,
-                      provided.descriptorInputs[i].contract))
+  for (unsigned i = 0; i < required.domainInputs.size(); ++i)
+    if (!sameType(required.domainInputs[i].item, provided.domainInputs[i].item))
       return false;
   for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
     const auto &expected = required.scopedInputs[i];
@@ -149,7 +138,7 @@ bool memberContract(Semantics &types, const Declaration &module,
           provided.parameters.size() - providedOwner ||
       required.inputs.size() != provided.inputs.size() ||
       required.outputs.size() != provided.outputs.size() ||
-      bool(required.descriptorResult) != bool(provided.descriptorResult))
+      bool(required.domainResult) != bool(provided.domainResult))
     return refuse("implementation signature arity differs");
   if (!types.charge(required.parameters.size() + provided.parameters.size() + 1,
                     provided.span))
@@ -303,8 +292,8 @@ bool memberContract(Semantics &types, const Declaration &module,
                   !refuse("implementation strengthens parameter permissions")))
       return false;
   }
-  if (required.kind == Declaration::Kind::View && required.descriptorResult)
-    return bool(provided.descriptorDefinition) ||
+  if (required.kind == Declaration::Kind::DomainFunction)
+    return bool(provided.domainDefinition) ||
            refuse("implementation domain recipe missing");
   if (!provided.body || required.completes != provided.completes)
     return refuse("implementation outcome contract differs");

@@ -6,7 +6,7 @@ from entry import Entry
 from source_modules import core_packages, library_modules
 
 
-MODULES = library_modules(*core_packages('zkc'))
+MODULES = library_modules(*core_packages())
 
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])

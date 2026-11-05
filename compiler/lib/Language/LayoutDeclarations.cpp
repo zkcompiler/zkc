@@ -1,5 +1,4 @@
 #include "LayoutReader.h"
-#include "zkc/Source/Names.h"
 #include "llvm/ADT/STLExtras.h"
 #include <algorithm>
 using namespace llvm;
@@ -19,8 +18,8 @@ Expected<SyntaxPort> LayoutReader::port(Id id, bool unnamed) {
     if (!projected2)
       return projected2.takeError();
     auto nodes = std::move(*projected2);
-    if (kind(nodes[0]) != K::Name || between(nodes[0], nodes[1]) != ":")
-      return fail(id, "native port requires a name and a type annotation");
+    if (kind(nodes[0]) != K::Name)
+      return fail(id, "native port requires a name and a type");
     auto projected3 = name(nodes[0]);
     if (!projected3)
       return projected3.takeError();
@@ -28,16 +27,6 @@ Expected<SyntaxPort> LayoutReader::port(Id id, bool unnamed) {
     target = nodes[1];
   } else
     result.name = "result";
-  if (kind(target) == K::FunctionType) {
-    if (unnamed)
-      return fail(target, "scoped functions cannot be returned",
-                  "source.scoped");
-    auto signature = scopedSignature(target);
-    if (!signature)
-      return signature.takeError();
-    result.scoped = std::move(*signature);
-    return result;
-  }
   if (kind(target) == K::RoleType) {
     auto projected4 = parts(target, 2, 2);
     if (!projected4)
@@ -139,86 +128,6 @@ Error LayoutReader::parameters(Id id, SyntaxDeclaration &decl) {
   }
   return Error::success();
 }
-Expected<SyntaxInputSelector> LayoutReader::inputSelector(Id id) {
-  SyntaxInputSelector result;
-  result.span = span(id);
-  // Walk the parsed projection spine; a selector is not a general expression
-  // or a qualified declaration reference.
-  while (kind(id) == K::Projection) {
-    if (auto error = charge(id))
-      return error;
-    auto nodes = children(id);
-    if (nodes.size() != 2 || between(nodes[0], nodes[1]) != ".")
-      return fail(id, "expected an input field selector", "source.data-bound");
-    auto field = nodes[1];
-    auto tokens = words(field);
-    if (!tokens)
-      return tokens.takeError();
-    if (tokens->size() != 1 ||
-        (kind(field) != K::Name &&
-         (kind(field) != K::Literal ||
-          tokens->front().find_first_not_of("0123456789") != StringRef::npos)))
-      return fail(field, "expected a named field or tuple index",
-                  "source.data-bound");
-    if (result.path.size() >= work.limits.typeDepth)
-      return fail(id, "selector path depth exceeded", "source.limit");
-    result.path.push_back(tokens->front().str());
-    id = nodes[0];
-  }
-  auto tokens = words(id);
-  if (!tokens)
-    return tokens.takeError();
-  if (kind(id) != K::Name || tokens->size() != 1)
-    return fail(id, "data precondition requires a named input selector",
-                "source.data-bound");
-  result.port = tokens->front().str();
-  std::reverse(result.path.begin(), result.path.end());
-  return result;
-}
-Error LayoutReader::dataRequirement(Id id, SyntaxRequirement &requirement) {
-  auto nodes = children(id);
-  const bool bound = head(nodes[0]) == "in_bounds";
-  auto args = children(nodes[1]);
-  if (args.size() != 2 && args.size() != (bound ? 3u : 4u))
-    return fail(id, "expected two selectors and optional collection axes",
-                "source.data-bound");
-  requirement.data = bound ? DataPrecondition::Kind::IndexBound
-                           : DataPrecondition::Kind::EqualExtent;
-  unsigned position = 0;
-  for (auto arg : args) {
-    if (auto error = charge(arg))
-      return error;
-    if (auto error = runtimeArgument(arg))
-      return error;
-    auto values = children(arg);
-    if (values.size() != 1)
-      return fail(arg,
-                  "data precondition arguments cannot have labels or bindings",
-                  "source.data-bound");
-    auto value = values.front();
-    if (position < 2) {
-      auto selector = inputSelector(value);
-      if (!selector)
-        return selector.takeError();
-      (position == 0 ? requirement.left : requirement.right) =
-          std::move(*selector);
-    } else {
-      auto tokens = words(value);
-      if (!tokens)
-        return tokens.takeError();
-      unsigned axis;
-      if (kind(value) != K::Literal || tokens->size() != 1 ||
-          tokens->front().find_first_not_of("0123456789") != StringRef::npos ||
-          tokens->front().getAsInteger(10, axis) || axis > 1)
-        return fail(value, "expected a collection axis, 0 or 1",
-                    "source.data-bound");
-      (bound || position == 3 ? requirement.rightAxis : requirement.leftAxis) =
-          axis;
-    }
-    ++position;
-  }
-  return Error::success();
-}
 Error LayoutReader::requirements(Id id, SyntaxDeclaration &decl) {
   decl.explicitRequirements = true;
   std::function<Error(Id)> append = [&](Id value) -> Error {
@@ -255,14 +164,7 @@ Error LayoutReader::requirements(Id id, SyntaxDeclaration &decl) {
         return projected19.takeError();
       auto predicate = std::move(*projected19);
       auto args = children(nodes[1]);
-      if (predicate == "item_from")
-        return fail(value,
-                    "item_from belongs on a callback signature's where clause",
-                    "source.finite-domain");
-      if (predicate == "in_bounds" || predicate == "equal_extent") {
-        if (auto error = dataRequirement(value, requirement))
-          return error;
-      } else if (predicate == "Copy" || predicate == "Drop") {
+      if (predicate == "Copy" || predicate == "Drop") {
         if (args.size() != 1)
           return fail(value, "permission requirement takes one type",
                       "source.permission");
@@ -276,12 +178,6 @@ Error LayoutReader::requirements(Id id, SyntaxDeclaration &decl) {
           return projected21.takeError();
         requirement.lhs = std::move(*projected21);
       } else {
-        // Retain the written callee in the same left-type syntax slot as the
-        // braced reader. Written-source export must not visit an empty span.
-        auto head = type(nodes[0]);
-        if (!head)
-          return head.takeError();
-        requirement.lhs = std::move(*head);
         requirement.capability = predicate;
         for (auto arg : args) {
           auto projected22 = argument(arg);
@@ -296,10 +192,10 @@ Error LayoutReader::requirements(Id id, SyntaxDeclaration &decl) {
         }
       }
     } else
-      return fail(value,
-                  "expected a native natural, data, permission or capability "
-                  "requirement",
-                  "source.layout-unavailable");
+      return fail(
+          value,
+          "expected a native natural, permission or capability requirement",
+          "source.layout-unavailable");
     decl.requirements.push_back(std::move(requirement));
     return Error::success();
   };
@@ -389,14 +285,18 @@ Error LayoutReader::import(Id id, SyntaxDeclaration &module) {
       auto selector = std::move(*projected34);
       if (selector.empty())
         return fail(item, "empty import selector");
-      std::string selection;
-      for (size_t i = 0; i < selector.size(); ++i) {
-        if (selector.front() == "notation" &&
-            (i == 1 || (i == 2 && selector[1] != "index")))
-          selection += ' ';
-        selection += selector[i];
+      if (selector.front() == "indexing")
+        result.indexing = true;
+      else {
+        if (selector.size() != 2)
+          return fail(item, "import selector requires a symbol");
+        if (selector.front() == "operator")
+          result.operators.push_back(selector[1].str());
+        else if (selector.front() == "notation")
+          result.notations.push_back(selector[1].str());
+        else
+          result.reductions.push_back(selector[1].str());
       }
-      result.notationSelectors.push_back(std::move(selection));
     }
   } else {
     result.alias = StringRef(result.module).rsplit("::").second.str();
@@ -414,78 +314,73 @@ Error LayoutReader::import(Id id, SyntaxDeclaration &module) {
   return Error::success();
 }
 Error LayoutReader::notation(Id id, SyntaxDeclaration &module) {
-  auto projected = words(id);
-  if (!projected)
-    return projected.takeError();
-  auto tokens = std::move(*projected);
+  auto projected36 = words(id);
+  if (!projected36)
+    return projected36.takeError();
+  auto tokens = std::move(*projected36);
   auto nodes = children(id);
-  size_t at = visible(id) ? 2 : 1;
-  if (tokens.size() <= at || nodes.size() < 2)
+  size_t at = visible(id) ? 1 : 0;
+  if (tokens.size() <= at + 1 || nodes.empty())
     return fail(id, "incomplete notation declaration");
+  auto form = tokens[at++];
   SyntaxOperator result;
   result.span = span(id);
   result.isPublic = visible(id);
-  result.explicitNotation = true;
   auto descriptor = std::make_shared<NotationDescriptor>();
-  auto fixity = tokens[at];
-  bool reduction = false;
-  if (fixity == "prefix" || fixity == "postfix" || fixity == "infix" ||
-      fixity == "infixl" || fixity == "infixr") {
-    descriptor->position = fixity == "prefix"    ? Position::Prefix
-                           : fixity == "postfix" ? Position::Postfix
-                                                 : Position::Infix;
-    descriptor->association = fixity == "infixl"   ? Association::Left
-                              : fixity == "infixr" ? Association::Right
-                                                   : Association::None;
-    if (tokens.size() <= at + 5 ||
-        tokens[at + 2].getAsInteger(10, descriptor->precedence))
-      return fail(id, "notation requires a numeric precedence",
-                  "source.notation");
-    descriptor->symbol =
-        tokens[at + (descriptor->position == Position::Prefix ? 4 : 5)].str();
-  } else if (tokens.size() > at + 1 && tokens[at + 1] == "[") {
-    descriptor->position = Position::Index;
-    descriptor->symbol = "[]";
-    descriptor->closing = "]";
+  if (form == "notation" || form == "indexing") {
+    descriptor->position =
+        form == "notation" ? Position::Delimited : Position::Index;
     descriptor->precedence = 100;
-  } else {
-    descriptor->symbol = tokens[at].str();
-    auto scalar = source::decodeSourceScalar(tokens[at], 0);
-    if (scalar && source::matchingSourceDelimiter(scalar->value)) {
-      descriptor->position = Position::Delimited;
-      descriptor->precedence = 100;
-      auto assignment = llvm::find(tokens, StringRef("="));
-      if (assignment == tokens.end() || assignment == tokens.begin())
-        return fail(id, "notation requires a target", "source.notation");
-      descriptor->closing = (assignment - 1)->str();
-    } else {
-      reduction = true;
-      descriptor->position = Position::Reduction;
-      descriptor->precedence = 67;
-      result.filteredOnly = tokens.size() > at + 4 && tokens[at + 4] == "with";
+    descriptor->symbol = form == "notation" ? tokens[at].str() : "[]";
+    for (auto hole : nodes.drop_back()) {
+      auto projected37 = name(hole);
+      if (!projected37)
+        return projected37.takeError();
+      auto holeName = std::move(*projected37);
+      result.holes.push_back(std::move(holeName));
     }
+    descriptor->arity = result.holes.size();
+    if (form == "indexing")
+      descriptor->closing = "]";
+    else {
+      auto assignment = llvm::find(tokens, StringRef("="));
+      if (assignment == tokens.begin() || assignment == tokens.end())
+        return fail(id, "notation requires a closing delimiter and target");
+      descriptor->closing = *(assignment - 1);
+    }
+    result.symbol = descriptor->symbol;
+    result.notation = descriptor;
+    result.explicitNotation = true;
+  } else {
+    if (form != "operator")
+      return fail(id,
+                  "native reduction projection requires scoped computations",
+                  "source.layout-unavailable");
+    auto fixity = tokens[at];
+    if (fixity == "prefix" || fixity == "postfix" || fixity == "infix" ||
+        fixity == "infixl" || fixity == "infixr") {
+      if (tokens.size() <= at + 4 ||
+          tokens[at + 2].getAsInteger(10, descriptor->precedence))
+        return fail(id, "operator requires a numeric precedence and symbol");
+      descriptor->position = fixity == "prefix"    ? Position::Prefix
+                             : fixity == "postfix" ? Position::Postfix
+                                                   : Position::Infix;
+      descriptor->association = fixity == "infixl"   ? Association::Left
+                                : fixity == "infixr" ? Association::Right
+                                                     : Association::None;
+      descriptor->arity = descriptor->position == Position::Infix ? 2 : 1;
+      at += 4;
+      result.explicitNotation = true;
+    }
+    result.symbol = tokens[at].str();
+    descriptor->symbol = result.symbol;
+    if (result.explicitNotation)
+      result.notation = descriptor;
   }
-  if (reduction) {
-    auto binder = name(nodes.front());
-    if (!binder)
-      return binder.takeError();
-    result.reductionBinder = std::move(*binder);
-  }
-  for (auto hole : nodes.drop_back().drop_front(reduction ? 1 : 0)) {
-    auto value = name(hole);
-    if (!value)
-      return value.takeError();
-    result.holes.push_back(std::move(*value));
-  }
-  descriptor->arity = reduction ? 2 : result.holes.size();
-  if (!syntax::validNotationDescriptor(*descriptor))
-    return fail(id, "invalid notation descriptor", "source.notation");
-  result.symbol = descriptor->symbol;
-  result.notation = std::move(descriptor);
-  auto target = type(nodes.back());
-  if (!target)
-    return target.takeError();
-  result.target = std::move(*target);
+  auto projected38 = type(nodes.back());
+  if (!projected38)
+    return projected38.takeError();
+  result.target = std::move(*projected38);
   module.operators.push_back(std::move(result));
   return Error::success();
 }
@@ -558,8 +453,7 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
     result.kind = D::Protocol;
     break;
   case K::Definition:
-    result.kind = mode == "view"    ? D::View
-                  : mode == "local" ? D::Local
+    result.kind = mode == "local"   ? D::Local
                   : mode == "entry" ? D::EntryFunction
                                     : D::Math;
     break;
@@ -608,12 +502,9 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
       if (!projected45)
         return projected45.takeError();
       auto value = std::move(*projected45);
-      auto &ports = value.scoped ? result.scopedInputs : result.inputs;
-      result.inputOrder.push_back({value.scoped
-                                       ? Declaration::InputSlot::Kind::Scoped
-                                       : Declaration::InputSlot::Kind::Data,
-                                   unsigned(ports.size())});
-      ports.push_back(std::move(value));
+      result.inputOrder.push_back(
+          {Declaration::InputSlot::Kind::Data, unsigned(result.inputs.size())});
+      result.inputs.push_back(std::move(value));
     }
   }
   if (auto output = first(id, K::Result)) {
@@ -631,9 +522,6 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
         if (!projected47)
           return projected47.takeError();
         auto projected = std::move(*projected47);
-        if (projected.scoped)
-          return fail(item, "scoped functions cannot be returned",
-                      "source.scoped");
         result.outputs.push_back(std::move(projected));
       }
     } else {
@@ -804,41 +692,6 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
                   "source.resource");
     attributes.clear();
   }
-  bool association = false;
-  if (kind(id) == K::Definition)
-    if (auto call = first(id, K::Call)) {
-      auto nodes = parts(*call, 2, 2);
-      if (!nodes)
-        return nodes.takeError();
-      auto head = name((*nodes)[0]);
-      if (!head)
-        return head.takeError();
-      auto inputs = children((*nodes)[1]);
-      if (inputs.size() != 1 || (*head != "domain" && *head != "finite"))
-        return fail(*call, "unsupported native callable association",
-                    "source.builtin");
-      auto value = argument(inputs.front());
-      if (!value)
-        return value.takeError();
-      auto literal = tree.text(*value);
-      if (kind(*value) != K::Literal || !literal.starts_with('"') ||
-          !literal.ends_with('"'))
-        return fail(*value, "callable association requires an identity string",
-                    "source.builtin");
-      auto identity = literal.drop_front().drop_back().str();
-      if (*head == "domain") {
-        if (result.kind != D::View)
-          return fail(*call, "finite constructor requires View mode",
-                      "source.descriptor");
-        result.domainConstructor = std::move(identity);
-      } else {
-        if (result.kind != D::Math && result.kind != D::Local)
-          return fail(*call, "finite consumer requires Math or Local mode",
-                      "source.finite");
-        result.finiteDefinition = std::move(identity);
-      }
-      association = true;
-    }
   if (auto suite = first(id, K::Suite)) {
     if (result.kind == D::Module || result.kind == D::Interface) {
       for (auto child : children(*suite)) {
@@ -893,9 +746,8 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
     result.deferredBody = DeferredBody{0, 0, 1, result.kind == D::Protocol};
   else if (result.kind == D::Module)
     result.externalModule = true;
-  else if (!association &&
-           (result.kind == D::View || result.kind == D::Math ||
-            result.kind == D::Local || result.kind == D::Protocol)) {
+  else if (result.kind == D::Math || result.kind == D::Local ||
+           result.kind == D::Protocol) {
     if (parent.kind != D::Interface)
       return fail(id, "a bodyless signature belongs to an interface",
                   "source.conformance");

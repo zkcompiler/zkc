@@ -765,8 +765,7 @@ int main() {
             break;
           case 13:
             const_cast<Declaration &>(named(project, "m::A::rows"))
-                .descriptorResult =
-                DescriptorContract{DescriptorFamily::Finite, {Type{}}};
+                .domainResult = Type{};
             break;
           case 14: {
             auto &allowance =
@@ -864,7 +863,7 @@ int main() {
           refuses(check(sources("fn apply(body:fn()->F effects())->F{return "
                                 "body();}fn bad()->F{return apply(" +
                                 constructor.str() + "::draw);}")),
-                  "source.service");
+                  "source.name");
         });
     cases.run(
         "managed method cannot be invoked inside a callback " + constructor,

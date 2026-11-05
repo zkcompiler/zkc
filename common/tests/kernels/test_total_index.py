@@ -6,7 +6,7 @@ import pytest
 
 from entry import Entry
 
-MODULES = library_modules(*core_packages('zkc'))
+MODULES = library_modules(*core_packages())
 MODULUS = 1 << 64
 MAXIMUM = MODULUS - 1
 SOURCE = '''module sample;

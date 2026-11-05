@@ -168,7 +168,6 @@ enum class ResolutionCategory {
   Callable,
   ServiceConstructor,
   ServiceMethod,
-  ConsumerRequirement,
   Other
 };
 struct ResolutionStep {
@@ -286,14 +285,6 @@ struct ScopedSignature {
            result == other.result && allowance == other.allowance;
   }
 };
-/// An exact named static selection, also the payload seam for future
-/// descriptor consumers. This is neither a runtime value nor a closure.
-struct SelectedCallable {
-  CallableReference target;
-  std::vector<Type> arguments;
-  ScopedSignature signature;
-  EffectSummary effects;
-};
 struct ScopedParameter {
   std::string name;
   ScopedSignature signature;
@@ -304,25 +295,14 @@ struct ScopedParameter {
   /// Each invocation must supply the whole original item of that domain.
   std::map<unsigned, unsigned> itemOrigins = {};
 };
-/// Structural descriptors are a separate static argument category. Ordinary
-/// operands retain their checked data identities and authored evaluation order.
-struct DescriptorParameter {
+/// Finite domains are a separate static argument category. Their ordinary
+/// operands remain checked data values with authored evaluation order.
+struct DomainParameter {
   std::string name;
-  DescriptorContract contract;
+  Type item;
   Span span;
 };
-/// The expected child contract is independent of the parent result contract.
-struct DescriptorEdge {
-  unsigned node;
-  DescriptorContract contract;
-  bool operator==(const DescriptorEdge &other) const {
-    return node == other.node && contract == other.contract;
-  }
-  bool operator!=(const DescriptorEdge &other) const {
-    return !(*this == other);
-  }
-};
-struct DescriptorBinding {
+struct DomainBinding {
   enum class Kind {
     Parameter,
     Application,
@@ -336,9 +316,9 @@ struct DescriptorBinding {
     MatrixCoordinates,
     SourceArray
   } kind;
-  DescriptorContract contract;
+  Type item;
   std::vector<ValueId> operands;
-  std::vector<DescriptorEdge> children;
+  std::vector<unsigned> children;
   unsigned axis = 0;
   std::optional<unsigned> parameter = {};
   Span span = {};
@@ -350,16 +330,16 @@ struct DescriptorBinding {
 };
 /// Closed static constructor graph. Data ports use ordinary caller operands;
 /// the descriptor itself is not a runtime value or an expression interpreter.
-struct DescriptorShape {
+struct DomainShape {
   std::vector<Type> inputs;
-  std::vector<DescriptorBinding> nodes;
+  std::vector<DomainBinding> nodes;
   unsigned result;
   std::string identity;
 };
-struct DescriptorDefinition {
-  std::optional<DescriptorBinding::Kind> constructor;
+struct DomainDefinition {
+  std::optional<DomainBinding::Kind> constructor;
   unsigned axis = 0;
-  std::vector<DescriptorBinding> bindings;
+  std::vector<DomainBinding> bindings;
   unsigned result = 0;
 };
 /// Static alias partition for a closed callable. Authored ports remain in the
@@ -394,8 +374,8 @@ struct FiniteCallback {
 };
 struct FiniteComputation {
   FiniteApplication::Kind kind;
-  std::shared_ptr<const DescriptorShape> domain;
-  std::vector<ValueId> descriptorOperands, operands;
+  std::shared_ptr<const DomainShape> domain;
+  std::vector<ValueId> domainOperands, operands;
   FiniteCallback body;
   std::optional<FiniteCallback> predicate;
 };
@@ -406,7 +386,7 @@ struct HelperCall {
   std::optional<Type> module;
   std::optional<unsigned> owner;
   std::vector<unsigned> scopedArguments = {};
-  std::vector<unsigned> descriptorArguments = {};
+  std::vector<unsigned> domainArguments = {};
 };
 /// A checked pointwise application of a static scalar math helper in local
 /// code. Each operand is either a whole vector of the helper's field, one row
@@ -573,8 +553,8 @@ struct Control {
   std::vector<std::shared_ptr<const Body>> regions;
   std::vector<std::string> alternatives;
   unsigned carried = 0;
-  std::vector<unsigned> descriptorArguments = {};
-  std::vector<std::shared_ptr<const DescriptorShape>> descriptorShapes;
+  std::vector<unsigned> domainArguments = {};
+  std::vector<std::shared_ptr<const DomainShape>> domainShapes;
   std::vector<ClosureLayout> regionLayouts;
   /// Protocol roster and exact enclosing managed-service roots.
   std::vector<unsigned> roles;
@@ -601,7 +581,7 @@ struct CallBinding {
   std::optional<unsigned> scopedSource = {};
   std::vector<unsigned> argumentOrder = {};
   std::vector<unsigned> scopedArguments = {};
-  std::vector<unsigned> descriptorArguments = {};
+  std::vector<unsigned> domainArguments = {};
   bool filteredReduction = false;
   /// Authored caller authority for installed schema-dependent invocations.
   /// Preserved through specialization; never replaced by the intrinsic home.
@@ -626,7 +606,7 @@ struct ScopedComputation {
   std::vector<CaptureSlot> captures;
   std::vector<uint32_t> scopedCaptures;
   std::shared_ptr<const Body> body;
-  std::vector<uint32_t> descriptorCaptures = {};
+  std::vector<uint32_t> domainCaptures = {};
 };
 /// Parameter is an index in the body's static scoped environment. A literal
 /// carries data snapshots and references to that body's scoped bindings.
@@ -638,8 +618,7 @@ struct ScopedBinding {
   std::vector<unsigned> scopedCaptures;
   Span span;
   std::optional<uint32_t> source;
-  std::vector<unsigned> descriptorCaptures = {};
-  std::shared_ptr<const SelectedCallable> named = {};
+  std::vector<unsigned> domainCaptures = {};
 };
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
@@ -669,7 +648,7 @@ struct Body {
   enum class Stage { Computation, Host } stage = Stage::Computation;
   std::vector<ServicePort> services;
   std::vector<ScopedBinding> scopedBindings;
-  std::vector<DescriptorBinding> descriptorBindings;
+  std::vector<DomainBinding> domainBindings;
   /// Candidate source expression results, independently checked against lexical
   /// inputs, bindings and SSA producers before invocation admission.
   std::map<uint32_t, ValueId> expressionValues;
@@ -761,8 +740,8 @@ struct PermissionBound {
   Span span;
   bool inferred = false;
 };
-/// Consumer conditions are demands, never native permissions granted by source.
-enum class Boundary { Participants, Construction, Message, MessagePayload };
+/// Boundary conditions are derived from use sites, never granted by `where`.
+enum class Boundary { Participants, Construction, Message };
 struct AdmissionObligation {
   Type type;
   Boundary boundary;
@@ -776,14 +755,6 @@ struct CapabilityBound {
   std::vector<Type> arguments;
   Span span;
   bool inferred = false;
-};
-/// An installed consumer's exact source contract, separate from inferred goals.
-/// The reference retains import/provider identity for independent source
-/// replay.
-struct ConsumerRequirement {
-  ResolvedReference reference;
-  std::vector<Type> arguments;
-  Span span;
 };
 enum class RelationPurpose { Parameter, Statement, Witness };
 struct RelationDefinition {
@@ -969,7 +940,7 @@ struct OracleDefinition {
 struct Declaration {
   enum class Kind {
     Domain,
-    View,
+    DomainFunction,
     Math,
     Local,
     Protocol,
@@ -983,8 +954,7 @@ struct Declaration {
     Interface,
     Module,
     Associated,
-    Relation,
-    Requirement
+    Relation
   } kind;
   struct Generated {
     DeclarationId target;
@@ -1014,7 +984,6 @@ struct Declaration {
   std::vector<PermissionBound> permissionBounds;
   std::vector<AdmissionObligation> admissions;
   std::vector<CapabilityBound> capabilityBounds;
-  std::vector<ConsumerRequirement> consumerRequirements;
   std::optional<Resource> resource;
   bool sealed = false;
   /// Record declarations only; independent of constructor sealing.
@@ -1051,11 +1020,10 @@ struct Declaration {
   /// Reverse identity on a generated Formula relation, including closed copies.
   std::optional<DeclarationId> oraclePredicateOwner;
   std::vector<ScopedParameter> scopedInputs;
-  std::vector<DescriptorParameter> descriptorInputs;
-  std::vector<std::shared_ptr<const DescriptorShape>> descriptorArguments;
-  /// Family contract of the result, independent of View mode.
-  std::optional<DescriptorContract> descriptorResult;
-  std::shared_ptr<const DescriptorDefinition> descriptorDefinition;
+  std::vector<DomainParameter> domainInputs;
+  std::vector<std::shared_ptr<const DomainShape>> domainArguments;
+  std::optional<Type> domainResult;
+  std::shared_ptr<const DomainDefinition> domainDefinition;
   std::optional<std::string> finiteDefinition;
   std::vector<ServicePort> services;
   /// Source arguments in written order. Data, managed services and static

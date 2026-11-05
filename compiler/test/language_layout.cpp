@@ -3,7 +3,6 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/SourceCorrespondence.h"
-#include "zkc/Language/Authoring.h"
 #include "zkc/Language/Companions.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/Json.h"
@@ -691,10 +690,10 @@ spec for Demo:
         analyze(
             take(capture({{"ops", R"(pub def first(a: bool, b: bool) -> bool:
     a
-pub notation infixl(60) a ⊕ b = first(a,b)
+pub operator infixl(60) ⊕ = first
 )",
                            "ops.zkc"},
-                          {"m", R"(use ops::{⊕}
+                          {"m", R"(use ops::{operator ⊕}
 pub protocol Demo roles(P)(value: bool @P) -> bool @P:
     return value ⊕ false
 )",
@@ -710,261 +709,13 @@ pub protocol Demo roles(P)(value: bool @P) -> bool @P:
     value
 def first(value: bool, ignored: bool) -> bool:
     value
-notation postfix(90) value ⊙ = identity(value)
+operator postfix(90) ⊙ = identity
 notation ⟦value⟧ = identity(value)
-notation value[ignored] = first(value, ignored)
+indexing value[ignored] = first(value, ignored)
 pub protocol Demo roles(P)(value: bool @P) -> bool @P:
     return ⟦value⊙⟧[false]
 )"));
         take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
-      });
-  cases.run("unified notation resolves generic and associated math targets",
-            [] {
-              auto project = take(check(R"(domain F = field("koala-bear")
-def identity<T: Type>(x: T) -> T:
-    x
-module Pair<T: Type>:
-    pub def first(a: T, b: T) -> T:
-        a
-notation prefix(80) √ a = identity(a)
-notation infixl(70) a ⊙ b = Pair<F>::first(a,b)
-notation ⟪ a, b ⟫ = Pair<F>::first(a,b)
-pub protocol Demo roles(P)(a: F @P, b: F @P) -> F @P:
-    return ⟪√a, a ⊙ b⟫
-)"));
-              take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
-            });
-  for (StringRef form :
-       {"notation infixl(70) a ⊙ b = f(b,a)",
-        "notation infixl(70) a ⊙ b = f(a,a)",
-        "notation infixl(70) a ⊙ b = f(a)",
-        "notation infixl(70) a ⊙ b = f(a,b,c)",
-        "notation infixl(70) a ⊙ a = f(a,a)", "notation xs[i] = f(i,xs)",
-        "notation ∑ x ∈ D, body = f(D, fn(y) => body)",
-        "notation ∑ x ∈ D, body = f(D, fn(x) => outer)",
-        "notation ∑ x ∈ D with p, body = f(D, fn(x) => body, fn(x) => p)"})
-    cases.run("notation templates refuse invalid hole use: " + form,
-              [&] { refuses(check(form.str() + "\n"), "syntax.notation"); });
-  for (StringRef head : {"operator infixl(70) ⊙ = f",
-                         "indexing xs[i] = f(xs,i)", "reduction ∑ = sum"})
-    cases.run("4.1 retires the old declaration head: " + head,
-              [&] { refuses(check(head.str() + "\n"), "syntax.declaration"); });
-  cases.run("unused imported descriptor ambiguity is explicit", [] {
-    CaptureOptions options;
-    options.format = "zkc-layout";
-    const std::string exported = R"(pub def unary(x: bool) -> bool:
-    x
-pub def binary(x: bool, y: bool) -> bool:
-    x
-pub notation prefix(80) ⊙ x = unary(x)
-pub notation infixl(70) x ⊙ y = binary(x,y)
-)";
-    auto importing = [&](StringRef selection) -> Expected<CheckedProject> {
-      auto captured =
-          capture({{"ops", exported, "ops.zkc"},
-                   {"m", "use ops::{" + selection.str() + "}\n", "m.zkc"}},
-                  options);
-      if (!captured)
-        return captured.takeError();
-      return analyze(*captured).checkedProject();
-    };
-    refuses(importing("⊙"), "source.notation-ambiguous");
-    take(importing("notation prefix ⊙"));
-    take(importing("notation infix ⊙"));
-    refuses(importing("notation postfix ⊙"), "source.import");
-  });
-  cases.run("notation operands are evaluated once in written order", [] {
-    auto project = take(check(R"(def first(x: bool) -> bool:
-    not x
-def second(x: bool) -> bool:
-    x
-def choose(a: bool, b: bool) -> bool:
-    a
-notation ⟪ a, b ⟫ = choose(a,b)
-local def compute(x: bool) -> bool:
-    return ⟪first(x),second(x)⟫
-)"));
-    const Declaration *compute = nullptr;
-    for (const auto &decl : project.declarations())
-      if (decl.qualifiedName == "m::compute")
-        compute = &decl;
-    require(compute && compute->body && compute->body->operations.size() == 3,
-            "notation duplicated or discarded an operand call");
-    unsigned index = 0;
-    for (StringRef expected : {"m::first", "m::second", "m::choose"}) {
-      const auto &operation = compute->body->operations[index++];
-      const auto *call = std::get_if<HelperCall>(&operation.action);
-      require(call &&
-                  project.declarations()[call->callee.index].qualifiedName ==
-                      expected,
-              "notation changed written operand evaluation order");
-    }
-  });
-  cases.run(
-      "bare notation selectors reexport complete descriptor families", [] {
-        CaptureOptions options;
-        options.format = "zkc-layout";
-        const std::string library = R"(pub def first(a: bool, b: bool) -> bool:
-    a
-pub notation infixl(70) a ⊙ b = first(a,b)
-pub notation ⟪ a, b ⟫ = first(a,b)
-pub notation xs[i] = first(xs,i)
-)";
-        auto project =
-            take(analyze(take(capture({{"ops", library, "ops.zkc"},
-                                       {"bridge", "pub use ops::{⊙, ⟪ ⟫, []}\n",
-                                        "bridge.zkc"},
-                                       {"m", R"(use bridge::{⊙, ⟪ ⟫, []}
-pub protocol Demo roles(P)(x: bool @P, y: bool @P) -> bool @P:
-    return ⟪x ⊙ y, x[y]⟫
-)",
-                                        "m.zkc"}},
-                                      options)))
-                     .checkedProject());
-        take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
-        auto report = take(inspectNotations(project, {true, false}));
-        require(StringRef(report).contains("bridge"),
-                "notation reexport lost its scope");
-      });
-  cases.run("bare indexing import refuses multiple arities before bodies", [] {
-    CaptureOptions options;
-    options.format = "zkc-layout";
-    auto importing = [&](StringRef selector) -> Expected<CheckedProject> {
-      auto captured =
-          capture({{"ops", R"(pub def two(a: bool, b: bool) -> bool:
-    a
-pub def three(a: bool, b: bool, c: bool) -> bool:
-    a
-pub notation xs[i] = two(xs,i)
-pub notation xs[i,j] = three(xs,i,j)
-)",
-                    "ops.zkc"},
-                   {"m", "use ops::{" + selector.str() + "}\n", "m.zkc"}},
-                  options);
-      if (!captured)
-        return captured.takeError();
-      return analyze(*captured).checkedProject();
-    };
-    refuses(importing("[]"), "source.notation-ambiguous");
-    take(importing("notation index(2)"));
-    take(importing("notation index(3)"));
-    refuses(importing("notation index(4)"), "source.import");
-  });
-  for (bool reverse : {false, true})
-    cases.run("incompatible unused imported descriptors refuse independent of "
-              "order " +
-                  Twine(reverse),
-              [&] {
-                CaptureOptions options;
-                options.format = "zkc-layout";
-                auto library = [](unsigned precedence) {
-                  return "pub def first(a: bool,b: bool) -> bool:\n    a\npub "
-                         "notation infixl(" +
-                         std::to_string(precedence) + ") a ⊙ b = first(a,b)\n";
-                };
-                auto captured =
-                    take(capture({{"a", library(70), "a.zkc"},
-                                  {"b", library(71), "b.zkc"},
-                                  {"m",
-                                   reverse ? "use b::{⊙}\nuse a::{⊙}\n"
-                                           : "use a::{⊙}\nuse b::{⊙}\n",
-                                   "m.zkc"}},
-                                 options));
-                refuses(analyze(captured).checkedProject(),
-                        "source.notation-conflict");
-              });
-  cases.run(
-      "layout notation precedence and nonassociation are semantic controls",
-      [] {
-        const std::string definitions = R"(def first(a: bool,b: bool) -> bool:
-    a
-notation infixl(60) a ⊕ b = first(a,b)
-notation infixr(70) a ⊙ b = first(a,b)
-notation infix(66) a ⊗ b = first(a,b)
-)";
-        take(check(definitions +
-                   "def f(a: bool,b: bool,c: bool) -> bool:\n    a ⊕ b ⊙ c\n"));
-        refuses(
-            check(definitions +
-                  "def f(a: bool,b: bool,c: bool) -> bool:\n    a ⊗ b ⊗ c\n"),
-            "syntax.comparison");
-        take(check(
-            definitions +
-            "def f(a: bool,b: bool,c: bool) -> bool:\n    (a ⊗ b) ⊗ c\n"));
-      });
-  cases.run("layout indexing refuses an ordered target at declaration", [] {
-    refuses(check(R"(local def first(a: bool,b: bool) -> bool:
-    return a
-notation xs[i] = first(xs,i)
-)"),
-            "source.index-target");
-  });
-  cases.run("notation cannot bind a nonconsumer as a finite reduction", [] {
-    refuses(check(R"(def first(a: bool,b: bool) -> bool:
-    a
-notation ∑ x ∈ D, body = first(D, fn(x) => body)
-)"),
-            "source.reduction-target");
-  });
-  cases.run("power syntax has no fabricated catalog meaning", [] {
-    refuses(check(R"(domain F = field("koala-bear")
-def power(a: F,b: index) -> F:
-    a ^ b
-)"),
-            "source.operator");
-  });
-  cases.run(
-      "layout notation retains source and formats through the same environment",
-      [] {
-        const std::string source = R"(def first(a: bool,b: bool) -> bool:
-    a
-notation infixl(70) a ⊙ b = first(a,b)
-notation ⟪ a, b ⟫ = first(a,b)
-notation xs[i] = first(xs,i)
-def render(x: bool,y: bool) -> bool:
-    ⟪ x⊙y,x[y] ⟫
-)";
-        auto project = take(check(source));
-        Authoring view(project);
-        auto formatted = view.format({0});
-        require(formatted.complete &&
-                    StringRef(formatted.text).contains("notation infixl(70)") &&
-                    StringRef(formatted.text).contains("⟪") &&
-                    StringRef(formatted.text).contains("x[y]"),
-                "formatter lost authored notation");
-        auto again = take(check(formatted.text));
-        require(Authoring(again).format({0}).text == formatted.text,
-                "notation formatting is not idempotent");
-        auto written = take(json::parse(take(inspectWrittenSource(project))));
-        unsigned occurrences = 0;
-        for (const auto &decl :
-             *written.getAsObject()->getArray("declarations"))
-          for (const auto &node : *decl.getAsObject()->getArray("nodes")) {
-            const auto *object = node.getAsObject();
-            occurrences += object->getString("kind") == "expr.notation_call" ||
-                           object->getString("kind") == "expr.subscript";
-          }
-        require(occurrences == 3,
-                "written source expanded or discarded authored notation calls");
-      });
-  cases.run(
-      "layout notation obeys semantic descriptor and expression budgets", [] {
-        const std::string definitions = R"(def first(a: bool,b: bool) -> bool:
-    a
-notation ⟪ a, b ⟫ = first(a,b)
-)";
-        Limits limits;
-        limits.notationHoles = 1;
-        refuses(check(definitions, limits), "source.limit");
-        limits = {};
-        limits.notationDescriptors = 1;
-        refuses(check(definitions, limits), "source.limit");
-        limits = {};
-        limits.expressionDepth = 3;
-        refuses(check(definitions +
-                          "def f(a: bool) -> bool:\n    ⟪a, ⟪a, ⟪a,a⟫⟫⟫\n",
-                      limits),
-                "source.limit");
       });
   cases.run("static requirements constrain closed selections", [] {
     auto source = R"(def identity<N: nat>(value: bool) -> bool where N <= 3:
@@ -1137,17 +888,17 @@ pub spec Audit for Demo:
              "m.zkc"}},
            {{"m", R"(def identity(value: bool) -> bool:
     value
-notation postfix(90) value ⊙ = identity(value)
+operator postfix(90) ⊙ = identity
 def apply(value: bool) -> bool:
     value⊙
 )",
              "m.zkc"}},
            {{"ops", R"(pub def first(a: bool, b: bool) -> bool:
     a
-pub notation infixl(60) a ⊕ b = first(a,b)
+pub operator infixl(60) ⊕ = first
 )",
              "ops.zkc"},
-            {"m", R"(use ops::{⊕}
+            {"m", R"(use ops::{operator ⊕}
 def apply(value: bool) -> bool:
     value ⊕ false
 )",
@@ -1277,7 +1028,7 @@ local def select(input: bool) -> bool:
   cases.run("power syntax can bind an ordinary library callable", [] {
     auto project = take(check(R"(def select(left: bool, right: bool) -> bool:
     left
-notation infixr(72) left ^ right = select(left,right)
+operator ^ = select
 pub protocol Demo roles(P)(left: bool @P, right: bool @P) -> bool @P:
     return left ^ right
 )"));

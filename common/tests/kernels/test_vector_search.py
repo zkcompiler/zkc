@@ -26,7 +26,7 @@ protocol Run roles(P)(xs:Vector<F>@P,needle:F@P)
 entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 '''
     entry = Entry(toolchain, journal, directory, source,
-                  [*library_modules(*core_packages('zkc')), *flags])
+                  [*library_modules(*core_packages()), *flags])
     degree = FIELDS[field]
     def encode(n):
         if field in (BASE, CUBIC):

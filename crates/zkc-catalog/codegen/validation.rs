@@ -775,7 +775,7 @@ fn source_shape<'a>(
     output: &'a Value,
 ) -> Result<SourceShape<'a>> {
     require(
-        matches!(kind_name, "Math" | "Local" | "Interface" | "Requirement"),
+        matches!(kind_name, "Math" | "Local" | "Interface"),
         "unknown source declaration kind",
     )?;
     for k in &statics {
@@ -791,8 +791,8 @@ fn source_shape<'a>(
         Some(source_term(catalog, &statics, output)?)
     };
     require(
-        matches!(kind_name, "Interface" | "Requirement") == output.is_none()
-            && (!matches!(kind_name, "Interface" | "Requirement") || inputs.is_empty()),
+        (kind_name == "Interface") == output.is_none()
+            && (kind_name != "Interface" || inputs.is_empty()),
         "source declaration kind and signature disagree",
     )?;
     Ok((kind_name, statics, inputs, output))
@@ -1087,9 +1087,9 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
     }
     let mut identities = frontend(v, &catalog, &mut exports)?;
     // A home names a catalog type constructor or a declared frontend
-    // constructor, a structural head the source language owns. Exactly one
-    // row spells each form, the structural meaning the frontend gives a head.
-    const FORMS: &[&str] = &["OracleHandle", "OracleHandleSequence", "FiniteDescriptor"];
+    // constructor, a logical type head the source language owns. Exactly one
+    // row spells each form, the logical meaning the frontend gives a head.
+    const FORMS: &[&str] = &["OracleHandle", "OracleHandleSequence"];
     let mut constructors = BTreeSet::new();
     let mut forms = BTreeSet::new();
     for r in list(&v["frontendConstructors"])? {

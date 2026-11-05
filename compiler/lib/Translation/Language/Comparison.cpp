@@ -441,14 +441,8 @@ class Comparator {
                                 const LayoutLeaf &output, StringRef alternative,
                                 StringRef site) {
     if (!scoped) {
-      auto *actual = next(block, cursor, span, "data.make", inputs, 1);
-      if (!actual || !attributes(*actual) ||
-          !types(actual->getResultTypes(), {output}) ||
-          !string(*actual, "alternative", alternative)) {
-        fail("mathematical variant identity or payload differs");
-        return {};
-      }
-      return Values{actual->getResult(0)};
+      fail("variant construction requires scoped execution");
+      return {};
     }
     Values result;
     auto *actual =
@@ -1420,9 +1414,7 @@ class Comparator {
         auto &target = project.declarations()[call->callee.index];
         bool owned = target.kind == Declaration::Kind::Local &&
                      source.mode == Body::Mode::Protocol;
-        bool math = target.kind == Declaration::Kind::Math ||
-                    (target.kind == Declaration::Kind::View &&
-                     !target.descriptorResult);
+        bool math = target.kind == Declaration::Kind::Math;
         auto input = flatten(call->operands);
         auto *actual = scoped
                            ? invoke(block, cursor, op.span,

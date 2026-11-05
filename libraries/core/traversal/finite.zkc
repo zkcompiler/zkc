@@ -1,7 +1,4 @@
 module zkc::finite;
-
-// Installed structural family: descriptors cannot inhabit ordinary Type ports.
-pub type Finite<I: Type + Copy + Drop> = builtin("finite", I);
 use zkc::sequence::{Sequence};
 use zkc::accumulation::{Combiner, FieldSum, FieldProduct, GroupSum};
 

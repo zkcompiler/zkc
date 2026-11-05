@@ -280,26 +280,6 @@ detail::Semantics::nativePortLayout(const Port &port) {
   }
   return result;
 }
-Expected<bool> detail::Semantics::nativeMessagePayload(const Type &type) {
-  if (auto error = work.charge(0))
-    return error;
-  auto limits = work.limits;
-  limits.work = work.remaining();
-  Layouts layouts(declarations, limits, authorities);
-  Work::Scope phase(layouts.state->work, work.phase);
-  auto layout = layouts.get(type);
-  auto charged = work.charge(layouts.state->work.used);
-  if (charged) {
-    if (!layout)
-      consumeError(layout.takeError());
-    return std::move(charged);
-  }
-  if (!layout)
-    return layout.takeError();
-  return !(*layout)->formal && !(*layout)->leaves.empty() &&
-         llvm::all_of((*layout)->leaves,
-                      [](const LayoutLeaf &leaf) { return leaf.data(); });
-}
 Expected<OracleKindLayout> Layouts::oracleKind(const Type &kind) {
   if (kind.kind != Type::Kind::OracleKind || kind.symbolic)
     return error("source.oracle-kind", "oracle layout requires a closed kind");

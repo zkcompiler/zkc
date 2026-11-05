@@ -204,13 +204,6 @@ trial of that snapshot, and its executed work remains chargeable.
 
 ## Finite computations
 
-`zkc::finite::Finite<I>` exports the installed Finite descriptor family. It is
-not an ordinary `Type`: imports and aliases preserve its descriptor category,
-and ordinary containers cannot store it. `view def` is the layout structural
-callable mode; the maintained `domain fn` and `domain<I>` library declarations
-remain source adapters during parent cutover. See the
-[layout finite example](../../docs/spec/language/layout-execution.md#structural-view-and-finite-consumers).
-
 The finite libraries use statically bound callbacks written `fn(...) -> ...`
 or `math fn(...) -> ...`, and finite domains written `domain<I>`. These are
 static parameter categories, with no runtime function or domain values. The input
@@ -443,5 +436,3 @@ negacyclic polynomials in coefficient order. Actual signed digits must fit the
 declared bound. Compute-prime transforms retain the original protocol modulus
 and exact reconstruction capacity; the prepared value has no wire codec. See
 the [operation contract](../../docs/spec/domains/quotient-matrices.md).
-
-[Native relay](transport/README.md) supplies reusable layout-source Relay and Forward contracts with installed native message consumer requirements.

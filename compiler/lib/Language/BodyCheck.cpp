@@ -1,10 +1,8 @@
 #include "BodyCheck.h"
-#include "DescriptorFactories.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "HelperResults.h"
 #include "OracleDefinitions.h"
-#include "SiteLabels.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -292,8 +290,16 @@ std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
 }
 bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
   const auto &expression = syntax.expressions[source.expression];
-  auto label = sourceSiteLabel(syntax, source, body.mode);
-  const bool explicitLabel = bool(source.site);
+  auto label = source.site;
+  const bool explicitLabel = bool(label);
+  if (!label && ((syntax.layoutSyntax && protocol()) || oracleMode())) {
+    if (source.evaluation == Statement::Evaluation::Ordered &&
+        source.pattern.kind == Pattern::Kind::Name)
+      label = source.pattern.name;
+    else if (expression.kind == Expression::Kind::For &&
+             expression.index.kind == Pattern::Kind::Name)
+      label = expression.index.name;
+  }
   if (!label)
     return true;
   if (!protocol() && !oracleMode())
@@ -304,7 +310,20 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
     return false;
   Operation *selected = nullptr;
   for (auto &operation : llvm::drop_begin(body.operations, firstOperation)) {
-    if (!siteEvent(operation))
+    bool eligible =
+        std::holds_alternative<Exchange>(operation.action) ||
+        std::holds_alternative<OracleSend>(operation.action) ||
+        std::holds_alternative<OracleQuery>(operation.action) ||
+        std::holds_alternative<OracleSourceQuery>(operation.action) ||
+        std::holds_alternative<OracleInstantiation>(operation.action) ||
+        std::holds_alternative<OracleSequenceAppend>(operation.action) ||
+        std::holds_alternative<OracleSequenceAt>(operation.action) ||
+        std::holds_alternative<ServiceQuery>(operation.action) ||
+        std::holds_alternative<ProtocolApplication>(operation.action) ||
+        std::holds_alternative<Control>(operation.action) ||
+        (syntax.layoutSyntax &&
+         std::holds_alternative<ProtocolRepeat>(operation.action));
+    if (!eligible)
       continue;
     if (selected)
       return fail("source.site",
@@ -520,9 +539,7 @@ bool BodyChecker::statementBody(const Statement &s) {
       return false;
     if (!checker.types.admit(before.type, Boundary::Construction, s.span,
                              &decl) ||
-        !checker.types.admit(before.type, Boundary::Message, s.span, &decl) ||
-        !checker.types.admit(before.type, Boundary::MessagePayload, s.span,
-                             &decl))
+        !checker.types.admit(before.type, Boundary::Message, s.span, &decl))
       return false;
     if (*sender == *receiver)
       return fail("source.send", "sender and receiver must be distinct",
@@ -770,9 +787,9 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
     if (!check.addService(sources[decl.id.index]->serviceBindings[i],
                           decl.services[i]))
       return false;
-  for (unsigned i = 0; i < decl.descriptorInputs.size(); ++i)
-    if (!check.addDomain(sources[decl.id.index]->descriptorBindings[i],
-                         decl.descriptorInputs[i], i))
+  for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
+    if (!check.addDomain(sources[decl.id.index]->domainBindings[i],
+                         decl.domainInputs[i], i))
       return false;
   for (unsigned i = 0; i < decl.scopedInputs.size(); ++i)
     if (!check.addScoped(sources[decl.id.index]->scopedBindings[i],
@@ -837,7 +854,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   bodyHeights[id.index] = 1;
   if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
     return false;
-  if (decl.kind == Declaration::Kind::View && decl.descriptorResult) {
+  if (decl.kind == Declaration::Kind::DomainFunction) {
     if (!resolveBindings(*this, decl, *sources[id.index]) ||
         !domainBody(decl, depth))
       return false;
@@ -845,13 +862,6 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     inferredContracts.erase(&decl);
     return true;
   }
-  if (decl.kind != Declaration::Kind::Oracle && !sources[id.index]->primitive &&
-      !sources[id.index]->finiteDefinition && sources[id.index]->bodies.empty())
-    return types.fail("source.body", "callable requires an authored body",
-                      decl.span);
-  if (decl.kind == Declaration::Kind::View &&
-      !checkViewStructure(*this, decl, *sources[id.index]))
-    return false;
   if (decl.kind == Declaration::Kind::Oracle) {
     // Proof Entry checking can reach this body during the signature pass,
     // before the signature pass reaches the generated predicate. Its source
@@ -862,8 +872,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   }
   Body result;
   result.mode = decl.kind == Declaration::Kind::Oracle ? Body::Mode::Oracle
-                : (decl.kind == Declaration::Kind::View ||
-                   decl.kind == Declaration::Kind::Math ||
+                : (decl.kind == Declaration::Kind::Math ||
                    decl.kind == Declaration::Kind::Relation)
                     ? Body::Mode::Math
                 : (decl.kind == Declaration::Kind::Local ||

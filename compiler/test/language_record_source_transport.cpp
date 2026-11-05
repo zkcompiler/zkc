@@ -201,9 +201,10 @@ protocol Run roles(P,V)(t:Ticket@P,c:Choice@P,s:S<Pair>@P)->(ok:bool@V){
     // Each authored nominal node adds a 67-byte authority frame, so a phantom
     // argument of 2,048 nominals fits as a lookup key, even hex-encoded in the
     // native descriptor, but not as a canonical key. The type is far inside
-    // typeDepth and has one leaf. Complete message-payload admission observes
-    // the layout during checking and refuses: provisional authority frames
-    // have the same width as final frames.
+    // typeDepth and has one leaf, so it is formable. Checking classifies the
+    // variant message without laying it out; closure lays it out first and
+    // refuses. A checking-phase layout would refuse identically, since its
+    // provisional frames have the final width.
     std::string row = "(", rows = "(";
     for (unsigned i = 0; i < 64; ++i)
       row += i ? ",A" : "A";
@@ -229,8 +230,8 @@ protocol Run roles(P,V)(t:Ticket@P,c:Choice@P,s:S<Pair>@P)->(ok:bool@V){
                 take(canonicalTypeKey(wide, authored)).size() >
                     zkc::protocol::VariantSpellingBytes / 2,
             "the limit fixture does not separate the two keys");
-    auto captured = take(capture({{"m", source, "m.zkc"}}));
-    refuses(analyze(captured).checkedProject(), "source.limit");
+    auto project = check({{"m", source, "m.zkc"}});
+    refuses(closeSubject(project, "m::Run"), "source.limit");
   });
   cases.run("the interface reader recomputes identities over the carrier", [] {
     auto project = check({{"m", R"(module m

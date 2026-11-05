@@ -34,7 +34,7 @@ entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
 
 
 def compile_entry(toolchain, journal, directory, source, flags, modules=()):
-    options = list(dict.fromkeys([*library_modules(*core_packages('zkc')), *modules, *flags]))
+    options = list(dict.fromkeys([*library_modules(*core_packages()), *modules, *flags]))
     entry = Entry(toolchain, journal, directory, source, options)
     return entry, operation_sites(json.loads(joint_artifact(json.loads(entry.package.read_text()))['candidate']))
 

@@ -59,7 +59,7 @@ int main() {
               const auto &decl = declaration(project, "Relay");
               require(decl.permissionBounds.empty(),
                       "transport inferred a usage promise");
-              require(decl.admissions.size() == 3,
+              require(decl.admissions.size() == 2,
                       "message lost independent boundaries");
               std::set<Boundary> kinds;
               for (const auto &obligation : decl.admissions) {
@@ -69,8 +69,7 @@ int main() {
                         "obligation lost its type or source");
               }
               require(kinds == std::set<Boundary>{Boundary::Construction,
-                                                  Boundary::Message,
-                                                  Boundary::MessagePayload},
+                                                  Boundary::Message},
                       "wrong message conditions");
             });
   cases.run("nested generic calls propagate boundary origins", [] {
@@ -81,7 +80,7 @@ protocol Outer<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let result=Forward(x
     const auto &origin = declaration(project, "Relay");
     for (StringRef name : {"Forward", "Outer"}) {
       const auto &decl = declaration(project, name);
-      require(decl.admissions.size() == 3, "propagated conditions differ");
+      require(decl.admissions.size() == 2, "propagated conditions differ");
       for (const auto &obligation : decl.admissions) {
         require(obligation.calls.size() == (name == "Forward" ? 1u : 2u),
                 "call chain lost");
@@ -146,7 +145,7 @@ protocol Bad roles(P,V)(x:Key@(P,V))->(r:Key@(P,V)){return x;}
 protocol Relay<T:Type,N:nat>roles(P,V)(x:[T;N]@P)->(r:[T;N]@V) where () {let result=send P->V(x);return result;}
 )"));
     const auto &decl = declaration(project, "Relay");
-    require(decl.admissions.size() == 3, "symbolic aggregate obligations lost");
+    require(decl.admissions.size() == 2, "symbolic aggregate obligations lost");
     compile(R"(
 protocol Relay<T:Type,N:nat>roles(P,V)(x:[T;N]@P)->(r:[T;N]@V) where () {let result=send P->V(x);return result;}
 entry fn Demo(inputs: Relay<bool,2>::Inputs) { return Relay<bool,2>::run(inputs); }
@@ -191,7 +190,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
           if (item.getAsObject()->getString("name") == "m::Relay")
             decl = item.getAsObject();
         require(decl && decl->getArray("admissions") &&
-                    decl->getArray("admissions")->size() == 3,
+                    decl->getArray("admissions")->size() == 2,
                 "inspection omitted boundary obligations");
         const auto *obligation =
             decl->getArray("admissions")->front().getAsObject();
@@ -223,7 +222,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 protocol Forward<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let r=Relay(x);return r;}
 )" + relay;
     const auto project = take(check(source));
-    require(declaration(project, "Forward").admissions.size() == 3,
+    require(declaration(project, "Forward").admissions.size() == 2,
             "later explicit-contract callee lost its boundaries");
     compile(source + "entry fn Demo(inputs: Forward<bool>::Inputs) { return "
                      "Forward<bool>::run(inputs); }");
@@ -254,7 +253,7 @@ protocol S<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let y=send P->V(x);let z
                 source += "let message" + std::to_string(i) + "=send P->V(x);";
               source += "return ();}";
               auto project = take(check(source));
-              require(declaration(project, "Many").admissions.size() == 3,
+              require(declaration(project, "Many").admissions.size() == 2,
                       "repeated sites duplicated the checked contract");
             });
   cases.run(

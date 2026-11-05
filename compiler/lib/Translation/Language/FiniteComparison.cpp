@@ -214,10 +214,10 @@ class FiniteCheck {
     }
     return op;
   }
-  bool descriptorInputs() {
-    for (unsigned i = 0; i < finite.descriptorOperands.size(); ++i) {
+  bool domainInputs() {
+    for (unsigned i = 0; i < finite.domainOperands.size(); ++i) {
       const auto &source = finite.domain->inputs[i];
-      const auto &input = values[finite.descriptorOperands[i].index];
+      const auto &input = values[finite.domainOperands[i].index];
       if (source.kind != Type::Kind::Array) {
         if (input.size() != 1)
           return fail("finite domain input carrier differs");
@@ -298,19 +298,19 @@ class FiniteCheck {
     const auto &shape = *finite.domain;
     for (const auto &node : shape.nodes) {
       Types result;
-      if (node.kind == DescriptorBinding::Kind::Zip ||
-          node.kind == DescriptorBinding::Kind::Product) {
+      if (node.kind == DomainBinding::Kind::Zip ||
+          node.kind == DomainBinding::Kind::Product) {
         for (auto child : node.children)
-          llvm::append_range(result, items.at(child.node));
-      } else if ((node.kind == DescriptorBinding::Kind::Elements ||
-                  node.kind == DescriptorBinding::Kind::SourceArray) &&
+          llvm::append_range(result, items.at(child));
+      } else if ((node.kind == DomainBinding::Kind::Elements ||
+                  node.kind == DomainBinding::Kind::SourceArray) &&
                  mlir::isa<data::SequenceType>(
                      data[node.operands.front().index].getType()))
         result.push_back(mlir::cast<data::SequenceType>(
                              data[node.operands.front().index].getType())
                              .getElementType());
       else {
-        auto layout = types(*finiteDescriptorItem(node.contract));
+        auto layout = types(node.item);
         if (!layout)
           return false;
         result = std::move(*layout);
@@ -334,34 +334,34 @@ class FiniteCheck {
       for (auto input : node.operands)
         operands.push_back(block.getArgument(input.index));
       for (auto child : node.children)
-        operands.push_back(descriptors[child.node]);
+        operands.push_back(descriptors[child]);
       StringRef name;
       SmallVector<StringRef> attrs;
       switch (node.kind) {
-      case DescriptorBinding::Kind::Elements:
-      case DescriptorBinding::Kind::SourceArray:
+      case DomainBinding::Kind::Elements:
+      case DomainBinding::Kind::SourceArray:
         name = "data.domain_elements";
         break;
-      case DescriptorBinding::Kind::Indices:
+      case DomainBinding::Kind::Indices:
         name = "data.domain_indices";
         attrs.push_back("axis");
         break;
-      case DescriptorBinding::Kind::Range:
+      case DomainBinding::Kind::Range:
         name = "data.domain_range";
         break;
-      case DescriptorBinding::Kind::Zip:
+      case DomainBinding::Kind::Zip:
         name = "data.domain_zip";
         break;
-      case DescriptorBinding::Kind::Product:
+      case DomainBinding::Kind::Product:
         name = "data.domain_product";
         break;
-      case DescriptorBinding::Kind::MatrixRow:
+      case DomainBinding::Kind::MatrixRow:
         name = "data.domain_matrix_row";
         break;
-      case DescriptorBinding::Kind::MatrixColumn:
+      case DomainBinding::Kind::MatrixColumn:
         name = "data.domain_matrix_column";
         break;
-      case DescriptorBinding::Kind::MatrixCoordinates:
+      case DomainBinding::Kind::MatrixCoordinates:
         name = "data.domain_matrix_coordinates";
         attrs.push_back("order");
         break;
@@ -372,13 +372,13 @@ class FiniteCheck {
                           {data::DomainType::get(context, items[i])}, attrs);
       if (!actual || actual->getNumRegions())
         return fail("domain constructor structure differs");
-      if (node.kind == DescriptorBinding::Kind::Indices) {
+      if (node.kind == DomainBinding::Kind::Indices) {
         auto axis = actual->getAttrOfType<mlir::IntegerAttr>("axis");
         if (!axis || !axis.getType().isInteger(64) ||
             axis.getInt() != node.axis)
           return fail("domain axis differs");
       }
-      if (node.kind == DescriptorBinding::Kind::MatrixCoordinates &&
+      if (node.kind == DomainBinding::Kind::MatrixCoordinates &&
           !text(*actual, "order", node.axis ? "column_major" : "row_major"))
         return fail("matrix enumeration order differs");
       descriptors.push_back(actual->getResult(0));
@@ -396,29 +396,29 @@ class FiniteCheck {
     if (!charge(arguments.size() + 1))
       return {};
     const auto &node = finite.domain->nodes[index];
-    if (node.kind == DescriptorBinding::Kind::Zip ||
-        node.kind == DescriptorBinding::Kind::Product) {
+    if (node.kind == DomainBinding::Kind::Zip ||
+        node.kind == DomainBinding::Kind::Product) {
       Values result;
       unsigned offset = 0;
       for (auto child : node.children) {
-        auto decoded = unpack(child.node,
-                              arguments.slice(offset, items[child.node].size()),
-                              block, cursor, ordinal, control, adapter);
+        auto decoded =
+            unpack(child, arguments.slice(offset, items[child].size()), block,
+                   cursor, ordinal, control, adapter);
         if (!decoded)
           return {};
         llvm::append_range(result, *decoded);
-        offset += items[child.node].size();
+        offset += items[child].size();
       }
       return result;
     }
-    if ((node.kind != DescriptorBinding::Kind::Elements &&
-         node.kind != DescriptorBinding::Kind::SourceArray) ||
+    if ((node.kind != DomainBinding::Kind::Elements &&
+         node.kind != DomainBinding::Kind::SourceArray) ||
         !mlir::isa<data::SequenceType>(
             data[node.operands.front().index].getType()))
       return Values(arguments);
-    auto packed = take(layouts.packed(*finiteDescriptorItem(node.contract)));
+    auto packed = take(layouts.packed(node.item));
     auto itemSite = "item_" + std::to_string(ordinal++);
-    auto flat = types(*finiteDescriptorItem(node.contract));
+    auto flat = types(node.item);
     if (!packed || !flat)
       return {};
     if (!packed->product)
@@ -627,30 +627,8 @@ public:
     (void)!!failure;
   }
   Expected<Values> run() {
-    if (!finite.domain ||
-        finite.domain->result >= finite.domain->nodes.size() ||
-        llvm::any_of(finite.domain->nodes, [](const DescriptorBinding &node) {
-          return !finiteDescriptorItem(node.contract);
-        }))
-      return error("source.descriptor",
-                   "finite comparison requires the Finite family");
     unsigned start = scoped ? scoped->consumed() : 0;
-    for (unsigned i = 0; i < finite.domain->nodes.size(); ++i) {
-      const auto &node = finite.domain->nodes[i];
-      if (!charge(node.children.size() + 1))
-        return std::move(failure);
-      for (const auto &edge : node.children) {
-        auto *item = finiteDescriptorItem(edge.contract);
-        if (!item || edge.node >= i)
-          return error("source.descriptor", "finite child contract differs");
-        // Bound and charge the complete item before structural comparison.
-        if (!take(layouts.get(*item)))
-          return std::move(failure);
-        if (edge.contract != finite.domain->nodes[edge.node].contract)
-          return error("source.descriptor", "finite child contract differs");
-      }
-    }
-    if (!descriptorInputs())
+    if (!domainInputs())
       return std::move(failure);
     initial = flatten(finite.operands);
     if (!ports(finite.body.captures, bodyPorts) ||

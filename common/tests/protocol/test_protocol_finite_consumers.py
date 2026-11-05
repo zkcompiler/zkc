@@ -14,7 +14,7 @@ import test_machine_stark as machine
 from test_total_callback_selection import compile_entry as compile_counted_entry
 
 ROOT = Path(__file__).resolve().parents[3]
-SHARED = library_modules(*core_packages('zkc'))
+SHARED = library_modules(*core_packages())
 AIR = library_modules('relations/air')
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
          ('--no-simplify', '--no-finite-bulk')]

@@ -1,7 +1,7 @@
 #include "BodySummary.h"
 #include "ClosureInputs.h"
 #include "DataRequirements.h"
-#include "DescriptorWitness.h"
+#include "DomainWitness.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "OracleDefinitions.h"
@@ -80,7 +80,7 @@ class SpecializationCheck {
   binding(const Body &body, const Body &closedBody, ValueOrigins &bodyOrigins,
           unsigned index, DeclarationId selected, const Substitution &subst,
           ArrayRef<Environment> environment,
-          ArrayRef<DescriptorEnvironment> domains,
+          ArrayRef<DomainEnvironment> domains,
           const std::function<ValueId(ValueId)> &map, unsigned depth) {
     if (index >= body.scopedBindings.size() ||
         selected.index >= candidate.size() || depth > work.limits.callDepth) {
@@ -100,25 +100,6 @@ class SpecializationCheck {
       }
       return environment[*binding.parameter];
     }
-    if (binding.named) {
-      const auto &selection = *binding.named;
-      auto statics = arguments(selection.arguments, subst, binding.span);
-      if (!statics)
-        return {};
-      auto module = selection.target.module;
-      if (module) {
-        module = type(*module, subst, binding.span);
-        if (!module)
-          return {};
-      }
-      auto dispatch = types.dispatch(module, selection.target.declaration,
-                                     *statics, binding.span);
-      if (!dispatch || dispatch->declaration.index >= source.size() ||
-          !instance(selected, source[dispatch->declaration.index], nullptr,
-                    dispatch->arguments, {}, depth))
-        return {};
-      return Environment{selected, {}};
-    }
     if (!binding.computation) {
       refuse(binding.span);
       return {};
@@ -129,8 +110,7 @@ class SpecializationCheck {
         actual.scopedOrigin->first.index != computation.lexicalOwner.index ||
         actual.scopedOrigin->second != computation.expression ||
         actual.scopedArguments.size() != binding.scopedCaptures.size() ||
-        actual.descriptorArguments.size() !=
-            binding.descriptorCaptures.size()) {
+        actual.domainArguments.size() != binding.domainCaptures.size()) {
       refuse(binding.span, "selected callback identity differs");
       return {};
     }
@@ -158,14 +138,14 @@ class SpecializationCheck {
       hidden.insert(hidden.end(), captured->captures.begin(),
                     captured->captures.end());
     }
-    for (unsigned i = 0; i < binding.descriptorCaptures.size(); ++i) {
-      if (!actual.descriptorArguments[i]) {
+    for (unsigned i = 0; i < binding.domainCaptures.size(); ++i) {
+      if (!actual.domainArguments[i]) {
         refuse(binding.span, "missing captured domain shape");
         return {};
       }
-      auto operands = bindDescriptorInputs(
-          types, source, body, closedBody, map, binding.descriptorCaptures[i],
-          subst, domains, *actual.descriptorArguments[i], &bodyOrigins);
+      auto operands = bindDomainInputs(
+          types, source, body, closedBody, map, binding.domainCaptures[i],
+          subst, domains, *actual.domainArguments[i], &bodyOrigins);
       if (!operands)
         return {};
       hidden.insert(hidden.end(), operands->begin(), operands->end());
@@ -190,7 +170,7 @@ class SpecializationCheck {
   }
   bool body(const Body &original, const Body &actual, const Substitution &subst,
             ArrayRef<Environment> environment,
-            ArrayRef<DescriptorEnvironment> domains, unsigned depth,
+            ArrayRef<DomainEnvironment> domains, unsigned depth,
             const ClosureLayout *layout = nullptr,
             std::optional<unsigned> invariantSuffix = {},
             unsigned regionDepth = 1) {
@@ -243,7 +223,7 @@ class SpecializationCheck {
         actual.operations.size() != original.operations.size() ||
         actual.stopped != original.stopped ||
         actual.stopReason != original.stopReason ||
-        !actual.scopedBindings.empty() || !actual.descriptorBindings.empty() ||
+        !actual.scopedBindings.empty() || !actual.domainBindings.empty() ||
         !same(actual.results, results))
       return refuse({});
     for (unsigned i = 0; i < original.values.size(); ++i) {
@@ -314,7 +294,7 @@ class SpecializationCheck {
             (a.lexicalOwner &&
              a.lexicalOwner->index != b.lexicalOwner->index) ||
             a.scopedArguments != b.scopedArguments ||
-            a.descriptorArguments != b.descriptorArguments ||
+            a.domainArguments != b.domainArguments ||
             bool(a.target.module) != bool(b.target.module) ||
             bool(a.notation) != bool(b.notation) ||
             (a.notation && *a.notation != *b.notation) ||
@@ -332,8 +312,7 @@ class SpecializationCheck {
         const auto *call = std::get_if<HelperCall>(&out.action);
         if (!call || invoke->binding >= original.scopedBindings.size() ||
             !call->arguments.empty() || call->module || call->owner ||
-            !call->scopedArguments.empty() ||
-            !call->descriptorArguments.empty())
+            !call->scopedArguments.empty() || !call->domainArguments.empty())
           return refuse(op.span);
         auto selected =
             binding(original, actual, bodyOrigins, invoke->binding,
@@ -353,10 +332,10 @@ class SpecializationCheck {
             bool(closed->predicate) != bool(finite->predicate) ||
             !same(closed->operands, mapped(finite->operands)))
           return refuse(op.span, "finite operation differs");
-        auto operands = bindDescriptorInputs(
-            types, source, original, actual, map, finite->domain, subst,
-            domains, *closed->domain, &bodyOrigins);
-        if (!operands || !same(closed->descriptorOperands, *operands))
+        auto operands = bindDomainInputs(types, source, original, actual, map,
+                                         finite->domain, subst, domains,
+                                         *closed->domain, &bodyOrigins);
+        if (!operands || !same(closed->domainOperands, *operands))
           return refuse(op.span, "finite domain mapping differs");
         auto callback = [&](unsigned index, const FiniteCallback &selected) {
           auto expected =
@@ -393,8 +372,7 @@ class SpecializationCheck {
         if (definition.kind != Declaration::Kind::Math || definition.abstract ||
             !definition.finiteDefinition || !definition.body ||
             definition.body->operations.size() != 1 ||
-            call->descriptorArguments.size() !=
-                definition.descriptorInputs.size() ||
+            call->domainArguments.size() != definition.domainInputs.size() ||
             call->scopedArguments.size() != definition.scopedInputs.size() ||
             call->operands.size() != definition.inputs.size() ||
             out.results.size() != definition.outputs.size() ||
@@ -416,24 +394,21 @@ class SpecializationCheck {
             &templateBody.operations.front().action);
         if (!finite || !closed.domain || finite->kind != closed.kind ||
             bool(finite->predicate) != bool(closed.predicate) ||
-            finite->domain >= templateBody.descriptorBindings.size())
+            finite->domain >= templateBody.domainBindings.size())
           return refuse(op.span, "expanded finite operation differs");
-        const auto &domain = templateBody.descriptorBindings[finite->domain];
+        const auto &domain = templateBody.domainBindings[finite->domain];
         if (!domain.parameter ||
-            *domain.parameter >= call->descriptorArguments.size())
+            *domain.parameter >= call->domainArguments.size())
           return refuse(op.span, "finite domain formal differs");
         auto operands =
-            bindDescriptorInputs(types, source, original, actual, map,
-                                 call->descriptorArguments[*domain.parameter],
-                                 subst, domains, *closed.domain, &bodyOrigins);
-        if (!operands || !same(closed.descriptorOperands, *operands))
+            bindDomainInputs(types, source, original, actual, map,
+                             call->domainArguments[*domain.parameter], subst,
+                             domains, *closed.domain, &bodyOrigins);
+        if (!operands || !same(closed.domainOperands, *operands))
           return refuse(op.span, "expanded finite domain substitution differs");
-        if (!typeEqual(
-                descriptorType(
-                    definition.descriptorInputs[*domain.parameter].contract),
-                descriptorType(
-                    closed.domain->nodes[closed.domain->result].contract),
-                selectedBindings, op.span))
+        if (!typeEqual(definition.domainInputs[*domain.parameter].item,
+                       closed.domain->nodes[closed.domain->result].item,
+                       selectedBindings, op.span))
           return false;
         std::vector<ValueId> data;
         for (auto operand : finite->operands) {
@@ -528,7 +503,7 @@ class SpecializationCheck {
               if constexpr (std::is_same_v<T, HelperCall>) {
                 if (action.owner != value.owner ||
                     !value.scopedArguments.empty() ||
-                    !value.descriptorArguments.empty())
+                    !value.domainArguments.empty())
                   return false;
                 const auto &definition = source[target.index];
                 if ((original.mode == Body::Mode::Math ||
@@ -560,17 +535,16 @@ class SpecializationCheck {
                 }
               }
               if constexpr (std::is_same_v<T, HelperCall>) {
-                if (action.descriptorArguments.size() !=
-                    callee.descriptorArguments.size())
+                if (action.domainArguments.size() !=
+                    callee.domainArguments.size())
                   return false;
-                for (unsigned j = 0; j < action.descriptorArguments.size();
-                     ++j) {
-                  if (!callee.descriptorArguments[j])
+                for (unsigned j = 0; j < action.domainArguments.size(); ++j) {
+                  if (!callee.domainArguments[j])
                     return false;
-                  auto bound = bindDescriptorInputs(
+                  auto bound = bindDomainInputs(
                       types, source, original, actual, map,
-                      action.descriptorArguments[j], subst, domains,
-                      *callee.descriptorArguments[j], &bodyOrigins);
+                      action.domainArguments[j], subst, domains,
+                      *callee.domainArguments[j], &bodyOrigins);
                   if (!bound)
                     return false;
                   hidden.insert(hidden.end(), bound->begin(), bound->end());
@@ -748,27 +722,26 @@ class SpecializationCheck {
                   action.alternatives != value.alternatives ||
                   action.regions.size() != value.regions.size() ||
                   action.regions.size() != value.regionLayouts.size() ||
-                  !value.descriptorArguments.empty() ||
-                  value.descriptorShapes.size() !=
-                      action.descriptorArguments.size())
+                  !value.domainArguments.empty() ||
+                  value.domainShapes.size() != action.domainArguments.size())
                 return false;
               std::vector<ValueId> captures;
               for (const auto &selected : environment)
                 captures.insert(captures.end(), selected.captures.begin(),
                                 selected.captures.end());
-              std::vector<DescriptorEnvironment> selectedDomains;
-              for (unsigned j = 0; j < action.descriptorArguments.size(); ++j) {
-                if (!value.descriptorShapes[j])
+              std::vector<DomainEnvironment> selectedDomains;
+              for (unsigned j = 0; j < action.domainArguments.size(); ++j) {
+                if (!value.domainShapes[j])
                   return false;
-                auto bound = bindDescriptorInputs(
-                    types, source, original, actual, map,
-                    action.descriptorArguments[j], subst, domains,
-                    *value.descriptorShapes[j], &bodyOrigins);
+                auto bound =
+                    bindDomainInputs(types, source, original, actual, map,
+                                     action.domainArguments[j], subst, domains,
+                                     *value.domainShapes[j], &bodyOrigins);
                 if (!bound)
                   return false;
                 captures.insert(captures.end(), bound->begin(), bound->end());
                 selectedDomains.push_back(
-                    {value.descriptorShapes[j], std::move(*bound)});
+                    {value.domainShapes[j], std::move(*bound)});
               }
               const bool loop = action.kind == Control::Kind::For;
               unsigned header = loop ? 2 : 1;
@@ -981,12 +954,9 @@ class SpecializationCheck {
     const auto &actual = candidate[id.index];
     if (!types.charge(1, actual.span))
       return false;
-    if (!actual.admissions.empty() || !actual.consumerRequirements.empty())
-      return refuse(actual.span,
-                    "closed declaration retains conditional requirements");
     if (ArrayRef<Type>(actual.staticArguments) != statics ||
         actual.scopedArguments.size() != selected.size() ||
-        !actual.scopedInputs.empty() || !actual.descriptorInputs.empty() ||
+        !actual.scopedInputs.empty() || !actual.domainInputs.empty() ||
         !actual.parameters.empty())
       return refuse(actual.span, "static substitution differs");
     for (unsigned i = 0; i < selected.size(); ++i)
@@ -1015,7 +985,7 @@ class SpecializationCheck {
     // no alias witness and therefore retain independent authored inputs.
     if (!checkedAliases) {
       if (!actual.closureLayout.captures.empty() ||
-          !actual.descriptorArguments.empty())
+          !actual.domainArguments.empty())
         return refuse(actual.span, "unwitnessed hidden input mapping");
       for (unsigned i = 0; i < actual.closureLayout.inputs.size(); ++i)
         if (actual.closureLayout.inputs[i] != i)
@@ -1081,7 +1051,7 @@ class SpecializationCheck {
       return refuse(actual.span);
     std::vector<Type> inputs, outputs;
     std::vector<ScopedSignature> signatures;
-    std::vector<Type> descriptorTypes;
+    std::vector<Type> domainItems;
     if (computation) {
       for (unsigned i = 0; i < templateBody->inputs; ++i)
         inputs.push_back(templateBody->values[i].type);
@@ -1089,9 +1059,9 @@ class SpecializationCheck {
       for (const auto &binding : templateBody->scopedBindings)
         if (binding.parameter)
           signatures.push_back(binding.signature);
-      for (const auto &binding : templateBody->descriptorBindings)
+      for (const auto &binding : templateBody->domainBindings)
         if (binding.parameter)
-          descriptorTypes.push_back(descriptorType(binding.contract));
+          domainItems.push_back(binding.item);
       if (!actual.effectAllowance ||
           !(*actual.effectAllowance ==
             EffectSummary{computation->signature.allowance}))
@@ -1103,8 +1073,8 @@ class SpecializationCheck {
         outputs.push_back(port.type);
       for (const auto &parameter : original.scopedInputs)
         signatures.push_back(parameter.signature);
-      for (const auto &parameter : original.descriptorInputs)
-        descriptorTypes.push_back(descriptorType(parameter.contract));
+      for (const auto &parameter : original.domainInputs)
+        domainItems.push_back(parameter.item);
       std::optional<EffectSummary> expectedAllowance;
       if (original.effectAllowance) {
         std::vector<EffectSummary> effects;
@@ -1129,7 +1099,7 @@ class SpecializationCheck {
         return refuse(actual.span);
     }
     if (signatures.size() != selected.size() ||
-        descriptorTypes.size() != actual.descriptorArguments.size() ||
+        domainItems.size() != actual.domainArguments.size() ||
         actual.outputs.size() != outputs.size() ||
         actual.inputs.size() < inputs.size())
       return refuse(actual.span);
@@ -1195,15 +1165,14 @@ class SpecializationCheck {
       }
       environment.push_back(std::move(binding));
     }
-    std::vector<DescriptorEnvironment> domains;
-    for (unsigned i = 0; i < actual.descriptorArguments.size(); ++i) {
-      const auto &shape = actual.descriptorArguments[i];
+    std::vector<DomainEnvironment> domains;
+    for (unsigned i = 0; i < actual.domainArguments.size(); ++i) {
+      const auto &shape = actual.domainArguments[i];
       if (!shape || shape->result >= shape->nodes.size() ||
-          !typeEqual(descriptorTypes[i],
-                     descriptorType(shape->nodes[shape->result].contract),
-                     subst, actual.span))
+          !typeEqual(domainItems[i], shape->nodes[shape->result].item, subst,
+                     actual.span))
         return refuse(actual.span, "domain item mapping differs");
-      DescriptorEnvironment domain{shape, {}};
+      DomainEnvironment domain{shape, {}};
       for (const auto &type : shape->inputs) {
         if (offset >= layout.captures.size())
           return refuse(actual.span, "missing domain input mapping");
@@ -1235,10 +1204,12 @@ class SpecializationCheck {
           layout.inputs);
       if (!assumptions)
         return false;
+      Declaration expected = actual;
+      expected.dataPreconditions = std::move(*assumptions);
       auto requirements = deriveDataPreconditions(
-          types, candidate, actual, *actual.body, *assumptions,
+          types, candidate, expected, *actual.body,
           computation || !original.scopedInputs.empty() ||
-              !original.descriptorInputs.empty());
+              !original.domainInputs.empty());
       if (!requirements || *requirements != actual.dataPreconditions)
         return types.diagnostic
                    ? false
@@ -1341,9 +1312,6 @@ checkScopedSpecialization(const ClosedEntry &entry, const Limits &limits,
   detail::Work::Scope phase(work, SourceWorkPhase::ScopedSpecialization);
   detail::Work::Record record(work, SourceWorkPhase::ScopedSpecialization,
                               observations);
-  if (auto error = detail::chargeSemanticIndex(
-          detail::DeclarationAccess::get(entry.project()), work))
-    return error;
   return detail::SpecializationCheck(entry, work).run();
 }
 } // namespace zkc::language

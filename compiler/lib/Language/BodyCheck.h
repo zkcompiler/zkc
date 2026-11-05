@@ -11,7 +11,7 @@ public:
               unsigned, unsigned lexicalCallbackDepth = 0);
   bool run(const SyntaxBody &, std::vector<Port> &, bool protocol);
   bool addScoped(BindingId, const ScopedSignature &, Span);
-  bool addDomain(BindingId, const DescriptorParameter &, unsigned);
+  bool addDomain(BindingId, const DomainParameter &, unsigned);
   bool addService(BindingId, const ServicePort &);
   bool addInput(BindingId, const Type &, std::vector<unsigned>, Span,
                 std::optional<unsigned> holder = {},
@@ -37,8 +37,6 @@ private:
   uint32_t statement = 0;
   /// Only the outer expression selected by an authored `<-` may be ordered.
   std::optional<uint32_t> orderedRoot;
-  /// An expected Local callback permits either a pure or ordered root.
-  std::optional<uint32_t> callbackRoot;
   const Pattern *bindingPattern = nullptr;
   std::optional<uint32_t> bindingPatternRoot;
   bool retiresCustody(const Pattern &, const Type &, unsigned = 1);
@@ -102,8 +100,6 @@ private:
   std::optional<unsigned> domainArgument(uint32_t, unsigned);
   std::optional<unsigned> scopedArgument(uint32_t, const ScopedSignature &,
                                          unsigned);
-  std::optional<unsigned> scopedComputation(uint32_t, const ScopedSignature &,
-                                            unsigned);
   std::optional<ValueId> invokeScoped(uint32_t, unsigned);
   bool inheritScoped(BodyChecker &);
   bool inheritDomains(BodyChecker &, const std::set<BindingId> &,
@@ -183,8 +179,7 @@ private:
                                bool allowUntypedStop);
   std::optional<std::pair<BindingId, std::vector<unsigned>>>
   sourcePlace(uint32_t, unsigned = 1, bool optional = false);
-  std::optional<RegionInputs> regionInputs(const Expression &,
-                                           bool includeHead = false);
+  std::optional<RegionInputs> regionInputs(const Expression &);
   std::optional<std::set<BindingId>> regionStates(const RegionInputs &, Span);
   std::optional<ValueId> capturePlace(const FreePlace &, Span);
   std::optional<std::pair<ValueId, std::vector<unsigned>>>

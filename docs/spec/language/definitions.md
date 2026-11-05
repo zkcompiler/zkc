@@ -196,14 +196,14 @@ are internal identity operations and do not authorize source access.
 
 ### Module imports and operator scope
 
-`use ops` imports the alias `ops` and that module's public notation bindings.
-`use ops as selected` changes the alias. `use ops::{Vector, add}` imports only
-those names. 4.1 selectors such as `use ops::{⊙, ⟪ ⟫, [], ∑}` import complete
-exported descriptor families when each spelling identifies one descriptor key.
-Ambiguous positions or index arities require an explicit selector such as
-`notation infix ⊙` or `notation index(2)`; import order and operand types do not
-choose syntax. The legacy brace reader retains its existing selectors until
-source migration. See the [notation contract](notation.md#imports-and-lexical-scope).
+`use zkc::vector;` imports the alias `vector` and that module's public operator,
+delimiter and reduction bindings. `use zkc::vector as vec;` changes the alias.
+A selected import such as
+`use zkc::vector::{Vector, add};` imports only those names;
+`use zkc::vector::{Vector, operator +};` also imports the selected public operator
+family, including all exported fixities for the token. `notation ⟪` selects a
+public delimiter shape; `reduction ∑` selects a public reduction binding.
+`indexing []` selects all exported indexing arities.
 Import aliases have whole-module scope and may refer to aliases written later.
 The names introduced by an import are excluded from its own source path; for
 example, `use library::sub as library;` resolves the enclosing or captured
@@ -409,11 +409,6 @@ including types, domains, associated types, relations and Entries. Callable
 contracts use the same descriptive fields as the declaration inventory.
 Capability requirements additionally provide `export`, a canonical qualified
 source name for writing the predicate in a `where` clause.
-Installed consumer requirements have `kind: "consumer"`, installed `identity`,
-canonical `export`, selected `provider`, complete `arguments` and `inferred:
-false`. Their installed declarations have `kind: "requirement"` and no runtime
-ports. The separate `admissions` inventory names derived `participants`,
-`construction`, `message` and `message_payload` demands with type and origins.
 `requirements_written` and `effects_written` distinguish authored contracts
 from completion by the checker. Record and variant descriptions expose public
 fields and constructor visibility, but omit private field names and types.
@@ -444,24 +439,10 @@ and does not supply linking, admission or security authority.
 The direct compiler and CLI emit the same flat `zkc.source-check/0` successful
 result. It records `status`, `phase`, `scope`, `capture`, `installation`, optional
 `declarations`, `api`, `notations`, and `entry`/`original` for Entry scope. The CLI adds `compiler`.
-It also retains `entries` and the required `source_claim_inventory` array in
-both scopes, plus the format-dependent [pending source assurance
-diagnostic](layout-execution.md#optional-specifications) for layout captures.
 The separate [notation inspection view](notation.md#inspection) describes syntax
 environments and occurrences; it does not change callable declaration records.
 
 ## Types and static terms
-
-Ordinary enum alternatives are total structural constructors in Math and
-pointwise Protocol computation as well as Local. Each construction retains the
-exact nominal type and static arguments, validates every alternative's payload
-types, and requires constructor authority for a restricted type. Math and
-pointwise Protocol construction additionally require the complete enum to be
-mathematical data. An empty alternative cannot hide a nonmathematical payload
-in another alternative. Payloads evaluate once in written order; their actual
-Math dependencies or Protocol availability determine the constructed value.
-Logical payloads and services remain outside ordinary enums. Explicit associated
-representation construction retains its separate Local contract.
 
 ```text
 domain Fr = field("bls12-381.fr");
@@ -632,78 +613,6 @@ can therefore refuse with `source.limit` before reaching an arithmetic
 refusals are unchanged. Standalone natural arithmetic uses its own allowance.
 This is a sound set of normalization rules, not a complete procedure for
 exponential arithmetic. Static argument inference does not invert `pow2`.
-
-### Installed consumer requirements
-
-`use zkc::transport::{NativeMessage}` exposes the installed consumer demand
-`where NativeMessage(T)`. Qualified paths, import aliases and public reexports
-retain the declaration's installed identity. A source declaration or capability
-with the same spelling supplies no native authority. A consumer requirement is
-neither a runtime argument nor a descriptor, callable or ordinary type.
-Multiple demands use the existing tuple syntax,
-`where (NativeMessage(T), NativeMessage(U))`; a module import alias such as
-`use zkc::transport as Wire` permits `where Wire::NativeMessage(T)`.
-
-The complete payload type is its invariant index. `NativeMessage(T)` requires
-ordinary executable payload data, external Construction, installed native
-Message support and a nonempty complete source-native message layout. The
-Layout owner decides the last condition from data leaves, including formal
-content. It is not an encoded byte-width or runtime collection-length test:
-`()` and empty source products fail, while an installed zero-length collection
-with a native frame can succeed. Private fields, sealed/opaque associated
-representations, resources, formal/logical values and unsupported native message
-heads cannot be authorized by a clause or a custom codec. Associated Field
-indices can acquire actual installed support after provider substitution.
-Participants, Copy/Drop and effects remain separate obligations.
-
-For example, a reusable interface and generic forwarding client can say:
-
-```text
-use zkc::transport::{NativeMessage}
-interface Relay:
-    protocol pass<T: Type> roles(P, V)(x: T @P) -> T @V effects() where NativeMessage(T)
-module NativeRelay: Relay:
-    protocol pass<U: Type> roles(A, B)(x: U @A) -> U @B where NativeMessage(U):
-        y <- send x to B
-        return y
-protocol Forward<T: Type, C: Relay> roles(P, V)(x: T @P) -> T @V where NativeMessage(T):
-    y <- C::pass<T>(x) @(P, V)
-    return y
-```
-
-An envelope API uses `NativeMessage(Envelope<T>)`; a premise for `T` alone does
-not establish that distinct index. Generic clauses remain conditional demands.
-Known invalidity refuses before symbolic premise matching. Every closed use
-checks all declared demands, including ones unused by the body. Sends derive
-Construction, Message and MessagePayload obligations even under `where ()`.
-A broad abstract interface with a hidden send implementation still refuses.
-
-Universal conformance uses capture-avoiding owner/member/provider substitution.
-Only the implementing module's admitted header and the required interface/member
-contract supply premises; implementation member demands are goals. Supported
-concrete goals discharge independently; remaining symbolic boundary/type atoms
-must match exactly. No general implication solver is introduced. Immutable
-written source independently reconstructs the explicit installed reference and
-indices as well as signature-derived admissions. This inventory includes unused
-standalone declarations and inherited module contracts under section parameter
-groups; it does not depend on candidate metadata remaining present. Every
-reconstructed header must retain its required admission atoms. Body checking can
-add goals. Anonymous Construction handlers inherit their owner's clauses; their
-authored identity comes from frozen parent membership and written-declaration
-links, including grouped handlers that share a source span. They undergo the
-same header-demand and admission comparison. Mutating both checked sides
-consistently cannot replace that source authority. Generated Host selections
-still discharge the selected protocol's demands. Project selection, header replay
-and specialization charge consumer metadata, admission type structure and every
-retained call origin before their project, callable or generated helper copies,
-including unused declarations in a project snapshot. Specialization releases
-discharged storage after complete argument admission. Failure publishes no
-partial closure.
-
-The existing written-source `requirement` node retains its fields and owner.
-Its `capability` path slot is syntactic: declaration lookup classifies installed
-consumer demands separately from catalog capability predicates. No executable
-schema or independent formal semantics is added by this source extension.
 
 `where 1 <= N` requires a natural bound. `where Copy(T), Drop(T)` adds permission
 requirements; `T: Type + Copy + Drop` expresses the same parameter permissions.
@@ -1067,35 +976,24 @@ admit that helper into mathematics.
 
 ## Boolean formulas
 
-`!a`, `a and b` and `a or b` accept Boolean operands. The legacy `&&` and `||`
-spellings project to the same selected expressions. Negation evaluates its
-operand once. In Math, Local and pointwise total Protocol expressions, `and`
-evaluates its right operand only when the left is true; `or` does so only when
-the left is false. In a local `fn` they follow the same
+`!a`, `a && b` and `a || b` accept Boolean operands. Negation evaluates its
+operand once. In a local `fn`, `&&` evaluates its right operand only when the
+left is true; `||` does so only when the left is false. They follow the same
 typing, effects, capture and resource-join rules as local `if` expressions.
 Specifically, `a && b` checks as `if a { b } else { false }`, and `a || b`
 as `if a { true } else { b }`. A noncopyable capture used only on the right
 therefore needs `Drop` on the skipped path.
-Both operands are checked, including a statically skipped operand. In Local, a
-block on the right may perform ordered work or stop. Its continuing result must
-be Boolean.
+Both operands are checked, including a statically skipped operand. A block on
+the right may perform ordered work or stop. Its continuing result must be Boolean.
 
-In `math fn`, relations and protocol formulas, these operators select total
+In `math fn`, relations and protocol formulas, these operators denote total
 mathematics. Both operands retain their dependencies and formation obligations,
-including in `false && x` and `true || x`; only reached work executes.
-Protocol `and` and `or` operands must
+including in `false && x` and `true || x`. Protocol `&&` and `||` operands must
 contain only mathematical work, including inside blocks and unused bindings:
-local calls, service queries, messages, mutation and rejection refuse
+local calls, service queries, messages, mutation, rejection and control refuse
 with `source.mode`. An empty effect allowance on a local function does not make
-it mathematical. Total nested Math selection is admitted. Pointwise Boolean
-selection uses the operands' actual availability, without a shared Protocol
-roster or common-value requirement. It retains an implicit zero-argument Math
-scoped computation over exact immutable free-place snapshots. RHS computations
-remain inside its selected arms. Authored expression, lexical scope, captures,
-invocation and closed specialization are independently checked through the
-ordinary scoped machinery. There is no public helper or runtime closure value.
-Oracle query plans do not support selected control and refuse these operators
-with `source.mode`; they do not fall back to eager evaluation.
+it mathematical. Put conditional execution in a local `fn` and call it from
+the protocol; this does not introduce a conditional message schedule.
 
 Total Boolean operations use the same mathematical helper path as field and
 group expressions. `intrinsic("bool.and", a, b)`, `"bool.or"` and `"bool.xor"`
@@ -1490,11 +1388,9 @@ Public bindings require public targets. Unused bindings are checked too.
 Reduction descriptors have one mapped-vector operand and the additional
 [finite reduction target rules](#finite-reduction-binders).
 
-A layout module can declare `notation infixl(65) a + b = A::add(a,b)`,
-where `A` is an explicit module parameter. Targets accept partial static
-arguments, names and holes, such as
-`notation infixl(70) a * b = scale<F = F>(a,b)`. Legacy brace blocks
-retain their declaration-prefix bindings until migration. The nearest
+A block can begin with `operator + = A::add;`, where `A` is an explicit module
+parameter, or with other callable bindings. Targets accept partial static
+arguments, names and holes, such as `operator * = scale<F = F>;`. The nearest
 block declaring a descriptor replaces its entire inherited callable family;
 there is no fallback based on operand types. Target names resolve at the binding's
 definition site. Module dictionaries are explicit, with no instance search.
@@ -1692,61 +1588,6 @@ once. Variant construction uses `Choice::Some<Fr>(x)` in local code.
 
 ## Finite domains
 
-View is one fixed structural callable mode. Its result category is checked
-separately. An ordinary View may forward an ordinary value or another admitted
-ordinary View; the Finite descriptor family uses its existing typed constructor
-graph. Arithmetic, ordinary Math calls and runtime allocation do not become
-structural operations merely because their effects are empty. View formation
-never invokes a scoped callback. Construction descriptor families and Constraint
-Views require separate typed implementations.
-
-Ordinary Views have an inherent empty effect contract, including abstract
-interface members called through a bound module before specialization. Authors
-do not write an effect allowance to establish that contract. Math and Local
-bodies and their scoped computations may call those members; conformance still
-requires exact View mode and the substituted owner/member signature. Protocol
-Boolean formulas admit ordinary View calls in either operand of `and` or `or`.
-An admitted consumer may use a Finite descriptor as a static argument within
-that formula. The descriptor does not become an ordinary Boolean or runtime
-value, and its existing closure, formation and reached-consumer checks remain
-mandatory.
-This admits neither descriptor-producing operands nor Local calls, even with an
-empty allowance, and preserves the receiving Math callback contract.
-
-The installed `FiniteDescriptor` frontend form owns Finite's category. The
-maintained source export `zkc::finite::Finite<I>` is an alias of that installed
-form. Imports and aliases preserve the category; an ordinary user type named
-`Finite` has no special meaning. Finite cannot instantiate `T: Type`, become an
-associated ordinary type or a service, or occur inside an ordinary record,
-tuple or array, including a zero-length array. Descriptor parameters and
-results retain their exact family and ordered typed static parameters
-separately from ordinary ports. The checked declaration has one descriptor
-result contract. Parameters and graph nodes carry that complete contract;
-each child edge carries its own expected contract and selects a node with an
-identical contract after substitution. A parent's result family or parameters
-do not determine its children's contracts. A closed graph's result index
-selects the authoritative node contract. Finite consumers explicitly require
-the Finite family with exactly one item parameter; Finite item and Copy/Drop
-rules are family-specific. No other descriptor family gains a source constructor
-or consumer from this representation alone. Descriptor helper ports reject placement, oracle holder/custody,
-row maxima, service associations and relation-purpose annotations before port
-normalization, including an explicitly empty receiver set. A native finite
-constructor association requires a Finite result, even when its declaration
-already selects View mode; an ordinary or omitted result cannot select that
-association.
-
-Independent admission derives View obligations from immutable authored
-headers, including abstract members, and rejects missing or reclassified
-candidate declarations. Defined ordinary Views replay their complete bodies
-through the source reader for both explicit and inferred results. Their
-returned SSA values, expression mappings, constants, projections and nested
-View calls must agree with that replay. Finite Views retain their independent
-typed recipe comparison and whole-graph closure checks.
-
-The legacy `domain fn` / `domain<I>` spelling adapts to View /
-Finite during the parent's source migration. Algebra `domain F = field(...)`
-continues to form a different static sort.
-
 A finite domain is a static description of an enumeration. Its ordinary data
 operands remain checked values; the domain itself is not a runtime `Type`, an
 Entry port, or a value that can be returned by an ordinary function.
@@ -1802,7 +1643,7 @@ forwarding a domain through an ordinary helper does not admit its constructors.
 Unrelated domain bindings are not admitted with a consumed domain. A nested
 consumer admits its domain only when that computation is reached.
 
-Closure retains constructor order, complete descriptor contracts and the identities of data
+Closure retains constructor order, exact item types and the identities of data
 operands. Shapes and static selections determine specialization; runtime contents
 do not. Shared immutable operands can reuse capture ports. Equal types alone do
 not identify two containers, and a mutable successor remains distinct from its
@@ -1925,10 +1766,6 @@ not a single carrier and cannot be used in a declared data condition. Implementa
 with logical selectors and axes matched by input position; condition order is
 irrelevant. Additional conditions require an explicit interface contract.
 Declaration inspection includes these conditions in `requirements`.
-Independent specialization replay seeds its facts from the authenticated source
-conditions mapped through the closed input layout, separately from the candidate
-declaration's derived conditions. Retained premise paths are charged before copying;
-closed declarations must not retain conditional consumer or admission demands.
 
 `container.at` takes the complete container type as its static argument and
 returns its logical element. `matrix.at<Matrix<F>>(m, row, column)` requires
@@ -2020,35 +1857,11 @@ fn forward<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
 
 Computation parameters, written `fn(...) -> ... effects(...)` or `math fn(...) -> ...`,
 are static, nonescaping inputs. Their signatures are not runtime `Type` values.
-A computation argument is a literal, an in-scope computation parameter, or an
-exact named Math or Local declaration selected at an expected callback argument.
-Named selections retain the canonical provider, resolution route, inferred or
-explicit static arguments, complete signature and effects. They use ordinary
-declaration admission and specialization. The declaration's mode must match
-exactly, including for an empty-effect Local helper. All data preconditions must
-follow from the receiving callback guarantees; selection never strengthens that
-contract, including when the callback is unused or a finite domain is empty.
-Concrete helper formation observes the complete body under its selected static
-arguments, including inherited module arguments, nested regions and exact
-member dispatch. Selected input extents may establish a data condition; caller
-actual values do not become additional callback guarantees.
-Projection validity uses the authenticated template type and its declaration's
-natural bounds before substituting the projected result. This applies to
-abstract member headers as well as concrete bodies and nested literals. For
-example, projecting element zero of `[T; N]` under `1 <= N` remains valid when
-selection maps `N` to a caller's symbolic `M`; ordinary selection must still
-establish `1 <= M`. Nested named selections restore the enclosing static frame
-before its next observation.
-A named selection has no capture inputs. An explicit adaptation literal may use
-the existing capture and precondition rules.
-Bare static application is valid only for a declaration selected in the expected
-callback category. Lexical data, domain and scoped parameters are already bound
-and cannot receive static arguments; both source syntaxes refuse such names
-with `source.static-argument`, before interpreting or discarding those arguments.
-A computation cannot be bound by `let`, put in a product or variant,
+A computation argument is a literal or an in-scope
+computation parameter. It cannot be bound by `let`, put in a product or variant,
 returned, sent, used as a data argument, or selected by runtime control.
 Protocol signatures and Entry ports cannot expose it. A protocol body may call
-a named function with a scoped argument. Invocation and forwarding
+a named function with a literal scoped argument. Invocation and forwarding
 select a statically known body; there is no dynamic dispatch or closure ABI.
 
 A callback signature accepts optional labels on its data inputs:
@@ -2167,11 +1980,6 @@ a concrete constant. Math summaries compose under the selected bodies and
 capture mappings. Equal formation dependency sets may be deduplicated; this
 does not omit operation coverage. Local placement uses all eager operands and
 captures independently of mathematical result dependencies.
-Retained summaries keep their immutable computation owners alive, including
-implicit Boolean roots created during usage inference and all nested regions.
-Discarding a temporary checking body cannot leave address-keyed summaries that
-can be reused for a different body. These owners expire with the source check;
-they do not become runtime closures or extend authority across project revisions.
 
 Closure materializes ordinary private helpers with explicit capture inputs and
 specializes accepting functions with the selected helpers. Their hidden data
@@ -2203,46 +2011,19 @@ Within scoped bodies, ordinary notation calls are rechecked against retained
 definition-site families and authored operands. Every retained notation
 occurrence must have exactly one matching call, including its source span and
 binding evidence; removing the expression mapping or binding refuses. The
-callback result must agree with its authored tail expression.
-
-Oracle queries are checked in both directions: every authored query has its
-exact handle/source input and position, and every candidate query corresponds
-to one authored occurrence. Missing expression hints cannot admit extra queries.
-Typed handle aliases are traversed under the same work and type limits.
-
-The same bounded value relation binds ordinary If/Match selectors, both Local
-For bounds and Protocol repetition counts to their authored child expressions.
-Repetition retains the resolved source maximum independently of the candidate
-operation. Continuing controls and transparent blocks require result associations
-even when their values are unused; deleting a candidate expression map cannot
-remove a source requirement. Authored return labels select declared root ports;
-Math and Local result inference uses the same tail relation. Root, callback,
-transparent-block and continuing-arm results follow their source tails through
-identity projections and administrative result/state packs. Joined mutable state retains lexical
-binding identity and the latest assignment generation. An authored control write
-invalidates prior generations even if the candidate removes the entire join;
-an explicit result formed before assignment keeps its earlier generation.
-Loop initial state and invariant forwarding remain checked for zero-trip
-execution. Guaranteed stops have no continuing value obligation and retain their
-separate source exit check.
-Resolved syntax, static-term resolution and the retained lexical families remain
-trusted inputs to this check.
+callback result must agree with its authored tail expression. Resolved syntax
+and the retained lexical families remain trusted inputs to this check.
 
 Declaration inspection reports `scoped_inputs` separately from `inputs`, with
 name, mode, input/result types and effect allowance. Each callback also has
 `input_labels`, an array parallel to `inputs` with a string or null per input,
 and `item_origins`, an array of exact `{ "input": unsigned, "domain": unsigned }`
 objects sorted by input position. Both positions are zero-based; `domain` indexes
-`descriptor_inputs`, not the interleaved authored port list. Both arrays are always
+`domain_inputs`, not the interleaved authored port list. Both arrays are always
 present, including an empty origin list. This is the sole version-0 schema;
 there is no legacy suffix or inspection alias. Enclosing `requirements` remain
 obligations of the enclosing signature. `input_order` retains `data`, `service`,
-`domain` and `scoped` categories. `descriptor_inputs` entries have `name`
-and `contract`; `descriptor_result`, when present, is one complete descriptor
-type term. The contract term uses the existing type inspection representation,
-including its descriptor kind, installed constructor and ordered arguments.
-Installed constructor recipes report `definition: "descriptor_constructor"`.
-There are no item-only result or input aliases. This diagnostic view does not add runtime
+`domain` and `scoped` categories. This diagnostic view does not add runtime
 interface fields. The [callback example](../../../common/tests/fixtures/projects/scoped-computations/callbacks.zkc)
 and [module example](../../../common/tests/fixtures/projects/scoped-computations/README.md)
 exercise user-defined apply/forward combinators. General finite domains, named consumers and mathematical binders use this same

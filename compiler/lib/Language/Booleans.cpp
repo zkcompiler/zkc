@@ -1,6 +1,4 @@
 #include "BodyCheck.h"
-#include "BodySummary.h"
-#include "ScopedWitness.h"
 using namespace llvm;
 namespace zkc::language::detail {
 bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
@@ -42,14 +40,9 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
       break;
     }
     auto callee = inference->callees.find(id);
-    if (callee == inference->callees.end())
-      return refuse();
-    const auto &target =
-        checker.output.declarations[callee->second.declaration.index];
-    if (target.kind != Declaration::Kind::Math &&
-        target.kind != Declaration::Kind::Variant &&
-        !(target.kind == Declaration::Kind::View &&
-          (!target.descriptorResult || inference->descriptorTypes.count(id))))
+    if (callee == inference->callees.end() ||
+        checker.output.declarations[callee->second.declaration.index].kind !=
+            Declaration::Kind::Math)
       return refuse();
     break;
   }
@@ -74,10 +67,6 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
   case K::Block:
   case K::If:
   case K::Match:
-    break;
-  case K::DomainProduct:
-    if (!inference->descriptorTypes.count(id))
-      return refuse();
     break;
   default:
     return refuse();
@@ -106,60 +95,25 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
 }
 std::optional<ValueId> BodyChecker::boolean(const Expression &expr,
                                             unsigned depth) {
-  if (!protocol())
+  if (local())
     return control(expr, Type{}, depth, false);
-  const auto id = uint32_t(&expr - syntax.expressions.data());
-  if (!mathematicalExpression(id, depth))
-    return {};
-  ScopedSignature signature;
-  signature.mode = ScopedSignature::Mode::Math;
-  signature.result = Type{};
-  auto index = scopedComputation(id, signature, depth);
-  if (!index)
-    return {};
-  // Only free-place snapshots are formed here. The original selected expression
-  // executes in the Math body, including every nested RHS computation.
-  auto binding =
-      summarizeScopedBinding(checker.types, body, *index, {}, {}, {}, 1, true);
-  if (!binding)
-    return {};
-  auto summary = checker.bodySummaries.apply(
-      checker.types, checker.output.declarations, *binding->computation->body,
-      binding->statics, binding->captures, binding->scoped, 1, binding->domains,
-      binding->lexical, callDepth + 1, binding->owner);
-  if (!summary || summary->results.size() != 1)
-    return {};
-  if (callDepth > checker.work.limits.callDepth ||
-      summary->callHeight > checker.work.limits.callDepth - callDepth) {
-    fail("source.limit", "retained Boolean call depth exceeded", expr.span);
-    return {};
+  std::vector<ValueId> operands;
+  for (auto child : expr.children) {
+    if (protocol() && !mathematicalExpression(child, depth + 1))
+      return {};
+    auto value = expression(child, Type{}, depth + 1);
+    if (!value || !use(*value, expr.span))
+      return {};
+    operands.push_back(*value);
   }
-  auto apply =
-      [&](const Dependencies &dependency) -> std::optional<Components> {
-    if (dependency.parameterized) {
-      fail("source.scoped-summary", "Boolean placement needs total mathematics",
-           expr.span);
-      return {};
-    }
-    std::vector<ValueId> operands;
-    for (auto input : dependency.inputs)
-      operands.push_back({input});
-    return combine(operands, expr.span);
-  };
-  for (const auto &formation : summary->formation)
-    if (!apply(formation))
-      return {};
-  auto available = apply(summary->results.front());
+  auto available = combine(operands, expr.span);
   if (!available)
     return {};
-  if (!checker.types.charge(1, expr.span))
-    return {};
-  const auto source = uint32_t(witnesses.invocations.size());
-  witnesses.invocations.push_back(std::make_shared<ScopedInvocationSource>(
-      ScopedInvocationSource{decl.id, id, {}}));
-  checker.bodyHeights[decl.id.index] =
-      std::max(checker.bodyHeights[decl.id.index],
-               summary->callHeight + lexicalCallbackDepth + 1);
-  return emit(ScopedInvoke{*index, {}, source}, Type{}, *available, expr.span);
+  return emit(MathValue{expr.kind == Expression::Kind::And
+                            ? MathematicalIdentity::BooleanAnd
+                            : MathematicalIdentity::BooleanOr,
+                        std::move(operands),
+                        {}},
+              Type{}, *available, expr.span);
 }
 } // namespace zkc::language::detail

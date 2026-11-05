@@ -293,7 +293,7 @@ math fn subject(a:Fr)->Array<Fr,4>{return fixed(range(0,4),fn(i)=>a);}
           if (missingBody)
             body->operations.clear();
           else
-            body->descriptorBindings.front().parameter.reset();
+            body->domainBindings.front().parameter.reset();
           fixed->body = std::move(body);
           Limits limits;
           source_detail::Work work{limits};
@@ -398,7 +398,7 @@ protocol Demo roles(P)()->(r:(Vector<Fr>,Vector<Fr>)@P){return subject();}entry 
         else if (choice == "seed")
           finite[0]->operands = finite[1]->operands;
         else
-          finite[0]->descriptorOperands = finite[1]->descriptorOperands;
+          finite[0]->domainOperands = finite[1]->domainOperands;
         requireAdmitted(closed, declaration, *body);
         const_cast<Declaration &>(declaration).body = std::move(body);
         changed = true;
@@ -423,7 +423,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:(Vector<Fr>,Vector<Fr>)@P){return bo
         generic = &declaration;
     require(generic && generic->inputs.size() == 1 &&
                 generic->scopedArguments.size() == 1 &&
-                generic->descriptorArguments.size() == 1,
+                generic->domainArguments.size() == 1,
             "missing Local caller's generic Math finite instance");
     bool changed = false;
     for (const auto &declaration : closed.declarations()) {
@@ -438,16 +438,13 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:(Vector<Fr>,Vector<Fr>)@P){return bo
                       generic->scopedArguments.front().index &&
                   finite.body.captures.empty() &&
                   finite.domain->identity ==
-                      generic->descriptorArguments.front()->identity,
+                      generic->domainArguments.front()->identity,
               "alternative instance must have the same callback and domain");
       // Reuse a real admitted instance with the same callback and domain, so
       // the alternative remains mathematically valid and well typed.
-      op.action = HelperCall{generic->id,
-                             finite.descriptorOperands,
-                             generic->staticArguments,
-                             {},
-                             {},
-                             {}};
+      op.action = HelperCall{
+          generic->id, finite.domainOperands, generic->staticArguments, {}, {},
+          {}};
       requireAdmitted(closed, declaration, *body);
       const_cast<Declaration &>(declaration).body = std::move(body);
       changed = true;
