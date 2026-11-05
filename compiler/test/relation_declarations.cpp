@@ -9,8 +9,10 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
@@ -313,5 +315,61 @@ relation.declare @predicate {
   require(!parse(withArguments(declaration, "07"), context) &&
               refusal.find("relation-static-arguments") != std::string::npos,
           "noncanonical generic static argument accepted");
+  // Opaque relation identity uses the same bounded native origin transport.
+  const std::string unsized =
+      R"(["descriptor-product", [["descriptor-sequence", ["builtin", "finite", [["unit"]]], unit], ["builtin", "finite", [["field", "bls12-381.fr"]]]]])";
+  auto structural = [&](const std::string &base, const std::string &term) {
+    auto result = base;
+    result.insert(result.find("signature ="),
+                  "static_arguments = [" + term + "], ");
+    return result;
+  };
+  auto nativeA = parse(structural(declaration, unsized), context);
+  auto nativeB = parse(structural(declaration, unsized), otherContext);
+  require(nativeA && nativeB &&
+              succeeded(relation::verifyDeclarationConsistency(
+                  {nativeA->getOperation(), nativeB->getOperation()})),
+          "equal structural opaque identities refused across contexts");
+  if (nativeA) {
+    auto arguments = relation::readStaticArguments(
+        (*nativeA->getOps<relation::DeclareOp>().begin()).getStaticArguments());
+    auto expected = llvm::json::parse(
+        R"([["descriptor-product",[["descriptor-sequence",["builtin","finite",[["unit"]]],null],["builtin","finite",[["field","bls12-381.fr"]]]]]])");
+    require(bool(arguments) && bool(expected),
+            "structural relation fixture refused");
+    if (arguments && expected)
+      require(*arguments == *expected,
+              "opaque relation changed structural statics");
+    if (!arguments)
+      llvm::consumeError(arguments.takeError());
+    if (!expected)
+      llvm::consumeError(expected.takeError());
+  }
+  auto nativeConflict =
+      parse(structural(changedPurpose, unsized), otherContext);
+  require(nativeA && nativeConflict &&
+              failed(relation::verifyDeclarationConsistency(
+                  {nativeA->getOperation(), nativeConflict->getOperation()})) &&
+              refusal.find("relation-declaration-conflict") !=
+                  std::string::npos,
+          "equal structural identity allowed conflicting purposes");
+  auto zero = unsized;
+  zero.replace(zero.find(", unit]"), 7, ", [\"nat\", \"0\"]]");
+  auto reversed =
+      R"(["descriptor-product", [["builtin", "finite", [["field", "bls12-381.fr"]]], ["descriptor-sequence", ["builtin", "finite", [["unit"]]], unit]]])";
+  for (const auto &different : {zero, std::string(reversed)}) {
+    auto other = parse(structural(changedPurpose, different), otherContext);
+    require(nativeA && other &&
+                succeeded(relation::verifyDeclarationConsistency(
+                    {nativeA->getOperation(), other->getOperation()})),
+            "null zero or ordered opaque identities collapsed");
+  }
+  for (const std::string term :
+       {R"(["descriptor-product", [unit]])",
+        R"(["descriptor-sequence", ["descriptor-product", []], false])",
+        R"(["descriptor-sequence", ["descriptor-product", []], ["unit"]])"})
+    require(!parse(structural(declaration, term), context) &&
+                refusal.find("relation-static-arguments") != std::string::npos,
+            "relation admitted malformed structural static argument");
   return failures != 0;
 }

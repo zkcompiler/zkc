@@ -77,8 +77,12 @@ Rust interface static-argument serde reader consume the same current version-0
 schema. Descriptor-child syntax recognizes these structures and the exact
 existing primitive Finite leaf; Type formation/category and native authority
 remain independent. General terms and existing Finite bytes are unchanged.
-Public codec fixtures cover this native boundary. Actual structural closure and
-source-to-native consumers, future installed leaf schemas, and the independent
+Public codec fixtures cover this native boundary. Native origin attributes use
+`UnitAttr` for null, distinct from the ordinary Unit term; native declaration
+admission/canonical keys and structured static-domain inventory consume these
+structural tags under their own native allowances. Opaque relation statics
+delegate to the strict origin reader. Actual structural closure and complete
+source-to-native integration, future installed leaf schemas, and the independent
 Lean origin/logical readers remain explicit integration requirements.
 
 The [distributed record source contract](language/records.md) extends checked

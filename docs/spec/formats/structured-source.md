@@ -437,6 +437,26 @@ Handwritten native IR may omit this source metadata, but cannot then be exported
 by this profile; no origin is inferred from its symbol. Local and protocol
 origins are decoded by definition kind and do not share a binding-value grammar.
 
+The native protocol-origin transport has an `ArrayAttr` root. Strings use
+`StringAttr`, arrays use `ArrayAttr`, and JSON `null` uses MLIR `UnitAttr`
+(printed as `unit`). This is distinct from the ordinary `["unit"]` term,
+which is an `ArrayAttr` containing the string `"unit"`. The transport accepts no
+other attribute kinds or stringified JSON substitute. Decoding retains its
+attribute traversal bounds and then checks the complete origin grammar above;
+`UnitAttr` in any other term position does not make a valid origin. Opaque
+relation static arguments use this same transport and aggregate origin limits.
+
+Native declaration containers recognize the same contextual structural tags
+and exact arities, including a general term payload for primitive Finite.
+Their separate cumulative work, depth and context checks still apply; the
+wire's text, list and table ceilings do not limit these native containers.
+Canonical native keys retain null, present zero and child order, ignoring only
+optional `StringAttr` types. Declaration reference and authority inventories
+traverse structural children. Structural descriptors retain logical category
+and cannot be hidden in ordinary declaration carriers. Structured export's
+static domain inventory traverses Product children and Sequence elements,
+including Finite payloads; an optional null extent contributes no domain.
+
 The public C++ checked-Type producer and strict C++/Rust readers implement these
 structural terms at version `0`, with no compatibility reader. This wire
 consumer's bounds do not bound the internal generic descriptor container.

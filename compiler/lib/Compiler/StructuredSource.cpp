@@ -357,11 +357,14 @@ Error collectStaticDomains(const json::Value &term, UsedIdentities &used) {
       return error("structured-source-static-domain");
     used.domains.insert(identity);
   }
-  if (tag == "array")
+  // A Sequence extent is null or a Natural, never a domain-bearing child.
+  if (tag == "array" || tag == "descriptor-sequence")
     return collectStaticDomains(tree[1], used);
-  if (tag == "tuple" || tag == "nominal" || tag == "builtin" ||
-      tag == "formal") {
-    auto index = tag == "tuple" ? 1 : tag == "nominal" ? 3 : 2;
+  if (tag == "tuple" || tag == "descriptor-product" || tag == "nominal" ||
+      tag == "builtin" || tag == "formal") {
+    auto index = tag == "tuple" || tag == "descriptor-product" ? 1
+                 : tag == "nominal"                            ? 3
+                                                               : 2;
     for (const auto &argument : *tree[index].getAsArray())
       if (auto e = collectStaticDomains(argument, used))
         return e;

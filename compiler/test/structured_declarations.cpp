@@ -1,4 +1,6 @@
 #include "../lib/Compiler/ComponentContracts.h"
+#include "../lib/Compiler/SourceView.h"
+#include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -50,6 +52,12 @@ A &port(J &carrier, unsigned index = 0) {
               .getAsArray();
 }
 std::string role(unsigned ordinal) { return nativeRoleName(ordinal); }
+void refusesNative(Error error, StringRef code) {
+  require(bool(error), "malformed native carrier accepted: " + code);
+  auto message = toString(std::move(error));
+  require(namesIdentifier(message, code),
+          "unexpected native refusal: " + message);
+}
 void refusesCarrier(const J &carrier, StringRef code) {
   auto error = checkComponentDeclarations(carrier);
   require(bool(error), "malformed carrier accepted: " + code);
@@ -84,15 +92,213 @@ protocol Run roles(V)(value:bool@V)->(accepted:bool@V) {
   auto expectedText = take(inspectComponentDeclarations(entry));
   auto expected = take(json::parse(expectedText));
   Cases cases;
+  auto accept = [](Error error) {
+    if (error)
+      throw std::runtime_error(toString(std::move(error)));
+  };
+  auto descriptorCarrier = [&](const J &term) -> J {
+    J identity = A{"nominal", "logical_record", "native::Box", A{term}};
+    return A{A{A{identity, "ordinary", false, A{}, A{"P"}, nullptr}},
+             A{A{"main",
+                 A{A{"value", identity, A{"P"}, uint64_t(0), uint64_t(0),
+                     A{"data", A{"P"}}}},
+                 A{}}},
+             A{A{"native::Box", nullptr}}};
+  };
+  auto nativeAccept = [&](const J &carrier) {
+    auto attr = take(importDeclarationData(&context, carrier));
+    protocol::SourceAllowance allowance;
+    accept(checkComponentDeclarations(attr, allowance));
+    require(equalNaturalJson(take(exportDeclarationData(attr)), carrier),
+            "native declaration transport changed the carrier");
+    return attr;
+  };
+  for (
+      StringRef text :
+      {R"(["descriptor-product",[]])",
+       R"(["descriptor-sequence",["descriptor-product",[]],null])",
+       R"(["descriptor-sequence",["descriptor-product",[]],["nat","0"]])",
+       R"(["descriptor-product",[["builtin","finite",[["unit"]]],["descriptor-sequence",["builtin","finite",[["field","bls12-381.fr"]]],null]]])"})
+    cases.run("full native declaration admission " + text, [&] {
+      auto carrier = descriptorCarrier(take(json::parse(text)));
+      accept(checkComponentDeclarations(carrier));
+      auto attr = nativeAccept(carrier);
+      std::string assembly;
+      raw_string_ostream(assembly) << attr;
+      auto reparsed = parseAttribute(assembly, &context);
+      require(reparsed == attr,
+              "declaration textual roundtrip changed identity");
+      protocol::SourceAllowance allowance;
+      accept(checkComponentDeclarations(reparsed, allowance));
+    });
+  cases.run(
+      "native declaration keys preserve null zero order and string semantics",
+      [&] {
+        auto term = take(json::parse(
+            R"(["descriptor-product",[["descriptor-sequence",["descriptor-product",[]],null],["builtin","finite",[["unit"]]]]])"));
+        auto carrier = descriptorCarrier(term);
+        auto zeroTerm = term;
+        (*(*(*zeroTerm.getAsArray())[1].getAsArray())[0].getAsArray())[2] =
+            A{"nat", "0"};
+        auto reversedTerm = term;
+        auto &children = *(*reversedTerm.getAsArray())[1].getAsArray();
+        std::swap(children[0], children[1]);
+        for (const auto &other : {zeroTerm, reversedTerm}) {
+          auto extra = descriptorCarrier(other);
+          rows(carrier, 0).push_back(rows(extra, 0)[0]);
+        }
+        auto attr = nativeAccept(carrier);
+        auto typed = [&](Attribute value, const auto &self) -> Attribute {
+          if (auto text = dyn_cast<StringAttr>(value))
+            return StringAttr::get(text.getValue(),
+                                   IntegerType::get(&context, 8));
+          if (auto array = dyn_cast<ArrayAttr>(value)) {
+            SmallVector<Attribute> children;
+            for (auto child : array)
+              children.push_back(self(child, self));
+            return ArrayAttr::get(&context, children);
+          }
+          return value;
+        };
+        auto first = cast<ArrayAttr>(cast<ArrayAttr>(attr[0])[0])[0];
+        auto annotated = typed(first, typed);
+        uint64_t remaining = 100000;
+        require(take(canonicalDeclarationTerm(first, remaining)) ==
+                    take(canonicalDeclarationTerm(annotated, remaining)),
+                "optional StringAttr type changed the canonical native key");
+        auto records = cast<ArrayAttr>(attr[0]);
+        SmallVector<Attribute> duplicate(records.begin(), records.end());
+        auto row = cast<ArrayAttr>(records[0]);
+        SmallVector<Attribute> duplicateRow(row.begin(), row.end());
+        duplicateRow[0] = annotated;
+        duplicate.push_back(ArrayAttr::get(&context, duplicateRow));
+        auto malformed = ArrayAttr::get(
+            &context, {ArrayAttr::get(&context, duplicate), attr[1], attr[2]});
+        protocol::SourceAllowance allowance;
+        refusesNative(checkComponentDeclarations(malformed, allowance),
+                      "component-declaration-duplicate");
+        uint64_t unitWork = 1;
+        require(
+            take(canonicalDeclarationTerm(UnitAttr::get(&context), unitWork)) ==
+                    UnitAttr::get(&context) &&
+                unitWork == 0,
+            "null canonicalization lost context or work accounting");
+        refuses(canonicalDeclarationTerm(UnitAttr::get(&context), unitWork),
+                "component-declaration-limit");
+        uint64_t unsupportedWork = 20;
+        refuses(canonicalDeclarationTerm(BoolAttr::get(&context, false),
+                                         unsupportedWork),
+                "component-declaration-limit");
+      });
+  for (StringRef text :
+       {R"(["descriptor-product",[null]])",
+        R"(["descriptor-product",[["unit"]]])",
+        R"(["descriptor-product",[],null])",
+        R"(["descriptor-product",[["formal","finite",[["unit"]]]]])",
+        R"(["descriptor-product",[["builtin","Finite",[["unit"]]]]])",
+        R"(["descriptor-product",[["builtin","finite",[]]]])",
+        R"(["descriptor-product",[["builtin","finite",[["unit"],["bool"]]]]])",
+        R"(["descriptor-sequence",["descriptor-product",[]]])",
+        R"(["descriptor-sequence",null,null])",
+        R"(["descriptor-sequence",["descriptor-product",[]],["unit"]])",
+        R"(["descriptor-sequence",["descriptor-product",[]],["nat","00"]])",
+        R"(["descriptor-sequence",["descriptor-product",[]],false])"})
+    cases.run("native declaration refuses malformed descriptor " + text, [&] {
+      auto carrier = descriptorCarrier(take(json::parse(text)));
+      refusesCarrier(carrier, "source.static-term");
+      auto attr = take(importDeclarationData(&context, carrier));
+      protocol::SourceAllowance allowance;
+      refusesNative(checkComponentDeclarations(attr, allowance),
+                    "source.static-term");
+    });
+  cases.run(
+      "native structural declarations keep native widths and cumulative work",
+      [&] {
+        A children;
+        for (unsigned i = 0; i < 513; ++i)
+          children.push_back(A{"descriptor-product", A{}});
+        children.push_back(
+            A{"builtin", "finite", A{A{"field", std::string(513, 'a')}}});
+        auto carrier =
+            descriptorCarrier(A{"descriptor-product", std::move(children)});
+        refusesCarrier(carrier, "source.static-term");
+        auto attr = nativeAccept(carrier);
+        protocol::SourceAllowance measured;
+        auto initial = measured.remaining;
+        accept(checkComponentDeclarations(attr, measured));
+        auto spent = initial - measured.remaining;
+        protocol::SourceAllowance exact{spent};
+        accept(checkComponentDeclarations(attr, exact));
+        require(exact.remaining == 0,
+                "native declaration work is not cumulative");
+        protocol::SourceAllowance shortWork{spent - 1};
+        refusesNative(checkComponentDeclarations(attr, shortWork),
+                      "component-declaration-limit");
+      });
+  cases.run("native declarations refuse a foreign null context", [&] {
+    MLIRContext other;
+    auto carrier = descriptorCarrier(take(json::parse(
+        R"(["descriptor-sequence",["descriptor-product",[]],null])")));
+    auto attr = take(importDeclarationData(&context, carrier));
+    auto replaceNull = [&](Attribute value, const auto &self) -> Attribute {
+      if (isa<UnitAttr>(value))
+        return UnitAttr::get(&other);
+      if (auto array = dyn_cast<ArrayAttr>(value)) {
+        SmallVector<Attribute> children;
+        for (auto child : array)
+          children.push_back(self(child, self));
+        return ArrayAttr::get(&context, children);
+      }
+      return value;
+    };
+    protocol::SourceAllowance allowance;
+    refusesNative(
+        checkComponentDeclarations(replaceNull(attr, replaceNull), allowance),
+        "component-declaration-limit");
+  });
+  cases.run(
+      "structural declarations retain nested nominal references and authority",
+      [&] {
+        auto carrier = descriptorCarrier(take(json::parse(
+            R"(["descriptor-product",[["descriptor-sequence",["builtin","finite",[["nominal","record","native::Inner",[]]]],null]]])")));
+        refusesCarrier(carrier, "component-declaration-record");
+        auto attr = take(importDeclarationData(&context, carrier));
+        protocol::SourceAllowance allowance;
+        refusesNative(checkComponentDeclarations(attr, allowance),
+                      "component-declaration-record");
+        rows(carrier, 0)
+            .push_back(A{A{"nominal", "record", "native::Inner", A{}},
+                         "ordinary", false, A{}, A{}, nullptr});
+        refusesCarrier(carrier, "component-declaration-authority");
+        auto missingAuthority = take(importDeclarationData(&context, carrier));
+        protocol::SourceAllowance authorityWork;
+        refusesNative(
+            checkComponentDeclarations(missingAuthority, authorityWork),
+            "component-declaration-authority");
+        rows(carrier, 2).push_back(A{"native::Inner", nullptr});
+        nativeAccept(carrier);
+        accept(checkComponentDeclarations(carrier));
+      });
+  for (StringRef text :
+       {R"(["descriptor-product",[]])",
+        R"(["descriptor-sequence",["descriptor-product",[]],null])"})
+    cases.run("ordinary declarations cannot erase descriptor category " + text,
+              [&] {
+                auto carrier = descriptorCarrier(take(json::parse(text)));
+                (*record(carrier, "native::Box")[0].getAsArray())[1] = "record";
+                record(carrier, "native::Box")[4] = A{};
+                port(carrier)[1] = record(carrier, "native::Box")[0];
+                refusesCarrier(carrier, "component-declaration-record");
+                auto attr = take(importDeclarationData(&context, carrier));
+                protocol::SourceAllowance allowance;
+                refusesNative(checkComponentDeclarations(attr, allowance),
+                              "component-declaration-record");
+              });
   auto parse = [&] {
     auto module =
         parseSourceString<ModuleOp>(bytes, ParserConfig(&context, false));
     require(bool(module), "emitted original did not parse");
     return module;
-  };
-  auto accept = [](Error error) {
-    if (error)
-      throw std::runtime_error(toString(std::move(error)));
   };
   cases.run("producer retains structured inherent declaration data", [&] {
     auto module = parse();
