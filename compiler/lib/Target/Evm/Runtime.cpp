@@ -358,7 +358,24 @@ function evm_tree_header(p, tag, n) -> end {
 }
 function evm_tree_hex(p, source, n) -> end {
   end := evm_tree_header(p, 0, mul(n, 2))
-  for { let i := 0 } lt(i, n) { i := add(i, 1) } {
+  // Callers bound n and provide disjoint buffers with 9 + 2*n output bytes.
+  // A word read may include ignored input padding, as in the scalar tail.
+  let i := 0
+  for {} iszero(gt(add(i, 16), n)) { i := add(i, 16) } {
+    // Discard the trailing 16 loaded bytes, regardless of their contents.
+    let expanded := shr(128, mload(add(source, i)))
+    expanded := and(or(expanded, shl(64, expanded)), 0x0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff)
+    expanded := and(or(expanded, shl(32, expanded)), 0x00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff)
+    expanded := and(or(expanded, shl(16, expanded)), 0x0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff)
+    expanded := and(or(expanded, shl(8, expanded)), 0x00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff)
+    // Split each 00bb byte into 0h 0l nibbles, one per output byte.
+    expanded := or(and(expanded, 0x000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f), shl(4, and(expanded, 0x00f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0)))
+    // Adding six marks nibbles >= 10; 39 adjusts ASCII digits to lowercase.
+    let letters := and(shr(4, add(expanded, 0x0606060606060606060606060606060606060606060606060606060606060606)), 0x0101010101010101010101010101010101010101010101010101010101010101)
+    mstore(end, add(add(expanded, 0x3030303030303030303030303030303030303030303030303030303030303030), mul(letters, 39)))
+    end := add(end, 32)
+  }
+  for {} lt(i, n) { i := add(i, 1) } {
     let b := byte(0, mload(add(source, i)))
     mstore8(end, byte(shr(4, b), "0123456789abcdef"))
     mstore8(add(end, 1), byte(and(b, 15), "0123456789abcdef"))
