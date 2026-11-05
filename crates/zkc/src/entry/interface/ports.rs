@@ -432,6 +432,72 @@ impl Interface {
 }
 
 impl Interface {
+    /// Borrow the admitted roster without allocating policy-association state.
+    #[cfg(feature = "evm")]
+    pub(crate) fn evm_public_inputs(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (&str, &raw::Schema, &[u32])> {
+        self.ports.public.iter().map(move |&index| {
+            let port = &self.ports.views[index].definition;
+            (port.name.as_str(), &port.schema, port.native.as_slice())
+        })
+    }
+
+    /// Independently check policy facts represented by this Interface. Query
+    /// schedules and realized codecs remain owned by the compiler descriptor.
+    #[cfg(feature = "evm")]
+    pub(crate) fn check_evm_policy(&self, policy: &serde_json::Value) -> Result<()> {
+        use serde_json::json;
+        let raw::Job::Proof {
+            acceptance,
+            construction,
+            gates,
+            ..
+        } = &self.document.job
+        else {
+            return Err(E::NativeBinding);
+        };
+        let protocol = self.selected_protocol();
+        let proof = self.proof().ok_or(E::NativeBinding)?;
+        let selected_construction = match construction.as_ref() {
+            raw::Construction::Derived { symbol, .. } => symbol.as_str(),
+            _ => "",
+        };
+        let services = proof
+            .replaced_services
+            .iter()
+            .map(|&index| protocol.services[index].native.to_string())
+            .collect::<Vec<_>>();
+        let natural = |value: &serde_json::Value| {
+            value
+                .as_str()
+                .and_then(|text| zkc_format::logical::natural_index(text).ok())
+        };
+        let gates_match = policy[11].as_array().is_some_and(|rows| {
+            rows.len() == gates.len()
+                && rows.iter().zip(gates).all(|(row, gate)| {
+                    natural(&row[1]) == Some(u64::from(gate.bits))
+                        && row[0] == crate::source_names::native_site_path(&gate.path)
+                })
+        });
+        let acceptance = validate::select(protocol, acceptance)?.1;
+        super::require(
+            policy.as_array().is_some_and(|fields| fields.len() == 12)
+                && policy[0] == "zkc.native-proof-policy/0"
+                && policy[1] == protocol.symbol
+                && policy[2] == self.roles()[proof.prover].native_name
+                && policy[3] == self.roles()[proof.verifier].native_name
+                && acceptance.len() == 1
+                && natural(&policy[4]) == Some(u64::from(acceptance[0]))
+                && policy[5] == proof.suite.as_deref().unwrap_or("")
+                && policy[6] == json!(services)
+                && policy[9] == proof.format.name()
+                && policy[10] == selected_construction
+                && gates_match,
+            E::NativeBinding,
+        )
+    }
+
     /// Resolve an original native coordinate to its participant ABI position.
     /// This is an association only; it supplies no common-control agreement.
     pub fn native_input_position(&self, role: &str, original: u32) -> Result<usize> {
