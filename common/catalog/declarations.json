@@ -16296,6 +16296,322 @@
         "target": "NativeMessage"
       },
       "prelude": false
+    },
+    {
+      "identity": "descriptor.product",
+      "owner": "zkc::descriptor",
+      "name": "Product",
+      "kind": "ContractConstructor",
+      "association": {
+        "kind": "constructor",
+        "target": "descriptor_product"
+      },
+      "prelude": false
+    },
+    {
+      "identity": "descriptor.sequence",
+      "owner": "zkc::descriptor",
+      "name": "Sequence",
+      "kind": "ContractConstructor",
+      "association": {
+        "kind": "constructor",
+        "target": "descriptor_sequence"
+      },
+      "prelude": false
+    },
+    {
+      "identity": "descriptor.append",
+      "owner": "zkc::descriptor",
+      "name": "append",
+      "kind": "View",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "xs",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        },
+        {
+          "name": "item",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 0
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "unsized"
+        }
+      },
+      "association": {
+        "kind": "scheme",
+        "target": "DescriptorAppend"
+      },
+      "prelude": false
+    },
+    {
+      "identity": "descriptor.concat",
+      "owner": "zkc::descriptor",
+      "name": "concat",
+      "kind": "View",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "left",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        },
+        {
+          "name": "right",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "unsized"
+        }
+      },
+      "association": {
+        "kind": "scheme",
+        "target": "DescriptorConcat"
+      },
+      "prelude": false
+    },
+    {
+      "identity": "descriptor.replace",
+      "owner": "zkc::descriptor",
+      "name": "replace",
+      "kind": "View",
+      "statics": [
+        {
+          "name": "Index",
+          "parameter": {
+            "kind": "Nat",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "xs",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "extent",
+              "variable": 1
+            }
+          }
+        },
+        {
+          "name": "item",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 0
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "extent",
+          "variable": 1
+        }
+      },
+      "association": {
+        "kind": "scheme",
+        "target": "DescriptorReplace"
+      },
+      "prelude": false
+    },
+    {
+      "identity": "descriptor.unsized",
+      "owner": "zkc::descriptor",
+      "name": "unsized",
+      "kind": "View",
+      "statics": [],
+      "inputs": [
+        {
+          "name": "xs",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "extent",
+              "variable": 1
+            }
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "unsized"
+        }
+      },
+      "association": {
+        "kind": "scheme",
+        "target": "DescriptorForgetExtent"
+      },
+      "prelude": false
+    },
+    {
+      "identity": "descriptor.sized",
+      "owner": "zkc::descriptor",
+      "name": "sized",
+      "kind": "View",
+      "statics": [
+        {
+          "name": "Length",
+          "parameter": {
+            "kind": "Nat",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "xs",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "static",
+          "index": 0
+        }
+      },
+      "association": {
+        "kind": "scheme",
+        "target": "DescriptorCheckExtent"
+      },
+      "prelude": false
+    },
+    {
+      "identity": "descriptor.fold",
+      "owner": "zkc::descriptor",
+      "name": "fold",
+      "kind": "View",
+      "statics": [
+        {
+          "name": "Count",
+          "parameter": {
+            "kind": "Nat",
+            "sort": ""
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "name": "member",
+          "kind": "selectedView",
+          "context": {
+            "kind": "contract",
+            "variable": 0
+          },
+          "state": {
+            "kind": "contract",
+            "variable": 1
+          }
+        },
+        {
+          "name": "context",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 0
+          }
+        },
+        {
+          "name": "seed",
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 1
+          }
+        }
+      ],
+      "output": {
+        "kind": "contract",
+        "variable": 1
+      },
+      "association": {
+        "kind": "scheme",
+        "target": "DescriptorFold"
+      },
+      "prelude": false
     }
   ],
   "frontendRules": [
@@ -16489,6 +16805,14 @@
     {
       "name": "oracle_sequence",
       "form": "OracleHandleSequence"
+    },
+    {
+      "name": "descriptor_product",
+      "form": "DescriptorProduct"
+    },
+    {
+      "name": "descriptor_sequence",
+      "form": "DescriptorSequence"
     }
   ],
   "frontendHomes": [
@@ -19529,6 +19853,261 @@
       "axis": 0,
       "identity": "source_array",
       "kind": "SourceArray"
+    }
+  ],
+  "frontendSchemes": [
+    {
+      "name": "DescriptorAppend",
+      "form": "Append",
+      "variables": [
+        "Contract"
+      ],
+      "statics": [],
+      "inputs": [
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        },
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 0
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "unsized"
+        }
+      }
+    },
+    {
+      "name": "DescriptorConcat",
+      "form": "Concat",
+      "variables": [
+        "Contract"
+      ],
+      "statics": [],
+      "inputs": [
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        },
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "unsized"
+        }
+      }
+    },
+    {
+      "name": "DescriptorReplace",
+      "form": "Replace",
+      "variables": [
+        "Contract",
+        "OptionalExtent"
+      ],
+      "statics": [
+        {
+          "kind": "Nat",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "extent",
+              "variable": 1
+            }
+          }
+        },
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 0
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "extent",
+          "variable": 1
+        }
+      }
+    },
+    {
+      "name": "DescriptorForgetExtent",
+      "form": "ForgetExtent",
+      "variables": [
+        "Contract",
+        "OptionalExtent"
+      ],
+      "statics": [],
+      "inputs": [
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "extent",
+              "variable": 1
+            }
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "unsized"
+        }
+      }
+    },
+    {
+      "name": "DescriptorCheckExtent",
+      "form": "CheckExtent",
+      "variables": [
+        "Contract"
+      ],
+      "statics": [
+        {
+          "kind": "Nat",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "sequence",
+            "element": {
+              "kind": "contract",
+              "variable": 0
+            },
+            "extent": {
+              "kind": "unsized"
+            }
+          }
+        }
+      ],
+      "output": {
+        "kind": "sequence",
+        "element": {
+          "kind": "contract",
+          "variable": 0
+        },
+        "extent": {
+          "kind": "static",
+          "index": 0
+        }
+      }
+    },
+    {
+      "name": "DescriptorFold",
+      "form": "Fold",
+      "variables": [
+        "Contract",
+        "Contract"
+      ],
+      "statics": [
+        {
+          "kind": "Nat",
+          "sort": ""
+        }
+      ],
+      "inputs": [
+        {
+          "kind": "selectedView",
+          "context": {
+            "kind": "contract",
+            "variable": 0
+          },
+          "state": {
+            "kind": "contract",
+            "variable": 1
+          }
+        },
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 0
+          }
+        },
+        {
+          "kind": "descriptor",
+          "contract": {
+            "kind": "contract",
+            "variable": 1
+          }
+        }
+      ],
+      "output": {
+        "kind": "contract",
+        "variable": 1
+      }
     }
   ]
 }

@@ -44,7 +44,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   if (const auto *association =
           checker.output.declarationIndex->association(target.declaration);
       isRecordIntrinsic(association))
-    return recordCall(expr, target, *association->rule, depth);
+    return recordCall(expr, target, *association->rule(), depth);
   if (callee.generated && !callee.generated->constructible &&
       (callee.kind == Declaration::Kind::Record ||
        callee.kind == Declaration::Kind::Variant)) {

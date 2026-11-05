@@ -13,6 +13,7 @@ fn main() {
     }
     for generator in [
         "projection",
+        "descriptor",
         "validation",
         "instances",
         "installation",

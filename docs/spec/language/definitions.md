@@ -238,6 +238,34 @@ Managed constructors selected through it or through an ordinary qualified or
 imported facade retain the same constructor category. They are legal only in
 managed-port positions; ordinary type positions, interface constraints and module
 implementations refuse them with `source.service`. The prelude itself has no imports or inherited operator environment.
+The installed `zkc::descriptor` module contributes structural contract heads and
+bounded View scheme shells through the same
+[declaration associations](../formats/contract-declarations.md#installed-structural-contracts-and-schemes).
+The index retains a typed immutable association keyed by the actual
+`DeclarationId`. Import aliases, visibility, source origin and selected-route
+terminality are ordinary index rules. A captured homonym or a copied catalog
+row cannot grant installation authority. Frozen installation replay checks the
+row join, declaration identity, owning module and installation source.
+
+`constructorAssociation(id)` returns an installed head;
+`schemeAssociation(id)` returns its typed named scheme signature;
+`schemeDefinition(id)` joins the immutable scheme table. Parent expression and
+fold checking consume these accessors after ordinary `lookup`; they must not
+resolve a second namespace or infer authority from spelling. Scheme discovery
+has category `ViewScheme`, never an ordinary callable signature. Until that
+consumer is integrated, concrete call elaboration refuses with
+`source.descriptor-scheme`.
+
+Indexed Product formation accepts ordered concrete descriptor children,
+including zero children at the internal checked-type boundary. Sequence accepts
+one concrete descriptor and optionally one exact Nat static. Unsized and
+sized-zero contracts differ. Data types, named constructor slots, holes, extra
+arguments and scheme-as-head applications refuse. Existing Nat statics use the
+ordinary Natural parameter kind. No public parser extension is introduced by
+this slice; empty tight type application syntax remains a parent integration
+requirement. Ordinary aggregate checking, scheme application, fold matching,
+closure and native materialization remain parent work.
+
 There is no runtime source-file lookup. Capture identity and captured file/byte
 limits exclude installed modules; declaration and work limits include reading
 and checking them. `Analysis::sources()` and `CheckedProject::sources()` include

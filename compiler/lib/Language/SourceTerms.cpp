@@ -11,9 +11,6 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
   if (!remaining || depth >= 64)
     return error("source.limit", "static term limit exceeded");
   --remaining;
-  if (type.kind == K::DescriptorProduct || type.kind == K::DescriptorSequence)
-    return error("source.static-term",
-                 "structural descriptor source schema is not installed");
   if (type.symbolic || type.kind == K::Parameter)
     return error("source.static-term", "static term is not closed");
   if (type.domain.size() > 512 || type.sort.size() > 512)
@@ -32,6 +29,20 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
   if (type.kind == K::Domain || type.kind == K::Asset)
     return json::Array{type.kind == K::Domain ? "domain" : "asset", type.sort,
                        type.domain};
+  if (type.kind == K::DescriptorSequence) {
+    auto element = encode(type.arguments.front(), remaining, depth + 1);
+    if (!element)
+      return element.takeError();
+    json::Value extent = nullptr;
+    if (type.arguments.size() == 2) {
+      auto value = encode(type.arguments.back(), remaining, depth + 1);
+      if (!value)
+        return value.takeError();
+      extent = std::move(*value);
+    }
+    return json::Array{"descriptor-sequence", std::move(*element),
+                       std::move(extent)};
+  }
   if (type.kind == K::Array) {
     if (type.arguments.size() != 1 || !type.dimension.isClosed())
       return error("source.static-term", "array is not closed");
@@ -52,6 +63,8 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
   }
   if (type.kind == K::Tuple)
     return json::Array{"tuple", std::move(arguments)};
+  if (type.kind == K::DescriptorProduct)
+    return json::Array{"descriptor-product", std::move(arguments)};
   if (!frontendTypeConstructor(type).empty())
     return json::Array{"builtin", frontendTypeConstructor(type),
                        std::move(arguments)};

@@ -37,6 +37,8 @@ fn complete_static_inventory() {
     let value = source();
     for (key, count) in [
         ("frontendDeclarations", CATALOG.frontend_declarations.len()),
+        ("frontendSchemes", CATALOG.frontend_schemes.len()),
+        ("frontendConstructors", CATALOG.frontend_constructors.len()),
         ("frontendNotations", CATALOG.frontend_notations.len()),
         ("frontendHomes", CATALOG.frontend_homes.len()),
         ("serviceMethods", CATALOG.service_methods.len()),

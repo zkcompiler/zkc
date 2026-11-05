@@ -310,6 +310,8 @@ StringRef syntaxKind(Declaration::Kind value) {
     return "associated";
   case Declaration::Kind::Relation:
     return "relation";
+  case Declaration::Kind::InstalledContractConstructor:
+  case Declaration::Kind::InstalledViewScheme:
   case Declaration::Kind::Requirement:
     llvm_unreachable(
         "installed requirements have no authored declaration node");

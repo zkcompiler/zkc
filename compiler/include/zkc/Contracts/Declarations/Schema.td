@@ -89,6 +89,49 @@ class ZKC_FrontendDeclaration<string id, string owner, string value,
   string target = associated;
   bit prelude = inPrelude;
 }
+// Exact installation-only recursive pattern sum. Unused variant fields must
+// remain empty; the independent backend validates bounds, cycles and sorts.
+class ZKC_ContractPattern<string tag, int index = -1,
+                           list<ZKC_ContractPattern> children = [],
+                           string extentTag = "", int extentIndex = -1>
+    : ZKC_Declaration {
+  string kind = tag;
+  int variable = index;
+  list<ZKC_ContractPattern> elements = children;
+  string extent = extentTag;
+  int extentVariable = extentIndex;
+}
+class ZKC_SchemePort<string tag, list<ZKC_ContractPattern> values,
+                     string label = ""> : ZKC_Declaration {
+  string kind = tag;
+  list<ZKC_ContractPattern> patterns = values;
+  string name = label;
+}
+class ZKC_FrontendScheme<string value, string meaning, list<string> sorts,
+                         list<ZKC_Parameter> s, list<ZKC_SchemePort> i,
+                         ZKC_ContractPattern o> : ZKC_Declaration {
+  string name = value;
+  string form = meaning;
+  list<string> variables = sorts;
+  list<ZKC_Parameter> statics = s;
+  list<ZKC_SchemePort> inputs = i;
+  ZKC_ContractPattern output = o;
+}
+// Shell alternatives share the declaration inventory but carry no concrete
+// source telescope or result. Only the installed materializer creates them.
+class ZKC_ContractHeadDeclaration<string id, string owner, string value,
+                                  string head, bit inPrelude = 0>
+    : ZKC_FrontendDeclaration<id, owner, value, "ContractConstructor", [], [], [],
+                              "constructor", head, inPrelude>;
+class ZKC_ViewSchemeDeclaration<string id, string owner, string value,
+                                list<ZKC_SourceStatic> s,
+                                list<ZKC_SchemePort> i, ZKC_ContractPattern o,
+                                string scheme, bit inPrelude = 0>
+    : ZKC_FrontendDeclaration<id, owner, value, "View", s, [], [],
+                              "scheme", scheme, inPrelude> {
+  list<ZKC_SchemePort> schemeInputs = i;
+  ZKC_ContractPattern schemeOutput = o;
+}
 // An installed notation names a declaration of its owner. An empty
 // associativity keeps the symbol's fixed syntax.
 class ZKC_FrontendNotation<string owner, string spelling, string associativity,

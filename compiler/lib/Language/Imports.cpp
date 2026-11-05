@@ -15,9 +15,8 @@ bool Checker::moduleContracts() {
         resolve(module, written.definition->name, written.definition->span);
     if (!target)
       return false;
-    if (auto *row = protocol::frontendDeclaration(
-            output.declarations[target->index].qualifiedName);
-        row && row->rule == protocol::FrontendSignature::RandomConstructor)
+    if (auto *row = formingIndex->association(*target);
+        row && row->rule() == protocol::FrontendSignature::RandomConstructor)
       return types.fail("source.service",
                         "managed constructor cannot be implemented",
                         module.span);

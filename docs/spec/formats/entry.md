@@ -348,6 +348,9 @@ relations require an empty list. Opaque identity is the native declaration's
 identity. The C++ reader compares this list with the original declaration.
 The Rust Host validates the typed carrier and retains its exact arguments; it
 does not reconstruct MLIR declarations or assign opaque predicate meaning.
+Structural descriptor arguments use the exact `descriptor-product` and
+`descriptor-sequence` origin tags, including descriptor-only children and the
+null-or-Natural extent. Wire recognition supplies no checked-source authority.
 The authenticated package binds the original IR hash and compiler-checked
 interface bytes.
 Each formal has `name`,

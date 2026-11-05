@@ -843,6 +843,25 @@ callbacks; Local and descriptor operand refusals remain checked. The maintained
 library still uses the legacy source adapter until the parent source cutover.
 Construction descriptor families, Constraint Views and independent Lean readers
 remain separate integration work.
+An internal installed structural declaration slice adds exact Product/Sequence
+head and six bounded View scheme rows, independent Python/TableGen/Rust catalog
+validation and typed projections. Installed shells enter the ordinary frozen
+declaration index without a concrete data signature or body. Focused native
+checks cover constructor formation, association identity, aliases, visibility,
+foreign homonyms, Nat parameters and installation drift. This is not complete
+public aggregate or Constraint View support. Parent scheme/fold/closure/native
+consumers and strict Lean reader migration remain publication requirements.
+The public checked-Type source-term encoder and strict C++/Rust wire readers
+support exact structural descriptor products and sequences, including empty
+products and distinct unsized/zero extents. Shared producer fixtures and bounded
+reader controls cover this codec boundary with unchanged Finite/ordinary bytes
+and limits. Native origin transport preserves null as MLIR UnitAttr through
+textual parsing and strict decoding. Native declaration admission and canonical
+keys recognize structural terms without importing wire widths; declaration and
+structured-export inventories follow structural children. Focused controls
+cover native protocol origins and opaque relation statics. These checks do not
+establish structural source-to-native formation,
+full protocol acceptance, future Constraint leaf schemas or formal support.
 Static natural constructor configuration, callable payloads and heterogeneous
 checked descriptor lists are not implemented by the graph foundation; their
 actual family formation and consumers remain required.

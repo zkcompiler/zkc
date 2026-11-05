@@ -16,6 +16,7 @@ import re
 import sys
 
 from tablegen import project
+import descriptor_schemes
 
 
 def require(condition, message):
@@ -88,7 +89,8 @@ def kind(value):
 source_kind = one_of("Math", "Local", "Interface", "Requirement")
 # The structural meanings the frontend gives its own type heads; a
 # `frontendConstructors` row spells each one.
-FRONTEND_CONSTRUCTOR_FORMS = ("OracleHandle", "OracleHandleSequence", "FiniteDescriptor")
+FRONTEND_CONSTRUCTOR_FORMS = ("OracleHandle", "OracleHandleSequence", "FiniteDescriptor",
+                              "DescriptorProduct", "DescriptorSequence")
 
 
 def source_term(value):
@@ -99,6 +101,31 @@ def source_term(value):
         record(value, {"constructor": text})
     else:
         record(value, {"static": count}, {"member": text})
+
+
+def source_declaration(value):
+    common = {"identity": text, "owner": text, "name": text, "kind": text,
+              "association": lambda v: record(v, {"kind": text, "target": text}),
+              "prelude": flag}
+    require(isinstance(value, dict), "expected declaration object")
+    if value.get("kind") == "ContractConstructor":
+        record(value, common)
+        require(value["association"]["kind"] == "constructor" and not value["prelude"],
+                "invalid contract constructor association")
+        return
+    scheme = value.get("kind") == "View"
+    record(value, common | {
+        "statics": sequence(lambda v: record(v, {"name": text, "parameter": kind})),
+        "inputs": sequence(descriptor_schemes.named_port if scheme else
+                           lambda v: record(v, {"name": text, "type": source_term})),
+        "output": descriptor_schemes.pattern if scheme else nullable(source_term),
+    })
+    if scheme:
+        require(value["association"]["kind"] == "scheme" and not value["prelude"],
+                "invalid View scheme association")
+    else:
+        source_kind(value["kind"])
+        one_of("primitive", "rule")(value["association"]["kind"])
 
 
 def application(value, extra=None):
@@ -436,14 +463,8 @@ def validate(catalog):
                 "requires": sequence(text), "permits": sequence(text),
             })),
             "exports": sequence(export),
-            "frontendDeclarations": sequence(row({
-                "identity": text, "owner": text, "name": text, "kind": source_kind,
-                "statics": sequence(row({"name": text, "parameter": kind})),
-                "inputs": sequence(row({"name": text, "type": source_term})),
-                "output": nullable(source_term),
-                "association": row({"kind": one_of("primitive", "rule"), "target": text}),
-                "prelude": flag,
-            })),
+            "frontendDeclarations": sequence(source_declaration),
+            "frontendSchemes": sequence(descriptor_schemes.shape),
             "frontendRules": sequence(row({
                 "name": text, "kind": source_kind, "statics": sequence(kind),
                 "inputs": sequence(source_term), "output": nullable(source_term),
@@ -624,6 +645,7 @@ def validate_frontend(catalog):
                 "source declaration kind and signature disagree")
         return kind, [(s["kind"], s["sort"]) for s in statics], inputs, output
 
+    descriptor_schemes.validate(catalog)
     rules = {}
     for row in catalog["frontendRules"]:
         require(identifier(row["name"]) and row["name"] not in rules, "invalid or duplicate frontend rule")
@@ -642,10 +664,14 @@ def validate_frontend(catalog):
         require(owner not in owners, "duplicate frontend ownership")
         owners.add(owner)
         declared.add(owner)
+        if row["kind"] == "ContractConstructor":
+            continue
         names = [static["name"] for static in row["statics"]] + [slot["name"] for slot in row["inputs"]]
         require(all(identifier(name) for name in names) and len(set(names)) == len(names),
                 "invalid or duplicate source parameter name")
         statics = [static["parameter"] for static in row["statics"]]
+        if row["kind"] == "View":
+            continue
         actual = shape(row["kind"], statics, [slot["type"] for slot in row["inputs"]], row["output"])
         association, target = row["association"]["kind"], row["association"]["target"]
         if association == "rule":

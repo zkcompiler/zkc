@@ -744,6 +744,12 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
           return result;
         };
         switch (decl.kind) {
+        case Declaration::Kind::InstalledContractConstructor:
+          dataKind("contract-constructor");
+          break;
+        case Declaration::Kind::InstalledViewScheme:
+          dataKind("view-scheme");
+          break;
         case Declaration::Kind::Requirement:
           dataKind("requirement");
           break;

@@ -1116,21 +1116,91 @@ std::string installedCatalogIdentity() {
                ? "static:" + std::to_string(*value.index) + ":" + value.member
                : "constructor:" + value.constructor;
   };
+  std::function<std::string(const protocol::PatternRef &)> pattern;
+  pattern = [&](const protocol::PatternRef &p) {
+    std::string value;
+    if (auto *v = std::get_if<protocol::ContractVariable>(&p->value)) {
+      detail::frame(value, "contract");
+      detail::frame(value, std::to_string(v->variable));
+    } else if (auto *v = std::get_if<protocol::ProductPattern>(&p->value)) {
+      detail::frame(value, "product");
+      detail::frame(value, std::to_string(v->elements.size()));
+      for (auto &element : v->elements)
+        detail::frame(value, pattern(element));
+    } else {
+      const auto &sequence = std::get<protocol::SequencePattern>(p->value);
+      detail::frame(value, "sequence");
+      detail::frame(value, pattern(sequence.element));
+      if (std::holds_alternative<protocol::UnsizedExtent>(sequence.extent))
+        detail::frame(value, "unsized");
+      else if (auto *e =
+                   std::get_if<protocol::ExtentVariable>(&sequence.extent)) {
+        detail::frame(value, "extent");
+        detail::frame(value, std::to_string(e->variable));
+      } else {
+        detail::frame(value, "static");
+        detail::frame(
+            value, std::to_string(
+                       std::get<protocol::NatStatic>(sequence.extent).index));
+      }
+    }
+    return value;
+  };
+  auto port = [&](const protocol::SchemePort &p) {
+    std::string value;
+    if (auto *v = std::get_if<protocol::DescriptorPort>(&p)) {
+      detail::frame(value, "descriptor");
+      detail::frame(value, pattern(v->contract));
+    } else {
+      auto &selected = std::get<protocol::SelectedViewPort>(p);
+      detail::frame(value, "selectedView");
+      detail::frame(value, pattern(selected.context));
+      detail::frame(value, pattern(selected.state));
+    }
+    return value;
+  };
+  for (const auto &scheme : protocol::frontendSchemes()) {
+    row({"frontend-scheme", scheme.name,
+         std::to_string(static_cast<unsigned>(scheme.form)),
+         pattern(scheme.output)});
+    for (auto [position, sort] : llvm::enumerate(scheme.variables))
+      row({"scheme-variable", scheme.name, std::to_string(position),
+           std::to_string(static_cast<unsigned>(sort))});
+    for (auto [position, value] : llvm::enumerate(scheme.statics))
+      row({"scheme-static", scheme.name, std::to_string(position),
+           std::to_string(static_cast<unsigned>(value.kind)), value.sort});
+    for (auto [position, value] : llvm::enumerate(scheme.inputs))
+      row({"scheme-input", scheme.name, std::to_string(position), port(value)});
+  }
   for (const auto &declaration : protocol::frontendDeclarations()) {
     row({"frontend-declaration", declaration.identity, declaration.module,
          declaration.name,
          std::to_string(static_cast<unsigned>(declaration.kind)),
-         declaration.rule ? "rule:" + std::to_string(static_cast<unsigned>(
-                                          *declaration.rule))
-                          : "primitive:" + declaration.primitive,
-         declaration.output ? term(*declaration.output) : "none",
          declaration.prelude ? "prelude" : "explicit"});
-    for (const auto &[position, value] : llvm::enumerate(declaration.statics))
+    if (auto *head = declaration.contractHead())
+      row({"contract-head-association", declaration.identity,
+           head->constructor});
+    else if (auto *scheme = declaration.viewScheme()) {
+      row({"scheme-association", declaration.identity,
+           protocol::frontendScheme(scheme->scheme)->name,
+           pattern(scheme->output)});
+      for (auto [position, value] : llvm::enumerate(scheme->inputs))
+        row({"scheme-named-input", declaration.identity,
+             std::to_string(position), value.name, port(value.port)});
+    } else {
+      const auto &concrete = *declaration.concrete();
+      row({"concrete-association", declaration.identity,
+           concrete.rule
+               ? "rule:" + std::to_string(static_cast<unsigned>(*concrete.rule))
+               : "primitive:" + concrete.primitive,
+           concrete.output ? term(*concrete.output) : "none"});
+      for (auto [position, value] : llvm::enumerate(concrete.inputs))
+        row({"frontend-input", declaration.identity, std::to_string(position),
+             value.name, term(value.type)});
+    }
+    for (const auto &[position, value] : llvm::enumerate(declaration.statics()))
       row({"frontend-static", declaration.identity, std::to_string(position),
            value.name, value.kind, value.sort});
-    for (const auto &[position, value] : llvm::enumerate(declaration.inputs))
-      row({"frontend-input", declaration.identity, std::to_string(position),
-           value.name, term(value.type)});
   }
   for (const auto &notation : protocol::frontendNotations())
     row({"frontend-notation", notation.module, notation.symbol, notation.fixity,

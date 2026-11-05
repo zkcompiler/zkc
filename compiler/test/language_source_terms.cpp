@@ -1,3 +1,4 @@
+#include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -37,6 +38,120 @@ Type natural(uint64_t value) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  // Independent expected terms exercise native transport, not source formation.
+  for (
+      StringRef term :
+      {R"(["descriptor-product",[]])",
+       R"(["descriptor-sequence",["descriptor-product",[]],null])",
+       R"(["descriptor-sequence",["descriptor-product",[]],["nat","0"]])",
+       R"(["descriptor-product",[["builtin","finite",[["field","bls12-381.fr"]]],["descriptor-sequence",["builtin","finite",[["unit"]]],null]]])",
+       R"(["descriptor-product",[["descriptor-sequence",["builtin","finite",[["unit"]]],null],["builtin","finite",[["field","bls12-381.fr"]]]]])",
+       R"(["builtin","finite",[["field","bls12-381.fr"]]])", R"(["unit"])",
+       R"(["tuple",[["unit"],["index"]]])"})
+    cases.run("native origin roundtrip " + term, [&] {
+      mlir::MLIRContext context;
+      auto expected = jsonValue(term);
+      json::Value origin =
+          json::Array{"native::Run", json::Array{json::Array{"D", expected}}};
+      valid(origin);
+      auto attr = zkc::protocol_ir::protocolOriginAttr(&context, origin);
+      require(take(zkc::protocol_ir::readProtocolOrigin(attr)) == origin,
+              "native transport changed the expected term");
+      std::string text;
+      raw_string_ostream(text) << attr;
+      auto reparsed = mlir::parseAttribute(text, &context);
+      require(reparsed == attr && mlir::isa<mlir::ArrayAttr>(reparsed),
+              "textual attribute roundtrip changed the origin");
+      require(take(zkc::protocol_ir::readProtocolOrigin(reparsed)) == origin,
+              "textual origin lost null or structure");
+      if (expected.getAsArray()->front() ==
+          json::Value("descriptor-sequence")) {
+        auto termAttr = mlir::cast<mlir::ArrayAttr>(mlir::cast<mlir::ArrayAttr>(
+            mlir::cast<mlir::ArrayAttr>(attr[1])[0])[1]);
+        bool unsized = (*expected.getAsArray())[2].kind() == json::Value::Null;
+        require(mlir::isa<mlir::UnitAttr>(termAttr[2]) == unsized,
+                "unsized extent is not exactly UnitAttr");
+      }
+    });
+  for (StringRef term :
+       {R"(null)", R"(["descriptor-product",[null]])",
+        R"(["descriptor-sequence",null,null])",
+        R"(["descriptor-sequence",["descriptor-product",[]],["unit"]])",
+        R"(["builtin","finite",[null]])", R"(["nat",null])",
+        R"(["unit",null])"})
+    cases.run("native origin refuses misplaced null " + term, [&] {
+      mlir::MLIRContext context;
+      json::Value origin = json::Array{
+          "native::Run", json::Array{json::Array{"D", jsonValue(term)}}};
+      zkc::test::refuses(
+          zkc::protocol_ir::readProtocolOrigin(
+              zkc::protocol_ir::protocolOriginAttr(&context, origin)),
+          "source.protocol-origin");
+    });
+  cases.run("native origin rejects unsupported attributes and root kinds", [] {
+    mlir::MLIRContext context;
+    auto string = [&](StringRef text) {
+      return mlir::StringAttr::get(&context, text);
+    };
+    for (mlir::Attribute unsupported :
+         {mlir::Attribute(mlir::BoolAttr::get(&context, false)),
+          mlir::Attribute(
+              mlir::IntegerAttr::get(mlir::IntegerType::get(&context, 64), 0)),
+          mlir::Attribute(mlir::DictionaryAttr::get(&context)),
+          mlir::Attribute(mlir::FlatSymbolRefAttr::get(&context, "null"))}) {
+      auto term = mlir::ArrayAttr::get(
+          &context,
+          {string("descriptor-sequence"),
+           mlir::ArrayAttr::get(&context, {string("descriptor-product"),
+                                           mlir::ArrayAttr::get(&context, {})}),
+           unsupported});
+      auto origin = mlir::ArrayAttr::get(
+          &context,
+          {string("native::Run"),
+           mlir::ArrayAttr::get(
+               &context,
+               {mlir::ArrayAttr::get(&context, {string("D"), term})})});
+      zkc::test::refuses(zkc::protocol_ir::readProtocolOrigin(origin),
+                         "source.protocol-origin");
+    }
+    for (mlir::Attribute root :
+         {mlir::Attribute{}, mlir::Attribute(mlir::UnitAttr::get(&context)),
+          mlir::Attribute(string("[]"))})
+      zkc::test::refuses(zkc::protocol_ir::readProtocolOrigin(root),
+                         "source.protocol-origin");
+    auto tooLong =
+        mlir::ArrayAttr::get(&context, {string(std::string(2049, 'a')),
+                                        mlir::ArrayAttr::get(&context, {})});
+    zkc::test::refuses(zkc::protocol_ir::readProtocolOrigin(tooLong),
+                       "source.protocol-origin");
+  });
+  cases.run("native protocol verifier and export preserve structural origin", [] {
+    mlir::DialectRegistry registry;
+    zkc::registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    auto expected = jsonValue(
+        R"(["native::Run",[["D",["descriptor-product",[["descriptor-sequence",["builtin","finite",[["unit"]]],null],["descriptor-sequence",["descriptor-product",[]],["nat","0"]]]]]]])");
+    std::string attribute;
+    raw_string_ostream(attribute)
+        << zkc::protocol_ir::protocolOriginAttr(&context, expected);
+    auto source = R"(module { "protocol.module"() ({
+      "protocol.func"() ({ ^entry(%flag:i1):
+        "protocol.return"(%flag) : (i1)->()
+      }) {sym_name="main",origin=)" +
+                  attribute + R"(,
+          function_type=(i1)->i1,roles=["P"],
+          input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+    }) {profile=#protocol.profile<protocol>} : ()->() })";
+    auto native = mlir::parseSourceString<mlir::ModuleOp>(source, &context);
+    require(bool(native) && succeeded(zkc::admitStage(*native)),
+            "native protocol rejected checked structural origin");
+    auto snapshot = take(json::parse(
+        take(zkc::protocol::exportStructuredSource(source, "main", context))
+            .bytes));
+    require((*(*(*snapshot.getAsArray())[7].getAsArray())[0].getAsArray())[8] ==
+                expected,
+            "protocol export changed structural origin");
+  });
   cases.run("closed constructors preserve every public kind", [] {
     using K = Type::Kind;
     auto field = domainType("Field", "bls12-381.fr");
@@ -196,7 +311,8 @@ int main() {
         }
         for (
             StringRef changedOrigin :
-            {R"(["orig::Run",[["N",["nat","7"]],["T",["tuple",[["field","bls12-381.fr"],["index"]]]]]])",
+            {R"(["orig::Run",[["D",["descriptor-sequence",["descriptor-product",[]],null]]]])",
+             R"(["orig::Run",[["N",["nat","7"]],["T",["tuple",[["field","bls12-381.fr"],["index"]]]]]])",
              R"(["orig::Run",[["T",["tuple",[["index"],["field","bls12-381.fr"]]]],["N",["nat","7"]]]])",
              R"(["orig::Run",[["T",["tuple",[["field","koala-bear"],["index"]]]],["N",["nat","7"]]]])"}) {
           auto candidate = mlir::parseSourceString<mlir::ModuleOp>(

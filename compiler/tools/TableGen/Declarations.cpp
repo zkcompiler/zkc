@@ -39,9 +39,10 @@ void require(bool valid, const Record *r, const Twine &message) {
   if (!valid)
     PrintFatalError(r, message);
 }
-void exactFields(const Record *r, ArrayRef<StringRef> fields) {
+void exactFields(const Record *r, ArrayRef<StringRef> fields,
+                 bool ordered = true) {
   for (const auto &value : r->getValues())
-    require(value.getName() == "ordinal" ||
+    require((ordered && value.getName() == "ordinal") ||
                 is_contained(fields, value.getName()),
             r, "unknown field " + value.getName());
 }
@@ -91,12 +92,195 @@ std::string indices(ArrayRef<int64_t> values) {
   }
   return result + "}";
 }
+// Installation-only bounded pattern graphs. These checks precede projection.
+Records boundedDefs(const Record *r, StringRef field, unsigned limit) {
+  require(r->getValueAsListInit(field)->size() <= limit, r,
+          "scheme pattern limit");
+  return r->getValueAsListOfDefs(field);
+}
+std::string checkedPattern(const Record *r, ArrayRef<StringRef> variables,
+                           ArrayRef<const Record *> statics,
+                           std::set<const Record *> &active, unsigned &nodes,
+                           unsigned depth = 0) {
+  require(depth <= 32 && ++nodes <= 1024, r, "scheme pattern limit");
+  require(active.insert(r).second, r, "cyclic scheme pattern");
+  exactFields(r, {"kind", "variable", "elements", "extent", "extentVariable"},
+              false);
+  auto tag = r->getValueAsString("kind");
+  auto variable = r->getValueAsInt("variable");
+  auto children = boundedDefs(r, "elements", 1024 - nodes);
+  auto extent = r->getValueAsString("extent");
+  auto position = r->getValueAsInt("extentVariable");
+  auto scoped = [&](int64_t index, StringRef sort) {
+    return index >= 0 && uint64_t(index) < variables.size() &&
+           variables[index] == sort;
+  };
+  std::string result;
+  if (tag == "contract") {
+    require(scoped(variable, "Contract") && children.empty() &&
+                extent.empty() && position == -1,
+            r, "invalid contract variable pattern");
+    result = "c" + std::to_string(variable);
+  } else {
+    require(variable == -1 && children.size() <= 1024 - nodes, r,
+            "invalid structural pattern");
+    if (tag == "product") {
+      require(extent.empty() && position == -1, r, "invalid product pattern");
+      result = "p(";
+      for (const auto *child : children)
+        result += checkedPattern(child, variables, statics, active, nodes,
+                                 depth + 1) +
+                  ",";
+      result += ")";
+    } else {
+      require(tag == "sequence" && children.size() == 1, r,
+              "invalid sequence pattern");
+      std::string e;
+      if (extent == "unsized") {
+        require(position == -1, r, "invalid unsized extent pattern");
+        e = "u";
+      } else if (extent == "extent") {
+        require(scoped(position, "OptionalExtent"), r,
+                "invalid extent variable pattern");
+        e = "e" + std::to_string(position);
+      } else {
+        require(extent == "static" && position >= 0 &&
+                    uint64_t(position) < statics.size() &&
+                    parameter(statics[position]) ==
+                        std::make_pair(StringRef("Nat"), StringRef("")),
+                r, "invalid static extent pattern");
+        e = "n" + std::to_string(position);
+      }
+      result = "s(" +
+               checkedPattern(children.front(), variables, statics, active,
+                              nodes, depth + 1) +
+               "," + e + ")";
+    }
+  }
+  active.erase(r);
+  return result;
+}
+std::string checkedPattern(const Record *r, ArrayRef<StringRef> variables,
+                           ArrayRef<const Record *> statics) {
+  std::set<const Record *> active;
+  unsigned nodes = 0;
+  return checkedPattern(r, variables, statics, active, nodes);
+}
+std::string checkedSchemePort(const Record *r, ArrayRef<StringRef> variables,
+                              ArrayRef<const Record *> statics, bool named) {
+  exactFields(r, {"kind", "patterns", "name"}, false);
+  require(named ? identifier(name(r)) : name(r).empty(), r,
+          "invalid scheme port name");
+  auto tag = r->getValueAsString("kind");
+  auto patterns = boundedDefs(r, "patterns", 2);
+  require((tag == "descriptor" && patterns.size() == 1) ||
+              (tag == "selectedView" && patterns.size() == 2),
+          r, "invalid scheme port");
+  std::string result = tag == "descriptor" ? "d(" : "v(";
+  for (auto [i, p] : enumerate(patterns)) {
+    if (i)
+      result += ",";
+    result += checkedPattern(p, variables, statics);
+  }
+  return result + ")";
+}
+struct SchemeShape {
+  std::vector<StringRef> variables;
+  unsigned statics;
+  std::vector<std::string> inputs;
+  std::string output;
+};
+SchemeShape schemeShape(StringRef form, const Record *r) {
+  if (form == "Append")
+    return {{"Contract"}, 0, {"d(s(c0,u))", "d(c0)"}, "s(c0,u)"};
+  if (form == "Concat")
+    return {{"Contract"}, 0, {"d(s(c0,u))", "d(s(c0,u))"}, "s(c0,u)"};
+  if (form == "Replace")
+    return {{"Contract", "OptionalExtent"},
+            1,
+            {"d(s(c0,e1))", "d(c0)"},
+            "s(c0,e1)"};
+  if (form == "ForgetExtent")
+    return {{"Contract", "OptionalExtent"}, 0, {"d(s(c0,e1))"}, "s(c0,u)"};
+  if (form == "CheckExtent")
+    return {{"Contract"}, 1, {"d(s(c0,u))"}, "s(c0,n0)"};
+  require(form == "Fold", r, "unknown descriptor scheme form");
+  return {{"Contract", "Contract"}, 1, {"v(c0,c1)", "d(c0)", "d(c1)"}, "c1"};
+}
+json::Object patternJSON(const Record *r) {
+  auto tag = r->getValueAsString("kind");
+  json::Object result{{"kind", tag}};
+  if (tag == "contract")
+    result["variable"] = r->getValueAsInt("variable");
+  else if (tag == "product") {
+    json::Array elements;
+    for (const auto *c : r->getValueAsListOfDefs("elements"))
+      elements.push_back(patternJSON(c));
+    result["elements"] = std::move(elements);
+  } else {
+    result["element"] =
+        patternJSON(r->getValueAsListOfDefs("elements").front());
+    auto tag = r->getValueAsString("extent");
+    json::Object extent{{"kind", tag}};
+    if (tag != "unsized")
+      extent[tag == "extent" ? "variable" : "index"] =
+          r->getValueAsInt("extentVariable");
+    result["extent"] = std::move(extent);
+  }
+  return result;
+}
+json::Object schemePortJSON(const Record *r, bool named = false) {
+  auto tag = r->getValueAsString("kind");
+  json::Object result{{"kind", tag}};
+  if (named)
+    result["name"] = name(r);
+  auto patterns = r->getValueAsListOfDefs("patterns");
+  if (tag == "descriptor")
+    result["contract"] = patternJSON(patterns.front());
+  else {
+    result["context"] = patternJSON(patterns[0]);
+    result["state"] = patternJSON(patterns[1]);
+  }
+  return result;
+}
+std::string patternCpp(const Record *r) {
+  auto tag = r->getValueAsString("kind");
+  std::string value;
+  if (tag == "contract")
+    value = "ContractVariable{" + number(r, "variable") + "u}";
+  else if (tag == "product") {
+    value = "ProductPattern{{";
+    for (const auto *c : r->getValueAsListOfDefs("elements"))
+      value += patternCpp(c) + ",";
+    value += "}}";
+  } else {
+    auto e = r->getValueAsString("extent");
+    auto extent = e == "unsized"
+                      ? "UnsizedExtent{}"
+                      : (e == "extent" ? "ExtentVariable{" : "NatStatic{") +
+                            number(r, "extentVariable") + "u}";
+    value = "SequencePattern{" +
+            patternCpp(r->getValueAsListOfDefs("elements").front()) + "," +
+            extent + "}";
+  }
+  return "std::make_shared<const ContractPattern>(ContractPattern{" + value +
+         "})";
+}
+std::string schemePortCpp(const Record *r) {
+  auto patterns = r->getValueAsListOfDefs("patterns");
+  if (r->getValueAsString("kind") == "descriptor")
+    return "DescriptorPort{" + patternCpp(patterns.front()) + "}";
+  return "SelectedViewPort{" + patternCpp(patterns[0]) + "," +
+         patternCpp(patterns[1]) + "}";
+}
+
 struct Model {
   DeclarationOrder order;
   Records sorts, types, operations, members, capabilities, rules, typeExports,
       families, familyCases, associatedTypes, capabilityExports,
-      consumerProfiles, frontendRules, frontendDeclarations, frontendNotations,
-      frontendConstructors, frontendHomes, serviceSignatures, serviceMethods;
+      consumerProfiles, frontendRules, frontendSchemes, frontendDeclarations,
+      frontendNotations, frontendConstructors, frontendHomes, serviceSignatures,
+      serviceMethods;
   explicit Model(const RecordKeeper &records)
       : order(records), sorts(order.sort("ZKC_Sort")),
         types(order.sort("ZKC_Type")), operations(order.sort("ZKC_Operation")),
@@ -110,6 +294,7 @@ struct Model {
         capabilityExports(order.sort("ZKC_CapabilityExport")),
         consumerProfiles(order.sort("ZKC_ConsumerProfile")),
         frontendRules(order.sort("ZKC_FrontendRule")),
+        frontendSchemes(order.sort("ZKC_FrontendScheme")),
         frontendDeclarations(order.sort("ZKC_FrontendDeclaration")),
         frontendNotations(order.sort("ZKC_FrontendNotation")),
         frontendConstructors(order.sort("ZKC_FrontendConstructor")),
@@ -323,9 +508,11 @@ void Model::validate() {
       return {int(index), member.str(), ""};
     };
     Shape shape{kind.str(), {}, {}, {}};
-    for (const auto *p : statics)
+    for (const auto *p : statics) {
+      exactFields(p, {"kind", "sort"}, false);
       std::get<1>(shape).emplace_back(parameter(p).first.str(),
                                       parameter(p).second.str());
+    }
     for (const auto *t : inputs)
       std::get<2>(shape).push_back(term(t));
     require(
@@ -346,6 +533,47 @@ void Model::validate() {
                                             r->getValueAsListOfDefs("inputs"),
                                             r->getValueAsListOfDefs("output")));
   }
+  std::map<StringRef, const Record *> schemes, contractHeads;
+  std::set<StringRef> schemeForms, usedSchemes, usedHeads;
+  for (const auto *r : frontendConstructors) {
+    exactFields(r, {"name", "form"});
+    contractHeads.emplace(name(r), r);
+  }
+  for (const auto *r : frontendSchemes) {
+    exactFields(r,
+                {"name", "form", "variables", "statics", "inputs", "output"});
+    require(identifier(name(r)) && schemes.emplace(name(r), r).second &&
+                schemeForms.insert(r->getValueAsString("form")).second,
+            r, "duplicate descriptor scheme");
+    auto expected = schemeShape(r->getValueAsString("form"), r);
+    require(r->getValueAsListInit("variables")->size() <= 1024, r,
+            "scheme signature limit");
+    auto variables = r->getValueAsListOfStrings("variables");
+    auto statics = boundedDefs(r, "statics", 1024);
+    for (const auto *p : statics)
+      exactFields(p, {"kind", "sort"}, false);
+    require(variables.size() <= 1024 && statics.size() <= 1024, r,
+            "scheme signature limit");
+    require(variables == expected.variables &&
+                statics.size() == expected.statics &&
+                all_of(statics,
+                       [](auto *p) {
+                         return parameter(p) ==
+                                std::make_pair(StringRef("Nat"), StringRef(""));
+                       }),
+            r, "descriptor scheme form mismatch");
+    auto inputs = boundedDefs(r, "inputs", 1024);
+    require(inputs.size() <= 1024, r, "scheme port limit");
+    std::vector<std::string> ports;
+    for (const auto *p : inputs)
+      ports.push_back(checkedSchemePort(p, variables, statics, false));
+    auto output =
+        checkedPattern(r->getValueAsDef("output"), variables, statics);
+    require(ports == expected.inputs && output == expected.output, r,
+            "descriptor scheme form mismatch");
+  }
+  if (schemeForms.size() != 6)
+    PrintFatalError("missing descriptor scheme form");
   std::set<StringRef> intrinsicNames, operationNames;
   for (const auto *r : order.sort("ZKC_MathematicalIntrinsic"))
     intrinsicNames.insert(name(r));
@@ -355,19 +583,84 @@ void Model::validate() {
   std::set<std::pair<StringRef, StringRef>> methods;
   std::set<std::pair<StringRef, StringRef>> declared;
   for (const auto *r : frontendDeclarations) {
-    exactFields(r, {"identity", "module", "name", "kind", "statics", "inputs",
-                    "output", "association", "target", "prelude"});
+    bool scheme = r->getValueAsString("kind") == "View";
+    if (scheme)
+      exactFields(r, {"identity", "module", "name", "kind", "statics", "inputs",
+                      "output", "association", "target", "prelude",
+                      "schemeInputs", "schemeOutput"});
+    else
+      exactFields(r, {"identity", "module", "name", "kind", "statics", "inputs",
+                      "output", "association", "target", "prelude"});
     auto identity = r->getValueAsString("identity");
     require(!identity.empty() && frontendIds.insert(identity).second, r,
             "duplicate frontend identity");
     checkExport(r);
     declared.emplace(r->getValueAsString("module"), name(r));
+    auto kind = r->getValueAsString("kind");
+    auto association = r->getValueAsString("association");
+    auto target = r->getValueAsString("target");
+    if (kind == "ContractConstructor") {
+      auto head = contractHeads.find(target);
+      require(
+          r->isSubClassOf("ZKC_ContractHeadDeclaration") &&
+              association == "constructor" && !r->getValueAsBit("prelude") &&
+              head != contractHeads.end() &&
+              (head->second->getValueAsString("form") == "DescriptorProduct" ||
+               head->second->getValueAsString("form") ==
+                   "DescriptorSequence") &&
+              usedHeads.insert(target).second &&
+              r->getValueAsListInit("statics")->size() == 0 &&
+              r->getValueAsListInit("inputs")->size() == 0 &&
+              r->getValueAsListInit("output")->size() == 0,
+          r, "invalid contract constructor association");
+      continue;
+    }
     std::vector<const Record *> statics;
     std::set<StringRef> names;
+    if (scheme)
+      require(r->getValueAsListInit("statics")->size() <= 1024, r,
+              "scheme signature limit");
     for (const auto *slot : r->getValueAsListOfDefs("statics")) {
+      exactFields(slot, {"name", "parameter"}, false);
+      if (scheme)
+        exactFields(slot->getValueAsDef("parameter"), {"kind", "sort"}, false);
       require(identifier(name(slot)) && names.insert(name(slot)).second, r,
               "invalid or duplicate source parameter name");
       statics.push_back(slot->getValueAsDef("parameter"));
+    }
+    if (scheme) {
+      auto found = schemes.find(target);
+      require(r->isSubClassOf("ZKC_ViewSchemeDeclaration") &&
+                  association == "scheme" && !r->getValueAsBit("prelude") &&
+                  found != schemes.end() && usedSchemes.insert(target).second &&
+                  r->getValueAsListInit("inputs")->size() == 0 &&
+                  r->getValueAsListInit("output")->size() == 0,
+              r, "invalid View scheme association");
+      auto *definition = found->second;
+      auto variables = definition->getValueAsListOfStrings("variables");
+      auto expectedStatics = definition->getValueAsListOfDefs("statics");
+      require(statics.size() == expectedStatics.size(), r,
+              "View scheme declaration mismatch");
+      for (unsigned i = 0; i < statics.size(); ++i)
+        require(sameParameter(statics[i], expectedStatics[i]), r,
+                "View scheme declaration mismatch");
+      auto expected = definition->getValueAsListOfDefs("inputs");
+      auto inputs = boundedDefs(r, "schemeInputs", expected.size());
+      require(inputs.size() == expected.size(), r,
+              "View scheme declaration mismatch");
+      for (unsigned i = 0; i < inputs.size(); ++i) {
+        require(names.insert(name(inputs[i])).second, r,
+                "invalid or duplicate source parameter name");
+        require(checkedSchemePort(inputs[i], variables, statics, true) ==
+                    checkedSchemePort(expected[i], variables, statics, false),
+                r, "View scheme declaration mismatch");
+      }
+      require(checkedPattern(r->getValueAsDef("schemeOutput"), variables,
+                             statics) ==
+                  checkedPattern(definition->getValueAsDef("output"), variables,
+                                 statics),
+              r, "View scheme declaration mismatch");
+      continue;
     }
     std::vector<const Record *> inputs;
     for (const auto *slot : r->getValueAsListOfDefs("inputs")) {
@@ -375,11 +668,8 @@ void Model::validate() {
               "invalid or duplicate source parameter name");
       inputs.push_back(slot->getValueAsDef("type"));
     }
-    auto kind = r->getValueAsString("kind");
     auto shape = sourceShape(r, kind, statics, inputs,
                              r->getValueAsListOfDefs("output"));
-    auto association = r->getValueAsString("association");
-    auto target = r->getValueAsString("target");
     if (association == "rule" && target == "RandomConstructor")
       serviceConstructors.insert(identity);
     if (association == "rule") {
@@ -396,6 +686,10 @@ void Model::validate() {
       require(preludeNames.insert(name(r)).second, r,
               "duplicate prelude frontend name");
   }
+  if (usedSchemes.size() != schemes.size())
+    PrintFatalError("unreferenced descriptor scheme");
+  if (usedHeads.size() != 2)
+    PrintFatalError("unreferenced contract constructor");
   std::set<std::tuple<StringRef, StringRef, StringRef>> notations;
   for (const auto *r : frontendNotations) {
     auto module = r->getValueAsString("module");
@@ -421,7 +715,8 @@ void Model::validate() {
   // constructor, a structural head the source language owns. Exactly one
   // row spells each form, the structural meaning the frontend gives a head.
   static constexpr StringRef frontendConstructorForms[] = {
-      "OracleHandle", "OracleHandleSequence", "FiniteDescriptor"};
+      "OracleHandle", "OracleHandleSequence", "FiniteDescriptor",
+      "DescriptorProduct", "DescriptorSequence"};
   std::set<StringRef> heads, forms;
   for (const auto *t : types)
     heads.insert(name(t));
@@ -1163,31 +1458,72 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
                      : "{" + std::to_string(index) + "u, " +
                            quote(t->getValueAsString("member")) + ", \"\"}";
   };
+  os << "llvm::ArrayRef<FrontendScheme> frontendSchemes() {\n"
+        "static const std::vector<FrontendScheme> rows = {\n";
+  std::map<StringRef, unsigned> schemeIndices;
+  for (auto [i, r] : enumerate(m.frontendSchemes)) {
+    schemeIndices.emplace(name(r), i);
+    os << "{" << quote(name(r))
+       << ", DescriptorForm::" << r->getValueAsString("form") << ", {";
+    for (auto v : r->getValueAsListOfStrings("variables"))
+      os << "PatternSort::" << v << ",";
+    os << "}, {";
+    for (auto *p : r->getValueAsListOfDefs("statics")) {
+      auto [kind, sort] = parameter(p);
+      os << "{StaticKind::" << kind << "," << quote(sort) << "},";
+    }
+    os << "}, {";
+    for (auto *p : r->getValueAsListOfDefs("inputs"))
+      os << schemePortCpp(p) << ",";
+    os << "}," << patternCpp(r->getValueAsDef("output")) << "},\n";
+  }
+  os << "}; return rows; }\n"
+        "const FrontendScheme *frontendScheme(SchemeId id) { auto rows = "
+        "frontendSchemes(); "
+        "return id.index < rows.size() ? &rows[id.index] : nullptr; }\n";
   os << "llvm::ArrayRef<FrontendDeclaration> frontendDeclarations() {\n"
         "static const std::vector<FrontendDeclaration> rows = {\n";
   for (const auto *r : m.frontendDeclarations) {
     os << "{" << quote(r->getValueAsString("identity")) << ", "
        << quote(r->getValueAsString("module")) << ", " << quote(name(r))
-       << ", SourceDeclarationKind::" << r->getValueAsString("kind") << ", {";
-    for (const auto *slot : r->getValueAsListOfDefs("statics")) {
-      auto [kind, sort] = parameter(slot->getValueAsDef("parameter"));
-      os << "{" << quote(name(slot)) << ", " << quote(kind) << ", "
-         << quote(sort) << "}, ";
+       << ", SourceDeclarationKind::" << r->getValueAsString("kind") << ", ";
+    auto kind = r->getValueAsString("kind");
+    if (kind == "ContractConstructor") {
+      os << "InstalledContractHead{" << quote(r->getValueAsString("target"))
+         << "}";
+    } else {
+      bool scheme = kind == "View";
+      os << (scheme ? "InstalledViewSignature" : "ConcreteSourceSignature")
+         << "{{";
+      for (const auto *slot : r->getValueAsListOfDefs("statics")) {
+        auto [kind, sort] = parameter(slot->getValueAsDef("parameter"));
+        os << "{" << quote(name(slot)) << ", " << quote(kind) << ", "
+           << quote(sort) << "}, ";
+      }
+      os << "}, {";
+      if (scheme) {
+        for (auto *slot : r->getValueAsListOfDefs("schemeInputs"))
+          os << "{" << quote(name(slot)) << "," << schemePortCpp(slot) << "},";
+        os << "}," << patternCpp(r->getValueAsDef("schemeOutput"))
+           << ", SchemeId{" << schemeIndices.at(r->getValueAsString("target"))
+           << "u}}";
+      } else {
+        for (const auto *slot : r->getValueAsListOfDefs("inputs"))
+          os << "{" << quote(name(slot)) << ", "
+             << sourceTerm(slot->getValueAsDef("type")) << "}, ";
+        os << "}, ";
+        auto output = r->getValueAsListOfDefs("output");
+        os << (output.empty() ? std::string("std::nullopt")
+                              : "SourceTerm" + sourceTerm(output.front()))
+           << ", ";
+        bool rule = r->getValueAsString("association") == "rule";
+        os << (rule
+                   ? "FrontendSignature::" + r->getValueAsString("target").str()
+                   : std::string("std::nullopt"))
+           << ", " << quote(rule ? "" : r->getValueAsString("target")) << "}";
+      }
     }
-    os << "}, {";
-    for (const auto *slot : r->getValueAsListOfDefs("inputs"))
-      os << "{" << quote(name(slot)) << ", "
-         << sourceTerm(slot->getValueAsDef("type")) << "}, ";
-    os << "}, ";
-    auto output = r->getValueAsListOfDefs("output");
-    os << (output.empty() ? std::string("std::nullopt")
-                          : "SourceTerm" + sourceTerm(output.front()))
-       << ", ";
-    bool rule = r->getValueAsString("association") == "rule";
-    os << (rule ? "FrontendSignature::" + r->getValueAsString("target").str()
-                : std::string("std::nullopt"))
-       << ", " << quote(rule ? "" : r->getValueAsString("target")) << ", "
-       << boolean(r->getValueAsBit("prelude")) << "},\n";
+    os << "," << boolean(r->getValueAsBit("prelude")) << "},\n";
   }
   os << "}; return rows; }\n"
         "const FrontendDeclaration *frontendDeclaration(llvm::StringRef "
@@ -1598,8 +1934,8 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
                      {"naturals", intrinsic->getValueAsInt("naturals")},
                      {"domainPoints", intrinsic->getValueAsBit("domainPoints")},
                      {"scalar", intrinsic->getValueAsBit("scalar")}});
-  json::Array frontendRules, declarations, notations, constructors, homes,
-      signatures, services;
+  json::Array frontendRules, schemes, declarations, notations, constructors,
+      homes, signatures, services;
   auto sourceTerm = [](const Record *t) {
     auto index = t->getValueAsInt("index");
     if (index < 0)
@@ -1626,28 +1962,55 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
                                          {"inputs", std::move(inputs)},
                                          {"output", sourceOutput(r)}});
   }
-  for (const auto *r : m.frontendDeclarations) {
-    json::Array statics, inputs;
-    for (const auto *slot : r->getValueAsListOfDefs("statics"))
-      statics.push_back(json::Object{
-          {"name", name(slot)},
-          {"parameter", parameterJSON(slot->getValueAsDef("parameter"))}});
-    for (const auto *slot : r->getValueAsListOfDefs("inputs"))
-      inputs.push_back(
-          json::Object{{"name", name(slot)},
-                       {"type", sourceTerm(slot->getValueAsDef("type"))}});
-    declarations.push_back(
-        json::Object{{"identity", r->getValueAsString("identity")},
-                     {"owner", r->getValueAsString("module")},
-                     {"name", name(r)},
-                     {"kind", r->getValueAsString("kind")},
+  for (const auto *r : m.frontendSchemes) {
+    json::Array variables, statics, inputs;
+    for (auto v : r->getValueAsListOfStrings("variables"))
+      variables.push_back(v);
+    for (auto *p : r->getValueAsListOfDefs("statics"))
+      statics.push_back(parameterJSON(p));
+    for (auto *p : r->getValueAsListOfDefs("inputs"))
+      inputs.push_back(schemePortJSON(p));
+    schemes.push_back(
+        json::Object{{"name", name(r)},
+                     {"form", r->getValueAsString("form")},
+                     {"variables", std::move(variables)},
                      {"statics", std::move(statics)},
                      {"inputs", std::move(inputs)},
-                     {"output", sourceOutput(r)},
-                     {"association",
-                      json::Object{{"kind", r->getValueAsString("association")},
-                                   {"target", r->getValueAsString("target")}}},
-                     {"prelude", r->getValueAsBit("prelude")}});
+                     {"output", patternJSON(r->getValueAsDef("output"))}});
+  }
+  for (const auto *r : m.frontendDeclarations) {
+    json::Object declaration{
+        {"identity", r->getValueAsString("identity")},
+        {"owner", r->getValueAsString("module")},
+        {"name", name(r)},
+        {"kind", r->getValueAsString("kind")},
+        {"association",
+         json::Object{{"kind", r->getValueAsString("association")},
+                      {"target", r->getValueAsString("target")}}},
+        {"prelude", r->getValueAsBit("prelude")}};
+    if (r->getValueAsString("kind") != "ContractConstructor") {
+      bool scheme = r->getValueAsString("kind") == "View";
+      json::Array statics, inputs;
+      for (auto *slot : r->getValueAsListOfDefs("statics"))
+        statics.push_back(json::Object{
+            {"name", name(slot)},
+            {"parameter", parameterJSON(slot->getValueAsDef("parameter"))}});
+      for (auto *slot :
+           r->getValueAsListOfDefs(scheme ? "schemeInputs" : "inputs")) {
+        if (scheme)
+          inputs.push_back(schemePortJSON(slot, true));
+        else
+          inputs.push_back(
+              json::Object{{"name", name(slot)},
+                           {"type", sourceTerm(slot->getValueAsDef("type"))}});
+      }
+      declaration["statics"] = std::move(statics);
+      declaration["inputs"] = std::move(inputs);
+      declaration["output"] =
+          scheme ? json::Value(patternJSON(r->getValueAsDef("schemeOutput")))
+                 : sourceOutput(r);
+    }
+    declarations.push_back(std::move(declaration));
   }
   for (const auto *r : m.frontendNotations) {
     json::Value fixity = nullptr;
@@ -1684,6 +2047,7 @@ json::Object inventory(const Model &m, const RecordKeeper &records) {
                      {"signature", r->getValueAsString("signature")},
                      {"capability", r->getValueAsString("capability")}});
   result["frontendRules"] = std::move(frontendRules);
+  result["frontendSchemes"] = std::move(schemes);
   result["frontendDeclarations"] = std::move(declarations);
   result["frontendNotations"] = std::move(notations);
   result["frontendConstructors"] = std::move(constructors);

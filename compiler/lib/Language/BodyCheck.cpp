@@ -803,7 +803,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   // A rule association has no body; an installed primitive keeps its own.
   if ((decl.generated && decl.generated->operation) ||
       (output.declarationIndex &&
-       (output.declarationIndex->ruleAssociation(id) ||
+       (output.declarationIndex->constructorAssociation(id) ||
+        output.declarationIndex->schemeAssociation(id) ||
+        output.declarationIndex->ruleAssociation(id) ||
         output.declarationIndex->serviceAssociation(id))))
     return true;
   if (sources[id.index]->invalidBody)

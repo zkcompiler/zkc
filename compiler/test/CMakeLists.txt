@@ -359,6 +359,7 @@ add_zkc_test(language_entry_components Compiler language-entry-components)
 add_zkc_test(language_roster_capacity CpuTarget language-roster-capacity)
 add_zkc_test(language_role_bounds Compiler language-role-bounds)
 add_zkc_test(installed_declarations Language installed-declarations)
+add_zkc_test(installed_descriptor_contracts Language installed-descriptor-contracts)
 add_zkc_test(language_entry_components_interface Compiler language-entry-components-interface)
 target_compile_definitions(zkc-language_entry_components_interface-test PRIVATE
   ZKC_ENTRY_COMPONENT_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/ordinary.zkc")
@@ -812,6 +813,9 @@ zkc_source_project(zkc-language_total_index-test
 add_zkc_test(power_of_two_recipe Transforms power-of-two-recipe)
 mlir_target_link_libraries(zkc-power_of_two_recipe-test PRIVATE MLIRParser)
 add_zkc_test(language_source_terms Compiler language-source-terms)
+add_zkc_test(language_descriptor_source_terms Language language-descriptor-source-terms)
+target_compile_definitions(zkc-language_descriptor_source_terms-test PRIVATE
+  ZKC_SOURCE_TERM_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-terms/descriptors.json")
 add_zkc_test(language_source_claims Compiler language-source-claims)
 target_compile_definitions(zkc-language_source_claims-test PRIVATE
   ZKC_CLAIM_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")

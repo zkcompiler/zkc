@@ -183,6 +183,14 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
                span);
     return {};
   }
+  if (reference->category == ResolutionCategory::ViewScheme ||
+      reference->category == ResolutionCategory::ContractConstructor) {
+    types.fail(
+        "source.descriptor-scheme",
+        "installed structural association requires descriptor elaboration",
+        span);
+    return {};
+  }
   if (!signature(reference->target))
     return {};
   const auto &target = output.declarations[reference->target.index];

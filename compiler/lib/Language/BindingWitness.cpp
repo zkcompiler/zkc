@@ -650,7 +650,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
                                           operation)
                  : refuse();
   if (index && index->association(binding.target.declaration) &&
-      index->association(binding.target.declaration)->rule ==
+      index->association(binding.target.declaration)->rule() ==
           protocol::FrontendSignature::RandomConstructor)
     return refuse();
   if (binding.installedSignature || binding.lexicalOwner ||

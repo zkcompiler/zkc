@@ -24,7 +24,8 @@ def main():
     directory.mkdir(parents=True)
     generator = tool("tablegen")
 
-    def native(value, expected=None, check_source=True, composed=False, extra="", physical=None):
+    def native(value, expected=None, check_source=True, composed=False, extra="", physical=None,
+               rewrite=None):
         """Dump the declarations, or with `physical` the native installation
         checked together with them."""
         if check_source:
@@ -33,7 +34,7 @@ def main():
                 validate_installation(physical, value)
         declarations, mathematical, installed = project(
             value, installation if physical is None else physical)
-        (directory / "Catalog.td").write_text(declarations + extra)
+        (directory / "Catalog.td").write_text((rewrite(declarations) if rewrite else declarations) + extra)
         (directory / "Mathematical.td").write_text(mathematical)
         (directory / "NativeInstallation.td").write_text(installed)
         input_path = directory / "Catalog.td"
@@ -149,6 +150,8 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
     # JSON row fields are checked before projection; malformed TableGen
     # spellings exercise the native schema's required parameters independently.
     for label, extra, diagnostic in [
+        ("unknown constructor row field", 'def ExtraHead : ZKC_FrontendConstructor<"extra_head", "DescriptorProduct"> { string extra = "unexpected"; }',
+         "unknown field extra"),
         ("missing service row arguments", 'def MissingService : ZKC_ServiceMethod<"id", "service.random", "draw", "RandomDraw">;',
          "template argument"),
         ("missing prelude membership", 'def MissingPrelude : ZKC_FrontendDeclaration<"id", "zkc::extra", "Sample", "Interface", [], [], [], "rule", "RandomConstructor">;',
@@ -160,6 +163,41 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
     ]:
         with case(label):
             native(source, diagnostic, check_source=False, extra="\n" + extra + "\n")
+
+    # These graphs are TableGen inputs, admitted independently of the JSON
+    # producer. JSON itself cannot represent an active-path cycle.
+    def scheme_output(text, definitions, output):
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if 'ZKC_FrontendScheme<"DescriptorAppend"' in line:
+                head, tail = line.rsplit(", ", 1)
+                lines[i:i + 1] = [definitions, head + ", " + output + tail[tail.index(">"):]]
+                break
+        else:
+            raise AssertionError("missing real Append scheme")
+        return "\n".join(lines) + "\n"
+
+    graphs = [
+        ("cycle", 'def Graph : ZKC_ContractPattern<"product"> { let elements = [Graph]; }',
+         "Graph", "cyclic scheme pattern"),
+        ("unknown pattern field", 'def Graph : ZKC_ContractPattern<"contract", 0> { int extra = 1; }',
+         "Graph", "unknown field extra"),
+        ("nested ordinal is not a pattern field", 'def Graph : ZKC_ContractPattern<"contract", 0> { int ordinal = 1; }',
+         "Graph", "unknown field ordinal"),
+        ("wrong variable sort", 'def Graph : ZKC_ContractPattern<"contract", 1>;',
+         "Graph", "invalid contract variable pattern"),
+        ("width", 'def Child : ZKC_ContractPattern<"contract", 0>;\n'
+         'def Graph : ZKC_ContractPattern<"product", -1, !listsplat(Child, 1025)>;',
+         "Graph", "scheme pattern limit"),
+    ]
+    definitions = ['def Graph0 : ZKC_ContractPattern<"contract", 0>;']
+    for i in range(1, 35):
+        definitions.append(f'def Graph{i} : ZKC_ContractPattern<"sequence", -1, [Graph{i - 1}], "unsized">;')
+    graphs.append(("depth", "\n".join(definitions), "Graph34", "scheme pattern limit"))
+    for label, definitions, output, diagnostic in graphs:
+        with case("independent bounded scheme graph " + label):
+            native(source, diagnostic, check_source=False,
+                   rewrite=lambda text: scheme_output(text, definitions, output))
 
     with case("installed contribution cannot enroll itself into the selected consumer"):
         inventory = native(source, composed=True)

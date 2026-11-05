@@ -8,6 +8,10 @@ namespace {
 ResolutionCategory category(const Declaration &decl) {
   using K = Declaration::Kind;
   switch (decl.kind) {
+  case K::InstalledContractConstructor:
+    return ResolutionCategory::ContractConstructor;
+  case K::InstalledViewScheme:
+    return ResolutionCategory::ViewScheme;
   case K::Module:
     return ResolutionCategory::Module;
   case K::Interface:
@@ -35,17 +39,59 @@ ResolutionCategory category(const Declaration &decl) {
 bool charge(const LookupTraversal &traversal) {
   return !traversal.charge || traversal.charge();
 }
+Declaration::Kind installedKind(protocol::SourceDeclarationKind kind) {
+  using K = protocol::SourceDeclarationKind;
+  switch (kind) {
+  case K::Math:
+    return Declaration::Kind::Math;
+  case K::Local:
+    return Declaration::Kind::Local;
+  case K::Interface:
+    return Declaration::Kind::Interface;
+  case K::Requirement:
+    return Declaration::Kind::Requirement;
+  case K::ContractConstructor:
+    return Declaration::Kind::InstalledContractConstructor;
+  case K::View:
+    return Declaration::Kind::InstalledViewScheme;
+  }
+  llvm_unreachable("unknown installed declaration kind");
+}
 } // namespace
 bool DeclarationIndex::add(const Declaration &decl, SourceOrigin origin) {
   assert(!frozen && decl.id.index == nodes.size());
+  auto selectedCategory = category(decl);
+  // Only the installed materializer can supply this exact catalog association.
+  // A captured homonym, changed row, or mismatching shell cannot gain
+  // authority.
+  const auto *expected = protocol::frontendDeclaration(decl.qualifiedName);
+  if (decl.installedDeclaration && (origin != SourceOrigin::Installation ||
+                                    decl.installedDeclaration != expected))
+    return false;
+  if (origin == SourceOrigin::Installation && expected) {
+    if (decl.installedDeclaration != expected || !decl.parent ||
+        decl.parent->index >= nodes.size() ||
+        nodes[decl.parent->index].origin != SourceOrigin::Installation ||
+        nodes[decl.parent->index].kind != Declaration::Kind::Module ||
+        !nodes[decl.parent->index].installation ||
+        nodes[decl.parent->index].installation->qualifiedName !=
+            expected->module ||
+        decl.module.index != decl.parent->index || !decl.isPublic ||
+        decl.anonymous || decl.name != expected->name ||
+        decl.kind != installedKind(expected->kind))
+      return false;
+  }
+  if ((decl.kind == Declaration::Kind::InstalledContractConstructor ||
+       decl.kind == Declaration::Kind::InstalledViewScheme) &&
+      (!expected || !decl.installedDeclaration))
+    return false;
   if (!decl.anonymous &&
       !canonicalDeclarations.emplace(decl.qualifiedName, decl.id).second)
     return false;
-  auto selectedCategory = category(decl);
   if (origin == SourceOrigin::Installation)
     if (auto *row = protocol::frontendDeclaration(decl.qualifiedName)) {
       associations.emplace(decl.id.index, row);
-      if (row->rule == protocol::FrontendSignature::RandomConstructor)
+      if (row->rule() == protocol::FrontendSignature::RandomConstructor)
         selectedCategory = ResolutionCategory::ServiceConstructor;
       if (row->prelude)
         prelude.emplace(
@@ -94,6 +140,10 @@ bool DeclarationIndex::matchesInstallation(
       return false;
     const auto &decl = declarations[i];
     const auto &identity = *node.installation;
+    auto *row = association(decl.id);
+    if (decl.installedDeclaration != row ||
+        (row && protocol::frontendDeclaration(decl.qualifiedName) != row))
+      return false;
     if (decl.id.index != i || decl.name != identity.name ||
         decl.qualifiedName != identity.qualifiedName ||
         bool(decl.parent) != bool(node.parent) ||
@@ -112,7 +162,12 @@ bool DeclarationIndex::matchesInstallation(
       return false;
     bool installed =
         sources[decl.span.source.index].origin == SourceOrigin::Installation;
-    if (installed != (i < nodes.size() && nodes[i].installation.has_value()))
+    if (installed && (decl.module.index >= declarations.size() ||
+                      sources[decl.span.source.index].module !=
+                          declarations[decl.module.index].qualifiedName))
+      return false;
+    if ((!installed && decl.installedDeclaration) ||
+        installed != (i < nodes.size() && nodes[i].installation.has_value()))
       return false;
   }
   return true;
@@ -387,7 +442,22 @@ DeclarationIndex::association(DeclarationId id) const {
 const protocol::FrontendDeclaration *
 DeclarationIndex::ruleAssociation(DeclarationId id) const {
   const auto *row = association(id);
-  return row && row->rule ? row : nullptr;
+  return row && row->rule() ? row : nullptr;
+}
+const protocol::InstalledContractHead *
+DeclarationIndex::constructorAssociation(DeclarationId id) const {
+  const auto *row = association(id);
+  return row ? row->contractHead() : nullptr;
+}
+const protocol::InstalledViewSignature *
+DeclarationIndex::schemeAssociation(DeclarationId id) const {
+  const auto *row = association(id);
+  return row ? row->viewScheme() : nullptr;
+}
+const protocol::FrontendScheme *
+DeclarationIndex::schemeDefinition(DeclarationId id) const {
+  const auto *signature = schemeAssociation(id);
+  return signature ? protocol::frontendScheme(signature->scheme) : nullptr;
 }
 const protocol::ServiceMethodDeclaration *
 DeclarationIndex::serviceAssociation(DeclarationId id) const {

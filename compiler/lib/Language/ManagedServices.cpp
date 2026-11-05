@@ -35,7 +35,7 @@ resolveServiceMethod(Semantics &types, const DeclarationIndex &index,
   auto *association = index.ruleAssociation(constructor.target);
   if (constructor.category != ResolutionCategory::ServiceConstructor ||
       !association ||
-      association->rule != protocol::FrontendSignature::RandomConstructor) {
+      association->rule() != protocol::FrontendSignature::RandomConstructor) {
     types.fail("source.service", "receiver has no managed constructor", span);
     return {};
   }

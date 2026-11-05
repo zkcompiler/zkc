@@ -29,7 +29,7 @@ does not install a runtime implementation by adding a declaration.
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
 `capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`,
 `mathematicalIntrinsics`, `consumerProfiles`, `frontendDeclarations`,
-`frontendRules`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
+`frontendRules`, `frontendSchemes`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
 `serviceSignatures`, `serviceMethods`, and the [installed-instance](#installed-instances)
 tables `domains`, `logicalTypes`, `frameTags`, `codecs`, `aggregateFrames`,
 `randomServices`, `limits`, `finiteDefinitions` and `domainConstructors`. The
@@ -721,7 +721,7 @@ The [native block format](native-index-block.md) owns the exact bytes.
 ## Frontend declaration associations
 
 The exact version-0 envelope also contains `frontendDeclarations`,
-`frontendRules`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
+`frontendRules`, `frontendSchemes`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
 `serviceSignatures` and `serviceMethods`. These source-facing rows grant source resolution and typed
 elaboration facts, never executable implementations, physical installation or
 formal interpretations; backend choices stay in the
@@ -733,7 +733,7 @@ extend their owning typed contracts.
 ### Installed source declarations
 
 `frontendDeclarations` lists every installed source declaration in declaration
-order. A row has exactly:
+order. The existing concrete alternative has exactly:
 
 | Field | Meaning |
 |---|---|
@@ -789,6 +789,91 @@ source syntax is unchanged. The installation identity frames every field of
 every declaration, notation and service method row, including `prelude`, method
 identity and constructor ownership.
 
+### Installed structural contracts and schemes
+
+This exact schema migration is an **internal implementation slice** of the
+Constraint authoring package. Publication requires the parent aggregate,
+scheme-call, fold, closure and native consumers, plus independently maintained
+strict readers. These tables alone grant no public complete Constraint support.
+
+`frontendDeclarations.kind` selects exactly one signature alternative. The
+concrete alternative above is unchanged. A `ContractConstructor` row contains
+exactly `identity`, `owner`, `name`, `kind`, `association` and `prelude`; its
+association is `{kind: "constructor", target}`. It has no static telescope,
+ports, output or source body. The target names a `frontendConstructors` row
+whose form is `DescriptorProduct` or `DescriptorSequence`. Each such head is
+associated exactly once. Checked installation shells retain their derived source
+symbols and exact row association. They cannot carry specialization origins,
+static or scoped actual arguments, closure captures, generated entry metadata,
+or authored protocol/specification/Oracle definitions. Independent source replay
+checks those invariants as well as the absence of a concrete signature or body.
+Both installed exports are in `zkc::descriptor`, named
+`Product` and `Sequence`, with explicit non-prelude membership.
+
+A `View` scheme row has the same nine outer fields as a concrete row, but its
+`association` is `{kind: "scheme", target}` and its signature contains scheme
+ports and patterns, rather than ordinary source type terms. It is non-prelude.
+The target names exactly one `frontendSchemes` row. Each scheme is referenced
+exactly once. All declaration alternatives share identity, owner/name, export,
+service-method identity and slot-name uniqueness checks.
+
+A scheme has exactly `{name, form, variables, statics, inputs, output}`.
+`variables` is an ordered list of internal `Contract` or `OptionalExtent` sorts;
+`statics` contains ordinary `{kind: "Nat", sort: ""}` parameter kinds. These
+metavariables introduce no public generic binder or descriptor keyword.
+
+```text
+Pattern = {kind: "contract", variable}
+        | {kind: "product", elements: [Pattern...]}
+        | {kind: "sequence", element: Pattern, extent: Extent}
+Extent = {kind: "unsized"}
+       | {kind: "extent", variable}
+       | {kind: "static", index}
+Port = {kind: "descriptor", contract: Pattern}
+     | {kind: "selectedView", context: Pattern, state: Pattern}
+```
+
+A declaration input adds exactly `name` to a Port; its output is a Pattern.
+Declaration statics remain `{name, parameter}`. Their kinds and ordered port and
+output patterns must equal the selected scheme exactly. Contract indices name
+Contract variables; extent indices name OptionalExtent variables; static
+extent indices name Nat statics. Unknown/duplicate keys, unscoped indices,
+wrong sorts, signatures, ownership or association targets refuse. Every pattern
+is bounded to depth 32 (root depth zero) and 1,024 visited occurrences before
+recursive projection; active-path cycles refuse even when subtrees are shared.
+The JSON decoders also refuse duplicate keys. The producer, TableGen backend
+and Rust generator validate their own representations independently.
+
+The installation contains exactly these six checked forms. Here `C`, `A` are
+Contract metavariables, `L` is an OptionalExtent metavariable, `N` is an ordinary
+Nat static, `D(P)` is a descriptor port, and `V(C,A)` is a selected View port.
+`Seq(C,_)` has an explicitly absent extent, distinct from zero.
+
+| Form | Variables | Nat statics | Ordered ports | Output |
+|---|---|---|---|---|
+| Append | C | none | D(Seq(C,_)), D(C) | Seq(C,_) |
+| Concat | C | none | D(Seq(C,_)), D(Seq(C,_)) | Seq(C,_) |
+| Replace | C, L | index | D(Seq(C,L)), D(C) | Seq(C,L) |
+| ForgetExtent | C, L | none | D(Seq(C,L)) | Seq(C,_) |
+| CheckExtent | C | N | D(Seq(C,_)) | Seq(C,N) |
+| Fold | C, A | count | V(C,A), D(C), D(A) | A |
+
+Their installed names are respectively `append`, `concat`, `replace`,
+`unsized`, `sized` and `fold`. The schema carries their exact association
+and shape; it supplies no evaluator or operation row. Installation identity
+frames signature alternatives, constructor/scheme joins, internal sorts,
+ordered recursive patterns, optional extents, statics and port labels.
+C++ projects an `InstalledSignature` variant and immutable `SchemeId` join;
+Rust projects its own `FrontendSignature`, `ContractPattern`, `SchemePort` and
+`SchemeId` models. Dumps retain the exact authored alternatives.
+
+The independent reader `lean/bridges/common/installed_catalogue.py` still
+refuses these shell alternatives with `missing catalog fields`; its exact
+source-row and closed type/origin vocabularies require Lean-owner migration.
+No common independent Python catalogue reader outside `lean/` consumes these
+fields. The common Python module here is the production generator, not an
+independent reader. No compatibility reader is provided.
+
 ### Installed notations
 
 `frontendNotations` owns installed notation only; authored source declares its
@@ -829,6 +914,10 @@ representation. An installed source alias may export it as `Finite<I>`;
 that alias's visible name grants no family authority. The rows own the spelling
 and the frontend owns each form's meaning: it forms, prints, encodes in static
 terms and looks up the home of these structural heads through their rows.
+`DescriptorProduct` and `DescriptorSequence` additionally identify installed-only
+contract heads. Their formation requires an actual installed DeclarationId
+selected through the ordinary index; the raw builtin head route refuses them.
+They are not ordinary catalog Type constructors or executable operations.
 A spelling that no row names grants no frontend-constructor authority.
 The interface schema kinds `oracle` and
 `oracle_sequence` belong to the [Entry format](entry.md) and do not follow the

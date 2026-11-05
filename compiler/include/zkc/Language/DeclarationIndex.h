@@ -71,6 +71,13 @@ public:
   std::map<std::string, ResolvedReference> accessible(SourceAccess) const;
   const protocol::FrontendDeclaration *association(DeclarationId) const;
   const protocol::FrontendDeclaration *ruleAssociation(DeclarationId) const;
+  /// Typed installation joins after ordinary lookup. These retain actual
+  /// DeclarationId authority and never supply an ordinary callable signature.
+  const protocol::InstalledContractHead *
+      constructorAssociation(DeclarationId) const;
+  const protocol::InstalledViewSignature *
+      schemeAssociation(DeclarationId) const;
+  const protocol::FrontendScheme *schemeDefinition(DeclarationId) const;
   const protocol::ServiceMethodDeclaration *
       serviceAssociation(DeclarationId) const;
   /// Replay installed identity and ownership against the frozen namespace.

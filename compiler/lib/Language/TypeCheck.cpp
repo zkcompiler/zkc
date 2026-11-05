@@ -378,7 +378,7 @@ Checker::ElaboratedType Checker::elaborateType(const Declaration &context,
   if (!signature(*id, depth + 1))
     return {};
   if (auto *row = index().association(*id);
-      row && row->rule == protocol::FrontendSignature::RandomConstructor) {
+      row && row->rule() == protocol::FrontendSignature::RandomConstructor) {
     types.fail("source.service",
                "managed constructor requires a protocol service port", s.span);
     return {};
@@ -431,6 +431,47 @@ Checker::ElaboratedType Checker::elaborateType(const Declaration &context,
                        s.span))
     return {};
   typeReferences.insert_or_assign(s.referenceSite, *reference);
+  if (const auto *head = index().constructorAssociation(*id)) {
+    const auto *constructor = protocol::frontendConstructor(head->constructor);
+    if (!constructor || decl.installedDeclaration != index().association(*id)) {
+      types.fail("source.installation", "contract head installation differs",
+                 s.span);
+      return {};
+    }
+    bool product = constructor->form ==
+                   protocol::FrontendConstructorForm::DescriptorProduct;
+    if (!s.labels.empty() ||
+        (!product && s.arguments.size() != 1 && s.arguments.size() != 2) ||
+        s.arguments.size() > work.limits.aggregateLeaves) {
+      types.fail("source.descriptor", "contract head argument shape differs",
+                 s.span);
+      return {};
+    }
+    if (!types.charge(s.arguments.size(), s.span))
+      return {};
+    Type result(product ? K::DescriptorProduct : K::DescriptorSequence);
+    for (auto [position, child] : llvm::enumerate(s.arguments)) {
+      auto argument = type(context, child, depth + 1);
+      if (!argument)
+        return {};
+      bool extent = !product && position == 1;
+      if (extent ? argument->kind != K::Natural : !isDescriptor(*argument)) {
+        types.fail("source.descriptor",
+                   extent
+                       ? "Sequence extent requires a natural"
+                       : "contract head child requires a concrete descriptor",
+                   child.span);
+        return {};
+      }
+      result.arguments.push_back(std::move(*argument));
+    }
+    return result;
+  }
+  if (index().schemeAssociation(*id)) {
+    types.fail("source.descriptor-scheme", "View scheme is not a contract head",
+               s.span);
+    return {};
+  }
   auto args = arguments(context, decl, s.arguments, s.span, s.labels);
   if (!args)
     return {};
