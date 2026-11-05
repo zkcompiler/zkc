@@ -367,6 +367,7 @@ mlir_target_link_libraries(zkc-construction_binding-test PRIVATE MLIRParser)
 add_zkc_test(language_constructions CpuTarget language-constructions)
 add_zkc_test(language_construction_witness Language language-construction-witness)
 add_zkc_test(language_modules Compiler language-modules)
+add_zkc_test(language_member_conformance Compiler language-member-conformance)
 add_zkc_test(language_signature_reconstruction Language language-signature-reconstruction)
 add_zkc_test(language_layout Compiler language-layout)
 target_compile_definitions(zkc-language_layout-test PRIVATE

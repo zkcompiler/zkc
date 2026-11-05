@@ -1,0 +1,33 @@
+module distributed
+
+#[linear]
+struct Pair<T: Type> roles(A, B):
+    left: T @A
+    right: T @B
+
+interface Relay:
+    protocol move<T: Type> roles(A, B)(
+        value: Pair<T> roles(A, B)
+    ) -> Pair<T> roles(A, B) effects()
+
+module Forward: Relay:
+    protocol move<U: Type> roles(X, Y)(
+        value: Pair<U> roles(X, Y)
+    ) -> Pair<U> roles(X, Y):
+        return value
+
+protocol RelayPair<R: Relay> roles(P, V)(
+    value: Pair<bool> roles(V, P)
+) -> Pair<bool> roles(V, P):
+    next <- R::move<bool>(value) @(V, P)
+    return next
+
+pub protocol Demo roles(P, V)() -> (accepted: bool @V):
+    value <- Pair<bool> roles(V, P) {left: true, right: false}
+    next <- RelayPair<Forward>(value)
+    fields <- unpack(next)
+    return fields.0
+
+entry def Run(inputs: Demo::Inputs):
+    result <- Demo::run(inputs)
+    return result

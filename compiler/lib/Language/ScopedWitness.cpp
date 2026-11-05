@@ -185,6 +185,27 @@ public:
         refuse(op.span);
       return {};
     }
+    // Region placement alone does not authenticate the values selecting it.
+    // Bind every evaluated header operand to the retained written expression.
+    unsigned header = loop ? 2 : 1;
+    if (expr.children.size() < header || !types.charge(header, op.span)) {
+      if (!types.diagnostic)
+        refuse(op.span);
+      return {};
+    }
+    for (unsigned i = repeat ? 1 : 0; i < header; ++i) {
+      auto value = body.expressionValues.find(expr.children[i]);
+      ValueId actual = repeat ? std::get<ProtocolRepeat>(op.action).count
+                              : (i < control->operands.size()
+                                     ? control->operands[i]
+                                     : ValueId{uint32_t(body.values.size())});
+      if (value == body.expressionValues.end() ||
+          value->second.index != actual.index ||
+          actual.index >= body.values.size()) {
+        refuse(op.span);
+        return {};
+      }
+    }
     if (!match)
       return expr.regions;
     // Checked native control orders nominal alternatives by their declaration,
@@ -233,6 +254,59 @@ public:
       result.push_back(at->second);
     }
     return result;
+  }
+  bool yield(const Body &body, unsigned region, Span controlSpan) {
+    if (body.stopped)
+      return true;
+    const auto &written = syntax.bodies.at(region);
+    if (!types.charge(written.results.size() + 1, written.span))
+      return false;
+    if (written.results.empty())
+      return true; // Unit tails can carry mutable state without a value result.
+    if (written.results.size() != 1 || body.results.empty())
+      return refuse(written.span);
+    auto expected = body.expressionValues.find(written.results.front().second);
+    if (expected == body.expressionValues.end() ||
+        expected->second.index >= body.values.size())
+      return refuse(written.span);
+    if (body.values[expected->second.index].type.kind == Type::Kind::Unit)
+      return true;
+    if (!types.charge(body.values.size() + body.operations.size(), controlSpan))
+      return false;
+    std::vector<const Operation *> producers(body.values.size());
+    for (const auto &op : body.operations)
+      for (auto value : op.results) {
+        if (!types.charge(1, op.span))
+          return false;
+        if (value.index >= producers.size() || producers[value.index])
+          return refuse(op.span);
+        producers[value.index] = &op;
+      }
+    auto actual = body.results.front();
+    bool packed = false;
+    for (unsigned steps = 0; actual.index != expected->second.index; ++steps) {
+      if (!types.charge(1, controlSpan))
+        return false;
+      if (steps > body.operations.size() || actual.index >= producers.size())
+        return refuse(controlSpan);
+      const auto *op = producers[actual.index];
+      if (!op || !same(op->span, controlSpan) || op->results.size() != 1)
+        return refuse(controlSpan);
+      if (const auto *projection = std::get_if<Projection>(&op->action);
+          projection && projection->path.empty()) {
+        actual = projection->input;
+      } else if (const auto *tuple = std::get_if<Construct>(&op->action);
+                 !packed && tuple &&
+                 tuple->kind == Construct::Kind::Aggregate &&
+                 tuple->operands.size() > 1 &&
+                 body.values[actual.index].type.kind == Type::Kind::Tuple) {
+        // A selected arm forwards its explicit result before mutable state.
+        actual = tuple->operands.front();
+        packed = true;
+      } else
+        return refuse(controlSpan);
+    }
+    return true;
   }
 };
 /// A retained managed binding resolves once to an authored declaration input.
@@ -1532,6 +1606,9 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 if (!regions[i])
                   return types.fail("source.binding-witness",
                                     "missing candidate region", op.span);
+                if (region && std::holds_alternative<Control>(op.action) &&
+                    !lexical->yield(*regions[i], authored[i], op.span))
+                  return false;
                 if (!visit(*regions[i], formals, depth + 1, lexicalOwner,
                            expectedRoots,
                            region ? std::optional(authored[i]) : std::nullopt,

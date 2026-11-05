@@ -141,6 +141,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   decl.sealed = source.sealed;
   decl.associatedSort = source.associatedSort;
   decl.abstract = source.abstract;
+  decl.completes = source.completes;
   decl.logical = source.logical || (source.kind == Declaration::Kind::Record &&
                                     !source.roles.empty());
   decl.effectAllowance =
@@ -207,6 +208,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   written.resource = source.resource;
   written.sealed = source.sealed;
   written.abstract = source.abstract;
+  written.completes = source.completes;
   sources.resize(output.declarations.size());
   sources[id.index] = &written;
   signatureState[id.index] = 0;
