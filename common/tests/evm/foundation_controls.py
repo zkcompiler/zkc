@@ -402,6 +402,44 @@ def participant_loops(subjects):
                 subjects.run(subject, f"rounds-{count}-changed-capture", wires,
                              proof=proof, expected=False)
 
+    source = (Path(__file__).parent / "fixtures/nested-loops.zkc").read_text()
+    for flags in ((), ("--no-simplify", "--no-calculation-batching")):
+        subject = subjects.compile("nested-loops-ordered" if flags else "nested-loops-default",
+                                   source, "nested_loops", flags)
+        for outer, inner in ((0, 3), (2, 0), (1, 1), (2, 3), (3, 2)):
+            wires = {0: field_wire("bls12-381.fr", [7]),
+                     1: index_wire(outer), 2: index_wire(inner)}
+            label = f"outer-{outer}-inner-{inner}"
+            fixture, _ = subjects.run(subject, label, wires)
+            proof = bytes.fromhex(fixture["proof"])
+            # Normal completion still checks proof EOF after either zero-trip
+            # loop; the inner exit must never suppress a later outer iteration.
+            subjects.run(subject, label + "-trailing", wires, proof=proof + b"x",
+                         expected=None, native_error="proof-trailing",
+                         evm_revert=("decode", 13), expected_trace=static_trace(fixture))
+            if outer and inner:
+                size = int.from_bytes(proof[40:48], "little")
+                if proof[48:48 + size] != wires[0]:
+                    raise AssertionError("first nested message has an unexpected wire value")
+                changed = proof[:48] + field_wire("bls12-381.fr", [8]) + proof[48 + size:]
+                subjects.run(subject, label + "-wrong-value", wires,
+                             proof=changed, expected=False)
+                if (outer, inner) == (2, 3):
+                    # False acceptance must not skip a reached receive in the
+                    # next outer iteration. Keep all framing unchanged.
+                    malformed = bytearray(changed)
+                    cursor = 40
+                    for _ in range(inner):
+                        cursor += 8 + int.from_bytes(proof[cursor:cursor + 8], "little")
+                    size = int.from_bytes(proof[cursor:cursor + 8], "little")
+                    if proof[cursor + 8:cursor + 8 + size] != wires[0]:
+                        raise AssertionError("later nested message has an unexpected wire value")
+                    malformed[cursor + 14:cursor + 8 + size] = b"\xff" * (size - 6)
+                    subjects.run(subject, label + "-false-then-malformed", wires,
+                                 proof=malformed, expected=None,
+                                 native_error="artifact-stopped:Decode(Scalar)",
+                                 evm_revert=("decode", 4), expected_trace=static_trace(fixture))
+
 
 def completion(subjects):
     for managed, completed_acceptance in product((False, True), repeat=2):

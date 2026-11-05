@@ -271,6 +271,11 @@ It allocates no second ownership ticket and does not move or erase effects.
 This numerical loop ticket is distinct from participant completion: participant
 completion exits the full selected function, including enclosing repeats.
 
+Structured while export evaluates the before region before each condition test.
+A false condition publishes the complete result tuple and breaks the nearest
+Yul loop; a true condition enters the after region and forwards its yielded
+values to the next iteration. The exporter adds no private continuation flag.
+
 Target control conversion has a separate cumulative weighted preflight allowance
 of 100,000. It counts operations, operand and result occurrences, successors,
 regions, blocks, arguments, converted lanes and estimated structural expansion

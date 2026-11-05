@@ -1050,7 +1050,7 @@ module { "protocol.module"() ({
     auto yul = take(evm::exportYul(*target, endpoint, policy, {}));
     unsigned loops = 0;
     target->walk([&](scf::WhileOp) { ++loops; });
-    require(loops >= 2 && StringRef(yul).contains("for { let ") &&
+    require(loops >= 2 && StringRef(yul).count("for {} 1 {} {") == loops &&
                 StringRef(yul).contains("leave") &&
                 StringRef(yul).contains(
                     "if iszero(eq(mload(0x140), mload(0x160)))"),
