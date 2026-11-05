@@ -7,6 +7,7 @@ expectations, without implementing a proof producer or target runtime.
 
 import argparse
 import hashlib
+from itertools import product
 import json
 from pathlib import Path
 import subprocess
@@ -166,7 +167,7 @@ class Subjects:
         return path, json.loads(package["artifact"]), compiled, artifact
 
     def run(self, subject, name, wires, *, expected=True, proof=None, native_error=None,
-            evm_revert=None):
+            evm_revert=None, expected_trace=None):
         if expected is None and evm_revert is None:
             raise ValueError("stopped controls require an exact EVM refusal")
         path, envelope, compiled, artifact = subject
@@ -206,11 +207,13 @@ class Subjects:
         outcome = {key: execution[key] for key in ("status", "reason", "output", "runtime_gas")}
         failure = f"{path.name}/{name}: {outcome}; full execution: {result_path}"
         if evm_revert is not None:
-            # These stopping subjects use authored, unobserved framed messages;
-            # the header hash is the complete executed primitive frontier.
+            # Most stopping subjects use authored, unobserved messages. A
+            # control after a completed managed prefix supplies that exact
+            # independently reconstructed frontier instead.
             root = invocation_root(fixture)
-            trace = [{"kind": "sha256", "input": root.hex(),
-                      "output": hashlib.sha256(root).hexdigest(), "status": "return"}]
+            trace = expected_trace if expected_trace is not None else [
+                {"kind": "sha256", "input": root.hex(),
+                 "output": hashlib.sha256(root).hexdigest(), "status": "return"}]
             try:
                 check_revert(execution, *evm_revert, trace)
             except AssertionError as error:
@@ -224,7 +227,7 @@ class Subjects:
         self.cases.append({"subject": path.name, "case": name, "decision": expected,
                            "runtime_bytes": len(artifact["runtime"]) // 2,
                            "gas": execution["runtime_gas"], "hashes": len(trace),
-                           "native_error": native_error, "evm_revert": evm_revert})
+                           "native_error": fixture["native_error"], "evm_revert": evm_revert})
         return fixture, execution
 
 
@@ -400,6 +403,51 @@ def participant_loops(subjects):
                              proof=proof, expected=False)
 
 
+def completion(subjects):
+    for managed, completed_acceptance in product((False, True), repeat=2):
+        parameters = "a:Fr@V,b:Fr@V"
+        prefix, acceptance, public = "", "true", "a,b"
+        construction = "authored"
+        if managed:
+            parameters += ",c:Fr@V,challenges:Random<Fr>@V"
+            prefix = "let challenge=challenges.draw();let delivered=send V->P(challenge);"
+            acceptance, public = "a*b==c", "a,b,c"
+            construction = f'fiat_shamir("{BLS_SUITE}",challenges)'
+        source = f'''module completion; domain Fr=field("bls12-381.fr");
+protocol Work roles(P,V)({parameters})->(echo:Fr@V,accepted:bool@V) completes {{
+  {prefix}
+  let (_,_)=finish_if @V(a==b)(echo=a,accepted={str(completed_acceptance).lower()});
+  require !(a==b);
+  return(echo=b,accepted={acceptance});
+}}
+proof Proof=Work{{prover P;verifier V;public{{{public}}};accept accepted;
+  construction {construction};}}
+'''
+        for flags in ((), ("--no-simplify", "--no-calculation-batching")):
+            name = "completion-managed" if managed else "completion-authored"
+            if completed_acceptance:
+                name += "-accepting"
+            subject = subjects.compile(name + ("-ordered" if flags else "-default"),
+                                       source, "completion", flags)
+            early = "early-true" if completed_acceptance else "early-false"
+            cases = [(early, [3, 3, 9], completed_acceptance),
+                     ("continued-true", [3, 4, 12], True)]
+            if managed:
+                cases.append(("continued-false", [3, 4, 11], False))
+            for label, values, expected in cases:
+                wires = {i: field_wire("bls12-381.fr", [v])
+                         for i, v in enumerate(values[:3 if managed else 2])}
+                fixture, _ = subjects.run(subject, label, wires, expected=expected)
+                if label == early:
+                    # Normal completion skips the rejecting suffix, but
+                    # still reaches outer EOF and current-generation checks.
+                    subjects.run(subject, early + "-trailing", wires,
+                                 proof=bytes.fromhex(fixture["proof"]) + b"\x00",
+                                 expected=None, native_error="proof-trailing",
+                                 evm_revert=("decode", 13),
+                                 expected_trace=static_trace(fixture))
+
+
 def filtered(subjects):
     field, f = "koala-bear.ext4-binomial3", FIELDS["koala-bear.ext4-binomial3"]
     source = (Path(__file__).parent / "fixtures/filtered.zkc").read_text()
@@ -491,7 +539,8 @@ def main():
         parser.add_argument(f"--{name}", type=Path, required=True)
     suites = {"arithmetic": arithmetic, "structured": structured, "envelopes": envelopes,
               "vectors": vectors, "finite": finite, "filtered": filtered,
-              "loops": participant_loops, "capacity": capacity, "bytes": bytes_access}
+              "loops": participant_loops, "completion": completion,
+              "capacity": capacity, "bytes": bytes_access}
     parser.add_argument("--suite", action="append", choices=suites)
     args = parser.parse_args()
     for name in ("compiler", "native_driver", "solc", "runner", "output"):

@@ -1018,9 +1018,9 @@ function evm_wire_retain(p, n) {
   mstore(add(p, 64), total)
 }
 function evm_wire_construct(p) {
-  // The scanner's rounded retained estimate bounds every construction
-  // allocation. Refuse before materializing a child if this invocation's
-  // already retained memory leaves insufficient allocator capacity.
+  // The scanner bounds retained construction allocations. Transient curve
+  // scratch is checked separately by the allocator. Refuse before a child
+  // materializes if already retained memory leaves insufficient capacity.
   if gt(mload(add(p, 64)), sub()YUL"
       << limits.memoryBytes << R"YUL(, p)) { evm_resource(13) }
 }
