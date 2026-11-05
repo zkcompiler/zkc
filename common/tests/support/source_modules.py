@@ -2,15 +2,16 @@
 
 from pathlib import Path
 
-from project import project_inputs
+from project import project_inputs, project_source_format
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def core_packages():
-    """Select the owned core manifests for tests that exercise the whole core."""
+def core_packages(source_format):
+    """Select core manifests for the explicit source format of a test capture."""
     return [str(path.parent.relative_to(ROOT / 'libraries'))
-            for path in sorted((ROOT / 'libraries/core').rglob('zkc.toml'))]
+            for path in sorted((ROOT / 'libraries/core').rglob('zkc.toml'))
+            if project_source_format(path) == source_format]
 
 
 def library_inputs(*packages, overrides=None):

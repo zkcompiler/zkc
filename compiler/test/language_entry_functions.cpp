@@ -412,7 +412,7 @@ int main() {
         let delivered=send P->V(x);let ok@V=true;return(ok=ok);}
       entry fn Demo(inputs:Work::Inputs){return Work::run(inputs);}
     )"),
-            "source.wire");
+            "source.message-payload");
   });
   cases.run("generated operations retain ordered failure effects", [] {
     refuses(check((protocol + R"(

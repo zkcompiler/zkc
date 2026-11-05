@@ -283,6 +283,55 @@ bool Checker::imports() {
                                             import.notations.end());
     std::set<std::string> selectedReductions(import.reductions.begin(),
                                              import.reductions.end());
+    // A surface selector names syntax, never a callable overload. Collect its
+    // complete key before loading any bodies or considering operand types.
+    std::set<OperatorSite> selectedSites;
+    for (const auto &selector : import.notationSelectors) {
+      std::set<std::string> keys;
+      std::vector<OperatorSite> matches;
+      for (auto site : exportedOperators[target]) {
+        if (!types.charge(selector.size() + 1, import.span))
+          return false;
+        const auto &binding = sources[site.first]->operators[site.second];
+        std::vector<const NotationDescriptor *> descriptors;
+        if (binding.notation)
+          descriptors.push_back(binding.notation.get());
+        else
+          for (const auto &fixed : syntax::defaultNotations())
+            if (fixed.symbol == binding.symbol)
+              descriptors.push_back(&fixed);
+        for (const auto *descriptor : descriptors) {
+          using P = NotationDescriptor::Position;
+          std::string exact = "notation ";
+          if (descriptor->position == P::Prefix)
+            exact += "prefix " + descriptor->symbol;
+          else if (descriptor->position == P::Infix)
+            exact += "infix " + descriptor->symbol;
+          else if (descriptor->position == P::Postfix)
+            exact += "postfix " + descriptor->symbol;
+          else if (descriptor->position == P::Index)
+            exact += "index(" + std::to_string(descriptor->arity) + ")";
+          const auto bare = descriptor->position == P::Delimited
+                                ? descriptor->symbol + descriptor->closing
+                                : descriptor->symbol;
+          if (selector != bare && selector != exact)
+            continue;
+          keys.insert(descriptor->key());
+          matches.push_back(site);
+        }
+      }
+      if (keys.empty())
+        return types.fail("source.import",
+                          "module does not export notation " + selector,
+                          import.span);
+      if (keys.size() != 1)
+        return types.fail(
+            "source.notation-ambiguous",
+            "notation import requires an explicit position or index arity: " +
+                selector,
+            import.span);
+      selectedSites.insert(matches.begin(), matches.end());
+    }
     bool selectedIndexing = import.indexing;
     for (auto site : exportedOperators[target]) {
       if (!types.charge(1, import.span))
@@ -292,11 +341,13 @@ bool Checker::imports() {
       bool indexing =
           binding.notation &&
           binding.notation->position == NotationDescriptor::Position::Index;
-      bool delimited = !indexing && !binding.holes.empty();
+      bool delimited =
+          binding.notation &&
+          binding.notation->position == NotationDescriptor::Position::Delimited;
       bool reduction =
           binding.notation &&
           binding.notation->position == NotationDescriptor::Position::Reduction;
-      if (!import.alias &&
+      if (!import.alias && !selectedSites.count(site) &&
           !(indexing ? import.indexing
                      : is_contained(reduction   ? import.reductions
                                     : delimited ? import.notations

@@ -1,0 +1,25 @@
+module m
+domain F = field("koala-bear")
+type Vector<E: Field> = builtin("vector", E)
+type Finite<I: Type + Copy + Drop> = builtin("finite", I)
+view def elements<E: Field>(xs: Vector<E>) -> Finite<E> = domain("elements")
+view def zip<A: Type + Copy + Drop, B: Type + Copy + Drop>(a: Finite<A>, b: Finite<B>) -> Finite<(A, B)> = domain("zip")
+view def product<A: Type + Copy + Drop, B: Type + Copy + Drop>(a: Finite<A>, b: Finite<B>) -> Finite<(A, B)> = domain("product")
+view def range(lo: index, hi: index) -> Finite<index> = domain("range")
+def fold<I: Type + Copy + Drop, S: Type + Copy + Drop>(rows: Finite<I>, initial: S, step: fn(S, item: I) -> S where item_from(item, rows)) -> S = finite("math.fold")
+local def ordered<I: Type + Copy + Drop, S: Type + Copy + Drop>(rows: Finite<I>, initial: S, step: local fn(S, item: I) -> S effects(stop) where item_from(item, rows)) -> S effects(stop) = finite("local.fold")
+
+view def relay<I: Type + Copy + Drop>(rows: Finite<I>) -> Finite<I>:
+    return rows
+view def paired<E: Field>(xs: Vector<E>) -> Finite<(E, E)>:
+    shared = elements(xs)
+    return zip(shared, shared)
+def mathematical<E: Field>(xs: Vector<E>, initial: E) -> E:
+    return fold(relay(paired(xs)), initial, fn(state, item) => state + item.0 + item.1)
+local def local_total<E: Field>(xs: Vector<E>, initial: E) -> E effects(stop):
+    result <- ordered(relay(paired(xs)), initial, fn(state, item) => state + item.0 + item.1)
+    return result
+pub protocol Demo roles(P)(xs: Vector<F> @P, initial: F @P) -> F @P:
+    first = mathematical(xs, initial)
+    second <- local_total(xs, initial)
+    return first + second

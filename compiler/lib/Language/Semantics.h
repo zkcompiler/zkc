@@ -62,11 +62,29 @@ public:
   };
 
   bool chargeType(const Type &, Span);
+  bool chargeContract(const DescriptorContract &contract, Span span) {
+    if (!charge(contract.parameters.size() + 1, span))
+      return false;
+    for (const auto &parameter : contract.parameters)
+      if (!chargeType(parameter, span))
+        return false;
+    return true;
+  }
+  std::optional<DescriptorContract>
+  substitute(const DescriptorContract &contract, const Substitution &bindings,
+             Span span) {
+    if (!chargeContract(contract, span))
+      return {};
+    auto type = substitute(descriptorType(contract), bindings, span);
+    return type ? descriptorContract(*type) : std::nullopt;
+  }
   bool chargeConstruction(const ConstructionDefinition &, Span);
   const Parameter *parameter(llvm::StringRef) const;
   const Declaration *typeDeclaration(const Type &) const;
   bool symbolic(const Type &) const;
   llvm::Expected<protocol::BoundType> nativeLayout(const Type &);
+  /// Complete source carrier observation, independent of encoded byte width.
+  llvm::Expected<bool> nativeMessagePayload(const Type &);
   /// Synchronously borrow declarations for a bounded port observation. Returned
   /// layout trees own their storage; performed work is reconciled on errors
   /// too. The caller attaches its span when accepting an error.

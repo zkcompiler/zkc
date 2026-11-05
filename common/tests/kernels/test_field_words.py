@@ -60,7 +60,7 @@ entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
 def test_coordinate_words(toolchain, journal, directory, field, flags):
     degree = FIELDS[field]
     entry = Entry(toolchain, journal, directory, SOURCE.format(field=field),
-                  (*library_modules(*core_packages()), *flags))
+                  (*library_modules(*core_packages('zkc')), *flags))
     rng = random.Random(4099 + degree)
 
     def element():

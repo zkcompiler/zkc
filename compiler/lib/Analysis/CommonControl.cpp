@@ -7,6 +7,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
 #include <set>
@@ -20,7 +21,14 @@ using Term = unsigned;
 using Components = SmallVector<Term>;
 using Environment = llvm::DenseMap<Value, Components>;
 struct Node {
-  enum Kind { Expression, Input, Carry, Exit, Iteration } kind = Expression;
+  enum Kind {
+    Expression,
+    Input,
+    Carry,
+    Exit,
+    Iteration,
+    Unknown
+  } kind = Expression;
   Type type;
   StringAttr name;
   DictionaryAttr attributes;
@@ -51,6 +59,7 @@ struct Derivation {
   facts::Work &work;
   SymbolTableCollection symbols;
   SmallVector<Node, 0> nodes{Node{}};
+  llvm::DenseMap<size_t, SmallVector<Term>> interned;
   SmallVector<Recurrence> recurrences;
   SmallVector<Demand> demands;
   SmallVector<CommonControlRequirement> requirements;
@@ -66,11 +75,36 @@ struct Derivation {
   }
   bool charge(uint64_t amount = 1) { return work.charge(amount); }
   Components absent() const { return Components(roles, 0); }
+  Term unknown(Type type, unsigned role) {
+    if (!charge())
+      return 0;
+    Node node;
+    node.kind = Node::Unknown;
+    node.type = type;
+    node.role = role;
+    // Fresh atoms cannot be hash-consed. Their actual traversal/result/role
+    // occurrence is this term's unique coordinate, including repeated calls.
+    nodes.push_back(std::move(node));
+    return nodes.size() - 1;
+  }
   Term intern(Node node) {
     if (!charge(1 + node.operands.size() + node.input.path.size() +
                 node.projectionTypes.size()))
       return 0;
-    for (unsigned i = 1; i < nodes.size(); ++i) {
+    // Index structural candidates so retaining fresh opaque subjects does not
+    // make unrelated total work scan the entire graph. Collisions still use
+    // the exact comparison below and debit the same bounded work allowance.
+    size_t key = hash_combine(
+        node.kind, node.type, node.name, node.attributes, node.coordinate,
+        hash_combine_range(node.operands.begin(), node.operands.end()),
+        node.alternative, node.input.input, node.input.role,
+        hash_combine_range(node.input.path.begin(), node.input.path.end()),
+        node.tagOnly, node.extentAxis.has_value(), node.extentAxis.value_or(0),
+        node.invocation, node.role,
+        hash_combine_range(node.projectionTypes.begin(),
+                           node.projectionTypes.end()));
+    auto &candidates = interned[key];
+    for (Term i : candidates) {
       if (!charge(1 + nodes[i].operands.size() + nodes[i].input.path.size() +
                   nodes[i].projectionTypes.size()))
         return 0;
@@ -88,14 +122,17 @@ struct Derivation {
         return i;
     }
     nodes.push_back(std::move(node));
-    return nodes.size() - 1;
+    Term result = nodes.size() - 1;
+    candidates.push_back(result);
+    return result;
   }
   Term expression(StringRef name, Type type, DictionaryAttr attributes,
                   ArrayRef<Term> inputs, unsigned coordinate = 0) {
     bool complete = all_of(
         inputs, [&](Term input) { return input && nodes[input].complete; });
-    // A constructor's tag remains static even when a payload has ordered
-    // provenance. Its full value is still unavailable for congruence.
+    // A constructor's tag remains static even when a payload is unavailable.
+    // A fresh opaque atom is available for exact forwarding, not for equating
+    // independent ordered computations.
     if (!complete && name != "data.make" && name != "selected")
       return 0;
     Node node;
@@ -296,6 +333,10 @@ struct Derivation {
       // Observing an equation can intern more terms and reallocate nodes.
       const Node a = nodes[left], b = nodes[right];
       if (a.type != b.type || a.kind != b.kind)
+        return false;
+      // Equal opaque subjects were handled by exact term identity above.
+      // Different Local/service results never agree by name or dependencies.
+      if (a.kind == Node::Unknown)
         return false;
       if (a.kind == Node::Input) {
         if (a.tagOnly != b.tagOnly || a.extentAxis != b.extentAxis)
@@ -563,6 +604,22 @@ struct Derivation {
           return outputs.takeError();
         for (auto [result, components] : zip(op->getResults(), *outputs))
           environment[result] = std::move(components);
+      } else if (auto exchange = dyn_cast<pir::ExchangeOp>(op)) {
+        auto sender = mapping.find(exchange.getSender());
+        auto receiver = mapping.find(exchange.getReceiver());
+        if (sender == mapping.end() || receiver == mapping.end() ||
+            sender->second == receiver->second)
+          return failure();
+        auto input = components(environment, exchange.getInput());
+        Term sent = input[sender->second];
+        if (!sent)
+          return failure();
+        // This SSA result exists on the completed normal path only. Keep
+        // exactly the actual sender and receiver; other input components
+        // retain their original subjects. No delivery/stop rule changes.
+        Components values = absent();
+        values[sender->second] = values[receiver->second] = sent;
+        environment[exchange.getOutput()] = std::move(values);
       } else if (auto view = dyn_cast<pir::RestrictRolesOp>(op)) {
         auto selected = roster(view.getRoles(), mapping);
         if (!selected)
@@ -613,10 +670,15 @@ struct Derivation {
           environment[result] = std::move(values);
         }
       } else {
-        // Ordered outputs, services and received values have no total/static
-        // provenance. Their mere availability never supplies agreement.
-        for (Value result : op->getResults())
-          environment[result] = absent();
+        // Fresh opaque subjects preserve exact forwarding without treating
+        // independent ordered computations as congruent total expressions.
+        for (Value result : op->getResults()) {
+          Components values = absent();
+          if (!isa<pir::ServiceReferenceType>(result.getType()))
+            for (unsigned role = 0; role < roles; ++role)
+              values[role] = unknown(result.getType(), role);
+          environment[result] = std::move(values);
+        }
       }
     }
     return failure();

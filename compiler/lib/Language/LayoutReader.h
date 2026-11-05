@@ -37,9 +37,12 @@ class LayoutReader {
   llvm::Error staticArguments(Id id, std::vector<SyntaxType> &values,
                               std::vector<ArgumentLabel> &labels);
   llvm::Expected<SyntaxPort> port(Id id, bool unnamed = false);
+  llvm::Expected<SyntaxScopedSignature> scopedSignature(Id id);
   llvm::Expected<Id> permissionBound(Id id, Permissions &permissions,
                                      std::vector<std::string> &written);
   llvm::Error parameters(Id id, SyntaxDeclaration &decl);
+  llvm::Expected<SyntaxInputSelector> inputSelector(Id id);
+  llvm::Error dataRequirement(Id id, SyntaxRequirement &requirement);
   llvm::Error requirements(Id id, SyntaxDeclaration &decl);
   llvm::Error formal(Id id, SyntaxDeclaration &module);
   llvm::Error import(Id id, SyntaxDeclaration &module);

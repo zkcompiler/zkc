@@ -1,3 +1,4 @@
+#include "../lib/Language/FiniteCardinality.h"
 #include "../lib/Language/FiniteFormation.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
@@ -26,7 +27,7 @@ struct Formation {
   source::Work work{limits};
   std::vector<Declaration> declarations;
   source::Semantics semantics{declarations, {}, work};
-  std::shared_ptr<DomainShape> shape = std::make_shared<DomainShape>();
+  std::shared_ptr<DescriptorShape> shape = std::make_shared<DescriptorShape>();
   std::map<unsigned, uint64_t> constants;
   std::map<std::pair<unsigned, unsigned>, uint64_t> extents;
   unsigned equalQueries = 0, boundQueries = 0;
@@ -38,12 +39,26 @@ struct Formation {
     Identity,
     Equality
   } exhaust = Exhaust::None;
-  unsigned add(DomainBinding::Kind kind, std::vector<ValueId> operands = {},
+  unsigned add(DescriptorBinding::Kind kind, std::vector<ValueId> operands = {},
                std::vector<unsigned> children = {}) {
-    DomainBinding node{};
+    DescriptorBinding node{};
     node.kind = kind;
     node.operands = std::move(operands);
-    node.children = std::move(children);
+    node.contract = {DescriptorFamily::Finite, {Type(Type::Kind::Index)}};
+    if (kind == DescriptorBinding::Kind::Zip ||
+        kind == DescriptorBinding::Kind::Product) {
+      Type pair(Type::Kind::Tuple);
+      for (auto child : children)
+        pair.arguments.push_back(
+            *finiteDescriptorItem(shape->nodes[child].contract));
+      node.contract.parameters = {std::move(pair)};
+    } else if (kind == DescriptorBinding::Kind::MatrixCoordinates) {
+      Type pair(Type::Kind::Tuple);
+      pair.arguments = {Type(Type::Kind::Index), Type(Type::Kind::Index)};
+      node.contract.parameters = {std::move(pair)};
+    }
+    for (auto child : children)
+      node.children.push_back({child, shape->nodes[child].contract});
     shape->nodes.push_back(std::move(node));
     shape->result = shape->nodes.size() - 1;
     return shape->result;
@@ -115,12 +130,32 @@ fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:fn(item:I)->Fr effects(st
 } // namespace
 int main() {
   Cases cases;
+  cases.run("cardinality interpretation checks Finite family and arity", [] {
+    Formation test;
+    auto index = test.add(DescriptorBinding::Kind::Range, {{0}, {1}});
+    auto &node = test.shape->nodes[index];
+    require(source::cardinalityNode(node).kind == zkc::facts::DomainKind::Range,
+            "well-formed Finite range lost its interpretation");
+    const auto original = node.contract;
+    for (unsigned mutation = 0; mutation != 3; ++mutation) {
+      node.contract = original;
+      if (mutation == 0)
+        node.contract.family = static_cast<DescriptorFamily>(99);
+      if (mutation == 1)
+        node.contract.parameters.clear();
+      if (mutation == 2)
+        node.contract.parameters.push_back(Type{});
+      require(source::cardinalityNode(node).kind ==
+                  zkc::facts::DomainKind::Unknown,
+              "cardinality interpreted a malformed Finite contract");
+    }
+  });
   for (bool total : {true, false})
     cases.run(total ? "Math fixed range uses exact actual constants"
                     : "Local fixed range cannot use erased actual constants",
               [&] {
                 Formation test;
-                test.add(DomainBinding::Kind::Range, {{0}, {1}});
+                test.add(DescriptorBinding::Kind::Range, {{0}, {1}});
                 test.constants = {{0, 0}, {1, 2}};
                 require(test.check(total, 2) == total,
                         "range formal/actual policy differs");
@@ -133,8 +168,8 @@ int main() {
               [&] {
                 Formation test;
                 test.shape->inputs = {arrayType(2, native)};
-                test.add(native ? DomainBinding::Kind::Elements
-                                : DomainBinding::Kind::SourceArray,
+                test.add(native ? DescriptorBinding::Kind::Elements
+                                : DescriptorBinding::Kind::SourceArray,
                          {{0}});
                 test.extents = {{{0, 0}, 2}};
                 require(test.check(false, 2) == native,
@@ -147,35 +182,35 @@ int main() {
     Type vector(Type::Kind::Builtin);
     vector.domain = "vector";
     test.shape->inputs = {vector};
-    test.add(DomainBinding::Kind::Elements, {{0}});
+    test.add(DescriptorBinding::Kind::Elements, {{0}});
     test.extents = {{{0, 0}, 2}};
     require(!test.check(false, 2), "Local declaration used actual extent");
     test.refused("source.data-bound");
   });
   cases.run("matrix coordinate count is the product of exact axes", [] {
     Formation test;
-    test.add(DomainBinding::Kind::MatrixCoordinates, {{0}});
+    test.add(DescriptorBinding::Kind::MatrixCoordinates, {{0}});
     test.extents = {{{0, 0}, 3}, {{0, 1}, 5}};
     require(test.check(true, 15), "matrix cardinality remained unknown");
   });
   cases.run("matrix structural equality invokes both formation callbacks", [] {
     Formation test;
-    auto a = test.add(DomainBinding::Kind::MatrixCoordinates, {{0}});
-    auto b = test.add(DomainBinding::Kind::MatrixCoordinates, {{1}});
-    test.add(DomainBinding::Kind::Zip, {}, {a, b});
+    auto a = test.add(DescriptorBinding::Kind::MatrixCoordinates, {{0}});
+    auto b = test.add(DescriptorBinding::Kind::MatrixCoordinates, {{1}});
+    test.add(DescriptorBinding::Kind::Zip, {}, {a, b});
     test.inferEqual = true;
     require(test.check(true) && test.equalQueries == 2,
             "matrix equality lost an inferred formation obligation");
   });
   cases.run("matching products infer each required extent equality", [] {
     Formation test;
-    auto a = test.add(DomainBinding::Kind::Elements, {{0}});
-    auto b = test.add(DomainBinding::Kind::Elements, {{1}});
-    auto c = test.add(DomainBinding::Kind::Elements, {{2}});
-    auto d = test.add(DomainBinding::Kind::Elements, {{3}});
-    auto x = test.add(DomainBinding::Kind::Product, {}, {a, c});
-    auto y = test.add(DomainBinding::Kind::Product, {}, {b, d});
-    test.add(DomainBinding::Kind::Zip, {}, {x, y});
+    auto a = test.add(DescriptorBinding::Kind::Elements, {{0}});
+    auto b = test.add(DescriptorBinding::Kind::Elements, {{1}});
+    auto c = test.add(DescriptorBinding::Kind::Elements, {{2}});
+    auto d = test.add(DescriptorBinding::Kind::Elements, {{3}});
+    auto x = test.add(DescriptorBinding::Kind::Product, {}, {a, c});
+    auto y = test.add(DescriptorBinding::Kind::Product, {}, {b, d});
+    test.add(DescriptorBinding::Kind::Zip, {}, {x, y});
     test.inferEqual = true;
     require(test.check(true) && test.equalQueries == 2,
             "product equality bypassed source precondition inference");
@@ -183,11 +218,11 @@ int main() {
   cases.run("empty product does not erase an earlier strict zip obligation",
             [] {
               Formation test;
-              auto a = test.add(DomainBinding::Kind::Elements, {{0}});
-              auto b = test.add(DomainBinding::Kind::Elements, {{1}});
-              auto zip = test.add(DomainBinding::Kind::Zip, {}, {a, b});
-              auto zero = test.add(DomainBinding::Kind::Range, {{2}, {2}});
-              test.add(DomainBinding::Kind::Product, {}, {zero, zip});
+              auto a = test.add(DescriptorBinding::Kind::Elements, {{0}});
+              auto b = test.add(DescriptorBinding::Kind::Elements, {{1}});
+              auto zip = test.add(DescriptorBinding::Kind::Zip, {}, {a, b});
+              auto zero = test.add(DescriptorBinding::Kind::Range, {{2}, {2}});
+              test.add(DescriptorBinding::Kind::Product, {}, {zero, zip});
               test.constants = {{2, 0}};
               test.extents = {{{0, 0}, 2}, {{1, 0}, 3}};
               require(!test.check(true, 0), "empty count erased zip admission");
@@ -195,8 +230,8 @@ int main() {
             });
   cases.run("unused matrix selector still requires its bound", [] {
     Formation test;
-    test.add(DomainBinding::Kind::MatrixRow, {{0}, {1}});
-    test.add(DomainBinding::Kind::Range, {{2}, {2}});
+    test.add(DescriptorBinding::Kind::MatrixRow, {{0}, {1}});
+    test.add(DescriptorBinding::Kind::Range, {{2}, {2}});
     test.constants = {{2, 0}};
     test.allowBound = false;
     require(!test.check(true, 0) && test.boundQueries == 1,
@@ -207,15 +242,15 @@ int main() {
     Formation test;
     test.shape->inputs = {arrayType(2), arrayType(3)};
     test.extents = {{{0, 0}, 2}, {{1, 0}, 3}};
-    auto a = test.add(DomainBinding::Kind::Elements, {{0}});
-    auto b = test.add(DomainBinding::Kind::Elements, {{1}});
-    test.add(DomainBinding::Kind::Zip, {}, {a, b});
+    auto a = test.add(DescriptorBinding::Kind::Elements, {{0}});
+    auto b = test.add(DescriptorBinding::Kind::Elements, {{1}});
+    test.add(DescriptorBinding::Kind::Zip, {}, {a, b});
     require(test.check(false, 2), "Local runtime admission became total proof");
   });
   cases.run(
       "filtered fixed collection is refused even with exact input size", [] {
         Formation test;
-        test.add(DomainBinding::Kind::Elements, {{0}});
+        test.add(DescriptorBinding::Kind::Elements, {{0}});
         test.extents = {{{0, 0}, 2}};
         test.filtered = true;
         require(!test.check(true, 2), "filter was treated as exact count");
@@ -223,7 +258,7 @@ int main() {
       });
   cases.run("formation exhaustion retains source.limit", [] {
     Formation test;
-    test.add(DomainBinding::Kind::Range, {{0}, {1}});
+    test.add(DescriptorBinding::Kind::Range, {{0}, {1}});
     test.constants = {{0, 0}, {1, 2}};
     test.work.used = test.limits.work;
     require(!test.check(true, 2), "exhaustion admitted a fixed result");
@@ -244,31 +279,31 @@ int main() {
                   // callback. For integer exhaustion the empty extent supplies
                   // the zero instead.
                   if (callback == Formation::Exhaust::Extent) {
-                    zero = test.add(DomainBinding::Kind::Range, {{0}, {0}});
+                    zero = test.add(DescriptorBinding::Kind::Range, {{0}, {0}});
                     test.constants = {{0, 0}};
                   } else {
-                    zero = test.add(DomainBinding::Kind::Elements, {{0}});
+                    zero = test.add(DescriptorBinding::Kind::Elements, {{0}});
                     test.extents = {{{0, 0}, 0}};
                   }
                   auto other = test.add(callback == Formation::Exhaust::Extent
-                                            ? DomainBinding::Kind::Elements
-                                            : DomainBinding::Kind::Range,
+                                            ? DescriptorBinding::Kind::Elements
+                                            : DescriptorBinding::Kind::Range,
                                         callback == Formation::Exhaust::Extent
                                             ? std::vector<ValueId>{{1}}
                                             : std::vector<ValueId>{{1}, {2}});
-                  test.add(DomainBinding::Kind::Product, {}, {zero, other});
+                  test.add(DescriptorBinding::Kind::Product, {}, {zero, other});
                   require(!test.check(true, 0), "zero hid callback exhaustion");
                 } else {
                   auto kind = callback == Formation::Exhaust::Identity
-                                  ? DomainBinding::Kind::Range
-                                  : DomainBinding::Kind::Elements;
-                  auto a = test.add(kind, kind == DomainBinding::Kind::Range
+                                  ? DescriptorBinding::Kind::Range
+                                  : DescriptorBinding::Kind::Elements;
+                  auto a = test.add(kind, kind == DescriptorBinding::Kind::Range
                                               ? std::vector<ValueId>{{0}, {1}}
                                               : std::vector<ValueId>{{0}});
-                  auto b = test.add(kind, kind == DomainBinding::Kind::Range
+                  auto b = test.add(kind, kind == DescriptorBinding::Kind::Range
                                               ? std::vector<ValueId>{{2}, {3}}
                                               : std::vector<ValueId>{{1}});
-                  test.add(DomainBinding::Kind::Zip, {}, {a, b});
+                  test.add(DescriptorBinding::Kind::Zip, {}, {a, b});
                   require(!test.check(true),
                           "callback exhaustion admitted equality");
                 }

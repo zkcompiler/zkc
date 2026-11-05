@@ -75,10 +75,17 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
   if (this->oracleMode() && !oracleExpression(expr))
     return {};
   const auto oracleMode = oracleEvaluation(expr.kind);
-  if (syntax.layoutSyntax || this->oracleMode() || orderedRoot) {
+  if (syntax.layoutSyntax || this->oracleMode() || orderedRoot ||
+      callbackRoot) {
     bool ordered =
         (expr.kind == K::MethodCall && !inference->callees.count(id)) ||
         oracleMode == Statement::Evaluation::Ordered;
+    if (expr.kind == K::Call && expr.binding) {
+      auto binding = scoped.find(*expr.binding);
+      ordered |= binding != scoped.end() &&
+                 body.scopedBindings[binding->second].signature.mode ==
+                     ScopedSignature::Mode::Local;
+    }
     if (expr.kind == K::Record) {
       auto type = inferredType(id);
       const auto *nominal =
@@ -124,7 +131,8 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
       if (source)
         ordered |= retiresCustody(*bindingPattern, *source);
     }
-    if ((ordered && orderedRoot != id) || (!ordered && orderedRoot == id)) {
+    if ((ordered && orderedRoot != id && callbackRoot != id) ||
+        (!ordered && orderedRoot == id)) {
       fail("source.action",
            ordered
                ? "ordered action requires the outer '<-' position"
@@ -210,7 +218,11 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
                   expr.span);
   } else if (expr.kind == K::Boolean || expr.kind == K::Decimal) {
     Type type;
+    std::string decimal;
     if (expr.kind == K::Decimal) {
+      if (!checker.types.charge(expr.text.size() + 1, expr.span))
+        return {};
+      decimal = expr.text;
       if (!expected ||
           (expected->kind != T::Field && expected->kind != T::Index)) {
         fail("source.inference",
@@ -225,16 +237,14 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
           fail("source.literal", "index literal overflows uint64", expr.span);
           return {};
         }
+        decimal = std::to_string(number);
         if (local())
-          result = emit(
-              LocalPrimitive{"index.constant", {}, {std::to_string(number)}},
-              type, {}, expr.span);
+          result = emit(LocalPrimitive{"index.constant", {}, {decimal}}, type,
+                        {}, expr.span);
         else
-          result = emit(MathValue{MathematicalIdentity::IndexConstant,
-                                  {},
-                                  std::to_string(number)},
-                        type, math() ? std::vector<unsigned>{} : allRoles(),
-                        expr.span);
+          result = emit(
+              MathValue{MathematicalIdentity::IndexConstant, {}, decimal}, type,
+              math() ? std::vector<unsigned>{} : allRoles(), expr.span);
       } else {
         if (type.symbolic) {
           if (auto error = protocol::checkGenericParameters("field.constant",
@@ -264,6 +274,15 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
                                 expr.text},
                       type, math() ? std::vector<unsigned>{} : allRoles(),
                       expr.span);
+    }
+    if (expr.kind == K::Decimal && result) {
+      if (!checker.types.chargeType(type, expr.span) ||
+          !checker.types.charge(decimal.size() + 1, expr.span))
+        return {};
+      auto &literals = witnesses.literals[decl.id.index];
+      if (!literals)
+        literals = std::make_shared<SourceLiterals>();
+      literals->try_emplace(id, type, decimal);
     }
   } else if (expr.kind == K::Call)
     result = call(expr, depth);

@@ -452,8 +452,12 @@ math fn caller(x:bool)->bool { return relay(x); }
     BodySummaryCache cache;
     auto body = inputs(1);
     body->parameterizedSummary = true;
-    body->domainBindings.push_back(
-        {DomainBinding::Kind::Parameter, boolean, {}, {}, 0, 0});
+    body->descriptorBindings.push_back({DescriptorBinding::Kind::Parameter,
+                                        {DescriptorFamily::Finite, {boolean}},
+                                        {},
+                                        {},
+                                        0,
+                                        0});
     body->scopedBindings.push_back({signature(2), 0, {}, {}, {}, {}, {}});
     body->results = {operation(
         *body,
@@ -481,8 +485,12 @@ math fn caller(x:bool)->bool { return relay(x); }
     BodySummaryCache cache;
     auto body = inputs(2);
     body->parameterizedSummary = true;
-    body->domainBindings.push_back(
-        {DomainBinding::Kind::Range, boolean, {{0}, {1}}, {}, 0, {}});
+    body->descriptorBindings.push_back({DescriptorBinding::Kind::Range,
+                                        {DescriptorFamily::Finite, {boolean}},
+                                        {{0}, {1}},
+                                        {},
+                                        0,
+                                        {}});
     body->scopedBindings.push_back({signature(), 0, {}, {}, {}, {}, {}});
     body->scopedBindings.push_back({signature(), 1, {}, {}, {}, {}, {}});
     body->results = {operation(
@@ -539,8 +547,13 @@ math fn caller(x:bool)->bool { return relay(x); }
         BodySummaryCache cache;
         auto outerBody = inputs(2);
         outerBody->parameterizedSummary = true;
-        outerBody->domainBindings.push_back(
-            {DomainBinding::Kind::Parameter, boolean, {}, {}, 0, 0});
+        outerBody->descriptorBindings.push_back(
+            {DescriptorBinding::Kind::Parameter,
+             {DescriptorFamily::Finite, {boolean}},
+             {},
+             {},
+             0,
+             0});
         outerBody->scopedBindings.push_back(
             {signature(2), 0, {}, {}, {}, {}, {}});
         outerBody->results = {operation(
@@ -549,7 +562,7 @@ math fn caller(x:bool)->bool { return relay(x); }
             {})};
         auto outer = computation(outerBody);
         outer->scopedCaptures = {0};
-        outer->domainCaptures = {0};
+        outer->descriptorCaptures = {0};
         auto stepBody = inputs(3);
         stepBody->results = {operation(
             *stepBody,

@@ -43,14 +43,14 @@ public:
                   syntax.scopedBindings.size());
       syntax.scopedBindings.push_back(*id);
     }
-    for (auto &port : decl.domainInputs) {
+    for (auto &port : decl.descriptorInputs) {
       auto id = bind(port.name, port.span, false, false, true);
       if (!id)
         return false;
       syntax.bindings[id->index].domain = true;
       inputOrigin(*id, Declaration::InputSlot::Kind::Domain,
-                  syntax.domainBindings.size());
-      syntax.domainBindings.push_back(*id);
+                  syntax.descriptorBindings.size());
+      syntax.descriptorBindings.push_back(*id);
     }
     if (syntax.oracleDefinition) {
       const auto &port = syntax.oracleDefinition->queryParameter;
@@ -247,7 +247,17 @@ private:
     if (!bounded(depth, expr.span))
       return false;
     if (expr.kind == Expression::Kind::Name) {
-      expr.binding = lookup(expr.text, expr.span);
+      auto found = names.find(expr.text);
+      // Unbound names can be exact declaration references only when the
+      // expected argument category admits them. Runtime checking still refuses
+      // them; lexical names always retain precedence and their read inventory.
+      if (found == names.end())
+        return true;
+      expr.binding = found->second;
+      if (!expr.arguments.empty() || !expr.staticLabels.empty())
+        return fail("source.static-argument",
+                    "lexical bindings do not accept static arguments",
+                    expr.span);
       return expr.binding &&
              use(LexicalReference::Access::Read,
                  {LexicalNode::Kind::Expression, id}, *expr.binding, expr.span);

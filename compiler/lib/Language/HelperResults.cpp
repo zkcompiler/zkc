@@ -70,11 +70,15 @@ class HelperResults::Extraction {
               false};
     return axis == 0 ? result.shape : ResultShape{};
   }
-  unsigned domain(const DomainBinding &node, ArrayRef<ValueId> operands,
+  unsigned domain(const DescriptorBinding &node, ArrayRef<ValueId> operands,
                   ArrayRef<unsigned> children, unsigned depth) {
     if (pending || !enter(depth))
       return 0;
-    if (node.kind == DomainBinding::Kind::Application) {
+    if (!finiteDescriptorItem(node.contract))
+      return remember({});
+    if (!types.chargeContract(node.contract, span))
+      return 0;
+    if (node.kind == DescriptorBinding::Kind::Application) {
       if (!node.factory ||
           node.factory->declaration.index >= reader.declarations.size())
         return remember({});
@@ -86,16 +90,16 @@ class HelperResults::Extraction {
       if (auto found = factories.find(key); found != factories.end())
         return found->second;
       const auto &callee = reader.declarations[index];
-      if (callee.abstract || !callee.domainDefinition)
+      if (callee.abstract || !callee.descriptorDefinition)
         return remember({});
-      const auto &recipe = *callee.domainDefinition;
+      const auto &recipe = *callee.descriptorDefinition;
       auto result = domains(recipe.bindings, recipe.result, operands, children,
                             depth + 1);
       if (!pending && !types.diagnostic)
         factories.emplace(std::move(key), result);
       return result;
     }
-    DomainBinding mapped = node;
+    DescriptorBinding mapped = node;
     mapped.operands = operands.vec();
     auto view = cardinalityNode(mapped);
     if (view.kind == facts::DomainKind::Zip)
@@ -130,7 +134,7 @@ class HelperResults::Extraction {
     }
     return remember(std::move(result));
   }
-  unsigned domains(ArrayRef<DomainBinding> nodes, unsigned selected,
+  unsigned domains(ArrayRef<DescriptorBinding> nodes, unsigned selected,
                    ArrayRef<ValueId> data, ArrayRef<unsigned> parameters,
                    unsigned depth) {
     if (!enter(depth) || !types.charge(nodes.size(), span))
@@ -161,12 +165,12 @@ class HelperResults::Extraction {
         operands.push_back(data[operand.index]);
       }
       for (auto child : node.children) {
-        if (child >= nested.size()) {
+        if (child.node >= nested.size()) {
           types.fail("source.scoped-domain",
                      "helper domain child coverage differs", span);
           return 0;
         }
-        children.push_back(nested[child]);
+        children.push_back(nested[child.node]);
       }
       nested.push_back(domain(node, operands, children, depth + 1));
     }
@@ -177,12 +181,12 @@ class HelperResults::Extraction {
       return 0;
     if (auto found = bodyDomains.find(selected); found != bodyDomains.end())
       return found->second;
-    if (selected >= body.domainBindings.size()) {
+    if (selected >= body.descriptorBindings.size()) {
       types.fail("source.scoped-domain", "helper domain is outside its body",
                  span);
       return 0;
     }
-    const auto &node = body.domainBindings[selected];
+    const auto &node = body.descriptorBindings[selected];
     unsigned result;
     if (node.parameter) {
       result = remember({{}, 0, *node.parameter, {}, false});
@@ -191,7 +195,7 @@ class HelperResults::Extraction {
       for (auto child : node.children) {
         if (pending || types.diagnostic)
           return 0;
-        children.push_back(bodyDomain(child, depth + 1));
+        children.push_back(bodyDomain(child.node, depth + 1));
       }
       result = domain(node, node.operands, children, depth + 1);
     }
@@ -239,13 +243,13 @@ class HelperResults::Extraction {
                      : nested->shape.axis == 0 ? actual.shape
                                                : ResultShape{};
     } else if (nested->shape.domain) {
-      if (*nested->shape.domain >= call.domainArguments.size()) {
+      if (*nested->shape.domain >= call.descriptorArguments.size()) {
         types.fail("source.scoped-domain",
                    "helper result domain coverage differs", span);
         return {};
       }
       result.shape =
-          shapes[bodyDomain(call.domainArguments[*nested->shape.domain])];
+          shapes[bodyDomain(call.descriptorArguments[*nested->shape.domain])];
     } else {
       result.shape = nested->shape;
     }
@@ -278,7 +282,7 @@ class HelperResults::Extraction {
                finite->domain) {
       result.shape =
           shapes[domains(finite->domain->nodes, finite->domain->result,
-                         finite->domainOperands, {}, 0)];
+                         finite->descriptorOperands, {}, 0)];
       if (finite->predicate)
         filter(result.shape);
     }

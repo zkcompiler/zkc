@@ -50,6 +50,8 @@ std::string operatorBindingKey(const OperatorBinding &binding,
   if (binding.notation &&
       binding.notation->position == NotationDescriptor::Position::Reduction)
     frame(key, binding.filtered ? "filtered" : "unfiltered");
+  if (binding.filteredOnly)
+    frame(key, "filtered-only");
   if (binding.filtered) {
     referenceKey(binding.filtered->target.reference);
     frame(
@@ -117,6 +119,14 @@ Checker::operatorBinding(const Declaration &context,
                source.span, {callee.span});
     return {};
   }
+  if (notation.position == Position::Index &&
+      sources[context.id.index]->layoutSyntax &&
+      callee.kind != Declaration::Kind::Math) {
+    types.fail("source.index-target",
+               "layout indexing requires a total mathematical callable",
+               source.span, {callee.span});
+    return {};
+  }
   if (notation.position == Position::Infix && notation.symbol == "==" &&
       callee.outputs.front().type != Type{}) {
     types.fail("source.operator", "equality operators require a Boolean result",
@@ -177,7 +187,8 @@ Checker::operatorBinding(const Declaration &context,
   if (types.diagnostic)
     return {};
   if (notation.position == Position::Reduction &&
-      !checkFiniteReductionTarget(types, callee, filtered, source.span))
+      !checkFiniteReductionTarget(types, callee,
+                                  filtered || source.filteredOnly, source.span))
     return {};
   if (source.filtered) {
     if (notation.position != Position::Reduction || filtered) {
@@ -237,12 +248,17 @@ Checker::operatorBinding(const Declaration &context,
         !(body.allowance == filteredBody.allowance) ||
         callee.scopedInputs[0].itemOrigins !=
             other.scopedInputs[1].itemOrigins ||
-        !same(callee.domainInputs[0].item, other.domainInputs[0].item) ||
+        !same(descriptorType(callee.descriptorInputs[0].contract),
+              descriptorType(other.descriptorInputs[0].contract)) ||
         !same(body.result, filteredBody.result) ||
         !same(callee.outputs[0].type, other.outputs[0].type))
       return refuse();
     result.filtered =
         BoundNotationTarget{resolved->target, std::move(resolved->arguments)};
+  }
+  if (source.filteredOnly) {
+    result.filteredOnly = true;
+    result.filtered = BoundNotationTarget{result.target, result.arguments};
   }
   return result;
 }
@@ -277,6 +293,7 @@ Checker::operatorCandidates(const Declaration &decl,
   }
   const auto descriptorKey = expr.notation->key();
   std::vector<OperatorBinding> result;
+  bool shadows = false;
   auto include = [&](const OperatorBinding &binding) {
     if (!binding.notation)
       return types.fail("source.operator", "notation binding has no descriptor",
@@ -290,6 +307,10 @@ Checker::operatorCandidates(const Declaration &decl,
     if (*binding.notation != *expr.notation || binding.symbol != symbol)
       return types.fail("source.operator", "notation binding shape differs",
                         expr.span, {binding.span});
+    shadows = true;
+    if ((binding.filteredOnly && !expr.filteredReduction) ||
+        (expr.filteredReduction && !binding.filtered))
+      return true;
     result.push_back(binding);
     return true;
   };
@@ -306,10 +327,10 @@ Checker::operatorCandidates(const Declaration &decl,
     for (const auto &binding : bindings)
       if (!include(binding))
         return {};
-    if (!result.empty())
+    if (shadows)
       break;
   }
-  if (result.empty()) {
+  if (!shadows) {
     if (!types.charge(visibleOperators[decl.module.index].size() + 1,
                       expr.span))
       return {};

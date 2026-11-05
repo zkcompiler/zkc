@@ -16,9 +16,10 @@ bool checkFiniteContracts(Semantics &, llvm::ArrayRef<Declaration>,
 /// Propagate requirements through a closed helper graph. Callees must already
 /// carry their checked requirements. Residual facts may mention only immutable
 /// mathematical input places; entry execution never acquires assumptions.
-std::optional<std::vector<DataPrecondition>>
-deriveDataPreconditions(Semantics &, llvm::ArrayRef<Declaration>,
-                        const Declaration &, const Body &,
-                        bool allowAdditional);
+/// Root assumptions are supplied separately so replay can borrow the candidate
+/// declaration without trusting its derived preconditions or copying its body.
+std::optional<std::vector<DataPrecondition>> deriveDataPreconditions(
+    Semantics &, llvm::ArrayRef<Declaration>, const Declaration &, const Body &,
+    llvm::ArrayRef<DataPrecondition> rootAssumptions, bool allowAdditional);
 } // namespace zkc::language::detail
 #endif

@@ -12,6 +12,8 @@ ResolutionCategory category(const Declaration &decl) {
     return ResolutionCategory::Module;
   case K::Interface:
     return ResolutionCategory::Interface;
+  case K::Requirement:
+    return ResolutionCategory::ConsumerRequirement;
   case K::Domain:
     return ResolutionCategory::Domain;
   case K::Record:
@@ -23,7 +25,7 @@ ResolutionCategory category(const Declaration &decl) {
   case K::Local:
   case K::Protocol:
   case K::Oracle:
-  case K::DomainFunction:
+  case K::View:
   case K::EntryFunction:
     return ResolutionCategory::Callable;
   default:
@@ -410,8 +412,9 @@ std::optional<DeclarationId> DeclarationIndex::home(const Type &type) const {
   // handle's head is its frontend constructor row. Domain names of field/group
   // types and printed aliases are never home lookup keys.
   StringRef head = type.kind == Type::Kind::Builtin ? StringRef(type.domain)
-                   : isOracleHandle(type)           ? oracleConstructor(type)
-                                                    : StringRef{};
+                   : isOracleHandle(type) || isDescriptor(type)
+                       ? frontendTypeConstructor(type)
+                       : StringRef{};
   auto at = constructorHomes.find(head.str());
   return at == constructorHomes.end() ? std::nullopt
                                       : std::optional(at->second);

@@ -67,6 +67,9 @@ struct SyntaxOperator {
   bool explicitNotation = false;
   std::vector<std::string> holes;
   std::optional<SyntaxType> filtered;
+  /// A layout template may authorize only the predicate-bearing form.
+  bool filteredOnly = false;
+  std::optional<std::string> reductionBinder;
 };
 struct BoundNotationTarget {
   CallableReference target;
@@ -82,6 +85,8 @@ struct OperatorBinding {
   /// The module whose declaration or body introduces this binding. A use
   /// records it as the provider of its notation route.
   DeclarationId module = {};
+  /// Preserve the written form independently of a legacy paired binding.
+  bool filteredOnly = false;
 };
 using NotationFamilies = std::map<uint32_t, std::vector<OperatorBinding>>;
 struct SyntaxSelector {
@@ -366,6 +371,7 @@ struct Import {
   std::optional<std::string> alias;
   bool explicitAlias = false;
   std::vector<std::string> operators, notations, reductions;
+  std::vector<std::string> notationSelectors;
   bool isPublic = false, indexing = false;
   std::optional<ResolvedReference> reference;
   ReferenceSite referenceSite = std::make_shared<ReferenceNode>();
@@ -418,13 +424,14 @@ struct SyntaxDeclaration {
   bool assetDomain = false;
   std::optional<std::string> primitive;
   std::optional<std::string> domainConstructor, finiteDefinition;
-  std::optional<SyntaxType> domainResult;
+  std::optional<SyntaxType> descriptorResult;
   bool isPublic = false;
   bool explicitPublic = false;
   bool completes = false;
   Span span;
   std::vector<std::string> roles;
-  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs, domainInputs;
+  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs,
+      descriptorInputs;
   std::vector<SyntaxOracleShape> oracleShapes;
   std::optional<SyntaxOracleDefinition> oracleDefinition;
   bool oraclePredicate = false;
@@ -439,7 +446,7 @@ struct SyntaxDeclaration {
   // Resolved lexical identities are private elaboration data, never serialized.
   std::vector<Binding> bindings;
   std::vector<BindingId> inputBindings, serviceBindings, scopedBindings,
-      domainBindings;
+      descriptorBindings;
   bool resolved = false;
   bool elaborated = false;
   std::vector<SyntaxParameter> parameters;

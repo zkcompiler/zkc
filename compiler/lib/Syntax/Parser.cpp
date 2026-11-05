@@ -306,6 +306,33 @@ class Parser {
             make(Kind::Else, first, {suite(SuiteKind::Statements)}));
       }
       left = make(matching ? Kind::Match : Kind::If, begin, parts);
+    } else if (at("fn") || (at("local") && text(1) == "fn")) {
+      bool local = take("local");
+      expect("fn");
+      std::vector<NodeId> parts{list(Kind::Parameters, "(", ")", true)};
+      if (take("=>")) {
+        if (local)
+          error(
+              "syntax.scoped",
+              "callback literals take their mode from the receiving signature");
+        parts.push_back(expression());
+        left = make(Kind::Lambda, begin, parts);
+      } else {
+        expect("->");
+        parts.push_back(expression());
+        if (take("effects"))
+          parts.push_back(list(Kind::Effects, "(", ")"));
+        if (take("where")) {
+          auto first = mark();
+          std::vector<NodeId> conditions{expression()};
+          while (at(",") && text(1) == "item_from" && text(2) == "(") {
+            advance();
+            conditions.push_back(expression());
+          }
+          parts.push_back(make(Kind::Where, first, conditions));
+        }
+        left = make(Kind::FunctionType, begin, parts);
+      }
     } else if (prefix) {
       unsigned power = prefix->precedence;
       if (minimum > power)
@@ -321,18 +348,6 @@ class Parser {
       expect(",");
       children.push_back(expression());
       left = make(Kind::Quantifier, begin, children);
-    } else if (at("|") && token(1).kind == TokenKind::Word &&
-               (text(2) == "," ||
-                (text(2) == "|" && (token(3).kind == TokenKind::Word ||
-                                    token(3).kind == TokenKind::Number ||
-                                    text(3) == "(" || text(3) == "[")))) {
-      advance();
-      std::vector<NodeId> children{name(false)};
-      while (take(","))
-        children.push_back(name(false));
-      expect("|");
-      children.push_back(expression());
-      left = make(Kind::Lambda, begin, children);
     } else if (take("|")) {
       auto value = expression();
       expect("|");
@@ -681,120 +696,143 @@ class Parser {
     return make(kind, begin, children);
   }
   NodeId notationDeclaration(uint32_t begin) {
-    auto form = text();
-    advance();
+    expect("notation");
+    using P = NotationDescriptor::Position;
+    using A = NotationDescriptor::Association;
+    NotationDescriptor descriptor;
     std::vector<NodeId> children;
     std::vector<std::string> holes;
-    NotationDescriptor descriptor;
-    bool explicitFixity = false;
     auto hole = [&] {
       auto value = text().str();
+      if (!at(TokenKind::Word) || value == "_")
+        error("syntax.notation", "expected a named notation hole");
       children.push_back(name(false));
-      if (std::find(holes.begin(), holes.end(), value) != holes.end())
+      if (llvm::is_contained(holes, value))
         error("syntax.notation", "notation holes must be distinct");
       holes.push_back(std::move(value));
       if (holes.size() > 64)
         work.exhaust(token().begin);
     };
-    if (form == "operator") {
-      if (at("infixl") || at("infixr") || at("infix") || at("prefix") ||
-          at("postfix")) {
-        explicitFixity = true;
-        using P = NotationDescriptor::Position;
-        using A = NotationDescriptor::Association;
-        descriptor.position = at("prefix")    ? P::Prefix
-                              : at("postfix") ? P::Postfix
-                                              : P::Infix;
-        descriptor.association = at("infixl")   ? A::Left
-                                 : at("infixr") ? A::Right
-                                                : A::None;
-        descriptor.arity = descriptor.position == P::Infix ? 2 : 1;
-        children.push_back(name(false));
-        expect("(");
-        auto first = mark();
-        unsigned precedence = 0;
-        if (!at(TokenKind::Number) || text().getAsInteger(10, precedence) ||
-            !precedence || precedence > 99)
-          error("syntax.notation",
-                "operator precedence must be from 1 through 99");
-        if (!boundary())
-          advance();
-        children.push_back(make(Kind::Literal, first));
-        descriptor.precedence = precedence;
-        expect(")");
-      }
-    }
-    if (form == "indexing") {
+    auto symbol = [&] {
+      descriptor.symbol = text().str();
+      if (!boundary())
+        advance();
+    };
+    if (at("infixl") || at("infixr") || at("infix") || at("prefix") ||
+        at("postfix")) {
+      descriptor.position = at("prefix")    ? P::Prefix
+                            : at("postfix") ? P::Postfix
+                                            : P::Infix;
+      descriptor.association = at("infixl")   ? A::Left
+                               : at("infixr") ? A::Right
+                                              : A::None;
+      advance();
+      expect("(");
+      if (!at(TokenKind::Number) ||
+          text().getAsInteger(10, descriptor.precedence))
+        error("syntax.notation", "notation requires an integer precedence");
+      if (!boundary())
+        advance();
+      expect(")");
+      if (descriptor.position != P::Prefix)
+        hole();
+      symbol();
+      if (descriptor.position != P::Postfix)
+        hole();
+      descriptor.arity = holes.size();
+    } else if (at(TokenKind::Word) && text(1) == "[") {
+      descriptor.position = P::Index;
+      descriptor.symbol = "[]";
+      descriptor.closing = "]";
+      descriptor.precedence = 100;
       hole();
       expect("[");
       hole();
       while (take(","))
         hole();
       expect("]");
-    } else if (form == "notation") {
+      descriptor.arity = holes.size();
+    } else {
       auto scalar = source::decodeSourceScalar(text(), 0);
       auto close = scalar ? source::matchingSourceDelimiter(scalar->value)
                           : std::nullopt;
-      if (!close)
-        error("syntax.notation", "expected a paired Unicode delimiter");
-      if (!boundary())
-        advance();
-      hole();
-      while (take(","))
+      symbol();
+      if (close) {
+        descriptor.position = P::Delimited;
+        descriptor.precedence = 100;
         hole();
-      auto closing = source::decodeSourceScalar(text(), 0);
-      if (!closing || !close || closing->value != *close)
-        error("syntax.notation", "notation requires the matching closer");
-      if (!boundary())
-        advance();
-    } else {
-      descriptor.symbol = text().str();
-      if (form == "reduction") {
-        descriptor.position = NotationDescriptor::Position::Reduction;
+        while (take(","))
+          hole();
+        descriptor.closing = text().str();
+        auto closing = source::decodeSourceScalar(text(), 0);
+        if (!closing || closing->value != *close)
+          error("syntax.notation", "notation requires the matching closer");
+        if (!boundary())
+          advance();
+        descriptor.arity = holes.size();
+      } else {
+        descriptor.position = P::Reduction;
         descriptor.precedence = 67;
         descriptor.arity = 2;
-        explicitFixity = true;
+        hole(); // The binder is not an evaluated operand.
+        expect("∈");
+        hole();
+        if (take("with")) {
+          hole();
+        }
+        expect(",");
+        hole();
       }
-      auto scalar = source::decodeSourceScalar(text(), 0);
-      bool custom =
-          scalar && scalar->bytes == text().size() && scalar->value > 127 &&
-          source::isMathematicalSymbol(scalar->value) && text() != "∑" &&
-          text() != "∏" && text() != "∈" && text() != "∀" && text() != "∃";
-      bool fixed = llvm::any_of(defaultNotations(), [&](const auto &notation) {
-        return notation.symbol == text();
-      });
-      if ((explicitFixity && !validNotationDescriptor(descriptor)) ||
-          (!explicitFixity && !custom && !fixed))
-        error("syntax.notation", "invalid operator symbol or fixed syntax");
-      if (!boundary())
-        advance();
     }
+    if (!validNotationDescriptor(descriptor))
+      error("syntax.notation", "invalid bounded notation descriptor");
     expect("=");
-    // Capture the exact callable target and optional static arguments. A
-    // descriptor's shape never depends on the callable's eventual type.
     auto targetBegin = mark();
     auto target = name();
-    if (at("<")) {
-      auto args = list(Kind::Parameters, "<", ">");
-      target = make(Kind::StaticApply, targetBegin, {target, args});
+    while (!end()) {
+      if (at("<")) {
+        auto args = list(Kind::Parameters, "<", ">");
+        target = make(Kind::StaticApply, targetBegin, {target, args});
+      } else if (take("::")) {
+        auto member = name(false);
+        target = make(Kind::Projection, targetBegin, {target, member});
+      } else
+        break;
     }
     children.push_back(target);
-    if (form == "reduction" && take(","))
-      children.push_back(expression(100));
-    if (!holes.empty()) {
-      expect("(");
-      for (size_t i = 0; i < holes.size(); ++i) {
-        if (i)
-          expect(",");
-        if (!take(holes[i])) {
-          error("syntax.notation",
-                "notation must use every hole once in written order");
-          if (!boundary())
-            advance();
-        }
+    auto templateToken = [&](StringRef value) {
+      if (!take(value))
+        error("syntax.notation",
+              "expected " + value.str() + " in notation template");
+    };
+    templateToken("(");
+    auto use = [&](StringRef expected) {
+      if (!take(expected)) {
+        error("syntax.notation",
+              "notation must use every hole once in written order");
+        if (!boundary())
+          advance();
       }
-      expect(")");
+    };
+    if (descriptor.position == P::Reduction) {
+      use(holes[1]);
+      for (unsigned i = 2; i < holes.size(); ++i) {
+        templateToken(",");
+        templateToken("fn");
+        templateToken("(");
+        use(holes[0]);
+        templateToken(")");
+        templateToken("=>");
+        use(holes[i]);
+      }
+    } else {
+      for (unsigned i = 0; i < holes.size(); ++i) {
+        if (i)
+          templateToken(",");
+        use(holes[i]);
+      }
     }
+    templateToken(")");
     lineEnd();
     return make(Kind::Notation, begin, children);
   }
@@ -806,18 +844,35 @@ class Parser {
       missing("nonempty import list");
     while (!end() && !at("}")) {
       auto first = mark();
-      if ((at("operator") || at("reduction") || at("notation")) &&
-          text(1) != "," && text(1) != "}" && text(1) != "::") {
-        advance();
-        if (at(TokenKind::Punctuation))
-          advance();
-        else
-          missing("notation symbol");
+      if (take("notation")) {
+        if (take("index")) {
+          expect("(");
+          if (!take(TokenKind::Number))
+            missing("index arity");
+          expect(")");
+        } else {
+          if (!take("prefix") && !take("infix") && !take("postfix"))
+            missing("notation position");
+          if (!boundary())
+            advance();
+        }
         children.push_back(make(Kind::ImportSelector, first));
-      } else if (at("indexing") && text(1) == "[") {
-        advance();
-        expect("[");
+      } else if (take("[")) {
         expect("]");
+        children.push_back(make(Kind::ImportSelector, first));
+      } else if (at(TokenKind::Punctuation)) {
+        auto scalar = source::decodeSourceScalar(text(), 0);
+        auto close = scalar ? source::matchingSourceDelimiter(scalar->value)
+                            : std::nullopt;
+        advance();
+        if (close) {
+          auto closing = source::decodeSourceScalar(text(), 0);
+          if (!closing || closing->value != *close)
+            error("syntax.notation",
+                  "import requires a matching delimiter pair");
+          if (!boundary())
+            advance();
+        }
         children.push_back(make(Kind::ImportSelector, first));
       } else
         children.push_back(name());
@@ -844,7 +899,7 @@ class Parser {
       return attribute();
     bool visible = take("pub");
     auto keyword = text();
-    if (at("operator") || at("notation") || at("indexing") || at("reduction"))
+    if (at("notation"))
       return notationDeclaration(begin);
     if (keyword == "law")
       return contract(SuiteKind::Contract);
@@ -917,7 +972,8 @@ class Parser {
       kind = Kind::OracleDefinition;
       bodyKind = SuiteKind::Oracle;
       needsSuite = true;
-    } else if (take("local") || take("ghost") || take("entry")) {
+    } else if (take("local") || take("ghost") || take("entry") ||
+               take("view")) {
       expect("def");
       kind = Kind::Definition;
     } else if (take("def"))
@@ -967,7 +1023,10 @@ class Parser {
       auto first = mark();
       children.push_back(make(Kind::Where, first, {expression()}));
     }
-    if (take(":")) {
+    if (kind == Kind::Definition && take("=")) {
+      children.push_back(expression());
+      lineEnd();
+    } else if (take(":")) {
       auto body = suite(bodyKind, bodyKind == SuiteKind::Statements ||
                                       bodyKind == SuiteKind::Oracle);
       children.push_back(body);

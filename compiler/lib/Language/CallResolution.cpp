@@ -36,7 +36,8 @@ resolveHomeMethod(Semantics &types, ArrayRef<Declaration> declarations,
       return {};
     const auto &candidate = declarations[id.index];
     if (candidate.name != name || candidate.abstract ||
-        (candidate.kind != Declaration::Kind::Math &&
+        (candidate.kind != Declaration::Kind::View &&
+         candidate.kind != Declaration::Kind::Math &&
          candidate.kind != Declaration::Kind::Local &&
          candidate.kind != Declaration::Kind::Protocol) ||
         candidate.inputs.empty() ||
@@ -107,8 +108,11 @@ bool Checker::domainExpression(const Declaration &decl,
     return false;
   // Classification only: the call records its route when it is checked.
   auto target = callable(decl, expr.text, expr.span, false);
-  return target && output.declarations[target->declaration.index].kind ==
-                       Declaration::Kind::DomainFunction;
+  return target &&
+         output.declarations[target->declaration.index].kind ==
+             Declaration::Kind::View &&
+         output.declarations[target->declaration.index]
+             .descriptorResult.has_value();
 }
 std::optional<CallableReference> Checker::callable(const Declaration &decl,
                                                    StringRef name, Span span,
