@@ -12,6 +12,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/SourceTerms.h"
+#include "zkc/Support/Refusal.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -1623,11 +1624,18 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                              types.work.remaining(), [&](uint64_t amount) {
                                return types.work.charge(amount, decl.span);
                              });
-        if (!encoded) {
-          consumeError(encoded.takeError());
-          return types.fail("source.relation",
-                            "opaque static argument is not closed", decl.span);
-        }
+        if (!encoded)
+          return types.accept(
+              handleErrors(
+                  encoded.takeError(),
+                  [&](const Refusal &error) -> Error {
+                    if (error.code == "source.static-term")
+                      return failure("source.relation",
+                                     "opaque static argument is not closed",
+                                     decl.span);
+                    return make_error<Refusal>(error.code, error.detail);
+                  }),
+              decl.span);
         arguments.push_back(std::move(*encoded));
       }
       std::string canonical;

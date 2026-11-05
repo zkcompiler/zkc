@@ -397,6 +397,7 @@ add_zkc_test(language_specification_ir CpuTarget language-specification-ir)
 mlir_target_link_libraries(zkc-language_specification_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_natural Language language-natural)
 add_zkc_test(language_semantic_budget Language language-semantic-budget)
+add_zkc_test(language_opaque_export Language language-opaque-export)
 add_zkc_test(language_snapshot_metadata Language language-snapshot-metadata)
 add_zkc_test(language_layout_reuse Language language-layout-reuse)
 target_compile_definitions(zkc-language_layout_reuse-test PRIVATE
