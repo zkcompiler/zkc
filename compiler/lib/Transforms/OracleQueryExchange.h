@@ -39,10 +39,19 @@ struct OracleExchangeRecipe : OracleHelperSignature {
 llvm::Expected<OracleQueryExchange> planOracleQueryExchange(
     const OracleAnchorStorage &, const OracleQueryController &receiver,
     const OracleQueryController &holder, llvm::ArrayRef<OracleMerkleFunctions>);
+struct OracleNativeWork;
+llvm::Expected<OracleQueryExchange> planOracleQueryExchangeWithWork(
+    const OracleAnchorStorage &, const OracleQueryController &,
+    const OracleQueryController &, llvm::ArrayRef<OracleMerkleFunctions>,
+    OracleNativeWork &);
 mlir::func::FuncOp emitOracleQueryExchange(mlir::ModuleOp,
                                            const OracleExchangeRecipe &);
 class OracleVerificationContext;
 bool checkOracleQueryExchange(const OracleVerificationContext &,
                               mlir::func::FuncOp, const OracleExchangeRecipe &);
+struct OracleNativeWork;
+llvm::Expected<mlir::func::FuncOp>
+emitOracleQueryExchangeWithWork(mlir::ModuleOp, const OracleExchangeRecipe &,
+                                OracleNativeWork &);
 } // namespace zkc::protocol
 #endif

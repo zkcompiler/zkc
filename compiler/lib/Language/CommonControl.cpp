@@ -105,8 +105,8 @@ struct CommonInstance {
   std::vector<CommonLoop> loops;
   std::vector<CommonDemand> demands;
   unsigned operands = 0, callHeight = 1, regionHeight = 1;
-  // Recurrence subjects and newly produced unknown values belong to a call
-  // occurrence. Propagate this conservatively through every retained edge,
+  // Recurrence subjects, exchanges and newly produced unknown values belong
+  // to a call occurrence. Propagate this through every retained edge,
   // including unused results and dormant regions.
   bool fresh = false;
 };
@@ -252,7 +252,7 @@ class Requirements {
                    constantCount, std::move(statics)});
   }
   Node unknown(const Type &type) {
-    // Unknown is not a total expression: Local, received and service results
+    // Unknown is not a total expression: Local and service results
     // must not acquire a shared identity merely because their inputs match.
     // Forwarding an existing unknown formal does not mint a new occurrence.
     if (building)
@@ -1479,8 +1479,6 @@ class Requirements {
     }
     if (value->kind == Provenance::Kind::Inactive)
       return node(value->kind, type, value->identity);
-    if (value->kind == Provenance::Kind::Unknown)
-      return unknown(type);
     return node(Provenance::Kind::Total, type, "field:" + std::to_string(index),
                 {value});
   }
@@ -1525,8 +1523,6 @@ class Requirements {
     }
     if (value->kind == Provenance::Kind::Inactive)
       return node(value->kind, type, value->identity);
-    if (value->kind == Provenance::Kind::Unknown)
-      return unknown(type);
     return node(Provenance::Kind::Total, type,
                 "payload:" + std::to_string(alternative) + ":" +
                     std::to_string(index),
@@ -1559,8 +1555,7 @@ class Requirements {
       return selection(value->type, value->identity, std::move(children), span,
                        depth);
     }
-    if (value->kind == Provenance::Kind::Unknown ||
-        value->kind == Provenance::Kind::Inactive)
+    if (value->kind == Provenance::Kind::Inactive)
       return value;
     return node(Provenance::Kind::Total, value->type,
                 tagOnly ? "tag" : "extent:" + std::to_string(*axis), {value});
@@ -1637,13 +1632,21 @@ class Requirements {
       return capacity(span, "common derivation depth exceeded");
     if (values.size() < 2)
       return true;
+    // An exchange forwards the actual sender's immutable subject. This can
+    // include an opaque Local/service result, but never equates two different
+    // opaque occurrences by their dependencies. Missing components are fresh
+    // unknowns and cannot satisfy this identity check.
+    if (llvm::all_of(
+            values, [&](const Node &value) { return value == values.front(); }))
+      return true;
     const auto &first = *values.front();
     for (const auto &value : values)
       if (value->kind == Provenance::Kind::Unknown ||
           value->type != first.type || value->tagOnly != first.tagOnly ||
           value->extentAxis != first.extentAxis)
-        return refuse(span, "shared control depends on Local, received, or "
-                            "otherwise unknown provenance");
+        return refuse(span,
+                      "shared control depends on Local, uncommunicated, or "
+                      "otherwise unknown provenance");
     if (llvm::all_of(values, [](const Node &value) {
           return value->kind == Provenance::Kind::Input;
         })) {
@@ -1882,6 +1885,17 @@ class Requirements {
           results.front()[role] = at(values[assembly->operands[i].index], role,
                                      valueTypes[op.results.front().index]);
         }
+      } else if (const auto *exchange = std::get_if<Exchange>(&op.action)) {
+        // Only the continuing result of this actual delivery gains the
+        // sender's subject. Do not rewrite the input's other components or
+        // grant a fact to a nonreceiver. Multicast is a sequence of these
+        // checked exchanges, with its existing partial-failure behavior.
+        if (building)
+          building->fresh = true;
+        auto sent = at(values[exchange->payload.index], roles[exchange->sender],
+                       valueTypes[exchange->payload.index]);
+        results.front()[roles[exchange->sender]] = sent;
+        results.front()[roles[exchange->receiver]] = std::move(sent);
       } else if (const auto *math = std::get_if<MathValue>(&op.action)) {
         std::string identity =
             "math:" + std::to_string(unsigned(math->identity)) + ":" +

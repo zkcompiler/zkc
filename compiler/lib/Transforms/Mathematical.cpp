@@ -3,6 +3,7 @@
 #include "MathematicalPreservation.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
+#include "OracleNativeCommon.h"
 #include "PreparationDialects.h"
 #include "PreparedProtocol.h"
 #include "ProtocolApplications.h"
@@ -1100,6 +1101,40 @@ OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate,
   return output;
 }
 
+OwningOpRef<ModuleOp>
+simplifyParticipant(ModuleOp source,
+                    protocol::OracleNativeWork *shared = nullptr) {
+  protocol::OracleNativeWork localWork;
+  auto &work = shared ? *shared : localWork;
+  // The inspection and the forthcoming mutable copy share one allowance.
+  for (unsigned pass = 0; pass < 2; ++pass)
+    if (auto e = protocol::boundOracleNativeIR(source, &work)) {
+      consumeError(std::move(e));
+      return {};
+    }
+  if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
+    return {};
+  auto original =
+      dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(source.getBody()->front());
+  if (!original ||
+      original.getProfile() != zkc::protocol_ir::Profile::Participant) {
+    diagnostics::emit(source.emitError(), "mathematical-simplification-profile",
+                      "expected the 'participant' profile");
+    return {};
+  }
+  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
+  auto unit =
+      cast<zkc::protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+  for (auto participant :
+       unit.getBody().front().getOps<zkc::protocol_ir::ParticipantOp>())
+    if (failed(simplifyCalculations(participant)))
+      return {};
+  if (failed(zkc::admitStage(*candidate)) ||
+      failed(verifyProjectionPreserved(source, *candidate)))
+    return {};
+  return candidate;
+}
+
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
   MathematicalPassOptions selection{*this};
@@ -1165,26 +1200,8 @@ struct SimplifyParticipantPass
   }
   void runOnOperation() final {
     auto source = getOperation();
-    if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
-      return signalPassFailure();
-    auto original =
-        dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(source.getBody()->front());
-    if (!original ||
-        original.getProfile() != zkc::protocol_ir::Profile::Participant) {
-      diagnostics::emit(source.emitError(),
-                        "mathematical-simplification-profile",
-                        "expected the 'participant' profile");
-      return signalPassFailure();
-    }
-    OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-    auto unit =
-        cast<zkc::protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
-    for (auto participant :
-         unit.getBody().front().getOps<zkc::protocol_ir::ParticipantOp>())
-      if (failed(simplifyCalculations(participant)))
-        return signalPassFailure();
-    if (failed(zkc::admitStage(*candidate)) ||
-        failed(verifyProjectionPreserved(source, *candidate)))
+    auto candidate = simplifyParticipant(source);
+    if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(candidate->getBodyRegion());
@@ -1436,6 +1453,22 @@ PreparedProtocol::projectOwned(OwningOpRef<ModuleOp> prepared, bool simplify,
           verifyAuthoredLocalsPreserved(&prepared->getBody()->front(), unit)))
     return {};
   return projectPrepared(*candidate, policy);
+}
+OwningOpRef<ModuleOp>
+PreparedProtocol::projectAssociated(ModuleOp candidate, bool simplify,
+                                    MathematicalSelectionPolicy policy) {
+  protocol::OracleNativeWork work;
+  // Charge inspection and copied declarations before projection. Its existing
+  // role-expansion bound additionally limits generated participant bodies.
+  for (unsigned pass = 0; pass < 2; ++pass)
+    if (auto e = protocol::boundOracleNativeIR(candidate, &work)) {
+      consumeError(std::move(e));
+      return {};
+    }
+  auto projected = projectPrepared(candidate, policy);
+  if (!projected || !simplify)
+    return projected;
+  return simplifyParticipant(*projected, &work);
 }
 } // namespace zkc::mathematical
 

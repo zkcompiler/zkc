@@ -1,3 +1,4 @@
+#include "../lib/Transforms/OraclePrivateComposite.h"
 #include "../lib/Transforms/OracleQueryBatch.h"
 #include "../lib/Transforms/OracleVerificationContext.h"
 #include "../lib/Transforms/RealizationEmission.h"
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <optional>
 
 using namespace mlir;
@@ -109,8 +111,9 @@ void checkModels(const Input &input, ModuleOp prepared) {
                                    root.exchange, root.response, root.window));
   }
 }
-Fixture emitted(MLIRContext &context, uint64_t capacity = 2,
-                bool emptyVirtual = false) {
+Fixture
+emitted(MLIRContext &context, uint64_t capacity = 2, bool emptyVirtual = false,
+        std::function<void(OraclePrivateComposite &, Input &)> extend = {}) {
   Fixture fixture;
   auto path =
       std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
@@ -161,40 +164,41 @@ module { "protocol.module"() ({
 )mlir");
   input.work.operations = 1000000;
   input.work.slots = 100000000;
-  input.holder = take(emitOracleQueryController(
-      *input.candidate, *fixture.prepared, input.storage, "P",
-      input.storage.constructors[0].kind, input.capacity, input.work,
+  auto composed = take(OraclePrivateComposite::create(
+      std::move(input.candidate), *fixture.prepared, std::move(input.work)));
+  input.holder = take(composed->controller(
+      input.storage, "P", input.storage.constructors[0].kind, input.capacity,
       OracleControllerAccess::Holder));
   input.merkle.resize(input.storage.constructors.size());
   for (auto [i, anchor] : enumerate(input.storage.constructors))
     if (anchor.constructor != OracleAnchorConstructor::Kind::Virtual)
-      input.merkle[i] = take(emitOracleMerkle(
-          *input.candidate, anchor.kind, anchor.scheme,
-          OracleLeafGrouping::Individual, OracleLeafOrder::Natural));
+      input.merkle[i] = take(composed->merkle(anchor.kind, anchor.scheme,
+                                              OracleLeafGrouping::Individual,
+                                              OracleLeafOrder::Natural));
   for (unsigned i = 0; i < 3; ++i) {
     Root root;
     root.kind = input.storage.constructors[i == 1 ? 1 : 0].kind;
-    root.controller = take(emitOracleQueryController(
-        *input.candidate, *fixture.prepared, input.storage, "V", root.kind,
-        input.capacity, input.work));
+    root.controller = take(
+        composed->controller(input.storage, "V", root.kind, input.capacity));
     root.exchange = take(planOracleQueryExchange(input.storage, root.controller,
                                                  input.holder, input.merkle));
-    root.response = take(
-        emitOracleQueryResponse(*input.candidate, root.exchange, input.work));
+    root.response = take(composed->response(root.exchange));
     root.demand =
-        take(emitOracleQueryDemand(*input.candidate, input.storage,
-                                   root.controller, root.kind, input.work));
-    root.window = take(emitOracleQueryWindow(
-        *input.candidate, root.controller, root.demand, root.exchange,
-        root.response, capacity, input.work));
+        take(composed->demand(input.storage, root.controller, root.kind));
+    root.window = take(composed->window(
+        root.controller, root.demand, root.exchange, root.response, capacity));
     input.entries.push_back(std::move(root));
   }
+  if (extend)
+    extend(*composed, input);
+  auto before = composed->primitiveCapacity();
+  input.batch = take(composed->batch(input.roots()));
+  auto finished = take(composed->finish());
+  input.candidate = std::move(finished.candidate);
+  input.work = std::move(finished.work);
   checkModels(input, *fixture.prepared);
-  auto before = input.work;
-  input.batch =
-      take(emitOracleQueryBatch(*input.candidate, input.roots(), input.work));
-  require(input.work.operations < before.operations &&
-              input.work.slots < before.slots,
+  require(input.work.operations < before.first &&
+              input.work.slots < before.second,
           "batch emission did not debit shared work");
   checked(checkBatch(input));
   require(print(*fixture.source) == frozenSource &&
@@ -464,19 +468,28 @@ int main() {
     effects(input);
   });
   cases.run("single-root and repeated emission use shared work", [&] {
-    auto input = copyInput(base, context);
+    OracleQueryBatch single, again;
+    auto built = emitted(
+        context, 2, false, [&](OraclePrivateComposite &composed, Input &input) {
+          auto roots = input.roots();
+          roots.resize(1);
+          auto before = composed.primitiveCapacity();
+          single = take(composed.batch(roots));
+          auto middle = composed.primitiveCapacity();
+          again = take(composed.batch(roots));
+          auto after = composed.primitiveCapacity();
+          require(
+              middle.first < before.first && middle.second < before.second &&
+                  after.first < middle.first && after.second < middle.second,
+              "repeated batches did not debit one shared allowance");
+        });
+    auto &input = built.input;
     auto roots = input.roots();
     roots.resize(1);
-    auto before = input.work;
-    auto single =
-        take(emitOracleQueryBatch(*input.candidate, roots, input.work));
-    auto again =
-        take(emitOracleQueryBatch(*input.candidate, roots, input.work));
     require(single.collect != again.collect &&
                 single.checkAvailable != again.checkAvailable &&
                 single.replay != again.replay &&
-                input.work.operations < before.operations &&
-                input.work.slots < before.slots,
+                input.work.operations < 1000000 && input.work.slots < 100000000,
             "batch reset work or reused helper names");
     auto current = take(OracleVerificationContext::read(*input.candidate));
     checked(checkOracleQueryBatch(current, roots, single));
@@ -494,14 +507,14 @@ int main() {
     checked(checkBatch(parsed));
   });
   cases.run("maximum window capacity composes without resetting work", [&] {
-    auto input = copyInput(base, context);
-    for (auto &root : input.entries)
-      root.window = take(emitOracleQueryWindow(
-          *input.candidate, root.controller, root.demand, root.exchange,
-          root.response, 1048575, input.work));
-    checkModels(input, *fixture->prepared);
-    input.batch =
-        take(emitOracleQueryBatch(*input.candidate, input.roots(), input.work));
+    auto built = emitted(
+        context, 2, false, [&](OraclePrivateComposite &composed, Input &input) {
+          for (auto &root : input.entries)
+            root.window =
+                take(composed.window(root.controller, root.demand,
+                                     root.exchange, root.response, 1048575));
+        });
+    auto &input = built.input;
     checked(checkBatch(input));
   });
 
@@ -763,7 +776,11 @@ int main() {
           SmallVector<OracleQueryBatchRoot> roots;
           for (const auto &entry : entries)
             roots.push_back({&entry.controller, &entry.demand, &entry.window});
-          auto work = input.work;
+          // Each malformed raw call owns its admission allowance. The
+          // previously completed composite already consumed its own budget.
+          OracleVirtualFunctionWork work;
+          work.operations = 1000000;
+          work.slots = 100000000;
           StringRef code = "oracle-batch-layout";
           if (test == 0 || test == 1) {
             roots.resize(test == 0 ? 0 : 33, roots[0]);
@@ -826,33 +843,48 @@ int main() {
     consumeError(current.takeError());
   });
   cases.run("batch root and aggregate widths refuse before construction", [&] {
-    auto input = copyInput(base, context);
+    OracleQueryBatch widest;
+    SmallVector<OracleQueryBatchRoot> roots;
+    unsigned admitted = 0;
+    auto built = emitted(
+        context, 2, false, [&](OraclePrivateComposite &composed, Input &input) {
+          auto first = input.roots()[0];
+          size_t stores = first.controller->stores.size();
+          // Collection and evaluation have separate widths.
+          admitted = std::min(
+              {size_t(32), size_t(511 - stores) / first.demand->state.size(),
+               size_t(509 - stores) / (first.controller->state.size() + 1),
+               size_t(511) / (first.demand->state.size() + 1)});
+          require(admitted > 0 && admitted <= 32,
+                  "test must reach the aggregate width boundary");
+          roots.assign(admitted, first);
+          widest = take(composed.batch(roots));
+        });
+    auto &input = built.input;
     auto first = input.roots()[0];
-    size_t stores = first.controller->stores.size();
-    // Demand collection and receiver evaluation have separate signatures.
-    // The receiver replay also carries the request/answer/cursor ports.
-    unsigned admitted =
-        std::min({size_t(32), size_t(511 - stores) / first.demand->state.size(),
-                  size_t(509 - stores) / (first.controller->state.size() + 1),
-                  size_t(511) / (first.demand->state.size() + 1)});
-    require(admitted > 0 && admitted <= 32,
-            "test must reach the aggregate width boundary");
-    SmallVector<OracleQueryBatchRoot> roots(admitted, first);
-    auto widest =
-        take(emitOracleQueryBatch(*input.candidate, roots, input.work));
+    roots.assign(admitted, first);
     auto current = take(OracleVerificationContext::read(*input.candidate));
     checked(checkOracleQueryBatch(current, roots, widest));
-    auto frozen = print(*input.candidate);
-    auto before = input.work;
+    // The boundary probes are independent raw calls over the same verified
+    // root model. Use the minimal admitted candidate so its unrelated wide
+    // helper inventory does not consume the capacity probe's allowance.
+    auto control = copyInput(base, context);
+    first = control.roots()[0];
+    roots.assign(admitted, first);
+    auto frozen = print(*control.candidate);
+    OracleVirtualFunctionWork controlWork;
+    controlWork.operations = 1000000;
+    controlWork.slots = 100000000;
+    auto before = controlWork;
     roots.push_back(first);
-    refuses(emitOracleQueryBatch(*input.candidate, roots, input.work),
+    refuses(emitOracleQueryBatch(*control.candidate, roots, controlWork),
             "oracle-batch-capacity");
     roots.resize(33, first);
-    refuses(emitOracleQueryBatch(*input.candidate, roots, input.work),
+    refuses(emitOracleQueryBatch(*control.candidate, roots, controlWork),
             "oracle-batch-capacity");
-    require(print(*input.candidate) == frozen &&
-                input.work.operations == before.operations &&
-                input.work.slots == before.slots,
+    require(print(*control.candidate) == frozen &&
+                controlWork.operations == before.operations &&
+                controlWork.slots == before.slots,
             "aggregate width refusal changed candidate or work");
   });
   return cases.result();

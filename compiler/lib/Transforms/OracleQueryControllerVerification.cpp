@@ -1,4 +1,5 @@
 #include "NativeBindingApplication.h"
+#include "OracleAccounting.h"
 #include "OracleQueryController.h"
 #include "OracleTableRead.h"
 #include "OracleVerificationContext.h"
@@ -33,6 +34,10 @@ Error layout(const OracleVerificationContext &targetContext,
       actual.constructors.size() > 512 || actual.continuations.size() > 512 ||
       actual.kinds.size() > 512)
     return refuse();
+  if (!targetContext.charge(64 + role.size() + actual.state.size() +
+                            actual.stores.size() + actual.constructors.size() +
+                            actual.continuations.size() + actual.kinds.size()))
+    return error("oracle-common-limit");
   uint64_t metadataRemaining = 4 * 1024 * 1024;
   if ((access != OracleControllerAccess::Available &&
        access != OracleControllerAccess::Holder) ||
@@ -45,7 +50,7 @@ Error layout(const OracleVerificationContext &targetContext,
   auto *context = targetContext.getModule().getContext();
   auto source = sourceContext.getUnit();
   auto program = dyn_cast_or_null<pir::MathematicalOp>(
-      SymbolTable::lookupSymbolIn(source, storage.entry));
+      sourceContext.getSymbols().getSymbolTable(source).lookup(storage.entry));
   if (!program ||
       !is_contained(program.getRoles(), StringAttr::get(context, role)))
     return refuse();
@@ -104,7 +109,8 @@ Error layout(const OracleVerificationContext &targetContext,
     stores.push_back(owner->sequence);
     if (constructor.constructor == OracleAnchorConstructor::Kind::Virtual) {
       auto original = dyn_cast_or_null<pir::OracleDefinitionOp>(
-          SymbolTable::lookupSymbolIn(source, constructor.declaration));
+          sourceContext.getSymbols().getSymbolTable(source).lookup(
+              constructor.declaration));
       if (!original)
         return refuse();
       if (auto e = checkOracleVirtualFunctions(targetContext, sourceContext,
@@ -131,7 +137,7 @@ Error layout(const OracleVerificationContext &targetContext,
         // whether a portable descriptor could encode this native carrier.
         uint64_t metadata = 128 + 2 * (storage.entry.size() + role.size()) +
                             8 * (4 + previous.size());
-        if (metadata > metadataRemaining)
+        if (metadata > metadataRemaining || !targetContext.charge(metadata))
           return refuse();
         metadataRemaining -= metadata;
         auto nominal = data::importVariantIdentity(context, identity);
@@ -175,7 +181,8 @@ Error layout(const OracleVerificationContext &targetContext,
     return refuse();
   return Error::success();
 }
-struct Reader {
+} // namespace
+struct OracleControllerReader {
   const OracleVerificationContext &context;
   const OracleAnchorStorage &storage;
   const Controller &model;
@@ -183,19 +190,20 @@ struct Reader {
   const SourceExecutionClosure &closure;
   Type index, scope, boolean;
   bool valid = true;
-  Reader(const OracleAnchorStorage &storage, const Controller &model,
-         const OracleVerificationContext &context)
+  OracleControllerReader(const OracleAnchorStorage &storage,
+                         const Controller &model,
+                         const OracleVerificationContext &context)
       : context(context), storage(storage), model(model),
         unit(context.getUnit()), closure(context.getClosure()),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
         scope(runtime::ScopeType::get(unit.getContext())),
         boolean(IntegerType::get(unit.getContext(), 1)) {}
   bool expect(bool value) {
-    valid &= value;
+    valid &= context.charge() && value;
     return valid;
   }
   struct Cursor {
-    Reader &reader;
+    OracleControllerReader &reader;
     ArrayRef<SourceExecutionStep> steps;
     unsigned offset = 0;
     std::map<uint64_t, Value> constants{};
@@ -205,6 +213,10 @@ struct Reader {
       if (!reader.expect(offset < steps.size()))
         return nullptr;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(
+              1 + step.inputs.size() + step.outputs.size() +
+              step.regions.size() + site.size())))
+        return nullptr;
       auto actual = step.operation->getAttrOfType<StringAttr>(
           operation == "func.call" ? "runtime.site" : "site");
       if (!reader.expect(step.operation->getName().getStringRef() ==
@@ -231,14 +243,15 @@ struct Reader {
       if (!reader.valid)
         return values;
       auto op = cast<exec::ApplyOp>(step->operation);
-      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-          op, op.getBindingAttr());
+      auto binding = reader.context.getSymbols()
+                         .lookupNearestSymbolFrom<runtime::BindingOp>(
+                             op, op.getBindingAttr());
       if (!reader.expect(binding && binding.getContract() == contract &&
                          binding.getImplementation().empty() &&
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      reader.expect(matchesNativeBinding(
+      reader.expect(reader.context.matchesBinding(
           binding, {contract.str(), SmallVector<Attribute>(statics), {}}));
       reader.expect(invocationParametersMatch(
           contract, binding.getArgumentsAttr(), op.getParametersAttr(),
@@ -275,8 +288,9 @@ struct Reader {
       auto values = result(step, outputs, inputs);
       if (reader.valid) {
         auto call = cast<func::CallOp>(step->operation);
-        callee = dyn_cast_or_null<func::FuncOp>(
-            SymbolTable::lookupSymbolIn(reader.unit, call.getCallee()));
+        callee = dyn_cast_or_null<func::FuncOp>(reader.context.getSymbols()
+                                                    .getSymbolTable(reader.unit)
+                                                    .lookup(call.getCallee()));
         reader.expect(bool(callee));
       }
       return values;
@@ -300,7 +314,8 @@ struct Reader {
       auto values = result(step, expected.getResultTypes(), inputs);
       if (reader.valid) {
         auto op = cast<exec::ComputeOp>(step->operation);
-        auto actual = SymbolTable::lookupSymbolIn(reader.unit, op.getCallee());
+        auto actual = reader.context.getSymbols().lookupSymbolIn(
+            reader.unit, op.getCallee());
         reader.expect(actual == expected.getOperation());
       }
       return values.front();
@@ -402,6 +417,11 @@ struct Reader {
   };
   void body(func::FuncOp function, TypeRange inputs, TypeRange outputs,
             bool region, llvm::function_ref<void(Cursor &, ValueRange)> check) {
+    if (!valid)
+      return;
+    if (!expect(context.charge(1 + inputs.size() + outputs.size()) &&
+                function && context.reserveRead(function)))
+      return;
     if (!valid)
       return;
     Types arguments{scope};
@@ -595,6 +615,22 @@ struct Reader {
                 llvm::function_ref<void(unsigned, func::FuncOp)> leaf,
                 DispatchCheck check = DispatchCheck::Explicit,
                 bool region = false, StringRef prefix = {}) {
+    if (!region && check == DispatchCheck::Anchor && cases.size() == 1) {
+      // Read both the direct anchor leaf and the older forwarding spelling.
+      // Shape selects a grammar; each path still checks the complete body and
+      // the reached anchor's actual selector, captures and return value.
+      if (!expect(function && context.charge(1 + function.getSymName().size())))
+        return;
+      auto found = closure.bodies.find(function.getSymName().str());
+      if (!expect(found != closure.bodies.end() && !found->second.empty()))
+        return;
+      auto *first = found->second.front().operation;
+      auto site = first->getAttrOfType<StringAttr>("runtime.site");
+      if (!site || site.getValue() != prefix.str() + "case") {
+        leaf(cases.front(), function);
+        return;
+      }
+    }
     body(function, formals, outputs, region, [&](Cursor &c, ValueRange inputs) {
       if (cases.empty()) {
         c.reject("refused", prefix.str() + "no_constructor");
@@ -641,9 +677,37 @@ struct Reader {
       for (const auto &item : model.constructors)
         if (item.kind == kind)
           cases.push_back(item.source);
-      auto reference = cantFail(oracleReferenceType(model.kinds[kind]));
+      auto reference =
+          requireOracleReferenceType(model.kinds[kind], context.getWork());
       Types inputs{reference};
       append_range(inputs, model.stores);
+      Builder builder(unit.getContext());
+      if (!expect(context.charge(4 + fieldName.size() + inputs.size() +
+                                 4 * cases.size())))
+        return;
+      if (!expect(functions[kind] && functions[kind]->getParentOp() == unit))
+        return;
+      SmallVector<Attribute> parts{
+          FlatSymbolRefAttr::get(functions[kind]),
+          TypeAttr::get(builder.getFunctionType(inputs, index)),
+          builder.getStringAttr(fieldName)};
+      for (unsigned source : cases) {
+        auto found = find_if(model.constructors, [&](const auto &item) {
+          return item.source == source;
+        });
+        unsigned constructor = found - model.constructors.begin();
+        unsigned slot = field(constructor, fieldName);
+        if (!valid ||
+            !expect(found->lookup && found->lookup->getParentOp() == unit))
+          return;
+        parts.push_back(builder.getI64IntegerAttr(source));
+        parts.push_back(builder.getI64IntegerAttr(constructor));
+        parts.push_back(FlatSymbolRefAttr::get(found->lookup));
+        parts.push_back(builder.getI64IntegerAttr(slot));
+      }
+      auto key = builder.getArrayAttr(parts);
+      if (context.checkedControllerCounts.contains(key))
+        continue;
       body(functions[kind], inputs, index, false,
            [&](Cursor &c, ValueRange inputs) {
              auto identity =
@@ -677,6 +741,9 @@ struct Reader {
                  DispatchCheck::Anchor);
              c.finish(value);
            });
+      if (!valid || !expect(context.charge()))
+        return;
+      context.checkedControllerCounts.insert(key);
     }
   }
   void counts() {
@@ -693,6 +760,26 @@ struct Reader {
       if (!expect(inputs.size() <= 512))
         return;
       const auto &queries = item.functions.queries;
+      Builder builder(unit.getContext());
+      if (!expect(context.charge(4 + inputs.size() + 2 * queries.size())) ||
+          !expect(model.constructionCounts[ordinal] &&
+                  model.constructionCounts[ordinal]->getParentOp() == unit))
+        return;
+      SmallVector<Attribute> parts{
+          FlatSymbolRefAttr::get(model.constructionCounts[ordinal]),
+          TypeAttr::get(builder.getFunctionType(inputs, index)),
+          builder.getBoolAttr(anchor.constructor ==
+                              OracleAnchorConstructor::Kind::Virtual)};
+      for (const auto &query : queries) {
+        auto function = model.leafCounts[kindNumber(query.kind)];
+        if (!valid || !expect(function && function->getParentOp() == unit))
+          return;
+        parts.push_back(builder.getI64IntegerAttr(query.source));
+        parts.push_back(FlatSymbolRefAttr::get(function));
+      }
+      auto key = builder.getArrayAttr(parts);
+      if (context.checkedControllerCounts.contains(key))
+        continue;
       body(model.constructionCounts[ordinal], inputs, index, false,
            [&](Cursor &c, ValueRange inputs) {
              Value total = c.number(
@@ -713,6 +800,9 @@ struct Reader {
              }
              c.finish(total);
            });
+      if (!valid || !expect(context.charge()))
+        return;
+      context.checkedControllerCounts.insert(key);
     }
   }
   Values step(Cursor &c, ValueRange inputs) {
@@ -768,7 +858,8 @@ struct Reader {
   }
 
   void initialize() {
-    auto reference = cantFail(oracleReferenceType(model.kinds.front()));
+    auto reference =
+        requireOracleReferenceType(model.kinds.front(), context.getWork());
     body(model.initialize, TypeRange{reference, index}, model.state, false,
          [&](Cursor &c, ValueRange inputs) {
            auto reference =
@@ -900,7 +991,7 @@ struct Reader {
       statics = {StringAttr::get(unit.getContext(), group.getDomain())};
     }
     Type data = root.getDataType();
-    auto reference = cantFail(oracleReferenceType(root));
+    auto reference = requireOracleReferenceType(root, context.getWork());
     Types arguments{reference};
     append_range(arguments, model.stores);
     Types dispatchTypes{index, index};
@@ -979,7 +1070,8 @@ struct Reader {
       }
       leaves.push_back(item.source);
     }
-    auto reference = cantFail(oracleReferenceType(model.kinds.front()));
+    auto reference =
+        requireOracleReferenceType(model.kinds.front(), context.getWork());
     Types inputs{reference, index};
     append_range(inputs, model.stores);
     body(
@@ -1067,22 +1159,32 @@ struct Reader {
         });
   }
 };
-} // namespace
 Error checkOracleQueryController(ModuleOp candidate, ModuleOp prepared,
                                  const OracleAnchorStorage &storage,
                                  StringRef role, pir::OracleKindAttr root,
                                  OracleQuerySize capacity,
                                  const Controller &actual,
                                  OracleControllerAccess access) {
-  auto targetContext = OracleVerificationContext::read(candidate);
+  OracleNativeWork rawWork;
+  auto targetContext = OracleVerificationContext::read(candidate, rawWork);
   if (!targetContext) {
-    consumeError(targetContext.takeError());
-    return error("oracle-controller-body");
+    return llvm::handleErrors(targetContext.takeError(),
+                              [&](const Refusal &failure) -> Error {
+                                if (failure.code == "oracle-common-limit" ||
+                                    failure.code == "common-control-capacity")
+                                  return error(failure.code, failure.detail);
+                                return error("oracle-controller-body");
+                              });
   }
-  auto sourceContext = OracleVerificationContext::read(prepared);
+  auto sourceContext = OracleVerificationContext::read(prepared, rawWork);
   if (!sourceContext) {
-    consumeError(sourceContext.takeError());
-    return error("oracle-controller-body");
+    return llvm::handleErrors(sourceContext.takeError(),
+                              [&](const Refusal &failure) -> Error {
+                                if (failure.code == "oracle-common-limit" ||
+                                    failure.code == "common-control-capacity")
+                                  return error(failure.code, failure.detail);
+                                return error("oracle-controller-body");
+                              });
   }
   return checkOracleQueryController(*targetContext, *sourceContext, storage,
                                     role, root, capacity, actual, access);
@@ -1094,24 +1196,26 @@ Error checkOracleQueryController(const OracleVerificationContext &targetContext,
                                  OracleQuerySize capacity,
                                  const Controller &actual,
                                  OracleControllerAccess access) {
-  auto refuse = [] { return error("oracle-controller-body"); };
-  if (targetContext.getUnit() == sourceContext.getUnit() ||
-      targetContext.getModule().getContext() !=
-          sourceContext.getModule().getContext())
-    return refuse();
-  if (auto e = layout(targetContext, sourceContext, storage, role, root,
-                      capacity, actual, access)) {
-    consumeError(std::move(e));
-    return refuse();
-  }
-  Reader reader(storage, actual, targetContext);
-  reader.counts();
-  reader.initialize();
-  reader.resume();
-  reader.advance();
-  reader.finish();
-  reader.evaluate();
-  reader.contents();
-  return reader.valid ? Error::success() : refuse();
+  return oracleVerificationWithWork(targetContext.getWork(), [&]() -> Error {
+    auto refuse = [] { return error("oracle-controller-body"); };
+    if (targetContext.getUnit() == sourceContext.getUnit() ||
+        targetContext.getModule().getContext() !=
+            sourceContext.getModule().getContext())
+      return refuse();
+    if (auto e = layout(targetContext, sourceContext, storage, role, root,
+                        capacity, actual, access)) {
+      consumeError(std::move(e));
+      return refuse();
+    }
+    OracleControllerReader reader(storage, actual, targetContext);
+    reader.counts();
+    reader.initialize();
+    reader.resume();
+    reader.advance();
+    reader.finish();
+    reader.evaluate();
+    reader.contents();
+    return reader.valid ? Error::success() : refuse();
+  });
 }
 } // namespace zkc::protocol

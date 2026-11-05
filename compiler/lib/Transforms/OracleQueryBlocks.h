@@ -6,6 +6,7 @@
 #include "zkc/Transforms/OracleSelection.h"
 #include <vector>
 namespace zkc::protocol {
+struct OracleNativeWork;
 // One contiguous nonadaptive source window. This borrows the admitted source;
 // it establishes neither query domains nor transport compatibility. Discovery
 // preserves a valid demand prefix and defers a later domain cut to replay.
@@ -18,7 +19,8 @@ struct OracleQueryWindowSelection {
 llvm::Expected<OracleQueryWindowSelection>
 selectOracleQueryWindow(protocol_ir::OracleQueryOp first, OracleAuthentication,
                         const OracleQueryCapacity &, mlir::DominanceInfo &,
-                        unsigned &remaining);
+                        unsigned &remaining,
+                        OracleNativeWork *common = nullptr);
 
 } // namespace zkc::protocol
 #endif

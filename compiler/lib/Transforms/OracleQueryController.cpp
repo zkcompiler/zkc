@@ -1,5 +1,6 @@
 #include "OracleQueryController.h"
 #include "CollectionRealization.h"
+#include "OracleEmissionAccounting.h"
 #include "OracleTableRead.h"
 #include "RealizationEmission.h"
 #include "mlir/IR/Verifier.h"
@@ -24,28 +25,34 @@ using Values = SmallVector<Value>;
 using Types = SmallVector<Type>;
 using Control = exec::ScopedExecutionBuilder;
 struct Emitter {
+  OracleNativeWork &common;
   ModuleOp candidate, prepared;
   const OracleAnchorStorage &storage;
   OracleQueryController result;
   pir::ProtocolModuleOp unit, original;
+  OracleEmissionListener emission;
   OpBuilder builder;
   Location loc;
   Type index, scope;
-  mathematical::RealizationEmitter bindings;
+  OracleBindingEmitter bindings;
   std::map<uint64_t, Value> *constants = nullptr;
   unsigned next = 0;
   uint64_t metadataRemaining = 4 * 1024 * 1024;
   Emitter(ModuleOp candidate, ModuleOp prepared,
           const OracleAnchorStorage &storage, StringRef role,
-          OracleQuerySize capacity, OracleControllerAccess access)
-      : candidate(candidate), prepared(prepared), storage(storage),
+          OracleQuerySize capacity, OracleControllerAccess access,
+          OracleNativeWork &common)
+      : common(common), candidate(candidate), prepared(prepared),
+        storage(storage),
         unit(cast<pir::ProtocolModuleOp>(candidate.getBody()->front())),
         original(cast<pir::ProtocolModuleOp>(prepared.getBody()->front())),
-        builder(candidate.getContext()), loc(candidate.getLoc()),
+        emission(common), builder(candidate.getContext(), &emission),
+        loc(candidate.getLoc()),
         index(IntegerType::get(candidate.getContext(), 64,
                                IntegerType::Unsigned)),
         scope(runtime::ScopeType::get(candidate.getContext())),
-        bindings(unit, "_oracle_controller_binding_") {
+        bindings(unit, "_oracle_controller_binding_", common) {
+    reserveOracleEmission(common, 8 + role.size());
     result.role = role.str();
     result.access = access;
     result.capacity = capacity;
@@ -80,6 +87,8 @@ struct Emitter {
     if (!rootKind)
       return rootKind.takeError();
     for (auto [source, constructor] : enumerate(storage.constructors)) {
+      if (!common.charge(8 + constructor.roles.size()))
+        return error("oracle-common-limit");
       auto role = find_if(constructor.roles, [&](const auto &owner) {
         return owner.role == result.role;
       });
@@ -100,9 +109,10 @@ struct Emitter {
       uint64_t lookupWork = 20 + 2 * role->fields.size();
       if (result.constructors.size() >= 512 || lookupWork > work.operations)
         return error("oracle-controller-limit");
-      work.operations -= lookupWork;
-      auto lookup =
-          emitOracleAnchorLookup(candidate, storage, source, item.role);
+      if (!work.reserveCapacity(lookupWork, 0))
+        return error("oracle-controller-limit");
+      auto lookup = emitOracleAnchorLookupWithWork(candidate, storage, source,
+                                                   item.role, work.getWork());
       if (!lookup)
         return lookup.takeError();
       item.lookup = *lookup;
@@ -133,7 +143,7 @@ struct Emitter {
           uint64_t metadata = 128 +
                               2 * (storage.entry.size() + result.role.size()) +
                               8 * (4 + previous.size());
-          if (metadata > metadataRemaining)
+          if (metadata > metadataRemaining || !work.getWork().charge(metadata))
             return error("oracle-controller-limit");
           metadataRemaining -= metadata;
           auto *context = candidate.getContext();
@@ -172,8 +182,8 @@ struct Emitter {
                       result.kinds.size() * 8;
     if (ports > 512 || bodies > work.operations || ports * bodies > work.slots)
       return error("oracle-controller-limit");
-    work.operations -= bodies;
-    work.slots -= ports * bodies;
+    if (!work.reserveCapacity(bodies, ports * bodies))
+      return error("oracle-controller-limit");
     return Error::success();
   }
   unsigned kindNumber(pir::OracleKindAttr value) {
@@ -194,12 +204,14 @@ struct Emitter {
   func::FuncOp function(StringRef label, TypeRange inputs, TypeRange outputs,
                         bool region,
                         llvm::function_ref<void(Control &, ValueRange)> emit) {
+    reserveOracleEmission(common, 8 + inputs.size() + outputs.size());
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&unit.getBody().front());
     std::string name;
     do {
-      name = "_oracle_query_" + label.str() + "_" + std::to_string(next++);
-    } while (SymbolTable::lookupSymbolIn(unit, name));
+      name = "_oracle_query_" + label.str() + "_" +
+             std::to_string(oracleEmissionOrdinal(common, next));
+    } while (lookupOracleEmissionSymbol(unit, name, common));
     Types formals{scope};
     append_range(formals, inputs);
     auto outcome =
@@ -214,6 +226,7 @@ struct Emitter {
       helper->setAttr("runtime.origin",
                       builder.getArrayAttr({builder.getStringAttr(name),
                                             builder.getArrayAttr({})}));
+    reserveOracleEmission(common, 1 + helper.getNumArguments());
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
     // A helper's successful path is a linear chain of scoped outcomes.
@@ -280,6 +293,8 @@ struct Emitter {
   }
   Values unpack(Control &c, Value record, TypeRange fields, StringRef site) {
     return c.match(record, {}, fields, {"Record"}, site, [&](unsigned) {
+      if (common.emission)
+        return common.emission->identityRegion(builder, loc, fields);
       return function(
           "unpack", fields, fields, true,
           [&](Control &body, ValueRange values) { body.complete(values); });
@@ -465,6 +480,13 @@ struct Emitter {
                         TypeRange formals, TypeRange outputs,
                         DispatchCheck check = DispatchCheck::Explicit,
                         bool region = false, StringRef prefix = {}) {
+    // A sole anchor leaf already validates the actual constructor tag. Its
+    // complete signature matches this dispatch; creating a forwarding body
+    // repeats an immutable call without adding a check.
+    if (!region && check == DispatchCheck::Anchor && cases.size() == 1) {
+      reserveOracleEmission(common, 1);
+      return cases.front().second;
+    }
     return function(
         label, formals, outputs, region, [&](Control &c, ValueRange inputs) {
           auto finish = [&](ValueRange values) {
@@ -513,6 +535,39 @@ struct Emitter {
     Types dispatchTypes{index, index};
     append_range(dispatchTypes, result.stores);
     for (unsigned kind = 0; kind < result.kinds.size(); ++kind) {
+      auto reference = requireOracleReferenceType(result.kinds[kind], common);
+      Types inputs{reference};
+      append_range(inputs, result.stores);
+      // Counts depend on these exact immutable lookup bodies and capture
+      // slots, not the root controller's answer/state ordering. Share their
+      // complete dispatch graph across roots of the same owned candidate.
+      auto *session = common.emission;
+      ArrayAttr key;
+      if (session && session->ownsCandidate(unit)) {
+        reserveOracleEmission(common, 3 + fieldName.size());
+        SmallVector<Attribute> parts{
+            builder.getStringAttr(fieldName),
+            TypeAttr::get(builder.getFunctionType(inputs, index))};
+        for (auto [ordinal, item] : enumerate(result.constructors)) {
+          if (!common.charge())
+            throw OracleAccountingLimit{};
+          if (item.kind != kind)
+            continue;
+          reserveOracleEmission(common, 5);
+          append_range(
+              parts, ArrayRef<Attribute>{
+                         builder.getI64IntegerAttr(item.source),
+                         builder.getI64IntegerAttr(ordinal),
+                         FlatSymbolRefAttr::get(item.lookup),
+                         builder.getI64IntegerAttr(field(ordinal, fieldName))});
+        }
+        key = builder.getArrayAttr(parts);
+        if (auto count = session->findControllerCount(key)) {
+          reserveOracleEmission(common, 1);
+          outputs.push_back(count);
+          continue;
+        }
+      }
       SmallVector<std::pair<unsigned, func::FuncOp>> cases;
       for (auto [ordinal, item] : enumerate(result.constructors)) {
         if (item.kind != kind)
@@ -531,9 +586,6 @@ struct Emitter {
       if (!cases.empty())
         select = dispatch("count_dispatch", 0, cases, dispatchTypes, index,
                           DispatchCheck::Anchor);
-      auto reference = cantFail(oracleReferenceType(result.kinds[kind]));
-      Types inputs{reference};
-      append_range(inputs, result.stores);
       auto count = function(
           label, inputs, index, false, [&](Control &c, ValueRange inputs) {
             auto identity =
@@ -548,6 +600,8 @@ struct Emitter {
             append_range(identity, inputs.drop_front());
             c.returned(call(c, select, identity, "select_count"));
           });
+      if (key)
+        session->rememberControllerCount(key, count);
       outputs.push_back(count);
     }
   }
@@ -564,6 +618,29 @@ struct Emitter {
       append_range(inputs, result.stores);
       if (inputs.size() > 512)
         return error("oracle-controller-limit");
+      auto *session = common.emission;
+      ArrayAttr key;
+      if (session && session->ownsCandidate(unit)) {
+        reserveOracleEmission(common,
+                              4 + sources.size() + result.stores.size());
+        SmallVector<Attribute> parts{
+            builder.getStringAttr("construction"),
+            TypeAttr::get(builder.getFunctionType(inputs, index)),
+            builder.getBoolAttr(anchor.constructor !=
+                                OracleAnchorConstructor::Kind::Virtual)};
+        for (const auto &query : item.functions.queries) {
+          reserveOracleEmission(common, 3);
+          parts.push_back(builder.getI64IntegerAttr(query.source));
+          parts.push_back(FlatSymbolRefAttr::get(
+              result.leafCounts[kindNumber(query.kind)]));
+        }
+        key = builder.getArrayAttr(parts);
+        if (auto count = session->findControllerCount(key)) {
+          reserveOracleEmission(common, 1);
+          result.constructionCounts.push_back(count);
+          continue;
+        }
+      }
       auto count = function(
           "construction_count", inputs, index, false,
           [&](Control &c, ValueRange inputs) {
@@ -583,12 +660,14 @@ struct Emitter {
             }
             c.returned(total);
           });
+      if (key)
+        session->rememberControllerCount(key, count);
       result.constructionCounts.push_back(count);
     }
     return Error::success();
   }
   void emitInitialize(pir::OracleKindAttr root) {
-    auto reference = cantFail(oracleReferenceType(root));
+    auto reference = requireOracleReferenceType(root, common);
     result.initialize =
         function("initialize", TypeRange{reference, index}, result.state, false,
                  [&](Control &c, ValueRange inputs) {
@@ -738,7 +817,7 @@ struct Emitter {
               c.returned(record[field(constructor, "data")]);
               return;
             }
-            auto reference = pack(c, cantFail(oracleReferenceType(root)),
+            auto reference = pack(c, requireOracleReferenceType(root, common),
                                   inputs.take_front(2), "root");
             auto zero = number(c, 0, "lower");
             auto empty = apply(c, collection->empty->contract, data, {},
@@ -770,7 +849,7 @@ struct Emitter {
     }
     auto select = dispatch("contents_dispatch", 0, cases, dispatchTypes, data,
                            DispatchCheck::Anchor);
-    Types inputs{cantFail(oracleReferenceType(root))};
+    Types inputs{requireOracleReferenceType(root, common)};
     append_range(inputs, result.stores);
     result.contents = function(
         "contents", inputs, data, false, [&](Control &c, ValueRange inputs) {
@@ -799,7 +878,7 @@ struct Emitter {
       const auto &anchor = storage.constructors[item.source];
       if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual)
         continue;
-      auto read = emitOracleTableRead(candidate, anchor.kind);
+      auto read = emitOracleTableReadWithWork(candidate, anchor.kind, common);
       if (!read)
         return read.takeError();
       auto helper = function(
@@ -838,7 +917,7 @@ struct Emitter {
     else
       leaf = dispatch("leaf_dispatch", Controller::Constructor, leaves,
                       DispatchCheck::Anchor);
-    Types inputs{cantFail(oracleReferenceType(root)), index};
+    Types inputs{requireOracleReferenceType(root, common), index};
     append_range(inputs, result.stores);
     result.evaluate = function(
         "evaluate", inputs, rootAnswer(), false,
@@ -899,44 +978,53 @@ Expected<OracleQueryController> emitOracleQueryController(
     ModuleOp candidate, ModuleOp prepared, const OracleAnchorStorage &storage,
     StringRef role, pir::OracleKindAttr root, OracleQuerySize capacity,
     OracleVirtualFunctionWork &work, OracleControllerAccess access) {
-  auto unit = [](ModuleOp module) -> pir::ProtocolModuleOp {
-    if (!module || !hasSingleElement(module.getBody()->getOperations()))
-      return {};
-    return dyn_cast<pir::ProtocolModuleOp>(module.getBody()->front());
-  };
-  auto target = unit(candidate), source = unit(prepared);
-  if (!target || !source || target == source ||
-      candidate.getContext() != prepared.getContext() || !root ||
-      root.getContext() != candidate.getContext() ||
-      root.getIdentity() != "table" ||
-      target.getProfile() != pir::Profile::Protocol ||
-      source.getProfile() != pir::Profile::Protocol ||
-      failed(zkc::admitStage(candidate)) || failed(zkc::admitStage(prepared)))
-    return error("oracle-controller-source");
-  // Native range admission is bounded. Refuse generation instead of silently
-  // truncating the source's recursive expansion or adding a validity premise.
-  if ((access != OracleControllerAccess::Available &&
-       access != OracleControllerAccess::Holder) ||
-      !capacity.nodes || capacity.leaves > capacity.nodes ||
-      capacity.nodes > (1048576 - 1) / 2 || capacity.leaves >= 1048576)
-    return error("oracle-controller-capacity");
-  auto program = dyn_cast_or_null<pir::MathematicalOp>(
-      SymbolTable::lookupSymbolIn(source, storage.entry));
-  if (!program || !is_contained(program.getRoles(),
-                                StringAttr::get(prepared.getContext(), role)))
-    return error("oracle-controller-layout");
-  Emitter emit(candidate, prepared, storage, role, capacity, access);
-  if (auto e = emit.plan(root, work))
-    return std::move(e);
-  if (auto e = emit.emitCounts())
-    return std::move(e);
-  emit.emitInitialize(root);
-  emit.emitResume();
-  emit.emitAdvance();
-  if (auto e = emit.emitEvaluator(root))
-    return std::move(e);
-  if (auto e = emit.emitContents(root))
-    return std::move(e);
-  return std::move(emit.result);
+  return oracleExpectedWithWork(
+      work.getWork(), [&]() -> Expected<OracleQueryController> {
+        auto unit = [](ModuleOp module) -> pir::ProtocolModuleOp {
+          if (!module || !hasSingleElement(module.getBody()->getOperations()))
+            return {};
+          return dyn_cast<pir::ProtocolModuleOp>(module.getBody()->front());
+        };
+        auto target = unit(candidate), source = unit(prepared);
+        if (!target || !source || target == source ||
+            candidate.getContext() != prepared.getContext() || !root ||
+            root.getContext() != candidate.getContext() ||
+            root.getIdentity() != "table" ||
+            target.getProfile() != pir::Profile::Protocol ||
+            source.getProfile() != pir::Profile::Protocol ||
+            failed(work.checkSubject(candidate)) ||
+            failed(work.checkSubject(prepared)))
+          return error("oracle-controller-source");
+        // Native range admission is bounded. Refuse generation instead of
+        // silently truncating the source's recursive expansion or adding a
+        // validity premise.
+        if ((access != OracleControllerAccess::Available &&
+             access != OracleControllerAccess::Holder) ||
+            !capacity.nodes || capacity.leaves > capacity.nodes ||
+            capacity.nodes > (1048576 - 1) / 2 || capacity.leaves >= 1048576)
+          return error("oracle-controller-capacity");
+        auto program = dyn_cast_or_null<pir::MathematicalOp>(
+            SymbolTable::lookupSymbolIn(source, storage.entry));
+        if (!program ||
+            !is_contained(program.getRoles(),
+                          StringAttr::get(prepared.getContext(), role)))
+          return error("oracle-controller-layout");
+        auto session = startOracleEmissionSession(work.getWork(), target);
+        Emitter emit(candidate, prepared, storage, role, capacity, access,
+                     work.getWork());
+        if (auto e = emit.plan(root, work))
+          return std::move(e);
+        if (auto e = emit.emitCounts())
+          return std::move(e);
+        emit.emitInitialize(root);
+        emit.emitResume();
+        emit.emitAdvance();
+        if (auto e = emit.emitEvaluator(root))
+          return std::move(e);
+        if (auto e = emit.emitContents(root))
+          return std::move(e);
+        commitOracleEmissionSession(session);
+        return std::move(emit.result);
+      });
 }
 } // namespace zkc::protocol

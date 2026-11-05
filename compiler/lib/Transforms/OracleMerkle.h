@@ -28,5 +28,10 @@ llvm::Error checkOracleMerkle(mlir::ModuleOp candidate,
                               protocol_ir::OracleKindAttr,
                               llvm::StringRef scheme, OracleLeafGrouping,
                               OracleLeafOrder);
+struct OracleNativeWork;
+llvm::Expected<OracleMerkleFunctions>
+emitOracleMerkleWithWork(mlir::ModuleOp, protocol_ir::OracleKindAttr,
+                         llvm::StringRef, OracleLeafGrouping, OracleLeafOrder,
+                         OracleNativeWork &);
 } // namespace zkc::protocol
 #endif

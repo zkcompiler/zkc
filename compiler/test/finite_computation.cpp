@@ -594,6 +594,66 @@ int main(int argc, char **argv) {
     require(succeeded(dependencies) && dependencies->size() == 3,
             "whole operation cloning was narrowed");
   });
+  for (bool nested : {false, true})
+    for (bool stateful : {false, true})
+      for (bool shared : {false, true})
+        cases.run(
+            std::string(nested ? "nested" : "direct") +
+                (stateful ? " stateful" : " empty-state") +
+                (shared ? " common-role fold" : " disjoint-role fold"),
+            [&] {
+              std::string text = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
+module { "protocol.module"() ({
+ "data.domain"() ({ ^entry(%xs:!V):
+   %domain = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   "data.domain_yield"(%domain) : (!data.domain<!F>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+ func.func private @step(%item:!F,%xs:!V,%capture:!F) { func.return }
+ HELPER
+ "protocol.func"() ({ ^entry(%xs:!V,%capture:!F):
+   OPERATION
+   "protocol.return"(%capture) : (!F)->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,!F)->!F,roles=["P","V"],input_roles=[["P"],["OWNER"]],output_roles=[["OWNER"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+              std::string fold =
+                  stateful
+                      ? "%result = \"data.finite_fold\"(%xs,%capture,%capture) "
+                        "{domain=@items,step=@step} : (!V,!F,!F)->!F"
+                      : "\"data.finite_fold\"(%xs,%capture) "
+                        "{domain=@items,step=@step} : (!V,!F)->()";
+              if (stateful)
+                text = replace(
+                    text, "@step(%item:!F,%xs:!V,%capture:!F) { func.return }",
+                    "@step(%state:!F,%item:!F,%xs:!V,%capture:!F) -> !F "
+                    "{ func.return %capture : !F }");
+              std::string helper;
+              std::string operation = fold;
+              if (nested) {
+                helper = "func.func private @work(%xs:!V,%capture:!F)";
+                helper += stateful ? " -> !F { " : " { ";
+                helper += fold;
+                helper +=
+                    stateful ? " func.return %result : !F }" : " func.return }";
+                operation =
+                    stateful
+                        ? "%out = func.call @work(%xs,%capture) : (!V,!F)->!F"
+                        : "func.call @work(%xs,%capture) : (!V,!F)->()";
+              }
+              text = replace(text, "HELPER", helper);
+              text = replace(text, "OPERATION", operation);
+              text = replace(text, "OWNER", shared ? "P" : "V");
+              text = replace(text, "OWNER", shared ? "P" : "V");
+              if (!shared) {
+                refusesIR(text, context, "mathematical-formation");
+                return;
+              }
+              auto module = parseSourceString<ModuleOp>(text, &context);
+              require(bool(module) && succeeded(admitStage(*module)),
+                      "common-role strict fold refused");
+            });
   cases.run("empty native state retains total formation", [&] {
     auto text = replace(fixture("total-state"),
                         "@step(%a:!F,%b:!F,%i:ui64,%xs:!V) -> (!F,!F)",

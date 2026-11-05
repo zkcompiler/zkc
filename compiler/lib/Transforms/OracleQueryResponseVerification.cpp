@@ -1,4 +1,5 @@
 #include "NativeBindingApplication.h"
+#include "OracleAccounting.h"
 #include "OracleQueryResponse.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -52,6 +53,9 @@ bool layout(const OracleVerificationContext &context,
       return {};
     return scopedDataSignature(function);
   };
+  if (!context.charge(64 + model.arms.size() + model.state.size() +
+                      model.receiverStores.size() + model.holderStores.size()))
+    return false;
   SmallVector<data::AlternativeAttr> alternatives;
   std::set<unsigned> constructors, slots;
   std::set<std::string> names;
@@ -124,7 +128,7 @@ struct Reader {
         scope(runtime::ScopeType::get(unit.getContext())),
         boolean(IntegerType::get(unit.getContext(), 1)) {}
   bool expect(bool value) {
-    valid &= value;
+    valid &= context.charge() && value;
     return valid;
   }
   struct Cursor {
@@ -137,6 +141,10 @@ struct Reader {
       if (!reader.expect(offset < steps.size()))
         return nullptr;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(
+              1 + step.inputs.size() + step.outputs.size() +
+              step.regions.size() + site.size())))
+        return nullptr;
       auto actual = step.operation->getAttrOfType<StringAttr>(
           operation == "func.call" ? "runtime.site" : "site");
       if (!reader.expect(step.operation->getName().getStringRef() ==
@@ -163,8 +171,9 @@ struct Reader {
       if (!reader.valid)
         return values;
       auto op = cast<exec::ApplyOp>(step->operation);
-      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-          op, op.getBindingAttr());
+      auto binding = reader.context.getSymbols()
+                         .lookupNearestSymbolFrom<runtime::BindingOp>(
+                             op, op.getBindingAttr());
       if (!reader.expect(binding && binding.getContract() == contract &&
                          binding.getImplementation().empty() &&
                          binding.getArguments().size() == statics.size() &&
@@ -173,7 +182,7 @@ struct Reader {
       SmallVector<Attribute> arguments;
       for (const auto &identity : statics)
         arguments.push_back(StringAttr::get(op.getContext(), identity));
-      reader.expect(matchesNativeBinding(
+      reader.expect(reader.context.matchesBinding(
           binding, {contract.str(), std::move(arguments), {}}));
       reader.expect(invocationParametersMatch(
           contract, binding.getArgumentsAttr(), op.getParametersAttr(),
@@ -191,8 +200,9 @@ struct Reader {
       auto values = result(step, outputs, inputs);
       if (reader.valid) {
         auto call = cast<func::CallOp>(step->operation);
-        callee = dyn_cast_or_null<func::FuncOp>(
-            SymbolTable::lookupSymbolIn(reader.unit, call.getCallee()));
+        callee = dyn_cast_or_null<func::FuncOp>(reader.context.getSymbols()
+                                                    .getSymbolTable(reader.unit)
+                                                    .lookup(call.getCallee()));
         reader.expect(bool(callee));
       }
       return values;
@@ -253,6 +263,11 @@ struct Reader {
   };
   void body(func::FuncOp function, TypeRange inputs, TypeRange outputs,
             bool region, llvm::function_ref<void(Cursor &, ValueRange)> check) {
+    if (!valid)
+      return;
+    if (!expect(context.charge(1 + inputs.size() + outputs.size()) &&
+                function && context.reserveRead(function)))
+      return;
     if (!valid)
       return;
     Types arguments{scope};
@@ -432,11 +447,13 @@ struct Reader {
 Error checkOracleQueryResponse(const OracleVerificationContext &context,
                                const OracleQueryExchange &model,
                                const OracleQueryResponse &actual) {
-  if (!layout(context, model, actual))
-    return error("oracle-response-body");
-  Reader reader(context, model, actual);
-  reader.authenticate();
-  reader.resume();
-  return reader.valid ? Error::success() : error("oracle-response-body");
+  return oracleVerificationWithWork(context.getWork(), [&]() -> Error {
+    if (!layout(context, model, actual))
+      return error("oracle-response-body");
+    Reader reader(context, model, actual);
+    reader.authenticate();
+    reader.resume();
+    return reader.valid ? Error::success() : error("oracle-response-body");
+  });
 }
 } // namespace zkc::protocol

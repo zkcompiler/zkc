@@ -372,9 +372,11 @@ add_zkc_component(Transforms
   lib/Transforms/OracleObservations.cpp
   lib/Transforms/OracleCommonPlan.cpp
   lib/Transforms/OracleCommonRealization.cpp
+  lib/Transforms/OraclePrivateComposite.cpp
   lib/Transforms/RealizedProtocol.cpp
   lib/Transforms/OracleCommonVerification.cpp
   lib/Transforms/OracleRealizationRecord.cpp
+  lib/Transforms/OracleRecordJson.cpp
   lib/Transforms/OracleQueryCapacity.cpp
   lib/Transforms/OracleQueryController.cpp
   lib/Transforms/OracleQueryControllerVerification.cpp
@@ -453,6 +455,7 @@ add_zkc_component(Compiler
   lib/Compiler/PolynomialReduction.cpp
   lib/Compiler/PublicCoin.cpp
   lib/Compiler/PublicCoinGraph.cpp
+  lib/Compiler/NativeConstructionPreparation.cpp
   lib/Compiler/NativeCodec.cpp
   lib/Compiler/NativeCodecVerification.cpp
   lib/Compiler/ConstructionBinding.cpp

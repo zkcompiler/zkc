@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Mathematical.h"
+#include "../../AdmissionPrivate.h"
 #include "OracleAnalysis.h"
 #include "ResourceOrigins.h"
 #include "zkc/Analysis/CommonControl.h"
@@ -23,6 +24,7 @@
 #include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/TypeFormation.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
@@ -329,6 +331,12 @@ public:
       if (isTotal(op)) {
         if (isa<data::BranchOp>(op) && failed(helpers.verifySelected(op)))
           return failure();
+        // Strict operations need a common owner even for an empty result tuple.
+        BitVector required(count, true);
+        for (auto operand : op->getOperands())
+          required &= env.values.lookup(operand);
+        if (required.none())
+          return refuse(op, "operation has no available component");
         for (auto [index, output] : enumerate(op->getResults())) {
           BitVector available(count, true);
           auto inputs = operandDependencies(op, index);
@@ -746,7 +754,9 @@ public:
 };
 } // namespace
 
-LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
+static LogicalResult
+verifyStructure(protocol_ir::ProtocolModuleOp module,
+                protocol::SourceExecutionClosure *sourceClosure = nullptr) {
   if (module.getProfile() == protocol_ir::Profile::Participant)
     return verifyParticipantModule(module);
   if (module.getProfile() != protocol_ir::Profile::Protocol)
@@ -766,8 +776,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   // Func owns both plain mathematics and scoped source execution. The source
   // closure assigns every retained definition to its checking owner and reads
   // actual scoped bodies, including dormant helpers and outlined regions.
-  if (auto error = protocol::verifySourceExecutionClosure(module))
-    return diagnostics::emit(module.emitOpError(), std::move(error));
+  auto closure = protocol::readSourceExecutionClosure(module);
+  if (!closure)
+    return diagnostics::emit(module.emitOpError(), closure.takeError());
   // The enclosing profile also owns finite references in protocol
   // definitions, outside the scoped/Math definition component above.
   if (failed(finite::verifyClosure(module)))
@@ -829,54 +840,153 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   for (auto repeat : originQueries)
     if (failed(origins.verify(repeat)))
       return failure();
-  uint64_t commonRemaining = 1000000;
-  facts::Work commonWork(commonRemaining);
-  llvm::DenseMap<Operation *, SmallVector<protocol_ir::MathematicalOp>> callers;
-  llvm::DenseSet<Operation *> selected;
-  SmallVector<protocol_ir::MathematicalOp> pending;
-  auto select = [&](protocol_ir::MathematicalOp program) {
-    if (selected.insert(program).second)
-      pending.push_back(program);
-  };
-  // Selected-control admission belongs to each actual call closure. An
-  // unrelated declaration must not change a generic loop's admission policy.
-  for (auto program :
-       module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
-    auto walked = program.walk([&](Operation *op) {
-      if (!commonWork.charge())
-        return WalkResult::interrupt();
-      if (isa<protocol_ir::BranchOp, protocol_ir::OracleSequenceAtOp>(op))
-        select(program);
-      if (auto call = dyn_cast<protocol_ir::ApplyOp>(op)) {
-        auto callee =
-            tables.lookupNearestSymbolFrom<protocol_ir::MathematicalOp>(
-                call, call.getCalleeAttr());
-        callers[callee].push_back(program);
+  if (sourceClosure)
+    *sourceClosure = std::move(*closure);
+  return success();
+}
+} // namespace zkc::mathematical
+
+namespace zkc::detail {
+LogicalResult
+verifyMathematicalStructure(protocol_ir::ProtocolModuleOp module,
+                            protocol::SourceExecutionClosure *sourceClosure) {
+  return mathematical::verifyStructure(module, sourceClosure);
+}
+Expected<SmallVector<CommonControlRequirement>>
+completeCommonControl(protocol_ir::ProtocolModuleOp module,
+                      facts::Work &commonWork,
+                      const OracleCountEquations *equations) {
+  SymbolTableCollection tables;
+  SmallVector<CommonControlRequirement> result;
+  using Callers =
+      llvm::DenseMap<Operation *, SmallVector<protocol_ir::MathematicalOp>>;
+  // Discover the ordinary policy independently of generated count equations.
+  // Source sequence selection can disappear during realization, so preserve
+  // its selected definitions and callers through the checked name association.
+  auto discover = [&](protocol_ir::ProtocolModuleOp unit, Callers &callers,
+                      llvm::DenseSet<Operation *> &selected) -> Error {
+    SmallVector<protocol_ir::MathematicalOp> pending;
+    auto select = [&](protocol_ir::MathematicalOp program) {
+      if (selected.insert(program).second)
+        pending.push_back(program);
+    };
+    for (auto program :
+         unit.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
+      auto walked = program.walk([&](Operation *op) {
+        if (!commonWork.charge())
+          return WalkResult::interrupt();
+        if (isa<protocol_ir::BranchOp, protocol_ir::OracleSequenceAtOp>(op))
+          select(program);
+        if (auto call = dyn_cast<protocol_ir::ApplyOp>(op)) {
+          auto callee =
+              tables.lookupNearestSymbolFrom<protocol_ir::MathematicalOp>(
+                  call, call.getCalleeAttr());
+          callers[callee].push_back(program);
+        }
+        return WalkResult::advance();
+      });
+      if (walked.wasInterrupted())
+        return error("common-control-capacity");
+    }
+    while (!pending.empty()) {
+      auto program = pending.pop_back_val();
+      for (auto caller : callers[program]) {
+        if (!commonWork.charge())
+          return error("common-control-capacity");
+        select(caller);
       }
-      return WalkResult::advance();
-    });
-    if (walked.wasInterrupted())
-      return diagnostics::emit(program.emitOpError(),
-                               "common-control-capacity");
-  }
-  while (!pending.empty()) {
-    auto program = pending.pop_back_val();
-    for (auto caller : callers[program]) {
+    }
+    return Error::success();
+  };
+  Callers callers;
+  llvm::DenseSet<Operation *> selected, equationSelected;
+  if (auto e = discover(module, callers, selected))
+    return std::move(e);
+  SmallVector<protocol_ir::MathematicalOp> pending;
+  if (equations) {
+    Callers originalCallers;
+    llvm::DenseSet<Operation *> originalSelected;
+    if (auto e = discover(equations->getOriginal(), originalCallers,
+                          originalSelected))
+      return std::move(e);
+    for (Operation *original : originalSelected) {
       if (!commonWork.charge())
-        return diagnostics::emit(caller.emitOpError(),
-                                 "common-control-capacity");
-      select(caller);
+        return error("common-control-capacity");
+      auto name = cast<protocol_ir::MathematicalOp>(original).getSymNameAttr();
+      auto actual =
+          tables.lookupSymbolIn<protocol_ir::MathematicalOp>(module, name);
+      if (!actual)
+        return error("common-control-provenance");
+      if (selected.insert(actual).second)
+        pending.push_back(actual);
+    }
+    // Preserve candidate callers of the original selected definitions too.
+    while (!pending.empty()) {
+      auto program = pending.pop_back_val();
+      for (auto caller : callers[program]) {
+        if (!commonWork.charge())
+          return error("common-control-capacity");
+        if (selected.insert(caller).second)
+          pending.push_back(caller);
+      }
+    }
+    for (const auto &observation : equations->getObservations()) {
+      if (!commonWork.charge())
+        return error("common-control-capacity");
+      if (!observation.actualEntry ||
+          observation.actualEntry->getParentOp() != module.getOperation())
+        return error("common-control-provenance");
+      if (equationSelected.insert(observation.actualEntry).second)
+        pending.push_back(observation.actualEntry);
+    }
+    while (!pending.empty()) {
+      auto program = pending.pop_back_val();
+      for (auto caller : callers[program]) {
+        if (!commonWork.charge())
+          return error("common-control-capacity");
+        if (equationSelected.insert(caller).second)
+          pending.push_back(caller);
+      }
     }
   }
-  // Wrappers inherit callee requirements even without a lexical common action.
+  // Full selected closures keep all their requirements. Equation-only
+  // traversals validate the generated observations without adding unrelated
+  // generic repeat-count demands. Neither mode changes demanded recurrences.
   for (auto program :
        module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
-    if (!selected.contains(program))
+    bool fullRequirements = selected.contains(program);
+    if (!fullRequirements && !equationSelected.contains(program))
       continue;
-    auto requirements = deriveCommonControlRequirements(program, commonWork);
+    auto requirements =
+        equations ? detail::deriveCommonControlRequirements(
+                        program, commonWork, *equations, fullRequirements)
+                  : zkc::deriveCommonControlRequirements(program, commonWork);
     if (!requirements)
-      return diagnostics::emit(program.emitOpError(), requirements.takeError());
+      return requirements.takeError();
+    for (auto &requirement : *requirements) {
+      if (!commonWork.charge(1 + requirement.components.size()))
+        return error("common-control-capacity");
+      for (const auto &component : requirement.components)
+        if (!commonWork.charge(component.path.size()))
+          return error("common-control-capacity");
+      result.push_back(std::move(requirement));
+    }
   }
+  return result;
+}
+} // namespace zkc::detail
+
+namespace zkc::mathematical {
+LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
+  if (failed(verifyStructure(module)))
+    return failure();
+  if (module.getProfile() != protocol_ir::Profile::Protocol)
+    return success();
+  uint64_t remaining = 1000000;
+  facts::Work work(remaining);
+  auto requirements = detail::completeCommonControl(module, work);
+  if (!requirements)
+    return diagnostics::emit(module.emitOpError(), requirements.takeError());
   return success();
 }
 

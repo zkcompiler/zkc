@@ -1,3 +1,4 @@
+#include "NativeTypeWork.h"
 #include "mlir/IR/TypeRange.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
@@ -20,6 +21,7 @@ struct SignatureFormation {
     return diagnostics::emit(emit(), "binding-signature", reason);
   }
   LogicalResult checkStatic(Attribute value, StringRef sort) {
+    detail::NativeTypeWorkScope::charge(1 + sort.size());
     if (!value || value.getContext() != context)
       return refuse("missing or foreign-context static value");
     if (sort == "Type") {
@@ -45,6 +47,8 @@ struct SignatureFormation {
     return success();
   }
   Type application(StringRef constructor, ArrayRef<unsigned> arguments) {
+    detail::NativeTypeWorkScope::charge(1 + constructor.size() +
+                                        arguments.size());
     CatalogTypeApplication selected{constructor, {}};
     for (unsigned index : arguments) {
       if (index >= terms.size()) {
@@ -60,8 +64,12 @@ struct SignatureFormation {
     if (scope.terms.size() != scope.sorts.size() || scope.terms.size() > 1024 ||
         arguments.size() > 128)
       return refuse("invalid catalog scope or static arity");
+    detail::NativeTypeWorkScope::charge(1 + scope.terms.size() +
+                                        arguments.size());
     unsigned next = 0;
     for (auto [i, term] : llvm::enumerate(scope.terms)) {
+      detail::NativeTypeWorkScope::charge(1 + term.name.size() +
+                                          scope.sorts[i].size());
       Attribute value;
       if (term.arguments) {
         if (term.parent || scope.constants.count(i) || scope.sorts[i] != "Type")
@@ -85,6 +93,7 @@ struct SignatureFormation {
         // The neutral catalog admits only natural constants. This is immutable
         // declaration data, not a printed MLIR type or a caller's string value.
         StringRef literal = constant->second;
+        detail::NativeTypeWorkScope::charge(literal.size());
         uint64_t natural;
         if (scope.sorts[i] != "Nat" || literal.empty() ||
             (literal.size() > 1 && literal.front() == '0') ||
@@ -107,6 +116,8 @@ struct SignatureFormation {
   }
   LogicalResult requirements(ArrayRef<requirements::Predicate> predicates) {
     for (const auto &predicate : predicates) {
+      detail::NativeTypeWorkScope::charge(1 + predicate.arguments.size() +
+                                          predicate.relation.size());
       SmallVector<Attribute> arguments;
       for (unsigned index : predicate.arguments) {
         if (index >= terms.size())
@@ -123,6 +134,7 @@ struct SignatureFormation {
         auto identity = dyn_cast<StringAttr>(value);
         if (!identity)
           return refuse("no installed fact for this static argument kind");
+        detail::NativeTypeWorkScope::charge(identity.size());
         identities.push_back(identity.str());
       }
       if (!protocol::installedDomains().hasFact(predicate.relation, identities))
@@ -133,10 +145,27 @@ struct SignatureFormation {
   const generic::Operation *binding(StringRef contract,
                                     ArrayRef<Attribute> arguments,
                                     DenseBoolArrayAttr &mask) {
+    detail::NativeTypeWorkScope::charge(1 + contract.size() + arguments.size());
     const generic::Operation *declaration = nullptr;
-    for (const auto &candidate : protocol::executableOperationContracts())
-      if (candidate.name == contract)
-        declaration = &candidate;
+    if (auto *work = detail::NativeTypeWorkScope::current()) {
+      if (!work->indexedContracts) {
+        for (const auto &candidate : protocol::executableOperationContracts()) {
+          detail::NativeTypeWorkScope::charge(1 + candidate.name.size());
+          work->contracts.try_emplace(candidate.name, &candidate);
+        }
+        work->indexedContracts = true;
+      }
+      detail::NativeTypeWorkScope::charge(1 + contract.size());
+      auto found = work->contracts.find(contract);
+      if (found != work->contracts.end())
+        declaration = found->second;
+    } else {
+      for (const auto &candidate : protocol::executableOperationContracts())
+        if (candidate.name == contract) {
+          declaration = &candidate;
+          break;
+        }
+    }
     if (!context || !declaration) {
       (void)refuse("missing context or unknown catalog operation");
       return {};
@@ -158,6 +187,7 @@ struct SignatureFormation {
     return declaration;
   }
   Type port(const generic::Type &port) {
+    detail::NativeTypeWorkScope::charge(1);
     if (!port.term)
       return application(port.constructor, port.arguments);
     if (!port.constructor.empty() || !port.arguments.empty() ||
@@ -179,10 +209,26 @@ FailureOr<SmallVector<Attribute>>
 resolveBindingTerms(llvm::function_ref<InFlightDiagnostic()> emit,
                     MLIRContext *context, StringRef contract,
                     ArrayRef<Attribute> arguments) {
+  detail::NativeTypeWorkScope::charge(1 + contract.size() + arguments.size());
+  auto *work = detail::NativeTypeWorkScope::current();
+  detail::NativeTypeWork::Application key;
+  if (work && context) {
+    key = {StringAttr::get(context, contract),
+           ArrayAttr::get(context, arguments)};
+    if (auto found = work->bindingTerms.find(key);
+        found != work->bindingTerms.end()) {
+      detail::NativeTypeWorkScope::charge(found->second.size());
+      return found->second;
+    }
+  }
   SignatureFormation formation{emit, context, {}};
   DenseBoolArrayAttr mask;
   if (!formation.binding(contract, arguments, mask))
     return failure();
+  if (work && context) {
+    detail::NativeTypeWorkScope::charge(1 + formation.terms.size());
+    work->bindingTerms.try_emplace(key, formation.terms);
+  }
   return std::move(formation.terms);
 }
 
@@ -190,6 +236,16 @@ FunctionType
 resolveLogicalSignature(llvm::function_ref<InFlightDiagnostic()> emit,
                         MLIRContext *context, StringRef contract,
                         ArrayRef<Attribute> arguments) {
+  detail::NativeTypeWorkScope::charge(1 + contract.size() + arguments.size());
+  auto *work = detail::NativeTypeWorkScope::current();
+  detail::NativeTypeWork::Application key;
+  if (work && context) {
+    key = {StringAttr::get(context, contract),
+           ArrayAttr::get(context, arguments)};
+    if (auto found = work->signatures.find(key);
+        found != work->signatures.end())
+      return found->second;
+  }
   SignatureFormation formation{emit, context, {}};
   DenseBoolArrayAttr mask;
   auto *declaration = formation.binding(contract, arguments, mask);
@@ -204,6 +260,7 @@ resolveLogicalSignature(llvm::function_ref<InFlightDiagnostic()> emit,
     if (!row || !scalar || !vector)
       return {};
     inputs.push_back(row);
+    detail::NativeTypeWorkScope::charge(mask.size());
     for (bool mapped : mask.asArrayRef())
       inputs.push_back(mapped ? vector : scalar);
     outputs.push_back(family.result == generic::NumericalSignature::Result::Map
@@ -224,6 +281,12 @@ resolveLogicalSignature(llvm::function_ref<InFlightDiagnostic()> emit,
         failed(append(declaration->signature.outputs, outputs)))
       return {};
   }
-  return FunctionType::get(context, inputs, outputs);
+  detail::NativeTypeWorkScope::charge(1 + inputs.size() + outputs.size());
+  auto signature = FunctionType::get(context, inputs, outputs);
+  if (work && context) {
+    detail::NativeTypeWorkScope::charge();
+    work->signatures.try_emplace(key, signature);
+  }
+  return signature;
 }
 } // namespace zkc

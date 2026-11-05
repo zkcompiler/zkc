@@ -1,4 +1,5 @@
 #include "NativeBindingApplication.h"
+#include "OracleAccounting.h"
 #include "OracleQueryDemand.h"
 #include "OracleVerificationContext.h"
 #include "OracleVirtualRecipe.h"
@@ -38,6 +39,10 @@ Error layout(const OracleVerificationContext &target,
       find_if(controller.kinds,
               [&](auto kind) { return sameOracleReferenceKind(kind, root); }) -
       controller.kinds.begin();
+  if (!target.charge(64 + storage.entry.size() * 2 +
+                     controller.role.size() * 2 + controller.kinds.size() +
+                     controller.constructors.size()))
+    return error("oracle-common-limit");
   auto *context = target.getModule().getContext();
   auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
   VariantIdentity nominalIdentity(VariantIdentity::Tuple{
@@ -64,12 +69,15 @@ Error layout(const OracleVerificationContext &target,
   // Re-read source order, including duplicate and unused queries. The neutral
   // source recipe expands total calls; it emits no helper and evaluates none.
   OracleVirtualFunctionWork work;
+  work.common = &source.getWork();
   for (const auto &item : controller.constructors) {
     const auto &anchor = storage.constructors[item.source];
     OracleVirtualRecipe recipe;
     if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual) {
       auto definition = dyn_cast_or_null<pir::OracleDefinitionOp>(
-          SymbolTable::lookupSymbolIn(source.getUnit(), anchor.declaration));
+          source.getSymbols()
+              .getSymbolTable(source.getUnit())
+              .lookup(anchor.declaration));
       if (!definition)
         return refuse();
       auto planned = planOracleVirtualFunctions(definition, work);
@@ -105,7 +113,7 @@ struct Reader {
         scope(runtime::ScopeType::get(unit.getContext())),
         boolean(IntegerType::get(unit.getContext(), 1)) {}
   bool expect(bool value) {
-    valid &= value;
+    valid &= context.charge() && value;
     return valid;
   }
   struct Cursor {
@@ -119,6 +127,10 @@ struct Reader {
       if (!reader.expect(offset < steps.size()))
         return nullptr;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(
+              1 + step.inputs.size() + step.outputs.size() +
+              step.regions.size() + site.size())))
+        return nullptr;
       auto actual = step.operation->getAttrOfType<StringAttr>(
           operation == "func.call" ? "runtime.site" : "site");
       if (!reader.expect(step.operation->getName().getStringRef() ==
@@ -145,14 +157,15 @@ struct Reader {
       if (!reader.valid)
         return values;
       auto op = cast<exec::ApplyOp>(step->operation);
-      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-          op, op.getBindingAttr());
+      auto binding = reader.context.getSymbols()
+                         .lookupNearestSymbolFrom<runtime::BindingOp>(
+                             op, op.getBindingAttr());
       if (!reader.expect(binding && binding.getContract() == contract &&
                          binding.getImplementation().empty() &&
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      reader.expect(matchesNativeBinding(
+      reader.expect(reader.context.matchesBinding(
           binding, {contract.str(), SmallVector<Attribute>(statics), {}}));
       reader.expect(invocationParametersMatch(
           contract, binding.getArgumentsAttr(), op.getParametersAttr(),
@@ -189,8 +202,9 @@ struct Reader {
       auto values = result(step, outputs, inputs);
       if (reader.valid) {
         auto call = cast<func::CallOp>(step->operation);
-        callee = dyn_cast_or_null<func::FuncOp>(
-            SymbolTable::lookupSymbolIn(reader.unit, call.getCallee()));
+        callee = dyn_cast_or_null<func::FuncOp>(reader.context.getSymbols()
+                                                    .getSymbolTable(reader.unit)
+                                                    .lookup(call.getCallee()));
         reader.expect(bool(callee));
       }
       return values;
@@ -214,7 +228,8 @@ struct Reader {
       auto values = result(step, expected.getResultTypes(), inputs);
       if (reader.valid) {
         auto op = cast<exec::ComputeOp>(step->operation);
-        auto actual = SymbolTable::lookupSymbolIn(reader.unit, op.getCallee());
+        auto actual = reader.context.getSymbols().lookupSymbolIn(
+            reader.unit, op.getCallee());
         reader.expect(actual == expected.getOperation());
       }
       return values.front();
@@ -316,6 +331,11 @@ struct Reader {
   };
   void body(func::FuncOp function, TypeRange inputs, TypeRange outputs,
             bool region, llvm::function_ref<void(Cursor &, ValueRange)> check) {
+    if (!valid)
+      return;
+    if (!expect(context.charge(1 + inputs.size() + outputs.size()) &&
+                function && context.reserveRead(function)))
+      return;
     if (!valid)
       return;
     Types arguments{scope};
@@ -593,7 +613,7 @@ struct Reader {
     dispatch(function, selector, cases, allTypes(), model.state, leaf, check);
   }
   void initialize(pir::OracleKindAttr root) {
-    auto reference = cantFail(oracleReferenceType(root));
+    auto reference = requireOracleReferenceType(root, context.getWork());
     body(model.initialize, TypeRange{reference, index}, model.state, false,
          [&](Cursor &c, ValueRange inputs) {
            auto coordinates =
@@ -693,47 +713,82 @@ Error checkOracleQueryDemand(ModuleOp candidate, ModuleOp prepared,
                              const OracleQueryController &controller,
                              pir::OracleKindAttr root, const Demand &actual) {
   auto refuse = [] { return error("oracle-demand-body"); };
-  auto target = OracleVerificationContext::read(candidate);
+  OracleNativeWork rawWork;
+  auto target = OracleVerificationContext::read(candidate, rawWork);
   if (!target) {
-    consumeError(target.takeError());
-    return refuse();
+    return llvm::handleErrors(target.takeError(),
+                              [&](const Refusal &failure) -> Error {
+                                if (failure.code == "oracle-common-limit" ||
+                                    failure.code == "common-control-capacity")
+                                  return error(failure.code, failure.detail);
+                                return refuse();
+                              });
   }
-  auto source = OracleVerificationContext::read(prepared);
+  auto source = OracleVerificationContext::read(prepared, rawWork);
   if (!source) {
-    consumeError(source.takeError());
-    return refuse();
+    return llvm::handleErrors(source.takeError(),
+                              [&](const Refusal &failure) -> Error {
+                                if (failure.code == "oracle-common-limit" ||
+                                    failure.code == "common-control-capacity")
+                                  return error(failure.code, failure.detail);
+                                return refuse();
+                              });
   }
   return checkOracleQueryDemand(*target, *source, storage, controller, root,
                                 actual);
+}
+static Error checkOracleQueryDemandImpl(
+    const OracleVerificationContext &target,
+    const OracleVerificationContext &source, const OracleAnchorStorage &storage,
+    const OracleQueryController &controller, pir::OracleKindAttr root,
+    const Demand &actual, const OracleCheckedController *checked) {
+  return oracleVerificationWithWork(target.getWork(), [&]() -> Error {
+    auto refuse = [] { return error("oracle-demand-body"); };
+    if (target.getUnit() == source.getUnit() ||
+        target.getModule().getContext() != source.getModule().getContext() ||
+        controller.kinds.empty())
+      return refuse();
+    // A demand root may have any checked kind number. Revalidate the evaluator
+    // with its own original root, rather than changing its kind enumeration.
+    if (checked) {
+      if (!target.charge() ||
+          !checked->matches(target, source, storage, controller))
+        return refuse();
+    } else if (auto e = checkOracleQueryController(
+                   target, source, storage, controller.role,
+                   controller.kinds.front(), controller.capacity, controller,
+                   controller.access)) {
+      consumeError(std::move(e));
+      return refuse();
+    }
+    unsigned rootKind = 0;
+    std::vector<OracleVirtualRecipe> recipes;
+    if (auto e = layout(target, source, storage, controller, root, actual,
+                        rootKind, recipes)) {
+      consumeError(std::move(e));
+      return refuse();
+    }
+    Reader reader(target, storage, controller, actual, recipes, rootKind);
+    reader.initialize(root);
+    reader.advance();
+    return reader.valid ? Error::success() : refuse();
+  });
 }
 Error checkOracleQueryDemand(const OracleVerificationContext &target,
                              const OracleVerificationContext &source,
                              const OracleAnchorStorage &storage,
                              const OracleQueryController &controller,
                              pir::OracleKindAttr root, const Demand &actual) {
-  auto refuse = [] { return error("oracle-demand-body"); };
-  if (target.getUnit() == source.getUnit() ||
-      target.getModule().getContext() != source.getModule().getContext() ||
-      controller.kinds.empty())
-    return refuse();
-  // A demand root may have any checked kind number. Revalidate the evaluator
-  // with its own original root, rather than changing its kind enumeration.
-  if (auto e = checkOracleQueryController(
-          target, source, storage, controller.role, controller.kinds.front(),
-          controller.capacity, controller, controller.access)) {
-    consumeError(std::move(e));
-    return refuse();
-  }
-  unsigned rootKind = 0;
-  std::vector<OracleVirtualRecipe> recipes;
-  if (auto e = layout(target, source, storage, controller, root, actual,
-                      rootKind, recipes)) {
-    consumeError(std::move(e));
-    return refuse();
-  }
-  Reader reader(target, storage, controller, actual, recipes, rootKind);
-  reader.initialize(root);
-  reader.advance();
-  return reader.valid ? Error::success() : refuse();
+  return checkOracleQueryDemandImpl(target, source, storage, controller, root,
+                                    actual, nullptr);
+}
+Error checkOracleQueryDemand(const OracleVerificationContext &target,
+                             const OracleVerificationContext &source,
+                             const OracleAnchorStorage &storage,
+                             const OracleQueryController &controller,
+                             pir::OracleKindAttr root, const Demand &actual,
+                             const OracleCheckedController &checked) {
+  return checkOracleQueryDemandImpl(target, source, storage, controller, root,
+                                    actual, &checked);
 }
 } // namespace zkc::protocol

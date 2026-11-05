@@ -1,9 +1,10 @@
+#include "../Transforms/OracleNativeCommon.h"
 #include "../Transforms/RealizedProtocol.h"
 #include "NativeRequest.h"
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
-#include <map>
 
 using namespace mlir;
 using namespace llvm;
@@ -11,19 +12,38 @@ namespace zkc::detail {
 namespace {
 namespace pir = protocol_ir;
 Error refuse() { return error("native-request-count-correspondence"); }
-struct Occurrence {
-  std::string site, role;
-  std::vector<unsigned> path;
-};
+Error capacity() { return error("native-request-count-limit"); }
 } // namespace
 Expected<SmallVector<NativeRequestCountPair>>
 readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
                         pir::ProtocolModuleOp projected,
                         const NativeProofPolicy &policy) {
+  protocol::OracleNativeWork work;
+  auto bound = [&](Operation *subject) {
+    if (auto failure = protocol::boundOracleNativeIR(subject, &work)) {
+      consumeError(std::move(failure));
+      return false;
+    }
+    return true;
+  };
+  // Check caller-controlled storage before obtaining owner snapshots. The
+  // owner's snapshot/projection phases have their own bounds; this allowance
+  // covers this consumer's complete comparison, indexes and matching work.
+  if (!projected || !hasSingleElement(projected.getBody()))
+    return refuse();
+  if (!bound(projected))
+    return capacity();
   auto common = owner.candidateSnapshot();
   auto ordinary = owner.project(false);
-  if (!common || !ordinary || !hasSingleElement(*ordinary->getBody()) ||
-      !OperationEquivalence::isEquivalentTo(
+  if (!common || !ordinary || !hasSingleElement(*ordinary->getBody()))
+    return refuse();
+  if (!bound(*common) || !bound(*ordinary))
+    return capacity();
+  // Reserve another complete traversal for the two-subject equivalence check;
+  // admission metadata or the supplied projection's shape cannot replace it.
+  if (!bound(projected) || !bound(*ordinary))
+    return capacity();
+  if (!OperationEquivalence::isEquivalentTo(
           &ordinary->getBody()->front(), projected,
           OperationEquivalence::IgnoreLocations))
     return refuse();
@@ -35,6 +55,10 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
       SymbolTable::lookupSymbolIn(unit, policy.entry));
   pir::ParticipantOp producer, validator;
   for (auto p : projected.getBody().front().getOps<pir::ParticipantOp>()) {
+    if (!work.charge() || !work.charge(p.getRole().size()) ||
+        !work.charge(policy.producer.size()) ||
+        !work.charge(policy.validator.size()))
+      return capacity();
     if (p.getRole() == policy.producer)
       producer = p;
     if (p.getRole() == policy.validator)
@@ -43,17 +67,20 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
   if (!program || !producer || !validator)
     return refuse();
   StringMap<Operation *> commonSites, pSites, vSites;
-  unsigned remaining = 1000000;
   bool valid = true;
   auto index = [&](Operation *root, StringMap<Operation *> &sites) {
     root->walk([&](Operation *op) {
-      if (!remaining) {
+      if (!work.charge()) {
         valid = false;
         return WalkResult::interrupt();
       }
-      --remaining;
-      if (auto site = op->getAttrOfType<StringAttr>("site"))
+      if (auto site = op->getAttrOfType<StringAttr>("site")) {
+        if (!work.charge(site.getValue().size())) {
+          valid = false;
+          return WalkResult::interrupt();
+        }
         valid &= sites.try_emplace(site.getValue(), op).second;
+      }
       return WalkResult::advance();
     });
   };
@@ -61,24 +88,45 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
   index(producer, pSites);
   index(validator, vSites);
   if (!valid)
-    return refuse();
+    return work.exhausted ? capacity() : refuse();
   SmallVector<NativeRequestCountPair> result;
   for (const auto &entry : owner.realizationFacts()) {
+    if (!work.charge() || !work.charge(entry.entry.size()) ||
+        !work.charge(policy.entry.size()))
+      return capacity();
     if (entry.entry != policy.entry)
       continue;
-    std::map<std::vector<unsigned>, SmallVector<Occurrence>> rounds;
-    SmallVector<Occurrence> loops;
-    for (const auto &occurrence : entry.occurrences) {
-      if (occurrence.purpose != "query_round_count" &&
-          occurrence.purpose != "query_requests")
-        continue;
-      Occurrence value{occurrence.site, occurrence.role, occurrence.sourcePath};
-      if (occurrence.purpose == "query_round_count")
-        rounds[value.path].push_back(value);
-      else
-        loops.push_back(value);
+    // Keys borrow immutable facts retained by owner. Hashing each full path
+    // is charged; no repeated vector copies or loop-by-query-block scan.
+    using Path = ArrayRef<unsigned>;
+    using Occurrence = protocol::OracleCommonOccurrence;
+    llvm::DenseMap<Path, SmallVector<const Occurrence *>> rounds;
+    llvm::DenseMap<Path, const protocol::OracleCommonQueryBlock *> blocks;
+    SmallVector<const Occurrence *> loops;
+    for (const auto &block : entry.queryBlocks) {
+      if (!work.charge() || (!block.queries.empty() &&
+                             !work.charge(block.queries.front().size())))
+        return capacity();
+      if (block.queries.empty() ||
+          !blocks.try_emplace(block.queries.front(), &block).second)
+        return refuse();
     }
-    for (const auto &item : loops) {
+    for (const auto &occurrence : entry.occurrences) {
+      if (!work.charge() || !work.charge(occurrence.purpose.size()) ||
+          !work.charge(occurrence.sourcePath.size()))
+        return capacity();
+      if (occurrence.purpose == "query_round_count")
+        rounds[occurrence.sourcePath].push_back(&occurrence);
+      else if (occurrence.purpose == "query_requests")
+        loops.push_back(&occurrence);
+    }
+    for (const auto *occurrence : loops) {
+      const auto &item = *occurrence;
+      if (!work.charge() || !work.charge(item.role.size()) ||
+          !work.charge(policy.validator.size()) ||
+          !work.chargeProduct(item.site.size(), 3) ||
+          !work.chargeProduct(item.sourcePath.size(), 2))
+        return capacity();
       if (item.role != policy.validator)
         continue;
       auto sourceLoop =
@@ -96,10 +144,18 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
       if (!assembly)
         return refuse();
       Value pCount, vCount;
-      auto found = rounds.find(item.path);
+      auto found = rounds.find(item.sourcePath);
       if (found == rounds.end() || found->second.size() != 2)
         return refuse();
-      for (const auto &round : found->second) {
+      for (const auto *occurrence : found->second) {
+        const auto &round = *occurrence;
+        if (!work.charge() || !work.chargeProduct(round.site.size(), 2) ||
+            !work.charge(round.role.size()) ||
+            !work.charge(policy.producer.size()) ||
+            !work.charge(policy.validator.size()) ||
+            !work.chargeProduct(assembly.getRoles().size(),
+                                round.role.size() + 1))
+          return capacity();
         auto sourceCall =
             dyn_cast_or_null<pir::LocalCallOp>(commonSites.lookup(round.site));
         auto actual = dyn_cast_or_null<pir::LocalCallOp>(
@@ -122,19 +178,13 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
         return refuse();
       // Source query-block inventory is ordered and multiplicity preserving.
       // Its first occurrence is the lexical identity of this generated loop.
-      bool blockFound = false;
-      for (const auto &block : entry.queryBlocks) {
-        if (block.queries.empty())
-          return refuse();
-        if (block.queries.front() == item.path) {
-          if (blockFound || !block.packetCapacity ||
-              *block.packetCapacity == 0 || *block.packetCapacity >= 1048576)
-            return refuse();
-          blockFound = true;
-        }
-      }
-      if (!blockFound)
+      auto block = blocks.find(item.sourcePath);
+      if (block == blocks.end() || !block->second->packetCapacity ||
+          *block->second->packetCapacity == 0 ||
+          *block->second->packetCapacity >= 1048576)
         return refuse();
+      if (!work.charge())
+        return capacity();
       result.push_back({pCount, vCount});
     }
   }

@@ -1,3 +1,4 @@
+#include "../lib/Transforms/OraclePrivateComposite.h"
 #include "../lib/Transforms/OracleQueryWindow.h"
 #include "../lib/Transforms/OracleVerificationContext.h"
 #include "../lib/Transforms/RealizationEmission.h"
@@ -170,36 +171,39 @@ Input emitted(MLIRContext &context, unsigned variant = 0,
   input.candidate = fresh(context);
   input.work.operations = 1000000;
   input.work.slots = 100000000;
+  auto composed = take(OraclePrivateComposite::create(
+      std::move(input.candidate), *input.prepared, std::move(input.work)));
   auto root = input.storage.constructors[0].kind;
-  input.receiver = take(emitOracleQueryController(
-      *input.candidate, *input.prepared, input.storage, "V", root,
-      input.capacity, input.work));
-  input.holder = take(emitOracleQueryController(
-      *input.candidate, *input.prepared, input.storage, "P", root,
-      input.capacity, input.work, OracleControllerAccess::Holder));
+  input.receiver =
+      take(composed->controller(input.storage, "V", root, input.capacity));
+  input.holder =
+      take(composed->controller(input.storage, "P", root, input.capacity,
+                                OracleControllerAccess::Holder));
   input.merkle.resize(input.storage.constructors.size());
   for (auto [ordinal, anchor] : enumerate(input.storage.constructors))
     if (anchor.constructor != OracleAnchorConstructor::Kind::Virtual)
-      input.merkle[ordinal] = take(emitOracleMerkle(
-          *input.candidate, anchor.kind, anchor.scheme,
-          OracleLeafGrouping::Individual, OracleLeafOrder::Natural));
+      input.merkle[ordinal] = take(composed->merkle(
+          anchor.kind, anchor.scheme, OracleLeafGrouping::Individual,
+          OracleLeafOrder::Natural));
   input.exchange = take(planOracleQueryExchange(input.storage, input.receiver,
                                                 input.holder, input.merkle));
-  checkModel(input);
-  input.response = take(
-      emitOracleQueryResponse(*input.candidate, input.exchange, input.work));
+  input.response = take(composed->response(input.exchange));
   input.root = input.storage.constructors[variant == 1 ? 1 : 0].kind;
-  input.demand = take(emitOracleQueryDemand(
-      *input.candidate, input.storage, input.receiver, input.root, input.work));
+  input.demand =
+      take(composed->demand(input.storage, input.receiver, input.root));
+  auto before = composed->primitiveCapacity();
+  input.window =
+      take(composed->window(input.receiver, input.demand, input.exchange,
+                            input.response, packetCapacity));
+  auto finished = take(composed->finish());
+  input.candidate = std::move(finished.candidate);
+  input.work = std::move(finished.work);
+  checkModel(input);
   checked(checkOracleQueryDemand(*input.candidate, *input.prepared,
                                  input.storage, input.receiver, input.root,
                                  input.demand));
-  auto before = input.work;
-  input.window = take(emitOracleQueryWindow(
-      *input.candidate, input.receiver, input.demand, input.exchange,
-      input.response, packetCapacity, input.work));
-  require(input.work.operations < before.operations &&
-              input.work.slots < before.slots,
+  require(input.work.operations < before.first &&
+              input.work.slots < before.second,
           "window emission did not debit shared work");
   checked(checkWindow(input));
   require(print(*input.source) == frozenSource &&
@@ -807,7 +811,12 @@ int main(int argc, char **argv) {
       auto demand = input.demand;
       auto exchange = input.exchange;
       auto response = input.response;
-      auto work = input.work;
+      // A distinct raw negative query pays its complete admission from a
+      // fresh allowance. This does not refresh the composed positive
+      // construction's sticky allowance, or any production work object.
+      OracleVirtualFunctionWork work;
+      work.operations = input.work.operations;
+      work.slots = input.work.slots;
       uint64_t capacity = 2;
       StringRef code = "oracle-window-layout";
       if (test < 4) {

@@ -9,9 +9,22 @@
 #include <string>
 
 namespace zkc::mathematical {
+class RealizedProtocol;
+}
+namespace zkc::detail {
+llvm::Expected<std::string>
+buildRunBundle(const mathematical::RealizedProtocol &, mlir::ModuleOp,
+               llvm::StringRef);
+llvm::Error verifyRunBundle(const mathematical::RealizedProtocol &,
+                            mlir::ModuleOp, llvm::StringRef, llvm::StringRef);
+} // namespace zkc::detail
+namespace zkc::mathematical {
 // Private ownership of an actual-body-checked realization edge. Construction
 // consumes the prepared owner; no mutable operation or untrusted record can
 // become a checked edge. All modules borrow the caller's MLIR context.
+// Creation, independent checking and publication share one local allowance.
+// The exact checked source and candidate move together into this owner; raw
+// checking/export APIs independently reconstruct facts for their own inputs.
 //
 // This is native structural correspondence, not a semantic simulation or
 // authority to publish logical claims. Logical clauses and selections stay on
@@ -19,6 +32,12 @@ namespace zkc::mathematical {
 // consumers retain this edge through execution and must interpret it before
 // publishing logical claims.
 class RealizedProtocol {
+  friend llvm::Expected<std::string>
+  detail::buildRunBundle(const RealizedProtocol &, mlir::ModuleOp,
+                         llvm::StringRef);
+  friend llvm::Error detail::verifyRunBundle(const RealizedProtocol &,
+                                             mlir::ModuleOp, llvm::StringRef,
+                                             llvm::StringRef);
   PreparedProtocol prepared;
   mlir::OwningOpRef<mlir::ModuleOp> candidate;
   protocol::OracleRealizationFacts facts;

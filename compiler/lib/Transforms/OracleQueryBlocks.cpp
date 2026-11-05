@@ -1,22 +1,24 @@
 #include "OracleQueryBlocks.h"
+#include "OracleNativeCommon.h"
 #include "zkc/Support/Refusal.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol {
 namespace {
 namespace pir = protocol_ir;
-Error charge(unsigned &remaining) {
+Error charge(unsigned &remaining, OracleNativeWork *common) {
+  if (common && !common->charge())
+    return error("oracle-common-limit");
   if (!remaining)
     return error("oracle-query-block-limit");
   --remaining;
   return Error::success();
 }
 } // namespace
-Expected<OracleQueryWindowSelection>
-selectOracleQueryWindow(pir::OracleQueryOp first,
-                        OracleAuthentication authentication,
-                        const OracleQueryCapacity &capacity,
-                        DominanceInfo &dominance, unsigned &remaining) {
+Expected<OracleQueryWindowSelection> selectOracleQueryWindow(
+    pir::OracleQueryOp first, OracleAuthentication authentication,
+    const OracleQueryCapacity &capacity, DominanceInfo &dominance,
+    unsigned &remaining, OracleNativeWork *common) {
   if (!first || !first.getOwner() ||
       !first->getParentOfType<pir::MathematicalOp>() ||
       (authentication != OracleAuthentication::PerQuery &&
@@ -25,7 +27,7 @@ selectOracleQueryWindow(pir::OracleQueryOp first,
   OracleQueryWindowSelection result;
   auto *operation = first.getOperation();
   while (operation && result.queries.size() < 32) {
-    if (auto e = charge(remaining))
+    if (auto e = charge(remaining, common))
       return std::move(e);
     auto query = dyn_cast<pir::OracleQueryOp>(operation);
     if (!query || query.getOwner() != first.getOwner())
@@ -35,7 +37,7 @@ selectOracleQueryWindow(pir::OracleQueryOp first,
     // be replaced by a structurally similar earlier value.
     bool available = true;
     for (Value operand : query->getOperands()) {
-      if (auto e = charge(remaining))
+      if (auto e = charge(remaining, common))
         return std::move(e);
       available &= dominance.properlyDominates(operand, first);
     }

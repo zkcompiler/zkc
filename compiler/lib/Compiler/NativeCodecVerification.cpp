@@ -1,4 +1,5 @@
 #include "NativeCodec.h"
+#include "NativeCodecCapacity.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Admission.h"
@@ -36,16 +37,9 @@ class CodecCorrespondence {
   StringMap<CodecMessage *> leaves, observerMessages;
   llvm::StringSet<> allowedFunctions, allowedBindings, usedHelpers;
   FlatSymbolRefAttr conditionalWrite, conditionalFinish;
-  uint64_t remaining = 1000000;
+  CodecCapacity &capacity;
   std::string checkpoint;
-  bool charge(size_t n = 1) {
-    if (n > remaining) {
-      remaining = 0;
-      return false;
-    }
-    remaining -= n;
-    return true;
-  }
+  bool charge(size_t n = 1) { return capacity.charge(n); }
   static bool attributes(Operation *a, Operation *b,
                          ArrayRef<StringRef> omitted = {}) {
     NamedAttrList x(a->getAttrs()), y(b->getAttrs());
@@ -171,6 +165,8 @@ class CodecCorrespondence {
            step.regions.empty();
   }
   bool slice(FlatSymbolRefAttr reference, unsigned count) {
+    if (!charge(4 * uint64_t(count) + 1))
+      return false;
     auto f = generated(reference);
     auto index =
         IntegerType::get(bytes.getContext(), 64, IntegerType::Unsigned);
@@ -200,6 +196,8 @@ class CodecCorrespondence {
     auto handler = protocol::scopedDataSignature(source);
     auto signature = protocol::scopedDataSignature(f);
     if (!signature || !handler || body(f).size() != 2)
+      return false;
+    if (!charge(4 * handler.getNumInputs() + 4 * handler.getNumResults() + 1))
       return false;
     SmallVector<Type> inputs{IntegerType::get(bytes.getContext(), 1)};
     append_range(inputs, handler.getInputs());
@@ -250,9 +248,9 @@ class CodecCorrespondence {
   pir::LocalCallOp invoke(Operation *&cursor, FlatSymbolRefAttr reference,
                           ValueRange inputs) {
     auto call = dyn_cast_or_null<pir::LocalCallOp>(cursor);
-    if (!call || !charge() || call->getAttrs().size() != 3 ||
-        !call.getSiteAttr() || call.getCalleeAttr() != reference ||
-        call.getInputs() != inputs ||
+    if (!call || !charge(1 + inputs.size() + call.getNumResults()) ||
+        call->getAttrs().size() != 3 || !call.getSiteAttr() ||
+        call.getCalleeAttr() != reference || call.getInputs() != inputs ||
         call.getRoleAttr() !=
             call->getParentOfType<pir::ParticipantOp>().getRoleAttr())
       return {};
@@ -263,25 +261,45 @@ class CodecCorrespondence {
   bool body(Block &source, Operation *cursor, Env env,
             SmallVector<Value> record, Value proof, bool writing,
             unsigned depth, Operation *sourceStart = nullptr) {
-    if (depth > 64)
+    // Environments enter by move. Arm environments below are built afresh,
+    // rather than copying all facts from preceding arms or enumerating paths.
+    if (depth > 64 ||
+        !charge(env.size() + record.size() + source.getNumArguments()))
       return false;
     struct Occurrences {
       SmallVector<Operation *> transport;
       SmallVector<pir::LocalCallOp> observations;
     };
     llvm::DenseMap<const CodecMessage *, Occurrences> occurrences;
+    const CodecMessage *pending = nullptr;
+    unsigned nextLeaf = 0;
     for (auto &op : source) {
-      if (!charge())
+      if (!charge(1 + op.getNumOperands() + op.getNumResults()))
         return false;
       if (isa<pir::EmitOp, pir::AwaitOp>(op)) {
         auto site = op.getAttrOfType<StringAttr>("site");
-        if (auto *message = site ? leaves.lookup(site.getValue()) : nullptr)
-          occurrences[message].transport.push_back(&op);
+        auto *message = site ? leaves.lookup(site.getValue()) : nullptr;
+        if (!message || (pending && pending != message) ||
+            nextLeaf >= message->encode->sites.size() ||
+            site.getValue() != message->encode->sites[nextLeaf])
+          return false;
+        occurrences[message].transport.push_back(&op);
+        pending = message;
+        if (++nextLeaf == message->encode->sites.size()) {
+          pending = nullptr;
+          nextLeaf = 0;
+        }
       } else if (auto call = dyn_cast<pir::LocalCallOp>(op)) {
-        if (auto *message = observerMessages.lookup(call.getCallee()))
+        auto *message = observerMessages.lookup(call.getCallee());
+        if (pending && pending != message)
+          return false;
+        if (message)
           occurrences[message].observations.push_back(call);
-      }
+      } else if (pending && !mathematical::isTotal(&op))
+        return false;
     }
+    if (pending)
+      return false;
     llvm::DenseSet<Operation *> completed, postponed;
     llvm::DenseMap<Operation *, SmallVector<Value>> overridden;
     for (auto &op :
@@ -292,11 +310,60 @@ class CodecCorrespondence {
         return false;
       if (completed.contains(&op))
         continue;
-      if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op)) {
+      if (auto branch = dyn_cast<pir::ParticipantBranchOp>(op)) {
+        auto actual = dyn_cast<pir::ParticipantBranchOp>(cursor);
+        unsigned originalInputs = branch.getNumOperands();
+        unsigned originalResults = branch.getNumResults();
+        unsigned extra = record.size(), capture = unsigned(bool(proof));
+        if (!actual || branch.getNumRegions() > 512 ||
+            !charge(branch.getNumRegions() + originalInputs + originalResults +
+                    2 * extra + capture) ||
+            !attributes(branch, actual) ||
+            actual.getNumRegions() != branch.getNumRegions() ||
+            actual.getNumOperands() != originalInputs + extra + capture ||
+            actual.getNumResults() != originalResults + extra ||
+            !operands(branch.getInputs(),
+                      actual.getInputs().take_front(originalInputs), env) ||
+            actual.getInputs().slice(originalInputs, extra) !=
+                ValueRange(record) ||
+            (proof && actual.getInputs().back() != proof))
+          return false;
+        for (auto [sourceArm, candidateArm] :
+             zip(branch.getArms(), actual.getArms())) {
+          if (!sourceArm.hasOneBlock() || !candidateArm.hasOneBlock())
+            return false;
+          auto &a = sourceArm.front();
+          auto &b = candidateArm.front();
+          unsigned originalFormals = a.getNumArguments();
+          Env inner;
+          // Payload formals precede captures. The complete original prefix
+          // includes any transcript/coordinate/replica slots already present;
+          // equal types never permit reordering those actual SSA associations.
+          if (b.getNumArguments() != originalFormals + extra + capture ||
+              !charge(b.getNumArguments()) ||
+              !bind(a.getArguments(),
+                    b.getArguments().take_front(originalFormals), inner) ||
+              !body(a, &b.front(), std::move(inner),
+                    SmallVector<Value>(
+                        b.getArguments().slice(originalFormals, extra)),
+                    proof ? b.getArguments().back() : Value(), writing,
+                    depth + 1))
+            return false;
+        }
+        if (!bind(branch.getResults(),
+                  actual.getResults().take_front(originalResults), env))
+          return false;
+        record.assign(actual.getResults().take_back(extra).begin(),
+                      actual.getResults().take_back(extra).end());
+        cursor = cursor->getNextNode();
+      } else if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op)) {
         auto actual = dyn_cast<pir::ProtocolLoopOp>(cursor);
         unsigned split = 1 + loop.getCarried(), extra = record.size(),
                  capture = unsigned(bool(proof));
-        if (!actual || !attributes(loop, actual, {"carried"}) ||
+        if (!actual ||
+            !charge(loop.getNumOperands() + loop.getNumResults() + 2 * extra +
+                    capture) ||
+            !attributes(loop, actual, {"carried"}) ||
             actual.getCarried() != loop.getCarried() + extra ||
             actual.getNumOperands() !=
                 loop.getNumOperands() + extra + capture ||
@@ -314,6 +381,7 @@ class CodecCorrespondence {
         auto &b = actual.getBody().front();
         Env inner;
         if (b.getNumArguments() != a.getNumArguments() + extra + capture ||
+            !charge(b.getNumArguments()) ||
             !bind(a.getArguments().take_front(split),
                   b.getArguments().take_front(split), inner) ||
             !bind(a.getArguments().drop_front(split),
@@ -332,7 +400,7 @@ class CodecCorrespondence {
         cursor = cursor->getNextNode();
       } else if (auto yield = dyn_cast<pir::ProtocolYieldOp>(op)) {
         auto actual = dyn_cast<pir::ProtocolYieldOp>(cursor);
-        if (!actual || !attributes(yield, actual) ||
+        if (!actual || !attributes(yield, actual) || !charge(record.size()) ||
             actual.getNumOperands() != yield.getNumOperands() + record.size() ||
             !operands(yield.getInputs(),
                       actual.getInputs().take_front(yield.getNumOperands()),
@@ -388,6 +456,28 @@ class CodecCorrespondence {
             transport.size() != message->encode->sites.size() ||
             observations.size() != message->observations.size())
           return false;
+        for (auto [actual, expected] : zip(observations, message->observations))
+          if (!charge() || actual.getCalleeAttr() != expected)
+            return false;
+        // Both transport and observers must belong to the same ordered
+        // interval. In particular an observer after selected control cannot
+        // be moved before it merely because the message has only one leaf.
+        unsigned nextTransport = 0, nextObservation = 0;
+        for (auto *between = transport.front();
+             nextTransport != transport.size() ||
+             nextObservation != observations.size();
+             between = between->getNextNode()) {
+          if (!between || !charge())
+            return false;
+          if (nextTransport < transport.size() &&
+              between == transport[nextTransport])
+            ++nextTransport;
+          else if (nextObservation < observations.size() &&
+                   between == observations[nextObservation].getOperation())
+            ++nextObservation;
+          else if (!mathematical::isTotal(between))
+            return false;
+        }
         SmallVector<Value> inputs(record), chunks;
         if (writing) {
           for (auto *send : transport) {
@@ -437,18 +527,6 @@ class CodecCorrespondence {
           append_range(observedState, observed.getResults());
           overridden[observations.front()] = observedState;
         }
-        // Only total calculations and this message's observations may be
-        // crossed while gathering one logical payload.
-        for (auto *between = transport.front(); between != transport.back();
-             between = between->getNextNode()) {
-          if (!between || !charge())
-            return false;
-          if (is_contained(transport, between) ||
-              is_contained(observations, dyn_cast<pir::LocalCallOp>(between)))
-            continue;
-          if (!mathematical::isTotal(between))
-            return false;
-        }
         if (!writing) {
           auto decoded = invoke(cursor, message->decode->handler, chunks);
           if (!decoded || decoded.getNumResults() != transport.size())
@@ -486,9 +564,10 @@ public:
   CodecCorrespondence(pir::ProtocolModuleOp candidate,
                       const NativeProofPolicy &policy,
                       const protocol::ConstructionPlan &plan,
-                      const protocol::SourceExecutionClosure &execution)
+                      const protocol::SourceExecutionClosure &execution,
+                      CodecCapacity &capacity)
       : policy(policy), plan(plan), codec(*plan.codec), symbols(candidate),
-        execution(execution) {
+        execution(execution), capacity(capacity) {
     bytes = data::BytesType::get(candidate.getContext());
   }
   bool check(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
@@ -532,9 +611,15 @@ public:
     StringMap<FlatSymbolRefAttr> observations;
     for (const auto &item : *transcript[6].getAsArray()) {
       const auto &row = *item.getAsArray();
-      for (const auto &origin : *row[2].getAsArray())
+      if (!charge(1 + row[2].getAsArray()->size()))
+        return false;
+      for (const auto &origin : *row[2].getAsArray()) {
+        auto name = *row[0].getAsString();
+        if (!capacity.text(name) || !capacity.text(*origin.getAsString()))
+          return false;
         observations[*origin.getAsString()] =
-            FlatSymbolRefAttr::get(source.getContext(), *row[0].getAsString());
+            FlatSymbolRefAttr::get(source.getContext(), name);
+      }
     }
     for (const auto &rule : plan.rules) {
       if (!protocol::isCodecRule(rule.kind))
@@ -583,7 +668,7 @@ public:
       for (const auto &site : message.encode->sites) {
         leaves[site] = &message;
         auto *event = bySite.lookup(site);
-        if (!event || !charge())
+        if (!event || !charge() || !capacity.text(event->origin))
           return false;
         origins.push_back(event->origin);
         auto ref = observations.lookup(event->origin);
@@ -591,6 +676,8 @@ public:
           return false;
         auto inserted = observerMessages.try_emplace(ref.getValue(), &message);
         if (!inserted.second && inserted.first->second != &message)
+          return false;
+        if (!charge(1 + message.observations.size()))
           return false;
         if (!is_contained(message.observations, ref))
           message.observations.push_back(ref);
@@ -662,18 +749,25 @@ public:
       }
       SmallVector<Value> layout;
       for (auto item : original.getAs<ArrayAttr>("participants")) {
+        if (!charge())
+          return false;
         auto ports = cast<DictionaryAttr>(item);
         if (ports.getAs<FlatSymbolRefAttr>("participant") !=
             FlatSymbolRefAttr::get(p))
           continue;
         auto inputs = ports.getAs<ArrayAttr>("inputs");
+        if (!charge(inputs.size()) || !charge(codec.inputs.size()))
+          return false;
+        // Reconstruct the role-local mapping independently from the retained
+        // original identities, rather than treating an identity as an offset.
+        llvm::DenseMap<int64_t, unsigned> positions;
+        for (auto [position, input] : enumerate(inputs))
+          positions.try_emplace(cast<IntegerAttr>(input).getInt(), position);
         for (unsigned input : codec.inputs) {
-          auto found = find_if(inputs, [&](Attribute a) {
-            return cast<IntegerAttr>(a).getInt() == input;
-          });
-          if (found == inputs.end())
+          auto found = positions.find(static_cast<int64_t>(input));
+          if (found == positions.end())
             return false;
-          layout.push_back(b.getArgument(found - inputs.begin()));
+          layout.push_back(b.getArgument(found->second));
         }
       }
       auto initialized = invoke(cursor, codec.initialize, layout);
@@ -729,7 +823,7 @@ public:
              return usedHelpers.contains(item.getKey());
            });
   }
-  bool exhausted() const { return !remaining; }
+  bool exhausted() const { return capacity.exhausted(); }
   StringRef detail() const { return checkpoint; }
 };
 } // namespace
@@ -739,15 +833,21 @@ Error verifyNativeCodec(ModuleOp transcript, ModuleOp encoded,
                         ArrayRef<NativeTranscriptEvent> events,
                         const json::Array &transcriptPlan,
                         const json::Array &codecPlan) {
-  if (!transcript || !encoded || failed(zkc::admitStage(transcript)) ||
-      failed(zkc::admitStage(encoded)))
+  if (!transcript || !encoded)
+    return error("native-codec-subject");
+  CodecCapacity capacity;
+  if (!capacity.operation(transcript) || !capacity.operation(encoded) ||
+      !capacity.inputs(policy, plan, events, transcriptPlan) ||
+      !capacity.jsonArray(codecPlan))
+    return error("native-codec-limit");
+  if (failed(zkc::admitStage(transcript)) || failed(zkc::admitStage(encoded)))
     return error("native-codec-subject");
   auto source = cast<pir::ProtocolModuleOp>(transcript.getBody()->front());
   auto candidate = cast<pir::ProtocolModuleOp>(encoded.getBody()->front());
   auto execution = protocol::readSourceExecutionClosure(candidate);
   if (!execution)
     return execution.takeError();
-  CodecCorrespondence checker(candidate, policy, plan, *execution);
+  CodecCorrespondence checker(candidate, policy, plan, *execution, capacity);
   if (!checker.check(source, candidate, events, transcriptPlan, codecPlan))
     return error(checker.exhausted() ? "native-codec-limit"
                                      : "native-codec-correspondence",

@@ -202,6 +202,12 @@ add_zkc_test(mathematical_facts Contracts mathematical-facts)
 add_zkc_test(structured_reference IR)
 mlir_target_link_libraries(zkc-structured_reference-test PRIVATE MLIRParser)
 add_zkc_test(finite_cardinality Contracts finite-cardinality)
+add_zkc_test(language_index_fact_transport CpuTarget language-index-fact-transport)
+mlir_target_link_libraries(zkc-language_index_fact_transport-test PRIVATE MLIRParser)
+
+add_zkc_test(mathematical_fact_transport IR mathematical-fact-transport)
+mlir_target_link_libraries(zkc-mathematical_fact_transport-test PRIVATE MLIRParser)
+
 add_zkc_test(mathematical_fact_analysis IR mathematical-fact-analysis)
 mlir_target_link_libraries(zkc-mathematical_fact_analysis-test PRIVATE
   MLIRParser MLIRPass)
@@ -363,6 +369,11 @@ add_zkc_test(construction_binding Compiler construction-binding)
 target_compile_definitions(zkc-construction_binding-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-construction_binding-test PRIVATE MLIRParser)
+
+add_zkc_test(selected_requests Compiler selected-requests)
+mlir_target_link_libraries(zkc-selected_requests-test PRIVATE MLIRParser MLIRPass)
+add_zkc_test(selected_codec Compiler selected-codec)
+mlir_target_link_libraries(zkc-selected_codec-test PRIVATE MLIRParser)
 
 add_zkc_test(language_constructions CpuTarget language-constructions)
 add_zkc_test(language_construction_witness Language language-construction-witness)
@@ -858,3 +869,26 @@ target_compile_definitions(zkc-selected_math-test PRIVATE
   ZKC_CONTROL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/control")
 mlir_target_link_libraries(zkc-selected_math-test PRIVATE MLIRParser MLIRPass)
 add_zkc_test(represented_numerical CpuTarget represented-numerical)
+
+add_zkc_test(selected_transcript_verification Compiler selected-transcript-verification)
+mlir_target_link_libraries(zkc-selected_transcript_verification-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(selected_projection IR selected-projection)
+mlir_target_link_libraries(zkc-selected_projection-test PRIVATE MLIRParser)
+
+add_zkc_test(selected_proof Compiler selected-proof)
+mlir_target_link_libraries(zkc-selected_proof-test PRIVATE MLIRParser)
+
+add_zkc_test(construction_preparation Compiler construction-preparation)
+mlir_target_link_libraries(zkc-construction_preparation-test PRIVATE MLIRParser)
+add_zkc_test(selected_oracle_common Transforms selected-oracle-common)
+mlir_target_link_libraries(zkc-selected_oracle_common-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(selected_source_constructions Translation selected-source-constructions)
+mlir_target_link_libraries(zkc-selected_source_constructions-test PRIVATE MLIRParser)
+
+add_zkc_test(selected_oracle_counts CpuTarget selected-oracle-counts)
+mlir_target_link_libraries(zkc-selected_oracle_counts-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(constructed_selected_control Compiler constructed-selected-control)
+mlir_target_link_libraries(zkc-constructed_selected_control-test PRIVATE MLIRParser)

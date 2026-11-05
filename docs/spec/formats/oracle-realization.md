@@ -20,6 +20,118 @@ the actual candidate and the reader-checked serialized record together. Its
 inspection APIs return independent module clones. Mutating an inspected clone
 cannot change the owned edge or confer checked status on the mutation. An empty
 oracle inventory uses the same reader and preserves the ordinary module exactly.
+Creation, the complete independent pair check and serialization use one
+cumulative native allowance. A private local owner may retain the successful
+reader's facts and entry analyses for publication of those exact unchanged
+owned subjects and policy. It exposes no mutable subject or caller-supplied
+evidence input. The checked source and candidate move together into the
+persistent owner; inspection still returns independent copies. Every raw
+candidate, check and export API independently checks its supplied subjects,
+including ordinary source admission and final paired candidate completion.
+The cumulative allowance is 1,000,000 work units and 100,000 native operation
+visits. Raw entry points own an allowance; private composed implementations
+borrow the existing allowance through selection resolution, storage and capacity
+planning, query schedules, primitive emission, and actual-body readers. Primitive
+size and step ceilings remain additional constraints. Exhaustion is sticky,
+including across refused attempts and private IR rollback. Ordinary source
+admission may be retained only for an exact immutable subject and allowance.
+The complete independent source/candidate check, including both common-control
+completions, remains required before any checked result is retained.
+Structural admission may return the complete source-execution closure it
+actually validated to the private preparation reader. That result belongs to
+the exact immutable module, preflight and allowance. Retaining it removes a
+second closure reconstruction, without replacing structural admission or either
+common-control completion.
+
+Record reading charges the original wire-byte scan before lexing, including
+legal whitespace. Its private lexer checks UTF-8, escapes, unsigned numbers and
+nesting while collecting bounded tokens. Grammar construction charges value and
+container slots, string constructors and decoded-key hashing/comparison before
+insertion; duplicate decoded keys refuse at that insertion. Unescaped strings
+borrow the exact input only until the complete raw check returns; escaped strings
+own their decoded spelling. No record or borrowed wire string grants authority,
+and no parsed tree escapes this boundary. Recursive type import, formation and record equality consume
+that allowance too. Recursive native formation callbacks borrow the same scoped
+allowance, including ordinary MLIR verification. That verification runs
+synchronously while the scope is active, and restores the context's threading
+setting on success, refusal and cancellation. Exact successful immutable native
+attribute/type, binding-signature and Oracle-kind formation results may be reused
+within that allowance; live declaration ownership, profile and complete immutable
+attributes are checked at every binding read. No mutable symbol, stage admission,
+count equation or authored predicate is supplied by those caches.
+
+Publication debits each derived JSON object, array, string copy and expanded
+structured-type occurrence before constructing it. Type codecs debit actual
+expanded tree occurrences, independently of native formation and their own local
+node, byte and depth ceilings. Publication borrows the checked model, checks JSON
+container depth once, and prints into a bounded stream once, debiting output bytes
+before append. Object keys use deterministic lexical order; each actual sorting
+comparison debits its key width before the JSON stream opens that object.
+The closed data exporter and persistent publication detach dynamic strings
+during construction. A bytes-only serializer may borrow native spellings from
+the exact immutable independently checked modules through its one serialization;
+only the owned bytes escape, avoiding a detached JSON string tree that would be
+immediately discarded. The generic borrowed-JSON publication path separately reserves
+and copies strings after bounding container depth. A refused stream drains only
+its already reserved formatting so the JSON printer can close its containers;
+no partial publication escapes. Raw record decoding checks the closed metadata
+schema, exact live symbol references and canonical first-use type order. After
+the complete independent body check, it compares the derived fields and checks
+declaration rows directly against the exact native inventory. Canonical type
+spelling is checked during every recursive decode occurrence against the
+constructed native node's exact constructor and ordered arguments. Variant
+identity/alternatives, service identity, oracle kind and canonical natural
+spellings remain exact. The complete expected native type inventory, including
+canonical first use and unused/extra rows, is compared after the body check;
+no second descriptor tree is constructed solely for comparison. Shared native type storage does not waive repeated descriptor
+occurrences. Successfully checked storage requirements
+may be retained with the exact immutable pair to avoid repeated planning. Syntax,
+schema, wire byte/depth, primitive limits and common-control capacity retain their
+own refusal distinctions; cumulative native exhaustion is `oracle-common-limit`.
+
+All emitters in one private candidate share a lazily created binding emitter.
+Standalone primitive generation creates the same private live inventory for its
+generation scope; nested primitives borrow the enclosing inventory. Raw source
+admission and independent primitive readers remain required. Selection inventory
+counts exceeding the wire limit refuse before per-root field reservation.
+It reserves its initial declaration/name inventory once and deduplicates only
+bindings it created for the exact contract, implementation pin and static
+arguments. Its live symbol inventory observes every root insertion through the
+private builders' listeners; direct root insertion, erasure and renaming are
+excluded until that scope ends. Every newly allocated spelling performs a charged
+collision check against this current inventory, including declarations inserted
+by sibling helpers. Every deduplicated binding also checks the live name and
+complete attributes against its exact created declaration before reuse.
+The owned composite producer retains its candidate and admitted source clone
+behind a closed producer interface until one independent final candidate read.
+It shares identical virtual bundles, anchor lookups, table reads and count
+helpers only within that exact private insertion session. Every reuse checks the
+live symbol binding, and its keys include every semantic body input; returned
+metadata copies and inventory slots remain charged. Standalone raw sessions do
+not gain that reuse authority. Immutable paired readers can retain successful
+exact primitive checks within their contexts; all supplied model fields remain
+part of each reuse key, and a fresh public call reconstructs them independently.
+The inventory is destroyed before source bodies or Oracle
+definitions are replaced or erased, and before refused generation rolls back
+inserted root declarations. Closed identity regions may be shared for exact
+input/output types within that private scope; they forward all payloads, retain
+normal scoped completion behavior and perform a charged live lookup on reuse.
+Authored bindings are not reused as implicit implementation choices. Immutable
+native reference-type construction may be cached by exact kind within the same
+allowance. Native storage inspection also collects exact immutable symbol leaves
+and full subtree heights; reference readers reuse those results while continuing
+to debit each copied leaf. Operation names use the same immutable storage cache.
+Port and contract extraction debit actual native visits, selectors, role scans
+and copied rows rather than exporting unrelated type descriptors; no mutable module snapshot or symbol index acquires authority from
+that cache. Listeners charge actual native operation insertions, including scoped
+builder plumbing. Block creation and block arguments consume work separately;
+primitive conservative size reservations do not stand in for, or duplicate,
+actual insertion debits. Virtual dependency slicing charges each complete
+inventory scan, owner-map rebuild, recursive region scan and copied edge or slot,
+even when a query's selected dependency slice is empty. The independent reader
+permits exact shared generated pins and still checks each actual application and
+its failure/outcome behavior.
+
 Joint compilation projects a private copy of the checked candidate, reads the
 native schedule against that candidate's interface and retains the entire edge
 in the final compilation owner. Execution does not authorize logical claim
@@ -470,6 +582,9 @@ checks the tag before indexing the selected immutable store, and returns the
 record fields in their declared order. Internal callers do not reconstruct and
 immediately deconstruct a handle record. Dispatch is a balanced tree of scoped
 conditional regions in one callable; each leaf checks the exact selected tag.
+A single anchor case may use its checked leaf directly, since that leaf checks
+the actual tag before loading the immutable store. Readers retain the earlier
+single-case forwarding spelling as well, checking the complete selected grammar.
 The bounded advance loop owns its transition body directly. Independent readers
 check these bodies, guards, case partitions and complete state transfers. None
 of these representation choices changes logical custody or authorizes using a
@@ -503,3 +618,11 @@ not establish the independent Lean realization bridge, commitment security,
 logical-clause transport or correspondence of later optimization passes. See
 [protocol oracle semantics](../ir/protocols.md#logical-oracle-kinds-and-handles)
 and [implementation status](../../status.md).
+
+Standalone primitive generation retains its original root inventory until the
+producer returns successfully. A listener cancellation can occur after an
+operation is linked; failure first releases the live symbol inventory, then
+drops references and erases every added root without allocating a cleanup
+inventory. The original roots are preserved, and cleanup never refunds the
+shared allowance. Nested private generation remains owned by the enclosing
+scratch lifetime and its final independent pair check.

@@ -11,46 +11,6 @@ Value resolveNativeRequestValue(NativeRequestValue input,
   return input.ordinary ? ordinary.lookup(input.source)
                         : replica.lookup(input.source);
 }
-bool readNativeRequestSteps(const NativeRequestFrame &frame, Operation *anchor,
-                            Operation *&cursor,
-                            const NativeRequestValues &ordinary,
-                            NativeRequestValues &replica) {
-  auto found = frame.before.find(anchor);
-  if (found == frame.before.end())
-    return true;
-  for (const auto &step : found->second) {
-    auto *source = step.source;
-    if (!cursor || source->getName() != cursor->getName() ||
-        source->getNumRegions() || cursor->getNumRegions() ||
-        source->getNumOperands() != cursor->getNumOperands() ||
-        source->getResultTypes() != cursor->getResultTypes())
-      return false;
-    NamedAttrList expected(source->getAttrs()), actual(cursor->getAttrs());
-    if (isa<pir::LocalCallOp>(source)) {
-      auto call = cast<pir::LocalCallOp>(cursor);
-      auto participant = call->getParentOfType<pir::ParticipantOp>();
-      if (!participant || call.getRole() != participant.getRole() ||
-          !call.getSiteAttr() || call.getSite().empty())
-        return false;
-      expected.erase("site");
-      expected.erase("role");
-      actual.erase("site");
-      actual.erase("role");
-    }
-    if (expected != actual)
-      return false;
-    for (auto [input, operand] : zip(step.inputs, cursor->getOperands())) {
-      Value related = resolveNativeRequestValue(input, ordinary, replica);
-      if (!related || related != operand)
-        return false;
-    }
-    for (auto [from, to] : zip(source->getResults(), cursor->getResults()))
-      if (!replica.try_emplace(from, to).second)
-        return false;
-    cursor = cursor->getNextNode();
-  }
-  return true;
-}
 bool readNativeRequestLoopInputs(const NativeRequestLoop &loop,
                                  pir::ProtocolLoopOp actual,
                                  unsigned stateSlots,

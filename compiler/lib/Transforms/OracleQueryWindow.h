@@ -22,7 +22,8 @@ struct OracleQueryWindow {
 // controller.initialize, independently checks both models for the same actual
 // root and binds the exact immutable stores. Kind numbers belong to that
 // controller; numbers from another controller are not interchangeable.
-// Failure removes partial additions and restores work before returning.
+// Failure removes partial additions and restores primitive capacity
+// reservations. Cumulative work and operation visits remain spent.
 llvm::Expected<OracleQueryWindow>
 emitOracleQueryWindow(mlir::ModuleOp candidate, const OracleQueryController &,
                       const OracleQueryDemand &, const OracleQueryExchange &,

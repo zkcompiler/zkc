@@ -90,6 +90,37 @@ struct MetadataVerifier {
     return success();
   }
 
+  // Retained metadata has its own capacity, deliberately below the native
+  // selected-region formation limit of 512. Inspect every dormant arm too.
+  LogicalResult checkArms(ArrayAttr arms) {
+    if (!arms || arms.empty() || arms.size() > 256)
+      return refuse(record, "invalid retained selected arms");
+    if (failed(charge(arms.size())))
+      return failure();
+    llvm::DenseSet<Attribute> alternatives;
+    for (auto item : arms) {
+      auto arm = dyn_cast<DictionaryAttr>(item);
+      auto alternative =
+          arm ? arm.getAs<StringAttr>("alternative") : StringAttr();
+      if (!keys(arm, {"alternative", "body"}) || !alternative ||
+          alternative.getValue().empty() || !arm.getAs<ArrayAttr>("body") ||
+          !alternatives.insert(alternative).second)
+        return refuse(record, "invalid retained selected arm");
+      if (failed(charge(alternative.getValue().size())))
+        return failure();
+    }
+    return success();
+  }
+  LogicalResult chargeAction(DictionaryAttr action) {
+    if (!action)
+      return refuse(record, "invalid retained action fields");
+    auto site = action.getAs<StringAttr>("site");
+    auto targets = action.getAs<ArrayAttr>("targets");
+    return charge(1 + uint64_t(action.size()) +
+                  (site ? site.getValue().size() : 0) +
+                  (targets ? targets.size() : 0));
+  }
+
   LogicalResult execution() {
     if (closure)
       return success();
@@ -198,6 +229,8 @@ struct MetadataVerifier {
   }
 
   LogicalResult checkInterface(DictionaryAttr interface) {
+    if (!interface || failed(charge(interface.size())))
+      return refuse(record, "invalid retained interface fields");
     auto construction =
         interface ? interface.getAs<DictionaryAttr>("construction")
                   : DictionaryAttr();
@@ -261,6 +294,8 @@ struct MetadataVerifier {
     llvm::DenseSet<unsigned> removedServices;
     ArrayAttr constructedActions;
     if (construction) {
+      if (roles.size() != 2)
+        return refuse(record, "construction requires two roles");
       auto format = construction.getAs<StringAttr>("format");
       auto states = construction.getAs<ArrayAttr>("state");
       auto root = construction.getAs<StringAttr>("root");
@@ -269,6 +304,8 @@ struct MetadataVerifier {
       auto removed = construction.getAs<ArrayAttr>("removed_services");
       constructedActions = construction.getAs<ArrayAttr>("actions");
       auto codec = construction.getAs<DictionaryAttr>("codec");
+      if (failed(charge(construction.size())))
+        return failure();
       NamedAttrList core(construction);
       core.erase("codec");
       if ((construction.get("codec") && !codec) ||
@@ -281,6 +318,9 @@ struct MetadataVerifier {
           !helpers || helpers.size() > 16384 || !removed || removed.empty() ||
           removed.size() > type.getNumInputs() || !constructedActions)
         return refuse(record, "invalid native construction mapping");
+      if (failed(charge(uint64_t(states.size()) + helpers.size() +
+                        removed.size() + plan.getValue().size())))
+        return failure();
       hostRoot = root.getValue() == "host";
       programmable = !plan.empty();
       for (auto item : states) {
@@ -326,6 +366,8 @@ struct MetadataVerifier {
             !is_contained(roles, codecValidator) || !helpers ||
             helpers.empty() || helpers.size() > 14336 || !programmable)
           return refuse(record, "invalid record codec mapping");
+        if (failed(charge(helpers.size())))
+          return failure();
         for (auto helper : helpers)
           if (!constructionHelpers.contains(helper) ||
               !codecHelpers.insert(helper).second)
@@ -348,10 +390,12 @@ struct MetadataVerifier {
                                  unsigned depth) -> LogicalResult {
         if (depth > 64)
           return refuse(record, "projection region depth exceeds 64");
+        if (!sequence || failed(charge(sequence.size())))
+          return refuse(record, "invalid original construction sequence");
         for (auto item : sequence) {
-          if (failed(charge(1)))
-            return failure();
           auto action = dyn_cast<DictionaryAttr>(item);
+          if (failed(chargeAction(action)))
+            return failure();
           auto kind = action ? action.getAs<StringAttr>("kind") : StringAttr();
           auto site = action ? action.getAs<StringAttr>("site") : StringAttr();
           auto targets =
@@ -359,16 +403,19 @@ struct MetadataVerifier {
           bool call = kind && kind.getValue() == "protocol.local_call";
           bool exchange = kind && kind.getValue() == "protocol.exchange";
           bool loop = kind && kind.getValue() == "protocol.repeat";
+          bool branch = kind && kind.getValue() == "protocol.branch";
           bool start = kind && kind.getValue() == "protocol.construction_start";
           if (!kind || !site || site.getValue().empty() ||
               !sourceSites.insert(site.getValue()).second || !targets ||
-              (loop ? targets.empty() || targets.size() > 2
-                    : targets.size() != (exchange || start ? 2u : 1u)) ||
+              (loop || branch
+                   ? targets.empty() || targets.size() > 2
+                   : targets.size() != (exchange || start ? 2u : 1u)) ||
               (kind.getValue() != "protocol.query" &&
                kind.getValue() != "protocol.guard" &&
                kind.getValue() != "protocol.finish_if" && !call && !exchange &&
-               !loop && !start) ||
-              !(call   ? keys(action, {"site", "kind", "targets", "callee"})
+               !loop && !branch && !start) ||
+              !(branch ? keys(action, {"site", "kind", "targets", "arms"})
+                : call ? keys(action, {"site", "kind", "targets", "callee"})
                 : loop ? keys(action,
                               {"site", "kind", "targets", "maximum", "body"})
                 : kind.getValue() == "protocol.query"
@@ -397,6 +444,16 @@ struct MetadataVerifier {
                 failed(self(self, body, depth + 1)))
               return refuse(record, "invalid original construction loop");
           }
+          if (branch) {
+            auto arms = action.getAs<ArrayAttr>("arms");
+            if (failed(checkArms(arms)))
+              return failure();
+            for (auto item : arms)
+              if (failed(self(
+                      self, cast<DictionaryAttr>(item).getAs<ArrayAttr>("body"),
+                      depth + 1)))
+                return failure();
+          }
           if (call && !action.getAs<FlatSymbolRefAttr>("callee"))
             return refuse(record, "invalid original local callee");
           llvm::DenseSet<Attribute> owners;
@@ -417,6 +474,8 @@ struct MetadataVerifier {
                                 operation.getValue() != "protocol.receive"
                  : call   ? operation.getValue() != "protocol.local_call"
                  : loop   ? operation.getValue() != "protocol.loop"
+                 : branch
+                     ? operation.getValue() != "protocol.participant_branch"
                  : start ? operation.getValue() != "protocol.construction_start"
                  : kind.getValue() == "protocol.query"
                      ? operation.getValue() != "protocol.service_query"
@@ -457,21 +516,30 @@ struct MetadataVerifier {
       byReference[participantRef] = participant;
       auto &indexed = occurrences[participant];
       unsigned ordinal = 0;
-      auto indexedBody =
-          participant.walk<WalkOrder::PreOrder>([&](Operation *op) {
-            if (op == participant.getOperation())
-              return WalkResult::advance();
-            if (failed(charge(1)))
-              return WalkResult::interrupt();
+      auto indexBody = [&](auto &&self, Region &region,
+                           unsigned depth) -> LogicalResult {
+        if (depth > 64)
+          return refuse(record, "projection region depth exceeds 64");
+        for (Block &block : region) {
+          if (failed(charge(1 + uint64_t(block.getNumArguments()))))
+            return failure();
+          for (Operation &op : block) {
+            auto site = op.getAttrOfType<StringAttr>("site");
+            if (failed(charge(1 + uint64_t(op.getNumOperands()) +
+                              op.getNumResults() + op.getNumRegions() +
+                              (site ? site.getValue().size() : 0))))
+              return failure();
             ++ordinal;
-            if (auto site = op->getAttrOfType<StringAttr>("site"))
-              if (!indexed.try_emplace(site, ordinal, op).second) {
-                (void)refuse(record, "ambiguous participant occurrence");
-                return WalkResult::interrupt();
-              }
-            return WalkResult::advance();
-          });
-      if (indexedBody.wasInterrupted())
+            if (site && !indexed.try_emplace(site, ordinal, &op).second)
+              return refuse(record, "ambiguous participant occurrence");
+            for (Region &nested : op.getRegions())
+              if (failed(self(self, nested, depth + 1)))
+                return failure();
+          }
+        }
+        return success();
+      };
+      if (failed(indexBody(indexBody, participant.getBody(), 0)))
         return failure();
       targets.push_back(builder.getArrayAttr({role, participantRef}));
       SmallVector<Attribute> dataPorts, servicePorts, results, actualServices;
@@ -576,8 +644,6 @@ struct MetadataVerifier {
       }
     }
     if (construction) {
-      if (roles.size() != 2)
-        return refuse(record, "construction requires two roles");
       ArrayAttr owners;
       for (auto removed : removedServices) {
         auto selectedOwners = cast<ArrayAttr>(inputs[removed]);
@@ -614,6 +680,15 @@ struct MetadataVerifier {
           if (auto body = action.getAs<ArrayAttr>("body"))
             if (failed(self(self, body, depth + 1)))
               return failure();
+          if (auto arms = action.getAs<ArrayAttr>("arms")) {
+            if (failed(charge(arms.size())))
+              return failure();
+            for (auto item : arms)
+              if (failed(self(
+                      self, cast<DictionaryAttr>(item).getAs<ArrayAttr>("body"),
+                      depth + 1)))
+                return failure();
+          }
         }
         return success();
       };
@@ -621,14 +696,18 @@ struct MetadataVerifier {
         return failure();
       auto compare = [&](auto &&self, ArrayAttr source, ArrayAttr constructed,
                          unsigned depth) -> LogicalResult {
-        if (depth > 64 || failed(charge(source.size() + constructed.size())))
+        if (!source || !constructed || depth > 64 ||
+            failed(charge(uint64_t(source.size()) + constructed.size())))
           return refuse(record, "projection metadata work limit");
         llvm::StringMap<DictionaryAttr> originals;
-        SmallVector<Attribute> retained, actualRetained;
+        SmallVector<Attribute> retained;
+        unsigned nextRetained = 0;
         unsigned removedQueries = 0, removedMessages = 0;
         bool pendingChallenge = false;
         for (auto item : source) {
           auto action = cast<DictionaryAttr>(item);
+          if (failed(chargeAction(action)))
+            return failure();
           originals[action.getAs<StringAttr>("site").getValue()] = action;
           auto targets = action.getAs<ArrayAttr>("targets");
           auto kind = action.getAs<StringAttr>("kind").getValue();
@@ -683,14 +762,20 @@ struct MetadataVerifier {
         totalRemoved += removedQueries;
         for (auto item : constructed) {
           auto action = dyn_cast<DictionaryAttr>(item);
+          if (failed(chargeAction(action)))
+            return failure();
           auto site = action ? action.getAs<StringAttr>("site") : StringAttr();
           if (!site)
             return refuse(record, "invalid constructed action");
           auto found = originals.find(site.getValue());
           if (found != originals.end()) {
             auto original = found->second;
-            if (!is_contained(retained, original))
-              return refuse(record, "changed retained construction action");
+            // Consume the independently inventoried source sequence exactly
+            // once. Each recursive arm owns a fresh site map and cursor.
+            if (nextRetained == retained.size() ||
+                retained[nextRetained] != original)
+              return refuse(
+                  record, "missing or reordered retained construction action");
             if (auto body = original.getAs<ArrayAttr>("body")) {
               auto editedBody = action.getAs<ArrayAttr>("body");
               NamedAttrList a(action), b(original);
@@ -699,10 +784,27 @@ struct MetadataVerifier {
               if (!editedBody || a != b ||
                   failed(self(self, body, editedBody, depth + 1)))
                 return refuse(record, "changed retained construction loop");
+            } else if (auto arms = original.getAs<ArrayAttr>("arms")) {
+              auto editedArms = action.getAs<ArrayAttr>("arms");
+              NamedAttrList a(action), b(original);
+              a.erase("arms");
+              b.erase("arms");
+              if (a != b || failed(checkArms(editedArms)) ||
+                  editedArms.size() != arms.size())
+                return refuse(record, "changed retained construction branch");
+              for (auto [before, after] : zip(arms, editedArms)) {
+                auto originalArm = cast<DictionaryAttr>(before);
+                auto editedArm = cast<DictionaryAttr>(after);
+                if (originalArm.get("alternative") !=
+                        editedArm.get("alternative") ||
+                    failed(self(self, originalArm.getAs<ArrayAttr>("body"),
+                                editedArm.getAs<ArrayAttr>("body"), depth + 1)))
+                  return refuse(record, "changed retained construction arm");
+              }
             } else if (action != original) {
               return refuse(record, "changed retained construction action");
             }
-            actualRetained.push_back(original);
+            ++nextRetained;
             continue;
           }
           if (action.getAs<StringAttr>("kind") ==
@@ -756,7 +858,7 @@ struct MetadataVerifier {
               return refuse(record, "repeated inserted transcript helper");
           }
         }
-        if (actualRetained != retained)
+        if (nextRetained != retained.size())
           return refuse(record,
                         "missing or reordered retained construction action");
         return success();
@@ -784,14 +886,16 @@ struct MetadataVerifier {
       const llvm::DenseMap<Operation *, Block *> &parents, unsigned depth) {
     if (depth > 64)
       return refuse(record, "projection region depth exceeds 64");
+    if (!actions || failed(charge(uint64_t(actions.size()) + parents.size())))
+      return refuse(record, "invalid retained action sequence");
     // Resolve every retained action to its actual participant occurrence, in
     // source order. Generated calculation calls are recorded separately.
     llvm::DenseMap<Operation *, unsigned> previous;
     llvm::StringSet<> sites;
     for (auto item : actions) {
-      if (!remaining--)
-        return refuse(record, "projection metadata work limit");
       auto action = dyn_cast<DictionaryAttr>(item);
+      if (failed(chargeAction(action)))
+        return failure();
       bool loop =
           action && action.getAs<StringAttr>("kind") ==
                         StringAttr::get(record.getContext(), "protocol.repeat");
@@ -931,19 +1035,18 @@ struct MetadataVerifier {
                       "exchange participant schemas, peers or types disagree");
       if (branch) {
         auto arms = action.getAs<ArrayAttr>("arms");
-        if (!arms || arms.empty() || arms.size() > 256)
-          return refuse(record, "invalid retained selected arms");
+        if (failed(checkArms(arms)) ||
+            failed(charge(uint64_t(arms.size()) * owners.size())))
+          return failure();
         for (auto [index, item] : enumerate(arms)) {
           auto arm = dyn_cast<DictionaryAttr>(item);
-          if (!keys(arm, {"alternative", "body"}) ||
-              !arm.getAs<StringAttr>("alternative") ||
-              !arm.getAs<ArrayAttr>("body"))
-            return refuse(record, "invalid retained selected arm");
           llvm::DenseMap<Operation *, Block *> armParents;
           for (Operation *owner : owners) {
             auto selected = dyn_cast<protocol_ir::ParticipantBranchOp>(
                 occurrences[owner].lookup(site).second);
             if (!selected || selected.getNumRegions() != arms.size() ||
+                selected.getAlternatives().size() != arms.size() ||
+                !llvm::hasSingleElement(selected->getRegion(index)) ||
                 selected.getAlternatives()[index] != arm.get("alternative"))
               return refuse(record, "selected arm identity differs");
             armParents[owner] = &selected->getRegion(index).front();

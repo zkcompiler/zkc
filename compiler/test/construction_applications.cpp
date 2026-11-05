@@ -2,6 +2,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeLanguage.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Construction.h"
@@ -112,6 +113,78 @@ int main() {
             "execution plan contains root start and the three child event "
             "handlers");
   });
+  for (unsigned selectedArm : {0u, 1u})
+    cases.run("delegation resolves a child in arm " + Twine(selectedArm), [&] {
+      // Construct imported native control around an existing source-produced
+      // call. This exercises the resolver independently of source selection.
+      auto project = take(checked(source));
+      auto closed = take(closeEntry(project, "m::Demo"));
+      auto original = take(emitOriginal(closed, context));
+      auto parsed = mlir::parseSourceString<mlir::ModuleOp>(original, &context);
+      require(bool(parsed), "delegated PIR parses");
+      namespace pir = zkc::protocol_ir;
+      auto unit = mlir::cast<pir::ProtocolModuleOp>(parsed->getBody()->front());
+      mlir::SymbolTableCollection symbols;
+      const auto &definition =
+          closed.declarations()
+              [closed.entry().proof()->selectedConstruction->index];
+      auto record = symbols.lookupNearestSymbolFrom<pir::ConstructionOp>(
+          unit, mlir::StringAttr::get(&context, definition.symbol));
+      auto target = symbols.lookupNearestSymbolFrom<pir::MathematicalOp>(
+          record, record.getTargetAttr());
+      pir::ApplyOp call;
+      target.walk([&](pir::ApplyOp actual) { call = actual; });
+      require(bool(call), "actual child call exists");
+      mlir::OpBuilder builder(call);
+      auto constant = [&]() {
+        mlir::OperationState state(call.getLoc(), "arith.constant");
+        state.addTypes(builder.getI1Type());
+        state.addAttribute("value", builder.getBoolAttr(true));
+        return builder.create(state)->getResult(0);
+      };
+      mlir::SmallVector<mlir::Value> captures(call.getInputs());
+      mlir::OperationState state(call.getLoc(), "protocol.branch");
+      state.addOperands(constant());
+      state.addOperands(captures);
+      state.addTypes(call.getResultTypes());
+      state.addAttribute("site", builder.getStringAttr("choose_child"));
+      state.addAttribute("roles", target.getRoles());
+      state.addAttribute("output_roles", target.getOutputRoles());
+      state.addAttribute("alternatives",
+                         builder.getStrArrayAttr({"then", "else"}));
+      state.addRegion();
+      state.addRegion();
+      auto *branch = builder.create(state);
+      call->replaceAllUsesWith(branch->getResults());
+      for (unsigned arm = 0; arm != 2; ++arm) {
+        auto *body = new mlir::Block;
+        branch->getRegion(arm).push_back(body);
+        for (auto value : captures)
+          body->addArgument(value.getType(), call.getLoc());
+        builder.setInsertionPointToEnd(body);
+        mlir::SmallVector<mlir::Value> yielded;
+        if (arm == selectedArm) {
+          call->moveBefore(body, body->end());
+          call->setOperands(body->getArguments());
+          yielded.assign(call.getResults().begin(), call.getResults().end());
+          builder.setInsertionPointToEnd(body);
+        } else {
+          yielded.push_back(constant());
+        }
+        pir::ProtocolYieldOp::create(builder, call.getLoc(), yielded);
+      }
+      require(mlir::succeeded(zkc::admitStage(*parsed)),
+              "selected child fixture forms before resolution");
+      auto resolved =
+          take(zkc::protocol::resolveConstructionPlan(record, symbols));
+      require(resolved.definitions.size() == 2 &&
+                  resolved.invocations.size() == 1,
+              "dormant and reached arms retain the same static child closure");
+      require(resolved.invocations.front().inputs == SmallVector<unsigned>{0},
+              "branch captures preserve the callee input coordinate");
+      require(resolved.plan.rules.size() == 4,
+              "selected child events have complete handler coverage");
+    });
   cases.run("inherited delegation can be replaced as a whole", [&] {
     auto text = changedSource(source, "construction Parent<F,Provider>;",
                               "construction Changed<F,Provider>;");

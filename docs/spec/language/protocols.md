@@ -247,11 +247,15 @@ Sending reads the original payload under its usage contract; reusable data retai
 its original roles. Open generic types retain boundary obligations until selection. Each native payload leaf emits `protocol.exchange` followed immediately
 by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because erasing
 a message would erase an interaction. These operations assume neither honest
-delivery nor equality of participant components.
+delivery nor equality of the original participant components. The independent
+[common-control analyses](selected-control.md#derived-admission-obligations)
+derive agreement from actual completed send components on normal continuing
+paths; this introduces no adversarial-honesty or statement-authority premise.
 
 ### Site labels
 
-`#[site(name)]` labels one outer message, managed query or static protocol call:
+`#[site(name)]` labels one outer message, managed query, static protocol call,
+selected control or protocol repeat:
 
 ```zkc
 #[site(commitment)] let received = send P -> V(value);
@@ -266,8 +270,12 @@ callee's sites. Labels do not change participant placement or insert transcript
 observations.
 
 A label cannot select a nested query inside an arithmetic expression or a send's
-payload, several events in one statement, a local function call, a guard or a
-loop itself. Split such expressions into statements to label their events.
+payload, several events in one statement, a local function call or a guard.
+Split such expressions into statements to label their events. In brace blocks,
+an attributed final expression remains a statement and must have unit type
+when it has no semicolon. To return a value-producing selected event, label an
+explicit binding and use that binding as the block result; its attribute is
+never discarded by implicit-tail conversion.
 Translation retains each label and independently checks its emitted site name.
 
 ## Managed services and rejection

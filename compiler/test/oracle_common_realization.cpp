@@ -1047,14 +1047,30 @@ int main(int argc, char **argv) {
         std::swap(declarations[0], declarations[1]);
       });
       cases.run("record producer enforces its reader lexical depth", [&] {
-        auto &state = entry.controllers.front().body.state;
-        auto saved = state;
-        auto restore = llvm::scope_exit([&] { state = std::move(saved); });
+        auto source =
+            OwningOpRef<ModuleOp>(cast<ModuleOp>((*prepared)->clone()));
+        auto originalUnit =
+            cast<pir::ProtocolModuleOp>(source->getBody()->front());
+        auto main = cast<pir::MathematicalOp>(
+            SymbolTable::lookupSymbolIn(originalUnit, "main"));
         Type nested = IntegerType::get(&context, 1);
         for (unsigned depth = 0; depth != 22; ++depth)
           nested = data::SequenceType::get(&context, nested);
-        state.push_back(nested);
-        refuses(serializeOracleRealization(*prepared, candidate),
+        Builder builder(&context);
+        auto signature = main.getFunctionType();
+        SmallVector<Type> inputs(signature.getInputs());
+        inputs.push_back(nested);
+        main.setFunctionTypeAttr(TypeAttr::get(
+            builder.getFunctionType(inputs, signature.getResults())));
+        main.getBody().front().addArgument(nested, main.getLoc());
+        SmallVector<Attribute> roles(main.getInputRoles().getValue());
+        roles.push_back(builder.getStrArrayAttr({"P"}));
+        main.setInputRolesAttr(builder.getArrayAttr(roles));
+        require(succeeded(verify(*source)), "deep ordinary source formation");
+        auto actual = take(emitOracleRealization(*source));
+        // This is a genuine paired candidate. An invalid controller model
+        // must be refused by the independent check before record encoding.
+        refuses(serializeOracleRealization(*source, actual),
                 "oracle-realization-record-limit");
       });
       cases.run("record refuses an oversized type table", [&] {

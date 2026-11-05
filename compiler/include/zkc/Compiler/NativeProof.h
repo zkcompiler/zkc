@@ -104,15 +104,21 @@ llvm::Error checkNativeProofBinding(
     const protocol::OracleRealizationPolicy &oracleSelection = {});
 enum class ConstructedParticipantRole { Producer, Validator };
 /// Check the supplied candidate as `checkNativeProof` does, then export its
-/// explicitly selected policy role as a flat `zkc.constructed-participant/0`
-/// record. The default preserves validator-only callers.
-/// Construction-inserted helpers expand through the admitted source execution
-/// closure at their actual data operands; original helper calls retain their
-/// callee. Operations keep their name, attributes and binding, with checked
-/// data inputs and successful payload results. Administrative scope/outcome
-/// edges are checked natively and excluded from the logical carrier.
-/// Exporter correctness and the meaning of each primitive remain explicit
-/// boundaries of the formal consumer.
+/// explicitly selected policy role as a structured
+/// `zkc.constructed-participant/0` record. The default preserves validator-only
+/// callers. Construction-inserted helpers expand through the admitted source
+/// execution closure at their actual data operands; original helper calls
+/// retain their callee. Operations keep their name, attributes and binding,
+/// with checked data inputs and successful payload results. Administrative
+/// scope/outcome edges are checked natively and excluded from the logical
+/// carrier. Selected instructions retain all ordered arms with closed
+/// payload/capture frames, exact result sorts and explicit yield/stop
+/// terminals. FinishIf keeps its actual condition, completion operands and
+/// false-edge continuations. Branches add no induction coordinate; query
+/// annotations rebase enclosing coordinates through actual captures. All child
+/// work shares cumulative limits. Existing Lean consumers still refuse selected
+/// records pending migration. Exporter correctness and the meaning of each
+/// primitive remain explicit boundaries of the formal consumer.
 llvm::Expected<llvm::json::Value> exportConstructedParticipant(
     mlir::ModuleOp source, mlir::ModuleOp candidate,
     llvm::StringRef sourceBytes, const NativeProofPolicy &policy,

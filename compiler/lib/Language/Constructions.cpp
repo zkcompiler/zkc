@@ -3,10 +3,22 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
+#include <map>
 #include <numeric>
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
+// These frames refer to the actual checked body, not to a source selector
+// spelling. Selected arms have separate lexical site namespaces.
+struct ConstructionFrame {
+  enum class Kind { Application, Repeat, Arm } kind;
+  const Operation *operation;
+  unsigned arm = 0;
+  bool operator==(const ConstructionFrame &other) const {
+    return kind == other.kind && operation == other.operation &&
+           arm == other.arm;
+  }
+};
 struct ConstructionSite {
   ConstructionRule::Kind kind;
   std::vector<std::string> path;
@@ -15,6 +27,7 @@ struct ConstructionSite {
   std::optional<Natural> bound;
   bool proofMessage = false;
   bool indexBlock = false;
+  std::vector<ConstructionFrame> ancestry;
 };
 struct ConstructionCall {
   std::vector<std::string> path;
@@ -22,8 +35,27 @@ struct ConstructionCall {
   DeclarationId target;
   std::vector<Type> arguments;
   std::vector<unsigned> services, roles;
+  std::vector<ConstructionFrame> ancestry;
 };
-bool within(ArrayRef<std::string> path, ArrayRef<std::string> parent) {
+struct ConstructionOccurrence {
+  std::optional<unsigned> index;
+  bool ambiguous = false;
+  void add(unsigned occurrence) {
+    ambiguous |= index.has_value();
+    index = occurrence;
+  }
+};
+struct ConstructionPath {
+  ConstructionOccurrence message, query, call;
+  std::optional<unsigned> application;
+  bool writtenApplication = false;
+  // These maps have at most the seven existing construction rule kinds.
+  std::map<ConstructionRule::Kind, unsigned> rules;
+  std::set<ConstructionRule::Kind> written;
+  std::optional<Type> chunks;
+};
+bool within(ArrayRef<ConstructionFrame> path,
+            ArrayRef<ConstructionFrame> parent) {
   return path.size() >= parent.size() &&
          equal(path.take_front(parent.size()), parent);
 }
@@ -194,6 +226,10 @@ bool Checker::constructions() {
       result.state = std::move(*nativeState);
     }
     for (const auto &service : syntax.services) {
+      for (const auto &port : target.services)
+        if (!types.charge(port.name.size() + service.name.size() + 1,
+                          service.span))
+          return false;
       auto found = llvm::find_if(target.services, [&](const ServicePort &port) {
         return port.name == service.name;
       });
@@ -202,6 +238,8 @@ bool Checker::constructions() {
                           "replacement names no managed protocol port",
                           service.span);
       auto port = unsigned(found - target.services.begin());
+      if (!types.charge(result.services.size() + 1, service.span))
+        return false;
       if (is_contained(result.services, port))
         return types.fail("source.construction",
                           "duplicate replacement authority", service.span);
@@ -297,6 +335,8 @@ bool Checker::constructions() {
                         "replacement authority",
                         decl.span);
     auto verifier = target.services[result.services.front()].owner;
+    if (!types.charge(result.services.size(), decl.span))
+      return false;
     if (any_of(result.services, [&](unsigned port) {
           return target.services[port].owner != verifier;
         }))
@@ -308,38 +348,81 @@ bool Checker::constructions() {
       return types.fail("source.construction",
                         "record codecs require two participants", decl.span);
 
+    if (!types.charge(target.services.size() + result.services.size(),
+                      decl.span))
+      return false;
+    std::vector<bool> replaced(target.services.size());
+    for (auto port : result.services)
+      replaced[port] = true;
     std::vector<ConstructionSite> sites;
     std::vector<ConstructionCall> calls;
     std::function<bool(const Body &, const Substitution &, ArrayRef<unsigned>,
                        ArrayRef<unsigned>, ArrayRef<std::string>, bool,
-                       unsigned)>
+                       ArrayRef<ConstructionFrame>, unsigned)>
         collect;
     collect = [&](const Body &body, const Substitution &bindings,
                   ArrayRef<unsigned> services, ArrayRef<unsigned> roles,
-                  ArrayRef<std::string> prefix, bool labelled, unsigned depth) {
+                  ArrayRef<std::string> prefix, bool labelled,
+                  ArrayRef<ConstructionFrame> ancestry, unsigned depth) {
       if (depth > work.limits.callDepth)
         return types.fail("source.limit", "construction occurrence depth",
                           decl.span);
       for (const auto &operation : body.operations) {
-        if (!types.charge(1, operation.span))
+        if (!types.charge(ancestry.size() + 1, operation.span))
           return false;
         for (const auto &part : prefix)
           if (!types.charge(part.size() + 1, operation.span))
             return false;
-        std::vector<std::string> path(prefix.begin(), prefix.end());
-        if (operation.site)
+        std::vector<std::string> path;
+        path.reserve(prefix.size() + 1);
+        path.assign(prefix.begin(), prefix.end());
+        if (operation.site) {
+          if (!types.charge(operation.site->size() + 1, operation.span))
+            return false;
           path.push_back(*operation.site);
+        }
         auto validPath = labelled && operation.site.has_value();
+        std::vector<ConstructionFrame> nested;
+        nested.reserve(ancestry.size() + 1);
+        nested.assign(ancestry.begin(), ancestry.end());
         if (auto repeat = std::get_if<ProtocolRepeat>(&operation.action)) {
+          if (!types.charge(repeat->services.size() + 1, operation.span))
+            return false;
           std::vector<unsigned> captured;
+          captured.reserve(repeat->services.size());
           for (auto service : repeat->services)
             captured.push_back(services[service.index]);
+          nested.push_back({ConstructionFrame::Kind::Repeat, &operation});
           if (!collect(*repeat->region, bindings, captured, roles, prefix,
-                       labelled, depth + 1))
+                       labelled, nested, depth + 1))
             return false;
+        } else if (auto control = std::get_if<Control>(&operation.action)) {
+          if (!types.charge(control->services.size(), operation.span))
+            return false;
+          std::vector<unsigned> captured;
+          captured.reserve(control->services.size());
+          for (auto service : control->services)
+            captured.push_back(services[service.index]);
+          nested.push_back({ConstructionFrame::Kind::Arm, &operation});
+          // Control roles are a roster in the enclosing declaration's role
+          // coordinates. Only the managed-service slots are compacted in an
+          // arm; static substitutions and the call's role mapping stay intact.
+          for (auto [arm, region] : enumerate(control->regions)) {
+            if (!types.charge(nested.size(), operation.span))
+              return false;
+            nested.back().arm = arm;
+            if (!collect(*region, bindings, captured, roles, prefix, labelled,
+                         nested, depth + 1))
+              return false;
+          }
         } else if (auto call =
                        std::get_if<ProtocolApplication>(&operation.action)) {
+          if (!types.charge(call->arguments.size() + call->services.size() +
+                                call->roles.size() + 1,
+                            operation.span))
+            return false;
           std::vector<Type> actual;
+          actual.reserve(call->arguments.size());
           for (const auto &argument : call->arguments) {
             auto value = types.substitute(argument, bindings, operation.span);
             if (!value)
@@ -365,15 +448,56 @@ bool Checker::constructions() {
                               operation.span);
           actual = std::move(selected->arguments);
           std::vector<unsigned> captured;
+          captured.reserve(call->services.size());
           for (auto service : call->services)
             captured.push_back(services[service.index]);
           std::vector<unsigned> mappedRoles;
+          mappedRoles.reserve(call->roles.size());
           for (auto role : call->roles)
             mappedRoles.push_back(roles[role]);
-          calls.push_back(
-              {path, validPath, callee.id, actual, captured, mappedRoles});
+          nested.push_back({ConstructionFrame::Kind::Application, &operation});
+          // Retention copies all maps, types, path labels and typed frames.
+          // Keep the local maps alive while recursive collection grows calls.
+          if (!types.charge(captured.size() + mappedRoles.size() +
+                                nested.size() + path.size() + 1,
+                            operation.span))
+            return false;
+          for (const auto &part : path)
+            if (!types.charge(part.size() + 1, operation.span))
+              return false;
+          for (const auto &argument : actual)
+            if (!types.chargeType(argument, operation.span))
+              return false;
+          calls.push_back({path, validPath, callee.id, actual, captured,
+                           mappedRoles, nested});
+          if (!types.charge(actual.size(), operation.span))
+            return false;
+          for (const auto &argument : actual)
+            if (!types.chargeType(argument, operation.span))
+              return false;
+          // Each expanded call rebuilds a string-keyed red-black tree. Charge
+          // the formal key copies and a conservative insertion comparison
+          // depth before constructing it. A comparison reads at most this
+          // key's bytes, even when the other key has a longer common prefix.
+          for (size_t i = 0; i < actual.size() && i < callee.parameters.size();
+               ++i) {
+            const auto &key = callee.parameters[i].atom;
+            if (!types.charge(key.size(), operation.span))
+              return false;
+            unsigned comparisons = 4;
+            for (auto size = i; size; size >>= 1)
+              comparisons += 4;
+            // Separate byte and comparison debits avoid multiplying a source
+            // width by a tree depth (or adding to that width) before charging.
+            for (unsigned comparison = 0; comparison < comparisons;
+                 ++comparison)
+              if (!types.charge(key.size(), operation.span) ||
+                  !types.charge(1, operation.span))
+                return false;
+          }
           if (!collect(*callee.body, types.substitution(callee, actual),
-                       captured, mappedRoles, path, validPath, depth + 1))
+                       captured, mappedRoles, path, validPath, nested,
+                       depth + 1))
             return false;
         } else if (auto message = std::get_if<Exchange>(&operation.action)) {
           auto payload =
@@ -387,9 +511,13 @@ bool Checker::constructions() {
                            std::move(*payload),
                            {},
                            roles[message->receiver] == verifier &&
-                               roles[message->sender] != verifier});
+                               roles[message->sender] != verifier,
+                           false,
+                           std::move(nested)});
         } else if (auto query = std::get_if<ServiceQuery>(&operation.action)) {
-          if (!is_contained(result.services, services[query->service.index]))
+          if (!types.charge(1, operation.span))
+            return false;
+          if (!replaced[services[query->service.index]])
             continue;
           auto payload = types.substitute(
               body.values[operation.results.front().index].type, bindings,
@@ -398,26 +526,89 @@ bool Checker::constructions() {
             return false;
           sites.push_back({ConstructionRule::Kind::Query, std::move(path),
                            validPath, std::move(*payload), query->bound, false,
-                           query->count.has_value()});
+                           query->count.has_value(), std::move(nested)});
         }
       }
       return true;
     };
+    if (!types.charge(target.services.size() + target.roles.size(), decl.span))
+      return false;
     std::vector<unsigned> services(target.services.size());
     std::vector<unsigned> roles(target.roles.size());
     std::iota(services.begin(), services.end(), 0);
     std::iota(roles.begin(), roles.end(), 0);
-    if (!collect(*target.body, substitution, services, roles, {}, true, 1))
+    if (!collect(*target.body, substitution, services, roles, {}, true, {}, 1))
       return false;
-    std::set<std::vector<std::string>> selectedCalls;
+    // Intern complete paths from the immutable checked occurrences. Charge a
+    // red-black tree's worst-case comparison depth and all compared bytes,
+    // including component boundaries and the retained key copy. Rule-kind
+    // tables below have a fixed maximum width of seven.
+    std::map<std::vector<std::string>, ConstructionPath> paths;
+    auto indexedPath = [&](ArrayRef<std::string> path,
+                           Span span) -> ConstructionPath * {
+      uint64_t width = 1;
+      for (const auto &part : path)
+        width += part.size() + 1;
+      if (!types.charge(8 * width + 32, span))
+        return nullptr;
+      for (auto size = paths.size(); size; size >>= 1)
+        if (!types.charge(4 * width, span))
+          return nullptr;
+      return &paths[std::vector<std::string>(path.begin(), path.end())];
+    };
+    std::vector<ConstructionPath *> sitePaths;
+    if (!types.charge(sites.size() + calls.size(), decl.span))
+      return false;
+    sitePaths.reserve(sites.size());
+    for (auto [index, site] : enumerate(sites)) {
+      auto *path = indexedPath(site.path, decl.span);
+      if (!path)
+        return false;
+      sitePaths.push_back(path);
+      if (site.labelled)
+        (site.kind == ConstructionRule::Kind::Message ? path->message
+                                                      : path->query)
+            .add(index);
+    }
+    for (auto [index, call] : enumerate(calls)) {
+      auto *path = indexedPath(call.path, decl.span);
+      if (!path)
+        return false;
+      if (call.labelled)
+        path->call.add(index);
+    }
+    for (auto [index, rule] : enumerate(result.rules)) {
+      auto *path = indexedPath(rule.path, rule.span);
+      if (!path)
+        return false;
+      path->rules[rule.kind] = index;
+      if (rule.chunks) {
+        if (!types.chargeType(*rule.chunks, rule.span))
+          return false;
+        path->chunks = *rule.chunks;
+      }
+    }
+    for (auto [index, application] : enumerate(result.applications)) {
+      auto *path = indexedPath(application.path, application.span);
+      if (!path)
+        return false;
+      path->application = index;
+    }
     for (const auto &source : syntax.applications) {
       ConstructionApplication application;
       application.span = source.span;
-      for (const auto &part : source.path)
+      for (const auto &part : source.path) {
+        if (!types.charge(part.name.size() + 1, source.span))
+          return false;
         application.path.push_back(part.name);
-      if (!selectedCalls.insert(application.path).second)
+      }
+      auto *path = indexedPath(application.path, source.span);
+      if (!path)
+        return false;
+      if (path->writtenApplication)
         return types.fail("source.construction",
                           "duplicate construction application", source.span);
+      path->writtenApplication = true;
       SaveAndRestore site(referenceSite, source.construction.referenceSite);
       auto selected = resolve(decl, source.construction.name, source.span);
       if (!selected || !signature(*selected))
@@ -437,36 +628,38 @@ bool Checker::constructions() {
         return false;
       application.construction = *selected;
       application.arguments = std::move(*arguments);
-      auto prior = llvm::find_if(result.applications, [&](const auto &prior) {
-        return prior.path == application.path;
-      });
-      if (prior == result.applications.end())
+      if (!path->application) {
+        path->application = result.applications.size();
         result.applications.push_back(std::move(application));
-      else
-        *prior = std::move(application);
+      } else
+        result.applications[*path->application] = std::move(application);
     }
-    for (auto item : enumerate(result.applications)) {
-      auto index = item.index();
-      const auto &application = item.value();
-      if (!types.charge(calls.size() + result.applications.size(),
-                        application.span))
+    std::vector<const ConstructionCall *> delegatedCalls;
+    for (const auto &application : result.applications) {
+      auto *path = indexedPath(application.path, application.span);
+      if (!path)
         return false;
-      for (const auto &other :
-           ArrayRef<ConstructionApplication>(result.applications)
-               .take_front(index))
-        if (within(application.path, other.path) ||
-            within(other.path, application.path))
-          return types.fail("source.construction",
-                            "construction applications overlap",
-                            application.span);
-      auto call = llvm::find_if(calls, [&](const auto &call) {
-        return call.labelled && call.path == application.path;
-      });
+      if (path->call.ambiguous)
+        return types.fail("source.construction",
+                          "construction application names multiple occurrences",
+                          application.span);
       const auto &child = output.declarations[application.construction.index];
-      if (call == calls.end() || call->target.index != child.target->index)
+      if (!path->call.index ||
+          calls[*path->call.index].target.index != child.target->index)
         return types.fail("source.construction",
                           "child does not target the selected protocol call",
                           application.span);
+      const auto *call = &calls[*path->call.index];
+      for (const auto *other : delegatedCalls) {
+        if (!types.charge(call->ancestry.size() + other->ancestry.size() + 1,
+                          application.span))
+          return false;
+        if (within(call->ancestry, other->ancestry) ||
+            within(other->ancestry, call->ancestry))
+          return types.fail("source.construction",
+                            "construction applications overlap",
+                            application.span);
+      }
       auto bindings = types.substitution(child, application.arguments);
       if (child.staticArguments.size() != call->arguments.size())
         return types.fail("source.construction",
@@ -513,19 +706,29 @@ bool Checker::constructions() {
             "source.construction",
             "child transcript authority or participant mapping differs",
             application.span);
+      if (!types.charge(childTarget.services.size() +
+                            childPlan.services.size() + call->services.size() +
+                            1,
+                        application.span))
+        return false;
+      std::vector<bool> childReplaced(childTarget.services.size());
+      for (auto port : childPlan.services)
+        childReplaced[port] = true;
       for (auto [port, mapped] : enumerate(call->services))
-        if (is_contained(result.services, mapped) !=
-            is_contained(childPlan.services, port))
+        if (replaced[mapped] != childReplaced[port])
           return types.fail("source.construction",
                             "child replacement must select exactly the ports "
                             "mapped to replaced authorities",
                             application.span);
+      delegatedCalls.push_back(call);
     }
-    auto delegated = [&](ArrayRef<std::string> path) -> std::optional<bool> {
-      for (const auto &application : result.applications) {
-        if (!types.charge(path.size() + application.path.size(), decl.span))
+    auto delegatedOccurrence =
+        [&](const ConstructionSite &site) -> std::optional<bool> {
+      for (const auto *call : delegatedCalls) {
+        if (!types.charge(site.ancestry.size() + call->ancestry.size() + 1,
+                          decl.span))
           return {};
-        if (within(path, application.path))
+        if (within(site.ancestry, call->ancestry))
           return true;
       }
       return false;
@@ -533,10 +736,6 @@ bool Checker::constructions() {
     auto bytes = builtinType("bytes", {});
     if (!bytes)
       return types.accept(bytes.takeError(), decl.span);
-    std::map<std::vector<std::string>, Type> chunks;
-    for (const auto &rule : result.rules)
-      if (rule.chunks)
-        chunks[rule.path] = *rule.chunks;
     auto validChunks = [&](auto &&self, const Type &value,
                            unsigned depth) -> bool {
       if (!types.charge(1, decl.span) || depth > work.limits.typeDepth)
@@ -570,14 +769,19 @@ bool Checker::constructions() {
                                              "nonempty product of Bytes",
                                              source.span);
       std::vector<std::string> path;
-      for (const auto &part : source.path)
+      for (const auto &part : source.path) {
+        if (!types.charge(part.name.size() + 1, source.span))
+          return false;
         path.push_back(part.name);
-      auto prior = chunks.find(path);
-      if (prior != chunks.end() && prior->second != *selected)
+      }
+      auto *indexed = indexedPath(path, source.span);
+      if (!indexed)
+        return false;
+      if (indexed->chunks && *indexed->chunks != *selected)
         return types.fail("source.construction",
                           "an inherited wire shape cannot be replaced",
                           source.span);
-      chunks[std::move(path)] = std::move(*selected);
+      indexed->chunks = std::move(*selected);
     }
     auto ranges = [&](auto &&self, const Type &value) -> Type {
       Type result(Type::Kind::Tuple);
@@ -588,25 +792,19 @@ bool Checker::constructions() {
           result.arguments.push_back(self(self, part));
       return result;
     };
-    std::set<std::pair<ConstructionRule::Kind, std::vector<std::string>>>
-        written;
     for (const auto &source : syntax.rules) {
       ConstructionRule rule{source.kind, {}, decl.members[source.member],
                             {},          {}, source.span,
                             {},          {}};
-      for (const auto &part : source.path)
-        rule.path.push_back(part.name);
-      if (!protocol::isCodecRule(rule.kind) &&
-          rule.kind != ConstructionRule::Kind::Start) {
-        auto owned = delegated(rule.path);
-        if (!owned)
+      for (const auto &part : source.path) {
+        if (!types.charge(part.name.size() + 1, source.span))
           return false;
-        if (*owned)
-          return types.fail("source.construction",
-                            "a child owns this complete construction subtree",
-                            source.span);
+        rule.path.push_back(part.name);
       }
-      if (!written.emplace(rule.kind, rule.path).second)
+      auto *path = indexedPath(rule.path, source.span);
+      if (!path)
+        return false;
+      if (!path->written.insert(rule.kind).second)
         return types.fail("source.construction",
                           "duplicate construction selector", source.span);
       std::vector<Type> inputs{*result.state}, outputs{*result.state};
@@ -639,19 +837,29 @@ bool Checker::constructions() {
           rule.inputs.push_back(unsigned(found - target.inputs.begin()));
         }
       } else {
-        if (!types.charge(sites.size(), source.span))
-          return false;
-        auto site = llvm::find_if(sites, [&](const ConstructionSite &site) {
-          return site.labelled && site.path == rule.path &&
-                 site.kind == (protocol::isCodecRule(rule.kind)
-                                   ? ConstructionRule::Kind::Message
-                                   : rule.kind);
-        });
-        if (site == sites.end())
+        const auto &occurrence = rule.kind == ConstructionRule::Kind::Query
+                                     ? path->query
+                                     : path->message;
+        if (occurrence.ambiguous)
+          return types.fail("source.construction",
+                            "selector names multiple occurrences of this kind "
+                            "and authority",
+                            source.span);
+        if (!occurrence.index)
           return types.fail(
               "source.construction",
               "selector names no occurrence of this kind and authority",
               source.span);
+        const auto *site = &sites[*occurrence.index];
+        if (!protocol::isCodecRule(rule.kind)) {
+          auto owned = delegatedOccurrence(*site);
+          if (!owned)
+            return false;
+          if (*owned)
+            return types.fail("source.construction",
+                              "a child owns this complete construction subtree",
+                              source.span);
+        }
         if (site->indexBlock)
           return types.fail("source.construction",
                             "index blocks require the native transcript "
@@ -664,7 +872,7 @@ bool Checker::constructions() {
                 "source.construction",
                 "codec rule requires a producer message and record format",
                 source.span);
-          rule.chunks = chunks.count(rule.path) ? chunks.at(rule.path) : *bytes;
+          rule.chunks = path->chunks ? *path->chunks : *bytes;
           auto pair = [](const Type &first, const Type &second) {
             Type value(Type::Kind::Tuple);
             value.arguments = {first, second};
@@ -735,21 +943,27 @@ bool Checker::constructions() {
         return false;
       for (const auto &parameter : handler.parameters)
         rule.arguments.push_back(parameterType(parameter));
-      if (!types.charge(result.rules.size(), source.span))
-        return false;
-      auto prior =
-          llvm::find_if(result.rules, [&](const ConstructionRule &prior) {
-            return prior.kind == rule.kind && prior.path == rule.path;
-          });
-      if (prior == result.rules.end())
+      auto prior = path->rules.find(rule.kind);
+      if (prior == path->rules.end()) {
+        path->rules[rule.kind] = result.rules.size();
         result.rules.push_back(std::move(rule));
-      else
-        *prior = std::move(rule);
+      } else
+        result.rules[prior->second] = std::move(rule);
     }
     for (const auto &rule : result.rules)
       if (!protocol::isCodecRule(rule.kind) &&
           rule.kind != ConstructionRule::Kind::Start) {
-        auto owned = delegated(rule.path);
+        auto *path = indexedPath(rule.path, rule.span);
+        if (!path)
+          return false;
+        const auto &occurrence = rule.kind == ConstructionRule::Kind::Query
+                                     ? path->query
+                                     : path->message;
+        if (!occurrence.index || occurrence.ambiguous)
+          return types.fail("source.construction",
+                            "inherited selector requires a unique occurrence",
+                            rule.span);
+        auto owned = delegatedOccurrence(sites[*occurrence.index]);
         if (!owned)
           return false;
         if (*owned)
@@ -759,18 +973,15 @@ bool Checker::constructions() {
               rule.span);
       }
     if (result.codec) {
-      for (const auto &site : sites) {
+      for (auto [index, site] : enumerate(sites)) {
         if (!site.proofMessage)
           continue;
         for (auto kind :
              {ConstructionRule::Kind::Encode, ConstructionRule::Kind::Receive,
               ConstructionRule::Kind::Decode}) {
-          if (!types.charge(result.rules.size(), decl.span))
+          if (!types.charge(8, decl.span))
             return false;
-          if (!site.labelled ||
-              none_of(result.rules, [&](const ConstructionRule &rule) {
-                return rule.kind == kind && rule.path == site.path;
-              }))
+          if (!site.labelled || !sitePaths[index]->rules.count(kind))
             return types.fail(
                 "source.construction",
                 "record codec does not cover every producer message",
@@ -784,18 +995,15 @@ bool Checker::constructions() {
           }))
         return types.fail("source.construction",
                           "construction requires on start", decl.span);
-      for (const auto &site : sites) {
-        auto owned = delegated(site.path);
+      for (auto [index, site] : enumerate(sites)) {
+        auto owned = delegatedOccurrence(site);
         if (!owned)
           return false;
         if (site.labelled && *owned)
           continue;
-        if (!types.charge(result.rules.size(), decl.span))
+        if (!types.charge(8, decl.span))
           return false;
-        if (!site.labelled ||
-            llvm::none_of(result.rules, [&](const ConstructionRule &rule) {
-              return rule.kind == site.kind && rule.path == site.path;
-            }))
+        if (!site.labelled || !sitePaths[index]->rules.count(site.kind))
           return types.fail(
               "source.construction",
               "construction does not cover every message and selected query",

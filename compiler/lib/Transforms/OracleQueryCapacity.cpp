@@ -1,4 +1,6 @@
 #include "OracleQueryCapacity.h"
+#include "OracleAccounting.h"
+#include "OracleNativeCommon.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Interactions.h"
 #include "zkc/Analysis/ProtocolConstants.h"
@@ -21,8 +23,14 @@ struct Analysis {
   facts::Work work;
   InteractionAnalysis interactions;
   MathematicalFactAnalysis mathematics;
-  Analysis(ModuleOp module, Block &body, uint64_t allowance)
-      : entry(&body), remaining(allowance), work(remaining),
+  Analysis(ModuleOp module, Block &body, uint64_t allowance,
+           OracleNativeWork &common)
+      : entry(&body), remaining(allowance), work([&, this](uint64_t amount) {
+          if (!common.charge(amount) || amount > remaining)
+            return false;
+          remaining -= amount;
+          return true;
+        }),
         interactions(module), mathematics(module) {}
   OracleQueryCapacity result;
   llvm::DenseMap<Value, OracleQuerySize> values;
@@ -224,31 +232,48 @@ struct Analysis {
 } // namespace
 Expected<OracleQueryCapacity>
 analyzeOracleQueryCapacity(ModuleOp prepared, StringRef entry, uint64_t work) {
-  if (!prepared || failed(zkc::admitStage(prepared)) ||
-      !hasSingleElement(prepared.getBody()->getOperations()))
-    return error("oracle-query-capacity-source");
-  auto unit = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
-  auto program = unit ? dyn_cast_or_null<pir::MathematicalOp>(
-                            SymbolTable::lookupSymbolIn(unit, entry))
-                      : pir::MathematicalOp{};
-  if (!program || unit.getProfile() != pir::Profile::Protocol)
-    return error("oracle-query-capacity-source");
-  Analysis analysis(prepared, program.getBody().front(), work);
-  auto view = analysis.structure(program);
-  if (!view)
-    return view.takeError();
-  for (auto argument : program.getBody().front().getArguments()) {
-    if (isa<pir::OracleHandleType>(argument.getType()))
-      analysis.values[argument] = {1, 1};
-    else if (auto sequence =
-                 dyn_cast<pir::OracleSequenceType>(argument.getType()))
-      // Cover every possible source element, including repeated occurrences.
-      // This structural bound grants no Host sequence-ingress capability.
-      analysis.values[argument] = {sequence.getMaximum(),
-                                   sequence.getMaximum()};
-  }
-  if (auto e = analysis.block(**view, (*view)->getBody()))
-    return std::move(e);
-  return std::move(analysis.result);
+  OracleNativeWork common;
+  auto preflight = OracleNativeSourcePreflight::read(prepared, common);
+  if (!preflight)
+    return preflight.takeError();
+  return analyzeOracleQueryCapacityWithWork(prepared, entry, work, common,
+                                            *preflight);
+}
+Expected<OracleQueryCapacity> analyzeOracleQueryCapacityWithWork(
+    ModuleOp prepared, StringRef entry, uint64_t work, OracleNativeWork &common,
+    const OracleNativeSourcePreflight &preflight) {
+  return oracleExpectedWithWork(common, [&]() -> Expected<OracleQueryCapacity> {
+    if (auto e = checkOracleNativePreflight(prepared, common, &preflight))
+      return std::move(e);
+    if (failed(preflight.admit()))
+      return error(common.exhausted ? "oracle-common-limit"
+                                    : "oracle-query-capacity-source");
+    if (!prepared || !hasSingleElement(prepared.getBody()->getOperations()))
+      return error("oracle-query-capacity-source");
+    auto unit = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
+    auto program =
+        unit ? dyn_cast_or_null<pir::MathematicalOp>(
+                   preflight.getSymbols().getSymbolTable(unit).lookup(entry))
+             : pir::MathematicalOp{};
+    if (!program || unit.getProfile() != pir::Profile::Protocol)
+      return error("oracle-query-capacity-source");
+    Analysis analysis(prepared, program.getBody().front(), work, common);
+    auto view = analysis.structure(program);
+    if (!view)
+      return view.takeError();
+    for (auto argument : program.getBody().front().getArguments()) {
+      if (isa<pir::OracleHandleType>(argument.getType()))
+        analysis.values[argument] = {1, 1};
+      else if (auto sequence =
+                   dyn_cast<pir::OracleSequenceType>(argument.getType()))
+        // Cover every possible source element, including repeated occurrences.
+        // This structural bound grants no Host sequence-ingress capability.
+        analysis.values[argument] = {sequence.getMaximum(),
+                                     sequence.getMaximum()};
+    }
+    if (auto e = analysis.block(**view, (*view)->getBody()))
+      return std::move(e);
+    return std::move(analysis.result);
+  });
 }
 } // namespace zkc::protocol

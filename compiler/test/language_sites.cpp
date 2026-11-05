@@ -78,6 +78,109 @@ int main() {
     require(updated.bytes().contains(nativeSiteName("commitment", 987) + "_0"),
             "unrelated source operation must not rename a labelled site");
   });
+  for (const auto &[name, statements] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"labelled repeat", R"(
+             #[site(iterations)] for _ in 0..n roles(P,V) max 2 {
+               let received=send P->V(x);
+             }
+           )"},
+           {"labelled final conditional in repeat", R"(
+             for _ in 0..n roles(P,V) max 2 {
+               #[site(choose)] if choice roles(P,V) {
+                 let received=send P->V(x);
+               } else {}
+             }
+           )"},
+           {"labelled final repeat in conditional", R"(
+             if choice roles(P,V) {
+               #[site(iterations)] for _ in 0..n roles(P,V) max 2 {
+                 let received=send P->V(x);
+               }
+             } else {}
+           )"}}) {
+    cases.run(name, [&, statements = statements] {
+      const auto source =
+          "protocol Structured roles(P,V)(x:F@P,n:index@(P,V),"
+          "choice:bool@(P,V))->(){" +
+          statements +
+          "return ();}entry fn Demo(inputs: Structured::Inputs) {"
+          "return Structured::run(inputs);}";
+      auto project = take(checked(source));
+      auto closed =
+          take(zkc::test::closeProtocolDeployment(project, "m::Demo"));
+      auto original = take(prepareOriginal(closed));
+      auto label = statements.find("site(choose)") != std::string::npos
+                       ? "choose"
+                       : "iterations";
+      const auto native = nativeSiteName(label, 0);
+      require(original.bytes().contains(native),
+              "structured statement lost its explicit label");
+      auto written = take(inspectWrittenSource(project));
+      require(StringRef(written).contains("\"site\":\"" + std::string(label) +
+                                          "\""),
+              "written source lost its statement attribute");
+      for (bool simplify : {false, true})
+        take(compileEntry(original, {simplify, false}));
+      auto parsed =
+          mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+      require(bool(parsed), "parse structured labelled original");
+      take(compareOriginal(closed, *parsed));
+      bool mutated = false;
+      parsed->walk([&](mlir::Operation *operation) {
+        auto site = operation->getAttrOfType<mlir::StringAttr>("site");
+        auto expected = native;
+        auto *parent = operation->getParentOp();
+        if (parent && parent->getName().getStringRef() == "protocol.branch") {
+          auto branch = parent->getAttrOfType<mlir::StringAttr>("site");
+          auto alternatives =
+              parent->getAttrOfType<mlir::ArrayAttr>("alternatives");
+          expected = nativeSelectedSite(
+              branch.getValue(),
+              mlir::cast<mlir::StringAttr>(
+                  alternatives[operation->getParentRegion()->getRegionNumber()])
+                  .getValue(),
+              native);
+        }
+        if (site && site.getValue() == expected) {
+          operation->setAttr("site", mlir::StringAttr::get(&context, "wrong"));
+          mutated = true;
+        }
+      });
+      require(mutated, "structured event site was not emitted");
+      refuses(compareOriginal(closed, *parsed), "source.correspondence");
+      auto changed = source;
+      changed.insert(changed.find("#[site("), "let unrelated@P=x+x;");
+      auto updated =
+          take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+              take(checked(changed)), "m::Demo"))));
+      require(updated.bytes().contains(native),
+              "unrelated statement renamed a structured label");
+    });
+  }
+  cases.run("labelled value selection uses an explicit binding", [&] {
+    take(checked(R"(
+      protocol Pick roles(P,V)(choice:bool@(P,V))->(result:bool@(P,V)){
+        let result={
+          #[site(choose)] let selected=if choice roles(P,V){true}else{false};
+          selected
+        };
+        return result;
+      }
+    )"));
+  });
+  cases.run("an attributed final statement cannot silently discard a value",
+            [&] {
+              refuses(checked(R"(
+      protocol Pick roles(P,V)(choice:bool@(P,V))->(result:bool@(P,V)){
+        let result={
+          #[site(choose)] if choice roles(P,V){true}else{false}
+        };
+        return result;
+      }
+    )"),
+                      "source.type");
+            });
   cases.run("native construction selects labelled challenge deliveries", [&] {
     auto project = take(checked(R"(
       protocol Proof roles(P,V)(x:F@P,coins:Random<F>@V)->(ok:bool@V){
@@ -252,7 +355,6 @@ protocol Gated<C: QueryLibrary> roles(P, V)(coins: Random<Q> @V) -> bool @V:
       "#[site(a)] let c=coins.draw()+1;",
       "#[site(a)] let c=send V->P(coins.draw());",
       "#[site(a)] require @V true;",
-      "#[site(a)] for _ in 0..n roles(P,V) max 2 {let r=send P->V(x);}",
       "#[site(a)] let c=coins.draw(); #[site(a)] let r=send V->P(c);",
       "#[site(a)] let r=send P->V(x); for _ in 0..n roles(P,V) max 2 "
       "{#[site(a)] let c=coins.draw();}",

@@ -3258,8 +3258,11 @@ private:
           kind == Expression::Kind::Block || kind == Expression::Kind::If ||
           kind == Expression::Kind::Match || kind == Expression::Kind::For;
       if (!s.terminated) {
+        // An attribute labels the statement, not an implicit block result.
+        // Retain it here; the checker requires an unterminated statement to
+        // have unit type. Value-producing events use a labelled binding.
         if (region && at("}") && s.kind == Statement::Kind::Expression &&
-            !s.exchange) {
+            !s.exchange && !s.site) {
           b.results.emplace_back("result", *expr);
           break;
         }

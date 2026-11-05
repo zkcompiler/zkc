@@ -1,4 +1,5 @@
 #include "OracleQueryDemand.h"
+#include "OracleEmissionAccounting.h"
 #include "RealizationEmission.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
@@ -20,27 +21,35 @@ using Values = SmallVector<Value>;
 using Types = SmallVector<Type>;
 using Control = exec::ScopedExecutionBuilder;
 struct Emitter {
+  OracleNativeWork &common;
   ModuleOp candidate;
   const OracleAnchorStorage &storage;
   const OracleQueryController &controller;
   OracleQueryDemand result;
   pir::ProtocolModuleOp unit;
+  OracleEmissionListener emission;
   OpBuilder builder;
   Location loc;
   Type index, scope;
-  mathematical::RealizationEmitter bindings;
+  OracleBindingEmitter bindings;
   std::map<uint64_t, Value> *constants = nullptr;
   unsigned next = 0, rootKind = 0;
   Emitter(ModuleOp candidate, const OracleAnchorStorage &storage,
-          const OracleQueryController &controller)
-      : candidate(candidate), storage(storage), controller(controller),
+          const OracleQueryController &controller, OracleNativeWork &common)
+      : common(common), candidate(candidate), storage(storage),
+        controller(controller),
         unit(cast<pir::ProtocolModuleOp>(candidate.getBody()->front())),
-        builder(candidate.getContext()), loc(candidate.getLoc()),
+        emission(common), builder(candidate.getContext(), &emission),
+        loc(candidate.getLoc()),
         index(IntegerType::get(candidate.getContext(), 64,
                                IntegerType::Unsigned)),
         scope(runtime::ScopeType::get(candidate.getContext())),
-        bindings(unit, "_oracle_demand_binding_") {}
+        bindings(unit, "_oracle_demand_binding_", common) {}
   Error plan(pir::OracleKindAttr root, OracleVirtualFunctionWork &work) {
+    if (!common.charge(64 + 2 * storage.entry.size() +
+                       2 * controller.role.size() + controller.kinds.size() +
+                       controller.constructors.size()))
+      return error("oracle-common-limit");
     auto capacity = controller.capacity;
     // A node enters once and returns once; final root completion adds at most
     // one transition. Request consumption is outside advance. A frame is
@@ -62,6 +71,8 @@ struct Emitter {
     rootKind = found - controller.kinds.begin();
     uint64_t queries = 0, width = 0;
     for (auto [ordinal, item] : enumerate(controller.constructors)) {
+      if (!common.charge(8 + controller.stores.size()))
+        return error("oracle-common-limit");
       if (item.source >= storage.constructors.size())
         return error("oracle-demand-layout");
       const auto &anchor = storage.constructors[item.source];
@@ -100,8 +111,8 @@ struct Emitter {
         operations > work.operations ||
         operations * (ports + width + 16) > work.slots)
       return error("oracle-demand-limit");
-    work.operations -= operations;
-    work.slots -= operations * (ports + width + 16);
+    if (!work.reserveCapacity(operations, operations * (ports + width + 16)))
+      return error("oracle-demand-limit");
     VariantIdentity nominalIdentity(VariantIdentity::Tuple{
         "zkc.oracle.demand-frame/0", toHex(storage.entry, true),
         toHex(controller.role, true)});
@@ -139,12 +150,14 @@ struct Emitter {
   func::FuncOp function(StringRef label, TypeRange inputs, TypeRange outputs,
                         bool region,
                         llvm::function_ref<void(Control &, ValueRange)> emit) {
+    reserveOracleEmission(common, 8 + inputs.size() + outputs.size());
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&unit.getBody().front());
     std::string name;
     do {
-      name = "_oracle_demand_" + label.str() + "_" + std::to_string(next++);
-    } while (SymbolTable::lookupSymbolIn(unit, name));
+      name = "_oracle_demand_" + label.str() + "_" +
+             std::to_string(oracleEmissionOrdinal(common, next));
+    } while (lookupOracleEmissionSymbol(unit, name, common));
     Types formals{scope};
     append_range(formals, inputs);
     auto outcome =
@@ -159,6 +172,7 @@ struct Emitter {
       helper->setAttr("runtime.origin",
                       builder.getArrayAttr({builder.getStringAttr(name),
                                             builder.getArrayAttr({})}));
+    reserveOracleEmission(common, 1 + helper.getNumArguments());
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
     // A helper's successful path is a linear chain of scoped outcomes.
@@ -499,7 +513,7 @@ struct Emitter {
     return dispatch(label, selector, cases, allTypes(), result.state, check);
   }
   void emitInitialize(pir::OracleKindAttr root) {
-    auto reference = cantFail(oracleReferenceType(root));
+    auto reference = requireOracleReferenceType(root, common);
     result.initialize =
         function("initialize", TypeRange{reference, index}, result.state, false,
                  [&](Control &c, ValueRange inputs) {
@@ -591,17 +605,24 @@ emitOracleQueryDemand(ModuleOp candidate, const OracleAnchorStorage &storage,
                       const OracleQueryController &controller,
                       pir::OracleKindAttr root,
                       OracleVirtualFunctionWork &work) {
-  if (!candidate || !hasSingleElement(candidate.getBody()->getOperations()))
-    return error("oracle-demand-source");
-  auto unit = dyn_cast<pir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!unit || unit.getProfile() != pir::Profile::Protocol ||
-      failed(zkc::admitStage(candidate)))
-    return error("oracle-demand-source");
-  Emitter emitter(candidate, storage, controller);
-  if (auto e = emitter.plan(root, work))
-    return std::move(e);
-  emitter.emitInitialize(root);
-  emitter.emitAdvance();
-  return std::move(emitter.result);
+  return oracleExpectedWithWork(
+      work.getWork(), [&]() -> Expected<OracleQueryDemand> {
+        if (!candidate ||
+            !hasSingleElement(candidate.getBody()->getOperations()))
+          return error("oracle-demand-source");
+        auto unit =
+            dyn_cast<pir::ProtocolModuleOp>(candidate.getBody()->front());
+        if (!unit || unit.getProfile() != pir::Profile::Protocol ||
+            failed(work.checkSubject(candidate)))
+          return error("oracle-demand-source");
+        auto session = startOracleEmissionSession(work.getWork(), unit);
+        Emitter emitter(candidate, storage, controller, work.getWork());
+        if (auto e = emitter.plan(root, work))
+          return std::move(e);
+        emitter.emitInitialize(root);
+        emitter.emitAdvance();
+        commitOracleEmissionSession(session);
+        return std::move(emitter.result);
+      });
 }
 } // namespace zkc::protocol

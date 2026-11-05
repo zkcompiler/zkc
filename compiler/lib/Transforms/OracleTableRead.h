@@ -17,5 +17,9 @@ emitOracleTableRead(mlir::ModuleOp candidate, protocol_ir::OracleKindAttr kind);
 llvm::Error checkOracleTableRead(mlir::ModuleOp candidate,
                                  mlir::func::FuncOp actual,
                                  protocol_ir::OracleKindAttr kind);
+struct OracleNativeWork;
+llvm::Expected<mlir::func::FuncOp>
+emitOracleTableReadWithWork(mlir::ModuleOp, protocol_ir::OracleKindAttr,
+                            OracleNativeWork &);
 } // namespace zkc::protocol
 #endif

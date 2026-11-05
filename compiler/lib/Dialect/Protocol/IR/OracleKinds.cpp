@@ -1,4 +1,5 @@
 #include "zkc/Contracts/OracleKinds.h"
+#include "../../NativeTypeWork.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolTypes.h"
 #include "zkc/Dialect/TypeFormation.h"
@@ -14,6 +15,19 @@ struct NativeKindSignature {
 FailureOr<NativeKindSignature>
 signature(llvm::function_ref<InFlightDiagnostic()> emit, StringRef identity,
           ArrayAttr arguments) {
+  zkc::detail::NativeTypeWorkScope::charge(1 + identity.size() +
+                                           (arguments ? arguments.size() : 0));
+  auto *work = zkc::detail::NativeTypeWorkScope::current();
+  zkc::detail::NativeTypeWork::Application key;
+  if (work && arguments) {
+    key = {StringAttr::get(arguments.getContext(), identity), arguments};
+    if (auto found = work->oracleKinds.find(key);
+        found != work->oracleKinds.end()) {
+      const auto &value = found->second;
+      return NativeKindSignature{value.data, value.query, value.answer,
+                                 value.rows};
+    }
+  }
   auto refuse = [&](StringRef detail) -> FailureOr<NativeKindSignature> {
     emit() << detail;
     return failure();
@@ -53,6 +67,12 @@ signature(llvm::function_ref<InFlightDiagnostic()> emit, StringRef identity,
       constructLogicalType(emit, arguments.getContext(), {"index", {}});
   if (!data || !query)
     return failure();
+  if (work) {
+    zkc::detail::NativeTypeWorkScope::charge();
+    work->oracleKinds.try_emplace(key,
+                                  zkc::detail::NativeTypeWork::OracleKindTypes{
+                                      data, query, row.getValue(), rows});
+  }
   return NativeKindSignature{data, query, row.getValue(), rows};
 }
 FailureOr<NativeKindSignature> signature(OracleKindAttr kind) {

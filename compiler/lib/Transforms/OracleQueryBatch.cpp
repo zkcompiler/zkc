@@ -1,4 +1,5 @@
 #include "OracleQueryBatch.h"
+#include "OracleEmissionAccounting.h"
 #include "OracleVerificationContext.h"
 #include "RealizationEmission.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -17,24 +18,27 @@ using Values = SmallVector<Value>;
 using Control = exec::ScopedExecutionBuilder;
 
 struct Emitter {
+  OracleNativeWork &common;
   protocol_ir::ProtocolModuleOp unit;
   ArrayRef<OracleQueryBatchRoot> roots;
   OracleQueryBatch result;
   Types stores, answers;
+  OracleEmissionListener emission;
   OpBuilder builder;
-  mathematical::RealizationEmitter bindings;
+  OracleBindingEmitter bindings;
   Type index, boolean;
   unsigned next = 0;
   uint64_t operationAllowance = 0, generatedSlots = 0;
 
   Emitter(protocol_ir::ProtocolModuleOp unit,
-          ArrayRef<OracleQueryBatchRoot> roots)
-      : unit(unit), roots(roots), builder(unit.getContext()),
-        bindings(unit, "_oracle_batch_binding_"),
+          ArrayRef<OracleQueryBatchRoot> roots, OracleNativeWork &common)
+      : common(common), unit(unit), roots(roots), emission(common),
+        builder(unit.getContext(), &emission),
+        bindings(unit, "_oracle_batch_binding_", common),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()) {}
 
-  Error plan(const OracleVerificationContext &context,
+  Error plan(const OracleVerificationContext *context,
              OracleVirtualFunctionWork &work) {
     if (roots.empty() || roots.size() > 32)
       return error("oracle-batch-capacity");
@@ -43,7 +47,8 @@ struct Emitter {
           helper->hasAttr("runtime.region") ||
           helper->hasAttr("data.preconditions") ||
           !helper->getAttrOfType<UnitAttr>("no_inline") ||
-          !context.getClosure().bodies.count(helper.getSymName().str()))
+          (context &&
+           !context->getClosure().bodies.count(helper.getSymName().str())))
         return {};
       auto origin =
           builder.getArrayAttr({builder.getStringAttr(helper.getSymName()),
@@ -64,6 +69,10 @@ struct Emitter {
       const auto &controller = *root.controller;
       const auto &demand = *root.demand;
       const auto &window = *root.window;
+      if (!common.charge(64 +
+                         8 * (controller.stores.size() +
+                              controller.state.size() + demand.state.size())))
+        return error("oracle-common-limit");
       if (!window.capacity || window.capacity >= 1048576)
         return error("oracle-batch-capacity");
       if (!capacity) {
@@ -133,20 +142,22 @@ struct Emitter {
     generatedSlots = operationAllowance * (width + 16);
     if (operationAllowance > work.operations || generatedSlots > work.slots)
       return error("oracle-batch-limit");
-    work.operations -= operationAllowance;
-    work.slots -= generatedSlots;
+    if (!work.reserveCapacity(operationAllowance, generatedSlots))
+      return error("oracle-batch-limit");
     return Error::success();
   }
 
   func::FuncOp function(StringRef label, TypeRange inputs, TypeRange outputs,
                         bool region,
                         llvm::function_ref<void(Control &, ValueRange)> emit) {
+    reserveOracleEmission(common, 8 + inputs.size() + outputs.size());
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&unit.getBody().front());
     std::string name;
     do {
-      name = "_oracle_batch_" + label.str() + "_" + std::to_string(next++);
-    } while (SymbolTable::lookupSymbolIn(unit, name));
+      name = "_oracle_batch_" + label.str() + "_" +
+             std::to_string(oracleEmissionOrdinal(common, next));
+    } while (lookupOracleEmissionSymbol(unit, name, common));
     Types formals{runtime::ScopeType::get(unit.getContext())};
     append_range(formals, inputs);
     auto helper = func::FuncOp::create(
@@ -162,6 +173,7 @@ struct Emitter {
       helper->setAttr("runtime.origin",
                       builder.getArrayAttr({builder.getStringAttr(name),
                                             builder.getArrayAttr({})}));
+    reserveOracleEmission(common, 1 + helper.getNumArguments());
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
     emit(control, helper.getArguments().drop_front());
@@ -335,80 +347,113 @@ struct Emitter {
 Expected<OracleQueryBatch>
 emitOracleQueryBatch(ModuleOp candidate, ArrayRef<OracleQueryBatchRoot> roots,
                      OracleVirtualFunctionWork &work) {
-  auto context = OracleVerificationContext::read(candidate);
-  if (!context) {
-    consumeError(context.takeError());
-    return error("oracle-batch-source");
-  }
-  Emitter emitter(context->getUnit(), roots);
-  auto savedWork = work;
-  SmallPtrSet<Operation *, 32> original;
-  for (auto &op : emitter.unit.getBody().front())
-    original.insert(&op);
-  bool published = false;
-  auto rollback = llvm::scope_exit([&] {
-    if (published)
-      return;
-    SmallVector<Operation *> additions;
-    for (auto &op : emitter.unit.getBody().front())
-      if (!original.contains(&op))
-        additions.push_back(&op);
-    for (auto *op : additions)
-      op->dropAllReferences();
-    for (auto *op : reverse(additions))
-      op->erase();
-    work = savedWork;
-  });
-  if (auto e = emitter.plan(*context, work))
-    return std::move(e);
-  emitter.collect();
-  emitter.checkAvailable();
-  emitter.replay();
-  emitter.finish();
-  uint64_t operationsRemaining = emitter.operationAllowance;
-  uint64_t slotsRemaining = emitter.generatedSlots;
-  bool withinReservation = true;
-  for (auto &addition : emitter.unit.getBody().front()) {
-    if (original.contains(&addition))
-      continue;
-    addition.walk([&](Operation *op) {
-      if (!withinReservation)
-        return;
-      auto charge = [&](uint64_t slots) {
-        if (slots > slotsRemaining)
-          withinReservation = false;
-        else
-          slotsRemaining -= slots;
-      };
-      if (!operationsRemaining) {
-        withinReservation = false;
-        return;
-      }
-      --operationsRemaining;
-      charge(op->getNumOperands());
-      charge(op->getNumResults());
-      for (auto &region : op->getRegions())
-        for (auto &block : region) {
-          if (!operationsRemaining) {
-            withinReservation = false;
-            return;
-          }
-          --operationsRemaining;
-          charge(block.getNumArguments());
+  return oracleExpectedWithWork(
+      work.getWork(), [&]() -> Expected<OracleQueryBatch> {
+        if (!candidate ||
+            !hasSingleElement(candidate.getBody()->getOperations()) ||
+            !isa<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front()))
+          return error("oracle-batch-source");
+        std::optional<OracleVerificationContext> context;
+        if (!work.ownsScratch(candidate)) {
+          auto checked =
+              OracleVerificationContext::read(candidate, work.getWork());
+          if (!checked)
+            return checked.takeError();
+          context.emplace(std::move(*checked));
         }
-    });
-  }
-  if (!withinReservation)
-    return error("oracle-batch-limit");
-  // Admission and the independent reader borrow the final candidate afresh.
-  auto actual = OracleVerificationContext::read(candidate);
-  if (!actual) {
-    consumeError(actual.takeError());
-    return error("oracle-batch-body");
-  }
-  if (auto e = checkOracleQueryBatch(*actual, roots, emitter.result))
-    return std::move(e);
-  published = true;
-  return std::move(emitter.result);
+        auto unit =
+            cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
+        auto session = startOracleEmissionSession(work.getWork(), unit);
+        Emitter emitter(unit, roots, work.getWork());
+        auto savedWork = work;
+        if (!work.getWork().chargeProduct(
+                3, emitter.unit.getBody().front().getOperations().size()))
+          return error("oracle-common-limit");
+        SmallPtrSet<Operation *, 32> original;
+        for (auto &op : emitter.unit.getBody().front())
+          original.insert(&op);
+        bool published = false;
+        auto rollback = llvm::scope_exit([&] {
+          if (published)
+            return;
+          SmallVector<Operation *> additions;
+          for (auto &op : emitter.unit.getBody().front())
+            if (!original.contains(&op))
+              additions.push_back(&op);
+          // End the maintained live inventory before erasing observed roots.
+          // This failed generation scope cannot issue further lookups.
+          if (work.getWork().emission)
+            work.getWork().emission->finish();
+          for (auto *op : additions)
+            op->dropAllReferences();
+          for (auto *op : reverse(additions))
+            op->erase();
+          // IR rollback must not refund work already performed.
+          work.operations = savedWork.operations;
+          work.slots = savedWork.slots;
+        });
+        if (auto e = emitter.plan(context ? &*context : nullptr, work))
+          return std::move(e);
+        emitter.collect();
+        emitter.checkAvailable();
+        emitter.replay();
+        emitter.finish();
+        uint64_t operationsRemaining = emitter.operationAllowance;
+        uint64_t slotsRemaining = emitter.generatedSlots;
+        bool withinReservation = true;
+        for (auto &addition : emitter.unit.getBody().front()) {
+          if (original.contains(&addition))
+            continue;
+          addition.walk([&](Operation *op) {
+            if (!withinReservation)
+              return;
+            if (!work.getWork().operation(op->getNumOperands() +
+                                          op->getNumResults() +
+                                          op->getNumRegions())) {
+              withinReservation = false;
+              return;
+            }
+            auto charge = [&](uint64_t slots) {
+              if (slots > slotsRemaining)
+                withinReservation = false;
+              else
+                slotsRemaining -= slots;
+            };
+            if (!operationsRemaining) {
+              withinReservation = false;
+              return;
+            }
+            --operationsRemaining;
+            charge(op->getNumOperands());
+            charge(op->getNumResults());
+            for (auto &region : op->getRegions())
+              for (auto &block : region) {
+                if (!operationsRemaining) {
+                  withinReservation = false;
+                  return;
+                }
+                --operationsRemaining;
+                charge(block.getNumArguments());
+              }
+          });
+        }
+        if (!withinReservation)
+          return error("oracle-batch-limit");
+        // Admission and the independent reader borrow the final candidate
+        // afresh.
+        // Private composite scratch is read exactly once by the final pair
+        // checker. Raw primitive subjects still complete their own reader.
+        if (!work.ownsScratch(candidate)) {
+          auto actual =
+              OracleVerificationContext::read(candidate, work.getWork());
+          if (!actual)
+            return actual.takeError();
+          if (auto e = checkOracleQueryBatch(*actual, roots, emitter.result))
+            return std::move(e);
+        }
+        published = true;
+        commitOracleEmissionSession(session);
+        return std::move(emitter.result);
+      });
 }
 } // namespace zkc::protocol

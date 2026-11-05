@@ -24,10 +24,11 @@ Origins authored(ModuleOp source) {
   source.walk([&](Operation *op) {
     if (isa<protocol_ir::OracleSendOp, protocol_ir::OracleQueryOp>(op)) {
       auto site = op->getAttrOfType<StringAttr>("site").str();
-      result[site] = {"leaf",
-                      site,
-                      {"oracle", "leaf", site},
-                      {{"apply", "main", "application"}}};
+      result[site] = {
+          "leaf",
+          site,
+          zkc::detail::NativeOracleOrigin{},
+          {{protocol::NativeOriginStep::Kind::Apply, "main", "application"}}};
     }
   });
   return result;
@@ -47,7 +48,8 @@ std::vector<std::pair<std::string, std::string>>
 messages(const Origins &origins) {
   std::vector<std::pair<std::string, std::string>> result;
   for (const auto &item : origins)
-    if (item.second.event.front() == "message")
+    if (std::holds_alternative<protocol::NativeMessageOrigin>(
+            item.second.event))
       result.emplace_back(item.first().str(), item.second.protocol);
   llvm::sort(result);
   return result;
@@ -69,10 +71,11 @@ int main() {
         unsigned requests = 0, responses = 0, deliveries = 0;
         for (const auto &item : origins) {
           const auto &origin = item.second;
-          if (origin.event.front() != "message")
+          if (!std::holds_alternative<protocol::NativeMessageOrigin>(
+                  origin.event))
             continue;
           auto encoded = take(protocol::encodeNativeOriginTemplate(
-              "main", origin.steps, origin.event));
+              take(zkc::detail::exportNativeSourceOrigin("main", origin))));
           auto decoded = take(protocol::decodeNativeOriginTemplate(encoded));
           auto message = std::get<protocol::NativeMessageOrigin>(decoded.event);
           require(message.site == item.first(),
@@ -99,7 +102,8 @@ int main() {
   });
   cases.run("all queries in a batch bind generated origins", [&] {
     auto changed = logical;
-    changed["duplicate"].steps.push_back({"apply", "nested", "different"});
+    changed["duplicate"].steps.push_back(
+        {protocol::NativeOriginStep::Kind::Apply, "nested", "different"});
     auto before =
         take(zkc::detail::realizedNativeOrigins(edge, "main", logical));
     auto after =
@@ -124,11 +128,11 @@ int main() {
   });
   cases.run("unexpected authored event cannot disappear", [&] {
     auto extra = logical;
-    extra["unaccounted"] = {
-        "main",
-        "unaccounted",
-        {"message", "main", "unaccounted", "unaccounted", "P", "V"},
-        {}};
+    extra["unaccounted"] = {"main",
+                            "unaccounted",
+                            protocol::NativeMessageOrigin{
+                                "main", "unaccounted", "unaccounted", "P", "V"},
+                            {}};
     refuses(zkc::detail::realizedNativeOrigins(edge, "main", extra),
             "native-proof-origin-coverage");
   });

@@ -23,6 +23,30 @@ namespace zkc::detail {
 namespace {
 namespace pir = protocol_ir;
 using Env = llvm::DenseMap<Value, Value>;
+// Bound subject indexing before constructing symbol tables or execution views.
+// This is a traversal of the actual IR, not a normalized construction model.
+bool chargeTranscriptSubject(Operation *op, size_t &remaining,
+                             unsigned depth = 0) {
+  size_t work = 1 + op->getNumOperands() + op->getNumResults() +
+                op->getAttrs().size() + op->getNumRegions();
+  if (depth > 64 || work > remaining)
+    return false;
+  remaining -= work;
+  for (auto &region : op->getRegions())
+    for (auto &block : region) {
+      work = 1 + block.getNumArguments();
+      if (work > remaining)
+        return false;
+      remaining -= work;
+      unsigned childDepth = isa<pir::ProtocolModuleOp, pir::ParticipantOp>(op)
+                                ? depth
+                                : depth + 1;
+      for (auto &nested : block)
+        if (!chargeTranscriptSubject(&nested, remaining, childDepth))
+          return false;
+    }
+  return true;
+}
 class TranscriptCorrespondence {
   const NativeProofPolicy &policy;
   const protocol::ConstructionPlan *plan;
@@ -34,22 +58,29 @@ class TranscriptCorrespondence {
   SymbolTable symbols;
   const protocol::SourceExecutionClosure &execution;
   const NativeRequestPlan &requests;
-  NativeRequestValues replicas;
   SmallVector<Type> stateTypes;
   StringMap<const NativeTranscriptEvent *> bySite;
   StringMap<std::string> deliveries;
   StringMap<const NativeTranscriptEvent *> checkedHelpers;
   llvm::StringSet<> bindings, originalSymbols;
-  llvm::DenseSet<Operation *> observedLoops;
-  size_t remaining = 1000000;
+  llvm::DenseSet<Operation *> observedControls;
+  size_t remaining;
+  bool capacityExceeded = false;
   std::string checkpoint;
   bool charge(size_t work = 1) {
     if (work > remaining) {
       remaining = 0;
+      capacityExceeded = true;
       return false;
     }
     remaining -= work;
     return true;
+  }
+  bool withinDepth(unsigned depth) {
+    if (depth <= 64)
+      return true;
+    capacityExceeded = true;
+    return false;
   }
   static StringRef text(Operation *op, StringRef key) {
     auto value = op->getAttrOfType<StringAttr>(key);
@@ -83,7 +114,7 @@ class TranscriptCorrespondence {
     return true;
   }
   bool exact(Operation &a, Operation &b, Env &env, unsigned depth) {
-    if (!charge() || depth > 64 || a.getName() != b.getName() ||
+    if (!charge() || !withinDepth(depth) || a.getName() != b.getName() ||
         !attributes(&a, &b) ||
         !operands(a.getOperands(), b.getOperands(), env) ||
         a.getNumRegions() != b.getNumRegions())
@@ -332,45 +363,60 @@ class TranscriptCorrespondence {
     }
     return true;
   }
-  bool indexObservedLoops(pir::ParticipantOp participant) {
-    observedLoops.clear();
-    llvm::DenseSet<Operation *> observed;
+  bool indexObservedControls(pir::ParticipantOp participant) {
+    observedControls.clear();
     // Discover required state threading from the actual source operations,
     // independently of the supplied event facts. Propagate once in postorder
     // so nested message-only loops cannot hide an omitted event.
-    return !participant
-                .walk<WalkOrder::PostOrder>([&](Operation *op) {
-                  if (!charge())
-                    return WalkResult::interrupt();
-                  bool required =
-                      observed.contains(op) ||
-                      isa<pir::EmitOp, pir::AwaitOp, pir::FinishIfOp,
-                          pir::ConstructionStartOp>(op) ||
-                      (isa<pir::ParticipantQueryOp>(op) &&
-                       bySite.contains(text(op, "site")));
-                  if (required) {
-                    if (isa<pir::ProtocolLoopOp>(op))
-                      observedLoops.insert(op);
-                    observed.insert(op->getParentOp());
-                  }
-                  return WalkResult::advance();
-                })
-                .wasInterrupted();
+    auto visit = [&](auto &&self, Operation *op, unsigned depth,
+                     bool &required) -> bool {
+      if (!charge() || !withinDepth(depth))
+        return false;
+      required = isa<pir::EmitOp, pir::AwaitOp, pir::FinishIfOp,
+                     pir::ConstructionStartOp>(op) ||
+                 (isa<pir::ParticipantQueryOp>(op) &&
+                  bySite.contains(text(op, "site")));
+      for (auto &region : op->getRegions())
+        for (auto &block : region) {
+          if (!charge(1 + block.getNumArguments()))
+            return false;
+          for (auto &nested : block) {
+            bool child = false;
+            unsigned childDepth =
+                isa<pir::ParticipantOp>(op) ? depth : depth + 1;
+            if (!self(self, &nested, childDepth, child))
+              return false;
+            required |= child;
+          }
+        }
+      if (required && isa<pir::ProtocolLoopOp, pir::ParticipantBranchOp>(op))
+        observedControls.insert(op);
+      return true;
+    };
+    bool required = false;
+    return visit(visit, participant, 0, required);
   }
-  bool body(Block &a, Block &b, Env env, SmallVector<Value> state,
-            ArrayRef<Value> coordinates, StringRef role,
+  bool body(Block &a, Block &b, Env env, NativeRequestValues &replicas,
+            SmallVector<Value> state, ArrayRef<Value> coordinates,
+            StringRef role,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached,
             unsigned depth, Operation *first = nullptr, bool threaded = true) {
-    if (depth > 64)
+    if (!withinDepth(depth) || b.empty())
       return false;
     Operation *cursor = first ? first : &b.front();
     auto *requestFrame =
         role == policy.producer ? requests.frames.lookup(&a) : nullptr;
     unsigned stateSlots = threaded ? stateTypes.size() : 0;
     SmallVector<Value> payloadGroup;
+    const protocol::ConstructionRule *payloadRule = nullptr;
     auto observe = [&](const NativeTranscriptEvent &event, Value payload) {
-      payloadGroup.push_back(payload);
       auto *rule = rules.lookup(event.site);
+      if (!charge() || (!payloadGroup.empty() && payloadRule != rule) ||
+          (rule && (payloadGroup.size() >= rule->sites.size() ||
+                    rule->sites[payloadGroup.size()] != event.site)))
+        return false;
+      payloadRule = rule;
+      payloadGroup.push_back(payload);
       if (rule && rule->sites.back() != event.site) {
         reached.push_back(&event);
         return true;
@@ -378,19 +424,30 @@ class TranscriptCorrespondence {
       bool valid = call(cursor, event, state, payloadGroup, coordinates,
                         nullptr, reached);
       payloadGroup.clear();
+      payloadRule = nullptr;
       return valid;
     };
     llvm::DenseMap<const NativeTranscriptEvent *, Value> challenges;
     for (auto &op : a) {
       checkpoint =
           op.getName().getStringRef().str() + " at " + text(&op, "site").str();
-      if (requestFrame &&
-          !readNativeRequestSteps(*requestFrame, &op, cursor, env, replicas))
-        return false;
+      if (requestFrame) {
+        uint64_t requestAllowance = remaining;
+        bool valid = readNativeRequestSteps(*requestFrame, &op, cursor, env,
+                                            replicas, requestAllowance);
+        remaining = requestAllowance;
+        if (!valid) {
+          capacityExceeded |= !requestAllowance;
+          return false;
+        }
+      }
       if (!charge() || !cursor)
         return false;
       auto event = bySite.find(text(&op, "site"));
       if (event == bySite.end() && isa<pir::EmitOp, pir::AwaitOp>(op))
+        return false;
+      if (isa<pir::ProtocolLoopOp, pir::ParticipantBranchOp>(op) &&
+          (!payloadGroup.empty() || !challenges.empty()))
         return false;
       const NativeRequestLoop *replica = nullptr;
       if (requestFrame) {
@@ -398,11 +455,137 @@ class TranscriptCorrespondence {
         if (found != requestFrame->loops.end())
           replica = found->second.get();
       }
-      if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op);
-          loop && (observedLoops.contains(loop) || replica)) {
+      if (auto branch = dyn_cast<pir::ParticipantBranchOp>(op)) {
+        auto actual = dyn_cast<pir::ParticipantBranchOp>(cursor);
+        const NativeRequestBranch *requestsForBranch = nullptr;
+        if (requestFrame) {
+          auto found = requestFrame->branches.find(&op);
+          if (found != requestFrame->branches.end())
+            requestsForBranch = found->second.get();
+        }
+        bool observed = observedControls.contains(branch);
+        unsigned ns = observed ? stateTypes.size() : 0;
+        unsigned np =
+            requestsForBranch ? requestsForBranch->captured.size() : 0;
+        unsigned nr = requestsForBranch ? requestsForBranch->outputs.size() : 0;
+        unsigned originalInputs = branch.getNumOperands();
+        if (!originalInputs || !actual || !attributes(branch, actual) ||
+            actual->getNumRegions() != branch->getNumRegions() ||
+            !charge(originalInputs + np + ns + nr))
+          return false;
+        // Derive reuse from actual source-mapped original/replica captures.
+        // Neither the selector nor a same-typed state slot is a capture of an
+        // enclosing coordinate. Repeated identical captures keep their slots.
+        llvm::DenseMap<Value, unsigned> captureSlots;
+        for (unsigned i = 1; i < originalInputs; ++i) {
+          Value value = env.lookup(branch.getOperand(i));
+          if (!value)
+            return false;
+          captureSlots.try_emplace(value, i);
+        }
+        if (requestsForBranch)
+          for (auto [i, input] : enumerate(requestsForBranch->captured)) {
+            Value value = resolveNativeRequestValue(input, env, replicas);
+            if (!value)
+              return false;
+            captureSlots.try_emplace(value, originalInputs + i);
+          }
+        SmallVector<Value> addedCoordinates;
+        SmallVector<unsigned> coordinateSlots;
+        if (observed) {
+          if (state.size() != ns || !charge(coordinates.size()))
+            return false;
+          for (Value coordinate : coordinates) {
+            auto inserted = captureSlots.try_emplace(
+                coordinate, originalInputs + np + ns + addedCoordinates.size());
+            if (inserted.second)
+              addedCoordinates.push_back(coordinate);
+            coordinateSlots.push_back(inserted.first->second);
+          }
+        }
+        unsigned extraCaptures = ns + addedCoordinates.size();
+        if (actual.getNumOperands() != originalInputs + np + extraCaptures ||
+            actual.getNumResults() != branch.getNumResults() + nr + ns ||
+            !operands(branch.getInputs(),
+                      actual.getInputs().take_front(originalInputs), env) ||
+            actual.getInputs().slice(originalInputs + np, ns) !=
+                (observed ? ValueRange(state) : ValueRange()) ||
+            actual.getInputs().take_back(addedCoordinates.size()) !=
+                ValueRange(addedCoordinates) ||
+            !llvm::equal(actual.getResults().take_back(ns).getTypes(),
+                         ArrayRef<Type>(stateTypes).take_front(ns)))
+          return false;
+        // The request readers validate every arm's shape. Charge that work to
+        // this checker's shared allowance before invoking them, including the
+        // per-arm reader's scan of the branch's arm list.
+        for (auto &region : actual->getRegions()) {
+          if (!region.hasOneBlock() ||
+              !charge(1 + region.front().getNumArguments() +
+                      actual.getNumOperands()))
+            return false;
+        }
+        if (requestsForBranch &&
+            !readNativeRequestBranchInputs(*requestsForBranch, actual,
+                                           extraCaptures, ns, env, replicas))
+          return false;
+        for (unsigned arm = 0; arm < branch->getNumRegions(); ++arm) {
+          auto &sourceRegion = branch->getRegion(arm);
+          if (!sourceRegion.hasOneBlock())
+            return false;
+          auto &x = sourceRegion.front();
+          auto &y = actual->getRegion(arm).front();
+          if (x.getNumArguments() < originalInputs - 1 ||
+              y.getNumArguments() != x.getNumArguments() + np + extraCaptures ||
+              !charge(branch->getNumRegions() + y.getNumArguments() +
+                      actual.getNumOperands() + nr))
+            return false;
+          unsigned payload = x.getNumArguments() - (originalInputs - 1);
+          unsigned stateStart = x.getNumArguments() + np;
+          for (unsigned i = 1; i < actual.getNumOperands(); ++i)
+            if (y.getArgument(payload + i - 1).getType() !=
+                actual.getOperand(i).getType())
+              return false;
+          Env inner;
+          NativeRequestValues innerReplicas;
+          if (requestsForBranch) {
+            if (!bindNativeRequestBranchArm(*requestsForBranch, actual, arm,
+                                            extraCaptures, ns, inner,
+                                            innerReplicas))
+              return false;
+          } else if (!bind(x.getArguments(),
+                           y.getArguments().take_front(x.getNumArguments()),
+                           inner))
+            return false;
+          SmallVector<Value> indices;
+          if (!charge(coordinateSlots.size() + ns))
+            return false;
+          for (unsigned slot : coordinateSlots)
+            indices.push_back(y.getArgument(payload + slot - 1));
+          // Even an empty arm of an observed branch carries the whole state.
+          // The static inventory visits every arm once, in declaration order.
+          if (!body(x, y, std::move(inner), innerReplicas,
+                    SmallVector<Value>(y.getArguments().slice(stateStart, ns)),
+                    indices, role, reached, depth + 1, nullptr, observed))
+            return false;
+        }
+        if (!charge(branch.getNumResults() + nr + ns))
+          return false;
+        if (requestsForBranch) {
+          if (!bindNativeRequestBranchOutputs(*requestsForBranch, actual, ns,
+                                              env, replicas))
+            return false;
+        } else if (!bind(branch.getResults(),
+                         actual.getResults().take_front(branch.getNumResults()),
+                         env))
+          return false;
+        if (observed)
+          state = SmallVector<Value>(actual.getResults().take_back(ns));
+        cursor = cursor->getNextNode();
+      } else if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op);
+                 loop && (observedControls.contains(loop) || replica)) {
         auto actual = dyn_cast<pir::ProtocolLoopOp>(cursor);
         unsigned split = 1 + loop.getCarried();
-        bool observed = observedLoops.contains(loop);
+        bool observed = observedControls.contains(loop);
         unsigned ns = observed ? stateTypes.size() : 0;
         unsigned nc = replica ? replica->carried.size() : 0;
         unsigned np = replica ? replica->captures.size() : 0;
@@ -413,6 +596,8 @@ class TranscriptCorrespondence {
         SmallVector<unsigned> coordinateSlots;
         if (observed) {
           for (Value input : loop.getInputs().drop_front(split)) {
+            if (!charge())
+              return false;
             Value value = env.lookup(input);
             if (!value)
               return false;
@@ -420,12 +605,16 @@ class TranscriptCorrespondence {
           }
           if (replica)
             for (auto input : replica->captured) {
+              if (!charge())
+                return false;
               Value value = resolveNativeRequestValue(input, env, replicas);
               if (!value)
                 return false;
               captures.push_back(value);
             }
           for (Value coordinate : coordinates) {
+            if (!charge(1 + captures.size()))
+              return false;
             auto found = llvm::find(captures, coordinate);
             unsigned slot = split + nc + ns + (found - captures.begin());
             if (found == captures.end()) {
@@ -465,6 +654,9 @@ class TranscriptCorrespondence {
         auto &x = loop.getBody().front();
         auto &y = actual.getBody().front();
         Env inner;
+        NativeRequestValues innerReplicas;
+        if (!charge(nc + np + ns + coords))
+          return false;
         if (y.getNumArguments() !=
                 x.getNumArguments() + nc + ns + np + coords ||
             !llvm::equal(
@@ -476,19 +668,33 @@ class TranscriptCorrespondence {
                   y.getArguments().slice(split + nc + ns,
                                          x.getNumArguments() - split),
                   inner) ||
-            (replica && !bindNativeRequestLoop(*replica, actual, ns, replicas)))
+            (replica &&
+             !bindNativeRequestLoop(*replica, actual, ns, innerReplicas)))
           return false;
         SmallVector<Value> indices;
         for (unsigned slot : coordinateSlots)
           indices.push_back(y.getArgument(slot));
         if (observed)
           indices.push_back(y.getArgument(0));
-        if (!body(x, y, std::move(inner),
+        if (!body(x, y, std::move(inner), innerReplicas,
                   SmallVector<Value>(y.getArguments().slice(split + nc, ns)),
                   indices, role, reached, depth + 1, nullptr, observed) ||
             !bind(loop.getResults(),
                   actual.getResults().take_front(loop.getNumResults()), env))
           return false;
+        // The loop reader binds its body formals and results together. Only
+        // the results escape the isolated loop; never export its local facts.
+        if (replica)
+          for (auto [i, index] : enumerate(replica->carried)) {
+            if (!charge())
+              return false;
+            if (!replicas
+                     .try_emplace(pir::ProtocolLoopOp(replica->validator)
+                                      .getResult(index),
+                                  actual.getResult(loop.getNumResults() + i))
+                     .second)
+              return false;
+          }
         if (observed) {
           state.clear();
           append_range(state, actual.getResults().take_back(ns));
@@ -502,8 +708,13 @@ class TranscriptCorrespondence {
         unsigned replicaYields =
             isa<pir::ProtocolYieldOp>(op) && requestFrame && requestFrame->loop
                 ? requestFrame->loop->yielded.size()
+            : isa<pir::ProtocolYieldOp>(op) && requestFrame &&
+                    requestFrame->branch
+                ? requestFrame->branch->outputs.size()
                 : 0;
-        if (op.getName() != cursor->getName() || !attributes(&op, cursor) ||
+        if (!payloadGroup.empty() || !challenges.empty() ||
+            !charge(replicaYields + stateSlots) ||
+            op.getName() != cursor->getName() || !attributes(&op, cursor) ||
             cursor->getNumOperands() !=
                 op.getNumOperands() + replicaYields + stateSlots ||
             cursor->getNumResults() !=
@@ -512,11 +723,16 @@ class TranscriptCorrespondence {
             !operands(op.getOperands(),
                       cursor->getOperands().take_front(op.getNumOperands()),
                       env) ||
-            (replicaYields &&
+            (replicaYields && requestFrame->loop &&
              !readNativeRequestYield(*requestFrame->loop,
                                      cursor->getOperands().slice(
                                          op.getNumOperands(), replicaYields),
                                      env, replicas)) ||
+            (isa<pir::ProtocolYieldOp>(op) && requestFrame &&
+             requestFrame->branch &&
+             !readNativeRequestBranchYield(
+                 *requestFrame->branch, requestFrame->arm,
+                 cursor->getOperands(), stateSlots, env, replicas)) ||
             !bind(op.getResults(),
                   cursor->getResults().take_front(op.getNumResults()), env))
           return false;
@@ -545,7 +761,8 @@ class TranscriptCorrespondence {
             return false;
         } else if (isa<pir::ParticipantQueryOp>(op)) {
           Value challenge;
-          if (role != policy.validator || !fact.query ||
+          if (!payloadGroup.empty() || !challenges.empty() ||
+              role != policy.validator || !fact.query ||
               !queryCall(cursor, fact, state, coordinates, role, challenge,
                          reached) ||
               op.getNumResults() != 1 ||
@@ -600,6 +817,7 @@ class TranscriptCorrespondence {
             if (query == bySite.end() ||
                 challenges.lookup(query->second) != payload)
               return false;
+            challenges.erase(query->second);
           }
           if (!payload || !observe(fact, payload))
             return false;
@@ -611,10 +829,10 @@ class TranscriptCorrespondence {
         cursor = cursor->getNextNode();
       }
     }
-    return !cursor && payloadGroup.empty();
+    return !cursor && payloadGroup.empty() && challenges.empty();
   }
   bool participant(pir::ParticipantOp a, pir::ParticipantOp b) {
-    if (!indexObservedLoops(a) ||
+    if (!indexObservedControls(a) ||
         !attributes(a, b, {"function_type", "service_ports"}))
       return false;
     auto x = a.getFunctionType(), y = b.getFunctionType();
@@ -671,6 +889,7 @@ class TranscriptCorrespondence {
     auto &before = a.getBody().front();
     auto &after = b.getBody().front();
     Env env;
+    NativeRequestValues replicas;
     if (!bind(before.getArguments(),
               after.getArguments().drop_back(extraInputs), env))
       return false;
@@ -721,9 +940,9 @@ class TranscriptCorrespondence {
       }
     }
     if (!cursor ||
-        !body(before, after, std::move(env), std::move(state), {}, a.getRole(),
-              reached, 0, cursor) ||
-        reached.size() != events.size())
+        !body(before, after, std::move(env), replicas, std::move(state), {},
+              a.getRole(), reached, 0, cursor) ||
+        reached.size() != events.size() || !charge(events.size()))
       return false;
     for (auto [actual, expected] : zip(reached, events))
       if (actual != &expected)
@@ -778,23 +997,33 @@ public:
       const protocol::ConstructionPlan *plan,
       ArrayRef<protocol::ConstructionInvocation> invocations,
       const protocol::SourceExecutionClosure &execution,
-      const NativeRequestPlan &requests)
+      const NativeRequestPlan &requests, size_t allowance)
       : policy(policy), plan(plan),
         hostRoot(!plan || plan->root == protocol::ConstructionPlan::Root::Host),
         events(events), symbols(candidate), execution(execution),
-        requests(requests) {
+        requests(requests), remaining(allowance) {
     if (plan) {
+      if (!charge(plan->state.size()))
+        return;
       stateTypes = plan->state;
-      for (const auto &rule : plan->rules)
+      for (const auto &rule : plan->rules) {
+        if (!charge(1 + rule.sites.size()))
+          return;
         if (!protocol::isCodecRule(rule.kind))
-          for (const auto &site : rule.sites)
+          for (const auto &site : rule.sites) {
+            if (!charge(site.size()))
+              return;
             rules[site] = &rule;
+          }
+      }
     } else {
       stateTypes.push_back(runtime::CapabilityType::get(
           candidate.getContext(), zkc::runtime::CapabilityKind::Transcript,
           policy.suite));
     }
     for (const auto &invocation : invocations) {
+      if (!charge(1 + invocation.site.size() + invocation.inputs.size()))
+        return;
       auto inserted = startRules.emplace(
           invocation.site,
           protocol::ConstructionRule{protocol::ConstructionRuleKind::Start,
@@ -807,7 +1036,7 @@ public:
     }
   }
   bool check(pir::ProtocolModuleOp before, pir::ProtocolModuleOp after) {
-    if (!attributes(before, after) ||
+    if (capacityExceeded || !attributes(before, after) ||
         (plan &&
          (!plan->symbol || plan->symbol.getValue() != policy.construction ||
           plan->suite != policy.suite ||
@@ -815,7 +1044,8 @@ public:
       return false;
     llvm::StringSet<> origins, queries;
     for (const auto &event : events) {
-      if ((event.reconstructed &&
+      if (!charge(1 + event.site.size() + event.origin.size()) ||
+          (event.reconstructed &&
            (event.query || event.startInputs || event.difficulty)) ||
           !bySite.try_emplace(event.site, &event).second ||
           !origins.insert(event.origin).second)
@@ -824,6 +1054,8 @@ public:
         queries.insert(event.site);
     }
     for (const auto &draw : policy.draws) {
+      if (!charge(1 + draw.first.size() + draw.second.size()))
+        return false;
       auto delivery = bySite.find(draw.second);
       if (!deliveries.try_emplace(draw.second, draw.first).second ||
           !queries.erase(draw.first) || delivery == bySite.end() ||
@@ -832,9 +1064,12 @@ public:
     }
     if (!queries.empty())
       return false;
-    for (auto &op : before.getBody().front())
+    for (auto &op : before.getBody().front()) {
+      if (!charge())
+        return false;
       if (auto name = op.getAttrOfType<StringAttr>("sym_name"))
         originalSymbols.insert(name.getValue());
+    }
     unsigned projections = 0;
     for (auto &op : before.getBody().front()) {
       if (!charge())
@@ -872,6 +1107,9 @@ public:
         continue;
       return false;
     }
+    if (!charge(events.size() * 2 + recordedHelpers.size() +
+                checkedHelpers.size() + rootHelpers.size()))
+      return false;
     unsigned expectedHelpers =
         count_if(
             events,
@@ -890,7 +1128,7 @@ public:
         return false;
     return projections == 1 && checkedHelpers.size() == expectedHelpers;
   }
-  bool exhausted() const { return !remaining; }
+  bool exhausted() const { return capacityExceeded; }
   StringRef detail() const { return checkpoint; }
 };
 } // namespace
@@ -940,6 +1178,10 @@ Error verifyNativeTranscript(
   if (!before || !after || before.getProfile() != pir::Profile::Participant ||
       after.getProfile() != pir::Profile::Participant)
     return error("native-transcript-subject");
+  size_t remaining = 1000000;
+  if (!chargeTranscriptSubject(before, remaining) ||
+      !chargeTranscriptSubject(after, remaining))
+    return error("native-transcript-limit", "subject traversal");
   auto requests = planNativeRequests(before, policy, events, realization);
   if (!requests)
     return requests.takeError();
@@ -955,7 +1197,7 @@ Error verifyNativeTranscript(
   if (!execution)
     return execution.takeError();
   TranscriptCorrespondence checker(after, policy, events, plan, invocations,
-                                   *execution, *requests);
+                                   *execution, *requests, remaining);
   if (!checker.check(before, after))
     return error(checker.exhausted() ? "native-transcript-limit"
                                      : "native-transcript-correspondence",
