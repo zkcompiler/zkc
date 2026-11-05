@@ -140,17 +140,19 @@ std::optional<Type> Checker::type(const Declaration &context,
                                   const SyntaxType &s, unsigned depth,
                                   bool allowPlacement) {
   SaveAndRestore site(referenceSite, s.referenceSite);
-  auto result = elaborateType(context, s, depth, allowPlacement);
-  if (result && !types.chargeType(*result, s.span))
+  auto elaborated = elaborateType(context, s, depth, allowPlacement);
+  auto result = std::move(elaborated.value);
+  if (result && !elaborated.complete && !types.chargeType(*result, s.span))
     return {};
   if (result && result->kind == Type::Kind::LogicalRecord &&
       !types.logicalRecord(*result, s.span))
     return {};
   return result;
 }
-std::optional<Type> Checker::elaborateType(const Declaration &context,
-                                           const SyntaxType &s, unsigned depth,
-                                           bool allowPlacement) {
+Checker::ElaboratedType Checker::elaborateType(const Declaration &context,
+                                               const SyntaxType &s,
+                                               unsigned depth,
+                                               bool allowPlacement) {
   if (depth > work.limits.typeDepth || !types.charge(1, s.span)) {
     if (!types.diagnostic)
       types.fail("source.limit", "source type complexity limit exceeded",
@@ -273,8 +275,8 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       return {};
     }
     Type result(K::Array);
-    result.arguments = {*element};
-    result.dimension = count->dimension;
+    result.arguments.push_back(std::move(*element));
+    result.dimension = std::move(count->dimension);
     return result;
   }
   if (s.kind == S::Tuple) {
@@ -442,8 +444,9 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  "a placed alias is not an ordinary data type", s.span);
       return {};
     }
-    return types.substitute(decl.domain, types.substitution(decl, *args),
-                            s.span);
+    return ElaboratedType(
+        types.substitute(decl.domain, types.substitution(decl, *args), s.span),
+        /*complete=*/true);
   }
   Type result;
   if (decl.kind == Declaration::Kind::Record)

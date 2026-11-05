@@ -58,7 +58,7 @@ struct DomainCallSource {
 struct ScopedCallSource : SourceCall {
   std::map<BindingId, unsigned> scoped, domains;
   std::map<uint32_t, DomainCallSource> domainCalls;
-  std::vector<OperatorBinding> notationFamily = {};
+  std::shared_ptr<const AuthoredOperatorFamily> notationFamily = {};
 };
 /// One replay's source-derived inventory. Selected Protocol Math wrappers have
 /// their own key within the containing lexical region. Candidate associations

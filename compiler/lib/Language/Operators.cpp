@@ -12,6 +12,41 @@ StringRef operatorSymbol(const Expression &expression) {
              ? StringRef(expression.notation->symbol)
              : StringRef{};
 }
+namespace {
+bool chargeBindingTypes(const OperatorBinding &binding, Semantics &types,
+                        Span span, TypeWork operation) {
+  auto charge = [&](const Type &type) {
+    return operation == TypeWork::Identity ? types.chargeIdentity(type, span)
+                                           : types.chargeType(type, span);
+  };
+  auto reference = [&](const CallableReference &target) {
+    return (!target.reference.abstract ||
+            charge(target.reference.abstract->module)) &&
+           (!target.module || charge(*target.module));
+  };
+  if (!reference(binding.target))
+    return false;
+  for (const auto &argument : binding.arguments)
+    if (argument && !charge(*argument))
+      return false;
+  if (binding.filtered) {
+    if (!reference(binding.filtered->target))
+      return false;
+    for (const auto &argument : binding.filtered->arguments)
+      if (argument && !charge(*argument))
+        return false;
+  }
+  return true;
+}
+} // namespace
+bool chargeOperatorBindingKeys(const OperatorBinding &binding, Semantics &types,
+                               Span span) {
+  return chargeBindingTypes(binding, types, span, TypeWork::Identity);
+}
+bool chargeOperatorBindingCopies(const OperatorBinding &binding,
+                                 Semantics &types, Span span) {
+  return chargeBindingTypes(binding, types, span, TypeWork::Copy);
+}
 std::string operatorBindingKey(const OperatorBinding &binding,
                                ArrayRef<Declaration> declarations) {
   std::string key;
@@ -36,7 +71,7 @@ std::string operatorBindingKey(const OperatorBinding &binding,
     }
     frame(key, reference.abstract ? "abstract" : "concrete");
     if (reference.abstract) {
-      frame(key, typeIdentity(reference.abstract->module));
+      frameTypeIdentity(key, reference.abstract->module);
       frame(key, std::to_string(reference.abstract->interface.index));
       frame(key, std::to_string(reference.abstract->binderOwner.index));
       frame(key, std::to_string(reference.abstract->binder));
@@ -44,9 +79,16 @@ std::string operatorBindingKey(const OperatorBinding &binding,
   };
   referenceKey(binding.target.reference);
   frame(key, declarations[binding.target.declaration.index].qualifiedName);
-  frame(key, binding.target.module ? typeIdentity(*binding.target.module) : "");
-  for (const auto &argument : binding.arguments)
-    frame(key, argument ? typeIdentity(*argument) : "");
+  if (binding.target.module)
+    frameTypeIdentity(key, *binding.target.module);
+  else
+    frame(key, "");
+  for (const auto &argument : binding.arguments) {
+    if (argument)
+      frameTypeIdentity(key, *argument);
+    else
+      frame(key, "");
+  }
   if (binding.notation &&
       binding.notation->position == NotationDescriptor::Position::Reduction)
     frame(key, binding.filtered ? "filtered" : "unfiltered");
@@ -57,11 +99,16 @@ std::string operatorBindingKey(const OperatorBinding &binding,
     frame(
         key,
         declarations[binding.filtered->target.declaration.index].qualifiedName);
-    frame(key, binding.filtered->target.module
-                   ? typeIdentity(*binding.filtered->target.module)
-                   : "");
-    for (const auto &argument : binding.filtered->arguments)
-      frame(key, argument ? typeIdentity(*argument) : "");
+    if (binding.filtered->target.module)
+      frameTypeIdentity(key, *binding.filtered->target.module);
+    else
+      frame(key, "");
+    for (const auto &argument : binding.filtered->arguments) {
+      if (argument)
+        frameTypeIdentity(key, *argument);
+      else
+        frame(key, "");
+    }
   }
   return key;
 }
@@ -279,7 +326,7 @@ bool Checker::prepareOperators() {
   return true;
 }
 
-std::optional<std::vector<OperatorBinding>>
+std::optional<std::map<std::string, OperatorBinding>>
 Checker::operatorCandidates(const Declaration &decl,
                             const SyntaxDeclaration &source,
                             uint32_t expression) {
@@ -311,6 +358,8 @@ Checker::operatorCandidates(const Declaration &decl,
     if ((binding.filteredOnly && !expr.filteredReduction) ||
         (expr.filteredReduction && !binding.filtered))
       return true;
+    if (!chargeOperatorBindingCopies(binding, types, expr.span))
+      return false;
     result.push_back(binding);
     return true;
   };
@@ -358,14 +407,15 @@ Checker::operatorCandidates(const Declaration &decl,
   // the diagnostic origin of an identically re-exported binding.
   std::map<std::string, OperatorBinding> unique;
   for (auto &binding : result) {
+    if (!chargeOperatorBindingKeys(binding, types, expr.span))
+      return {};
     auto key = operatorBindingKey(binding, output.declarations);
     if (!types.charge(key.size() + 1, expr.span))
       return {};
     unique.emplace(std::move(key), std::move(binding));
   }
-  result.clear();
-  for (auto &[key, binding] : unique)
-    result.push_back(std::move(binding));
-  return result;
+  // Inference consumes these exact keys by moving map nodes. Discarding them
+  // here would force another identical materialization at every occurrence.
+  return unique;
 }
 } // namespace zkc::language::detail

@@ -95,7 +95,7 @@ void Checker::installAdmissionCollection(bool signaturesOnly) {
                                            AdmissionObligation obligation) {
     if (signaturesOnly && signatureState[scope.id.index] != 1)
       return false;
-    if (!types.chargeType(obligation.type, obligation.span) ||
+    if (!types.chargeIdentity(obligation.type, obligation.span) ||
         !types.charge(obligation.calls.size() + 1, obligation.span))
       return false;
     auto &admissions = output.declarations[scope.id.index].admissions;

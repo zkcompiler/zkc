@@ -751,6 +751,7 @@ bool consumerRequirementsAgree(Semantics &types, const Declaration &actual,
   }
   return true;
 }
+} // namespace
 bool requiredAdmissionsIncluded(Semantics &types, const Declaration &actual,
                                 const Declaration &written, bool exact) {
   auto refuse = [&] {
@@ -764,7 +765,7 @@ bool requiredAdmissionsIncluded(Semantics &types, const Declaration &actual,
   auto admissionKeys = [&](const Declaration &declaration,
                            std::set<std::pair<Boundary, std::string>> &keys) {
     for (const auto &obligation : declaration.admissions) {
-      if (!types.chargeType(obligation.type, declaration.span) ||
+      if (!types.chargeIdentity(obligation.type, declaration.span) ||
           !types.charge(obligation.calls.size() + 1, declaration.span))
         return false;
       keys.emplace(obligation.boundary, typeIdentity(obligation.type));
@@ -782,6 +783,7 @@ bool requiredAdmissionsIncluded(Semantics &types, const Declaration &actual,
     return refuse();
   return true;
 }
+namespace {
 template <typename Header>
 bool headerPremisesAgree(Semantics &types, const CheckedStorage &storage,
                          const Declaration &actual, const Header &written,

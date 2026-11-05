@@ -33,6 +33,8 @@ unpackedPlacement(Semantics &types, const Value &source, const Type &payload,
   auto roles = placementRoles(*exact);
   if (root.fields.empty())
     return DataPlacement{std::move(roles)};
+  if (!types.chargeIdentity(payload, span))
+    return {};
   return types.placement(
       payload,
       ProductPlacement{typeIdentity(payload), std::move(roles), root.fields},
@@ -311,11 +313,13 @@ std::optional<ValueId> BodyChecker::recordCall(const Expression &expr,
   std::vector<unsigned> roles;
   if (protocol()) {
     const auto &wrapper = *body.values[value->index].placement;
-    if (inspect)
+    if (inspect) {
+      if (!checker.types.chargeIdentity(result, expr.span))
+        return {};
       placed = ProductPlacement{typeIdentity(result),
                                 placementRoles(wrapper),
                                 {wrapper, *payloadPlacement}};
-    else
+    } else
       placed = repack ? wrapper : *payloadPlacement;
     roles = placementRoles(*placed);
   }
@@ -421,10 +425,13 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
           replacement.components != placementRoles(*payloadPlacement))
         return refuse();
       placed = *input.placement;
-    } else if (row->rule == protocol::FrontendSignature::RecordInspect)
+    } else if (row->rule == protocol::FrontendSignature::RecordInspect) {
+      if (!types.chargeIdentity(result, operation.span))
+        return false;
       placed = ProductPlacement{typeIdentity(result),
                                 input.components,
                                 {*input.placement, *payloadPlacement}};
+    }
     if (output.placement != placed ||
         output.components != placementRoles(placed))
       return refuse();

@@ -32,6 +32,9 @@ struct LoopSubject {
 // Checked static actuals retain the environment in which they were written.
 struct StaticEnvironment {
   detail::Substitution bindings;
+  // Keys point to this object's immutable map values. Moving std::map retains
+  // node addresses; the reference sets and their Types share this lifetime.
+  std::map<const Type *, std::set<std::string>> references;
   std::shared_ptr<const StaticEnvironment> parent;
 };
 struct LexicalStatics {
@@ -288,12 +291,24 @@ class Requirements {
   }
   bool staticReferences(const Type &type, std::set<std::string> &references,
                         Span span, unsigned depth = 1) {
-    if (!charge(type.domain.size() + type.arguments.size() + 1, span))
+    if (!charge(type.arguments.size() + 1, span))
       return false;
     if (depth > work.limits.typeDepth)
       return capacity(span, "common static type depth exceeded");
-    if (type.symbolic && !type.domain.empty())
+    if (type.symbolic && !type.domain.empty()) {
+      if (!charge(type.domain.size(), span))
+        return false;
       references.insert(type.domain);
+    }
+    // Closed dimensions have no references. A closed ordinary leaf does not
+    // inspect or copy its nominal domain text; complete Type/key preflight is
+    // a separate operation and still bounds that metadata.
+    if (type.dimension.isClosed()) {
+      for (const auto &argument : type.arguments)
+        if (!staticReferences(argument, references, span, depth + 1))
+          return false;
+      return true;
+    }
     for (const auto &[factors, coefficient] : type.dimension.terms()) {
       (void)coefficient;
       if (!charge(factors.size() + 1, span))
@@ -311,7 +326,8 @@ class Requirements {
   }
   struct StaticBinding {
     const Type *value;
-    std::shared_ptr<const StaticEnvironment> parent;
+    std::shared_ptr<const StaticEnvironment> owner, parent;
+    const std::set<std::string> *references;
     unsigned depth;
   };
   std::optional<StaticBinding>
@@ -327,13 +343,15 @@ class Requirements {
       }
       auto found = frame->bindings.find(name.str());
       if (found != frame->bindings.end())
-        return StaticBinding{&found->second, frame->parent, depth};
+        return StaticBinding{&found->second, frame, frame->parent,
+                             &frame->references.at(&found->second), depth};
     }
     return {};
   }
   Type substitute(const Type &type,
                   std::shared_ptr<const StaticEnvironment> environment,
-                  Span span, unsigned depth = 0) {
+                  Span span, unsigned depth = 0,
+                  const std::set<std::string> *knownReferences = nullptr) {
     if (!environment || failure)
       return type;
     // A whole symbolic term is replaced before inspecting its formal arguments,
@@ -344,13 +362,16 @@ class Requirements {
         return type;
       if (binding)
         return substitute(*binding->value, binding->parent, span,
-                          binding->depth);
+                          binding->depth, binding->references);
     }
-    std::set<std::string> references;
-    if (!staticReferences(type, references, span))
-      return type;
+    std::set<std::string> computed;
+    if (!knownReferences) {
+      if (!staticReferences(type, computed, span))
+        return type;
+      knownReferences = &computed;
+    }
     detail::Substitution bindings;
-    for (const auto &name : references) {
+    for (const auto &name : *knownReferences) {
       auto binding = staticBinding(name, environment, span, depth);
       if (failure)
         return type;
@@ -358,8 +379,8 @@ class Requirements {
         continue;
       // Close an actual in its defining caller before normalizing the
       // containing observation: pow2(N), N := pow2(M), M := 5 becomes pow2(32).
-      auto actual =
-          substitute(*binding->value, binding->parent, span, binding->depth);
+      auto actual = substitute(*binding->value, binding->parent, span,
+                               binding->depth, binding->references);
       if (failure)
         return type;
       bindings.emplace(name, std::move(actual));
@@ -409,6 +430,7 @@ class Requirements {
     // even though each declaration and its eventual specialization are valid.
     if (!bindings.empty()) {
       std::string key;
+      std::map<const Type *, std::set<std::string>> retainedReferences;
       bool closed = true;
       for (const auto &[name, type] : bindings)
         if (!charge(name.size() + 1, callee.span) ||
@@ -418,10 +440,13 @@ class Requirements {
           break;
         } else {
           std::set<std::string> references;
-          staticReferences(type, references, callee.span);
+          if (!staticReferences(type, references, callee.span) ||
+              !charge(1, callee.span))
+            break;
           closed &= references.empty();
+          retainedReferences.emplace(&type, std::move(references));
           detail::frame(key, name);
-          detail::frame(key, typeIdentity(type));
+          frameTypeIdentity(key, type);
         }
       if (failure)
         return {};
@@ -434,8 +459,9 @@ class Requirements {
       if (found != staticFrames.end())
         parent = found->second;
       else {
-        parent = std::make_shared<StaticEnvironment>(
-            StaticEnvironment{std::move(bindings), std::move(parent)});
+        parent = std::make_shared<StaticEnvironment>(StaticEnvironment{
+            std::move(bindings), std::move(retainedReferences),
+            std::move(parent)});
         staticFrames.emplace(std::move(key), parent);
       }
     }
@@ -610,22 +636,26 @@ class Requirements {
   }
   bool closedStatic(const Type &type,
                     std::shared_ptr<const StaticEnvironment> environment,
-                    Span span, unsigned depth = 0) {
+                    Span span, unsigned depth = 0,
+                    const std::set<std::string> *knownReferences = nullptr) {
     if (auto alias = staticAlias(type)) {
       auto binding = staticBinding(*alias, environment, span, depth);
       if (failure)
         return false;
       if (binding)
         return closedStatic(*binding->value, binding->parent, span,
-                            binding->depth);
+                            binding->depth, binding->references);
     }
-    std::set<std::string> references;
-    if (!staticReferences(type, references, span))
-      return false;
-    for (const auto &name : references) {
+    std::set<std::string> computed;
+    if (!knownReferences) {
+      if (!staticReferences(type, computed, span))
+        return false;
+      knownReferences = &computed;
+    }
+    for (const auto &name : *knownReferences) {
       auto binding = staticBinding(name, environment, span, depth);
-      if (!binding ||
-          !closedStatic(*binding->value, binding->parent, span, binding->depth))
+      if (!binding || !closedStatic(*binding->value, binding->parent, span,
+                                    binding->depth, binding->references))
         return false;
     }
     return true;
@@ -1003,7 +1033,7 @@ class Requirements {
       if (!chargeStaticType(type, span, /*identity=*/true))
         return {};
       detail::frame(key, std::to_string(r));
-      detail::frame(key, typeIdentity(type));
+      frameTypeIdentity(key, type);
       result[r] = recipe(Provenance::Kind::Formal, type, {}, slot, r);
     }
     detail::frame(key, "end");
@@ -1040,11 +1070,11 @@ class Requirements {
       for (const auto &type : binding->signature.inputs) {
         if (!chargeStaticType(type, span, /*identity=*/true))
           return result;
-        detail::frame(key, typeIdentity(type));
+        frameTypeIdentity(key, type);
       }
       if (!chargeStaticType(binding->signature.result, span, /*identity=*/true))
         return result;
-      detail::frame(key, typeIdentity(binding->signature.result));
+      frameTypeIdentity(key, binding->signature.result);
       detail::frame(key, binding->statics ? "statics" : "no-statics");
       if (binding->statics) {
         identity(key, binding->statics->environment.get());
@@ -1052,7 +1082,7 @@ class Requirements {
         for (const auto &type : binding->statics->parameters) {
           if (!chargeStaticType(type, span, /*identity=*/true))
             return result;
-          detail::frame(key, typeIdentity(type));
+          frameTypeIdentity(key, type);
         }
       }
       auto nested = formalEnvironment(binding->environment, operands, roles,
@@ -1777,7 +1807,7 @@ class Requirements {
         detail::frame(path, step.payload ? "payload" : "field");
         detail::frame(path, std::to_string(step.alternative));
         detail::frame(path, std::to_string(step.index));
-        detail::frame(path, typeIdentity(step.type));
+        frameTypeIdentity(path, step.type);
       }
       if (!charge(path.size() + 1, span))
         return false;

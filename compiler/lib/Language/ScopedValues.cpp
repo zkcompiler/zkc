@@ -123,8 +123,6 @@ class ValueCheck {
     auto root = place(expr.children.front(), depth + 1);
     if (!root)
       return {};
-    if (!types.chargeType(environment.at(BindingId{root->binding}), expr.span))
-      return {};
     auto type = types.projectedType(
         owner, environment.at(BindingId{root->binding}), root->path, expr.span);
     if (type && expr.kind == Expression::Kind::Subscript &&
@@ -1739,7 +1737,8 @@ class ValueCheck {
         if (expr.kind == Expression::Kind::NotationCall ||
             expr.kind == Expression::Kind::Subscript || binding.notation) {
           if (!expr.notation || !binding.notation || !source.notationFamilies ||
-              !source.notationFamilies->count(id) || !expr.scope ||
+              !source.notationFamilies->count(id) ||
+              !source.notationFamilies->at(id) || !expr.scope ||
               *expr.scope >= syntax.bodies.size() ||
               !syntax.bodies[*expr.scope].notationEnvironment ||
               !checkNotationOccurrence(
@@ -1768,7 +1767,7 @@ class ValueCheck {
                                        authored, expr.span) ||
                 !checkOperatorWitness(
                     types, storage.declarations,
-                    source.notationFamilies->at(id), *expr.notation, binding,
+                    *source.notationFamilies->at(id), *expr.notation, binding,
                     inputs, body.values[actual.index].type, expr.span))
               return false;
           }

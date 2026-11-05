@@ -78,12 +78,16 @@ struct Type {
   Type() = default;
   Type(Kind kind, std::string domain = {})
       : kind(kind), domain(std::move(domain)) {}
-  bool operator==(const Type &b) const {
+  bool sameHead(const Type &b) const {
     if (kind == Kind::Natural && b.kind == Kind::Natural)
       return dimension == b.dimension;
     return kind == b.kind && (kind != Kind::Descriptor || family == b.family) &&
-           domain == b.domain && sort == b.sort && arguments == b.arguments &&
-           dimension == b.dimension && symbolic == b.symbolic;
+           domain == b.domain && sort == b.sort &&
+           arguments.size() == b.arguments.size() && dimension == b.dimension &&
+           symbolic == b.symbolic;
+  }
+  bool operator==(const Type &b) const {
+    return sameHead(b) && (kind == Kind::Natural || arguments == b.arguments);
   }
   bool operator!=(const Type &b) const { return !(*this == b); }
 };
@@ -154,9 +158,13 @@ std::string spelling(const Type &);
 /// Injective lookup key within one checked snapshot; source-facing spelling is
 /// deliberately separate. It binds no source revision, so it never decides
 /// nominal equality across captures.
-/// Callers precharge typeComplexity before copying keys of candidate terms;
-/// this unchecked snapshot helper itself never establishes admission.
+/// Callers precharge TypeWork::Identity against their current cumulative
+/// ledger; this unchecked snapshot helper itself never establishes admission.
 std::string typeIdentity(const Type &);
+/// Append one snapshot key with the enclosing key's u64 little-endian length
+/// frame, avoiding a temporary full key and another copy. The Type key's own
+/// nested frames remain decimal. Same Identity precharge requirement.
+void frameTypeIdentity(std::string &, const Type &);
 /// The defining authority of a nominal declaration path: 64 lowercase hex
 /// for an authored or installed declaration, none for a generated one.
 using NominalAuthority =
@@ -171,15 +179,33 @@ using NominalAuthority =
 /// Enforces default candidate depth/node/identity-work ceilings itself;
 /// ledger-owning callers additionally precharge their remaining allowance.
 llvm::Expected<std::string> canonicalTypeKey(const Type &, NominalAuthority);
+/// Budgeted key construction performs its sole preflight and debit before any
+/// key allocation or authority callback. Each invocation (including a cache
+/// lookup) must use the caller's actual remaining allowance. No admission or
+/// validated-handle authority is exported by this API.
+struct Limits;
+using TypeWorkCharge = llvm::function_ref<llvm::Error(uint64_t)>;
+llvm::Expected<std::string> canonicalTypeKey(const Type &, NominalAuthority,
+                                             const Limits &, uint64_t remaining,
+                                             TypeWorkCharge);
 /// Bound traversal, candidate descriptor shapes and the selected operation
 /// before copying a term or constructing its expanded identity. An optional
 /// ordinary static replacement borrows a
 /// complete selected term; its contents are not substituted a second time.
 using TypeReplacement = llvm::function_ref<const Type *(const Type &)>;
-enum class TypeWork { Copy, Identity };
+/// Snapshot keys carry no nominal authority frames. Only canonical keys pay
+/// for authority resolution/text; neither is an ordinary Type copy.
+enum class TypeWork { Copy, Identity, CanonicalIdentity, StaticExport };
+/// Optional equality observation fused into the bounded traversal. This is
+/// only a comparison result, never validation or source admission authority.
+struct TypeComparison {
+  const Type &expected;
+  bool equal = true;
+};
 llvm::Expected<uint64_t>
 typeComplexity(const Type &, uint64_t nodes, uint64_t depth,
                uint64_t work = UINT64_MAX, TypeReplacement = nullptr,
-               bool complete = true, TypeWork = TypeWork::Identity);
+               bool complete = true, TypeWork = TypeWork::Identity,
+               TypeComparison * = nullptr);
 } // namespace zkc::language
 #endif

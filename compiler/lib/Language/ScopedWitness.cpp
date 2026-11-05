@@ -1478,8 +1478,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     if (binding.scopedArguments.empty() &&
         binding.descriptorArguments.empty()) {
       if (!binding.notation)
-        return source.notationFamily.empty() || refuse();
-      if (!expr.notation || !expr.scope ||
+        return !source.notationFamily || refuse();
+      if (!source.notationFamily || !expr.notation || !expr.scope ||
           *expr.scope >= source.syntax->bodies.size() ||
           !source.syntax->bodies[*expr.scope].notationEnvironment ||
           op.results.size() != 1 ||
@@ -1504,7 +1504,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
              checkOperatorOperands(types, *expr.notation, binding,
                                    binding.argumentOrder, authored, op.span) &&
              checkOperatorWitness(
-                 types, storage.declarations, source.notationFamily,
+                 types, storage.declarations, *source.notationFamily,
                  *expr.notation, binding, inputs,
                  body.values[op.results.front().index].type, op.span);
     }
@@ -1538,7 +1538,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       return refuse();
     if (expr.kind == Expression::Kind::NotationCall ||
         expr.kind == Expression::Kind::Subscript) {
-      if (!expr.notation ||
+      if (!source.notationFamily || !expr.notation ||
           expr.notation->position != NotationDescriptor::Position::Reduction ||
           expr.filteredReduction != binding.filteredReduction ||
           op.results.size() != 1 || op.results[0].index >= body.values.size() ||
@@ -1551,14 +1551,14 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           !checkOperatorOperands(types, *expr.notation, binding,
                                  binding.argumentOrder, {}, op.span) ||
           !checkOperatorWitness(types, storage.declarations,
-                                source.notationFamily, *expr.notation, binding,
+                                *source.notationFamily, *expr.notation, binding,
                                 {}, body.values[op.results[0].index].type,
                                 op.span) ||
           !checkCallAction(types, storage.declarations, body, op,
                            storage.declarationIndex.get()))
         return false;
     } else if (binding.notation || binding.filteredReduction ||
-               !source.notationFamily.empty())
+               bool(source.notationFamily))
       return refuse();
     std::function<bool(uint32_t, unsigned, unsigned)> domain =
         [&](uint32_t expression, unsigned index, unsigned depth) {

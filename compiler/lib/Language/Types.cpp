@@ -216,38 +216,105 @@ std::string spelling(const Type &type) {
   return result;
 }
 namespace {
+// The plan borrows each Type head and owns only Natural/authority text.
+// Subtree byte lengths are measured without materializing recursive strings.
+struct KeyHead {
+  const Type *type;
+  std::string dimension;
+  std::optional<std::string> revision;
+  size_t size = 0;
+};
+size_t decimalWidth(size_t value) {
+  size_t width = 1;
+  while (value >= 10) {
+    value /= 10;
+    ++width;
+  }
+  return width;
+}
+size_t framedSize(StringRef value) {
+  return decimalWidth(value.size()) + 1 + value.size();
+}
 Error typeKey(const Type &type, const NominalAuthority *authority,
-              std::string &result) {
+              std::string &result, bool framed = false) {
+  std::vector<KeyHead> heads;
+  std::function<Expected<size_t>(const Type &)> measure =
+      [&](const Type &term) -> Expected<size_t> {
+    size_t index = heads.size();
+    KeyHead head{&term, term.dimension.spelling(), {}, 0};
+    size_t size = decimalWidth(unsigned(term.kind)) + 1;
+    if (term.kind == Type::Kind::Natural) {
+      size += framedSize(head.dimension);
+    } else {
+      size += 2 + framedSize(term.domain) + framedSize(head.dimension) +
+              decimalWidth(term.arguments.size()) + 1;
+      if (term.kind == Type::Kind::Descriptor)
+        size += decimalWidth(unsigned(term.family)) + 1;
+      if (term.kind == Type::Kind::Domain || term.kind == Type::Kind::Asset)
+        size += framedSize(term.sort);
+      if (authority && !term.symbolic &&
+          (term.kind == Type::Kind::Record ||
+           term.kind == Type::Kind::LogicalRecord ||
+           term.kind == Type::Kind::Variant ||
+           term.kind == Type::Kind::Module)) {
+        auto revision = (*authority)(term.domain);
+        if (!revision)
+          return revision.takeError();
+        if (*revision && (**revision).size() != 64)
+          return error("source.authority",
+                       "nominal authority must have 64 bytes");
+        // Presence distinguishes an empty generated-authority frame from a
+        // node that has no authority frame at all.
+        head.revision = *revision ? std::move(**revision) : std::string{};
+        size += framedSize(*head.revision);
+      }
+    }
+    heads.push_back(std::move(head));
+    if (term.kind != Type::Kind::Natural)
+      for (const auto &argument : term.arguments) {
+        auto child = measure(argument);
+        if (!child)
+          return child.takeError();
+        size += decimalWidth(*child) + 1 + *child;
+      }
+    heads[index].size = size;
+    return size;
+  };
+  auto size = measure(type);
+  if (!size)
+    return size.takeError();
+  auto before = result.size();
+  auto outer = framed ? 8 : 0;
+  result.reserve(before + outer + *size);
+  if (framed) {
+    uint64_t bytes = *size;
+    for (unsigned i = 0; i < 8; ++i)
+      result.push_back(static_cast<char>(bytes >> (8 * i)));
+  }
   raw_string_ostream out(result);
   auto frame = [&](StringRef value) { out << value.size() << ':' << value; };
-  out << static_cast<unsigned>(type.kind) << ':';
-  if (type.kind == Type::Kind::Natural) {
-    frame(type.dimension.spelling());
-    return Error::success();
+  for (size_t i = 0; i < heads.size(); ++i) {
+    const auto &head = heads[i];
+    const auto &term = *head.type;
+    if (i)
+      out << head.size << ':';
+    out << unsigned(term.kind) << ':';
+    if (term.kind == Type::Kind::Natural) {
+      frame(head.dimension);
+      continue;
+    }
+    out << term.symbolic << ':';
+    if (term.kind == Type::Kind::Descriptor)
+      out << unsigned(term.family) << ':';
+    frame(term.domain);
+    if (head.revision)
+      frame(*head.revision);
+    if (term.kind == Type::Kind::Domain || term.kind == Type::Kind::Asset)
+      frame(term.sort);
+    frame(head.dimension);
+    out << term.arguments.size() << ':';
   }
-  out << type.symbolic << ':';
-  if (type.kind == Type::Kind::Descriptor)
-    out << static_cast<unsigned>(type.family) << ':';
-  frame(type.domain);
-  if (authority && !type.symbolic &&
-      (type.kind == Type::Kind::Record ||
-       type.kind == Type::Kind::LogicalRecord ||
-       type.kind == Type::Kind::Variant || type.kind == Type::Kind::Module)) {
-    auto revision = (*authority)(type.domain);
-    if (!revision)
-      return revision.takeError();
-    frame(*revision ? StringRef(**revision) : StringRef());
-  }
-  if (type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset)
-    frame(type.sort);
-  frame(type.dimension.spelling());
-  out << type.arguments.size() << ':';
-  for (const auto &argument : type.arguments) {
-    std::string nested;
-    if (auto error = typeKey(argument, authority, nested))
-      return error;
-    frame(nested);
-  }
+  assert(result.size() == before + outer + *size);
   return Error::success();
 }
 } // namespace
@@ -256,18 +323,34 @@ std::string typeIdentity(const Type &type) {
   cantFail(typeKey(type, nullptr, result));
   return result;
 }
+void frameTypeIdentity(std::string &result, const Type &type) {
+  cantFail(typeKey(type, nullptr, result, /*framed=*/true));
+}
 Expected<std::string> canonicalTypeKey(const Type &type,
                                        NominalAuthority authority) {
   const Limits limits;
-  auto cost =
-      typeComplexity(type, limits.typeNodes, limits.typeDepth, limits.work);
+  return canonicalTypeKey(type, authority, limits, limits.work,
+                          [](uint64_t) { return Error::success(); });
+}
+Expected<std::string> canonicalTypeKey(const Type &type,
+                                       NominalAuthority authority,
+                                       const Limits &limits, uint64_t remaining,
+                                       TypeWorkCharge charge) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  auto cost = typeComplexity(type, limits.typeNodes, limits.typeDepth,
+                             std::min(remaining, limits.work), nullptr, true,
+                             TypeWork::CanonicalIdentity);
   if (!cost)
     return cost.takeError();
+  if (auto e = charge(*cost))
+    return std::move(e);
   std::string result;
-  if (auto error = typeKey(type, &authority, result))
-    return std::move(error);
+  if (auto e = typeKey(type, &authority, result))
+    return std::move(e);
   return result;
 }
+
 namespace {
 bool descriptorNatural(const Type &term) {
   // Natural equality and keys intentionally use the normalized polynomial.
@@ -284,34 +367,62 @@ bool descriptorNatural(const Type &term) {
                Natural::Factor::Kind::Atom &&
            term.dimension.terms().begin()->first.front().name == term.domain));
 }
-Error checkDescriptorHead(const Type &type, bool contract) {
+Error checkDescriptorHead(const Type &type, bool contract,
+                          TypeReplacement replacement = nullptr) {
+  auto selected = [&](const Type &child) -> const Type & {
+    if (replacement)
+      if (const auto *value = replacement(child))
+        return *value;
+    return child;
+  };
   using K = Type::Kind;
   if (contract && type.kind == K::Natural && !descriptorNatural(type))
     return error("source.descriptor", "invalid descriptor natural static");
+  if (contract && !isDescriptor(type) && type.kind != K::Natural) {
+    const bool structural = type.kind == K::Boolean || type.kind == K::Index ||
+                            type.kind == K::Unit || type.kind == K::Tuple ||
+                            type.kind == K::Array;
+    const bool scalar = type.kind == K::Boolean || type.kind == K::Index ||
+                        type.kind == K::Unit;
+    if ((type.kind != K::Domain && type.kind != K::Asset &&
+         !type.sort.empty()) ||
+        type.family != DescriptorFamily::Finite ||
+        (structural && (!type.domain.empty() || type.symbolic)) ||
+        (scalar && !type.arguments.empty()) ||
+        (type.kind == K::Array && type.arguments.size() != 1) ||
+        (type.kind != K::Array && type.dimension != Natural{}) ||
+        ((type.kind == K::Field || type.kind == K::Group ||
+          type.kind == K::Domain || type.kind == K::Asset) &&
+         !type.symbolic && !type.arguments.empty()) ||
+        ((type.kind == K::Oracle || type.kind == K::OracleSequence) &&
+         (!type.domain.empty() || type.symbolic)))
+      return error("source.descriptor", "foreign ordinary descriptor metadata");
+  }
   if (isDescriptor(type)) {
     if (!type.domain.empty() || !type.sort.empty() || type.symbolic ||
         type.dimension != Natural{} || !(type.assumptions == Permissions{}) ||
         type.family != DescriptorFamily::Finite)
       return error("source.descriptor", "foreign descriptor metadata");
     if (type.kind == K::Descriptor) {
-      if (type.arguments.size() != 1 || isStaticOnly(type.arguments.front()))
+      if (type.arguments.size() != 1 ||
+          isStaticOnly(selected(type.arguments.front())))
         return error("source.descriptor", "invalid Finite contract");
     } else if (type.kind == K::DescriptorProduct) {
       for (const auto &child : type.arguments)
-        if (!isDescriptor(child))
+        if (!isDescriptor(selected(child)))
           return error("source.descriptor",
                        "product child is not a descriptor");
     } else {
       if ((type.arguments.size() != 1 && type.arguments.size() != 2) ||
-          !isDescriptor(type.arguments.front()))
+          !isDescriptor(selected(type.arguments.front())))
         return error("source.descriptor", "invalid sequence element contract");
       if (type.arguments.size() == 2 &&
-          !descriptorNatural(type.arguments.back()))
+          !descriptorNatural(selected(type.arguments.back())))
         return error("source.descriptor", "invalid sequence extent term");
     }
   } else {
     for (const auto &child : type.arguments)
-      if (isDescriptor(child))
+      if (isDescriptor(selected(child)))
         return error("source.descriptor",
                      "descriptor in ordinary type arguments");
   }
@@ -321,7 +432,8 @@ Error checkDescriptorHead(const Type &type, bool contract) {
 Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,
                                   uint64_t depth, uint64_t work,
                                   TypeReplacement replacement, bool complete,
-                                  TypeWork operation) {
+                                  TypeWork operation,
+                                  TypeComparison *comparison) {
   uint64_t cost = 0;
   auto charge = [&](uint64_t amount) {
     if (amount > work - cost)
@@ -329,12 +441,13 @@ Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,
     cost += amount;
     return true;
   };
-  std::function<Error(const Type &, uint64_t, bool, bool)> visit =
-      [&](const Type &input, uint64_t level, bool replace,
-          bool contract) -> Error {
+  std::function<Expected<uint64_t>(const Type &, uint64_t, bool, bool,
+                                   const Type *)>
+      visit = [&](const Type &input, uint64_t level, bool replace,
+                  bool contract, const Type *expected) -> Expected<uint64_t> {
     if (replace && replacement)
       if (const auto *selected = replacement(input))
-        return visit(*selected, level, false, contract);
+        return visit(*selected, level, false, contract, expected);
     const auto &term = input;
     contract |= isDescriptor(term);
     if (!nodes || level > depth)
@@ -342,41 +455,127 @@ Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,
     --nodes;
     if (unsigned(term.kind) > unsigned(Type::Kind::DescriptorSequence))
       return error("source.type", "invalid source type kind");
-    // Copying a Type does not construct a framed identity. Key construction
-    // separately accounts for each ancestor copying the nested framing.
-    const bool identity = operation == TypeWork::Identity;
-    auto expanded = [&](uint64_t amount) {
-      auto multiplier = identity ? level : 1;
-      return amount <= (work - cost) / multiplier &&
-             charge(amount * multiplier);
+    const bool identity = operation != TypeWork::Copy;
+    // Copy pays for retained metadata once. The linear key writer pays for
+    // its head plan/traversals, each output byte and auxiliary Natural text.
+    // Measure decimal widths from the actual values before any allocation.
+    if (!charge(identity ? 4 : 1) || !charge(term.domain.size()) ||
+        !charge(term.sort.size()))
+      return error("source.limit", "expanded type work exceeded");
+    auto compareHead = [&] {
+      if (expected && comparison->equal && !term.sameHead(*expected))
+        comparison->equal = false;
     };
-    if (!expanded(identity ? 32 : 1) || !expanded(term.domain.size()) ||
-        !expanded(term.sort.size()) ||
-        (identity && (term.arguments.size() > (work - cost) / level / 22 ||
-                      !expanded(term.arguments.size() * 22))) ||
-        ((identity && !term.symbolic &&
+    auto expectedChild = [&](unsigned index) -> const Type * {
+      return expected && comparison->equal && term.kind != Type::Kind::Natural
+                 ? &expected->arguments[index]
+                 : nullptr;
+    };
+    if (!identity) {
+      for (const auto &[factors, coefficient] : term.dimension.terms()) {
+        (void)coefficient;
+        if (!charge(1))
+          return error("source.limit", "natural copy work exceeded");
+        for (const auto &factor : factors)
+          if (!charge(1) || !charge(factor.name.size()) ||
+              !charge(factor.member.size()))
+            return error("source.limit", "natural copy work exceeded");
+      }
+      compareHead();
+      for (unsigned i = 0; i < term.arguments.size(); ++i) {
+        auto child = visit(term.arguments[i], level + 1, replace, contract,
+                           expectedChild(i));
+        if (!child)
+          return child.takeError();
+      }
+      if (complete)
+        if (auto e = checkDescriptorHead(term, contract,
+                                         replace ? replacement : nullptr))
+          return std::move(e);
+      return 0;
+    }
+    // Static export also emits textual tags/JSON nodes and validates its
+    // output.
+    if (operation == TypeWork::StaticExport && !charge(32))
+      return error("source.limit", "static export framing work exceeded");
+    uint64_t dimensionSize = term.dimension.terms().empty() ? 1 : 0;
+    bool first = true;
+    for (const auto &[factors, coefficient] : term.dimension.terms()) {
+      uint64_t width = decimalWidth(coefficient) + (first ? 0 : 1);
+      first = false;
+      if (!charge(identity ? 2 * width : 1))
+        return error("source.limit", "natural identity work exceeded");
+      dimensionSize += width;
+      for (const auto &factor : factors) {
+        width = 2 + decimalWidth(factor.name.size()) + 1 + factor.name.size();
+        if (factor.kind == Natural::Factor::Kind::Projection)
+          width +=
+              decimalWidth(factor.member.size()) + 1 + factor.member.size();
+        if (!charge(identity ? width : 1) ||
+            !charge(identity ? width : factor.name.size()) ||
+            !charge(identity ? 0 : factor.member.size()))
+          return error("source.limit", "natural identity work exceeded");
+        dimensionSize += width;
+      }
+    }
+    if (identity && term.dimension.terms().empty() && !charge(2))
+      return error("source.limit", "natural identity work exceeded");
+    uint64_t size = decimalWidth(unsigned(term.kind)) + 1;
+    auto frameSize = [](uint64_t n) { return decimalWidth(n) + 1 + n; };
+    if (term.kind == Type::Kind::Natural) {
+      size += frameSize(dimensionSize);
+      if (identity && !charge(size - dimensionSize))
+        return error("source.limit", "natural key framing work exceeded");
+      // Natural keys omit domain/sort. Their metadata remains bounded above.
+    } else {
+      size += 2 + frameSize(term.domain.size()) + frameSize(dimensionSize) +
+              decimalWidth(term.arguments.size()) + 1;
+      if (term.kind == Type::Kind::Descriptor)
+        size += decimalWidth(unsigned(term.family)) + 1;
+      bool sorted =
+          term.kind == Type::Kind::Domain || term.kind == Type::Kind::Asset;
+      if (sorted)
+        size += frameSize(term.sort.size());
+      if (identity && !charge(size - term.domain.size() - dimensionSize -
+                              (sorted ? term.sort.size() : 0)))
+        return error("source.limit", "type key framing work exceeded");
+      if (operation == TypeWork::CanonicalIdentity && !term.symbolic &&
           (term.kind == Type::Kind::Record ||
            term.kind == Type::Kind::LogicalRecord ||
            term.kind == Type::Kind::Variant ||
-           term.kind == Type::Kind::Module)) &&
-         !expanded(67)))
-      return error("source.limit", "expanded type identity work exceeded");
-    for (auto &[factors, coefficient] : term.dimension.terms()) {
-      (void)coefficient;
-      if (!expanded(identity ? 24 : 1))
-        return error("source.limit", "natural identity work exceeded");
-      for (auto &factor : factors)
-        if (!expanded(identity ? 48 : 1) || !expanded(factor.name.size()) ||
-            !expanded(factor.member.size()))
-          return error("source.limit", "natural identity work exceeded");
+           term.kind == Type::Kind::Module)) {
+        // The callback can supply 64 bytes or an empty generated frame. Bound
+        // the larger frame and its separately owned callback result.
+        if (!charge(134))
+          return error("source.limit", "nominal authority work exceeded");
+        size += 67;
+      }
     }
-    for (auto &argument : term.arguments)
-      if (auto e = visit(argument, level + 1, replace, contract))
-        return e;
-    return complete ? checkDescriptorHead(term, contract) : Error::success();
+    compareHead();
+    for (unsigned i = 0; i < term.arguments.size(); ++i) {
+      auto child = visit(term.arguments[i], level + 1, replace, contract,
+                         expectedChild(i));
+      if (!child)
+        return child.takeError();
+      auto prefix = decimalWidth(*child) + 1;
+      if (identity && !charge(prefix))
+        return error("source.limit", "nested key framing work exceeded");
+      size += prefix + *child;
+    }
+    if (complete)
+      if (auto e = checkDescriptorHead(term, contract,
+                                       replace ? replacement : nullptr))
+        return std::move(e);
+    return size;
   };
-  if (auto e = visit(type, 1, true, false))
-    return std::move(e);
+  auto size =
+      visit(type, 1, true, false, comparison ? &comparison->expected : nullptr);
+  if (!size)
+    return size.takeError();
+  // Both raw keys and keys framed directly into a destination share this
+  // bound. The optional outer frame never requires a temporary whole key.
+  if (operation != TypeWork::Copy && !charge(8))
+    return error("source.limit", "outer key framing work exceeded");
   return cost;
 }
 

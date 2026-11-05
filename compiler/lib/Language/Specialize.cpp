@@ -1105,9 +1105,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                      source.span);
           return {};
         }
-        if (!types.chargeType(arg, source.span))
+        if (!types.chargeIdentity(arg, source.span))
           return {};
-        detail::frame(key, typeIdentity(arg));
+        frameTypeIdentity(key, arg);
       }
       if (scoped.size() != source.scopedInputs.size()) {
         types.fail("source.scoped", "specialization scoped arity differs",
@@ -1614,9 +1614,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         continue;
       json::Array arguments;
       for (const auto &argument : decl.staticArguments) {
-        if (!types.chargeType(argument, decl.span))
-          return false;
-        auto encoded = encodeStaticTerm(argument);
+        auto encoded =
+            encodeStaticTerm(argument, types.work.limits,
+                             types.work.remaining(), [&](uint64_t amount) {
+                               return types.work.charge(amount, decl.span);
+                             });
         if (!encoded) {
           consumeError(encoded.takeError());
           return types.fail("source.relation",

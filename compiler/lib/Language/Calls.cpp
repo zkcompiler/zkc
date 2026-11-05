@@ -453,7 +453,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!visible)
       return {};
     if (evidence.scopedSource)
-      witnesses.calls[*evidence.scopedSource]->notationFamily = visible->vec();
+      witnesses.calls[*evidence.scopedSource]->notationFamily = visible;
     if (!checkOperatorOperands(checker.types, *expr.notation, evidence, binding,
                                authoredOperands, expr.span))
       return {};
@@ -475,7 +475,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     auto &families = witnesses.notations[decl.id.index];
     if (!families)
       families = std::make_shared<NotationFamilies>();
-    families->try_emplace(id, visible->vec());
+    families->try_emplace(id, visible);
   }
   auto emitCall = [&](decltype(Operation::action) action,
                       Components available) -> std::optional<ValueId> {

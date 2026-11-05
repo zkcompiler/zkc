@@ -1044,6 +1044,8 @@ bool Checker::representations() {
         if (type.kind == Type::Kind::Parameter || type.symbolic)
           return true;
         // Cycle sets are keyed by lookup key; local to this one expansion.
+        if (!types.chargeIdentity(type, span))
+          return false;
         auto key = typeIdentity(type);
         if (complete.count(key))
           return true;

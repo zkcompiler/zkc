@@ -144,6 +144,8 @@ bool Checker::retainNotations() {
     for (const auto &argument : binding.arguments)
       if (argument && !types.chargeType(*argument, source.span))
         return {};
+    if (!chargeOperatorBindingKeys(binding, types, source.span))
+      return {};
     record.identity = operatorBindingKey(binding, output.declarations);
     if (!types.charge(record.identity.size(), source.span))
       return {};

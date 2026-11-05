@@ -801,7 +801,7 @@ class ExpressionInference {
                                                     : unpacked,
                         span);
           }
-          return fields.has_value() || checker.types.diagnostic.has_value();
+          return bool(fields) || checker.types.diagnostic.has_value();
         });
         return;
       }
@@ -819,7 +819,7 @@ class ExpressionInference {
       if (!type)
         return;
       constrain(result.type, *type, expr.span);
-      std::optional<std::vector<TypeField>> fields;
+      std::shared_ptr<const std::vector<TypeField>> fields;
       if (expr.kind == K::Record)
         fields = checker.types.fields(*type, expr.span);
       else if (auto alternatives =
@@ -827,8 +827,12 @@ class ExpressionInference {
         auto alt = llvm::find_if(*alternatives, [&](const auto &alternative) {
           return alternative.name == split.second;
         });
-        if (alt != alternatives->end())
-          fields = alt->fields;
+        if (alt != alternatives->end()) {
+          if (!checker.types.charge(1, expr.span))
+            return;
+          fields = std::make_shared<const std::vector<TypeField>>(
+              std::move(alt->fields));
+        }
       }
       if (!fields || fields->size() != expr.children.size()) {
         if (!checker.types.diagnostic)
@@ -1047,7 +1051,7 @@ class ExpressionInference {
                expr.span);
           break;
         }
-        const auto &binding = visible->front();
+        const auto &binding = visible->begin()->second;
         if (expr.filteredReduction && !binding.filtered) {
           fail("source.reduction-target",
                "this reduction binding has no filtered companion", expr.span);
@@ -1058,10 +1062,11 @@ class ExpressionInference {
         const auto &arguments = expr.filteredReduction
                                     ? binding.filtered->arguments
                                     : binding.arguments;
-        output.operators.emplace(
-            id, ExpressionTypes::Operator{
-                    {operatorBindingKey(binding, checker.output.declarations)},
-                    binding.span});
+        ExpressionTypes::Operator witness;
+        auto node = visible->extract(visible->begin());
+        witness.family.push_back(std::move(node.key()));
+        witness.binding = binding.span;
+        output.operators.emplace(id, std::move(witness));
         output.callees.emplace(id, target);
         if (!recordNotation(id, binding.module, target))
           break;
@@ -1079,11 +1084,13 @@ class ExpressionInference {
         inputs.push_back(child(i));
       std::vector<OperatorInference::Candidate> candidates;
       ExpressionTypes::Operator witness;
-      for (auto &binding : *visible) {
-        witness.family.push_back(
-            operatorBindingKey(binding, checker.output.declarations));
-        candidates.push_back({binding.target, std::move(binding.arguments),
-                              binding.span, binding.module});
+      while (!visible->empty()) {
+        auto node = visible->extract(visible->begin());
+        auto &binding = node.mapped();
+        witness.family.push_back(std::move(node.key()));
+        candidates.push_back({std::move(binding.target),
+                              std::move(binding.arguments), binding.span,
+                              binding.module});
       }
       output.operators.emplace(id, std::move(witness));
       operators->add(id, expr.span, std::move(inputs), result.type,

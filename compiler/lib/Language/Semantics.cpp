@@ -11,13 +11,22 @@ Semantics::Semantics(const std::vector<Declaration> &declarations,
       naturals(work.limits.work, work.limits.naturalTerms,
                work.limits.naturalFactors,
                [&work](uint64_t amount) { return work.charge(amount); }),
-      declarations(declarations), assets(assets),
-      complete(std::move(complete)) {
+      declarations(declarations), assets(assets), qualified(ownedQualified),
+      parameters(ownedParameters), complete(std::move(complete)) {
   for (const auto &decl : declarations) {
     indexDeclaration(decl);
     for (unsigned i = 0; i < decl.parameters.size(); ++i)
       indexParameter(decl.parameters[i], decl.id, i);
   }
+}
+Semantics::Semantics(const Semantics &owner, Work &work)
+    : work(work),
+      naturals(work.limits.work, work.limits.naturalTerms,
+               work.limits.naturalFactors,
+               [&work](uint64_t amount) { return work.charge(amount); }),
+      declarations(owner.declarations), assets(owner.assets),
+      qualified(owner.qualified), parameters(owner.parameters) {
+  authorities = owner.authorities;
 }
 Expected<std::optional<std::string>>
 Semantics::nominalAuthority(StringRef path) const {
@@ -33,11 +42,42 @@ Semantics::nominalAuthority(StringRef path) const {
 }
 void Semantics::indexDeclaration(const Declaration &decl) {
   if (!decl.origin && !decl.anonymous)
-    qualified.emplace(decl.qualifiedName, decl.id);
+    ownedQualified.emplace(decl.qualifiedName, decl.id);
 }
 void Semantics::indexParameter(const Parameter &parameter, DeclarationId id,
                                unsigned index) {
-  parameters.emplace(parameter.atom, std::make_pair(id, index));
+  ownedParameters.emplace(parameter.atom, std::make_pair(id, index));
+}
+// Private memo routing only. Collisions always compare the complete owned
+// Type; this hash is never an identity or source/native admission witness.
+size_t typeLookupHash(const Type &type) {
+  hash_code dimension = hash_value(type.dimension.terms().size());
+  for (const auto &[factors, coefficient] : type.dimension.terms()) {
+    dimension = hash_combine(dimension, coefficient, factors.size());
+    for (const auto &factor : factors)
+      dimension = hash_combine(dimension, unsigned(factor.kind), factor.name,
+                               factor.member);
+  }
+  if (type.kind == Type::Kind::Natural)
+    return hash_combine(unsigned(type.kind), dimension);
+  auto result = hash_combine(
+      unsigned(type.kind), type.domain, type.sort, dimension, type.symbolic,
+      type.arguments.size(),
+      type.kind == Type::Kind::Descriptor ? unsigned(type.family) : 0);
+  for (const auto &child : type.arguments)
+    result = hash_combine(result, typeLookupHash(child));
+  return result;
+}
+
+Type typeHead(const Type &type, bool includeDimension) {
+  Type result(type.kind, type.domain);
+  result.family = type.family;
+  result.sort = type.sort;
+  if (includeDimension)
+    result.dimension = type.dimension;
+  result.symbolic = type.symbolic;
+  result.assumptions = type.assumptions;
+  return result;
 }
 Type parameterType(const Parameter &p) {
   using K = Type::Kind;
@@ -275,17 +315,40 @@ std::optional<Type> Semantics::substitute(const Type &input,
       fail("source.limit", "type substitution depth limit", span);
     return {};
   }
-  if ((depth == 1 || normalizationDepth == 1) && !bindings.empty()) {
+  bool resultNeedsPreflight = true;
+  if (depth == 1 || normalizationDepth == 1) {
     // Bound the selected tree as a whole before any recursive result copy.
     // Each binding is an ordinary static term, not a descriptor-kind variable.
+    bool normalizationNeeded = false, bindingSelected = false;
+    bool reductionNeeded = false;
     auto cost = typeComplexity(
         input, work.limits.typeNodes, work.limits.typeDepth - depth + 1,
         work.remaining(),
         [&](const Type &term) -> const Type * {
-          if (!term.symbolic)
-            return nullptr;
-          auto found = bindings.find(term.domain);
-          return found == bindings.end() ? nullptr : &found->second;
+          // Replaced heads return the selected term directly; they perform no
+          // normalization or formation of the unreplaced pattern.
+          if (term.symbolic) {
+            auto found = bindings.find(term.domain);
+            if (found != bindings.end()) {
+              bindingSelected = true;
+              return &found->second;
+            }
+          }
+          reductionNeeded |= (term.kind == Type::Kind::OracleProjection &&
+                              term.arguments.size() == 1) ||
+                             ((term.kind == Type::Kind::Associated ||
+                               !domainSort(term).empty()) &&
+                              !term.arguments.empty());
+          normalizationNeeded |=
+              (!bindings.empty() && !term.dimension.isClosed()) ||
+              term.kind == Type::Kind::OracleKind ||
+              term.kind == Type::Kind::LogicalRecord ||
+              (term.kind == Type::Kind::OracleProjection &&
+               term.arguments.size() == 1) ||
+              ((term.kind == Type::Kind::Associated ||
+                !domainSort(term).empty()) &&
+               !term.arguments.empty());
+          return nullptr;
         },
         true, TypeWork::Copy);
     if (!cost) {
@@ -294,6 +357,17 @@ std::optional<Type> Semantics::substitute(const Type &input,
     }
     if (!charge(*cost, span))
       return {};
+    // The preflight inspected every head and found no substitution, natural
+    // normalization, projection or logical formation to perform. Preserve the
+    // validated tree with one copy, rather than rebuilding and revalidating it.
+    if (!normalizationNeeded && !bindingSelected)
+      return input;
+    // Selection and Natural arithmetic preserve every stored Type kind, child
+    // count and level. Preflight checked their selected parent categories;
+    // NaturalArithmetic admits every new polynomial allocation on this ledger
+    // and the Natural branch restores canonical head metadata. Only projection
+    // reduction can change the stored tree and require a fresh whole check.
+    resultNeedsPreflight = reductionNeeded;
   }
   if (isDescriptor(input) && input.symbolic) {
     fail("source.descriptor", "descriptor contracts have no symbolic head",
@@ -303,34 +377,42 @@ std::optional<Type> Semantics::substitute(const Type &input,
   if (input.symbolic) {
     auto found = bindings.find(input.domain);
     if (found != bindings.end()) {
-      if (!chargeType(found->second, span))
-        return {};
+      // The owning selected-tree preflight already debited this exact copy,
+      // including its complete metadata and its actual insertion depth.
       return found->second;
     }
   }
-  if (!chargeType(input, span))
-    return {};
-  Type result = input;
-  for (auto &arg : result.arguments) {
+  // The whole selected-tree debit above pays for these shallow heads and
+  // their child vectors. Never copy a subtree only to overwrite its children.
+  Type result = typeHead(input);
+  result.arguments.reserve(input.arguments.size());
+  for (const auto &arg : input.arguments) {
     auto t = substitute(arg, bindings, span, depth + 1);
     if (!t)
       return {};
-    arg = std::move(*t);
+    result.arguments.push_back(std::move(*t));
   }
-  if (!result.dimension.isClosed()) {
+  // Natural owns a canonical polynomial. With no bindings there is no
+  // arithmetic to perform or polynomial to materialize again.
+  if (!bindings.empty() && !result.dimension.isClosed()) {
     // A projection of a bound asset atom is decided here, from the captured
     // asset or by renaming, before the polynomial is normalized.
     std::map<std::pair<std::string, std::string>, Natural> projections;
+    bool bindingRelevant = false;
     for (const auto &[factors, coefficient] : result.dimension.terms()) {
       (void)coefficient;
       if (!charge(factors.size() + 1, span))
         return {};
       for (const auto &factor : factors) {
-        if (factor.kind != Natural::Factor::Kind::Projection)
-          continue;
         auto found = bindings.find(factor.name);
+        if (factor.kind != Natural::Factor::Kind::Projection) {
+          bindingRelevant |= found != bindings.end() &&
+                             found->second.kind == Type::Kind::Natural;
+          continue;
+        }
         if (found == bindings.end())
           continue;
+        bindingRelevant = true;
         auto key = std::make_pair(factor.name, factor.member);
         if (projections.count(key))
           continue;
@@ -340,25 +422,27 @@ std::optional<Type> Semantics::substitute(const Type &input,
         projections.emplace(std::move(key), std::move(value->dimension));
       }
     }
-    auto n = naturals.substitute(
-        result.dimension,
-        [&](const Natural::Factor &factor) -> const Natural * {
-          if (factor.kind == Natural::Factor::Kind::Projection) {
-            auto found =
-                projections.find(std::make_pair(factor.name, factor.member));
-            return found == projections.end() ? nullptr : &found->second;
-          }
-          auto found = bindings.find(factor.name);
-          return found != bindings.end() &&
-                         found->second.kind == Type::Kind::Natural
-                     ? &found->second.dimension
-                     : nullptr;
-        });
-    if (!n) {
-      accept(n.takeError(), span);
-      return {};
+    if (bindingRelevant) {
+      auto n = naturals.substitute(
+          result.dimension,
+          [&](const Natural::Factor &factor) -> const Natural * {
+            if (factor.kind == Natural::Factor::Kind::Projection) {
+              auto found =
+                  projections.find(std::make_pair(factor.name, factor.member));
+              return found == projections.end() ? nullptr : &found->second;
+            }
+            auto found = bindings.find(factor.name);
+            return found != bindings.end() &&
+                           found->second.kind == Type::Kind::Natural
+                       ? &found->second.dimension
+                       : nullptr;
+          });
+      if (!n) {
+        accept(n.takeError(), span);
+        return {};
+      }
+      result.dimension = std::move(*n);
     }
-    result.dimension = std::move(*n);
     if (result.kind == Type::Kind::Natural) {
       result.symbolic = !result.dimension.isClosed();
       if (!result.symbolic)
@@ -401,7 +485,8 @@ std::optional<Type> Semantics::substitute(const Type &input,
       }
   if (result.kind == Type::Kind::LogicalRecord && !logicalRecord(result, span))
     return {};
-  if (!chargeType(result, span))
+  if (resultNeedsPreflight && (depth == 1 || normalizationDepth == 1) &&
+      !chargeType(result, span))
     return {};
   return result;
 }

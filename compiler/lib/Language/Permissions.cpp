@@ -11,37 +11,28 @@ Permissions intersect(Permissions a, const Permissions &b) {
 }
 } // namespace
 
-std::optional<std::vector<TypeField>>
+std::shared_ptr<const std::vector<TypeField>>
 Semantics::fields(const Type &type, Span span, unsigned depth) {
-  std::optional<std::vector<TypeField>> computed;
-  const auto *result = productFields(type, span, depth, computed);
-  if (!result)
-    return {};
-  if (computed)
-    return computed;
-  // A memoized declared record is copied for this caller.
-  if (!charge(result->size(), span))
-    return {};
-  return *result;
-}
-const std::vector<TypeField> *
-Semantics::productFields(const Type &type, Span span, unsigned depth,
-                         std::optional<std::vector<TypeField>> &computed) {
   if (depth > work.limits.typeDepth || !charge(1, span)) {
     if (!diagnostic)
       fail("source.limit", "field expansion depth", span);
     return nullptr;
   }
-  auto &result = computed.emplace();
+  std::vector<TypeField> result;
+  auto finish = [&]() -> std::shared_ptr<const std::vector<TypeField>> {
+    if (!charge(1, span))
+      return {};
+    return std::make_shared<const std::vector<TypeField>>(std::move(result));
+  };
   if (type.kind == Type::Kind::Unit)
-    return &result;
+    return finish();
   if (type.kind == Type::Kind::Tuple) {
     for (unsigned i = 0; i < type.arguments.size(); ++i) {
       if (!chargeType(type.arguments[i], span))
         return nullptr;
       result.push_back({std::to_string(i), type.arguments[i], true, span});
     }
-    return &result;
+    return finish();
   }
   if (type.kind == Type::Kind::Array) {
     if (!type.dimension.isClosed()) {
@@ -59,8 +50,10 @@ Semantics::productFields(const Type &type, Span span, unsigned depth,
         return nullptr;
       result.push_back({std::to_string(i), type.arguments.front(), true, span});
     }
-    return &result;
+    return finish();
   }
+  if (!charge(type.domain.size() + 1, span))
+    return {};
   auto *decl = typeDeclaration(type);
   if (!decl || (type.kind != Type::Kind::Record &&
                 type.kind != Type::Kind::LogicalRecord &&
@@ -75,15 +68,17 @@ Semantics::productFields(const Type &type, Span span, unsigned depth,
     StringRef member = decl->generated->member;
     if (member.contains(':') || member == "Public" || member == "Witness" ||
         member == "ProverOutputs" || member == "VerifierOutputs") {
+      if (!chargeType(type, span))
+        return {};
       auto selected = entryFamilyFields(*decl, type.arguments, span);
       if (!selected)
         return nullptr;
       for (auto &field : *selected)
-        result.push_back({field.name, std::move(field.type), true, span});
-      return &result;
+        result.push_back(
+            {std::move(field.name), std::move(field.type), true, span});
+      return finish();
     }
   }
-  auto bindings = substitution(*decl, type.arguments);
   if (type.kind == Type::Kind::Associated) {
     if (decl->abstract) {
       fail("source.private", "abstract type representation is unavailable",
@@ -92,25 +87,103 @@ Semantics::productFields(const Type &type, Span span, unsigned depth,
     }
     const auto &base = type.arguments.front();
     auto &owner = declarations[decl->parent->index];
-    bindings = substitution(owner, base.arguments);
+    if (!chargeType(base, span))
+      return nullptr;
+    for (const auto &parameter : owner.parameters)
+      if (!charge(parameter.atom.size() + 1, span))
+        return nullptr;
+    auto bindings = substitution(owner, base.arguments);
     auto repr = substitute(decl->domain, bindings, span, depth + 1);
     if (!repr)
       return nullptr;
-    result.push_back({"value", *repr, false, span});
-    return &result;
+    result.push_back({"value", std::move(*repr), false, span});
+    return finish();
   }
   // Placement checks walk each field of a wide record once per placed role;
   // reuse the substituted declaration instead of expanding it again.
-  computed.reset();
-  // A lookup key suffices: this view's memo never outlives its declarations.
-  auto key = typeIdentity(type);
-  if (!charge(key.size(), span))
+  // Route by the bounded root head only. Compare the complete candidate while
+  // performing its mandatory preflight, without a separate hash walk or
+  // equality traversal. No routing hash confers admission authority.
+  auto sample = [](StringRef text) {
+    return text.empty()
+               ? llvm::hash_value(size_t(0))
+               : llvm::hash_combine(text.size(), text.front(),
+                                    text[text.size() / 2], text.back());
+  };
+  uint64_t nodes = work.limits.typeNodes;
+  std::function<std::optional<llvm::hash_code>(const Type &, unsigned)> route =
+      [&](const Type &term, unsigned level) -> std::optional<llvm::hash_code> {
+    if (!nodes || level > work.limits.typeDepth || !charge(4, span)) {
+      if (!diagnostic)
+        fail("source.limit", "field lookup type bound", span);
+      return {};
+    }
+    --nodes;
+    auto key = llvm::hash_value(unsigned(term.kind));
+    if (term.kind != Type::Kind::Natural)
+      key = llvm::hash_combine(
+          key, sample(term.domain), sample(term.sort), term.symbolic,
+          term.arguments.size(),
+          term.kind == Type::Kind::Descriptor ? unsigned(term.family) : 0);
+    for (const auto &[factors, coefficient] : term.dimension.terms()) {
+      if (!charge(2, span))
+        return {};
+      key = llvm::hash_combine(key, coefficient, factors.size());
+      for (const auto &factor : factors) {
+        if (!charge(4, span))
+          return {};
+        key = llvm::hash_combine(key, unsigned(factor.kind),
+                                 sample(factor.name), sample(factor.member));
+      }
+    }
+    if (term.kind != Type::Kind::Natural)
+      for (const auto &argument : term.arguments) {
+        auto child = route(argument, level + 1);
+        if (!child)
+          return {};
+        key = llvm::hash_combine(key, *child);
+      }
+    return key;
+  };
+  auto routed = route(type, 1);
+  if (!routed)
+    return {};
+  auto hash = size_t(*routed);
+  auto found = declaredFields.find(hash);
+  bool checked = false;
+  if (found != declaredFields.end())
+    for (const auto &entry : llvm::reverse(found->second)) {
+      TypeComparison comparison{entry.type};
+      auto cost = typeComplexity(type, work.limits.typeNodes,
+                                 work.limits.typeDepth, work.remaining(),
+                                 nullptr, true, TypeWork::Copy, &comparison);
+      if (!cost) {
+        accept(cost.takeError(), span);
+        return {};
+      }
+      if (!charge(*cost, span))
+        return {};
+      checked = true;
+      if (comparison.equal) {
+        if (depth <= entry.depth)
+          return entry.fields;
+        break;
+      }
+    }
+  if (!checked && !chargeType(type, span))
+    return {};
+  // Cache hits never construct a substitution. On a miss, admit each owned
+  // argument/name copy before building the map.
+  if (!chargeType(type, span, /*complete=*/false))
     return nullptr;
-  auto memoized = declaredFields.find(key);
-  if (memoized != declaredFields.end() && depth <= memoized->second.depth)
-    return &memoized->second.fields;
+  for (const auto &parameter : decl->parameters)
+    if (!charge(parameter.atom.size() + 1, span))
+      return nullptr;
+  auto bindings = substitution(*decl, type.arguments);
   std::vector<TypeField> expanded;
   for (const auto &source : decl->fields) {
+    if (!charge(source.name.size() + 1, span))
+      return nullptr;
     auto t = substitute(source.type, bindings, span, depth + 1);
     if (!t)
       return nullptr;
@@ -131,10 +204,14 @@ Semantics::productFields(const Type &type, Span span, unsigned depth,
       return nullptr;
     expanded.push_back(std::move(field));
   }
-  auto &entry = declaredFields[key];
-  entry.fields = std::move(expanded);
-  entry.depth = depth;
-  return &entry.fields;
+  if (!chargeType(type, span, /*complete=*/false) || !charge(1, span))
+    return {};
+  auto fields =
+      std::make_shared<const std::vector<TypeField>>(std::move(expanded));
+  // Append an immutable depth version. Existing shared results and their
+  // addresses remain valid even if a deeper query recomputes the fields.
+  declaredFields[hash].emplace_back(type, fields, depth);
+  return fields;
 }
 bool Semantics::oracleField(const TypeField &field) {
   if (field.maximumRows) {
@@ -169,14 +246,23 @@ bool Semantics::oracleField(const TypeField &field) {
 bool Semantics::logicalRecord(const Type &type, Span span) {
   if (!chargeType(type, span))
     return false;
-  // A lookup key suffices: this view's memo never outlives its declarations.
-  auto key = typeIdentity(type);
-  if (checkedLogicalRecords.count(key))
-    return true;
   const auto *decl = typeDeclaration(type);
   if (type.kind != Type::Kind::LogicalRecord || !decl ||
       decl->kind != Declaration::Kind::Record || !decl->logical)
     return fail("source.type", "expected a nominal logical record", span);
+  auto &checked = checkedLogicalRecords[size_t(typeLookupHash(type))];
+  for (const auto &candidate : checked) {
+    if (!chargeType(type, span, /*complete=*/false))
+      return false;
+    if (candidate == type)
+      return true;
+  }
+  auto retain = [&] {
+    if (!chargeType(type, span, /*complete=*/false))
+      return false;
+    checked.push_back(type);
+    return true;
+  };
   if (decl->resource && decl->roles.empty())
     return fail("source.resource", "logical records require Copy and Drop",
                 decl->span);
@@ -188,8 +274,7 @@ bool Semantics::logicalRecord(const Type &type, Span span) {
       if (!field.placement)
         return fail("source.placement", "distributed field has no placement",
                     field.span);
-    checkedLogicalRecords.insert(std::move(key));
-    return true;
+    return retain();
   }
   bool logical = false;
   for (const auto &field : *product) {
@@ -202,8 +287,7 @@ bool Semantics::logicalRecord(const Type &type, Span span) {
     return fail("source.oracle-aggregate",
                 "logical record requires a direct oracle handle or sequence",
                 decl->span);
-  checkedLogicalRecords.insert(std::move(key));
-  return true;
+  return retain();
 }
 std::optional<std::vector<Alternative>>
 Semantics::alternatives(const Type &type, Span span, unsigned depth) {
@@ -247,12 +331,16 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       inherent = {inherent.copy || p.copy, inherent.drop || p.drop};
     };
     if (scope) {
-      for (const auto &parameter : scope->parameters) {
-        if (!charge(parameter.atom.size() + 1, span))
-          return {};
-        if (parameter.atom == type.domain)
-          include(parameter.permissions);
-      }
+      // Copy already implies Drop. Once both permissions follow from the
+      // value itself, no parameter-name lookup can strengthen the answer.
+      // Bound candidates below are still completely checked on every query.
+      if (!inherent.copy)
+        for (const auto &parameter : scope->parameters) {
+          if (!charge(parameter.atom.size() + 1, span))
+            return {};
+          if (parameter.atom == type.domain)
+            include(parameter.permissions);
+        }
       for (const auto &bound : scope->permissionBounds) {
         if (!chargeType(bound.type, span))
           return {};
@@ -351,32 +439,35 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
     return result;
   }
   Permissions result{true, true};
-  std::vector<Type> children;
-  if (type.kind == K::Tuple || type.kind == K::Array)
-    children = type.arguments;
-  else if (type.kind == K::Record || type.kind == K::LogicalRecord) {
+  auto include = [&](const Type &child) {
+    auto p = permissions(child, span, scope, depth + 1);
+    if (!p)
+      return false;
+    result = intersect(result, *p);
+    return true;
+  };
+  if (type.kind == K::Tuple || type.kind == K::Array) {
+    for (const auto &child : type.arguments)
+      if (!include(child))
+        return {};
+  } else if (type.kind == K::Record || type.kind == K::LogicalRecord) {
     auto fs = fields(type, span, depth + 1);
     if (!fs)
       return {};
-    for (auto &f : *fs) {
-      children.push_back(f.type);
-    }
+    for (const auto &field : *fs)
+      if (!include(field.type))
+        return {};
   } else if (type.kind == K::Variant) {
     auto alts = alternatives(type, span, depth + 1);
     if (!alts)
       return {};
-    for (auto &a : *alts)
-      for (auto &f : a.fields)
-        children.push_back(f.type);
+    for (const auto &alternative : *alts)
+      for (const auto &field : alternative.fields)
+        if (!include(field.type))
+          return {};
   } else {
     fail("source.type", "static term has no runtime permissions", span);
     return {};
-  }
-  for (auto &child : children) {
-    auto p = permissions(child, span, scope, depth + 1);
-    if (!p)
-      return {};
-    result = intersect(result, *p);
   }
   if (auto *decl = typeDeclaration(type)) {
     if (decl->resource) {
@@ -497,18 +588,22 @@ bool Semantics::sharedData(const Type &type, Span span,
   if (isLogicalValue(type))
     return fail("source.oracle-boundary",
                 "logical protocol values are not ordinary shared data", span);
-  std::vector<Type> children;
+  auto include = [&](const Type &child) {
+    return sharedData(child, span, scope, depth + 1);
+  };
   if (type.kind == K::Builtin) {
     auto policy = protocol::nativeTypeConstructorPolicy(type.domain);
     if (!policy || !policy->total || !policy->shared)
       return fail("source.roles",
                   "role assembly requires ordinary total shared data", span);
     for (const auto &argument : type.arguments)
-      if (!isStaticOnly(argument))
-        children.push_back(argument);
-  } else if (type.kind == K::Tuple || type.kind == K::Array)
-    children = type.arguments;
-  else if (type.kind == K::Record || type.kind == K::Associated) {
+      if (!isStaticOnly(argument) && !include(argument))
+        return false;
+  } else if (type.kind == K::Tuple || type.kind == K::Array) {
+    for (const auto &child : type.arguments)
+      if (!include(child))
+        return false;
+  } else if (type.kind == K::Record || type.kind == K::Associated) {
     // Abstract associated data is checked again after module substitution.
     if (type.kind == K::Associated && symbolic(type))
       return true;
@@ -516,22 +611,21 @@ bool Semantics::sharedData(const Type &type, Span span,
     if (!fields)
       return false;
     for (const auto &field : *fields)
-      children.push_back(field.type);
+      if (!include(field.type))
+        return false;
   } else if (type.kind == K::Variant) {
     auto alternatives = this->alternatives(type, span, depth + 1);
     if (!alternatives)
       return false;
     for (const auto &alternative : *alternatives)
       for (const auto &field : alternative.fields)
-        children.push_back(field.type);
+        if (!include(field.type))
+          return false;
   } else if (type.kind != K::Boolean && type.kind != K::Index &&
              type.kind != K::Field && type.kind != K::Group &&
              type.kind != K::Unit && type.kind != K::Parameter &&
              type.kind != K::OracleProjection)
     return fail("source.roles", "type is not ordinary shared data", span);
-  for (const auto &child : children)
-    if (!sharedData(child, span, scope, depth + 1))
-      return false;
   return true;
 }
 bool Semantics::withinModule(DeclarationId context, DeclarationId owner) const {
@@ -551,7 +645,7 @@ bool Semantics::constructorAllowed(const Declaration &context,
           type.kind == Type::Kind::Associated) &&
          withinModule(context.module, decl->module);
 }
-std::optional<std::vector<TypeField>>
+std::shared_ptr<const std::vector<TypeField>>
 Semantics::structuralFields(const Type &type, Span span) {
   if (!chargeType(type, span))
     return {};
@@ -577,6 +671,8 @@ std::optional<Type> Semantics::projectionType(const Type &type, StringRef name,
     }
     // Even a closed out-of-bounds access is a validity check, not an overload
     // selection rule. Body checking discharges it for the chosen signature.
+    if (!chargeType(type.arguments.front(), span, /*complete=*/false))
+      return {};
     return type.arguments.front();
   }
   auto product = structuralFields(type, span);
@@ -588,16 +684,41 @@ std::optional<Type> Semantics::projectionType(const Type &type, StringRef name,
     fail("source.field", "unknown field: " + name, span);
     return {};
   }
+  if (!chargeType(found->type, span, /*complete=*/false))
+    return {};
   return found->type;
 }
-std::optional<Type> Semantics::projectedType(const Declaration &decl, Type type,
+std::optional<Type> Semantics::projectedType(const Declaration &decl,
+                                             const Type &input,
                                              ArrayRef<unsigned> path,
                                              Span span) {
   if (!charge(path.size() + 1, span))
     return {};
-  for (auto index : path) {
-    if (!chargeType(type, span))
+  // Declared and generated record fields perform complete candidate preflight
+  // themselves before expansion/cache use. Borrow directly into that consumer
+  // rather than traversing the unchanged root twice in this same call.
+  bool record = input.kind == Type::Kind::Record ||
+                input.kind == Type::Kind::LogicalRecord;
+  if ((path.empty() || !record) && !chargeType(input, span))
+    return {};
+  if (path.empty())
+    return input;
+  // Borrow intermediate Types. Recursive owners keep expanded record fields
+  // alive until the final selected Type has been admitted and copied once.
+  std::function<std::optional<Type>(const Type &, ArrayRef<unsigned>)> select =
+      [&](const Type &type,
+          ArrayRef<unsigned> remaining) -> std::optional<Type> {
+    if (remaining.empty()) {
+      if (!chargeType(type, span))
+        return {};
+      return type;
+    }
+    if (remaining.size() > work.limits.typeDepth || !charge(1, span)) {
+      if (!diagnostic)
+        fail("source.limit", "projection path depth exceeded", span);
       return {};
+    }
+    auto index = remaining.front();
     if (type.kind == Type::Kind::Array) {
       if (type.dimension.isClosed() && index >= type.dimension.closedValue()) {
         fail("source.index", "static array index is out of range", span);
@@ -609,20 +730,25 @@ std::optional<Type> Semantics::projectedType(const Declaration &decl, Type type,
         if (!assumptions(decl, required, {}, span))
           return {};
       }
-      auto element = type.arguments.front();
-      type = std::move(element);
-    } else {
-      auto fs = fields(type, span);
-      if (!fs)
-        return {};
-      if (index >= fs->size()) {
+      return select(type.arguments.front(), remaining.drop_front());
+    }
+    if (type.kind == Type::Kind::Tuple) {
+      if (index >= type.arguments.size()) {
         fail("source.index", "product index is out of range", span);
         return {};
       }
-      type = (*fs)[index].type;
+      return select(type.arguments[index], remaining.drop_front());
     }
-  }
-  return type;
+    auto fs = fields(type, span);
+    if (!fs)
+      return {};
+    if (index >= fs->size()) {
+      fail("source.index", "product index is out of range", span);
+      return {};
+    }
+    return select((*fs)[index].type, remaining.drop_front());
+  };
+  return select(input, path);
 }
 std::optional<unsigned> Semantics::fieldIndex(const Declaration &decl,
                                               const Type &type, StringRef name,

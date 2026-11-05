@@ -112,7 +112,7 @@ bool Semantics::entails(const Declaration *context, const CapabilityBound &goal,
     return true;
   };
   auto intern = [&](const Type &type) -> std::optional<unsigned> {
-    if (!chargeType(type, goal.span))
+    if (!chargeIdentity(type, goal.span))
       return {};
     auto key = typeIdentity(type);
     if (!charge(key.size(), goal.span))

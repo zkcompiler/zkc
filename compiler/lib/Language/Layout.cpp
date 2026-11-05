@@ -45,8 +45,8 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
     return error("source.limit", "schema identity depth limit exceeded");
   ++depth;
   auto restoreDepth = llvm::scope_exit([&] { --depth; });
-  auto complexity =
-      typeComplexity(layout.type, remaining, Limits{}.typeDepth, remaining);
+  auto complexity = typeComplexity(layout.type, remaining, Limits{}.typeDepth,
+                                   remaining, nullptr, true, TypeWork::Copy);
   if (!complexity)
     return complexity.takeError();
   if (*complexity > remaining)
@@ -135,6 +135,11 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
         return error("source.limit", "schema formula instance budget exceeded");
       remaining -= product.instance.size();
       const bool array = schema.type.kind == Type::Kind::Array;
+      auto keyCost = typeComplexity(schema.type, Limits{}.typeNodes,
+                                    Limits{}.typeDepth, remaining);
+      if (!keyCost)
+        return keyCost.takeError();
+      remaining -= *keyCost;
       if (product.instance != typeIdentity(schema.type) ||
           product.fields.size() != (array ? 1 : schema.fields.size()))
         return error("source.layout", "schema formula instance differs");
@@ -194,15 +199,21 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
 }
 struct Layouts::State {
   Limits workLimits;
-  detail::Work work;
+  detail::Work ownedWork;
+  detail::Work &work;
   const std::vector<Declaration> &declarations;
   ArrayRef<Asset> assets;
   detail::AuthorityView authorities;
-  std::optional<detail::Semantics> types;
+  std::unique_ptr<detail::Semantics> types;
   State(const std::vector<Declaration> &declarations, const Limits &limits,
         detail::AuthorityView authorities, ArrayRef<Asset> assets = {})
-      : workLimits(limits), work{workLimits}, declarations(declarations),
-        assets(assets), authorities(authorities) {}
+      : workLimits(limits), ownedWork{workLimits}, work(ownedWork),
+        declarations(declarations), assets(assets), authorities(authorities) {}
+  State(detail::Semantics &owner)
+      : workLimits(owner.work.limits), ownedWork{workLimits}, work(owner.work),
+        declarations(owner.declarations), assets(owner.assets),
+        authorities(owner.authorities),
+        types(new detail::Semantics(owner, work)) {}
 };
 // An observer of a checked project or closed Entry lays out with the
 // project's final authorities, computed once after all checking.
@@ -224,10 +235,9 @@ Layouts::Layouts(const ClosedEntry &entry, const Limits &limits,
   state->work.allowance = &remaining;
 }
 Layouts::~Layouts() = default;
-Layouts::Layouts(const std::vector<Declaration> &declarations,
-                 const Limits &limits, detail::AuthorityView authorities)
-    : definitions(declarations), limits(limits),
-      state(std::make_unique<State>(declarations, this->limits, authorities)) {}
+Layouts::Layouts(detail::Semantics &owner)
+    : definitions(owner.declarations), limits(owner.work.limits),
+      state(std::make_unique<State>(owner)) {}
 Expected<ValuePlacement> Layouts::placement(const Type &type,
                                             const ValuePlacement &seed,
                                             unsigned participants) {
@@ -245,67 +255,37 @@ detail::Semantics::nativeLayout(const Type &type) {
   if (isNativeData(type) &&
       !(type.kind == Type::Kind::Builtin && type.domain == "sequence"))
     return builtinLayout(type);
-  auto limits = work.limits;
-  limits.work = work.remaining();
-  Layouts layouts(declarations, limits, authorities);
-  Work::Scope phase(layouts.state->work, work.phase);
+  Layouts layouts(*this);
   auto result = layouts.packed(type);
-  auto charged = work.charge(layouts.state->work.used);
-  if (charged) {
-    if (!result)
-      consumeError(result.takeError());
-    return std::move(charged);
-  }
-  if (!result) {
+  if (!result)
     return result.takeError();
-  }
   return std::move(result->carrier);
 }
 Expected<ProtocolPortLayout>
 detail::Semantics::nativePortLayout(const Port &port) {
   if (auto e = work.charge(0))
     return e;
-  auto limits = work.limits;
-  limits.work = work.remaining();
-  Layouts layouts(declarations, limits, authorities);
-  Work::Scope phase(layouts.state->work, work.phase);
-  auto result = layouts.protocolPort(port);
-  auto charged = work.charge(layouts.state->work.used);
-  if (charged) {
-    if (!result)
-      consumeError(result.takeError());
-    return std::move(charged);
-  }
-  if (!result) {
-    return result.takeError();
-  }
-  return result;
+  Layouts layouts(*this);
+  return layouts.protocolPort(port);
 }
 Expected<bool> detail::Semantics::nativeMessagePayload(const Type &type) {
-  if (auto error = work.charge(0))
-    return error;
-  auto limits = work.limits;
-  limits.work = work.remaining();
-  Layouts layouts(declarations, limits, authorities);
-  Work::Scope phase(layouts.state->work, work.phase);
+  if (auto e = work.charge(0))
+    return e;
+  Layouts layouts(*this);
   auto layout = layouts.get(type);
-  auto charged = work.charge(layouts.state->work.used);
-  if (charged) {
-    if (!layout)
-      consumeError(layout.takeError());
-    return std::move(charged);
-  }
   if (!layout)
     return layout.takeError();
   return !(*layout)->formal && !(*layout)->leaves.empty() &&
          llvm::all_of((*layout)->leaves,
                       [](const LayoutLeaf &leaf) { return leaf.data(); });
 }
+
 Expected<OracleKindLayout> Layouts::oracleKind(const Type &kind) {
   if (kind.kind != Type::Kind::OracleKind || kind.symbolic)
     return error("source.oracle-kind", "oracle layout requires a closed kind");
-  auto complexity = typeComplexity(kind, limits.typeNodes, limits.typeDepth,
-                                   state->work.remaining());
+  auto complexity =
+      typeComplexity(kind, limits.typeNodes, limits.typeDepth,
+                     state->work.remaining(), nullptr, true, TypeWork::Copy);
   if (!complexity)
     return complexity.takeError();
   if (auto e = charge(*complexity))
@@ -395,7 +375,8 @@ Error Layouts::initializeTypes() {
     return e;
   if (auto e = detail::chargeSemanticIndex(state->declarations, state->work))
     return e;
-  state->types.emplace(state->declarations, state->assets, state->work);
+  state->types = std::make_unique<detail::Semantics>(
+      state->declarations, state->assets, state->work);
   state->types->authorities = state->authorities;
   return Error::success();
 }
@@ -588,6 +569,14 @@ observeProtocolPort(std::shared_ptr<const Layout> body,
       return error("source.placement", "logical product placement differs");
     if (maximum && !isOracleHandle(value.type))
       return error("source.layout", "row maximum requires a direct oracle");
+    if (product) {
+      auto keyCost = typeComplexity(value.type, limits.typeNodes,
+                                    limits.typeDepth, remaining);
+      if (!keyCost)
+        return keyCost.takeError();
+      if (auto e = charge(*keyCost))
+        return e;
+    }
     if (product &&
         ((!value.roleParameters.empty() &&
           product->arguments.size() != value.roleParameters.size()) ||
@@ -743,26 +732,34 @@ Expected<ProtocolPortLayout> Layouts::protocolPort(const Port &port,
   // Temporary source migration seam: only legacy, telescope-free records may
   // derive their field formulas from the historical explicit oriented port.
   if (!placed && port.oracle) {
-    std::function<ValuePlacement(const Layout &)> legacy =
-        [&](const Layout &l) {
-          if (isOracleHandle(l.type)) {
-            auto receivers = port.roles;
-            llvm::erase(receivers, port.oracle->holder);
-            return ValuePlacement(
-                OraclePlacement{port.oracle->holder, receivers});
-          }
-          if (l.type.kind == Type::Kind::LogicalRecord) {
-            const auto *decl = state->types->typeDeclaration(l.type);
-            if (!decl || !decl->roles.empty())
-              return ValuePlacement(DataPlacement{});
-            ProductPlacement product{typeIdentity(l.type), port.roles, {}};
-            for (const auto &field : l.fields)
-              product.fields.push_back(legacy(*field.layout));
-            return ValuePlacement(std::move(product));
-          }
-          return ValuePlacement(DataPlacement{port.roles});
-        };
-    placed = legacy(**body);
+    std::function<Expected<ValuePlacement>(const Layout &)> legacy =
+        [&](const Layout &l) -> Expected<ValuePlacement> {
+      if (isOracleHandle(l.type)) {
+        auto receivers = port.roles;
+        llvm::erase(receivers, port.oracle->holder);
+        return ValuePlacement(OraclePlacement{port.oracle->holder, receivers});
+      }
+      if (l.type.kind == Type::Kind::LogicalRecord) {
+        const auto *decl = state->types->typeDeclaration(l.type);
+        if (!decl || !decl->roles.empty())
+          return ValuePlacement(DataPlacement{});
+        if (!state->types->chargeIdentity(l.type, port.span))
+          return state->types->takeError();
+        ProductPlacement product{typeIdentity(l.type), port.roles, {}};
+        for (const auto &field : l.fields) {
+          auto child = legacy(*field.layout);
+          if (!child)
+            return child.takeError();
+          product.fields.push_back(std::move(*child));
+        }
+        return ValuePlacement(std::move(product));
+      }
+      return ValuePlacement(DataPlacement{port.roles});
+    };
+    auto rebuilt = legacy(**body);
+    if (!rebuilt)
+      return rebuilt.takeError();
+    placed = std::move(*rebuilt);
   } else if (!placed && !port.roles.empty())
     placed = DataPlacement{port.roles};
   if (placed) {
@@ -873,18 +870,23 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     return error("source.limit", "logical layout depth exceeded");
   if (auto e = charge(1))
     return e;
-  auto cost = typeComplexity(type, limits.typeNodes, limits.typeDepth,
-                             state->work.remaining());
+  auto cost =
+      typeComplexity(type, limits.typeNodes, limits.typeDepth,
+                     state->work.remaining(), nullptr, true, TypeWork::Copy);
   if (!cost)
     return cost.takeError();
   if (auto e = charge(*cost))
     return std::move(e);
-  auto key = typeIdentity(type);
-  if (auto e = charge(key.size()))
-    return e;
-  auto known = cache.find(key);
-  if (known != cache.end())
-    return known->second;
+  auto key = detail::typeLookupHash(type);
+  auto &bucket = cache[key];
+  for (const auto &known : bucket) {
+    // Hashes only route. No text key or Type copy is materialized on a hit;
+    // every complete collision comparison consumes this caller's allowance.
+    if (!state->types->chargeType(type, {}, /*complete=*/false))
+      return state->types->takeError();
+    if (known->type == type)
+      return known;
+  }
   if (type.symbolic || !type.dimension.isClosed())
     return error("source.generic", "layout requires a closed type");
   using K = Type::Kind;
@@ -905,6 +907,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   if (type.kind == K::Associated &&
       (type.arguments.size() != 1 || type.arguments.front().kind != K::Module))
     return error("source.layout", "associated type requires one module");
+  if (!state->types->chargeType(type, {}))
+    return state->types->takeError();
   auto result = std::make_shared<Layout>();
   result->type = type;
   // The revision-bound identity is formed once, when custody or a nominal
@@ -912,9 +916,11 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   auto identify = [&]() -> Error {
     if (!result->identity.digest.empty())
       return Error::success();
-    auto canonical = canonicalTypeKey(type, [&](StringRef path) {
-      return state->types->nominalAuthority(path);
-    });
+    auto canonical = canonicalTypeKey(
+        type,
+        [&](StringRef path) { return state->types->nominalAuthority(path); },
+        limits, state->work.remaining(),
+        [&](uint64_t amount) { return charge(amount); });
     if (!canonical)
       return canonical.takeError();
     if (auto e = charge(canonical->size()))
@@ -1130,7 +1136,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       result->element = result->fields.front().layout;
   } else if ((type.kind == K::Record || type.kind == K::LogicalRecord) &&
              decl) {
-    std::optional<std::vector<TypeField>> generatedFields;
+    std::shared_ptr<const std::vector<TypeField>> generatedFields;
     const auto *definitionFields = &decl->fields;
     if (decl->generated) {
       generatedFields = state->types->fields(type, {}, depth + 1);
@@ -1253,7 +1259,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   if (auto e = identify())
     return e;
   std::shared_ptr<const Layout> immutable = result;
-  cache.emplace(std::move(key), immutable);
+  cache[key].push_back(immutable);
   return immutable;
 }
 } // namespace zkc::language

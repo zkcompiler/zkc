@@ -19,6 +19,13 @@ bool checkOperatorWitness(Semantics &, llvm::ArrayRef<Declaration>,
                           const NotationDescriptor &, const CallBinding &,
                           llvm::ArrayRef<Type> inputs, const Type &output,
                           Span);
+/// Borrow keys only from Checker's immutable independent lexical enumeration.
+/// This avoids rebuilding text, not current candidate validation or matching.
+bool checkOperatorWitness(Semantics &, llvm::ArrayRef<Declaration>,
+                          const AuthoredOperatorFamily &,
+                          const NotationDescriptor &, const CallBinding &,
+                          llvm::ArrayRef<Type> inputs, const Type &output,
+                          Span);
 bool checkOperatorOperands(Semantics &, const NotationDescriptor &,
                            const CallBinding &,
                            llvm::ArrayRef<unsigned> parameterOrder,

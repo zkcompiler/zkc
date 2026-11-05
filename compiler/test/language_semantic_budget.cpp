@@ -41,13 +41,16 @@ int main() {
               "overflowing substitution succeeded");
       diagnostic(types, allowance == 100 ? "source.natural" : "source.limit");
       auto arithmeticWork = limits.work - types.naturals.remainingWork();
-      // The selected-tree preflight spends four units before copying. The
-      // ten-unit allowance now refuses before polynomial normalization starts.
-      require(arithmeticWork == (allowance == 100 ? 4 : 0),
-              "normalization ran beyond admission or lost performed units");
-      require(work.used == (allowance == 100 ? 15 : 9) &&
-                  remaining == allowance - work.used,
-              "normalization/preflight spending was omitted or double charged");
+      // Shallow reconstruction avoids the discarded copy. Ten units admit
+      // two arithmetic units before the next polynomial step refuses.
+      require(arithmeticWork == (allowance == 100 ? 4 : 2),
+              "normalization ran beyond admission or lost performed units: " +
+                  Twine(arithmeticWork));
+      require(
+          work.used == (allowance == 100 ? 11 : 9) &&
+              remaining == allowance - work.used,
+          "normalization/preflight spending was omitted or double charged: " +
+              Twine(work.used));
     }
   });
   cases.run("placement remapping retains failed validation prefixes", [] {

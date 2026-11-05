@@ -202,6 +202,8 @@ bool memberContract(Semantics &types, const Declaration &module,
       if (!actual || !types.chargeType(*actual, provided.span))
         return false;
       clearPermissionAssumptions(*actual);
+      if (!types.chargeIdentity(*actual, provided.span))
+        return false;
       admissions.emplace(obligation.boundary, typeIdentity(*actual));
     }
   }
@@ -217,8 +219,12 @@ bool memberContract(Semantics &types, const Declaration &module,
       return false;
     if (*admitted == Semantics::Admission::Accepted)
       continue;
-    if (*admitted == Semantics::Admission::Rejected ||
-        !admissions.count({obligation.boundary, typeIdentity(requirement)}))
+    if (*admitted == Semantics::Admission::Rejected)
+      return refuse(
+          "implementation strengthens boundary admission requirements");
+    if (!types.chargeIdentity(requirement, provided.span))
+      return false;
+    if (!admissions.count({obligation.boundary, typeIdentity(requirement)}))
       return refuse(
           "implementation strengthens boundary admission requirements");
   }

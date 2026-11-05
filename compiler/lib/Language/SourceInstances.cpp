@@ -13,13 +13,9 @@ class Instances {
   const WrittenIndex &written;
   Work &work;
   Expected<json::Value> term(const Type &type) {
-    auto complexity = typeComplexity(type, work.limits.typeNodes,
-                                     work.limits.typeDepth, work.remaining());
-    if (!complexity)
-      return complexity.takeError();
-    if (auto e = work.charge(*complexity))
-      return std::move(e);
-    return encodeStaticTerm(type);
+    return encodeStaticTerm(
+        type, work.limits, work.remaining(),
+        [&](uint64_t amount) { return work.charge(amount); });
   }
   Expected<json::Array> indices(ArrayRef<unsigned> values) {
     if (auto e = work.charge(values.size()))

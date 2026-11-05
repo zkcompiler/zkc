@@ -262,7 +262,7 @@ class Closure {
     for (const auto &argument : arguments) {
       if (!types.chargeIdentity(argument, binding.span))
         return {};
-      frame(key, typeIdentity(argument));
+      frameTypeIdentity(key, argument);
     }
     frame(key, "data");
     for (auto value : nested.data) {
@@ -429,7 +429,7 @@ public:
     for (const auto &input : shape.inputs) {
       if (!types.chargeIdentity(input, {}))
         return {};
-      frame(shape.identity, typeIdentity(input));
+      frameTypeIdentity(shape.identity, input);
     }
     frame(shape.identity, "constructors");
     for (const auto &node : shape.nodes) {
@@ -439,7 +439,7 @@ public:
                         node.span))
         return {};
       frame(shape.identity, std::to_string(unsigned(node.kind)));
-      frame(shape.identity, typeIdentity(descriptorType(node.contract)));
+      frameTypeIdentity(shape.identity, descriptorType(node.contract));
       frame(shape.identity, std::to_string(node.axis));
       frame(shape.identity, std::to_string(node.operands.size()));
       for (auto operand : node.operands)
@@ -450,7 +450,7 @@ public:
             !types.chargeIdentity(descriptorType(child.contract), node.span))
           return {};
         frame(shape.identity, std::to_string(child.node));
-        frame(shape.identity, typeIdentity(descriptorType(child.contract)));
+        frameTypeIdentity(shape.identity, descriptorType(child.contract));
       }
     }
     frame(shape.identity, std::to_string(shape.result));

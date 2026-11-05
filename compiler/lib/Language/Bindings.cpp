@@ -129,6 +129,8 @@ std::optional<ValueId> BodyChecker::transport(ArrayRef<ValueId> values,
   }
   std::optional<ValueId> result;
   if (protocol() && !values.empty()) {
+    if (!checker.types.chargeIdentity(type, span))
+      return {};
     ProductPlacement schema{typeIdentity(type), {}, {}};
     std::set<unsigned> participation;
     for (auto value : values) {

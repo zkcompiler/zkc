@@ -888,8 +888,15 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
         // Counted by lookup key; local to this one traversal.
         std::string key = std::to_string(unsigned(call->kind)) + ":" +
                           std::to_string(call->target.index);
-        for (const auto &argument : call->arguments)
-          detail::frame(key, typeIdentity(argument));
+        for (const auto &argument : call->arguments) {
+          auto cost = typeComplexity(argument, limits.typeNodes,
+                                     limits.typeDepth, work.remaining());
+          if (!cost)
+            return cost.takeError();
+          if (auto e = work.charge(*cost, op.span))
+            return e;
+          frameTypeIdentity(key, argument);
+        }
         if (invoked.insert(key).second) {
           if (invoked.size() > limits.instances)
             return detail::failure("source.limit",

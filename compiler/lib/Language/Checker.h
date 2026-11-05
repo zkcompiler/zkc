@@ -126,9 +126,9 @@ public:
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
                                                  const SyntaxOperator &,
                                                  bool filtered = false);
-  std::optional<std::vector<OperatorBinding>>
+  std::optional<std::map<std::string, OperatorBinding>>
   operatorCandidates(const Declaration &, const SyntaxDeclaration &, uint32_t);
-  std::optional<llvm::ArrayRef<OperatorBinding>>
+  std::shared_ptr<const AuthoredOperatorFamily>
   operatorWitnessFamily(const Declaration &, const SyntaxDeclaration &,
                         uint32_t);
   bool body(DeclarationId, unsigned);
@@ -175,8 +175,20 @@ private:
   bool inferUsage(Declaration &, Body::Mode, unsigned);
   bool collectUsage(const Declaration &, const Type &, Usage, Span,
                     llvm::StringRef, llvm::StringRef);
-  std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
-                                    unsigned, bool allowPlacement);
+  // A call-local owning result from elaboration. Only Checker can certify the
+  // result of its immediately preceding complete substitution. The handle is
+  // consumed by type() before exposing a mutable Type, never cached or shared.
+  class ElaboratedType {
+    friend class Checker;
+    std::optional<Type> value;
+    bool complete = false;
+    ElaboratedType() = default;
+    ElaboratedType(Type value) : value(std::move(value)) {}
+    ElaboratedType(std::optional<Type> value, bool complete = false)
+        : value(std::move(value)), complete(complete) {}
+  };
+  ElaboratedType elaborateType(const Declaration &, const SyntaxType &,
+                               unsigned, bool allowPlacement);
   std::vector<SyntaxDeclaration> syntax;
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<unsigned, SyntaxDeclaration> reconstructedSources;
@@ -214,7 +226,7 @@ private:
   // Keep this cache separate from inference's candidate enumeration.
   using OperatorFamilyKey =
       std::tuple<unsigned, std::optional<uint32_t>, std::string>;
-  std::map<OperatorFamilyKey, std::vector<OperatorBinding>>
+  std::map<OperatorFamilyKey, std::shared_ptr<const AuthoredOperatorFamily>>
       operatorWitnessFamilies;
   std::vector<unsigned> signatureState;
   std::set<const Declaration *> inferredContracts;

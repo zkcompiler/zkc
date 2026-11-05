@@ -489,6 +489,8 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
   if ((isLogicalValue(type) || productPlacement || structuralSchema) &&
       (type.kind == T::Tuple || type.kind == T::Array)) {
     if (!productPlacement) {
+      if (!checker.types.chargeIdentity(type, expr.span))
+        return {};
       ProductPlacement schema{typeIdentity(type), {}, {}};
       std::set<unsigned> roles;
       for (auto id : values) {
