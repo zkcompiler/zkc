@@ -88,6 +88,7 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--output=PATH"),
             Opt::new("--target=TARGET"),
             Opt::new("--evm-version=FORK"),
+            Opt::new("--evm-limits=FILE"),
             Opt::new("--solc=PATH"),
             Opt::new("--solc-sha256=PIN").hex(Some(32)),
             Opt::new("--reuse=EVM_DIRECTORY"),
@@ -110,6 +111,8 @@ it publishes a fresh verifier directory, defaulting to build/zkc/<entry-stem>.ev
             " selects a declared EVM deployment fork (default ",
             zkc::evm_target_default_fork!(),
             ").
+--evm-limits=FILE selects a partial JSON object of declared deployment ceilings.
+Omitted names use declaration maxima; selected values must stay within declared ranges.
 The report supplies the manifest SHA-256 for independent artifact authentication.
 --reuse and --reuse-sha256 reuse an authenticated EVM artifact only on an exact build match.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
@@ -526,6 +529,29 @@ mod tests {
         );
         assert_eq!(
             run("check", &args(&[&format!("--evm-version={}", forks[0])]))["code"],
+            "cli-option"
+        );
+    }
+
+    #[test]
+    fn evm_limits_file_is_unique_documented_and_requires_the_evm_target() {
+        let spec = command("compile").unwrap();
+        assert!(spec.help().contains("--evm-limits=FILE"));
+        let values = args(&["--target=evm", "--evm-limits=limits.json"]);
+        assert_eq!(
+            spec.parse(&values).unwrap().value("--evm-limits"),
+            Some("limits.json")
+        );
+        assert!(
+            spec.parse(&args(&["--target=evm", "--evm-limits=a", "--evm-limits=b"]))
+                .is_err()
+        );
+        assert_eq!(
+            run("compile", &args(&["--evm-limits=limits.json"]))["code"],
+            "cli-usage"
+        );
+        assert_eq!(
+            run("check", &args(&["--evm-limits=limits.json"]))["code"],
             "cli-option"
         );
     }

@@ -71,6 +71,7 @@ int runLanguageCompiler(int argc, char **argv) {
   bool cpuTargetSelected = false;
   EvmOptions evmOptions;
   bool evmForkSelected = false;
+  bool evmLimitsSelected = false;
   std::string observationPath;
   bool collectObservations = false;
   std::vector<std::string> dumps;
@@ -200,7 +201,7 @@ int runLanguageCompiler(int argc, char **argv) {
       command != "language-interface" && command != "language-bundle" &&
       command != "language-package" && command != "language-evm")
     return refuse(error("source.command", "unknown language command"));
-  if (argc > int(limits.files + 13))
+  if (argc > int(limits.files + (command == "language-evm" ? 14 : 13)))
     return refuse(error("source.limit", "too many source command arguments"));
   uint64_t total = 0, assetTotal = 0;
   for (int i = 2; i < argc; ++i) {
@@ -218,6 +219,15 @@ int runLanguageCompiler(int argc, char **argv) {
         return refuse(fork.takeError());
       evmOptions.fork = *fork;
       evmForkSelected = true;
+    } else if (arg.consume_front("--evm-limits=")) {
+      if (command != "language-evm" || evmLimitsSelected)
+        return refuse(
+            error("evm.limits", "deployment limits are a unique EVM option"));
+      auto selected = parseEvmLimits(arg);
+      if (!selected)
+        return refuse(selected.takeError());
+      evmOptions.limits = *selected;
+      evmLimitsSelected = true;
     } else if (arg.starts_with("--observations=") ||
                arg.starts_with("--diagnostics=")) {
       collectObservations = arg.starts_with("--observations=");

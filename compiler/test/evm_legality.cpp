@@ -1127,6 +1127,30 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
               ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_BOUNDS)
 #undef ZKC_EVM_LIMIT_BOUNDS
             });
+  cases.run("deployment JSON decoder shares every declared range", [&] {
+    auto encode = [](const json::Value &value) {
+      std::string text;
+      raw_string_ostream(text) << value;
+      return text;
+    };
+#define ZKC_EVM_LIMIT_DECODE_BOUNDS(member, name, minimum, maximum)            \
+  {                                                                            \
+    for (uint64_t value : {minimum, maximum}) {                                \
+      auto object = encodeEvmLimits(EvmLimits());                              \
+      (*object.getAsObject())[name] = value;                                   \
+      auto selected = take(parseEvmLimits(encode(object)));                    \
+      require(selected.member == value,                                        \
+              "decoder lost deployment ceiling " name);                        \
+    }                                                                          \
+    for (uint64_t value : {minimum - 1, maximum + 1}) {                        \
+      auto object = encodeEvmLimits(EvmLimits());                              \
+      (*object.getAsObject())[name] = value;                                   \
+      refuses(parseEvmLimits(encode(object)), "evm.limits");                   \
+    }                                                                          \
+  }
+    ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_DECODE_BOUNDS)
+#undef ZKC_EVM_LIMIT_DECODE_BOUNDS
+  });
   cases.run("deployment forks are typed and exact", [&] {
     require(take(parseEvmFork("cancun")) == EvmFork::Cancun &&
                 take(parseEvmFork("prague")) == EvmFork::Prague,

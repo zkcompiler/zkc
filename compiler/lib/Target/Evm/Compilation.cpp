@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Names.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
@@ -115,6 +116,35 @@ std::string digest(StringRef bytes) {
   return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
 }
 } // namespace
+
+Expected<EvmLimits> parseEvmLimits(StringRef text) {
+  auto parsed =
+      parseNaturalJson(text, 64 * 1024, 2, "evm.limits", "evm.limits");
+  if (!parsed)
+    return parsed.takeError();
+  auto *object = parsed->getAsObject();
+  constexpr size_t count = 0
+#define ZKC_EVM_LIMIT_COUNT(...) +1
+      ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_COUNT)
+#undef ZKC_EVM_LIMIT_COUNT
+      ;
+  if (!object || object->size() != count)
+    return error("evm.limits", "expected every declared deployment ceiling");
+  EvmLimits limits;
+#define ZKC_EVM_LIMIT_DECODE(member, name, minimum, maximum)                   \
+  {                                                                            \
+    const auto *value = object->get(name);                                     \
+    auto number = value ? value->getAsUINT64() : std::nullopt;                 \
+    if (!number)                                                               \
+      return error("evm.limits", "expected an unsigned integer for " name);    \
+    limits.member = *number;                                                   \
+  }
+  ZKC_EVM_TARGET_LIMITS(ZKC_EVM_LIMIT_DECODE)
+#undef ZKC_EVM_LIMIT_DECODE
+  if (auto failure = validateLimits(limits))
+    return std::move(failure);
+  return limits;
+}
 
 Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
                                          const EvmOptions &options,
