@@ -157,8 +157,15 @@ protocol P roles(A)(lo:index@A,hi:index@A,flag:bool@A)->(ok:bool@A){let ok=aggre
             for (unsigned i = 0; i < nodes.size(); ++i) {
               const auto &node = *nodes[i].getAsObject();
               for (const auto &child : *node.getArray("children"))
-                require(child.getAsInteger() && *child.getAsInteger() >= 0 &&
-                            uint64_t(*child.getAsInteger()) < i,
+                require(child.getAsObject() &&
+                            child.getAsObject()->getInteger("node") &&
+                            *child.getAsObject()->getInteger("node") >= 0 &&
+                            uint64_t(*child.getAsObject()->getInteger("node")) <
+                                i &&
+                            *child.getAsObject()->get("contract") ==
+                                *nodes[*child.getAsObject()->getInteger("node")]
+                                     .getAsObject()
+                                     ->get("contract"),
                         "domain is not a closed ordered graph");
               for (const auto &operand : *node.getArray("operands"))
                 require(operand.getAsInteger() &&
@@ -179,16 +186,23 @@ protocol P roles(A)(lo:index@A,hi:index@A,flag:bool@A)->(ok:bool@A){let ok=aggre
         require(aggregate, "finite wrapper instance missing");
         auto &domain = *aggregate->getArray("domains")->front().getAsObject();
         auto &nodes = *domain.getArray("nodes");
-        require(domain.getArray("inputs")->size() == 2 && nodes.size() == 2 &&
-                    nodes[0].getAsObject()->getString("kind") == "range" &&
-                    nodes[1].getAsObject()->getString("kind") == "product" &&
-                    *nodes[0].getAsObject()->get("operands") ==
-                        json::Value(json::Array{0, 1}) &&
-                    *nodes[1].getAsObject()->get("children") ==
-                        json::Value(json::Array{0, 0}) &&
-                    *aggregate->getObject("layout")->get("captures") ==
-                        json::Value(json::Array{1, 2}),
-                "shared range graph or runtime operand mapping differs");
+        require(
+            domain.getArray("inputs")->size() == 2 && nodes.size() == 2 &&
+                nodes[0].getAsObject()->getString("kind") == "range" &&
+                nodes[1].getAsObject()->getString("kind") == "product" &&
+                *nodes[0].getAsObject()->get("operands") ==
+                    json::Value(json::Array{0, 1}) &&
+                *nodes[1].getAsObject()->get("children") ==
+                    json::Value(json::Array{
+                        json::Object{{"node", 0},
+                                     {"contract", *nodes[0].getAsObject()->get(
+                                                      "contract")}},
+                        json::Object{{"node", 0},
+                                     {"contract", *nodes[0].getAsObject()->get(
+                                                      "contract")}}}) &&
+                *aggregate->getObject("layout")->get("captures") ==
+                    json::Value(json::Array{1, 2}),
+            "shared range graph or runtime operand mapping differs");
         require(
             bytes.find("finite-domain") == std::string::npos,
             "internal domain identity leaked instead of a constructor graph");

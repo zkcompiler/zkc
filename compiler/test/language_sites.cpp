@@ -78,6 +78,481 @@ int main() {
     require(updated.bytes().contains(nativeSiteName("commitment", 987) + "_0"),
             "unrelated source operation must not rename a labelled site");
   });
+  for (const auto &[name, statements] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"labelled repeat", R"(
+             #[site(iterations)] for _ in 0..n roles(P,V) max 2 {
+               let received=send P->V(x);
+             }
+           )"},
+           {"labelled final conditional in repeat", R"(
+             for _ in 0..n roles(P,V) max 2 {
+               #[site(choose)] if choice roles(P,V) {
+                 let received=send P->V(x);
+               } else {}
+             }
+           )"},
+           {"labelled final repeat in conditional", R"(
+             if choice roles(P,V) {
+               #[site(iterations)] for _ in 0..n roles(P,V) max 2 {
+                 let received=send P->V(x);
+               }
+             } else {}
+           )"}}) {
+    cases.run(name, [&, statements = statements] {
+      const auto source =
+          "protocol Structured roles(P,V)(x:F@P,n:index@(P,V),"
+          "choice:bool@(P,V))->(){" +
+          statements +
+          "return ();}entry fn Demo(inputs: Structured::Inputs) {"
+          "return Structured::run(inputs);}";
+      auto project = take(checked(source));
+      auto closed =
+          take(zkc::test::closeProtocolDeployment(project, "m::Demo"));
+      auto original = take(prepareOriginal(closed));
+      auto label = statements.find("site(choose)") != std::string::npos
+                       ? "choose"
+                       : "iterations";
+      const auto native = nativeSiteName(label, 0);
+      require(original.bytes().contains(native),
+              "structured statement lost its explicit label");
+      auto written = take(inspectWrittenSource(project));
+      require(StringRef(written).contains("\"site\":\"" + std::string(label) +
+                                          "\""),
+              "written source lost its statement attribute");
+      for (bool simplify : {false, true})
+        take(compileEntry(original, {simplify, false}));
+      auto parsed =
+          mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+      require(bool(parsed), "parse structured labelled original");
+      take(compareOriginal(closed, *parsed));
+      bool mutated = false;
+      parsed->walk([&](mlir::Operation *operation) {
+        auto site = operation->getAttrOfType<mlir::StringAttr>("site");
+        auto expected = native;
+        auto *parent = operation->getParentOp();
+        if (parent && parent->getName().getStringRef() == "protocol.branch") {
+          auto branch = parent->getAttrOfType<mlir::StringAttr>("site");
+          auto alternatives =
+              parent->getAttrOfType<mlir::ArrayAttr>("alternatives");
+          expected = nativeSelectedSite(
+              branch.getValue(),
+              mlir::cast<mlir::StringAttr>(
+                  alternatives[operation->getParentRegion()->getRegionNumber()])
+                  .getValue(),
+              native);
+        }
+        if (site && site.getValue() == expected) {
+          operation->setAttr("site", mlir::StringAttr::get(&context, "wrong"));
+          mutated = true;
+        }
+      });
+      require(mutated, "structured event site was not emitted");
+      refuses(compareOriginal(closed, *parsed), "source.correspondence");
+      auto changed = source;
+      changed.insert(changed.find("#[site("), "let unrelated@P=x+x;");
+      auto updated =
+          take(prepareOriginal(take(zkc::test::closeProtocolDeployment(
+              take(checked(changed)), "m::Demo"))));
+      require(updated.bytes().contains(native),
+              "unrelated statement renamed a structured label");
+    });
+  }
+  cases.run("labelled value selection uses an explicit binding", [&] {
+    take(checked(R"(
+      protocol Pick roles(P,V)(choice:bool@(P,V))->(result:bool@(P,V)){
+        let result={
+          #[site(choose)] let selected=if choice roles(P,V){true}else{false};
+          selected
+        };
+        return result;
+      }
+    )"));
+  });
+  cases.run("an attributed final statement cannot silently discard a value",
+            [&] {
+              refuses(checked(R"(
+      protocol Pick roles(P,V)(choice:bool@(P,V))->(result:bool@(P,V)){
+        let result={
+          #[site(choose)] if choice roles(P,V){true}else{false}
+        };
+        return result;
+      }
+    )"),
+                      "source.type");
+            });
+  for (unsigned mutation = 0; mutation < 5; ++mutation) {
+    cases.run("authored site witness mutation " + Twine(mutation), [&] {
+      auto project = take(checked((header + R"(
+        #[site(first)] let a=coins.draw();
+        #[site(second)] let b=coins.draw();
+        let c=coins.draw();
+        return ();
+      })")
+                                      .str()));
+      cantFail(checkScopedElaboration(project));
+      auto declaration =
+          llvm::find_if(project.declarations(),
+                        [](const auto &d) { return d.name == "Round"; });
+      auto &body = const_cast<Body &>(*declaration->body);
+      std::vector<Operation *> queries;
+      for (auto &operation : body.operations)
+        if (std::holds_alternative<ServiceQuery>(operation.action))
+          queries.push_back(&operation);
+      require(queries.size() == 3, "missing query occurrences");
+      if (mutation == 0 || mutation == 4)
+        std::swap(queries[0]->site, queries[1]->site);
+      if (mutation == 1)
+        queries[0]->site.reset();
+      if (mutation == 2)
+        queries[2]->site = "added";
+      if (mutation == 3)
+        queries[1]->site = queries[0]->site;
+      if (mutation == 4)
+        for (auto *query : queries)
+          query->expression.reset();
+      auto error = checkScopedElaboration(project);
+      require(bool(error), "candidate labels bypassed authored site replay");
+      require(
+          StringRef(toString(std::move(error))).contains("source.site-witness"),
+          "site mutation reached the wrong witness boundary");
+    });
+  }
+  for (unsigned mutation = 0; mutation < 2; ++mutation) {
+    cases.run("inferred site witness mutation " + Twine(mutation), [&] {
+      CaptureOptions options;
+      options.format = "zkc-layout";
+      auto source = take(capture({{"m", R"(module m
+domain F = field("bls12-381.fr")
+protocol Draw roles(P, V)(coins: Random<F> @V) -> bool @V:
+    first <- coins.draw()
+    second <- coins.draw()
+    return true
+)",
+                                   "inferred-sites.zkc"}},
+                                 options));
+      auto project = take(analyze(source).checkedProject());
+      cantFail(checkScopedElaboration(project));
+      auto declaration =
+          llvm::find_if(project.declarations(),
+                        [](const auto &d) { return d.name == "Draw"; });
+      auto &body = const_cast<Body &>(*declaration->body);
+      std::vector<Operation *> queries;
+      for (auto &operation : body.operations)
+        if (std::holds_alternative<ServiceQuery>(operation.action))
+          queries.push_back(&operation);
+      require(queries.size() == 2 && queries[0]->site == "first" &&
+                  queries[1]->site == "second",
+              "inferred labels missing");
+      if (mutation == 0)
+        std::swap(queries[0]->site, queries[1]->site);
+      else
+        queries[0]->site.reset();
+      auto error = checkScopedElaboration(project);
+      require(bool(error), "inferred labels bypassed source replay");
+      require(
+          StringRef(toString(std::move(error))).contains("source.site-witness"),
+          "inferred site mutation reached the wrong witness boundary");
+    });
+  }
+  for (bool oracle : {false, true})
+    for (bool explicitLabel : {false, true})
+      for (bool live : {false, true})
+        for (unsigned mutation = 0; mutation < 3; ++mutation)
+          for (unsigned metadata = 0; metadata < 4; ++metadata) {
+            if (oracle && mutation == 2)
+              continue;
+            cases.run(
+                Twine("built-in query source obligation oracle=") +
+                    Twine(oracle) + " explicit=" + Twine(explicitLabel) +
+                    " live=" + Twine(live) + " mutation=" + Twine(mutation) +
+                    " metadata=" + Twine(metadata),
+                [=] {
+                  CaptureOptions options;
+                  options.format = oracle ? "zkc" : "zkc-layout";
+                  std::string source;
+                  if (oracle)
+                    source = R"(module m;
+domain F=field("bls12-381.fr");
+type Fixed<T:Type+Copy+Drop,N:nat>=builtin("oracle.table",T,N);
+type Oracle<K:OracleKind>=builtin("oracle",K);
+type O=Oracle<Fixed<F,16>>;
+oracle def Identity(source:O)->O {
+  query(position:index) {
+    let alias=source;
+)" + std::string(explicitLabel ? "#[site(first)] " : "") +
+                             R"(
+    let unused <- oracle.query(alias,position);
+    let answer <- query source at position;
+    return )" + (live ? "unused" : "answer") +
+                             R"(;
+  }
+}
+)";
+                  else
+                    source = R"(module m
+domain F = field("bls12-381.fr")
+type Fixed<T: Type + Copy + Drop, N: nat> = builtin("oracle.table", T, N)
+type Oracle<K: OracleKind> = builtin("oracle", K)
+type Word = Oracle<Fixed<F, 16>>
+protocol Read roles(P, V)(x: F @P, word: Word @P -> V, position: index @V) -> F @V:
+)" + std::string(explicitLabel ? "    #[site(first)]\n" : "") +
+                             R"(    unused <- query word at position
+    answer <- query word at position
+    return )" + (live ? "unused\n" : "answer\n");
+                  auto captured = take(
+                      capture({{"m", source, "query-sites.zkc"}}, options));
+                  auto project = take(analyze(captured).checkedProject());
+                  cantFail(checkScopedElaboration(project));
+                  auto declaration =
+                      llvm::find_if(project.declarations(), [&](const auto &d) {
+                        return d.name == (oracle ? "Identity" : "Read");
+                      });
+                  require(declaration != project.declarations().end() &&
+                              declaration->body,
+                          "missing query body");
+                  auto &body = const_cast<Body &>(*declaration->body);
+                  auto query =
+                      llvm::find_if(body.operations, [&](const auto &op) {
+                        return op.site == (explicitLabel ? "first" : "unused");
+                      });
+                  require(query != body.operations.end() && query->expression &&
+                              (oracle
+                                   ? std::holds_alternative<OracleSourceQuery>(
+                                         query->action)
+                                   : std::holds_alternative<OracleQuery>(
+                                         query->action)),
+                          "missing authored built-in query");
+                  auto expression = *query->expression;
+                  if (metadata & 1)
+                    query->expression.reset();
+                  if (metadata & 2)
+                    body.expressionValues.erase(expression);
+                  if (mutation == 0) {
+                    query->action =
+                        MathValue{MathematicalIdentity::FieldConstant, {}, "0"};
+                    query->site.reset();
+                  } else if (mutation == 1) {
+                    body.operations.erase(query);
+                  } else {
+                    require(body.inputs != 0, "missing x input");
+                    query->action = Exchange{0, 1, ValueId{0}};
+                  }
+                  auto error = checkScopedElaboration(project);
+                  require(bool(error), "authored query obligation disappeared");
+                  auto diagnostic = toString(std::move(error));
+                  require(
+                      StringRef(diagnostic).contains("source.site-witness"),
+                      "query mutation reached the wrong witness boundary: " +
+                          diagnostic);
+                });
+          }
+  for (bool oracle : {false, true})
+    for (unsigned aliases = 0; aliases < 3; ++aliases)
+      for (bool position : {false, true})
+        for (bool hint : {false, true})
+          cases.run(
+              "query operand witness oracle=" + Twine(oracle) +
+                  " aliases=" + Twine(aliases) +
+                  " position=" + Twine(position) + " hint=" + Twine(hint),
+              [=] {
+                std::string source = R"(
+                        type Fixed<T:Type+Copy+Drop,N:nat>=builtin("oracle.table",T,N);
+                        type Oracle<K:OracleKind>=builtin("oracle",K);
+                        type O=Oracle<Fixed<F,16>>;
+                      )";
+                source += oracle ? R"(
+                        oracle def Read(source:O,other:O,alternate:index)->O {
+                          query(position:index) {
+                      )"
+                                 : R"(
+                        protocol Read roles(P,V)(source:O@P->V,other:O@P->V,
+                          position:index@V,alternate:index@V)->(result:F@V){
+                      )";
+                for (unsigned i = 0; i < aliases; ++i)
+                  source += "let alias" + std::to_string(i) + "=" +
+                            (i ? "alias" + std::to_string(i - 1) : "source") +
+                            ";";
+                source += "let answer <- query " +
+                          (aliases ? "alias" + std::to_string(aliases - 1)
+                                   : "source") +
+                          " at position; return answer;}";
+                if (oracle)
+                  source += "}";
+                auto project = take(checked(source));
+                cantFail(checkScopedElaboration(project));
+                auto declaration =
+                    llvm::find_if(project.declarations(), [](const auto &decl) {
+                      return decl.name == "Read";
+                    });
+                require(declaration != project.declarations().end() &&
+                            declaration->body,
+                        "missing query operand fixture");
+                auto &body = const_cast<Body &>(*declaration->body);
+                auto operation =
+                    llvm::find_if(body.operations, [](const auto &op) {
+                      return std::holds_alternative<OracleQuery>(op.action) ||
+                             std::holds_alternative<OracleSourceQuery>(
+                                 op.action);
+                    });
+                require(operation != body.operations.end(),
+                        "missing authored query action");
+                if (!hint) {
+                  operation->expression.reset();
+                  cantFail(checkScopedElaboration(project));
+                }
+                if (oracle) {
+                  auto &query = std::get<OracleSourceQuery>(operation->action);
+                  if (position)
+                    query.position = ValueId{2};
+                  else
+                    query.source = 1;
+                } else {
+                  auto &query = std::get<OracleQuery>(operation->action);
+                  if (position)
+                    query.position = ValueId{3};
+                  else
+                    query.handle = ValueId{1};
+                }
+                auto error = checkScopedElaboration(project);
+                require(bool(error), "query operand replacement passed");
+                auto diagnostic = toString(std::move(error));
+                require(
+                    StringRef(diagnostic).contains("source.binding-witness"),
+                    "wrong query operand boundary: " + diagnostic);
+              });
+  for (bool oracle : {false, true})
+    for (unsigned aliases : {1u, 2u})
+      for (bool position : {false, true})
+        for (bool hint : {false, true})
+          cases.run(
+              "coordinated query alias oracle=" + Twine(oracle) +
+                  " aliases=" + Twine(aliases) +
+                  " position=" + Twine(position) + " hint=" + Twine(hint),
+              [=] {
+                std::string source = R"(
+              type Fixed<T:Type+Copy+Drop,N:nat>=builtin("oracle.table",T,N);
+              type Oracle<K:OracleKind>=builtin("oracle",K);
+              type O=Oracle<Fixed<F,16>>;
+            )";
+                source +=
+                    oracle
+                        ? "oracle def "
+                          "Read(source:O,other:O,alternate:index)->O{"
+                          "query(position:index){"
+                        : "protocol Read "
+                          "roles(P,V)(source:O@P->V,other:O@P->V,"
+                          "position:index@V,alternate:index@V)->(result:F@V){";
+                for (unsigned i = 0; i < aliases; ++i)
+                  source += "let alias" + std::to_string(i) + "=" +
+                            (i          ? "alias" + std::to_string(i - 1)
+                             : position ? "position"
+                                        : "source") +
+                            ";";
+                auto name = "alias" + std::to_string(aliases - 1);
+                source += "let answer <- query " +
+                          (position ? "source" : name) + " at " +
+                          (position ? name : "position") + ";return answer;}";
+                if (oracle)
+                  source += "}";
+                auto project = take(checked(source));
+                cantFail(checkScopedElaboration(project));
+                auto declaration =
+                    llvm::find_if(project.declarations(), [](const auto &decl) {
+                      return decl.name == "Read";
+                    });
+                require(declaration != project.declarations().end() &&
+                            declaration->body,
+                        "missing coordinated alias fixture");
+                auto &body = const_cast<Body &>(*declaration->body);
+                if (!hint) {
+                  for (auto &op : body.operations)
+                    if (std::holds_alternative<Projection>(op.action))
+                      op.expression.reset();
+                  cantFail(checkScopedElaboration(project));
+                }
+                auto query = llvm::find_if(body.operations, [](const auto &op) {
+                  return std::holds_alternative<OracleQuery>(op.action) ||
+                         std::holds_alternative<OracleSourceQuery>(op.action);
+                });
+                require(query != body.operations.end(), "missing query");
+                unsigned changed = 0;
+                for (auto &op : body.operations) {
+                  if (changed == aliases)
+                    break;
+                  auto *projection = std::get_if<Projection>(&op.action);
+                  if (!projection || !projection->path.empty())
+                    continue;
+                  require(op.results.size() == 1, "missing alias result");
+                  if (!changed)
+                    projection->input =
+                        ValueId{position ? (oracle ? 2u : 3u) : 1u};
+                  auto useName = "alias" + std::to_string(changed);
+                  auto useSpan = query->span;
+                  useSpan.begin = prelude.size() + source.rfind(useName);
+                  useSpan.end = useSpan.begin + useName.size();
+                  op.span = useSpan;
+                  body.values[op.results.front().index].span = useSpan;
+                  if (!hint)
+                    op.expression.reset();
+                  ++changed;
+                }
+                require(changed == aliases, "missing alias projections");
+                if (oracle && !position)
+                  std::get<OracleSourceQuery>(query->action).source = 1;
+                // Protocol retains the exact mapped alias handle/position.
+                // Oracle source indices and identity chains are changed
+                // together above.
+                auto error = checkScopedElaboration(project);
+                require(bool(error),
+                        "coordinated query alias redirection passed");
+                auto diagnostic = toString(std::move(error));
+                require(
+                    StringRef(diagnostic).contains("source.binding-witness") &&
+                        StringRef(diagnostic)
+                            .contains("binding occurrence coverage differs"),
+                    diagnostic);
+              });
+  for (unsigned mutation = 0; mutation < 3; ++mutation)
+    cases.run("ordered Local call site control " + Twine(mutation), [=] {
+      CaptureOptions options;
+      options.format = "zkc-layout";
+      auto captured = take(capture({{"m", R"(module m
+local def keep(value: bool) -> bool:
+    return value
+protocol Run roles(P)(value: bool @P) -> bool @P:
+    result <- keep(value)
+    return result
+)",
+                                     "local-sites.zkc"}},
+                                   options));
+      auto project = take(analyze(captured).checkedProject());
+      cantFail(checkScopedElaboration(project));
+      auto declaration =
+          llvm::find_if(project.declarations(),
+                        [](const auto &d) { return d.name == "Run"; });
+      require(declaration != project.declarations().end() && declaration->body,
+              "missing Local caller body");
+      auto &body = const_cast<Body &>(*declaration->body);
+      auto call = llvm::find_if(body.operations, [](const auto &op) {
+        return std::holds_alternative<HelperCall>(op.action);
+      });
+      require(call != body.operations.end() && !call->site && call->binding,
+              "ordered Local call must have no protocol site");
+      if (mutation == 0) {
+        call->expression.reset();
+        cantFail(checkScopedElaboration(project));
+      } else {
+        call->site = "result";
+        if (mutation == 2)
+          call->action = Exchange{0, 0, ValueId{0}};
+        auto error = checkScopedElaboration(project);
+        require(bool(error), "Local call acquired a protocol site");
+        require(StringRef(toString(std::move(error)))
+                    .contains("source.site-witness"),
+                "Local site mutation reached the wrong boundary");
+      }
+    });
   cases.run("native construction selects labelled challenge deliveries", [&] {
     auto project = take(checked(R"(
       protocol Proof roles(P,V)(x:F@P,coins:Random<F>@V)->(ok:bool@V){
@@ -252,7 +727,6 @@ protocol Gated<C: QueryLibrary> roles(P, V)(coins: Random<Q> @V) -> bool @V:
       "#[site(a)] let c=coins.draw()+1;",
       "#[site(a)] let c=send V->P(coins.draw());",
       "#[site(a)] require @V true;",
-      "#[site(a)] for _ in 0..n roles(P,V) max 2 {let r=send P->V(x);}",
       "#[site(a)] let c=coins.draw(); #[site(a)] let r=send V->P(c);",
       "#[site(a)] let r=send P->V(x); for _ in 0..n roles(P,V) max 2 "
       "{#[site(a)] let c=coins.draw();}",
@@ -267,214 +741,62 @@ protocol Gated<C: QueryLibrary> roles(P, V)(coins: Random<Q> @V) -> bool @V:
             "source.site");
   });
   for (bool oracle : {false, true})
-    for (unsigned aliases = 0; aliases < 3; ++aliases)
-      for (bool position : {false, true})
-        for (bool hint : {false, true})
-          cases.run(
-              "query operand witness oracle=" + Twine(oracle) +
-                  " aliases=" + Twine(aliases) +
-                  " position=" + Twine(position) + " hint=" + Twine(hint),
-              [=] {
-                std::string source = R"(
-                        type Fixed<T:Type+Copy+Drop,N:nat>=builtin("oracle.table",T,N);
-                        type Oracle<K:OracleKind>=builtin("oracle",K);
-                        type O=Oracle<Fixed<F,16>>;
-                      )";
-                source += oracle ? R"(
-                        oracle def Read(source:O,other:O,alternate:index)->O {
-                          query(position:index) {
-                      )"
-                                 : R"(
-                        protocol Read roles(P,V)(source:O@P->V,other:O@P->V,
-                          position:index@V,alternate:index@V)->(result:F@V){
-                      )";
-                for (unsigned i = 0; i < aliases; ++i)
-                  source += "let alias" + std::to_string(i) + "=" +
-                            (i ? "alias" + std::to_string(i - 1) : "source") +
-                            ";";
-                source += "let answer <- query " +
-                          (aliases ? "alias" + std::to_string(aliases - 1)
-                                   : "source") +
-                          " at position; return answer;}";
-                if (oracle)
-                  source += "}";
-                auto project = take(checked(source));
-                cantFail(checkScopedElaboration(project));
-                auto declaration =
-                    llvm::find_if(project.declarations(), [](const auto &decl) {
-                      return decl.name == "Read";
-                    });
-                require(declaration != project.declarations().end() &&
-                            declaration->body,
-                        "missing query operand fixture");
-                auto &body = const_cast<Body &>(*declaration->body);
-                auto operation =
-                    llvm::find_if(body.operations, [](const auto &op) {
-                      return std::holds_alternative<OracleQuery>(op.action) ||
-                             std::holds_alternative<OracleSourceQuery>(
-                                 op.action);
-                    });
-                require(operation != body.operations.end(),
-                        "missing authored query action");
-                if (!hint) {
-                  operation->expression.reset();
-                  cantFail(checkScopedElaboration(project));
-                }
-                if (oracle) {
-                  auto &query = std::get<OracleSourceQuery>(operation->action);
-                  if (position)
-                    query.position = ValueId{2};
-                  else
-                    query.source = 1;
-                } else {
-                  auto &query = std::get<OracleQuery>(operation->action);
-                  if (position)
-                    query.position = ValueId{3};
-                  else
-                    query.handle = ValueId{1};
-                }
-                auto error = checkScopedElaboration(project);
-                require(bool(error), "query operand replacement passed");
-                auto diagnostic = toString(std::move(error));
-                require(
-                    StringRef(diagnostic).contains("source.binding-witness"),
-                    "wrong query operand boundary: " + diagnostic);
-              });
-  for (bool oracle : {false, true})
-    for (unsigned aliases : {1u, 2u})
-      for (bool position : {false, true})
-        for (bool hint : {false, true})
-          cases.run(
-              "coordinated query alias oracle=" + Twine(oracle) +
-                  " aliases=" + Twine(aliases) +
-                  " position=" + Twine(position) + " hint=" + Twine(hint),
-              [=] {
-                std::string source = R"(
-              type Fixed<T:Type+Copy+Drop,N:nat>=builtin("oracle.table",T,N);
-              type Oracle<K:OracleKind>=builtin("oracle",K);
-              type O=Oracle<Fixed<F,16>>;
-            )";
-                source +=
-                    oracle
-                        ? "oracle def "
-                          "Read(source:O,other:O,alternate:index)->O{"
-                          "query(position:index){"
-                        : "protocol Read "
-                          "roles(P,V)(source:O@P->V,other:O@P->V,"
-                          "position:index@V,alternate:index@V)->(result:F@V){";
-                for (unsigned i = 0; i < aliases; ++i)
-                  source += "let alias" + std::to_string(i) + "=" +
-                            (i          ? "alias" + std::to_string(i - 1)
-                             : position ? "position"
-                                        : "source") +
-                            ";";
-                auto name = "alias" + std::to_string(aliases - 1);
-                source += "let answer <- query " +
-                          (position ? "source" : name) + " at " +
-                          (position ? name : "position") + ";return answer;}";
-                if (oracle)
-                  source += "}";
-                auto project = take(checked(source));
-                cantFail(checkScopedElaboration(project));
-                auto declaration =
-                    llvm::find_if(project.declarations(), [](const auto &decl) {
-                      return decl.name == "Read";
-                    });
-                require(declaration != project.declarations().end() &&
-                            declaration->body,
-                        "missing coordinated alias fixture");
-                auto &body = const_cast<Body &>(*declaration->body);
-                if (!hint) {
-                  for (auto &op : body.operations)
-                    if (std::holds_alternative<Projection>(op.action))
-                      op.expression.reset();
-                  cantFail(checkScopedElaboration(project));
-                }
-                auto query = llvm::find_if(body.operations, [](const auto &op) {
-                  return std::holds_alternative<OracleQuery>(op.action) ||
-                         std::holds_alternative<OracleSourceQuery>(op.action);
-                });
-                require(query != body.operations.end(), "missing query");
-                unsigned changed = 0;
-                for (auto &op : body.operations) {
-                  if (changed == aliases)
-                    break;
-                  auto *projection = std::get_if<Projection>(&op.action);
-                  if (!projection || !projection->path.empty())
-                    continue;
-                  require(op.results.size() == 1, "missing alias result");
-                  if (!changed)
-                    projection->input =
-                        ValueId{position ? (oracle ? 2u : 3u) : 1u};
-                  auto useName = "alias" + std::to_string(changed);
-                  auto useSpan = query->span;
-                  useSpan.begin = prelude.size() + source.rfind(useName);
-                  useSpan.end = useSpan.begin + useName.size();
-                  op.span = useSpan;
-                  body.values[op.results.front().index].span = useSpan;
-                  if (!hint)
-                    op.expression.reset();
-                  ++changed;
-                }
-                require(changed == aliases, "missing alias projections");
-                if (oracle && !position)
-                  std::get<OracleSourceQuery>(query->action).source = 1;
-                // Protocol retains the exact mapped alias handle/position.
-                // Oracle source indices and identity chains are changed
-                // together above.
-                auto error = checkScopedElaboration(project);
-                require(bool(error),
-                        "coordinated query alias redirection passed");
-                auto diagnostic = toString(std::move(error));
-                require(
-                    StringRef(diagnostic).contains("source.binding-witness"),
-                    diagnostic);
-              });
-  for (bool oracle : {false, true})
-    cases.run(
-        "unauthored query cannot hide behind a retained source " +
-            Twine(oracle),
-        [=] {
-          std::string source = R"(
+    for (bool unlabelled : {false, true})
+      cases.run(
+          "unauthored query cannot hide behind a retained source " +
+              Twine(oracle) + " unlabelled=" + Twine(unlabelled),
+          [=] {
+            std::string source = R"(
                   type Fixed<T:Type+Copy+Drop,N:nat>=builtin("oracle.table",T,N);
                   type Oracle<K:OracleKind>=builtin("oracle",K);
                   type O=Oracle<Fixed<F,16>>;
                 )";
-          source += oracle ? "oracle def Read(source:O)->O{"
-                             "query(position:index){"
-                           : "protocol Read roles(P,V)(source:O@P->V,"
-                             "position:index@V)->(result:F@V){";
-          source += "let answer <- query source at position;return answer;}";
-          if (oracle)
-            source += "}";
-          auto project = take(checked(source));
-          cantFail(checkScopedElaboration(project));
-          auto declaration =
-              llvm::find_if(project.declarations(), [](const auto &decl) {
-                return decl.name == "Read";
-              });
-          require(declaration != project.declarations().end() &&
-                      declaration->body,
-                  "missing query coverage fixture");
-          auto &body = const_cast<Body &>(*declaration->body);
-          auto query = llvm::find_if(body.operations, [](const auto &op) {
-            return std::holds_alternative<OracleQuery>(op.action) ||
-                   std::holds_alternative<OracleSourceQuery>(op.action);
+            source += oracle ? "oracle def Read(source:O)->O{"
+                               "query(position:index){"
+                             : "protocol Read roles(P,V)(source:O@P->V,"
+                               "position:index@V)->(result:F@V){";
+            source += "let answer <- query source at position;return answer;}";
+            if (oracle)
+              source += "}";
+            auto project = take(checked(source));
+            cantFail(checkScopedElaboration(project));
+            auto declaration =
+                llvm::find_if(project.declarations(), [](const auto &decl) {
+                  return decl.name == "Read";
+                });
+            require(declaration != project.declarations().end() &&
+                        declaration->body,
+                    "missing query coverage fixture");
+            auto &body = const_cast<Body &>(*declaration->body);
+            auto query = llvm::find_if(body.operations, [](const auto &op) {
+              return std::holds_alternative<OracleQuery>(op.action) ||
+                     std::holds_alternative<OracleSourceQuery>(op.action);
+            });
+            require(query != body.operations.end() &&
+                        query->results.size() == 1,
+                    "missing query producer");
+            auto extra = *query;
+            auto result = body.values.at(extra.results.front().index);
+            extra.results = {ValueId{uint32_t(body.values.size())}};
+            extra.expression.reset();
+            if (unlabelled) {
+              extra.site.reset();
+              // This valid source span names an input, not a query. The honest
+              // query and its expression association remain unchanged.
+              extra.span = declaration->inputs.front().span;
+              result.span = extra.span;
+            }
+            body.values.push_back(std::move(result));
+            body.operations.push_back(std::move(extra));
+            auto error = checkScopedElaboration(project);
+            require(bool(error), "unauthored query was accepted");
+            auto diagnostic = toString(std::move(error));
+            // Oracle event-label coverage may reject the duplicate before the
+            // ordinary value checker reaches its reverse occurrence comparison.
+            require(namesIdentifier(diagnostic, oracle && !unlabelled
+                                                    ? "source.site-witness"
+                                                    : "source.binding-witness"),
+                    diagnostic);
           });
-          require(query != body.operations.end() && query->results.size() == 1,
-                  "missing query producer");
-          auto extra = *query;
-          auto result = body.values.at(extra.results.front().index);
-          extra.results = {ValueId{uint32_t(body.values.size())}};
-          extra.expression.reset();
-          body.values.push_back(std::move(result));
-          body.operations.push_back(std::move(extra));
-          auto error = checkScopedElaboration(project);
-          require(bool(error), "unauthored query was accepted");
-          auto diagnostic = toString(std::move(error));
-          require(StringRef(diagnostic)
-                      .contains("query has no authored occurrence"),
-                  diagnostic);
-        });
   return cases.result();
 }

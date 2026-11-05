@@ -78,6 +78,33 @@ void refused(Error error) {
   auto message = toString(std::move(error));
   require(message.find("source.claim.export") != std::string::npos, message);
 }
+const json::Array &claimRoute(const json::Value &value) {
+  auto *route = value.getAsArray();
+  require(route && !route->empty(), "claim route must be a nonempty array");
+  auto tag = (*route)[0].getAsString();
+  require(bool(tag), "claim route must have a string tag");
+  if (*tag == "input")
+    require(route->size() == 3, "input route must have three elements");
+  else if (*tag == "result" || *tag == "repeat_input" ||
+           *tag == "repeat_result")
+    require(route->size() == 4, "result route must have four elements");
+  else {
+    require(*tag == "pure" || *tag == "action" || *tag == "terminal",
+            "unexpected claim route tag");
+    require(route->size() == 6, "operation route must have six elements");
+    require(bool((*route)[5].getAsArray()), "route operands must be an array");
+  }
+  return *route;
+}
+bool routeHasTag(const json::Value &value, StringRef expected) {
+  const auto &route = claimRoute(value);
+  auto tag = *route[0].getAsString();
+  bool found = tag == expected;
+  if (tag == "pure" || tag == "action" || tag == "terminal")
+    for (const auto &operand : *route[5].getAsArray())
+      found = routeHasTag(operand, expected) || found;
+  return found;
+}
 std::string importedContracts(StringRef rootClause, StringRef childClause,
                               bool callChild = true) {
   return ("module claims;"
@@ -99,6 +126,15 @@ std::string importedContracts(StringRef rootClause, StringRef childClause,
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("claim route tags exclude descriptor text and include descendants", [] {
+    auto route = take(
+        json::parse(R"(["pure",{"text":"terminal"},[],0,0,[["input",0,0]]])"));
+    require(!routeHasTag(route, "terminal"),
+            "descriptor text was mistaken for a route tag");
+    route = take(json::parse(
+        R"(["pure",{},[],0,0,[["action",{},[],0,0,[["terminal",{},[],0,0,[["input",0,0]]]]]]])"));
+    require(routeHasTag(route, "terminal"), "nested terminal tag was missed");
+  });
   cases.run(
       "cardinality aliases and associated Scalar normalize request identity",
       [] {
@@ -1329,18 +1365,56 @@ int main() {
           if ((*row[1].getAsArray())[0] != json::Value("argument"))
             continue;
           for (const auto &value : *row[3].getAsArray()) {
-            const auto &route = *value.getAsArray();
+            const auto &route = claimRoute(value);
             require(route[0] != json::Value("terminal"),
                     "handoff discharged a Boolean Pending conversion");
             conversions += route[0] == json::Value("pure");
           }
         }
         require(conversions != 0, "identity lost its actual helper route");
+        // Selected Boolean composition is an actual Math helper. Its whole
+        // body needs an exact terminal-acceptance theorem; export does not
+        // prove that theorem or push acceptance through the helper's body.
         auto negated = editSource(fixture("components-local-pending"),
                                   "firstOk && secondOk && finished",
                                   "firstOk && secondOk && !finished");
-        auto rejected = take(prepareOriginal(
+        auto changed = take(prepareOriginal(
             take(closeSubject(take(check(negated)), "claims::Run"))));
+        auto changedBytes = take(exportSourceClaims(changed));
+        cantFail(checkSourceClaims(changed, changedBytes));
+        auto changedClaims = take(json::parse(changedBytes));
+        unsigned helperTerminals = 0;
+        for (const auto &value :
+             *changedClaims.getAsObject()->getArray("seams")) {
+          const auto &row = *value.getAsArray();
+          const auto &endpoint = *row[1].getAsArray();
+          if (endpoint[0] != json::Value("output") ||
+              endpoint[2] == json::Value("residual"))
+            continue;
+          for (const auto &value : *row[3].getAsArray()) {
+            const auto &route = claimRoute(value);
+            require(route[0] == json::Value("terminal"),
+                    "selected helper lost its exact theorem obligation");
+            ++helperTerminals;
+            require(route.size() == 6,
+                    "helper terminal route must have six elements");
+            for (const auto &operand : *route[5].getAsArray())
+              require(!routeHasTag(operand, "terminal"),
+                      "acceptance propagated implicitly through the helper");
+          }
+        }
+        require(helperTerminals != 0, "missing selected helper terminal");
+        require(changedBytes != bytes,
+                "changed selected helper retained the old claim association");
+        refused(checkSourceClaims(original, changedBytes));
+        refused(checkSourceClaims(changed, bytes));
+        // A direct negation of the Pending completion remains a forbidden
+        // terminal conversion, with no intervening helper theorem boundary.
+        auto direct =
+            editSource(fixture("components-local-pending"),
+                       "firstOk && secondOk && finished", "!finished");
+        auto rejected = take(prepareOriginal(
+            take(closeSubject(take(check(direct)), "claims::Run"))));
         refuses(exportSourceClaims(rejected), "component-seam-acceptance");
       });
   cases.run("multi-field Local conversion covers every output projection", [] {

@@ -50,6 +50,22 @@ paths that reach it. Intersecting identical explicit premises is a permitted
 conservative implementation: it may omit a common consequence whose derivations
 differ between branches. No fact from one branch alone may escape the join.
 
+In admitted selected mathematical `data.branch` arms, explicit immutable capture
+arguments retain the exact identities of their outer SSA operands. The mapping
+uses the arm ABI: alternative payload arguments first, followed by captures in
+actual operand order. It composes through nested arms and exact helper
+forwarding, including repeated captures of one actual value. Enclosing function
+formation premises therefore remain available for those same index, container
+and axis subjects in either arm. Captured constructor results also retain their
+independently derived cardinality; the shortcut for unknown function formals
+must not hide such results.
+
+This transport imports no condition, reached guard, callee precondition or
+arm-local premise. Alternative payloads and selected operation results do not
+acquire an outer operand's origin from this rule. Distinct equal-typed captures
+retain distinct identities; an index bound supplies no extent equality.
+Every capture hop consumes the caller's extraction work and dependency depth.
+
 Loop entry, recurrence and zero-trip results are separate subjects. A property
 of a callback result does not establish that property of the initial state or
 of a loop that never executes. A consumer requiring a loop invariant must
@@ -147,7 +163,15 @@ substitution, origin extraction, range transfers and extent comparison share
 that requirement.
 Native extraction memoization includes the consumed dependency depth. Reusing a
 shallow result cannot hide an over-depth path through a shared expression, an
-origin or a forwarded argument. A failed extraction charge produces Capacity
+origin or a forwarded argument. Normalization retains its consumed dependency
+depth as well as its value or forwarded argument position, including on cache
+hits. A forwarding summary retains the greatest depth needed to establish its
+mapping while preserving the shared helper graph's per-body path accounting.
+Continued cardinality, range and symbolic-source extraction starts at the
+retained depth. For example, a capture at depth 255 forwarding to an
+append at 256 cannot inspect its empty input at 257: the result is Capacity
+without evidence, even when the constructed count would otherwise be one.
+A failed extraction charge produces Capacity
 without a value, including when an unsigned argument otherwise admits the full
 word range.
 Optional callers may retain the ordered path. Mandatory formation checks report

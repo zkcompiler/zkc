@@ -33,8 +33,11 @@ public:
 /// Query scopes and work are separate from this reusable information. Every
 /// nested extraction and kernel query debits the caller's Work. Query depth
 /// starts at the caller's consumed interpretation depth (zero at a root);
-/// nested domain adapters must preserve it across the leaf boundary. Formation
-/// import seeds identities and type extents without deriving every formal.
+/// nested domain adapters must preserve it across the leaf boundary. Continued
+/// extraction also retains depth consumed by origin normalization,
+/// including cached capture and helper forwarding before expression analysis.
+/// Formation import seeds identities and type extents without deriving every
+/// formal.
 /// Helper observation charges depend on returned values, not unread body
 /// operations or cache warmth; recursive result caches live within a query.
 /// Formation assumptions come only from the original subjects' common helper,
@@ -66,6 +69,9 @@ public:
 
   /// Exact SSA forwarding only. Constructors/equal shapes retain their own
   /// origin, including distinct invocations of the same constructor helper.
+  /// Immutable data.branch captures forward to their actual outer operands,
+  /// through nested arms and helper aliases. Payload arguments and selected
+  /// results retain their own identities; conditions add no premises.
   facts::Result<mlir::Value> origin(mlir::Value, facts::Work &,
                                     unsigned depth = 0);
   /// Bounded demanded-expression analysis for ui64 literals, arguments, helper

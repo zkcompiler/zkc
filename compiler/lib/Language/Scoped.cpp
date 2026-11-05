@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "CallableConstraints.h"
 #include "Effects.h"
 #include "ScopedWitness.h"
 #include <algorithm>
@@ -27,14 +28,59 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
   const auto &expr = syntax.expressions[id];
   if (expr.kind == Expression::Kind::Name) {
     auto found = expr.binding ? scoped.find(*expr.binding) : scoped.end();
-    if (found == scoped.end()) {
+    if (found != scoped.end())
+      return found->second;
+    if (expr.binding) {
       fail("source.scoped", "expected a scoped parameter", expr.span);
       return {};
     }
-    return found->second;
+    auto selected = selectCallable(checker.types, checker.output.declarations,
+                                   inference->callees.at(id),
+                                   inference->arguments.at(id), expr.span);
+    if (!selected)
+      return {};
+    if (selected->signature.mode != signature.mode ||
+        selected->signature.inputs != signature.inputs ||
+        selected->signature.result != signature.result) {
+      fail("source.scoped",
+           "named callable signature differs from its receiver", expr.span);
+      return {};
+    }
+    if (!effectsWithin(checker.types, selected->effects,
+                       EffectSummary{signature.allowance}, expr.span)) {
+      fail("source.effect", "named callable exceeds its receiving allowance",
+           expr.span);
+      return {};
+    }
+    if (!chargeSelectedCallable(checker.types, *selected, expr.span))
+      return {};
+    auto source = std::make_shared<ScopedSource>();
+    source->owner = decl.id;
+    source->expression = id;
+    source->signature = signature;
+    source->named = std::make_shared<const SelectedCallable>(*selected);
+    unsigned witness = witnesses.sources.size();
+    witnesses.sources.push_back(std::move(source));
+    ScopedBinding binding{signature, {}, {}, {}, {}, expr.span, witness};
+    binding.named =
+        std::make_shared<const SelectedCallable>(std::move(*selected));
+    unsigned index = body.scopedBindings.size();
+    body.scopedBindings.push_back(std::move(binding));
+    return index;
   }
-  if (expr.kind != Expression::Kind::Lambda ||
-      depth > checker.work.limits.expressionDepth ||
+  if (expr.kind != Expression::Kind::Lambda) {
+    fail("source.scoped", "expected a scoped literal", expr.span);
+    return {};
+  }
+  return scopedComputation(id, signature, depth);
+}
+std::optional<unsigned>
+BodyChecker::scopedComputation(uint32_t id, const ScopedSignature &signature,
+                               unsigned depth) {
+  const auto &expr = syntax.expressions[id];
+  const bool selected =
+      expr.kind == Expression::Kind::And || expr.kind == Expression::Kind::Or;
+  if (depth > checker.work.limits.expressionDepth ||
       callDepth + 1 > checker.work.limits.callDepth) {
     fail("source.limit", "scoped computation depth exceeded", expr.span);
     return {};
@@ -54,7 +100,7 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
   }
   unsigned sourceIndex = witnesses.sources.size();
   witnesses.sources.push_back(std::move(source));
-  auto inputs = regionInputs(expr);
+  auto inputs = regionInputs(expr, selected);
   if (!inputs)
     return {};
   if (!inputs->writes.empty() || !inputs->services.empty()) {
@@ -146,24 +192,35 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
     binding.scopedCaptures.push_back(index);
     computation->scopedCaptures.push_back(capture.index);
   }
-  if (!inheritDomains(nested, inputs->domains, binding.domainCaptures))
+  if (!inheritDomains(nested, inputs->domains, binding.descriptorCaptures))
     return {};
   for (auto capture : inputs->domains)
-    computation->domainCaptures.push_back(capture.index);
+    computation->descriptorCaptures.push_back(capture.index);
   // Destructuring emits ordinary projections after every input is allocated.
   for (unsigned i = 0; i < parameters.size(); ++i)
     if (!nested.bindPattern(expr.payloads.front()[i], parameters[i]))
       return {};
-  const auto &region = syntax.bodies[expr.regions.front()];
-  auto result = nested.tail(region, signature.result, true);
+  // The receiving Local signature supplies a literal's ordered root.
+  // Implicit selected Math scopes never acquire Local action authority.
+  if (!selected && syntax.layoutSyntax &&
+      signature.mode == ScopedSignature::Mode::Local) {
+    const auto &region = syntax.bodies[expr.regions.front()];
+    if (region.results.size() == 1)
+      nested.callbackRoot = region.results.front().second;
+  }
+  const auto span =
+      selected ? expr.span : syntax.bodies[expr.regions.front()].span;
+  auto result = selected ? nested.expression(id, signature.result, depth + 1)
+                         : nested.tail(syntax.bodies[expr.regions.front()],
+                                       signature.result, true);
   if (!result && (!checked->stopped || checker.types.diagnostic))
     return {};
   if (result) {
-    if (!nested.use(*result, region.span))
+    if (!nested.use(*result, span))
       return {};
     checked->results.push_back(*result);
   }
-  if (!nested.finish(region.span))
+  if (!nested.finish(span))
     return {};
   if (!effectsWithin(checker.types, checked->effects,
                      EffectSummary{signature.allowance}, expr.span)) {
@@ -215,7 +272,8 @@ std::optional<ValueId> BodyChecker::invokeScoped(uint32_t id, unsigned depth) {
 bool Checker::retainScopedSources() {
   for (const auto &decl : output.declarations) {
     if ((!decl.body || !sources[decl.id.index]->resolved) &&
-        decl.kind != Declaration::Kind::Protocol)
+        decl.kind != Declaration::Kind::Protocol &&
+        !(decl.kind == Declaration::Kind::View && !decl.abstract))
       continue;
     auto source = std::make_shared<ScopedSource>();
     source->owner = decl.id;
@@ -226,6 +284,18 @@ bool Checker::retainScopedSources() {
     if (auto families = witnesses.notations.find(decl.id.index);
         families != witnesses.notations.end())
       source->notationFamilies = families->second;
+    if (auto enums = witnesses.enumTypes.find(decl.id.index);
+        enums != witnesses.enumTypes.end())
+      source->enumTypes = enums->second;
+    if (auto maxima = witnesses.repeatMaxima.find(decl.id.index);
+        maxima != witnesses.repeatMaxima.end())
+      source->repeatMaxima = maxima->second;
+    if (auto literals = witnesses.literals.find(decl.id.index);
+        literals != witnesses.literals.end())
+      source->literals = literals->second;
+    if (auto captures = witnesses.controlSnapshots.find(decl.id.index);
+        captures != witnesses.controlSnapshots.end())
+      source->controlSnapshots = captures->second;
     output.bodySources.emplace(decl.id.index, std::move(source));
   }
   for (const auto &decl : output.declarations) {
@@ -255,6 +325,18 @@ bool Checker::retainScopedSources() {
     if (auto families = witnesses.notations.find(source->owner.index);
         families != witnesses.notations.end())
       source->notationFamilies = families->second;
+    if (auto enums = witnesses.enumTypes.find(source->owner.index);
+        enums != witnesses.enumTypes.end())
+      source->enumTypes = enums->second;
+    if (auto maxima = witnesses.repeatMaxima.find(source->owner.index);
+        maxima != witnesses.repeatMaxima.end())
+      source->repeatMaxima = maxima->second;
+    if (auto literals = witnesses.literals.find(source->owner.index);
+        literals != witnesses.literals.end())
+      source->literals = literals->second;
+    if (auto captures = witnesses.controlSnapshots.find(source->owner.index);
+        captures != witnesses.controlSnapshots.end())
+      source->controlSnapshots = captures->second;
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)
       return false;

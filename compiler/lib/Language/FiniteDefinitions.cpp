@@ -28,7 +28,7 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
   if ((decl.kind != Declaration::Kind::Math &&
        decl.kind != Declaration::Kind::Local) ||
       (definition->mode == instances::FiniteMode::Math) != mathematical ||
-      decl.domainInputs.size() != 1 || decl.outputs.size() != 1 ||
+      decl.descriptorInputs.size() != 1 || decl.outputs.size() != 1 ||
       !decl.services.empty())
     return refuse("finite definition requires one domain and an ordinary "
                   "function signature of the selected mode");
@@ -39,7 +39,11 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
   if (decl.inputs.size() != unsigned(fold) ||
       decl.scopedInputs.size() != (filtered ? 2u : 1u))
     return refuse("finite data or scoped input count differs");
-  const auto &item = decl.domainInputs.front().item;
+  auto *finiteItem =
+      finiteDescriptorItem(decl.descriptorInputs.front().contract);
+  if (!finiteItem)
+    return refuse("finite definition requires Finite with one item parameter");
+  const auto &item = *finiteItem;
   const auto &output = decl.outputs.front().type;
   Type element = output;
   if (fold) {
@@ -113,8 +117,13 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
          decl.span});
   }
   body.inputs = operands.size();
-  body.domainBindings.push_back(
-      {DomainBinding::Kind::Parameter, item, {}, {}, 0, 0, decl.span});
+  body.descriptorBindings.push_back({DescriptorBinding::Kind::Parameter,
+                                     decl.descriptorInputs.front().contract,
+                                     {},
+                                     {},
+                                     0,
+                                     0,
+                                     decl.span});
   for (unsigned i = 0; i < decl.scopedInputs.size(); ++i) {
     const auto &parameter = decl.scopedInputs[i];
     body.scopedBindings.push_back(

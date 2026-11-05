@@ -78,7 +78,7 @@ FormatResult format(const Snapshot &snapshot, Budget budget,
     } else if (value == ")" || value == "]" || value == "}") {
       spaces[i] = 0;
     } else if (value == "=" || value == "<-" || value == ":=" ||
-               value == "->") {
+               value == "->" || value == "=>") {
       spaces[i] = 1;
       after(i, 1);
     }

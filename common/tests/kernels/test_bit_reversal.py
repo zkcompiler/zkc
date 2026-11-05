@@ -36,7 +36,7 @@ def element(degree, n):
 @pytest.mark.parametrize('field', sorted(FIELDS))
 def test_bit_reversal(toolchain, journal, directory, field):
     degree = FIELDS[field]
-    entry = Entry(toolchain, journal, directory, SOURCE.format(field=field), library_modules(*core_packages()))
+    entry = Entry(toolchain, journal, directory, SOURCE.format(field=field), library_modules(*core_packages('zkc')))
     for bits in (0, 1, 3, 5):
         n = 1 << bits
         xs = [element(degree, 7 + i) for i in range(n)]

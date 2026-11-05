@@ -37,6 +37,27 @@ No independent formal consumer is changed by this native ownership migration.
 
 ## Contract inventory
 
+The [View and Finite source contract](language/layout-execution.md#structural-view-and-finite-consumers)
+separates fixed callable mode from installed descriptor family and complete
+ordered typed parameter contracts. The authoritative source graph retains those
+contracts on every parameter/node, independently typed child edges and one
+declaration result contract. Inference, substitution, conformance, closure,
+identity, source replay and finite Translation consume the same graph; Finite
+item extraction checks family and arity explicitly. Frontend owns source signature classification, retained typed recipes,
+lexical invocation provenance and authored replay. Replay obligations follow
+immutable authored declarations, including bodyless members; ordinary bodies
+and exact returns replay for explicit and inferred results. Descriptor port
+modifiers refuse before normalization, and constructor associations require
+the Finite result category. Ordinary View calls retain Math native ports in
+Local bodies/callbacks, checked by both emission and comparison. IR's existing
+finite operations own native enumeration/admission; finite lowering and source/native
+comparison consume the same whole retained DAG. The existing
+`frontendConstructors` catalog table adds the closed `FiniteDescriptor` form;
+Python generation, native TableGen/Contracts and Rust catalog validation consume
+it at version `0`. Independent Lean View/category/recipe readers and
+interpretation remain a parent migration gate. Native checks do not establish
+that gate, typed construction families or Constraint View support.
+
 The [distributed record source contract](language/records.md) extends checked
 Language signatures and written type nodes with ordered role applications and
 recursive field placements. The source producer retains private/empty fields
@@ -230,7 +251,7 @@ review loops for this unit. Formal interpretation is a later independent task.
 | Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Typed route implemented; existing reached schedule, stops and budgets retained |
 | Restricted record custody and succession | [Source restrictions](language/definitions.md), [distributed records](language/records.md), [translation](language/translation.md), Language / IR | Checked instantiated record layout and consuming home APIs → independent interface readers, actual-body comparator, native resource-origin analysis, native proof admission and unit backend | Explicit linear/affine ordinary and fixed-roster distributed wrappers retain nominal custody, including zero storage. Catalog-associated inspect_record/repack_record preserve exact roots, ordered role maps, placed Copy/Drop payloads, authored lexical authority and child-to-SSA provenance across helpers and existing repeats; actual comparison checks every fragment pass. Consume/create replacements still refuse. Source-selected control integration and independent formal-consumer migration remain separate work |
 | Native branch origin frames | [Native occurrences](ir/construction.md#native-occurrence-encoding), IR / Contracts | Typed native origin and byte writer → native readers and independent format/runtime consumers | Four-field branch frames retain declared arm labels. C++ and Rust typed/byte readers implement the shape; source-origin producer integration and independent formal-reader migration remain separate |
-| Selected Protocol and Math control | [Selected regions](ir/control.md#selected-protocol-and-mathematical-regions), IR / Protocol and Data | Registered closed arms and derived common-input requirements → native admission, interaction consumers, actual projection/correspondence and exact resource origins | Protocol arms retain native Exec outlining; selected Math uses recursive computation recipes, arm-local scoped conditional/match bodies and independent actual-candidate comparison through normalization and realization. Source emission, common-input export and SDK admission are integrated for the supported profile and paired with fresh compiled packages; Program and Rust selected execution are implemented. Formal interpretation is listed under formal reader status. Oracle analyses retain arm coordinates. Native proof construction, reverse request planning, native codec construction and oracle realization refuse selected Protocol or Math control in the selected entry's [static closure](ir/control.md#analyses-and-construction): its dormant arms, applications, helper and local calls and referenced declarations. A declaration outside that closure, such as an uncalled helper or protocol, does not gate the entry |
+| Selected Protocol and Math control | [Selected regions](ir/control.md#selected-protocol-and-mathematical-regions), IR / Protocol and Data | Registered closed arms and derived common-input requirements → native admission, interaction consumers, actual projection/correspondence and exact resource origins | Source and native independently forward actual completed exchange components on normal paths, then congruent admitted total computations; this grants no equality to nonreceivers, statement authority or adversarial-honesty premise. Protocol arms retain native Exec outlining; selected Math uses recursive computation recipes, arm-local scoped conditional/match bodies and independent actual-candidate comparison through normalization and realization. Source emission, common-input export and SDK admission are integrated for the supported profile and paired with fresh compiled packages; Program and Rust selected execution are implemented. Formal interpretation is listed under formal reader status; no formal migration of the communication-derived rule is claimed. Oracle analyses retain arm coordinates. Native proof construction, reverse request planning, native codec construction and oracle realization refuse selected Protocol or Math control in the selected entry's [static closure](ir/control.md#analyses-and-construction): its dormant arms, applications, helper and local calls and referenced declarations. A declaration outside that closure, such as an uncalled helper or protocol, does not gate the entry |
 | Native successor operands | [Execution branches](ir/execution.md#structural-branch-interfaces-and-admitted-execution), IR / Data and Exec | Native builders and source emitter → BranchOpInterface clients, source readers and correspondence checks | Independent forwarded segments implemented; generic CFG publication still requires semantic binding, custody and budget correspondence beyond structural formation |
 | Stage admission and target selection | [Stage pipelines](ir/native-foundation.md#stage-pipelines-and-target-selection), IR / Compiler | Shared stage builder and selected installation → API, textual pipeline, import and publication | Shared stage builders, typed selection and complete native admission; catalog availability does not establish an installed backend |
 | `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Participant loop, if and match captures use explicit local/parent bindings; selected participant control has all-arm admission. The native producer and independent C++/Rust readers are implemented and share the program byte controls. Formal interpretation is listed under formal reader status |
@@ -245,10 +266,11 @@ contract change, not the most recent documentation-only registration.
 
 | Identifier / version | Owning specification | Single owner | Producer → consumer code | Status | Stages or links introduced | Last PR |
 |---|---|---|---|---|---|---|
+| Total ordinary enum construction and Boolean selection | [Types and static terms](language/definitions.md#types-and-static-terms), [Boolean formulas](language/definitions.md#boolean-formulas) | Frontend / Language | Enum and Boolean body checking → immutable source witnesses, scoped specialization, native emission and actual-original comparison | Implemented for ordinary mathematical enums and selected Math/pointwise Protocol Booleans. Protocol Booleans retain a zero-argument Math computation with exact lexical captures; no shared Protocol control is introduced. Generated Oracle admissibility aggregation uses explicit eager Boolean intrinsics; authored Oracle-plan selection remains unsupported. Native tests and CPU execution cover both simplifier settings. Native index-bound transport into selected arms remains limited (see [status](../status.md)); independent formal elaboration and correspondence remain separate | None | — |
 | `zkc.compilation-observation/0` source work | [Source work observation](language/definitions.md#bounds-and-scope) | Frontend / Language accounting; compiler driver diagnostic output | Language `Work`, checked/analysis/closure accessors → [source driver](../../compiler/lib/Driver/Language.cpp) → [SDK diagnostic transport](../../crates/zkc/src/project/compiler.rs), CLI reports | Native producer and accessors implemented with source-level regression coverage; execution validation pending. SDK transport accepts diagnostic JSON without a strict field schema. Independent formal readers do not consume this diagnostic surface. Completed ledgers expose every subphase; independent checks and Host children remain explicit | None; diagnostic only, no admission or authority | — |
 | `zkc.source-ast/0` | [Written source](language/source-ast.md) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → future Lean elaboration reader | Partial: both native grammars and neutral formal nodes exported, including explicit target decisions, grouped requests and authored site references; generic bridge inventory retains their node envelope, while typed formal interpretation remains open | None; does not discharge `source.correspondence` | [#186](https://github.com/zkcompiler/zkc/pull/186) |
 | `zkc.source-bindings/0` | [Binding proposals](language/source-ast.md#source-binding-proposals) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: retained resolutions; no elaboration soundness theorem | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
-| `zkc.source-instances/0` | [Closed instances](language/source-ast.md#closed-source-instances) | Frontend / Language | [Compiler](../../compiler/lib/Compiler) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: closed instances and mandatory unresolved oracle construction substitutions with whole-Formula lookup keys; independent source/IR occurrence association, expected-type checking and call-edge proof remain open | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
+| `zkc.source-instances/0` | [Closed instances](language/source-ast.md#closed-source-instances) | Frontend / Language | [Compiler](../../compiler/lib/Compiler) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: closed instances, complete node/edge descriptor terms in retained graphs, and mandatory unresolved oracle construction substitutions with whole-Formula lookup keys; independent source/IR occurrence association, expected-type checking and call-edge proof remain open | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
 | `zkc.source-correspondence/0` | [Checked elaboration](language/elaboration.md), [generated definitions and occurrences](language/source-ast.md#generated-definitions-and-occurrences) | Frontend / Language | [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp) → [bridge inventory](../../lean/bridges/pipeline/source_inventory.py) and future Lean correspondence checker | Native producer and exact-artifact bridge checks cover source context, authored/generated rows, substitutions, complete ordered sites and written references; installed declarations have no captured source spans. Semantic source correspondence remains open | Proposed source-to-admitted connection | [#185](https://github.com/zkcompiler/zkc/pull/185) |
 | Structured source, version 0 | [Structured source](formats/structured-source.md) | IR / Protocol | [StructuredSource.cpp](../../compiler/lib/Compiler/StructuredSource.cpp) → [Lean structured reader](../../lean/Zkc/Source/Structured) | Partial: strict Lean type/binding/parameter reading, logical-record origins and complete oracle input/component logical sorts are installed; new total-word meanings and oracle execution remain outside the ordinary formal profile | Existing source interpretation; wire recognition grants no oracle execution admission | [#194](https://github.com/zkcompiler/zkc/pull/194) |
 | Logical oracle operations and kinds, version 0 | [Protocol oracles](ir/protocols.md#logical-oracle-kinds-and-handles), [wire operations](formats/structured-source.md#logical-oracle-vocabulary) | IR / Protocol | [OracleOps.td](../../compiler/include/zkc/Dialect/Protocol/IR/OracleOps.td), [Protocol formation](../../compiler/lib/Dialect/Protocol/IR/Oracles.cpp) → [realization](../../compiler/lib/Transforms/OracleCommonRealization.cpp), frontend emission, Lean reader | Native table/virtual semantics, checked source projection and realization implemented; the independent Lean reader preserves logical-sort descriptors and sequence capacity; oracle execution still needs independent Lean interpretation | No new registered claim stage | [#194](https://github.com/zkcompiler/zkc/pull/194) |
@@ -491,3 +513,32 @@ joint reached checks or externally pinned independent input binding. Native
 common-control analysis, executable admission, selected oracle/security
 profiles and independent formal consumers retain their separate integration
 and evidence boundaries.
+
+
+## Installed source consumer demands
+
+The [frontend catalog associations](formats/contract-declarations.md#frontend-declaration-associations)
+include static `Requirement` declarations. The first installed form is
+[NativeMessage](language/definitions.md#installed-consumer-requirements), with
+one complete payload type index. Frontend/Language owns source formation,
+independent written-source reconstruction, universal conformance and closed
+specialization. One immutable header replay owns managed ports and consumer
+demand correspondence, including erased metadata, inherited contracts and
+unused standalone declarations. It preserves required signature admission atoms
+while allowing additional checked goals. Anonymous Construction handlers use
+frozen parent membership and written-declaration links to replay inherited
+demands. Project, header and specialization snapshots charge consumer metadata
+and admission types and call origins before copying; discharged snapshots
+release it.
+Existing source Admission and Layout owners decide its
+Construction/Message/nonempty-carrier demands. Native admission, codecs and
+Runtime retain their established executable contracts; no runtime row or
+executable schema changes. Python/TableGen/Rust catalog readers and the
+independent Lean Python projection reader accept the extended frontend kind
+vocabulary with unchanged exact row fields. No Lean semantics, connector,
+formal correspondence or security claim is supplied by these checks.
+The existing source API diagnostic inventories additionally classify consumer
+requirements by installed identity, export, provider and complete type indices,
+and name the derived `message_payload` admission. Written-source requirement
+nodes retain their existing shape and source owner; neither diagnostic view
+supplies executable authority.

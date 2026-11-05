@@ -25,6 +25,7 @@ struct ScopedSummaryBinding {
   /// body. Retained instances extend its immutable lifetime explicitly.
   std::shared_ptr<const ScopedComputation> owner = {};
   std::shared_ptr<const BodySummaryStatics> lexical = {};
+  std::shared_ptr<const SelectedCallable> named = {};
 };
 struct BodySummary {
   // Math dependencies compose exactly at logical-value granularity. Local
@@ -102,9 +103,9 @@ summarizeScopedBinding(Semantics &, const Body &, unsigned,
 /// Resolve a domain's eager operand dependencies in the caller's value space.
 /// Unknown domain formals remain parameterized rather than appearing constant.
 std::optional<Dependencies>
-summarizeDomainBinding(Semantics &, const Body &, unsigned,
-                       llvm::ArrayRef<Dependencies> values,
-                       llvm::ArrayRef<Dependencies> environment = {},
-                       unsigned depth = 1, bool identityValues = false);
+summarizeDescriptorBinding(Semantics &, const Body &, unsigned,
+                           llvm::ArrayRef<Dependencies> values,
+                           llvm::ArrayRef<Dependencies> environment = {},
+                           unsigned depth = 1, bool identityValues = false);
 } // namespace zkc::language::detail
 #endif

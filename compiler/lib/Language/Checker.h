@@ -3,6 +3,7 @@
 #include "BodySummary.h"
 #include "CallResolution.h"
 #include "Internal.h"
+#include "ScopedWitness.h"
 #include "Semantics.h"
 #include "UsagePlan.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -14,6 +15,10 @@ struct BodyWitnesses {
   std::vector<std::shared_ptr<ScopedInvocationSource>> invocations;
   std::vector<std::shared_ptr<IntrinsicCallSource>> intrinsics;
   std::map<unsigned, std::shared_ptr<NotationFamilies>> notations;
+  std::map<unsigned, std::shared_ptr<std::map<uint32_t, Type>>> enumTypes;
+  std::map<unsigned, std::shared_ptr<std::map<uint32_t, Natural>>> repeatMaxima;
+  std::map<unsigned, std::shared_ptr<SourceLiterals>> literals;
+  std::map<unsigned, std::shared_ptr<SourceControlSnapshots>> controlSnapshots;
 };
 struct BodyPlan {
   UsagePlan usage;
@@ -47,6 +52,10 @@ public:
   /// Dependencies use the same signature cycle checks; bodies are not checked.
   bool prepareSignatureReconstruction(DeclarationId, const SyntaxDeclaration &);
   bool reconstructSignature(DeclarationId id) { return signature(id); }
+  /// Replay typed View recipes with lazy dependency checking and the same
+  /// authored inference policy as formation, in a private signature snapshot.
+  void beginViewReconstruction();
+  void prepareViewReconstruction(DeclarationId, const SyntaxDeclaration &);
   /// Eligibility is derived from authored headers, never candidate bound flags.
   bool permitsContractInference(DeclarationId id) const {
     return inferredContracts.count(&output.declarations[id.index]);

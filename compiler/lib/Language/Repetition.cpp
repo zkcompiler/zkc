@@ -36,6 +36,13 @@ bool BodyChecker::repeat(const Expression &expr) {
       maximum->dimension.closedValue() > 1048576)
     return fail("source.bound", "loop maximum exceeds installed limit",
                 expr.span);
+  if (!checker.types.chargeType(*maximum, expr.span))
+    return false;
+  auto &maxima = witnesses.repeatMaxima[decl.id.index];
+  if (!maxima)
+    maxima = std::make_shared<std::map<uint32_t, Natural>>();
+  maxima->try_emplace(uint32_t(&expr - syntax.expressions.data()),
+                      maximum->dimension);
   StatementPlacement header(*this);
   auto count = expression(expr.children[1], Type(Type::Kind::Index));
   if (!count || !use(*count, expr.span))
@@ -118,7 +125,17 @@ bool BodyChecker::repeat(const Expression &expr) {
       return false;
     operation.captures.push_back(*value);
   }
+  SourceControlSnapshot snapshot;
+  if (!checker.types.charge(2 * states.size(), expr.span))
+    return false;
+  snapshot.initial.assign(states.begin(), states.end());
+  snapshot.joined = snapshot.initial;
   auto captureDomainOperand = [&](ValueId operand) -> std::optional<ValueId> {
+    if (!checker.types.charge(1 + body.values[operand.index].components.size(),
+                              expr.span) ||
+        !checker.types.chargeType(body.values[operand.index].type, expr.span))
+      return {};
+    snapshot.recipes.push_back(operand);
     const auto value = body.values[operand.index];
     if (!checker.types.requireUsage(value.type, Usage::Copy, expr.span, &decl,
                                     "source.permission",
@@ -145,6 +162,15 @@ bool BodyChecker::repeat(const Expression &expr) {
   if (!captureDomains(nested, summary->domains, captureDomainOperand,
                       expr.span))
     return false;
+  if (!snapshot.initial.empty() || !snapshot.recipes.empty()) {
+    if (!checker.types.charge(1, expr.span))
+      return false;
+    auto &snapshots = witnesses.controlSnapshots[decl.id.index];
+    if (!snapshots)
+      snapshots = std::make_shared<SourceControlSnapshots>();
+    snapshots->emplace(uint32_t(&expr - syntax.expressions.data()),
+                       std::move(snapshot));
+  }
   std::map<unsigned, ServiceId> roots;
   for (auto id : summary->services) {
     auto root = services.at(id);

@@ -283,7 +283,7 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
     root = Path(__file__).resolve().parents[3]
     modules = {'sample': root / f'common/tests/fixtures/constructions/{protocol}.zkc',
                'spongefish::duplex': root / 'libraries/constructions/spongefish/duplex.zkc'}
-    modules.update(library_inputs(*core_packages()))
+    modules.update(library_inputs(*core_packages('zkc')))
     if protocol == 'sumcheck':
         modules['sumcheck'] = root / 'libraries/protocols/polynomial/sumcheck/lib.zkc'
     package = directory / 'proof.zkpkg'
@@ -335,7 +335,7 @@ def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, jour
     source.write_text((root / 'common/tests/fixtures/constructions/managed.zkc').read_text()
                       .replace('merlin3.bls12-381.fr64be/0', suite))
     modules = {'sample': source}
-    modules.update(library_inputs(*core_packages()))
+    modules.update(library_inputs(*core_packages('zkc')))
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                              *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),

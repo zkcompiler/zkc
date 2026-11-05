@@ -643,7 +643,7 @@ protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry fn Demo(
   auto emptyMessage = check(R"(module m;
 protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}entry fn Demo(inputs: Relay<()>::Inputs) { return Relay<()>::run(inputs); })");
   refuses(zkc::test::closeProtocolDeployment(emptyMessage, "m::Demo"),
-          "source.wire");
+          "source.message-payload");
   auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
 module First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
@@ -825,7 +825,7 @@ void managedServices() {
        std::vector<std::tuple<std::string, std::string, std::string>>{
            {"Draw<Fr>(alias, coins)", "Draw<Fr>(alias)", "source.call"},
            {"Draw<Fr>(alias, coins)", "Draw<Fr>(unknown, coins)",
-            "source.name"},
+            "source.service"},
            {"Draw<Fr>(alias, coins)", "Draw<Fr>(go, coins)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @(P,V)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @P", "source.service"},

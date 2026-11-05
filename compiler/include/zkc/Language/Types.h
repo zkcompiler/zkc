@@ -23,6 +23,8 @@ struct Permissions {
 /// sorts and cannot form runtime values. Parameters carry
 /// declaration-qualified atom identities. Nominal arguments include phantom
 /// parameters; representation is not identity.
+enum class DescriptorFamily { Finite };
+
 struct Type {
   enum class Kind {
     Boolean,
@@ -54,9 +56,12 @@ struct Type {
     /// constructor.
     OracleProjection,
     /// A nominal protocol product whose fields have independent placements.
-    LogicalRecord
+    LogicalRecord,
+    /// Installed structural family; never an ordinary Type argument or value.
+    Descriptor
   };
   Kind kind = Kind::Boolean;
+  DescriptorFamily family = DescriptorFamily::Finite;
   std::string domain;
   /// Catalog sort for static-only domains and asset sort for assets; Field and
   /// Group use their own kinds.
@@ -71,9 +76,9 @@ struct Type {
   bool operator==(const Type &b) const {
     if (kind == Kind::Natural && b.kind == Kind::Natural)
       return dimension == b.dimension;
-    return kind == b.kind && domain == b.domain && sort == b.sort &&
-           arguments == b.arguments && dimension == b.dimension &&
-           symbolic == b.symbolic;
+    return kind == b.kind && (kind != Kind::Descriptor || family == b.family) &&
+           domain == b.domain && sort == b.sort && arguments == b.arguments &&
+           dimension == b.dimension && symbolic == b.symbolic;
   }
   bool operator!=(const Type &b) const { return !(*this == b); }
 };
@@ -99,6 +104,23 @@ Type assetType(llvm::StringRef sort, llvm::StringRef identity);
 /// The asset sort of an asset term; empty for every other kind.
 llvm::StringRef assetSort(const Type &);
 bool isStaticOnly(const Type &);
+bool isDescriptor(const Type &);
+/// Typed signature contract, independent of the callable mode.
+struct DescriptorContract {
+  DescriptorFamily family;
+  std::vector<Type> parameters;
+  bool operator==(const DescriptorContract &other) const {
+    return family == other.family && parameters == other.parameters;
+  }
+  bool operator!=(const DescriptorContract &other) const {
+    return !(*this == other);
+  }
+};
+std::optional<DescriptorContract> descriptorContract(const Type &);
+/// Lossless projection into the existing typed static term traversal.
+Type descriptorType(const DescriptorContract &);
+/// Finite interpretation only: reject every other family and incorrect arity.
+const Type *finiteDescriptorItem(const DescriptorContract &);
 /// Direct logical handle values; aggregate formation has its own recursive
 /// check.
 bool isOracleHandle(const Type &);
@@ -110,6 +132,8 @@ bool isLogicalValue(const Type &);
 bool isLogicalValue(const PlacedType &);
 /// Library constructor spelling, distinct from native-data eligibility.
 llvm::StringRef oracleConstructor(const Type &);
+/// Exact installed form's spelling for a logical head or descriptor family.
+llvm::StringRef frontendTypeConstructor(const Type &);
 llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);
 /// Injective lookup key within one checked snapshot; source-facing spelling is

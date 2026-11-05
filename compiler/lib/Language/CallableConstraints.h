@@ -22,5 +22,13 @@ std::optional<std::vector<Type>> callableArguments(TypeInference &, Semantics &,
                                                    const Declaration &,
                                                    const CallableConstraints &,
                                                    Span);
+/// Form the complete named selection after ordinary constraint solving. This
+/// does not invoke the helper, infer requirements, or create a callback body.
+std::optional<SelectedCallable> selectCallable(Semantics &,
+                                               llvm::ArrayRef<Declaration>,
+                                               const CallableReference &,
+                                               llvm::ArrayRef<Type>, Span);
+bool sameSelectedCallable(const SelectedCallable &, const SelectedCallable &);
+bool chargeSelectedCallable(Semantics &, const SelectedCallable &, Span);
 } // namespace zkc::language::detail
 #endif

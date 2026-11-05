@@ -18,6 +18,8 @@ struct RegionInputs {
 };
 struct FreePlaceEnvironment {
   std::set<BindingId> data, services, scoped, domains;
+  /// Optional source lexical membership query, independent of candidate slots.
+  std::function<bool(BindingId)> dataBinding;
   std::function<std::optional<std::pair<BindingId, std::vector<unsigned>>>(
       uint32_t)>
       place;
@@ -26,9 +28,10 @@ struct FreePlaceEnvironment {
 };
 /// Shared control/scoped query. Deferred bodies contribute free places without
 /// contributing execution flow. Occurrences survive projection minimization.
-std::optional<RegionInputs> queryFreePlaces(Semantics &,
-                                            const SyntaxDeclaration &,
-                                            const Expression &,
-                                            const FreePlaceEnvironment &);
+/// includeHead includes the selector when extracting an entire computation;
+/// ordinary control regions capture only their arm bodies.
+std::optional<RegionInputs>
+queryFreePlaces(Semantics &, const SyntaxDeclaration &, const Expression &,
+                const FreePlaceEnvironment &, bool includeHead = false);
 } // namespace zkc::language::detail
 #endif

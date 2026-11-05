@@ -97,7 +97,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, terminal_log=0,
                                f'example::{entry}', f'--output={package}', realization, *flags])
         return package, report['package_sha256']
     report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
-                           f'--module=example={path}', f'--module=fri={library}', *library_modules(*core_packages()),
+                           f'--module=example={path}', f'--module=fri={library}', *library_modules(*core_packages('zkc')),
                            f'example::{entry}', f'--output={package}', realization, *flags])
     return package, report['package_sha256']
 
@@ -179,7 +179,7 @@ def guard_sites(toolchain, journal, directory, *, entry='Proof', library=LIBRARY
     else:
         emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
                                f'--entry=example::{entry}', f'--module=example={directory / "fri.zkc"}',
-                               f'--module=fri={library}', *library_modules(*core_packages()), *flags])
+                               f'--module=fri={library}', *library_modules(*core_packages('zkc')), *flags])
     # Resolve each phase's distinct direct guard shape, then expose its names.
     result = emitted_guard_sites(emitted, {'commit.': COMMIT_GUARDS, 'sample.': SAMPLER_GUARDS,
                                            'bind.': BIND_GUARDS, 'check.': CHECK_GUARDS})
@@ -463,7 +463,7 @@ def test_fri_transcript_events_follow_source_order(toolchain, journal, directory
     source.write_text(EXAMPLE.read_text())
     bundle = journal.json([toolchain.compiler, 'language-bundle', '--source-format=zkc',
                            '--entry=example::Proof', f'--module=example={source}',
-                           f'--module=fri={LIBRARY}', *library_modules(*core_packages()), MERKLE])
+                           f'--module=fri={LIBRARY}', *library_modules(*core_packages('zkc')), MERKLE])
     descriptor = bundle[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0' and descriptor[2] == 'zkc.native-origin/0'
     policy = descriptor[1]
@@ -635,7 +635,7 @@ def test_fri_refuses_unsupported_static_profiles(
         f'ScalarLowDegree<Direct<E>,{log_size},{terminal_log},{rounds},{queries}>'))
     journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                   f'--module=example={source}', f'--module=fri={LIBRARY}',
-                  *library_modules(*core_packages()), 'example::Proof',
+                  *library_modules(*core_packages('zkc')), 'example::Proof',
                   f'--output={directory / "invalid.zkpkg"}'], refuses='source-compilation')
 
 

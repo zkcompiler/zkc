@@ -85,10 +85,10 @@ def kind(value):
     )
 
 
-source_kind = one_of("Math", "Local", "Interface")
-# The logical meanings the frontend gives its own type heads; a
+source_kind = one_of("Math", "Local", "Interface", "Requirement")
+# The structural meanings the frontend gives its own type heads; a
 # `frontendConstructors` row spells each one.
-FRONTEND_CONSTRUCTOR_FORMS = ("OracleHandle", "OracleHandleSequence")
+FRONTEND_CONSTRUCTOR_FORMS = ("OracleHandle", "OracleHandleSequence", "FiniteDescriptor")
 
 
 def source_term(value):
@@ -620,7 +620,7 @@ def validate_frontend(catalog):
             parameter(static)
         inputs = [resolve(term, statics) for term in inputs]
         output = None if output is None else resolve(output, statics)
-        require((kind == "Interface") == (output is None) and (kind != "Interface" or not inputs),
+        require((kind in ("Interface", "Requirement")) == (output is None) and (kind not in ("Interface", "Requirement") or not inputs),
                 "source declaration kind and signature disagree")
         return kind, [(s["kind"], s["sort"]) for s in statics], inputs, output
 
@@ -651,7 +651,7 @@ def validate_frontend(catalog):
         if association == "rule":
             require(rules.get(target) == actual, "frontend rule signature mismatch")
         else:
-            require(row["kind"] != "Interface"
+            require(row["kind"] not in ("Interface", "Requirement")
                     and target in (intrinsics if row["kind"] == "Math" else operations),
                     "frontend primitive kind mismatch")
         if row["prelude"]:

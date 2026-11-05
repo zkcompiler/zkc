@@ -1983,7 +1983,8 @@ private:
         fail("source.mode", "entry functions cannot be interface members");
         return {};
       }
-      bool math = !entry && take("math");
+      bool view = !entry && take("view");
+      bool math = !entry && !view && take("math");
       bool fn = take("fn");
       if (entry && !fn) {
         fail("source.syntax", "expected fn after entry");
@@ -2002,11 +2003,11 @@ private:
         fail("source.unsupported", "protocols are not interface members");
         return {};
       }
-      d.kind = domainFunction ? Declaration::Kind::DomainFunction
-               : protocol     ? Declaration::Kind::Protocol
-               : entry        ? Declaration::Kind::EntryFunction
-               : math         ? Declaration::Kind::Math
-                              : Declaration::Kind::Local;
+      d.kind = (domainFunction || view) ? Declaration::Kind::View
+               : protocol               ? Declaration::Kind::Protocol
+               : entry                  ? Declaration::Kind::EntryFunction
+               : math                   ? Declaration::Kind::Math
+                                        : Declaration::Kind::Local;
       if (!name(d.name) || !parameters(d.parameters))
         return {};
       if (protocol && (!expect("roles") || !roleList(d.roles, true)))
@@ -2017,7 +2018,7 @@ private:
         auto ports = std::move(d.inputs);
         d.inputs.clear();
         for (auto &port : ports) {
-          auto &selected = port.domain   ? d.domainInputs
+          auto &selected = port.domain   ? d.descriptorInputs
                            : port.scoped ? d.scopedInputs
                                          : d.inputs;
           d.inputOrder.push_back(
@@ -2036,7 +2037,7 @@ private:
         if (!expect("->") || !expect("domain") || !expect("<") || !type(item) ||
             !expect(">"))
           return {};
-        d.domainResult = std::move(item);
+        d.descriptorResult = std::move(item);
       } else if (take("->")) {
         SyntaxPort p;
         p.name = "result";
@@ -2068,7 +2069,7 @@ private:
         if (!setupSlot(d))
           return {};
       d.abstract = abstract;
-      if (entry && (!d.scopedInputs.empty() || !d.domainInputs.empty())) {
+      if (entry && (!d.scopedInputs.empty() || !d.descriptorInputs.empty())) {
         fail("source.stage", "entry parameters must be ordinary data");
         return {};
       }
@@ -2707,11 +2708,9 @@ private:
           } while (take(",") && !at("}"));
         if (!expect("}"))
           return {};
-      } else if (!value.arguments.empty()) {
-        fail("source.syntax",
-             "static application requires a call or constructor");
-        return {};
       }
+      // A bare static application is still a Name. Only an expected static
+      // callback argument can admit it; ordinary value inference rejects it.
     }
     value.span.end = previousEnd;
     bool blockLike = value.kind == Expression::Kind::Block ||
@@ -3258,8 +3257,11 @@ private:
           kind == Expression::Kind::Block || kind == Expression::Kind::If ||
           kind == Expression::Kind::Match || kind == Expression::Kind::For;
       if (!s.terminated) {
+        // An attribute labels the statement, not an implicit block result.
+        // Retain it here; the checker requires an unterminated statement to
+        // have unit type. Value-producing events use a labelled binding.
         if (region && at("}") && s.kind == Statement::Kind::Expression &&
-            !s.exchange) {
+            !s.exchange && !s.site) {
           b.results.emplace_back("result", *expr);
           break;
         }

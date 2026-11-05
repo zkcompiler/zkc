@@ -1,19 +1,19 @@
-#include "DomainWitness.h"
+#include "DescriptorWitness.h"
 #include "ValueOrigins.h"
 #include <algorithm>
 #include <limits>
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
-class DomainCheck {
+class DescriptorCheck {
   Semantics &types;
   ArrayRef<Declaration> declarations;
   const Body &body;
   const Substitution &statics;
-  ArrayRef<DomainEnvironment> environment;
+  ArrayRef<DescriptorEnvironment> environment;
   const Body &caller;
   const std::function<ValueId(ValueId)> &map;
-  const DomainShape &candidate;
+  const DescriptorShape &candidate;
   ValueOrigins &origins;
   std::vector<std::optional<ValueId>> ports;
   unsigned next = 0;
@@ -24,7 +24,7 @@ class DomainCheck {
   std::map<Factory, unsigned> checkedFactories;
   std::set<Factory> activeFactories;
   struct Context {
-    ArrayRef<DomainBinding> bindings;
+    ArrayRef<DescriptorBinding> bindings;
     std::vector<ValueId> data;
     std::vector<unsigned> domains;
     Substitution statics;
@@ -44,14 +44,30 @@ class DomainCheck {
     }
     return selected;
   }
-  bool bindPort(unsigned index, ValueId value, Span span) {
+  std::optional<DescriptorContract>
+  closedContract(const DescriptorContract &source,
+                 const Substitution &substitution, Span span) {
+    if (!types.chargeContract(source, span))
+      return {};
+    auto term = type(descriptorType(source), substitution, span);
+    return term ? descriptorContract(*term) : std::nullopt;
+  }
+  bool bindPort(unsigned index, ValueId value,
+                const DescriptorContract &contract, Span span) {
     if (index >= ports.size() || value.index >= caller.values.size())
       return refuse(span,
                     "descriptor operand mapping is outside its input space");
     auto actual = type(caller.values[value.index].type, statics, span);
-    auto permissions = actual ? types.permissions(*actual, span) : std::nullopt;
-    if (!actual || !permissions || !permissions->copy || !permissions->drop ||
-        *actual != candidate.inputs[index])
+    if (actual && contract.family == DescriptorFamily::Finite) {
+      auto permissions = types.permissions(*actual, span);
+      if (!finiteDescriptorItem(contract) || !permissions ||
+          !permissions->copy || !permissions->drop)
+        return types.diagnostic
+                   ? false
+                   : refuse(span,
+                            "finite operand permissions or contract differ");
+    }
+    if (!actual || *actual != candidate.inputs[index])
       return types.diagnostic ? false
                               : refuse(span, "descriptor operand type differs");
     if (ports[index]) {
@@ -65,22 +81,26 @@ class DomainCheck {
       ports[index] = value;
     return true;
   }
-  std::optional<unsigned> constructor(const DomainBinding &source,
+  std::optional<unsigned> constructor(const DescriptorBinding &source,
                                       const Substitution &substitution,
                                       ArrayRef<ValueId> data,
-                                      ArrayRef<unsigned> children) {
+                                      ArrayRef<DescriptorEdge> children) {
     if (next >= candidate.nodes.size()) {
       refuse(source.span, "descriptor omits an admitted constructor");
       return {};
     }
     const auto &actual = candidate.nodes[next];
-    if (!types.chargeType(actual.item, source.span) ||
+    if (!types.chargeContract(actual.contract, source.span) ||
         !types.charge(actual.operands.size() + actual.children.size() + 1,
                       source.span))
       return {};
-    auto item = type(source.item, substitution, source.span);
-    if (!item || source.kind != actual.kind || *item != actual.item ||
-        source.axis != actual.axis || data.size() != actual.operands.size() ||
+    for (const auto &child : actual.children)
+      if (!types.chargeContract(child.contract, source.span))
+        return {};
+    auto contract = closedContract(source.contract, substitution, source.span);
+    if (!contract || source.kind != actual.kind ||
+        *contract != actual.contract || source.axis != actual.axis ||
+        data.size() != actual.operands.size() ||
         children != ArrayRef(actual.children) || actual.factory ||
         actual.parameter || actual.expression || !actual.arguments.empty() ||
         !actual.argumentOrder.empty()) {
@@ -89,15 +109,15 @@ class DomainCheck {
       return {};
     }
     for (unsigned i = 0; i < data.size(); ++i)
-      if (!bindPort(actual.operands[i].index, data[i], source.span))
+      if (!bindPort(actual.operands[i].index, data[i], *contract, source.span))
         return {};
     unsigned depth = 1;
     for (auto child : children) {
-      if (child >= next) {
+      if (child.node >= next) {
         refuse(source.span, "constructor child does not precede its use");
         return {};
       }
-      depth = std::max(depth, depths[child] + 1);
+      depth = std::max(depth, depths[child.node] + 1);
     }
     if (depth > 63) {
       types.fail("source.limit",
@@ -107,7 +127,7 @@ class DomainCheck {
     depths.push_back(depth);
     return next++;
   }
-  std::optional<unsigned> inherited(const DomainEnvironment &expected,
+  std::optional<unsigned> inherited(const DescriptorEnvironment &expected,
                                     unsigned depth) {
     if (!expected.shape ||
         expected.operands.size() != expected.shape->inputs.size() ||
@@ -134,8 +154,8 @@ class DomainCheck {
     Context context{expected.shape->nodes, expected.operands, {}, {}, {}, {}};
     for (unsigned i = 0; i < context.bindings.size(); ++i) {
       const auto &binding = context.bindings[i];
-      if (binding.kind == DomainBinding::Kind::Parameter ||
-          binding.kind == DomainBinding::Kind::Application) {
+      if (binding.kind == DescriptorBinding::Kind::Parameter ||
+          binding.kind == DescriptorBinding::Kind::Application) {
         refuse(binding.span, "inherited descriptor is not closed");
         return {};
       }
@@ -144,8 +164,9 @@ class DomainCheck {
     }
     return context.checked.at(expected.shape->result);
   }
-  std::optional<unsigned>
-  application(Context &context, const DomainBinding &binding, unsigned depth) {
+  std::optional<unsigned> application(Context &context,
+                                      const DescriptorBinding &binding,
+                                      unsigned depth) {
     if (!binding.factory ||
         binding.factory->declaration.index >= declarations.size()) {
       refuse(binding.span, "source factory reference is invalid");
@@ -171,16 +192,16 @@ class DomainCheck {
       arguments = std::move(selected->arguments);
     }
     const auto &callee = declarations[target.index];
-    if (callee.kind != Declaration::Kind::DomainFunction || callee.abstract ||
-        !callee.domainDefinition ||
+    if (callee.kind != Declaration::Kind::View || callee.abstract ||
+        !callee.descriptorDefinition ||
         binding.operands.size() != callee.inputs.size() ||
-        binding.children.size() != callee.domainInputs.size() ||
+        binding.children.size() != callee.descriptorInputs.size() ||
         !types.checkArguments(callee, arguments, binding.span)) {
       if (!types.diagnostic)
         refuse(binding.span, "factory has no checked concrete definition");
       return {};
     }
-    const auto &definition = *callee.domainDefinition;
+    const auto &definition = *callee.descriptorDefinition;
     Context nested{definition.bindings,
                    {},
                    {},
@@ -230,10 +251,31 @@ class DomainCheck {
       assigned[argument] = true;
       const auto &slot = callee.inputOrder[argument];
       if (slot.kind == Declaration::InputSlot::Kind::Domain) {
-        auto selected = node(context, binding.children[slot.index], depth + 1);
+        auto selected = edge(context, binding.children[slot.index], depth + 1);
         if (!selected)
           return {};
         nested.domains[slot.index] = *selected;
+      }
+    }
+    auto expectedResult = callee.descriptorResult
+                              ? closedContract(*callee.descriptorResult,
+                                               nested.statics, binding.span)
+                              : std::nullopt;
+    auto actualResult =
+        closedContract(binding.contract, context.statics, binding.span);
+    if (!expectedResult || !actualResult || *expectedResult != *actualResult) {
+      if (!types.diagnostic)
+        refuse(binding.span, "selected factory result contract differs");
+      return {};
+    }
+    for (unsigned i = 0; i < nested.domains.size(); ++i) {
+      auto expected = closedContract(callee.descriptorInputs[i].contract,
+                                     nested.statics, binding.span);
+      if (!expected ||
+          *expected != candidate.nodes[nested.domains[i]].contract) {
+        if (!types.diagnostic)
+          refuse(binding.span, "selected factory child contract differs");
+        return {};
       }
     }
     std::get<3>(identity) = nested.domains;
@@ -266,6 +308,17 @@ class DomainCheck {
     checkedFactories.emplace(std::move(identity), result);
     return result;
   }
+  std::optional<unsigned> edge(Context &context, const DescriptorEdge &child,
+                               unsigned depth) {
+    auto expected = closedContract(child.contract, context.statics, {});
+    auto selected = expected ? node(context, child.node, depth) : std::nullopt;
+    if (!selected || *expected != candidate.nodes[*selected].contract) {
+      if (!types.diagnostic)
+        refuse({}, "descriptor child contract differs");
+      return {};
+    }
+    return selected;
+  }
   std::optional<unsigned> node(Context &context, unsigned index,
                                unsigned depth) {
     if (depth > types.work.limits.callDepth) {
@@ -292,7 +345,7 @@ class DomainCheck {
                       binding.span))
       return {};
     std::optional<unsigned> result;
-    if (binding.kind == DomainBinding::Kind::Parameter) {
+    if (binding.kind == DescriptorBinding::Kind::Parameter) {
       if (!binding.parameter || *binding.parameter >= context.domains.size()) {
         refuse(binding.span, "unbound domain parameter in witness");
         return {};
@@ -306,11 +359,11 @@ class DomainCheck {
         selected = *actual;
       }
       result = selected;
-    } else if (binding.kind == DomainBinding::Kind::Application)
+    } else if (binding.kind == DescriptorBinding::Kind::Application)
       result = application(context, binding, depth);
     else {
       std::vector<ValueId> data;
-      std::vector<unsigned> children;
+      std::vector<DescriptorEdge> children;
       for (auto operand : binding.operands) {
         if (operand.index >= context.data.size()) {
           refuse(binding.span, "constructor data edge differs");
@@ -319,19 +372,20 @@ class DomainCheck {
         data.push_back(context.data[operand.index]);
       }
       for (auto child : binding.children) {
-        auto selected = node(context, child, depth + 1);
+        auto selected = edge(context, child, depth + 1);
         if (!selected)
           return {};
-        children.push_back(*selected);
+        children.push_back({*selected, candidate.nodes[*selected].contract});
       }
       result = constructor(binding, context.statics, data, children);
     }
     if (!result)
       return {};
-    auto expected = type(binding.item, context.statics, binding.span);
-    if (!expected || *expected != candidate.nodes[*result].item) {
+    auto expected =
+        closedContract(binding.contract, context.statics, binding.span);
+    if (!expected || *expected != candidate.nodes[*result].contract) {
       if (!types.diagnostic)
-        refuse(binding.span, "domain result item differs");
+        refuse(binding.span, "descriptor result contract differs");
       return {};
     }
     context.active.erase(index);
@@ -340,12 +394,12 @@ class DomainCheck {
   }
 
 public:
-  DomainCheck(Semantics &types, ArrayRef<Declaration> declarations,
-              const Body &body, const Body &caller,
-              const std::function<ValueId(ValueId)> &map,
-              const Substitution &statics,
-              ArrayRef<DomainEnvironment> environment,
-              const DomainShape &candidate, ValueOrigins &origins)
+  DescriptorCheck(Semantics &types, ArrayRef<Declaration> declarations,
+                  const Body &body, const Body &caller,
+                  const std::function<ValueId(ValueId)> &map,
+                  const Substitution &statics,
+                  ArrayRef<DescriptorEnvironment> environment,
+                  const DescriptorShape &candidate, ValueOrigins &origins)
       : types(types), declarations(declarations), body(body), statics(statics),
         environment(environment), caller(caller), map(map),
         candidate(candidate), origins(origins) {}
@@ -363,7 +417,7 @@ public:
       if (!types.chargeType(input, {}))
         return false;
     ports.resize(candidate.inputs.size());
-    Context context{body.domainBindings, {}, {}, statics, {}, {}};
+    Context context{body.descriptorBindings, {}, {}, statics, {}, {}};
     for (unsigned i = 0; i < body.values.size(); ++i)
       context.data.push_back(map({i}));
     context.domains.resize(environment.size(),
@@ -398,12 +452,12 @@ public:
 };
 } // namespace
 std::optional<std::vector<ValueId>>
-bindDomainInputs(Semantics &types, ArrayRef<Declaration> declarations,
-                 const Body &source, const Body &caller,
-                 const std::function<ValueId(ValueId)> &map, unsigned root,
-                 const Substitution &statics,
-                 ArrayRef<DomainEnvironment> environment,
-                 const DomainShape &candidate, ValueOrigins *cache) {
+bindDescriptorInputs(Semantics &types, ArrayRef<Declaration> declarations,
+                     const Body &source, const Body &caller,
+                     const std::function<ValueId(ValueId)> &map, unsigned root,
+                     const Substitution &statics,
+                     ArrayRef<DescriptorEnvironment> environment,
+                     const DescriptorShape &candidate, ValueOrigins *cache) {
   ValueOrigins localOrigins(types, caller);
   auto &origins = cache ? *cache : localOrigins;
   if (!origins.describes(caller)) {
@@ -411,25 +465,26 @@ bindDomainInputs(Semantics &types, ArrayRef<Declaration> declarations,
                "origin cache belongs to a different body", {});
     return {};
   }
-  DomainCheck check(types, declarations, source, caller, map, statics,
-                    environment, candidate, origins);
+  DescriptorCheck check(types, declarations, source, caller, map, statics,
+                        environment, candidate, origins);
   if (!check.run(root))
     return {};
   return check.inputs();
 }
-bool checkDomainClosure(Semantics &types, ArrayRef<Declaration> declarations,
-                        const Body &body, unsigned root,
-                        const Substitution &statics,
-                        ArrayRef<DomainEnvironment> environment,
-                        const DomainEnvironment &candidate,
-                        ValueOrigins *cache) {
+bool checkDescriptorClosure(Semantics &types,
+                            ArrayRef<Declaration> declarations,
+                            const Body &body, unsigned root,
+                            const Substitution &statics,
+                            ArrayRef<DescriptorEnvironment> environment,
+                            const DescriptorEnvironment &candidate,
+                            ValueOrigins *cache) {
   if (!candidate.shape ||
       candidate.operands.size() != candidate.shape->inputs.size())
     return types.fail("source.domain-witness",
                       "invalid descriptor operand coverage", {});
   ValueOrigins localOrigins(types, body);
   auto &origins = cache ? *cache : localOrigins;
-  auto inputs = bindDomainInputs(
+  auto inputs = bindDescriptorInputs(
       types, declarations, body, body, [](ValueId value) { return value; },
       root, statics, environment, *candidate.shape, &origins);
   if (!inputs)

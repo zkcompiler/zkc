@@ -41,7 +41,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_poseidon2_width16(toolchain, journal, directory, flags):
-    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules(*core_packages()), *flags))
+    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules(*core_packages('zkc')), *flags))
     other = list(range(16))
     states, same = entry.run('batch', {'states': INPUT + other + INPUT, 'count': 3})['result']
     assert same is True
