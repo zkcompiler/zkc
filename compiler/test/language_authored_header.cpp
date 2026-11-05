@@ -54,6 +54,37 @@ const char *used = R"(module m;
 math fn unused<T:Type,N:nat,M:nat>(x:T)->T where Copy(T),N<=M{return x;}
 math fn client()->bool{return unused<bool,2,3>(true);}
 )";
+std::string reconstructionSource(bool view) {
+  std::string source = view ? R"(module m
+view def selected(value: bool) -> bool:
+    return value
+)"
+                            : R"(module m
+interface Choose:
+    def selected(value: bool) -> bool
+module Implementation: Choose:
+    def selected(value: bool) -> bool:
+        return value
+)";
+  return source + R"(local def unused() -> bool effects():
+    return true
+)";
+}
+std::pair<uint64_t, bool> reconstruct(const CheckedProject &project, bool view,
+                                      uint64_t allowance) {
+  Limits limits;
+  limits.work = allowance;
+  Work work{limits};
+  const auto &storage = DeclarationAccess::storage(project);
+  auto error = view ? checkViewSources(storage, work)
+                    : checkModuleContracts(storage, work);
+  bool accepted = !error;
+  if (error)
+    require(namesIdentifier(toString(std::move(error)), "source.limit"),
+            "reconstruction failed outside its work bound");
+  require(work.used <= allowance, "reconstruction overspent its work bound");
+  return {work.used, accepted};
+}
 } // namespace
 int main() {
   Cases cases;
@@ -393,6 +424,118 @@ int main() {
     require(retry.used == original.used,
             "effect dependency retry changed work");
   });
+  for (bool view : {true, false}) {
+    StringRef consumer = view ? "View" : "conformance";
+    cases.run(consumer + " reconstruction exact effect-copy budget", [&] {
+      auto project = check(reconstructionSource(view), true);
+      accepts(project);
+      auto original = reconstruct(project, view, Limits{}.work);
+      auto cost = original.first;
+      require(original.second && cost > 0, "original did not reconstruct");
+      require(reconstruct(project, view, cost) == original,
+              "exact reconstruction budget failed");
+      require(!reconstruct(project, view, cost - 1).second,
+              "one-short reconstruction budget passed");
+      require(reconstruct(project, view, cost) == original,
+              "reconstruction retry changed work");
+      outs() << consumer << " effect-copy exact_work=" << cost << '\n';
+    });
+    cases.run(consumer + " preflights unrelated effect dependency growth", [&] {
+      auto project = check(reconstructionSource(view), true);
+      accepts(project);
+      auto original = reconstruct(project, view, Limits{}.work);
+      require(original.second, "original did not reconstruct");
+      auto &helper = named(project);
+      require(helper.effectAllowance &&
+                  helper.effectAllowance->dependencies.empty(),
+              "missing unrelated explicit empty ceiling");
+      auto &dependencies = helper.effectAllowance->dependencies;
+      uint64_t refusalWork = 0;
+      for (uint64_t count : {original.first + 1, 2 * original.first + 1}) {
+        dependencies.clear();
+        for (unsigned i = 0; i < count; ++i)
+          dependencies.emplace(i, Effects{});
+        Limits limits;
+        limits.work = original.first;
+        Work work{limits};
+        const auto &storage = DeclarationAccess::storage(project);
+        auto error = view ? checkViewSources(storage, work)
+                          : checkModuleContracts(storage, work);
+        require(bool(error), "unpaid unrelated effect map was copied");
+        handleAllErrors(std::move(error), [&](const DiagnosticError &failure) {
+          const auto &diagnostic = failure.diagnostic();
+          require(diagnostic.code == "source.limit" && diagnostic.primary &&
+                      diagnostic.primary->source.index ==
+                          helper.span.source.index &&
+                      diagnostic.primary->begin == helper.span.begin &&
+                      diagnostic.primary->end == helper.span.end,
+                  "effect preflight lost its diagnostic owner");
+        });
+        require(work.used <= limits.work, "effect preflight overspent work");
+        if (refusalWork)
+          require(work.used == refusalWork,
+                  "oversized map performed additional charged work");
+        refusalWork = work.used;
+        outs() << consumer << " effect-copy entries=" << count
+               << " refusal_work=" << work.used << '\n';
+      }
+      dependencies.clear();
+      require(reconstruct(project, view, original.first) == original,
+              "restoring the map changed reconstruction");
+      accepts(project);
+    });
+    cases.run(consumer + " charges each unrelated copied dependency once", [&] {
+      auto project = check(reconstructionSource(view), true);
+      accepts(project);
+      auto original = reconstruct(project, view, Limits{}.work);
+      require(original.second, "original did not reconstruct");
+      auto &dependencies = named(project).effectAllowance->dependencies;
+      for (unsigned count : {1u, 7u}) {
+        dependencies.clear();
+        for (unsigned i = 0; i < count; ++i)
+          dependencies.emplace(i, Effects{});
+        require(!reconstruct(project, view, original.first).second,
+                "copied dependencies used the unchanged empty-map budget");
+        auto paid = std::make_pair(original.first + count, true);
+        require(reconstruct(project, view, paid.first) == paid,
+                "copied dependency charge differs from the node count");
+        require(!reconstruct(project, view, paid.first - 1).second,
+                "one-short paid dependency budget passed");
+        require(reconstruct(project, view, paid.first) == paid,
+                "paid dependency retry changed work");
+        // Paying for reconstruction does not authenticate the forged helper.
+        rejects(project);
+      }
+      dependencies.clear();
+      require(reconstruct(project, view, original.first) == original,
+              "empty-map budget changed after paid reconstruction");
+      accepts(project);
+    });
+    cases.run(consumer + " preserves real callback effect dependencies", [&] {
+      auto project = check(reconstructionSource(view) + R"(
+local def callback(value: bool, action: local fn(bool) -> bool effects(stop)) -> bool effects(action):
+    result <- action(value)
+    return result
+)",
+                           true);
+      accepts(project);
+      auto &callback = named(project, "m::callback");
+      require(callback.effectAllowance &&
+                  callback.effectAllowance->dependencies.size() == 1 &&
+                  callback.effectAllowance->dependencies.at(0).mayStop,
+              "missing real callback effect environment");
+      auto allowance = *callback.effectAllowance;
+      auto original = reconstruct(project, view, Limits{}.work);
+      require(original.second &&
+                  reconstruct(project, view, original.first) == original &&
+                  *callback.effectAllowance == allowance,
+              "reconstruction changed the callback effect environment");
+      callback.effectAllowance->dependencies.clear();
+      rejects(project);
+      callback.effectAllowance = allowance;
+      accepts(project);
+    });
+  }
   cases.run("premise work limits and field growth", [] {
     auto project = check(mixed);
     const auto &storage = DeclarationAccess::storage(project);
