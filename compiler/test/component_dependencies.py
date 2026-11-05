@@ -277,6 +277,7 @@ def main():
     )
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
+        ROOT / "lib/Compiler/DiagnosticCapture.h",
         ROOT / "lib/Compiler/ComponentContracts.h",
         ROOT / "lib/Compiler/SourceArtifacts.h",
         ROOT / "lib/Compiler/SourceView.h",
@@ -334,6 +335,9 @@ def main():
     # emitter. Keep that transitive implementation boundary explicit.
     bridges.update((name, ROOT / "lib/Transforms/OracleRealizationFacts.h")
                    for name in ("ZkcCompiler", "ZkcCpuTarget"))
+    bridges.update((target, ROOT / f"lib/Compiler/{header}.h")
+                   for target in ("ZkcCpuTarget", "ZkcEvmTarget")
+                   for header in ("DiagnosticCapture", "LanguageDiagnostics"))
     bridges.update(("ZkcCpuTarget", ROOT / f"lib/Compiler/{name}.h") for name in ("CompilationState", "LanguageDiagnostics", "HostReferences", "MathematicalOptions", "NativeDeployment", "ArtifactJson", "Run", "LanguageInterface", "LanguagePackageReader", "PublicCoin"))
     bridges.update(("ZkcCpuTarget", ROOT / f"lib/Transforms/{name}.h") for name in ("PreparedProtocol", "RealizedProtocol", "MathematicalSupport", "NativeBindingApplication", "MathematicalPassOptions", "Computation/Support", "NumericalSelection", "ScopedPreparation", "FiniteVerification", "MathematicalRecipes", "ScopedCallback"))
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"

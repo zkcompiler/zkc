@@ -1,6 +1,7 @@
 #include "zkc/Compiler/Host.h"
 #include "../../Compiler/DiagnosticCapture.h"
 #include "../../Compiler/HostReferences.h"
+#include "../../Compiler/LanguageDiagnostics.h"
 #include "../../Compiler/LanguageInterface.h"
 #include "../../Compiler/LanguagePackageReader.h"
 #include "../../Compiler/NativeDeployment.h"
@@ -162,8 +163,8 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
   registerDialects(registry);
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
-  auto module =
-      mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(
+      original.bytes(), &context, originalSourceFilename);
   if (!module)
     return error("entry.original", "admitted Host original no longer parses");
   if (options.observations)

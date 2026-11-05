@@ -18,6 +18,10 @@ class DiagnosticCapture {
 
 public:
   explicit DiagnosticCapture(mlir::MLIRContext &context);
+  DiagnosticCapture(const DiagnosticCapture &) = delete;
+  DiagnosticCapture &operator=(const DiagnosticCapture &) = delete;
+  DiagnosticCapture(DiagnosticCapture &&) = delete;
+  DiagnosticCapture &operator=(DiagnosticCapture &&) = delete;
   void atRoot(mlir::Location location) { root = location; }
   bool hasErrors() const { return sawError; }
   llvm::Error failure(llvm::Error fallback = llvm::Error::success());

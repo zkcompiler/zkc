@@ -3,7 +3,6 @@
 #include "../Transforms/RealizedProtocol.h"
 #include "mlir/IR/Location.h"
 #include "zkc/Compiler/Compilation.h"
-#include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/EndpointClosure.h"
 namespace zkc {

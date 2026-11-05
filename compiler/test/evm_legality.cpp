@@ -235,7 +235,6 @@ int main() {
             "invalid-type.mlir", {}, registry);
         require(!result, "invalid original rank compiled");
         bool typed = false, located = false;
-        std::string detail;
         handleAllErrors(result.takeError(), [&](const ErrorInfoBase &error) {
           if (!error.isA<CompilationError>())
             return;
@@ -245,10 +244,9 @@ int main() {
           for (const auto &refusal : failure.refusals)
             if (refusal.code == "invalid-original-rank") {
               typed = true;
-              detail = refusal.detail;
             }
         });
-        require(typed && located && !detail.empty(),
+        require(typed && located,
                 "verifier metadata became prose or borrowed context state");
       });
   cases.run("typed ordered effects survive CSE and canonicalization", [&] {

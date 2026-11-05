@@ -97,8 +97,10 @@ and prepares actual inputs before execution.
 | Language | Source capture, resolution, typing and Entry closure |
 | Translation | Source emission/comparison, relation import and checked executable export |
 | Program | MLIR-free executable structure, codec and admission |
-| Transforms | Preparation, projection, demand lowering and physical selection |
-| Compiler | Complete Entry, bundle and proof compilations |
+| Transforms | Common preparation, projection, numerical realization and closed execution |
+| Compiler | Common construction, source association and checked endpoint closure |
+| CPU target | Physical selection, native compilation and Entry/bundle/proof publication |
+| EVM target | Checked verifier conversion, target legality and Yul publication |
 | Driver | Request parsing and publication |
 
 The [architecture map](../architecture.md#implementation-owners) locates these

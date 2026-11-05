@@ -569,7 +569,11 @@ structured refusal metadata, recognized file locations and embedding
 preconditions survive context teardown. Raw original compilation preserves the
 supplied filename. Checked Entry compilation maps original locations back to
 authored source using its checked correspondence. Codes are never recovered
-from diagnostic prose; upstream errors may have no zkc code.
+from diagnostic prose; upstream errors may have no zkc code. Mapped locations
+retain their exact captured source ID and byte span in the existing CLI diagnostic
+records. Location records remain separate from flattened refusal rows: the latter
+do not establish a code-to-location association. Raw MLIR coordinates without a
+checked source mapping do not acquire an invented source ID.
 
 The compiler's EVM target refuses, in pipeline order:
 

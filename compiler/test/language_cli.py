@@ -124,6 +124,31 @@ with case('a compiler refusal keeps its code through the driver'):
     assert diagnostics[0]['code'] == 'source.limit', diagnostics
     assert 'source.limit' not in diagnostics[0]['message'], diagnostics
 
+with case('EVM target refusals retain authored spans through the driver'):
+    source = OUT / 'evm-loop-location.zkc'
+    text = """module loops;
+protocol Copies roles(A,B)(a:bool@(A,B),rounds:index@(A,B))->(accepted:bool@B) {
+  let mut accepted @B = true;
+  for _ in 0..rounds roles(A,B) max 1000001 {
+    let copy=send A->B(a);
+    accepted=accepted && copy;
+  }
+  return accepted;
+}
+proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construction authored;}
+"""
+    source.write_text(text)
+    report = OUT / 'evm-location.json'
+    commands.run([compiler, 'language-evm', '--source-format=zkc',
+                  f'--module=loops={source}', '--entry=loops::Proof',
+                  f'--diagnostics={report}'], refuses='evm.participant-loop-maximum')
+    record = json.loads(report.read_text())
+    source_id = next(i for i, item in enumerate(record['sources'])
+                     if item['module'] == 'loops')
+    spans = [item for item in record['diagnostics'] if item.get('source') == source_id]
+    assert any(text[item['begin']:item['end']].startswith('for ') for item in spans), spans
+
+
 with case('definition checking never treats empty Entry selection as omission'):
     for args in [
         ['--source-format=zkc', '--entry=', *modules],

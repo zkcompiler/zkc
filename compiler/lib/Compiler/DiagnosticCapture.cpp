@@ -1,4 +1,5 @@
 #include "DiagnosticCapture.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "zkc/Support/Refusal.h"
 using namespace llvm;
 using namespace mlir;

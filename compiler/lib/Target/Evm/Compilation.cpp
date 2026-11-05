@@ -277,8 +277,8 @@ compileEvmEntry(const language::CheckedOriginal &original,
     return located(policy.takeError());
   selected.policy = std::move(*policy);
   auto compiled =
-      compileEvmProof(original.bytes(), "zkc-language-original.mlir", selected,
-                      DialectRegistry());
+      compileEvmProof(original.bytes(), language::originalSourceFilename,
+                      selected, DialectRegistry());
   if (!compiled)
     return located(compiled.takeError());
   return std::move(*compiled);
