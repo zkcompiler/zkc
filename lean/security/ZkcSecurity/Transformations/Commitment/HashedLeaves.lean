@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Transformations.Commitment.Extractable
+public import ZkcSecurity.Transformations.Commitment.HashDecoding
 
 @[expose] public section
 
@@ -14,7 +14,7 @@ hash with the siblings, least significant bit first (`climb`), as deployed Merkl
 
 The extractor reads the record of hash calls straight-line: from a label it follows the first
 recorded node call answered by that label down to the leaf level (`extractLabel`), and reads the
-row of the first recorded leaf call answered by the leaf label (`extractRow`). `scheme` proves the
+row of the first recorded leaf call answered by the leaf label (`findRow`). `scheme` proves the
 two laws of `Extractable`:
 
 * `extractLabel_of_climbs`: an accepted climb recorded in a record without two calls answered
@@ -177,44 +177,41 @@ def inputs (query : Query) : List Y :=
 
 /-! ### Extraction along a recorded climb -/
 
+/-- Node extraction requires only consistency of the children decoder. -/
+theorem findChildren_of_mem_of_decoderConsistent {log : HashLog Query Y}
+    (consistent : DecoderConsistent model.children log) {query : Query} {label left right : Y}
+    (member : (⟨query, label⟩ : (_ : Query) × Y) ∈ log)
+    (children : model.children query = some (left, right)) :
+    findChildren model log label = some (left, right) :=
+  consistent.find_of_mem member children
+
+/-- Row extraction requires only consistency of the leaf decoder. -/
+theorem findRow_of_mem_of_decoderConsistent {log : HashLog Query Y}
+    (consistent : DecoderConsistent model.leafRow log) {query : Query} {label : Y}
+    {row : Row} (member : (⟨query, label⟩ : (_ : Query) × Y) ∈ log)
+    (leafRow : model.leafRow query = some row) :
+    findRow model log label = some row :=
+  consistent.find_of_mem member leafRow
+
 theorem findChildren_of_mem {log : HashLog Query Y}
     (injective : MerkleTreeExtractor.ResponseInjectiveOn log) {query : Query} {label left right : Y}
     (member : (⟨query, label⟩ : (_ : Query) × Y) ∈ log)
     (children : model.children query = some (left, right)) :
-    findChildren model log label = some (left, right) := by
-  unfold findChildren
-  cases found : log.find? (fun entry => (model.children entry.1).isSome && entry.2 == label) with
-  | none =>
-      have := List.find?_eq_none.mp found _ member
-      simp [children] at this
-  | some entry =>
-      have holds := List.find?_some found
-      have entryMember := List.mem_of_find?_eq_some found
-      simp only [Bool.and_eq_true, beq_iff_eq] at holds
-      have same : entry.1 = query := injective entry entryMember _ member holds.2
-      simp [same, children]
+    findChildren model log label = some (left, right) :=
+  findChildren_of_mem_of_decoderConsistent model
+    (.of_responseInjective model.children injective) member children
 
 theorem findRow_of_mem {log : HashLog Query Y}
     (injective : MerkleTreeExtractor.ResponseInjectiveOn log) {query : Query} {label : Y}
     {row : Row} (member : (⟨query, label⟩ : (_ : Query) × Y) ∈ log)
     (leafRow : model.leafRow query = some row) :
-    findRow model log label = some row := by
-  unfold findRow
-  cases found : log.find? (fun entry => (model.leafRow entry.1).isSome && entry.2 == label) with
-  | none =>
-      have := List.find?_eq_none.mp found _ member
-      simp [leafRow] at this
-  | some entry =>
-      have holds := List.find?_some found
-      have entryMember := List.mem_of_find?_eq_some found
-      simp only [Bool.and_eq_true, beq_iff_eq] at holds
-      have same : entry.1 = query := injective entry entryMember _ member holds.2
-      simp [same, leafRow]
+    findRow model log label = some row :=
+  findRow_of_mem_of_decoderConsistent model
+    (.of_responseInjective model.leafRow injective) member leafRow
 
-/-- A recorded climb leads the extractor from its top to its bottom label, in a record without
-two calls answered alike. -/
-theorem extractLabel_of_climbs {log : HashLog Query Y}
-    (injective : MerkleTreeExtractor.ResponseInjectiveOn log) :
+/-- A recorded climb leads the extractor from its top to its bottom label, when the children decoder is consistent. -/
+theorem extractLabel_of_climbs_of_decoderConsistent {log : HashLog Query Y}
+    (consistent : DecoderConsistent model.children log) :
     ∀ (depth index : ℕ) (path : List Y) (current top : Y), path.length = depth →
       index < 2 ^ depth → Climbs model log index path current top →
       extractLabel model log depth top index = some current
@@ -236,11 +233,11 @@ theorem extractLabel_of_climbs {log : HashLog Query Y}
       by_cases inLeft : index < 2 ^ depth
       · have bit : index / 2 ^ depth = 0 := Nat.div_eq_of_lt inLeft
         rw [bit] at top
-        rw [findChildren_of_mem model injective (left := middle) (right := sibling) top
+        rw [findChildren_of_mem_of_decoderConsistent model consistent (left := middle) (right := sibling) top
           (by simp [parent, model.children_node])]
         simp only [inLeft, ↓reduceIte]
         rw [Nat.mod_eq_of_lt inLeft] at belowClimb
-        exact extractLabel_of_climbs injective depth index lower current middle lowerLength inLeft
+        exact extractLabel_of_climbs_of_decoderConsistent consistent depth index lower current middle lowerLength inLeft
           belowClimb
       · have upper : index - 2 ^ depth < 2 ^ depth := by rw [pow_succ] at below; omega
         have bit : index / 2 ^ depth = 1 := by
@@ -249,12 +246,22 @@ theorem extractLabel_of_climbs {log : HashLog Query Y}
         have low : index % 2 ^ depth = index - 2 ^ depth := by
           rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt upper]
         rw [bit] at top
-        rw [findChildren_of_mem model injective (left := sibling) (right := middle) top
+        rw [findChildren_of_mem_of_decoderConsistent model consistent (left := sibling) (right := middle) top
           (by simp [parent, model.children_node])]
         simp only [inLeft, ↓reduceIte]
         rw [low] at belowClimb
-        exact extractLabel_of_climbs injective depth (index - 2 ^ depth) lower current middle
+        exact extractLabel_of_climbs_of_decoderConsistent consistent depth (index - 2 ^ depth) lower current middle
           lowerLength upper belowClimb
+
+/-- Response injectivity supplies the children-decoder consistency required by
+extraction along a recorded climb. -/
+theorem extractLabel_of_climbs {log : HashLog Query Y}
+    (injective : MerkleTreeExtractor.ResponseInjectiveOn log) :
+    ∀ (depth index : ℕ) (path : List Y) (current top : Y), path.length = depth →
+      index < 2 ^ depth → Climbs model log index path current top →
+      extractLabel model log depth top index = some current :=
+  extractLabel_of_climbs_of_decoderConsistent model
+    (.of_responseInjective model.children injective)
 
 theorem opening_agrees (answer : Query → Y) (log : HashLog Query Y) (depth : ℕ) (root : Y)
     (index : ℕ) (opening : Opening Row Y)
