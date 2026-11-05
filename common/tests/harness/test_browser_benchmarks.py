@@ -138,6 +138,53 @@ def test_quartic_keccak_fixture_uses_every_coordinate_and_derived_challenges(bro
     assert 'hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0' in program.source
 
 
+def test_quartic_keccak_fri_preserves_the_exact_consumer_and_independent_word(browser):
+    from coset_reference import CosetReference
+    fixtures = importlib.import_module('bench.browser_fixtures')
+    root = Path(__file__).resolve().parents[3]
+    program = fixtures.quartic_keccak_fri(root)
+    source = root/'common/tests/evm/fixtures/fri_keccak.zkc'
+    assert program.source == source.read_text()
+    assert 'ScalarLowDegree<Direct<F>,5,0,3,8>' in program.source
+    assert 'hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0' in program.source
+    assert 'ext8' not in program.source
+    assert program.entry == 'fri_keccak::Proof' and program.proof
+    assert program.dependencies == ('protocols.polynomial.fri',)
+    assert source in program.support
+    inputs = program.inputs[0]
+    assert inputs['public'] == {'shift': ['3', '1', '0', '0'], 'round_count': '3', 'query_count': '8'}
+    word = [tuple(map(int, value)) for value in inputs['witness']['word']]
+    assert len(word) == 32 and all(len(value) == 4 for value in word)
+    reference = CosetReference('koala-bear.ext4-binomial3')
+    domain = reference.domain((3, 1, 0, 0), 32)
+    coefficients = [(i+1, i*i, 2*i, 1) for i in range(8)]
+    # Interpolate a degree-seven prefix at held-out points, rather than merely
+    # repeating the generator's Horner calculation on the same rows.
+    for i in (8, 17, 31):
+        assert word[i] == reference.lagrange(word[:8], domain[:8], domain[i])
+        assert word[i] == reference.horner(coefficients, domain[i])
+
+
+def test_quartic_keccak_fri_is_explicit_and_does_not_expand_defaults(browser, tmp_path):
+    from types import SimpleNamespace
+    fixtures = importlib.import_module('bench.browser_fixtures')
+    root = Path(__file__).resolve().parents[3]
+    assert 'quartic-keccak-fri' not in {name for name, _, _ in fixtures.catalog(root)}
+    args = SimpleNamespace(source=root, output=tmp_path/'fixtures', compiler=None,
+                           source_only=True, setup_material=None, case=['quartic-keccak-fri'])
+    assert fixtures.prepare(args) == 0
+    cases = json.loads((args.output/'cases.json').read_text())['cases']
+    assert [case['name'] for case in cases] == ['quartic-keccak-fri']
+    assert cases[0]['providers'] == ['plonky3']
+    assert cases[0]['options'] == {'allow_authored': False}
+    assert cases[0]['oracle_realization'] == fixtures.quartic_keccak_fri(root).oracle_policy.record()
+    directory = Path(cases[0]['directory'])
+    assert json.loads((directory/'options.json').read_text()) == {'allow_authored': False, 'providers': ['plonky3']}
+    assert (directory/'main.zkc').read_bytes() == (root/'common/tests/evm/fixtures/fri_keccak.zkc').read_bytes()
+    assert json.loads((directory/'witness.json').read_text()) == fixtures.quartic_keccak_fri(root).inputs[0]['witness']
+    assert not (directory/'entry.zkpkg').exists()
+
+
 def test_proof_identity_capture_keeps_process_wall_time(browser, tmp_path, monkeypatch):
     path, _ = prepared(browser, tmp_path)
     web = tmp_path/'web'
