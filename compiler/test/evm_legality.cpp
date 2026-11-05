@@ -270,13 +270,12 @@ int main() {
     require(bool(valid), "shared typed query origin refused");
     auto message = fixture(
         R"mlir(#runtime.origin<"main", #runtime.message_origin<"Round","message","field","P","V">>)mlir");
-    require(!message &&
-                StringRef(diagnostics).contains("draw query occurrence"),
+    require(!message && StringRef(diagnostics).contains("query method differs"),
             "challenge accepted a message occurrence");
     auto otherMethod = fixture(
         R"mlir(#runtime.origin<"main", #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","sample","V">>)mlir");
     require(!otherMethod &&
-                StringRef(diagnostics).contains("draw query occurrence"),
+                StringRef(diagnostics).contains("query method differs"),
             "challenge accepted an unrelated query method");
     auto observation = parseSourceString<ModuleOp>(R"mlir(
       module { func.func @observe(%s:i64,%g:i64,%v:i256,%p:i64,%n:i64) {
@@ -298,6 +297,99 @@ int main() {
         R"mlir(#runtime.origin<"main" path [#runtime.origin_step<branch,"Round","choose","left">], #runtime.query_origin<"Round","draw",0,"random.bls12-381.fr/0","draw","V">>)mlir");
     require(!selected && StringRef(diagnostics).contains("evm.origin"),
             "selected-control origin was silently reinterpreted");
+  });
+  cases.run(
+      "typed index blocks validate their independent physical boundary", [&] {
+        auto fixture = [&](uint64_t bound, uint64_t count, uint64_t bits,
+                           bool gated, StringRef method, StringRef suite) {
+          std::string text;
+          raw_string_ostream out(text);
+          out << "module { func.func "
+                 "@block(%s:i64,%g:i64,%w:i64,%p:i64,%n:i64) { "
+                 "%v,%length,%next = \"evm.transcript.indices"
+              << (gated ? "_gated" : "") << "\"(%s,%g," << (gated ? "%w," : "")
+              << "%p,%n) {suite=\"" << suite << "\",bound=" << bound
+              << ":i64,count=" << count << ":i64,";
+          if (gated)
+            out << "difficulty=" << bits << ":i64,";
+          out << "origin=#runtime.origin<\"main\", "
+                 "#runtime.query_origin<\"Round\","
+                 "\"sample\",0,\"random.koala-bear.ext4-binomial3/0\",\""
+              << method << "\",\"V\">>} : (i64,i64," << (gated ? "i64," : "")
+              << "i64,i64)->(i64,i64,i64) func.return } }";
+          return parseSourceString<ModuleOp>(text, &context);
+        };
+        constexpr StringLiteral suite =
+            "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0";
+        for (uint64_t bound : {uint64_t(1), uint64_t(1) << 63})
+          for (uint64_t bits : {0u, 64u})
+            require(bool(fixture(bound, 1048576, bits, true, "indices", suite)),
+                    "valid edge index block refused: " + diagnostics);
+        for (uint64_t bound :
+             {uint64_t(0), uint64_t(3), (uint64_t(1) << 63) + 1})
+          require(!fixture(bound, 1, 0, false, "indices", suite),
+                  "invalid physical index bound accepted");
+        for (uint64_t count : {0u, 1048577u})
+          require(!fixture(8, count, 0, false, "indices", suite),
+                  "invalid physical index count accepted");
+        require(!fixture(8, 1, 65, true, "indices", suite),
+                "invalid physical gate bits accepted");
+        require(!fixture(8, 1, 0, false, "draw", suite),
+                "index block accepted a draw occurrence");
+        require(!fixture(8, 1, 0, false, "indices", "not-installed"),
+                "index block accepted an uninstalled suite");
+        // Malformed physical IR is checked independently of the canonical
+        // producer.
+        for (StringRef attribute : {"suite", "bound", "count", "origin"}) {
+          auto module = fixture(8, 1, 0, false, "indices", suite);
+          auto function = *module->getOps<func::FuncOp>().begin();
+          auto op = *function.getOps<evm::TranscriptIndicesOp>().begin();
+          op->removeAttr(attribute);
+          require(failed(verify(op)), "missing physical attribute accepted");
+        }
+        for (StringRef attribute : {"bound", "count"}) {
+          auto module = fixture(8, 1, 0, false, "indices", suite);
+          auto function = *module->getOps<func::FuncOp>().begin();
+          auto op = *function.getOps<evm::TranscriptIndicesOp>().begin();
+          op->setAttr(attribute,
+                      IntegerAttr::get(IntegerType::get(&context, 32), 1));
+          require(failed(verify(op)),
+                  "wrong physical attribute width accepted");
+        }
+        {
+          auto module = fixture(8, 1, 0, false, "indices", suite);
+          auto function = *module->getOps<func::FuncOp>().begin();
+          auto op = *function.getOps<evm::TranscriptIndicesOp>().begin();
+          op->setAttr("extra", UnitAttr::get(&context));
+          require(failed(verify(op)), "unexpected physical attribute accepted");
+        }
+        {
+          auto module = fixture(8, 1, 0, false, "indices", suite);
+          auto function = *module->getOps<func::FuncOp>().begin();
+          auto op = *function.getOps<evm::TranscriptIndicesOp>().begin();
+          op->getResult(0).setType(IntegerType::get(&context, 256));
+          require(failed(verify(op)),
+                  "wrong physical result lane width accepted");
+        }
+      });
+  cases.run("challenge physical lanes match the installed field", [&] {
+    for (auto [field, width] :
+         {std::pair<StringRef, unsigned>{"bls12-381.fr", 64},
+          {"koala-bear.ext4-binomial3", 256}}) {
+      std::string text;
+      raw_string_ostream out(text);
+      out << "module { func.func @challenge(%s:i64,%g:i64,%p:i64,%n:i64) { "
+             "%v,%next = \"evm.transcript.challenge\"(%s,%g,%p,%n) {"
+             "value_type=!algebra.field<\""
+          << field
+          << "\">,"
+             "origin=#runtime.origin<\"main\", #runtime.query_origin<\"Round\","
+             "\"draw\",0,\"random.bls12-381.fr/0\",\"draw\",\"V\">>}"
+             " : (i64,i64,i64,i64)->(i"
+          << width << ",i64) func.return } }";
+      require(!parseSourceString<ModuleOp>(text, &context),
+              "mismatched challenge physical result accepted");
+    }
   });
   for (StringRef name : {"evm.checked", "evm.word", "evm.scope.root",
                          "evm.index.pow2", "evm.field.pow", "evm.field.div"})
@@ -435,6 +527,12 @@ proof Proof=Work{prover P;verifier V;public{values,value,go};accept accepted;con
                     "unit predicate branch acquired physical state lanes");
             for (Region *arm :
                  {&branch.getThenRegion(), &branch.getElseRegion()}) {
+              // Canonical SCF may omit the empty else of a result-free if.
+              if (arm->empty()) {
+                require(arm == &branch.getElseRegion(),
+                        "unit predicate lost its reached then arm");
+                continue;
+              }
               auto yields = arm->front().getOps<scf::YieldOp>();
               require(llvm::hasSingleElement(yields) &&
                           (*yields.begin())->getNumOperands() == 0 &&
@@ -642,15 +740,17 @@ proof Proof=Work {
       if (!row.transcript)
         continue;
       const auto &facts = *row.transcript;
-      bool expected = facts.family == "hash-chain" &&
-                      facts.hash == "keccak256" && facts.bindsSuite &&
-                      facts.decoder == "fr64be";
+      bool expected =
+          facts.family == "hash-chain" && facts.hash == "keccak256" &&
+          facts.bindsSuite &&
+          (facts.decoder == "fr64be" || facts.decoder == "rejection31le");
       auto suite = evm::realizeTranscript(layouts, context, row.identity);
       if (!suite) {
         auto message = toString(suite.takeError());
         require(!expected && StringRef(message).contains("evm.construction"),
                 "a suite refused outside its facts: " + message);
-        if (facts.family == "hash-chain" && facts.decoder != "fr64be")
+        if (facts.family == "hash-chain" && facts.hash == "keccak256" &&
+            facts.decoder != "fr64be" && facts.decoder != "rejection31le")
           require(
               StringRef(message).contains(facts.decoder + " challenge decoder"),
               "a hash-chain suite refused without its decoder: " + message);
@@ -659,14 +759,26 @@ proof Proof=Work {
       require(expected, "a suite without the realized facts was realized: " +
                             row.identity);
       ++realized;
-      // The reduction modulus is the challenge field's declared
-      // characteristic, and the runtime emits exactly that prime.
+      // Both decoders use the declared base characteristic. Extension
+      // challenges keep the installed ascending coefficient layout.
       auto field = protocol::installedDomains().associatedIdentity(
           row.identity, "ChallengeField");
       const auto *challenge = protocol::instances::domain(field);
-      require(challenge && challenge->field && !challenge->field->extension,
-              "realized challenge field is not a declared prime field");
-      APInt modulus(256, challenge->field->characteristic, 10);
+      require(challenge && challenge->field,
+              "realized challenge field has no declared field facts");
+      const auto *base =
+          protocol::instances::domain(suite->challenge->base.getDomain());
+      require(base && base->field && !base->field->extension,
+              "realized challenge has no prime base");
+      APInt modulus(256, base->field->characteristic, 10);
+      require((facts.decoder == "fr64be") == (suite->challenge->degree == 1),
+              "challenge decoder lost its coefficient representation");
+      require(suite->index == protocol::installedDomains().hasFact(
+                                  "IndexTranscript", {row.identity}) &&
+                  suite->indexBlock ==
+                      protocol::installedDomains().hasFact(
+                          "IndexBlockTranscript", {row.identity}),
+              "realized index capabilities differ from installed facts");
       require(suite->challenge->modulus == modulus,
               "realized modulus differs from the declared characteristic");
       SmallString<80> digits;
@@ -684,20 +796,23 @@ proof Proof=Work {
                 !StringRef(plain).contains("evm_transcript_"),
             "a program without a transcript received transcript helpers");
   });
-  cases.run("a hash-chain suite refuses at its unrealized decoder", [&] {
-    auto text = proofSource("", "accepted:bool@V", "return(accepted=a*b==c);");
-    text = replaceFixture(std::move(text), "field(\"bls12-381.fr\")",
-                          "field(\"koala-bear.ext8-binomial3\")");
-    text = replaceFixture(
-        std::move(text), "\"hash-chain.keccak256.bls12-381.fr64be/0\"",
-        "\"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0\"");
-    auto compiled = compileEvmEntry(originalSource(text));
-    require(!compiled, "an unrealized challenge decoder compiled");
-    auto message = toString(compiled.takeError());
-    require(StringRef(message).contains("evm.construction") &&
-                StringRef(message).contains("rejection31le challenge decoder"),
-            "unexpected refusal: " + message);
-  });
+  for (unsigned degree : {4u, 8u})
+    cases.run("managed extension challenge degree " + Twine(degree), [&] {
+      auto text =
+          proofSource("", "accepted:bool@V", "return(accepted=a*b==c);");
+      std::string field =
+          "koala-bear.ext" + std::to_string(degree) + "-binomial3";
+      text = replaceFixture(std::move(text), "field(\"bls12-381.fr\")",
+                            "field(\"" + field + "\")");
+      text = replaceFixture(
+          std::move(text), "\"hash-chain.keccak256.bls12-381.fr64be/0\"",
+          "\"hash-chain.keccak256." + field + ".rejection31le/0\"");
+      auto compiled = compileEvmEntry(originalSource(text));
+      require(bool(compiled), compiled ? "" : toString(compiled.takeError()));
+      require(StringRef(compiled->yul())
+                  .contains("evm_transcript_challenge_rejection31("),
+              "managed extension challenge lost its exact decoder");
+    });
   for (StringRef expression : {"a*b==c", "a+b==c", "a-b==c", "!(a==b)",
                                "a==b && b==c", "a==b || b==c", "a+1==c"}) {
     cases.run(
@@ -1260,24 +1375,16 @@ proof Proof=Work {
               require(bool(traversal), "collect lost its traversal");
               auto allocation = op->getOperand(0).getDefiningOp();
               auto capacity =
-                  op->getOperand(1).getDefiningOp<arith::SelectOp>();
-              require(allocation && capacity &&
-                          allocation->getOperand(0) == capacity &&
-                          capacity.getTrueValue() == traversal.getUpperBound(),
-                      "collect allocation did not bound storage alone");
-              auto ceiling =
-                  capacity.getFalseValue().getDefiningOp<arith::ConstantOp>();
-              require(ceiling &&
-                          cast<IntegerAttr>(ceiling.getValue()).getInt() == 3,
-                      "collect ignored the configured output ceiling");
-              auto condition =
-                  capacity.getCondition().getDefiningOp<arith::CmpIOp>();
-              require(condition &&
-                          condition.getPredicate() ==
-                              arith::CmpIPredicate::ult &&
-                          condition.getLhs() == traversal.getUpperBound() &&
-                          condition.getRhs() == ceiling,
-                      "collect capacity was not min(candidates, ceiling)");
+                  op->getOperand(1).getDefiningOp<arith::ConstantOp>();
+              auto candidates =
+                  traversal.getUpperBound().getDefiningOp<arith::ConstantOp>();
+              require(
+                  allocation && capacity && candidates &&
+                      allocation->getOperand(0) == capacity &&
+                      cast<IntegerAttr>(capacity.getValue()).getInt() == 3 &&
+                      cast<IntegerAttr>(candidates.getValue()).getInt() == 1025,
+                  "collect did not separate 1025 candidates from its folded "
+                  "storage ceiling");
               require(op->getOperand(2) == traversal.getRegionIterArgs()[0],
                       "collect stores by traversal rather than selection");
               auto callback = op->getOperand(3).getDefiningOp<func::CallOp>();

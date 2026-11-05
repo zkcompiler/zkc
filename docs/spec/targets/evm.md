@@ -37,16 +37,32 @@ Proofs use either an authored empty transcript or a managed construction over
 a transcript suite that the target realizes. The target selects the
 realization by the suite's [transcript facts](../formats/contract-declarations.md#nominal-domains),
 never by its spelling: the `hash-chain` family over `keccak256`, binding the
-suite identity at initialization, with the `fr64be` decoder, whose challenge
-field is a prime field of at most 256 bits. That realization reduces all 64
-big-endian request bytes modulo the challenge field's declared characteristic,
-independently of other arithmetic fields in the verifier. Of the installed
-suites, `hash-chain.keccak256.bls12-381.fr64be/0` has these facts; a suite with
-another family, hash or decoder refuses with `evm.construction`, naming the
-fact the target does not realize. A program without a transcript has no
-challenge field and no transcript helpers. External services, curve
-operations, Merkle authentication and full FRI/STARK deployment require further
-target support.
+suite identity at initialization. The decoder is either `fr64be` over a prime
+field with an installed native field codec and at most 256 bits, or `rejection31le` over a supported ascending
+binomial extension whose base characteristic is below 2^31. The former reduces
+all 64 big-endian request bytes modulo the declared characteristic. The latter
+reads masked u32 little-endian candidates, rejects candidates at or above the
+base characteristic, and retains accepted coordinates in ascending basis order
+across at most sixteen 64-byte answers. Extension coefficients use the same
+ascending basis as arithmetic and the native codec, in 32-byte physical cells. Those internal answers consume one
+logical transcript transition. Arithmetic fields elsewhere in the verifier do
+not select the challenge decoder.
+
+Installed BLS Fr and KoalaBear quartic/octic Keccak hash-chain suites have these
+facts. Other families, hashes or decoders refuse with `evm.construction`, naming
+the fact the target does not realize. A program without a transcript has no
+challenge field and no transcript helpers.
+
+Managed scalar index requests and native index blocks use the suite's installed
+capabilities and the [shared request contract](../formats/native-index-block.md).
+Block order and duplicates are preserved. The EVM verifier checks a supplied
+grinding witness; native proving owns the bounded search. For difficulty zero,
+a nonzero witness refuses before transcript consumption. For positive
+difficulty, the complete request and its atomic transition precede a failed
+gate; no result or successor is published on that failure. The existing target
+transition, element and memory ceilings and EVM gas remain separate from the
+native numerical-work allowance. External services, curve operations, Merkle
+authentication and full FRI/STARK deployment require further target support.
 
 Target MLIR combines exact standard Func, SCF and Arith operations with
 separate ODS-defined EVM operations for checked arithmetic, collections, wire
@@ -219,10 +235,14 @@ verification decision. Reverts have a four-byte declared class followed by one
 | Source stop | `ZKCS` | Reached protocol or numerical failure |
 | Decode refusal | `ZKCD` | Invalid ABI, public wire, proof header or reached frame |
 | Target fault | `ZKCT` | Violated target ownership or internal representation contract |
-| Resource refusal | `ZKCR` | Exceeded an immutable deployment ceiling |
+| Resource refusal | `ZKCR` | Exceeded an immutable deployment ceiling or the declared sampler limit |
 
 EVM out-of-gas is a machine halt, separate from these structured outcomes. EVM
 gas does not implement native VM instruction fuel.
+The rejection sampler uses `ZKCR` code 15 after all sixteen answers fail to
+complete the field value. Native index shape and canonical-zero-witness checks
+use `ZKCS` code 5; a failed positive gate uses `ZKCS` code 0 after its complete
+request. These target codes do not replace the native outcome identifiers.
 
 Each deployment fixes one effective value per declared ceiling, within the
 ceiling's declared minimum and maximum. The declaration alone states these
@@ -240,7 +260,7 @@ which every reader checks against the declared ranges.
 | `proof_bytes` | Proof bytes of one call |
 | `calldata_bytes` | Calldata bytes of one call |
 | `root_bytes` | Bytes of the invocation binding root |
-| `memory_bytes` | Retained memory; its declared minimum holds the fixed target state |
+| `memory_bytes` | Simultaneous retained and rounded temporary memory, including block preflight workspace; its declared minimum holds the fixed target state |
 | `transcript_transitions` | Transcript transitions of one call |
 | `path_siblings` | Digests of one Merkle path envelope, for byte and digest-word paths alike. One more refuses with its own resource code, after the element charge |
 
@@ -353,7 +373,7 @@ The compiler's EVM target refuses, in pipeline order:
 | `evm.source-limit` | An original over 16 MiB, empty, nested beyond the MLIR nesting limit or with a filename over 4,096 bytes, or a `zkc.evm-source/0` response over 16 MiB |
 | `evm.source` | An original that does not parse or is not admitted at its stage; the detail is the captured diagnostics |
 | `evm.entry` | A selected Entry that is not a checked proof Entry, a proof without exactly one native Boolean acceptance, or a lowered module without exactly one EVM entry function |
-| `evm.construction` | An explicit construction, services, draws or gates without a transcript suite, a non-native proof format, or a transcript suite the target does not realize: not an installed hash-chain suite over Keccak-256 that binds its identity, decodes `fr64be` and has a prime challenge field |
+| `evm.construction` | An explicit construction, services, draws or gates without a transcript suite, a non-native proof format, or a transcript suite the target does not realize: not an installed hash-chain suite over Keccak-256 that binds its identity, has one of the supported decoder and challenge-field combinations |
 | `evm.field` | A field without an exact installed prime modulus below 2^256, or an extension that is not a declared binomial extension of degree 2 to 8 over such a prime field |
 | `evm.descriptor` | A common construction descriptor that is not the policy's `zkc.native-proof-descriptor/0` with a selection |
 | `evm.closed-execution` | A constructed module the closed-execution pipeline refuses; the detail is the captured diagnostics |

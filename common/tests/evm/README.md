@@ -291,3 +291,64 @@ refusals, fixed arrays, and opaque root/path envelopes, including the path
 ceiling at the declared default and lowered below a path's length. Envelope transport does
 not establish cryptographic authentication. These are bounded differential
 controls, not a general EVM refinement proof.
+
+## Managed Keccak transcript controls
+
+With the same prepared compiler, native fixture driver, wire consumer, pinned
+solc and revm runner, run:
+
+```sh
+python3 common/tests/evm/transcript_controls.py \
+ --compiler build/compiler/zkc-compile --native-driver target/debug/evm_fixture \
+ --solc /pinned/solc --runner /path/to/zkc-evm-test-runner \
+ --sampler-consumer build/compiler/test/zkc-evm_wire-test \
+ --gate-witness-code 5 --gate-rejection-code 0 --sampler-exhaustion-code 15 \
+ --output build/experiments/evm-transcript
+```
+
+The explicit refusal codes are expectations from the target contract. They are
+never inferred from generated Yul, an engine result or a failed run. The default
+matrix covers quartic challenges, scalar indices, ordered index blocks, gated
+CHECK and repeated occurrences, with real native producers and independently
+constructed complete hash traces. Every execution case requires two calls on
+the same deployment. The block matrix includes Q=128/129 with bound 256: all
+ordered samples are compared with a native echo after subsequent observations
+and proof-frame decoding, while the source retains both sampled and echoed
+outputs through the final message. Their varied values discriminate overlapping
+result compaction from all-zero controls.
+
+`--suite challenge`, `index`, `block`, `gate` or `repeated` selects compiled
+cases and may be repeated. With `--sampler-consumer`, separate helper controls
+also run. Use `--suite helpers` with the arguments above to run only those
+controls; compiler/native-driver paths must still exist for tool fingerprinting,
+but neither executable is invoked in that selection. Omit the consumer and
+exhaustion-code arguments together to select only compiled cases.
+
+The helper consumer renames the original production request function and wraps
+it: every real request expansion and successor executes before caller-provided
+synthetic bytes overwrite the answer. Sampler cases cover masking/rejection,
+partial acceptance across answers, an empty first answer, success on answer
+sixteen, total exhaustion and partial exhaustion. Each compares all reached
+request preimages, digests and successors, including all sixteen requests on
+exhaustion. Successful helper returns additionally check the final digest,
+coordinates, generation, draw count and remaining budget. No synthetic-answer
+hash markers are added.
+
+Block helper cases reach the declared target element maximum and maximum+1
+(currently 1,024/1,025); the latter requires resource code 2 and an empty hash
+frontier. At the maximum, every ordered result is checked against real request
+bytes. Other helper cases check b=64 with a synthetic zero gate passing and a
+gate of 2^63 failing despite its low 63 bits being zero, with complete production
+request hashing even on failure. The b=0 equation uses the same explicit initial
+digest and origin as the ungated reference. Both lower to identical runtime
+arguments, so this does not test source gate selection or distinct proof roots.
+
+`summary.json` separates `compiled_cases`, `sampler_helpers`, `block_helpers`
+and Python-only `reference_only` probes. Per-case expected and revm reports,
+native reports for compiled cases, source products and solc requests/artifacts
+remain under the output directory. Helper deployments have no compiled native
+proof, authenticated SDK artifact or natural sampler-exhaustion evidence.
+The maximum-count helper does not test compiled output compaction or lifetime.
+Refusal precedence, internal preflight atomicity, octic execution and an honest
+passing b=64 compiled proof remain outside these added controls. No native
+b=64 witness search is attempted.

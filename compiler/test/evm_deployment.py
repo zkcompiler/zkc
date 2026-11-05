@@ -107,9 +107,7 @@ proof Proof=Echo{prover P;verifier V;public{value};accept accepted;construction 
     assert response['descriptor'][1] == policy
     assert response['descriptor'][6] == []
 
-with case('source-selected gates remain native and refuse unsupported EVM construction'):
-    source = OUT / 'gated.zkc'
-    source.write_text('''module gated;
+GATED_SOURCE = '''module gated;
 domain Q=field("koala-bear.ext4-binomial3");
 protocol Queries roles(P,V)(coins:Random<Q>@V)->(accepted:bool@V) {
   #[site(positions)] let positions=coins.indices(2,16);
@@ -119,14 +117,40 @@ protocol Queries roles(P,V)(coins:Random<Q>@V)->(accepted:bool@V) {
 proof Proof=Queries {
   prover P; verifier V; public{}; accept accepted;
   construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",coins);
-  gate positions bits 0;
+  gate positions bits BITS;
 }
-''')
-    selection = ['--source-format=zkc', f'--module=gated={source}', '--entry=gated::Proof']
-    native = json.loads(commands.run([compiler, 'language-package', *selection]))
-    policy = json.loads(native['artifact'])[2][1]
-    assert len(policy[11]) == 1 and policy[11][0][1] == '0'
-    commands.run([compiler, 'language-evm', *selection], refuses='evm.construction')
+'''
+
+for bits in (0, 6, 64):
+    with case(f'source-selected gate at difficulty {bits} closes the EVM verifier'):
+        source = OUT / f'gated-{bits}.zkc'
+        source.write_text(GATED_SOURCE.replace('BITS', str(bits)))
+        selection = ['--source-format=zkc', f'--module=gated={source}', '--entry=gated::Proof']
+        native = json.loads(commands.run([compiler, 'language-package', *selection]))
+        policy = json.loads(native['artifact'])[2][1]
+        assert len(policy[11]) == 1 and policy[11][0][1] == str(bits)
+        response = json.loads(commands.run([compiler, 'language-evm', *selection]))
+        assert response['policy'] == policy
+        assert response['descriptor'] == json.loads(native['artifact'])[2]
+        assert response['original'] == json.loads(native['artifact'])[1]
+        event = next(row for row in response['descriptor'][3] if row[0] == 'gated-indices')
+        assert event[2:] == ['2', '16', str(bits)]
+        assert response['descriptor'][7] == [
+            [event[1], 'gate.' + policy[11][0][0], 'index', 'native.index/0']]
+        assert response['yul']
+
+for name, request, refusal in (
+    ('zero-bound', '0,16', 'source.service'),
+    ('zero-count', '2,0', 'source.service'),
+    ('nonpower-bound', '3,16', 'native-proof-index-block'),
+    ('count-ceiling', '2,1048577', 'native-proof-index-block'),
+):
+    with case(f'EVM construction preserves common index-block refusal for {name}'):
+        source = OUT / f'invalid-block-{name}.zkc'
+        source.write_text(GATED_SOURCE.replace('BITS', '0').replace('2,16', request))
+        selection = ['--source-format=zkc', f'--module=gated={source}', '--entry=gated::Proof']
+        for mode in ('language-package', 'language-evm'):
+            commands.run([compiler, mode, *selection], refuses=refusal)
 
 with case('a Yul export refusal joins the diagnostics captured before it'):
     # Every message site adds its origin template to the static invocation

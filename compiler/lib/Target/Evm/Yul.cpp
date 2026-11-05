@@ -136,6 +136,18 @@ std::string sign(Type type, StringRef value) {
 }
 
 LogicalResult Exporter::transcript(Operation *op) {
+  bool challenge = isa<TranscriptChallengeOp>(op);
+  bool index = isa<TranscriptIndexOp>(op);
+  bool gated = isa<TranscriptIndicesGatedOp>(op);
+  bool block = gated || isa<TranscriptIndicesOp>(op);
+  if (!realizedSuite)
+    return refuse(op, "transcript operation requires a realized policy suite");
+  if (challenge && op->getAttrOfType<TypeAttr>("value_type").getValue() !=
+                       realizedSuite->challenge->type)
+    return refuse(op, "challenge field differs from managed transcript policy");
+  if ((index || block) &&
+      op->getAttrOfType<StringAttr>("suite").getValue() != realizedSuite->suite)
+    return refuse(op, "index suite differs from managed transcript policy");
   auto origin = runtime::exportNativeOrigin(
       op->getAttrOfType<runtime::NativeOriginAttr>("origin"));
   if (!origin) {
@@ -161,7 +173,7 @@ LogicalResult Exporter::transcript(Operation *op) {
                         message->schema, message->sender,   message->receiver};
   } else if (auto *query =
                  std::get_if<protocol::NativeQueryOrigin>(&origin->event)) {
-    if (query->method != "draw")
+    if (query->method != (index ? "index" : block ? "indices" : "draw"))
       return refuse(op, "unsupported transcript query method");
     event = json::Array{
         "query",        query->protocol,
@@ -189,7 +201,23 @@ LogicalResult Exporter::transcript(Operation *op) {
   unsigned coordinates = op->getNumOperands() - 2;
   Value coordinateData = op->getOperand(coordinates);
   Value coordinateLength = op->getOperand(coordinates + 1);
-  out << "{\nlet occurrence := evm_alloc(4096)\n";
+  bool rejection =
+      challenge &&
+      realizedSuite->decoder == TranscriptRealization::Decoder::Rejection31Le;
+  uint64_t bound = 0, count = 0, difficulty = 0;
+  std::string witness = gated ? name(op->getOperand(2)) : "0";
+  out << "{\n";
+  if (block) {
+    bound = op->getAttrOfType<IntegerAttr>("bound").getUInt();
+    count = op->getAttrOfType<IntegerAttr>("count").getUInt();
+    if (gated)
+      difficulty = op->getAttrOfType<IntegerAttr>("difficulty").getUInt();
+    // Native shape and canonical-zero checks precede origin reconstruction.
+    out << "evm_transcript_block_validate(" << bound << ", " << count << ", "
+        << difficulty << ", " << witness << ")\n";
+  }
+  // Successful buffered results are compacted over this expired workspace.
+  out << "let occurrence := evm_alloc(4096)\n";
   out << "if iszero(eq(" << name(coordinateLength) << ", " << depth
       << ")) { evm_fault(8) }\n";
   copyStatic(*prefix, "occurrence");
@@ -218,12 +246,44 @@ LogicalResult Exporter::transcript(Operation *op) {
     out << list(op->getResults()) << " := evm_transcript_observe("
         << name(op->getOperand(0)) << ", " << name(op->getOperand(1))
         << ", frame, frameLength, occurrence, sub(end, occurrence))\n";
+  } else if (block) {
+    out << "evm_transcript_block_check(" << name(op->getOperand(0)) << ", "
+        << name(op->getOperand(1)) << ")\n"
+        << "let resultData := evm_alloc(" << count * 32 << ")\n"
+        << name(op->getResult(2)) << " := evm_transcript_indices("
+        << name(op->getOperand(0)) << ", " << name(op->getOperand(1)) << ", "
+        << bound << ", " << count << ", " << difficulty << ", " << witness
+        << ", resultData, occurrence, sub(end, occurrence))\n"
+        << "mcopy(occurrence, resultData, " << count * 32 << ")\n"
+        << name(op->getResult(0)) << " := occurrence\n"
+        << name(op->getResult(1)) << " := " << count << "\n";
+  } else if (index) {
+    out << list(op->getResults()) << " := evm_transcript_index("
+        << list(op->getOperands().take_front(3))
+        << ", occurrence, sub(end, occurrence))\n";
+  } else if (rejection) {
+    out << "let resultData := 0\n"
+        << "resultData, " << name(op->getResult(1))
+        << " := evm_transcript_challenge_rejection31("
+        << name(op->getOperand(0)) << ", " << name(op->getOperand(1))
+        << ", occurrence, sub(end, occurrence), "
+        << realizedSuite->challenge->degree << ")\n"
+        << "mcopy(occurrence, resultData, "
+        << realizedSuite->challenge->coefficientBytes() << ")\n"
+        << name(op->getResult(0)) << " := occurrence\n";
   } else {
     out << list(op->getResults()) << " := evm_transcript_challenge("
         << name(op->getOperand(0)) << ", " << name(op->getOperand(1))
         << ", occurrence, sub(end, occurrence))\n";
   }
-  out << "mstore(0x40, occurrence)\n}\n";
+  if (block)
+    out << "mstore(0x40, add(occurrence, " << count * 32 << "))\n";
+  else if (rejection)
+    out << "mstore(0x40, add(occurrence, "
+        << realizedSuite->challenge->coefficientBytes() << "))\n";
+  else
+    out << "mstore(0x40, occurrence)\n";
+  out << "}\n";
   return success();
 }
 
@@ -238,7 +298,8 @@ LogicalResult Exporter::operation(Operation *op) {
   }
   if (isa<EvmDialect>(op->getDialect())) {
     declare(op->getResults());
-    if (isa<TranscriptObserveOp, TranscriptChallengeOp>(op))
+    if (isa<TranscriptObserveOp, TranscriptChallengeOp, TranscriptIndexOp,
+            TranscriptIndicesOp, TranscriptIndicesGatedOp>(op))
       return transcript(op);
     if (isa<SourceStopOp, SourceGuardOp>(op)) {
       uint64_t code = 0;
@@ -473,6 +534,18 @@ LogicalResult Exporter::operation(Operation *op) {
     if (invert)
       out << ")";
     out << "\n";
+    return success();
+  }
+  if (isa<arith::MinUIOp, arith::MaxUIOp, arith::MinSIOp, arith::MaxSIOp>(op)) {
+    bool signedCompare = isa<arith::MinSIOp, arith::MaxSIOp>(op);
+    bool minimum = isa<arith::MinUIOp, arith::MinSIOp>(op);
+    std::string a = name(op->getOperand(0)), b = name(op->getOperand(1));
+    out << "let " << name(op->getResult(0)) << " := " << a << "\nif "
+        << (signedCompare ? (minimum ? "sgt(" : "slt(")
+                          : (minimum ? "gt(" : "lt("))
+        << (signedCompare ? sign(op->getOperand(0).getType(), a) : a) << ", "
+        << (signedCompare ? sign(op->getOperand(1).getType(), b) : b) << ") { "
+        << name(op->getResult(0)) << " := " << b << " }\n";
     return success();
   }
   if (auto select = dyn_cast<arith::SelectOp>(op)) {

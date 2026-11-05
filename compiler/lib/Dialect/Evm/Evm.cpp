@@ -84,7 +84,8 @@ template <typename Op> LogicalResult attributes(Op op) {
              << attr.getName();
   return success();
 }
-LogicalResult origin(Operation *op, bool observation) {
+LogicalResult origin(Operation *op, bool observation,
+                     llvm::StringRef method = "draw") {
   auto attr = op->getAttrOfType<runtime::NativeOriginAttr>("origin");
   auto value = runtime::exportNativeOrigin(attr);
   if (!value) {
@@ -102,10 +103,36 @@ LogicalResult origin(Operation *op, bool observation) {
           "[evm.origin] observation requires message occurrence");
   } else {
     auto *query = std::get_if<protocol::NativeQueryOrigin>(&value->event);
-    if (!query || query->method != "draw")
+    if (!query || query->method != method)
       return op->emitOpError(
-          "[evm.origin] challenge requires draw query occurrence");
+          "[evm.origin] transcript query method differs from operation");
   }
+  return success();
+}
+LogicalResult indexSuite(Operation *op, bool block) {
+  auto suite = op->getAttrOfType<StringAttr>("suite");
+  if (!suite)
+    return op->emitOpError("[evm.construction] requires transcript suite");
+  NativeLayouts layouts(*op->getContext());
+  auto realized =
+      realizeTranscript(layouts, *op->getContext(), suite.getValue());
+  if (!realized) {
+    llvm::consumeError(realized.takeError());
+    return op->emitOpError("[evm.construction] unsupported transcript suite");
+  }
+  if (block ? !realized->indexBlock : !realized->index)
+    return op->emitOpError("[evm.construction] suite lacks index capability");
+  return origin(op, false, block ? "indices" : "index");
+}
+LogicalResult indexBlock(Operation *op, bool gated) {
+  if (failed(indexSuite(op, true)))
+    return failure();
+  auto bound = op->getAttrOfType<IntegerAttr>("bound").getUInt();
+  auto count = op->getAttrOfType<IntegerAttr>("count").getUInt();
+  if (!bound || bound > (uint64_t(1) << 63) || (bound & (bound - 1)) ||
+      !count || count > 1048576 ||
+      (gated && op->getAttrOfType<IntegerAttr>("difficulty").getUInt() > 64))
+    return op->emitOpError("[evm.construction] invalid native index block");
   return success();
 }
 LogicalResult wire(LayoutCheck &check) {
@@ -653,7 +680,24 @@ LogicalResult TranscriptChallengeOp::verify() {
   if (!scalar ||
       !realizedChallengeField(c.layouts, *getContext(), scalar.getDomain()))
     return emitOpError("[evm.value-type] requires realized challenge field");
-  return c.signature({c.i64, c.i64, c.i64, c.i64}, {c.i256, c.i64});
+  SmallVector<Type> outputs(c.layout->lanes.begin(), c.layout->lanes.end());
+  outputs.push_back(c.i64);
+  return c.signature({c.i64, c.i64, c.i64, c.i64}, outputs);
+}
+LogicalResult TranscriptIndexOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  return indexSuite(*this, false);
+}
+LogicalResult TranscriptIndicesOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  return indexBlock(*this, false);
+}
+LogicalResult TranscriptIndicesGatedOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  return indexBlock(*this, true);
 }
 LogicalResult SourceStopOp::verify() {
   if (failed(attributes(*this)))

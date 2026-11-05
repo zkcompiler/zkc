@@ -647,10 +647,6 @@ fn source_descriptor_and_policy_keep_the_current_carriers_and_associations() {
         // not realize.
         (5, json!("merlin3.bls12-381.fr64be/0")),
         (5, json!("spongefish0.8.0.keccak.bls12-381.fr64be/0")),
-        (
-            5,
-            json!("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"),
-        ),
         (6, json!([])),
         (6, json!(["1", "1"])),
         (7, json!(["0", "0"])),
@@ -990,13 +986,21 @@ fn calldata_has_the_exact_context_before_proof_order_and_padding() {
 
 #[test]
 fn the_realized_suites_are_selected_by_installed_transcript_facts() {
-    let realized = zkc_catalog::CATALOG
+    let mut realized = zkc_catalog::CATALOG
         .domains
         .iter()
         .map(|row| row.identity.name())
         .filter(|suite| super::realized_suite(suite))
         .collect::<Vec<_>>();
-    assert_eq!(realized, ["hash-chain.keccak256.bls12-381.fr64be/0"]);
+    realized.sort_unstable();
+    assert_eq!(
+        realized,
+        [
+            "hash-chain.keccak256.bls12-381.fr64be/0",
+            "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+        ]
+    );
     assert!(!super::realized_suite("bls12-381.fr"));
     assert!(!super::realized_suite(
         "hash-chain.keccak256.bls12-381.fr64be/1"
