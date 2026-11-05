@@ -84,7 +84,7 @@ exportNativeSourceOrigin(StringRef entry, const NativeSourceOrigin &origin) {
       },
       origin.event);
 }
-Expected<StringMap<NativeSourceOrigin>>
+Expected<RealizedNativeOrigins>
 realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
                       StringRef entry,
                       const StringMap<NativeSourceOrigin> &authored) {
@@ -293,6 +293,6 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
     if (!std::holds_alternative<NativeOracleOrigin>(item.second.event) &&
         !result.contains(item.first()))
       return error("native-proof-origin-coverage");
-  return result;
+  return RealizedNativeOrigins{std::move(candidate), std::move(result)};
 }
 } // namespace zkc::detail

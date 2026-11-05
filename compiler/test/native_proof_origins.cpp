@@ -1,8 +1,10 @@
 #include "../lib/Compiler/NativeProofOrigins.h"
+#include "../lib/Transforms/OracleCommonRealization.h"
 #include "../lib/Transforms/RealizedProtocol.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -69,7 +71,7 @@ int main() {
         auto origins =
             take(zkc::detail::realizedNativeOrigins(edge, "main", logical));
         unsigned requests = 0, responses = 0, deliveries = 0;
-        for (const auto &item : origins) {
+        for (const auto &item : origins.origins) {
           const auto &origin = item.second;
           if (!std::holds_alternative<protocol::NativeMessageOrigin>(
                   origin.event))
@@ -94,6 +96,73 @@ int main() {
                 "origin inventory lost the ordered query blocks or root "
                 "deliveries");
       });
+  cases.run(
+      "origin candidate survives owner moves and unrelated mutation", [&] {
+        OwningOpRef<ModuleOp> original;
+        std::string record;
+        protocol::OracleRealizationPolicy policy;
+        auto inspect = [&](const zkc::detail::RealizedNativeOrigins &snapshot) {
+          require(bool(original) && bool(snapshot.candidate),
+                  "origin snapshot lost a side of the realization");
+          if (auto failure = protocol::checkOracleRealization(
+                  *original, *snapshot.candidate, record, policy))
+            throw std::runtime_error(toString(std::move(failure)));
+          std::vector<std::string> encoded;
+          snapshot.candidate.get().walk([&](protocol_ir::ExchangeOp exchange) {
+            auto origin = snapshot.origins.find(exchange.getSite());
+            require(origin != snapshot.origins.end(),
+                    "actual exchange lost its retained origin");
+            auto *message = std::get_if<protocol::NativeMessageOrigin>(
+                &origin->second.event);
+            require(message && message->site == exchange.getSite() &&
+                        message->sender == exchange.getSender() &&
+                        message->receiver == exchange.getReceiver(),
+                    "retained origin no longer describes the actual exchange");
+            encoded.push_back(take(protocol::encodeNativeOriginTemplate(
+                take(zkc::detail::exportNativeSourceOrigin("main",
+                                                           origin->second)))));
+          });
+          require(encoded.size() == 6 &&
+                      encoded.size() == messages(snapshot.origins).size(),
+                  "actual candidate and retained message inventory diverged");
+          llvm::sort(encoded);
+          return encoded;
+        };
+        std::vector<std::string> baseline;
+        auto retained = [&] {
+          auto localSource = fixture(context);
+          require(succeeded(admitStage(*localSource)),
+                  "lifetime fixture must have a valid source baseline");
+          auto localOrigins = authored(*localSource);
+          auto owner = realize(*localSource);
+          original = owner.preparedSnapshot();
+          record = owner.realizationRecord().str();
+          policy = owner.oraclePolicy();
+          auto snapshot = take(
+              zkc::detail::realizedNativeOrigins(owner, "main", localOrigins));
+          // Establish a successful actual-body and origin baseline before
+          // mutation.
+          baseline = inspect(snapshot);
+          auto unrelated = owner.candidateSnapshot();
+          require(bool(unrelated) &&
+                      unrelated.get() != snapshot.candidate.get(),
+                  "candidate snapshots must have separate ownership");
+          auto moved = std::move(owner);
+          require(!owner.candidateSnapshot(),
+                  "moved-from realization retained its candidate");
+          unrelated->getBody()->getOperations().clear();
+          auto fresh = take(
+              zkc::detail::realizedNativeOrigins(moved, "main", localOrigins));
+          require(inspect(fresh) == baseline && inspect(snapshot) == baseline,
+                  "owner move or unrelated mutation changed retained facts");
+          return snapshot;
+        }();
+        // The source, both realization owners and the unrelated snapshot are
+        // gone. Recheck the detached pair; origins alone cannot grant
+        // admission.
+        require(inspect(retained) == baseline,
+                "returned candidate or origins borrowed a destroyed owner");
+      });
   cases.run("missing authored query lineage refuses", [&] {
     auto incomplete = logical;
     incomplete.erase("duplicate");
@@ -109,10 +178,10 @@ int main() {
     auto after =
         take(zkc::detail::realizedNativeOrigins(edge, "main", changed));
     unsigned changedRequests = 0;
-    for (const auto &item : before)
+    for (const auto &item : before.origins)
       if (item.first().ends_with("opening_request"))
         changedRequests +=
-            item.second.protocol != after.lookup(item.first()).protocol;
+            item.second.protocol != after.origins.lookup(item.first()).protocol;
     require(
         changedRequests == 1,
         "a non-first batch occurrence failed to bind its complete query group");
@@ -123,7 +192,7 @@ int main() {
         take(zkc::detail::realizedNativeOrigins(edge, "main", logical));
     auto after =
         take(zkc::detail::realizedNativeOrigins(sequential, "main", logical));
-    require(messages(before) != messages(after),
+    require(messages(before.origins) != messages(after.origins),
             "realization choice was not bound");
   });
   cases.run("unexpected authored event cannot disappear", [&] {

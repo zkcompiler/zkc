@@ -2242,7 +2242,7 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
       detail::realizedNativeOrigins(*owner, policy.entry, *occurrenceMap);
   if (!actualOrigins)
     return actualOrigins.takeError();
-  auto candidate = owner->candidateSnapshot();
+  auto candidate = std::move(actualOrigins->candidate);
   if (!candidate || !unit(*candidate))
     return error("native-proof-preparation");
   std::shared_ptr<const protocol::SourceExecutionClosure> realizedExecution;
@@ -2261,11 +2261,12 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
             construction ? &*construction : nullptr, invocations))
       return std::move(e);
   }
-  return PreparedProof{std::move(originalOwner), std::move(originalExecution),
-                       std::move(candidate),     std::move(realizedExecution),
-                       std::move(*joint),        std::move(*actualOrigins),
-                       std::move(construction),  std::move(invocations),
-                       std::move(owner)};
+  return PreparedProof{
+      std::move(originalOwner), std::move(originalExecution),
+      std::move(candidate),     std::move(realizedExecution),
+      std::move(*joint),        std::move(actualOrigins->origins),
+      std::move(construction),  std::move(invocations),
+      std::move(owner)};
 }
 } // namespace
 Expected<NativeProofPolicy> selectNativeProofDraws(
