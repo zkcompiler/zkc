@@ -2167,6 +2167,11 @@ a concrete constant. Math summaries compose under the selected bodies and
 capture mappings. Equal formation dependency sets may be deduplicated; this
 does not omit operation coverage. Local placement uses all eager operands and
 captures independently of mathematical result dependencies.
+Retained summaries keep their immutable computation owners alive, including
+implicit Boolean roots created during usage inference and all nested regions.
+Discarding a temporary checking body cannot leave address-keyed summaries that
+can be reused for a different body. These owners expire with the source check;
+they do not become runtime closures or extend authority across project revisions.
 
 Closure materializes ordinary private helpers with explicit capture inputs and
 specializes accepting functions with the selected helpers. Their hidden data

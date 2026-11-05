@@ -366,7 +366,9 @@ contracts authenticate here. Closed specialization maps and discharges them;
 its inferred data requirements remain subject to the separate body replay above.
 Variable premise counts, natural terms/factors, telescope strings, static type
 arguments, explicit effect dependencies and selector paths are charged before
-snapshot copies and comparison.
+snapshot copies and comparison. View and conformance reconstruction preflight
+every copied declaration, including unused declarations whose effect dependency
+maps are unrelated to the header currently being compared.
 Static-only comparisons do not copy unrelated admission-origin lists. Data,
 consumer and managed-header replay retains its lazy reconstruction when those
 contracts apply. No whole-body re-elaboration is required by this comparison.
@@ -488,8 +490,11 @@ consumed states and stopped arms retain their existing outcome obligations.
 Finite descriptor recipes retain their eager resolved operand references in the
 immutable source record. A protocol repeat's recipe-capture suffix must match
 those available source values through typed identity edges and validated
-type-preserving participant restrictions. Identity edges preserve availability;
-they cannot restore components discarded by a restriction. Restriction inputs
+type-preserving participant restrictions. Each immediate identity edge preserves
+participant availability, oracle holder and ordinary data placement. Comparing
+only compressed endpoints is insufficient: an intermediate edge cannot discard
+and then restore that metadata. Identity edges cannot restore components
+discarded by a restriction. Restriction inputs
 must precede their producer, retain ordinary data placement and supply every selected participant;
 they cannot gain participants. This equivalence is specific to recipe captures,
 whose final availability is exactly the intersection of the eager operand's
