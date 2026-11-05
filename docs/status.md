@@ -220,15 +220,20 @@ Focused row, polynomial and backend-require controls compare native outcomes
 and complete deployed hash traces; malformed ODS controls protect normalization.
 The Direct quartic Keccak FRI reference independently replays the shared library.
 Its original eight-query scalar fixture needs 122 transitions, above the target's
-64-transition ceiling; wide helper signatures also expose solc stack pressure.
+64-transition ceiling. The smaller source diagnostic exceeds the static target
+conversion allowance; earlier emitted variants also exposed solc stack pressure.
 Native/reference FRI success does not establish deployed FRI or STARK support.
 The small FRI geometry is a closure control, not a security profile.
 Every path envelope remains bounded by the declared path ceiling. Other Merkle
 schemes, multiproofs, additional curve operations, transcript families and decoders other
 than the realized ones and full STARK verifier deployment need additional
-target support. Conditional participant completion
-in the verifier refuses with `evm.completion`. These checks are bounded
-execution evidence, not a formal lowering or cryptographic theorem.
+target support. The target structurally lowers participant selection, bounded
+repeats and full-tuple conditional completion through MLIR control flow. Flat
+conditional completion is supported; full selected-proof production remains
+dependent on common preparation and dynamic-origin support. A cumulative static
+target work bound protects this conversion separately from deployment and native
+execution allowances. These checks are bounded execution evidence, not a formal
+lowering or cryptographic theorem.
 
 The target-local [BLS G1 adapter](spec/targets/evm.md#bls12-381-g1-adapter)
 adds typed add/scale/equality operations and strict native compressed frames
