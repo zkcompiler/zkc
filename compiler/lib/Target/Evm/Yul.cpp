@@ -1,4 +1,5 @@
 #include "Arithmetic.h"
+#include "Authentication.h"
 #include "Runtime.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -33,7 +34,7 @@ public:
            const NativeProofPolicy &policy, const EvmLimits &limits)
       : module(module), endpoint(endpoint), policy(policy), limits(limits),
         layouts(*module.getContext()), arithmetic(layouts, limits),
-        wire(layouts, limits), out(text) {}
+        authentication(layouts, limits), wire(layouts, limits), out(text) {}
   Expected<std::string> run();
 
 private:
@@ -45,6 +46,7 @@ private:
   /// The realized transcript suite of the checked policy, when it has one.
   std::optional<TranscriptRealization> realizedSuite;
   detail::Arithmetic arithmetic;
+  detail::Authentication authentication;
   WireGenerator wire;
   std::string text;
   raw_string_ostream out;
@@ -301,6 +303,13 @@ LogicalResult Exporter::operation(Operation *op) {
     if (isa<TranscriptObserveOp, TranscriptChallengeOp, TranscriptIndexOp,
             TranscriptIndicesOp, TranscriptIndicesGatedOp>(op))
       return transcript(op);
+    if (isa<RequireOp>(op)) {
+      // Bound control.require reports rejected:require, independently of the
+      // source-site classification of a protocol guard.
+      out << "if iszero(" << name(op->getOperand(0))
+          << ") { evm_source(16) }\n";
+      return success();
+    }
     if (isa<SourceStopOp, SourceGuardOp>(op)) {
       uint64_t code = 0;
       if (auto site = op->getAttrOfType<StringAttr>("site")) {
@@ -323,8 +332,11 @@ LogicalResult Exporter::operation(Operation *op) {
             FieldEqualOp, FieldFromIndexOp, FieldEmbedOp, FieldInverseOp,
             VectorConstantOp, VectorEmptyOp, VectorLengthOp, VectorAppendOp,
             VectorSplitOp, VectorSumOp, VectorAllocOp, VectorGetOp, VectorSetOp,
-            VectorEqualOp>(op))
+            VectorEqualOp, PolyDomainRootOp, PolyDomainPointOp,
+            PolyFromCoefficientsOp, PolyEvaluateOp>(op))
       helper = arithmetic.helper(op);
+    else if (isa<OracleCheckOp>(op))
+      helper = authentication.helper(op);
     else if (isa<ProofReceiveOp, SequenceEmptyOp, SequenceAppendOp,
                  SequenceLengthOp, SequenceGetOp, SequenceAllocOp,
                  SequenceSetOp, VariantMakeOp, VariantTagOp, VariantGetOp,
@@ -839,7 +851,7 @@ Expected<std::string> Exporter::run() {
   for (auto function : module.getOps<func::FuncOp>())
     if (failed(this->function(function)))
       return zkc::error("evm.yul", "could not emit target function");
-  out << arithmetic.helpers() << wire.definitions();
+  out << arithmetic.helpers() << authentication.helpers() << wire.definitions();
   out << "}\n";
   for (const auto &item : data)
     out << "data \"" << item.name << "\" hex\"" << toHex(item.bytes, true)

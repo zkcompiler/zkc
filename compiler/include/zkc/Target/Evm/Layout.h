@@ -44,7 +44,8 @@ struct ValueLayout {
     FieldArray,
     FixedVector,
     Root,
-    Path
+    Path,
+    Univariate
   };
   mlir::Type logical;
   Kind kind;

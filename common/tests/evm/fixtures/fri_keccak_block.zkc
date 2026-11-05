@@ -1,0 +1,23 @@
+module fri_keccak_block;
+use fri::{Direct, BlockLowDegree};
+use zkc::vector::{Vector};
+use zkc::indices::{Indices};
+domain F = field("koala-bear.ext4-binomial3");
+// Separate product-block query law; not a replacement for ScalarLowDegree.
+// Structural closure control only; these parameters are not a security profile.
+protocol Fri roles(P,V)(word: Vector<F> @P, shift: F @(P,V),
+    round_count: index @(P,V), query_count: index @(P,V), coins: Random<F> @V)
+    -> (accepted: bool @V, positionsP: Indices @P,
+        positionsV: Indices @V, valuesV: Vector<F> @V) {
+  let (accepted, positionsP, positionsV, valuesV) =
+    BlockLowDegree<Direct<F>,5,0,3,8>(word, shift, shift,
+      round_count, query_count, coins);
+  return (accepted = accepted, positionsP = positionsP,
+          positionsV = positionsV, valuesV = valuesV);
+}
+proof Proof = Fri {
+  prover P; verifier V;
+  public { shift, round_count, query_count };
+  accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", coins);
+}
