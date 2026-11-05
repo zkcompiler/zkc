@@ -584,8 +584,8 @@ bridges take a package's format from the SDK's project inspection. Nominal home-
 ordinary invocation binder and resolved mode/effects. Imports do not extend
 method eligibility. Protocol methods derive their complete role substitution
 from an exact fixed-roster receiver map; legacy direct logical families still
-require a unique complete roster. Managed Random signatures
-still use the existing service adapter rather than the callable index.
+require a unique complete roster. Managed service constructors and methods
+resolve through installed catalog declarations in the same index.
 Invocation checking now reconstructs source child values, named destinations,
 protocol roles and exact managed-service roots from immutable source occurrences
 in every body and callback. Coordinated action/binding swaps and balanced
@@ -594,8 +594,10 @@ source and preserves its lexical authority and value mapping.
 The maintained new-syntax Schnorr fixture executes valid and
 invalid witnesses, extra unused random draws and reached guards. Optional specs
 retain their authored source and resolved protocol attachment, with assurance
-reported as open and unresolved; every declared postcondition and request remains
-in the required obligation inventory. Native checking does not prove them. The ordinary
+reported as open and unresolved. Explicit target acceptance, grouped and anonymous
+security requests, and formal site selectors survive written-source export;
+every declared postcondition and request remains in the required obligation
+inventory. Native checking does not prove them. The ordinary
 project/SDK default remains the existing syntax. Shortened implementation
 signatures, complete mathematical control, schemes and typed formal projections
 remain outside the development execution profile. The integrated
@@ -739,10 +741,20 @@ sealed witnesses through Prove, Verify and Run, including verifier rejection,
 empty ordinary fields and external child-admission refusal. These are native
 artifact and execution checks, not a formal security correspondence.
 
+Member-generic Math, Local and Protocol contracts compare universally quantified
+member binders after owner specialization. Alpha-renamed parameters, associated
+domains, roles, services, callback contracts and effects retain one selected
+implementation through closure and independent authored replay. Stronger hidden
+formation or boundary-admission requirements refuse; unsupported implication is
+not delegated to optional formal intent. The [connected 4.1 clients](../compiler/test/fixtures/layout/library-contracts/README.md)
+exercise Schnorr, a fixed two-variable Sumcheck/full-table opening control and
+distributed linear custody through actual native execution. These controls do
+not establish cryptographic security or complete the maintained-library migration.
+Protocol interface members use the layout reader; the retiring brace reader
+has no new Protocol interface syntax.
+
 Fixed source arrays use static numeric indexing. Private ingress without an
-admitted validator, member-generic conformance and zero-leaf messages refuse.
-Abstract callable signatures with member generics can be checked and inspected,
-but modules implementing them are not supported. Associated types cannot
+admitted validator and zero-leaf messages refuse. Associated types cannot
 introduce member-specific static parameters.
 Implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
@@ -1151,8 +1163,9 @@ exercise home-authorized consuming inspection and repacking through closed sourc
 native originals, independently decoded interfaces, actual-candidate comparison
 and CPU Run compilation. [Native bundle execution](../common/tests/protocol/test_distributed_succession.py)
 checks scalar results at zero, one and multiple trips with simplification enabled
-and disabled, without fabricated resource ingress. The function Entry Host schema
-gap described above remains separate. Fixed-roster fragments retain exact roots across helper
+and disabled, without fabricated resource ingress. Function Entry Host schema
+support is covered separately by the fresh Entry component tests above.
+Fixed-roster fragments retain exact roots across helper
 calls and existing repeats, including zero trips, private/sealed payloads and
 non-identity role maps. Consume plus fresh construction remains an invalid
 repeat successor. Source-selected control integration and independent formal

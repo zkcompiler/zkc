@@ -37,6 +37,7 @@ class Parser {
   std::vector<uint32_t> significant;
   size_t cursor = 0;
   unsigned recursion = 0, angleDepth = 0;
+  bool formalTerms = false;
   const Environment *environment;
   std::map<const Environment *,
            std::map<std::string, const NotationDescriptor *>>
@@ -280,7 +281,14 @@ class Parser {
         }
     auto delimited = notation(text(), NotationDescriptor::Position::Delimited);
     auto reduction = notation(text(), NotationDescriptor::Position::Reduction);
-    if (at("if") || at("match")) {
+    if (formalTerms && at("site") && token(1).kind == TokenKind::Word) {
+      advance();
+      auto pathBegin = mark();
+      auto path = name();
+      while (take("."))
+        path = make(Kind::Projection, pathBegin, {path, name(false)});
+      left = make(Kind::SiteReference, begin, {path});
+    } else if (at("if") || at("match")) {
       bool matching = take("match");
       if (!matching)
         expect("if");
@@ -570,9 +578,25 @@ class Parser {
     return make(Kind::Suite, begin, children);
   }
   NodeId contract(SuiteKind context) {
+    auto previousFormalTerms = formalTerms;
+    formalTerms =
+        context == SuiteKind::Contract || context == SuiteKind::Requests;
+    auto restoreTerms = scope_exit([&] { formalTerms = previousFormalTerms; });
     auto begin = mark();
     Kind kind = Kind::Request;
     std::vector<NodeId> children;
+    if (formalTerms && at("security") && text(1) == ":") {
+      advance();
+      expect(":");
+      if (at(TokenKind::LineEnd)) {
+        children.push_back(suite(SuiteKind::Requests));
+      } else {
+        auto requestBegin = mark();
+        children.push_back(make(Kind::Request, requestBegin, {expression()}));
+        lineEnd();
+      }
+      return make(Kind::Security, begin, children);
+    }
     if (at("requires") || at("ensures") || at("target") || at("reduces") ||
         at("law")) {
       if (context == SuiteKind::Requests)
@@ -600,6 +624,11 @@ class Parser {
       if (kind == Kind::Reduces) {
         expect("to");
         children.push_back(expression());
+      } else if (kind == Kind::Target && at("accept")) {
+        auto decisionBegin = mark();
+        advance();
+        children.push_back(
+            make(Kind::Acceptance, decisionBegin, {expression()}));
       }
     } else if (context == SuiteKind::Oracle && at("query")) {
       advance();
@@ -630,6 +659,16 @@ class Parser {
       } else
         children.push_back(expression());
       kind = Kind::Selection;
+    } else if (formalTerms) {
+      if (token().kind == TokenKind::Word &&
+          (text(1) == ":" || text(1) == "=")) {
+        children.push_back(name(false));
+        if (take("="))
+          kind = Kind::GoalAlias;
+        else
+          expect(":");
+      }
+      children.push_back(expression());
     } else {
       children.push_back(name(false));
       if (take("="))

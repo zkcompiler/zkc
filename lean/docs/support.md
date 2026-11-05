@@ -2,6 +2,10 @@
 
 The [independent STARK components](spec/stark-components.md) prove strict
 constraint/DEEP quotient laws, uniform polynomial batching and typed OOD bounds.
+Adaptive-candidate bounds additionally allow quotient lists fixed after batching
+and before evaluation, with explicit trace- and quotient-list losses.
+First-admissible selection laws preserve every attempted draw, distinguish joint
+from iid histories, and keep exhaustion and conditional success separate.
 Optional ArkLib adapters reuse proved list-collision and quotienting bounds and
 the two-word affine-line unique-decoding result. A separate proved capacity bound
 also gives many-word power-batch distance preservation for a common target code,
@@ -10,6 +14,22 @@ a typed common-degree quotient specialization. The general degree-corrected STIR
 combination theorem has a transitive admitted dependency and is excluded from
 the established roots. These are reusable mathematical components; compiled STARK composition,
 IR association, selected parameters and bounded-search provider correspondence remain separate obligations.
+
+The [recorded batch-authentication laws](spec/fiat-shamir-security.md#shared-batch-authentication)
+recover all scalar authentication paths from one shared pruned frontier and
+prove ordered whole-row agreement with the existing extractor, or a collision
+in the recorded hash calls. Native batch correspondence, selected row codecs,
+provider bounds and application-event coverage are separate obligations.
+
+The [shared-permutation record laws](spec/fiat-shamir-security.md#fixed-extraction-from-a-shared-permutation-record)
+use one request-fixed extractor for fixed-width overwrite-sponge leaves and
+Merkle nodes, including multiblock rows and cross-role input aliases. The
+monitored finite two-sided ideal lazy permutation records every primitive call
+and proves a bound on disagreement with any recorded scalar opening or ordered
+batch. The bound counts cached, inverse and pre-allocation queries as well as
+fresh calls. Source/native operation correspondence and security of unrestricted
+public fixed Poseidon2 computation are not established by this ideal-service
+result.
 
 The [explicit-table model](spec/table-relations.md) proves complete Boolean
 laws for finite masked membership and exact indexed reads, including duplicate

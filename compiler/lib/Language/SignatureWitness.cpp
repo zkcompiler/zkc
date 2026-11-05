@@ -1,5 +1,6 @@
 #include "SignatureWitness.h"
 #include "Checker.h"
+#include "Conformance.h"
 #include "Effects.h"
 #include "Internal.h"
 #include "ScopedWitness.h"
@@ -58,54 +59,6 @@ bool checkOrigins(Semantics &types, const Declaration &decl,
          refuse("callback item origins differ from authored selectors");
 }
 
-bool checkMemberInputs(Semantics &types, const Declaration &required,
-                       const Declaration &provided,
-                       const Substitution &bindings) {
-  auto refuse = [&] {
-    return types.fail("source.scoped-witness",
-                      "implementation callback contract differs from interface",
-                      provided.span);
-  };
-  if (!types.charge(required.inputOrder.size() + required.domainInputs.size() +
-                        required.scopedInputs.size() + 1,
-                    provided.span))
-    return false;
-  if (required.kind != provided.kind ||
-      required.inputOrder.size() != provided.inputOrder.size() ||
-      required.domainInputs.size() != provided.domainInputs.size() ||
-      required.scopedInputs.size() != provided.scopedInputs.size())
-    return refuse();
-  for (unsigned i = 0; i < required.inputOrder.size(); ++i)
-    if (required.inputOrder[i].kind != provided.inputOrder[i].kind ||
-        required.inputOrder[i].index != provided.inputOrder[i].index)
-      return refuse();
-  auto sameType = [&](const Type &expected, const Type &actual) {
-    auto resolved = types.substitute(expected, bindings, provided.span);
-    return resolved && (*resolved == actual || refuse());
-  };
-  for (unsigned i = 0; i < required.domainInputs.size(); ++i)
-    if (!sameType(required.domainInputs[i].item, provided.domainInputs[i].item))
-      return false;
-  for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
-    const auto &expected = required.scopedInputs[i];
-    const auto &actual = provided.scopedInputs[i];
-    if (!types.charge(expected.itemOrigins.size() + actual.itemOrigins.size() +
-                          expected.signature.inputs.size() + 1,
-                      provided.span))
-      return false;
-    if (expected.itemOrigins != actual.itemOrigins ||
-        expected.signature.mode != actual.signature.mode ||
-        expected.signature.allowance != actual.signature.allowance ||
-        expected.signature.inputs.size() != actual.signature.inputs.size())
-      return refuse();
-    for (unsigned j = 0; j < expected.signature.inputs.size(); ++j)
-      if (!sameType(expected.signature.inputs[j], actual.signature.inputs[j]))
-        return false;
-    if (!sameType(expected.signature.result, actual.signature.result))
-      return false;
-  }
-  return true;
-}
 } // namespace
 llvm::Error checkSignatureSources(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
@@ -176,9 +129,10 @@ struct ContractHeaders {
   Semantics &types;
   std::map<uint32_t, const SyntaxDeclaration *> sources;
   std::map<uint32_t, uint32_t> parents;
-  bool managed = false;
+  bool allProtocols = false;
   bool collect(const SyntaxDeclaration &source, const std::string &path,
-               std::optional<DeclarationId> parent, unsigned depth) {
+               std::optional<DeclarationId> parent, unsigned depth,
+               bool contractMember = false) {
     if (depth > types.work.limits.typeDepth)
       return types.fail("source.limit", "conformance source depth",
                         source.span);
@@ -195,7 +149,8 @@ struct ContractHeaders {
         source.kind != Declaration::Kind::Variant &&
         source.kind != Declaration::Kind::Math &&
         source.kind != Declaration::Kind::Local &&
-        (!managed || source.kind != Declaration::Kind::Protocol) &&
+        !(source.kind == Declaration::Kind::Protocol &&
+          (allProtocols || contractMember)) &&
         source.kind != Declaration::Kind::DomainFunction)
       return true;
     auto id = storage.declarationIndex->canonical(path);
@@ -213,12 +168,54 @@ struct ContractHeaders {
           StringRef(path).rsplit("::").first);
     if (parent)
       parents.emplace(id->index, parent->index);
+    bool memberContract =
+        source.kind == Declaration::Kind::Interface ||
+        (source.kind == Declaration::Kind::Module && source.definition);
     for (const auto &member : source.members)
-      if (!collect(member, path + "::" + member.name, *id, depth + 1))
+      if (!collect(member, path + "::" + member.name, *id, depth + 1,
+                   memberContract))
         return false;
     return true;
   }
 };
+bool useRetainedProtocolHeaders(const CheckedStorage &storage,
+                                ContractHeaders &headers, Semantics &types) {
+  // Classification and lexical input IDs belong to immutable parsed syntax.
+  // Re-resolve managed constructor routes before replaying its type terms.
+  for (auto &[id, source] : headers.sources) {
+    if (source->kind != Declaration::Kind::Protocol)
+      continue;
+    auto found = storage.bodySources.find(id);
+    if (!types.charge(1, source->span))
+      return false;
+    if (found == storage.bodySources.end() || !found->second ||
+        found->second->owner.index != id || !found->second->syntax)
+      return types.fail("source.scoped-witness", "missing Protocol header",
+                        source->span);
+    const auto &parsed = *found->second->syntax;
+    if (parsed.kind != source->kind || parsed.name != source->name ||
+        parsed.span.source.index != source->span.source.index ||
+        parsed.span.begin != source->span.begin ||
+        parsed.span.end != source->span.end)
+      return types.fail("source.scoped-witness", "Protocol source differs",
+                        source->span);
+    source = &parsed;
+    for (const auto &port : source->services) {
+      auto selected = storage.declarationIndex->lookup(
+          SourceAccess{DeclarationId{id}}, port.type.name,
+          {[&] { return types.charge(1, port.span); }, {}});
+      auto *reference = std::get_if<ResolvedReference>(&selected);
+      if (!reference || !port.serviceReference ||
+          *reference != *port.serviceReference)
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.scoped-witness",
+                                "managed constructor lookup differs",
+                                port.span);
+    }
+  }
+  return true;
+}
 // All header consumers start from the same authored parameter indexing and
 // signature inference/admission lifecycle. Candidate parameter atoms must not
 // enter the reader's semantic index before these telescopes are reconstructed.
@@ -330,10 +327,11 @@ bool signatureAgrees(Semantics &types, const Declaration &actual,
                     actual.span))
     return false;
   if (actual.kind != written.kind || actual.abstract != written.abstract ||
+      actual.completes != written.completes ||
       actual.associatedSort != written.associatedSort ||
       !(actual.permissions == written.permissions) ||
       actual.resource != written.resource || actual.sealed != written.sealed ||
-      actual.domain != written.domain ||
+      actual.domain != written.domain || actual.roles != written.roles ||
       actual.implementation != written.implementation ||
       actual.parameters.size() != written.parameters.size() ||
       actual.inputs.size() != written.inputs.size() ||
@@ -357,8 +355,31 @@ bool signatureAgrees(Semantics &types, const Declaration &actual,
       if (a[i].name != b[i].name || a[i].type != b[i].type)
         return refuse();
   }
-  if (!checkMemberInputs(types, written, actual, {}))
+  if (!memberInputs(types, written, actual, {}, "source.scoped-witness"))
     return false;
+  // Reconstruct signature-derived boundary premises, rather than accepting
+  // candidate premises or permitting their omission. Defined bodies may add
+  // derived obligations; member inclusion independently checks those as goals.
+  auto admissionKeys = [&](const Declaration &declaration,
+                           std::set<std::pair<Boundary, std::string>> &keys) {
+    for (const auto &obligation : declaration.admissions) {
+      if (!types.chargeType(obligation.type, declaration.span) ||
+          !types.charge(obligation.calls.size() + 1, declaration.span))
+        return false;
+      keys.emplace(obligation.boundary, typeIdentity(obligation.type));
+    }
+    return true;
+  };
+  std::set<std::pair<Boundary, std::string>> actualAdmissions,
+      writtenAdmissions;
+  if (!admissionKeys(actual, actualAdmissions) ||
+      !admissionKeys(written, writtenAdmissions))
+    return false;
+  if (!std::includes(actualAdmissions.begin(), actualAdmissions.end(),
+                     writtenAdmissions.begin(), writtenAdmissions.end()) ||
+      ((!actual.body || actual.abstract) &&
+       actualAdmissions != writtenAdmissions))
+    return refuse();
   // Replay includes signature inference, not just written bounds. Bodies can
   // append obligations (or strengthen an inferred usage leaf) only where the
   // authored declaration permits inference. Such additions are goals below,
@@ -401,147 +422,6 @@ bool signatureAgrees(Semantics &types, const Declaration &actual,
     return refuse();
   return true;
 }
-// Permission caches in a candidate obligation are not premises, including
-// caches nested in a product. The caller charges and bounds the tree first.
-void clearPermissionAssumptions(Type &type) {
-  type.assumptions = {};
-  for (auto &argument : type.arguments)
-    clearPermissionAssumptions(argument);
-}
-bool implementationAgrees(Semantics &types, const Declaration &module,
-                          const Declaration &interface,
-                          const Declaration &required,
-                          const Declaration &provided,
-                          const Substitution &bindings) {
-  auto refuse = [&](StringRef message) {
-    return types.fail("source.scoped-witness", message, provided.span);
-  };
-  if (required.kind == Declaration::Kind::Associated) {
-    const auto &sort = required.associatedSort;
-    if (isDomainSort(sort) && (sort != provided.associatedSort ||
-                               sort != domainSort(provided.domain)))
-      return refuse("associated implementation sort differs");
-    if (isStaticOnly(provided.domain))
-      return isDomainSort(sort) ||
-             refuse("runtime associated representation differs");
-    Type self(Type::Kind::Module, module.qualifiedName);
-    for (const auto &p : module.parameters)
-      self.arguments.push_back(parameterType(p));
-    Type type(Type::Kind::Associated, provided.qualifiedName);
-    type.arguments.push_back(std::move(self));
-    auto promised = required.permissions.value_or(Permissions{});
-    if (required.resource)
-      promised = {false, *required.resource == Resource::Affine};
-    auto caps = types.permissions(type, provided.span, &module);
-    return caps && (caps->includes(promised) ||
-                    refuse("associated implementation permissions differ"));
-  }
-  if (required.parameters.size() != interface.parameters.size() ||
-      provided.parameters.size() != module.parameters.size() ||
-      required.inputs.size() != provided.inputs.size() ||
-      required.outputs.size() != provided.outputs.size() ||
-      bool(required.domainResult) != bool(provided.domainResult))
-    return refuse("implementation signature arity differs");
-  for (bool input : {true, false}) {
-    const auto &a = input ? required.inputs : required.outputs;
-    const auto &b = input ? provided.inputs : provided.outputs;
-    for (unsigned i = 0; i < a.size(); ++i) {
-      auto expected = types.substitute(a[i].type, bindings, provided.span);
-      if (!expected || (*expected != b[i].type &&
-                        !refuse("implementation port signature differs")))
-        return false;
-    }
-  }
-  if (!checkMemberInputs(types, required, provided, bindings))
-    return false;
-  if (required.domainResult) {
-    auto expected =
-        types.substitute(*required.domainResult, bindings, provided.span);
-    if (!expected || (*expected != *provided.domainResult &&
-                      !refuse("implementation domain result differs")))
-      return false;
-  }
-  for (const auto &condition : provided.dataPreconditions)
-    if (!llvm::is_contained(required.dataPreconditions, condition))
-      return refuse("implementation strengthens data preconditions");
-  Declaration available{};
-  available.parameters = module.parameters;
-  available.bounds = module.bounds;
-  available.permissionBounds = module.permissionBounds;
-  available.capabilityBounds = module.capabilityBounds;
-  for (const auto &p : required.parameters) {
-    auto actual = bindings.find(p.atom);
-    if (actual != bindings.end() && !(p.permissions == Permissions{}))
-      available.permissionBounds.push_back(
-          {actual->second, p.permissions, p.span});
-  }
-  for (const auto &bound : required.bounds) {
-    Type l(Type::Kind::Natural), r(Type::Kind::Natural);
-    l.dimension = bound.lhs;
-    r.dimension = bound.rhs;
-    auto lhs = types.substitute(l, bindings, provided.span);
-    auto rhs = types.substitute(r, bindings, provided.span);
-    if (!lhs || !rhs)
-      return false;
-    available.bounds.push_back({lhs->dimension, rhs->dimension, bound.span});
-  }
-  for (const auto &bound : required.permissionBounds) {
-    auto value = types.substitute(bound.type, bindings, provided.span);
-    if (!value)
-      return false;
-    available.permissionBounds.push_back(
-        {*value, bound.permissions, bound.span});
-  }
-  for (const auto &bound : required.capabilityBounds) {
-    CapabilityBound assumption{bound.predicate, {}, bound.span};
-    for (const auto &argument : bound.arguments) {
-      auto value = types.substitute(argument, bindings, provided.span);
-      if (!value)
-        return false;
-      assumption.arguments.push_back(std::move(*value));
-    }
-    if (llvm::any_of(assumption.arguments,
-                     [&](const auto &t) { return types.symbolic(t); }))
-      available.capabilityBounds.push_back(std::move(assumption));
-    else if (!types.entails(nullptr, assumption, "source.scoped-witness"))
-      return false;
-  }
-  for (const auto &bound : provided.capabilityBounds)
-    if (!types.entails(&available, bound, "source.scoped-witness"))
-      return false;
-  for (const auto &bound : provided.bounds)
-    if (!types.assumptions(available, bound, {}, provided.span))
-      return false;
-  for (const auto &bound : provided.permissionBounds) {
-    if (!types.chargeType(bound.type, provided.span))
-      return false;
-    Type requirement = bound.type;
-    clearPermissionAssumptions(requirement);
-    auto value = types.substitute(requirement, {}, provided.span);
-    auto caps = value ? types.permissions(*value, provided.span, &available)
-                      : std::nullopt;
-    if (!caps ||
-        (!caps->includes(bound.permissions) &&
-         !refuse("implementation strengthens permission preconditions")))
-      return false;
-  }
-  for (unsigned i = 0; i < provided.parameters.size(); ++i) {
-    if (isStaticOnly(parameterType(provided.parameters[i])))
-      continue;
-    auto caps = types.permissions(parameterType(module.parameters[i]),
-                                  provided.span, &available);
-    if (!caps || (!caps->includes(provided.parameters[i].permissions) &&
-                  !refuse("implementation strengthens parameter permissions")))
-      return false;
-  }
-  if (required.kind == Declaration::Kind::DomainFunction)
-    return bool(provided.domainDefinition) ||
-           refuse("implementation domain recipe missing");
-  return provided.body &&
-         effectsWithin(types, provided.body->effects,
-                       required.effectAllowance.value_or(EffectSummary{}),
-                       provided.span);
-}
 } // namespace
 llvm::Expected<std::map<uint32_t, std::vector<ServicePort>>>
 replayServicePorts(const CheckedStorage &storage, Work &work) {
@@ -571,30 +451,8 @@ replayServicePorts(const CheckedStorage &storage, Work &work) {
   for (const auto &source : authored)
     if (!headers.collect(source, source.name, {}, 1))
       return types.takeError();
-  // The retained body syntax owns the classification and lexical input IDs.
-  // Its type terms and roles are replayed; candidate fields are discarded.
-  for (auto &[id, source] : headers.sources) {
-    if (source->kind != Declaration::Kind::Protocol)
-      continue;
-    auto found = storage.bodySources.find(id);
-    if (found == storage.bodySources.end() || !found->second ||
-        !found->second->syntax)
-      return failure("source.binding-witness", "missing managed input syntax",
-                     source->span);
-    source = found->second->syntax.get();
-    for (const auto &port : source->services) {
-      auto selected = storage.declarationIndex->lookup(
-          SourceAccess{DeclarationId{id}}, port.type.name,
-          {[&] { return types.charge(1, port.span); }, {}});
-      auto *reference = std::get_if<ResolvedReference>(&selected);
-      if (!reference || !port.serviceReference ||
-          *reference != *port.serviceReference)
-        return types.diagnostic
-                   ? types.takeError()
-                   : failure("source.binding-witness",
-                             "managed constructor lookup differs", port.span);
-    }
-  }
+  if (!useRetainedProtocolHeaders(storage, headers, types))
+    return types.takeError();
   CheckedStorage replay(storage.capture, storage.installation);
   auto reader = reconstructHeaders(storage, replay, headers, types, work);
   if (!reader)
@@ -661,6 +519,8 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
     for (const auto &source : authored)
       if (!headers.collect(source, source.name, {}, 1))
         return false;
+    if (!useRetainedProtocolHeaders(storage, headers, types))
+      return false;
     std::vector<DeclarationId> implementations;
     for (unsigned index = 0; index < storage.declarations.size(); ++index) {
       const auto &decl = storage.declarations[index];
@@ -822,9 +682,9 @@ llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
                             module.span);
         if (!reconstruct(*requiredId) || !reconstruct(*providedId))
           return false;
-        if (!implementationAgrees(premises, writtenModule, writtenContract,
-                                  replay.declarations[requiredId->index],
-                                  provided, bindings))
+        if (!memberContract(premises, writtenModule, writtenContract,
+                            replay.declarations[requiredId->index], provided,
+                            bindings, "source.scoped-witness"))
           return types.accept(premises.takeError());
       }
     }

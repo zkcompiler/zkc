@@ -339,7 +339,6 @@ bool Checker::constructions() {
             return false;
         } else if (auto call =
                        std::get_if<ProtocolApplication>(&operation.action)) {
-          const auto &callee = output.declarations[call->callee.index];
           std::vector<Type> actual;
           for (const auto &argument : call->arguments) {
             auto value = types.substitute(argument, bindings, operation.span);
@@ -347,6 +346,24 @@ bool Checker::constructions() {
               return false;
             actual.push_back(std::move(*value));
           }
+          std::optional<Type> module;
+          if (operation.binding && operation.binding->target.module) {
+            module = types.substitute(*operation.binding->target.module,
+                                      bindings, operation.span);
+            if (!module)
+              return false;
+          }
+          auto selected =
+              types.dispatch(module, call->callee, actual, operation.span);
+          if (!selected || !this->body(selected->declaration, 1))
+            return false;
+          const auto &callee = output.declarations[selected->declaration.index];
+          if (!callee.body)
+            return types.fail("source.construction",
+                              "construction site traversal needs a selected "
+                              "protocol implementation",
+                              operation.span);
+          actual = std::move(selected->arguments);
           std::vector<unsigned> captured;
           for (auto service : call->services)
             captured.push_back(services[service.index]);
@@ -354,7 +371,7 @@ bool Checker::constructions() {
           for (auto role : call->roles)
             mappedRoles.push_back(roles[role]);
           calls.push_back(
-              {path, validPath, call->callee, actual, captured, mappedRoles});
+              {path, validPath, callee.id, actual, captured, mappedRoles});
           if (!collect(*callee.body, types.substitution(callee, actual),
                        captured, mappedRoles, path, validPath, depth + 1))
             return false;

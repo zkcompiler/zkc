@@ -7,8 +7,8 @@
 using namespace llvm;
 namespace zkc::language::detail {
 std::optional<std::vector<unsigned>>
-Semantics::proofGateOrder(const Declaration &protocol,
-                          const ProofEntry &proof) {
+Semantics::proofGateOrder(const Declaration &protocol, const ProofEntry &proof,
+                          ArrayRef<Type> arguments) {
   if (proof.gates.empty())
     return std::vector<unsigned>{};
   auto refuse = [&](const Twine &message, Span span) {
@@ -44,7 +44,8 @@ Semantics::proofGateOrder(const Declaration &protocol,
     // Repeats retain lexical site identity. Calls consume authored path
     // components; generated names never participate in source resolution.
     auto walk = [&](auto &&self, const Body &body, unsigned component,
-                    ArrayRef<unsigned> services, unsigned depth) -> bool {
+                    ArrayRef<unsigned> services, const Substitution &bindings,
+                    unsigned depth) -> bool {
       if (depth > work.limits.callDepth)
         return fail("source.limit", "gate occurrence depth exceeded",
                     gate.span);
@@ -56,7 +57,8 @@ Semantics::proofGateOrder(const Declaration &protocol,
           std::vector<unsigned> captures;
           for (auto service : repeat->services)
             captures.push_back(services[service.index]);
-          if (!self(self, *repeat->region, component, captures, depth + 1))
+          if (!self(self, *repeat->region, component, captures, bindings,
+                    depth + 1))
             return false;
         } else if (operation.site && *operation.site == gate.path[component]) {
           if (component + 1 == gate.path.size()) {
@@ -79,9 +81,32 @@ Semantics::proofGateOrder(const Declaration &protocol,
             std::vector<unsigned> captures;
             for (auto service : call->services)
               captures.push_back(services[service.index]);
-            const auto &callee = declarations[call->callee.index];
-            if (!callee.body ||
-                !self(self, *callee.body, component + 1, captures, depth + 1))
+            std::vector<Type> actual;
+            for (const auto &argument : call->arguments) {
+              auto value = substitute(argument, bindings, operation.span);
+              if (!value)
+                return false;
+              actual.push_back(std::move(*value));
+            }
+            std::optional<Type> module;
+            if (operation.binding && operation.binding->target.module) {
+              module = substitute(*operation.binding->target.module, bindings,
+                                  operation.span);
+              if (!module)
+                return false;
+            }
+            auto selectedCall =
+                dispatch(module, call->callee, actual, operation.span);
+            if (!selectedCall)
+              return false;
+            const auto &callee = declarations[selectedCall->declaration.index];
+            if (!callee.body)
+              return fail(
+                  "source.gate",
+                  "gate traversal needs a selected protocol implementation",
+                  gate.span);
+            if (!self(self, *callee.body, component + 1, captures,
+                      substitution(callee, selectedCall->arguments), depth + 1))
               return false;
           }
         }
@@ -91,7 +116,8 @@ Semantics::proofGateOrder(const Declaration &protocol,
     };
     std::vector<unsigned> services(protocol.services.size());
     std::iota(services.begin(), services.end(), 0);
-    if (!protocol.body || !walk(walk, *protocol.body, 0, services, 1))
+    if (!protocol.body || !walk(walk, *protocol.body, 0, services,
+                                substitution(protocol, arguments), 1))
       return {};
     if (matches != 1)
       return refuse(

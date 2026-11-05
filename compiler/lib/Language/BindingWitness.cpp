@@ -618,6 +618,9 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     if (distinctRoles.size() != binding.roles.size())
       return refuse();
     auto subst = types.substitution(callee, binding.arguments);
+    if (binding.target.module && callee.parent)
+      subst.emplace("self:" + declarations[callee.parent->index].qualifiedName,
+                    *binding.target.module);
     auto mapped = [&](const Port &port) {
       std::vector<unsigned> roles;
       for (auto role : port.roles)

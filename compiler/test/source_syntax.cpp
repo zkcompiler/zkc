@@ -116,7 +116,7 @@ void corpus() {
   check(metered.workUsed() > metered.tokens().size() &&
             metered.workUsed() <= Budget{}.work,
         "syntax work is available for project aggregate charging");
-  check(files == 15, "complete accepted example corpus");
+  check(files == 16, "complete accepted example corpus");
 }
 void designCases() {
   auto buffer =

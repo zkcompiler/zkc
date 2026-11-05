@@ -532,6 +532,7 @@ Semantics::dispatch(const std::optional<Type> &module, DeclarationId required,
     return refuse("static dispatch member arguments differ");
   const bool callable = target.kind == Declaration::Kind::Math ||
                         target.kind == Declaration::Kind::Local ||
+                        target.kind == Declaration::Kind::Protocol ||
                         target.kind == Declaration::Kind::DomainFunction;
   if (callable && completeDispatchBody &&
       !completeDispatchBody(*provided, enclosingCalls))

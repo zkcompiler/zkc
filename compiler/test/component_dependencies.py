@@ -209,7 +209,7 @@ def main():
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
     private_headers["ZkcLanguage"].update(
         ROOT / f"lib/Language/{name}.h"
-        for name in ("CallResolution", "CommonRequirements", "RecordIntrinsics")
+        for name in ("CallResolution", "CommonRequirements", "Conformance", "RecordIntrinsics")
     )
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
     private_headers["ZkcTranslation"].add(ROOT / "lib/Translation/Entry/Native.h")

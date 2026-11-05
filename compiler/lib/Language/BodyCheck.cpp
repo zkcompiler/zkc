@@ -434,26 +434,22 @@ bool BodyChecker::statementBody(const Statement &s) {
     expected = Type{};
   if (s.kind == Statement::Kind::Expression && !s.terminated)
     expected = Type(Type::Kind::Unit);
-  std::optional<TypeScope> methodTypes;
+  std::optional<TypeScope> callTypes;
   if ((expr.kind == Expression::Kind::Call ||
        expr.kind == Expression::Kind::MethodCall) &&
       !expr.binding) {
+    // Classify through the same callable selection that checks the call.
+    // Namespace lookup alone cannot select a symbolic module's member.
+    callTypes.emplace(*this, s.expression,
+                      s.kind == Statement::Kind::Expression && !s.terminated
+                          ? std::nullopt
+                          : expected);
+    if (!*callTypes)
+      return false;
     std::optional<DeclarationId> target;
-    if (expr.kind == Expression::Kind::MethodCall) {
-      // An unbound protocol application is dispatched before ordinary unit
-      // expression checking, just like a qualified protocol application.
-      methodTypes.emplace(*this, s.expression,
-                          s.kind == Statement::Kind::Expression && !s.terminated
-                              ? std::nullopt
-                              : expected);
-      if (!*methodTypes)
-        return false;
-      auto found = this->inference->callees.find(s.expression);
-      if (found != this->inference->callees.end())
-        target = found->second.declaration;
-    } else
-      // Dispatch only; inference records the call's route.
-      target = checker.probe(decl, expr.text, expr.span, nullptr);
+    auto found = this->inference->callees.find(s.expression);
+    if (found != this->inference->callees.end())
+      target = found->second.declaration;
     if (checker.types.diagnostic)
       return false;
     if (target && checker.output.declarations[target->index].kind ==

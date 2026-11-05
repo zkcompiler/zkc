@@ -54,8 +54,8 @@ def entries : List Entry := [
   ⟨"hypothesis.fri-folding-proximity", .libraryHypothesis,
     some `ZkcSecurity.ArkLib.Fri.FoldingProximity,
     "Mutual correlated agreement of the line generator on every folded Reed-Solomon code at \
-    the radius; proved at the unique-decoding radius, and for folding up to the cube-root \
-    radius, and open beyond."⟩,
+    the radius; supplied by unique-decoding, cube-root, or Johnson/weighted-Johnson \
+    heads with their explicit dimension and certificate premises."⟩,
   ⟨"family.fri-round-by-round", .familyProperty, some `ZkcSecurity.ArkLib.Fri.RoundByRound,
     "The round-by-round soundness certificate of the FRI verifier at the ideal \
     interpretation, with errors per folding round and for the query block."⟩,

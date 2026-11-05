@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from . import algebra, commitments, operations, stark
 from .execution import compile_program
 from .io import digest, require, write_json
+from .oracle_policy import OraclePolicy, OracleProfile
 from .programs import Program, local
 from .runner import Capture
 
@@ -123,6 +124,24 @@ proof Proof=Work{prover P;verifier V;public{width,height,expected};accept accept
                    oracle='every ascending quartic coordinate is nonzero; opened row compared with public expected coordinates; native/browser exact proof agreement; no independent root or security claim')
 
 
+def quartic_keccak_fri(root):
+    """Reuse the exact Direct FRI consumer, with an independent polynomial word."""
+    from coset_reference import CosetReference
+    source = root/'common/tests/evm/fixtures/fri_keccak.zkc'
+    reference = CosetReference('koala-bear.ext4-binomial3')
+    shift = (3, 1, 0, 0)
+    coefficients = [(i+1, i*i, 2*i, 1) for i in range(8)]
+    word = [reference.horner(coefficients, point) for point in reference.domain(shift, 32)]
+    return Program(source.read_text(), [{'public': {'shift': reference.encode(shift),
+                       'round_count': '3', 'query_count': '8'},
+                   'witness': {'word': list(map(reference.encode, word))}}],
+        entry='fri_keccak::Proof', proof=True, dependencies=('protocols.polynomial.fri',),
+        support=(source, root/'common/tests/evm/fri_closure.py',
+                 root/'common/tests/support/coset_reference.py', root/'common/tests/support/binomial_reference.py'),
+        oracle_policy=OraclePolicy(OracleProfile.QUARTIC_KECCAK_BLOCKS),
+        oracle='exact ScalarLowDegree<Direct<F>,5,0,3,8> structural closure; independent CosetReference degree-seven word over 32 natural-order points; returned authenticated query values checked against that word; exact native/browser proof bytes; no proximity, security or formal claim')
+
+
 def blst_control(pairing):
     if pairing:
         parameters = 'count:index'
@@ -204,6 +223,9 @@ def prepare(args):
     if args.compiler:
         capture.add(args.compiler)
     selected = list(catalog(root))
+    # The exact closure control is opt-in; preserve the ordinary default panel.
+    if args.case and 'quartic-keccak-fri' in args.case:
+        selected.append(('quartic-keccak-fri', lambda: quartic_keccak_fri(root), ['plonky3']))
     if args.setup_material:
         selected.append(('setup-key-proof', lambda: setup_key(root, args.setup_material.resolve()), ['arkworks', 'blst']))
     require(not args.case or set(args.case) <= {c[0] for c in selected}, 'unknown browser fixture case')
@@ -232,6 +254,9 @@ def prepare(args):
         candidate = {'name': name, 'directory': str(directory), 'providers': providers,
                      'oracle_realization': program.oracle_policy.record(),
                      'statements': statements, 'options': {'allow_authored': 'construction authored' in program.source}}
+        if name == 'quartic-keccak-fri':
+            # The manual native/browser harness reads this same admission file.
+            write_json(directory/'options.json', candidate['options'] | {'providers': providers})
         if name == 'setup-key-proof':
             material = args.setup_material.resolve()
             candidate['authority'] = str(material/'authority.json')

@@ -72,7 +72,7 @@ pub fn source_name_profile_identity() -> &'static str {
 }
 /// Encode an already checked labelled application path. Repeat coordinates are
 /// dynamic construction inputs, not static path segments.
-#[cfg(any(feature = "cpu", test))]
+#[cfg(any(feature = "cpu", feature = "evm", test))]
 pub(crate) fn native_site_path(path: &[String]) -> String {
     let mut site = String::new();
     for part in path {

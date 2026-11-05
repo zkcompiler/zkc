@@ -41,6 +41,40 @@ LIBRARIES = [
 ]
 
 
+def quartic_keccak_policy():
+    record = expected_policy('fri-keccak256-koala-bear-quartic-atomic-blocks',
+                             'rows.merkle-keccak256.koala-bear.ext4-binomial3/0')
+    record['selection'].update(order='after-final-draw', authentication='atomic-blocks')
+    return record
+
+
+def test_quartic_keccak_profile_is_a_closed_opt_in_measurement(modules):
+    record = quartic_keccak_policy()
+    policy = modules.oracle_policy.read_policy(record)
+    assert policy.profile is modules.oracle_policy.OracleProfile.QUARTIC_KECCAK_BLOCKS
+    assert json.loads(policy.flag().split('=', 1)[1]) == record['selection']
+    assert policy.record() == record
+    # Ordinary FRI workloads and optimization candidates keep their selection.
+    assert modules.oracle_policy.workload_policy('fri', {}) == modules.oracle_policy.OCTIC_KECCAK
+    assert modules.oracle_policy.OraclePolicy().selection() == expected_policy('clear-table', '')['selection']
+
+
+@pytest.mark.parametrize('change', ['octic', 'clear', 'grouping', 'table-order', 'draw-order', 'per-query', 'unknown'])
+def test_quartic_keccak_profile_refuses_selection_drift(modules, change):
+    record = quartic_keccak_policy()
+    selection = record['selection']
+    table = selection['roots']['table']
+    if change == 'octic': table['scheme'] = OCTIC[1]
+    elif change == 'clear': table['scheme'] = ''
+    elif change == 'grouping': table['grouping'] = 'antipodal-pairs'
+    elif change == 'table-order': table['order'] = 'bit-reversed'
+    elif change == 'draw-order': selection['order'] = 'unrestricted'
+    elif change == 'per-query': selection['authentication'] = 'per-query'
+    else: selection['extra'] = True
+    with pytest.raises(modules.io.MeasurementError, match='exact profile'):
+        modules.oracle_policy.read_policy(record)
+
+
 @pytest.mark.parametrize('family,field,profile,scheme', [
     ('fri', None, *OCTIC), ('air', None, *OCTIC), ('machine', None, *OCTIC),
     *(('stark', *row) for row in LIBRARIES),
@@ -135,8 +169,10 @@ def test_optimization_candidate_records_separate_semantic_request(modules):
 
 
 @pytest.mark.parametrize('drift', [False, True])
-def test_compiler_receipt_matches_independent_expected_policy(modules, tmp_path, drift):
-    policy = expected_policy(*OCTIC)
+@pytest.mark.parametrize('quartic', [False, True])
+def test_compiler_receipt_matches_independent_expected_policy(modules, tmp_path, drift, quartic):
+    policy = quartic_keccak_policy() if quartic else expected_policy(*OCTIC)
+    typed_policy = modules.oracle_policy.read_policy(policy)
     compiler = tmp_path/'compiler'
     published = options(expected_policy('clear-table', '')['selection'] if drift else policy['selection'])
     compiler.write_text(f'''#!{sys.executable}
@@ -150,7 +186,7 @@ print(json.dumps({{'options':{published!r}}}))
     compiler.chmod(0o755)
     source = tmp_path/'source'; source.mkdir()
     args = SimpleNamespace(source=source, compiler=compiler, timeout=5, compiler_option=[])
-    program = modules.programs.Program('module example;', [], dependencies=(), oracle_policy=modules.oracle_policy.OCTIC_KECCAK)
+    program = modules.programs.Program('module example;', [], dependencies=(), oracle_policy=typed_policy)
     manifest = {}
     def call():
         return modules.execution.compile_program(args, tmp_path/'out', modules.runner.Capture(tmp_path/'capture'),

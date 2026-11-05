@@ -14,6 +14,12 @@ struct FormalNodeId {
 struct FormalReference {
   std::string name;
 };
+struct FormalSite {
+  FormalNodeId path;
+};
+struct FormalSecurity {
+  std::vector<FormalNodeId> requests;
+};
 struct FormalLiteral {
   enum class Kind { Natural, Boolean, String } kind;
   std::string spelling;
@@ -96,6 +102,7 @@ struct FormalClause {
   std::optional<FormalNodeId> label;
   FormalNodeId value;
   std::optional<FormalNodeId> residual;
+  std::optional<FormalNodeId> decision;
 };
 struct FormalImport {
   bool isPublic = false, lean = false;
@@ -163,13 +170,13 @@ struct FormalAttribute {
   std::vector<FormalNodeId> arguments;
 };
 using FormalValue = std::variant<
-    FormalReference, FormalLiteral, FormalHole, FormalSequence, FormalArgument,
-    FormalApplication, FormalMember, FormalOperator, FormalRoles,
-    FormalAvailability, FormalRoleAssembly, FormalDeclaration, FormalClause,
-    FormalImport, FormalBinding, FormalReturn, FormalGuard, FormalIf,
-    FormalMatch, FormalCase, FormalFor, FormalSend, FormalQuery,
-    FormalOracleSend, FormalQueryBody, FormalQuantifier, FormalLambda,
-    FormalReduction, FormalAttribute>;
+    FormalReference, FormalSite, FormalSecurity, FormalLiteral, FormalHole,
+    FormalSequence, FormalArgument, FormalApplication, FormalMember,
+    FormalOperator, FormalRoles, FormalAvailability, FormalRoleAssembly,
+    FormalDeclaration, FormalClause, FormalImport, FormalBinding, FormalReturn,
+    FormalGuard, FormalIf, FormalMatch, FormalCase, FormalFor, FormalSend,
+    FormalQuery, FormalOracleSend, FormalQueryBody, FormalQuantifier,
+    FormalLambda, FormalReduction, FormalAttribute>;
 struct FormalNode {
   source::Span span;
   FormalValue value;

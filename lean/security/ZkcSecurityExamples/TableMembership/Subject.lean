@@ -37,9 +37,9 @@ noncomputable instance samples : ∀ event : Domain.Event model.toCarriers,
 /-- Closed source and artifact admission, before the required connection installation. -/
 def admittedSubject : HonestPair.Subject model original imported selected := by
   bind_authored_subject "selected_rows" exports
-    "sha256:74d4bc43c8cb1cf3ec783e4cfbffcceb2671d08d0c6132c2d884dfbf06895964",
-    "sha256:df57c1cb2687526661407fe7edf64ae135a7e39949b99ee7b36cef61e5870744",
-    "sha256:604950bc7ce10f42e51966e1edbbaf6fd28f5394a5341b4b3626f39d58edaa16"
+    "sha256:6af83ed2005d9869fa10e2565db4a9e8b1dbdb36e65e5cf22caeef760822126f",
+    "sha256:e8eeb5f53b2c09587f867564d77ae2f16a9d219a413f926c47e2387d07ae97c6",
+    "sha256:2f9247eabe6adc88896857f1c4bf7f91366c6b0965157cd5046019f323186ca5"
 
 /-- Fix the admitted metadata before deriving both complete source connections.
 This subject requires the links explicitly; failed proof production cannot

@@ -228,7 +228,10 @@ edge uses index zero. A literal's `literal` field retains its source spelling
 | `roles` | optional `holder`, ordered `participants` |
 | `availability` | `value`, `roles` |
 | `specification`, `relation`, `ghost_function`, `oracle_function`, `law_declaration` | Boolean `public`; optional `name`, `parameters`, `inputs`, `roles`, `result`, `constraints`, `effects`, `body`, `subject` |
-| `requires`, `ensures`, `target`, `reduces`, `request`, `alias`, `law` | optional `label`, `value`, optional `residual` |
+| `requires`, `ensures`, `reduces`, `request`, `alias`, `law` | optional `label`, `value`, optional `residual` |
+| `target` | optional `label`, `value`, optional `residual` (null), optional `decision` |
+| `security` | ordered `requests` |
+| `site` | `value` |
 | `import` | Boolean `public`, Boolean `lean`, `module`, optional `alias`, ordered `members` |
 | `binding` | `pattern`, `value`, optional `type`; Boolean `mutable`, `ordered`, `update` |
 | `return` | `value` |
@@ -252,6 +255,15 @@ An ordinary role list has no holder. Custody has a holder and receiver
 participants; it cannot collapse into a shared availability list. `group`
 preserves one parenthesized argument, distinct from tuple construction.
 `reduces` preserves its source relation in `value` and destination in `residual`.
+A target's `decision` retains the authored expression after `accept`, or null
+when absent; it is not a guessed output or a checked acceptance association.
+`security` retains grouping while its child requests retain their own optional
+labels. Inline `security: expression` has one unlabeled request child. The word
+`security` is not synthesized as that child's label. A `site` node's `value`
+addresses the authored selector expression; its envelope `path` still identifies
+the written node, as for every other kind. No resolved event identity is inferred
+by the writer. These version-0 additions require current producers and readers;
+older anonymous-request lookup keys must not be reused as proof evidence.
 Clause labels, omitted senders and omitted loop maxima are never synthesized by
 this writer. Spans recover punctuation and trivia from the exact capture.
 

@@ -205,8 +205,8 @@ commitments on `koala-bear.ext4-binomial3` (width 16),
 `baby-bear.ext4-binomial11` (width 16), or `goldilocks.ext2-binomial7` (width 8).
 Transcript suites, concrete outer commitments and input shapes are unchanged.
 
-Every profile selects uniform roots, individual leaves, natural table order,
-unrestricted query order and per-query authentication. This choice does not
+The per-query profiles select uniform roots, individual leaves, natural table
+order, unrestricted query order and per-query authentication. This choice does not
 claim atomic authentication, paired leaves, a cryptographic improvement or a
 throughput improvement. The default for other generated workloads is explicit
 `clear-table`; concrete source commitments keep their authored schemes.
@@ -214,7 +214,14 @@ throughput improvement. The default for other generated workloads is explicit
 `zkc.benchmark-oracle-policy/0` has exactly `format`, `profile` and `selection`.
 The profile is one of `clear-table`, `fri-keccak256-koala-bear-octic`,
 `fri-poseidon2-16-koala-bear-quartic`, `fri-poseidon2-16-baby-bear-quartic`,
-or `fri-poseidon2-8-goldilocks-quadratic`. `selection` is the exact
+`fri-poseidon2-8-goldilocks-quadratic`,
+`fri-poseidon2-16-koala-bear-quartic-atomic-blocks`, or the explicitly selected
+`fri-keccak256-koala-bear-quartic-atomic-blocks`. The two atomic-block profiles
+retain individual/natural layout and select after-final-draw ordering with
+atomic-block authentication. The Keccak profile uses
+`rows.merkle-keccak256.koala-bear.ext4-binomial3/0`. These are closed measurement
+selections of existing realizations, without a compiler/catalog or format change.
+`selection` is the exact
 [`zkc.oracle-selection/0`](../../docs/spec/formats/oracle-realization.md#requested-selection)
 request, with all fields present. Unknown fields and profile/selection mismatch
 refuse. There is one current schema; old evidence without this policy is not
@@ -895,6 +902,20 @@ challenge suite in one row-opening proof. All four coordinates are nonzero.
 The manual browser roundtrip checks exact native/browser proof bytes and
 context, framing, input and budget refusals; this does not establish a complete
 STARK client or a cryptographic security claim.
+
+`--case quartic-keccak-fri` is an opt-in fixture for the
+[manual native/browser roundtrip](../../crates/zkc-web/README.md#manual-integration-check),
+outside the default generated panel and the ordinary browser benchmark
+scheduler's existing family/profile selections. It reads the exact EVM fixture
+`fri_keccak.zkc`, calls `ScalarLowDegree<Direct<F>,5,0,3,8>`, and uses quartic
+Keccak rejection31le challenges and the atomic-block Keccak profile above.
+Its 32-row word comes from independent `CosetReference` evaluation with the
+same coefficients and shift as `fri_closure.py`. The manual harness checks
+returned authenticated values against this word, the existing nine request,
+framing, context, budget and lifecycle controls,
+repeated outputs, and exact native/browser proof bytes. It does not substitute
+the octic `fri-8` or `fri-1024` workload. This is bounded structural execution
+evidence, without a security, formal, STARK or EVM completion claim.
 
 External prepared fixtures use one exact case document, with paths relative to
 that document (and statement/material paths relative to the case directory):

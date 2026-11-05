@@ -6,8 +6,11 @@ import ZkcArkLib.Fri.Completeness
 import ZkcArkLib.Fri.Correspondence
 import ZkcArkLib.Fri.Domain
 import ZkcArkLib.Fri.GeneralizedJohnson
+import ZkcArkLib.Fri.Johnson
+import ZkcArkLib.Fri.JohnsonBounds
 import ZkcArkLib.Fri.Protocol
 import ZkcArkLib.Fri.Soundness
+import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLib.Fri.UniqueDecoding
 import ZkcArkLib.Gkr.Layer
 import ZkcArkLib.Knowledge.FiniteRecovery
@@ -48,6 +51,7 @@ import TestsArkLib.Compatibility
 import TestsArkLib.CompiledSumcheckFiatShamir
 import TestsArkLib.Endpoints
 import TestsArkLib.FiniteRecovery
+import TestsArkLib.FriAdoption
 import TestsArkLib.FriSecurity
 import TestsArkLib.KzgEvaluationBinding
 import TestsArkLib.MultilinearSumcheck
