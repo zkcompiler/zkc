@@ -13,10 +13,20 @@ participant and its transitive executable symbols. Selection retains the full
 checked construction source separately from the executable closure. Target
 legality examines reachable operations and types, including nested helpers;
 unsupported reachable code refuses compilation. Unused producer mathematics
-does not make a supported verifier illegal. The target realizes no conditional
-participant completion: a `protocol.finish_if` in the selected verifier refuses
-with `evm.completion` before realization. Completions owned by other
-participants do not enter the verifier closure.
+does not make a supported verifier illegal. Participant selection, bounded
+repeats and conditional completion lower through function control flow before
+standard MLIR restructuring to the target's structured profile. The full result
+tuple reaches one function epilogue, including managed transcript state exactly
+once. Completing with false acceptance is a normal result and still checks
+proof EOF and transcript ownership; a source stop retains its distinct failure
+and unread suffix. Completions owned by other participants do not enter the
+verifier closure.
+
+The target consumes shared checked construction and origin facts. Flat
+conditional completion is supported. Nested selected proof control still needs
+the common preparation producer and its dynamic-origin layout; target control
+lowering does not supply that shared source correspondence. A selected origin
+outside the available layout profile continues to refuse compilation.
 
 Arithmetic consumes the installed domain catalog: prime fields with a modulus
 of at most 256 bits and installed ascending binomial extensions of degree 2–8.
@@ -258,7 +268,21 @@ Checked conditional numeric loops consume their leading Boolean through
 `runtime.take_condition`. Lowering checks the live transfer ticket, returns the
 Boolean lane and preserves that one ticket with the exact remaining payload.
 It allocates no second ownership ticket and does not move or erase effects.
-This does not enable conditional participant completion.
+This numerical loop ticket is distinct from participant completion: participant
+completion exits the full selected function, including enclosing repeats.
+
+Structured while export evaluates the before region before each condition test.
+A false condition publishes the complete result tuple and breaks the nearest
+Yul loop; a true condition enters the after region and forwards its yielded
+values to the next iteration. The exporter adds no private continuation flag.
+
+Target control conversion has a separate cumulative weighted preflight allowance
+of 100,000. It counts operations, operand and result occurrences, successors,
+regions, blocks, arguments, converted lanes and estimated structural expansion
+across the selected closure before transferring its executable regions. It does not
+reset per function, arm or loop. This implementation bound is distinct from
+native execution allowances, deployment ceilings and gas; it is not a claim
+that every later compiler pass takes at most that many steps.
 
 ## Target declaration
 
@@ -539,7 +563,17 @@ agreement for their subjects, not a general target refinement theorem.
 The compiler and the SDK each refuse with their own codes; a code names the
 boundary that refused, and its detail is diagnostic text. A compiler refusal
 reaches an SDK caller inside `source-compilation`, whose diagnostics carry the
-compiler's code and detail.
+compiler's code and detail. Both targets use the common `CompilationError`
+carrier for captured MLIR diagnostics and native refusals: owned rendering,
+structured refusal metadata, recognized file locations and embedding
+preconditions survive context teardown. Raw original compilation preserves the
+supplied filename. Checked Entry compilation maps original locations back to
+authored source using its checked correspondence. Codes are never recovered
+from diagnostic prose; upstream errors may have no zkc code. Mapped locations
+retain their exact captured source ID and byte span in the existing CLI diagnostic
+records. Location records remain separate from flattened refusal rows: the latter
+do not establish a code-to-location association. Raw MLIR coordinates without a
+checked source mapping do not acquire an invented source ID.
 
 The compiler's EVM target refuses, in pipeline order:
 
@@ -549,23 +583,25 @@ The compiler's EVM target refuses, in pipeline order:
 | `evm.fork` | `--evm-version=` on another command or given twice, or a fork name or selection that is not a declared fork |
 | `evm.limits` | A deployment ceiling outside its declared range, or a `--evm-limits=` option that is repeated, used on another language command, exceeds 64 KiB, is malformed/duplicate JSON or is not the complete exact object of declared unsigned integer ceilings |
 | `evm.source-limit` | An original over 16 MiB, empty, nested beyond the MLIR nesting limit or with a filename over 4,096 bytes, or a `zkc.evm-source/0` response over 16 MiB |
-| `evm.source` | An original that does not parse or is not admitted at its stage; the detail is the captured diagnostics |
+| `evm.source` | An original that does not parse or is not admitted at its stage; captured diagnostics accompany the boundary refusal |
 | `evm.entry` | A selected Entry that is not a checked proof Entry, a proof without exactly one native Boolean acceptance, or a lowered module without exactly one EVM entry function |
 | `evm.construction` | An explicit construction, services, draws or gates without a transcript suite, a non-native proof format, or a transcript suite the target does not realize: not an installed hash-chain suite over Keccak-256 that binds its identity, has one of the supported decoder and challenge-field combinations |
 | `evm.field` | A field without an exact installed prime modulus below 2^256, or an extension that is not a declared binomial extension of degree 2 to 8 over such a prime field |
 | `evm.descriptor` | A common construction descriptor that is not the policy's `zkc.native-proof-descriptor/0` with a selection |
-| `evm.closed-execution` | A constructed module the closed-execution pipeline refuses; the detail is the captured diagnostics |
+| `evm.closed-execution` | A constructed module the closed-execution pipeline refuses; captured diagnostics accompany the boundary refusal |
 | `evm.endpoint` | A checked endpoint that is not exactly one selected validator with one checked projection record, unconsumed inputs or affine results, a transcript capability other than the managed suite's, a public row that does not name the validator, port and type, outputs out of source order, or an acceptance that is not exactly one Boolean |
 | `evm.layout` | A public input type without an EVM value layout: not complete Copy and Drop logical data, a vector object other than a commitment or proof, or no local EVM representation |
-| `evm.completion` | A `protocol.finish_if` in the selected verifier |
 | `evm.participant-loop-maximum` | A `protocol.loop` in the selected verifier whose checked maximum exceeds the deployment's `participant_loop_maximum` |
-| `evm.lowering` | A reachable operation or type without an EVM realization; the joined `evm.diagnostics` names it with `[evm.unsupported-operation]` or `[evm.unsupported-type]` |
-| `evm.control-flow` | A lowered function whose control flow cannot be structured, such as a statically infinite loop |
+| `evm.structural-work-limit` | Target inspection and estimated structural expansion exceeds the cumulative static work limit of 100,000; the diagnostic names the observed count and limit |
+| `evm.lowering` | A reachable operation or type without an EVM realization; captured diagnostic text names it with `[evm.unsupported-operation]` or `[evm.unsupported-type]` |
+| `evm.control-flow` | A lowered function whose control flow cannot be structured, or an internal dispatch shape outside the integer target profile, such as a statically infinite loop |
 | `evm.target-legality` | An operation or type that remains outside the closed target after lowering or before export |
-| `evm.yul` | A Yul export failure at the invocation boundary or in a target function; the joined `evm.diagnostics` carries the exporter's reason, `[evm.yul]` followed by the coded refusal: `evm.wire-type` for a message type without a supported wire frame, `evm.wire-operation` for a sequence, bytes or variant operation without a wire implementation, `evm.arithmetic` for a field or vector operation without an implementation; a static invocation root above `root_bytes` reports `[evm.root-limit]` |
+| `evm.yul` | A Yul export failure at the invocation boundary or in a target function; captured diagnostic text carries the exporter's reason, `[evm.yul]` followed by the coded refusal: `evm.wire-type` for a message type without a supported wire frame, `evm.wire-operation` for a sequence, bytes or variant operation without a wire implementation, `evm.arithmetic` for a field or vector operation without an implementation; a static invocation root above `root_bytes` reports `[evm.root-limit]` |
 
-`evm.diagnostics` is never a refusal of its own: it joins a lowering or export
-refusal with every diagnostic captured so far.
+Diagnostic rendering is not a separate refusal boundary. Warnings and remarks
+do not fail an otherwise successful compilation. The invocation collector owns
+one context, including diagnostics emitted by its pass workers; overlapping
+invocations must not install competing collectors on that context.
 
 The SDK refuses, by phase:
 

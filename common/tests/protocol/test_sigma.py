@@ -28,6 +28,21 @@ def test_published_sigma_entries(toolchain, journal, directory, kind):
 
     entry = kind + 'Proof'
     package, pin = build(toolchain, journal, directory, PROJECT, entry, [])
+    # These maintained subjects also feed formal construction consumers. Check
+    # their native export at the same source boundary as execution, without
+    # rebuilding Lean or compiling the source a second time.
+    captured = json.loads(package.read_text())
+    original = directory / 'original.mlir'
+    original.write_text(captured['original'])
+    deployment = json.loads(captured['artifact'])
+    policy = journal.write('policy.json', deployment[2][1])
+    candidate = directory / 'candidate.mlir'
+    candidate.write_text(journal.run([
+        toolchain.compiler, 'protocol-construct-proof', original, policy]))
+    exported = journal.json([toolchain.compiler, 'protocol-constructed-participant',
+                             original, policy, candidate])
+    assert exported[0] == 'zkc.constructed-participant/0'
+    assert exported[3] == deployment[2][1]
     public, witness = read(PROJECT, 'public', entry), read(PROJECT, 'witness', entry)
     proof = directory / 'proof.bin'
     args = [f'--package={package}', f'--sha256={pin}']

@@ -10,7 +10,8 @@ namespace zkc::protocol {
 // A finite declarative recipe, derived only from the original and checked
 // primitive identities. IDs are lexical SSA coordinates, never native handles.
 // The emitter constructs MLIR; a separate reader interprets this grammar
-// against actual source-execution closures and common operations.
+// against actual source-execution closures and common operations. Unchanged
+// isolated Math regions borrow their native source instead of extending it.
 struct OracleCommonBlock;
 struct OracleCommonInstruction {
   std::string name;
@@ -18,6 +19,10 @@ struct OracleCommonInstruction {
   std::vector<unsigned> inputs, outputs;
   std::vector<mlir::Type> types;
   std::shared_ptr<OracleCommonBlock> region;
+  /// Total isolated Math retained directly from the immutable prepared source.
+  /// The source must outlive emission/checking. Its regions remain native MLIR,
+  /// not another recipe language; only its external operands are remapped.
+  mlir::Operation *preserved = nullptr;
 };
 struct OracleCommonBlock {
   std::vector<unsigned> arguments;

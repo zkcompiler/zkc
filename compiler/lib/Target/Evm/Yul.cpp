@@ -460,14 +460,15 @@ LogicalResult Exporter::operation(Operation *op) {
     Block &after = loop.getAfter().front();
     declare(before.getArguments());
     assignment(before.getArguments(), loop.getInits());
-    std::string continuing = fresh();
-    out << "for { let " << continuing << " := 1 } " << continuing << " {} {\n";
+    // The condition's false edge exits this loop after publishing its results.
+    // A structured break needs no synthetic continuation value on the stack.
+    out << "for {} 1 {} {\n";
     if (failed(block(before)))
       return failure();
     auto condition = cast<scf::ConditionOp>(before.getTerminator());
     out << "switch " << name(condition.getCondition()) << "\ncase 0 {\n";
     assignment(op->getResults(), condition.getArgs());
-    out << continuing << " := 0\n}\ndefault {\n";
+    out << "break\n}\ndefault {\n";
     declare(after.getArguments());
     assignment(after.getArguments(), condition.getArgs());
     if (failed(block(after)))

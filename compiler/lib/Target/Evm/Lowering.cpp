@@ -10,6 +10,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/RegionUtils.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Dialect/Bindings.h"
@@ -19,6 +20,7 @@
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Authentication.h"
 #include "zkc/Target/Evm/Curve.h"
@@ -33,6 +35,13 @@ using namespace llvm;
 namespace zkc::evm {
 namespace {
 using Values = SmallVector<Value>;
+
+Values flatten(ArrayRef<ValueRange> groups) {
+  Values values;
+  for (ValueRange group : groups)
+    append_range(values, group);
+  return values;
+}
 
 bool isTranscript(Type type) {
   auto capability = dyn_cast<runtime::CapabilityType>(type);
@@ -105,6 +114,60 @@ private:
   }
 };
 
+// A target-local weighted metric for inspection and estimated expansion.
+// It is deliberately independent of native preparation limits and EVM gas.
+Error checkStructuralWork(ModuleOp candidate, const EvmTypes &types) {
+  constexpr uint64_t limit = 100000;
+  uint64_t count = 0;
+  auto charge = [&](uint64_t items) { return (count += items) <= limit; };
+  auto lanes = [&](TypeRange input) {
+    SmallVector<Type> result;
+    // Unsupported layouts receive their ordinary preparation refusal later.
+    if (failed(types.convertTypes(input, result)))
+      return uint64_t(0);
+    return uint64_t(result.size());
+  };
+  WalkResult checked = candidate.walk<WalkOrder::PreOrder>([&](Operation *op) {
+    if (!charge(1 + op->getNumOperands() + op->getNumResults() +
+                op->getNumSuccessors() + op->getNumRegions()))
+      return WalkResult::interrupt();
+    uint64_t operands = lanes(op->getOperandTypes());
+    uint64_t results = lanes(op->getResultTypes());
+    if (!charge(operands + results))
+      return WalkResult::interrupt();
+    for (Region &region : op->getRegions())
+      for (Block &block : region)
+        if (!charge(1 + block.getNumArguments()) ||
+            !charge(lanes(block.getArgumentTypes())))
+          return WalkResult::interrupt();
+    StringRef name = op->getName().getStringRef();
+    uint64_t generated = 0;
+    if (name == "protocol.participant" || isa<func::FuncOp>(op)) {
+      auto attr = op->getAttrOfType<TypeAttr>("function_type");
+      auto signature =
+          attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType();
+      generated = 4;
+      if (signature)
+        generated += signature.getNumInputs() + signature.getNumResults() +
+                     lanes(signature.getInputs()) +
+                     lanes(signature.getResults());
+    } else if (isSelectedControl(op))
+      generated = 8 + results + op->getNumRegions() * (8 + operands);
+    else if (name == "protocol.loop")
+      generated = 20 + 4 * operands + results;
+    else if (name == "protocol.finish_if")
+      generated = 8 + 2 * operands + results;
+    return charge(generated) ? WalkResult::advance() : WalkResult::interrupt();
+  });
+  if (!checked.wasInterrupted())
+    return Error::success();
+  std::string detail = "structural rewrite work count " +
+                       std::to_string(count) + " exceeds target limit " +
+                       std::to_string(limit);
+  candidate.emitError("[evm.structural-work-limit] ") << detail;
+  return zkc::error("evm.structural-work-limit", detail);
+}
+
 struct PreparedFunction {
   std::string name;
   FunctionType signature;
@@ -115,12 +178,14 @@ struct PreparedEndpoint {
   llvm::DenseMap<Operation *, Operation *> references;
   llvm::DenseMap<Operation *, finite::Computation> computations;
   llvm::DenseMap<Operation *, NativeBinding> bindings;
+  llvm::DenseMap<Operation *, SmallVector<unsigned>> completionAffine;
   SmallPtrSet<Block *, 32> omittedBlocks;
   SmallPtrSet<Operation *, 32> omittedOperations;
 
   LogicalResult prepare(ModuleOp source, ModuleOp target, EvmTypes &types,
                         NativeLayouts &layouts) {
     SymbolTableCollection symbols;
+    mathematical::NativeTypePolicies policies(source);
     SmallVector<Operation *> owners;
     source.walk([&](Operation *op) {
       if (isa<func::FuncOp>(op) ||
@@ -416,6 +481,25 @@ struct PreparedEndpoint {
         }
         if (op == owner)
           return WalkResult::advance();
+        if (op->getName().getStringRef() == "protocol.finish_if") {
+          // Formation already checks the complete entry tuple and owner.
+          // Preserve logical affine order even when a resource has no lanes.
+          SmallVector<unsigned> affine;
+          for (auto [index, value] :
+               enumerate(op->getOperands().drop_front())) {
+            Type logical = value.getType();
+            if (auto represented = dyn_cast<runtime::RepresentedType>(logical))
+              logical = represented.getLogical();
+            auto policy = policies.get(logical);
+            if (!policy) {
+              op->emitError("[evm.unsupported-type] completion result policy");
+              return WalkResult::interrupt();
+            }
+            if (policy->affine)
+              affine.push_back(index);
+          }
+          completionAffine[op] = std::move(affine);
+        }
         if (auto flags = op->getAttrOfType<arith::IntegerOverflowFlagsAttr>(
                 "overflowFlags"))
           if (flags.getValue() != arith::IntegerOverflowFlags::none) {
@@ -445,7 +529,9 @@ struct PreparedEndpoint {
                                     "data.finite_fold",
                                     "data.finite_collect",
                                     "protocol.loop",
+                                    "protocol.participant_branch",
                                     "protocol.yield",
+                                    "protocol.finish_if",
                                     "func.return",
                                     "protocol.finish",
                                     "cf.br",
@@ -481,6 +567,8 @@ struct PreparedEndpoint {
                                     "algebra.group_scale",
                                     "algebra.group_equal",
                                     "data.make",
+                                    "data.branch",
+                                    "data.yield",
                                     "exec.variant",
                                     "data.is",
                                     "data.get",
@@ -640,6 +728,38 @@ private:
   std::optional<LogicalResult> lowerScalar(Operation *, StringRef, ValueRange,
                                            ArrayAttr);
   LogicalResult lowerLoop(Operation *);
+  LogicalResult lowerSelection(Operation *);
+  LogicalResult lowerCompletion(Operation *);
+  Block *continuation(Operation *op, TypeRange lanes) {
+    Block *suffix = builder.splitBlock(op->getBlock(), op->getIterator());
+    Block *result =
+        builder.createBlock(suffix->getParent(), suffix->getIterator(), lanes,
+                            SmallVector<Location>(lanes.size(), op->getLoc()));
+    builder.mergeBlocks(suffix, result);
+    return result;
+  }
+  FailureOr<Block *> moveBody(Region &body, Block *before) {
+    Block *entry = &body.front();
+    auto signature = types.convertBlockSignature(entry);
+    if (!signature)
+      return failure();
+    // Signature conversion can replace the Block itself.
+    entry = builder.applySignatureConversion(entry, *signature, &types);
+    builder.inlineRegionBefore(body, *before->getParent(),
+                               before->getIterator());
+    return entry;
+  }
+  LogicalResult yieldTo(Operation *yield, Block *destination) {
+    OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPoint(yield);
+    // Keep the logical operands until the existing branch conversion obtains
+    // their grouped one-to-many adaptor. The pinned getRemappedValues API is
+    // one-to-one and cannot flatten zero/multiple-lane yield operands.
+    cf::BranchOp::create(builder, yield->getLoc(), destination,
+                         yield->getOperands());
+    builder.eraseOp(yield);
+    return success();
+  }
   FailureOr<Values> call(Operation *op, Operation *callee, ValueRange args) {
     auto found = prepared.functions.find(callee);
     if (found == prepared.functions.end() ||
@@ -771,7 +891,7 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
   auto admitted = prepared.bindings.find(op)->second;
   auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
   StringRef name = admitted.declaration.getContract();
-  Values operands = get(op->getOperands().drop_front());
+  Values operands = flatten(this->operands.drop_front());
   active(op, get(op->getOperand(0))[0]);
   auto resultTypes = converted(op->getResultTypes(), op);
   if (failed(resultTypes))
@@ -991,39 +1111,147 @@ LogicalResult Lowering::lowerBinding(Operation *op) {
 }
 
 LogicalResult Lowering::lowerLoop(Operation *op) {
+  if (!isa<func::FuncOp>(op->getParentOp()))
+    return refuse(op, "participant control must first move to function CFG");
   auto carried = op->getAttrOfType<IntegerAttr>("carried");
   auto maximum = op->getAttrOfType<IntegerAttr>("maximum");
   auto parameter = op->getAttrOfType<BoolAttr>("parameter");
-  // lowerEndpoint has refused a maximum above the deployment's ceiling.
   if (!carried || !maximum || maximum.getInt() < 0 || !parameter ||
       parameter.getValue() || op->getNumOperands() < 1 ||
-      static_cast<uint64_t>(maximum.getInt()) >
-          options.limits.participantLoopMaximum)
+      maximum.getUInt() > options.limits.participantLoopMaximum)
     return refuse(op, "loop requires an admitted deployment maximum");
-  Value count = get(op->getOperand(0))[0];
-  emit<LoopBoundOp>(op, {}, {count, integer(op->getLoc(), maximum.getUInt())});
-  Values initial = get(op->getOperands().slice(1, carried.getUInt()));
-  Value zero = integer(op->getLoc(), 0), one = integer(op->getLoc(), 1);
-  auto loop =
-      scf::ForOp::create(builder, op->getLoc(), zero, count, one, initial);
-  loop.setUnsignedCmpAttr(builder.getUnitAttr());
-  Block &body = op->getRegion(0).front();
-  TypeConverter::SignatureConversion signature(body.getNumArguments());
-  signature.addInputs(0, {builder.getI64Type()});
-  for (unsigned i = 0; i < carried.getUInt(); ++i) {
-    auto lanes = converted(TypeRange(body.getArgument(i + 1).getType()), op);
-    if (failed(lanes))
-      return failure();
-    signature.addInputs(i + 1, *lanes);
-  }
-  for (unsigned i = carried.getUInt() + 1; i < body.getNumArguments(); ++i)
-    signature.remapInput(i, get(op->getOperand(i)));
-  builder.eraseBlock(loop.getBody());
-  builder.inlineRegionBefore(op->getRegion(0), loop.getRegion(),
-                             loop.getRegion().end());
-  if (failed(builder.convertRegionTypes(&loop.getRegion(), types, &signature)))
+  auto lanes = converted(op->getResultTypes(), op);
+  if (failed(lanes))
     return failure();
-  return bind(op, loop.getResults());
+  Location loc = op->getLoc();
+  Value count = get(op->getOperand(0))[0];
+  emit<LoopBoundOp>(op, {}, {count, integer(loc, maximum.getUInt())});
+  Values initial = flatten(operands.slice(1, carried.getUInt()));
+  Values captures = flatten(operands.drop_front(1 + carried.getUInt()));
+  Value zero = integer(loc, 0), one = integer(loc, 1);
+  Block *before = op->getBlock();
+  Block *exit = continuation(op, *lanes);
+  SmallVector<Type> headerTypes{builder.getI64Type()};
+  append_range(headerTypes, *lanes);
+  Block *header =
+      builder.createBlock(exit->getParent(), exit->getIterator(), headerTypes,
+                          SmallVector<Location>(headerTypes.size(), loc));
+  Block *latch =
+      builder.createBlock(exit->getParent(), exit->getIterator(), *lanes,
+                          SmallVector<Location>(lanes->size(), loc));
+  Operation *yield = op->getRegion(0).front().getTerminator();
+  auto body = moveBody(op->getRegion(0), latch);
+  if (failed(body) || failed(yieldTo(yield, latch)))
+    return failure();
+  builder.setInsertionPointToEnd(before);
+  Values start{zero};
+  append_range(start, initial);
+  cf::BranchOp::create(builder, loc, header, start);
+  builder.setInsertionPointToEnd(header);
+  Value index = header->getArgument(0);
+  Value entered = arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        index, count);
+  Values arguments(header->getArguments());
+  append_range(arguments, captures);
+  cf::CondBranchOp::create(builder, loc, entered, *body, arguments, exit,
+                           header->getArguments().drop_front());
+  builder.setInsertionPointToEnd(latch);
+  Values next{arith::AddIOp::create(builder, loc, index, one)};
+  append_range(next, latch->getArguments());
+  cf::BranchOp::create(builder, loc, header, next);
+  return bind(op, exit->getArguments());
+}
+
+LogicalResult Lowering::lowerSelection(Operation *op) {
+  if (!isa<func::FuncOp>(op->getParentOp()))
+    return refuse(op, "selected control must first move to function CFG");
+  auto lanes = converted(op->getResultTypes(), op);
+  if (failed(lanes))
+    return failure();
+  Location loc = op->getLoc();
+  Block *before = op->getBlock();
+  Block *exit = continuation(op, *lanes);
+  SmallVector<Block *> arms;
+  for (Region &region : op->getRegions()) {
+    Operation *yield = region.front().getTerminator();
+    auto arm = moveBody(region, exit);
+    if (failed(arm) || failed(yieldTo(yield, exit)))
+      return failure();
+    arms.push_back(*arm);
+  }
+  builder.setInsertionPointToEnd(before);
+  Value selector = get(op->getOperand(0))[0];
+  Values captures = flatten(operands.drop_front());
+  Type logical = op->getOperand(0).getType();
+  if (auto represented = dyn_cast<runtime::RepresentedType>(logical))
+    logical = represented.getLogical();
+  if (logical.isSignlessInteger(1)) {
+    cf::CondBranchOp::create(builder, loc, selector, arms[0], captures, arms[1],
+                             captures);
+  } else {
+    auto variant = cast<data::VariantType>(logical);
+    auto type = builder.getNamedAttr("value_type", TypeAttr::get(variant));
+    Value tag =
+        emit<VariantTagOp>(op, {builder.getI64Type()}, {selector}, {type})[0];
+    for (auto [i, alternative] : enumerate(variant.getAlternatives())) {
+      Block *load = builder.createBlock(exit->getParent(), exit->getIterator());
+      Block *next =
+          i + 1 == arms.size()
+              ? nullptr
+              : builder.createBlock(exit->getParent(), exit->getIterator());
+      // createBlock changes the insertion point. Dispatch belongs in the
+      // preceding block, never in the newly-created payload prologue.
+      builder.setInsertionPointToEnd(before);
+      if (!next)
+        cf::BranchOp::create(builder, loc, load);
+      else {
+        Value selected = arith::CmpIOp::create(
+            builder, loc, arith::CmpIPredicate::eq, tag, integer(loc, i));
+        cf::CondBranchOp::create(builder, loc, selected, load, ValueRange{},
+                                 next, ValueRange{});
+      }
+      builder.setInsertionPointToEnd(load);
+      Values arguments;
+      for (auto [index, payload] : enumerate(alternative.getPayload())) {
+        auto payloadLanes = converted(TypeRange(payload), op);
+        if (failed(payloadLanes))
+          return failure();
+        append_range(arguments,
+                     emit<VariantGetOp>(
+                         op, *payloadLanes, {selector},
+                         {type,
+                          builder.getNamedAttr("alternative",
+                                               builder.getI32IntegerAttr(i)),
+                          builder.getNamedAttr(
+                              "payload", builder.getI32IntegerAttr(index))}));
+      }
+      append_range(arguments, captures);
+      cf::BranchOp::create(builder, loc, arms[i], arguments);
+      before = next;
+    }
+  }
+  return bind(op, exit->getArguments());
+}
+
+LogicalResult Lowering::lowerCompletion(Operation *op) {
+  auto function = dyn_cast<func::FuncOp>(op->getParentOp());
+  auto affine = prepared.completionAffine.find(op);
+  if (!function || !function->hasAttr("evm.entry") ||
+      affine == prepared.completionAffine.end())
+    return refuse(op, "completion requires its participant function CFG");
+  auto lanes = converted(op->getResultTypes(), op);
+  if (failed(lanes))
+    return failure();
+  Block *before = op->getBlock();
+  Block *exit = &function.getBody().back();
+  Block *suffix = continuation(op, *lanes);
+  Values successors;
+  for (unsigned position : affine->second)
+    append_range(successors, operands[position + 1]);
+  builder.setInsertionPointToEnd(before);
+  cf::CondBranchOp::create(builder, op->getLoc(), operands[0][0], exit,
+                           flatten(operands.drop_front()), suffix, successors);
+  return bind(op, suffix->getArguments());
 }
 
 LogicalResult Lowering::lowerFinite(Operation *op) {
@@ -1327,7 +1555,7 @@ LogicalResult Lowering::lowerFinite(Operation *op) {
 LogicalResult Lowering::lowerOperation(Operation *op) {
   StringRef name = op->getName().getStringRef();
   Location loc = op->getLoc();
-  Values operands = get(op->getOperands());
+  Values operands = flatten(this->operands);
   if (name == "exec.apply")
     return lowerBinding(op);
   if (name == "exec.fold" || name == "exec.collect" ||
@@ -1335,11 +1563,18 @@ LogicalResult Lowering::lowerOperation(Operation *op) {
     return lowerFinite(op);
   if (name == "protocol.loop")
     return lowerLoop(op);
-  if (name == "protocol.yield") {
-    scf::YieldOp::create(builder, loc, operands);
+  if (name == "protocol.participant_branch" || name == "data.branch")
+    return lowerSelection(op);
+  if (name == "protocol.finish_if")
+    return lowerCompletion(op);
+  if (name == "protocol.finish") {
+    auto function = dyn_cast<func::FuncOp>(op->getParentOp());
+    if (!function || !function->hasAttr("evm.entry"))
+      return refuse(op, "finish requires its participant function CFG");
+    cf::BranchOp::create(builder, loc, &function.getBody().back(), operands);
     return success();
   }
-  if (name == "func.return" || name == "protocol.finish") {
+  if (name == "func.return") {
     func::ReturnOp::create(builder, loc, operands);
     return success();
   }
@@ -1360,8 +1595,8 @@ LogicalResult Lowering::lowerOperation(Operation *op) {
         op->getAttrOfType<DenseI32ArrayAttr>("successor_operand_segments");
     if (!sizes || sizes.size() != 2 || sizes[0] < 0)
       return refuse(op, "invalid checked outcome dispatch");
-    Values args = get(op->getOperand(0));
-    append_range(args, get(op->getOperands().slice(1, sizes[0])));
+    Values args(this->operands[0]);
+    append_range(args, flatten(this->operands.slice(1, sizes[0])));
     cf::BranchOp::create(builder, loc, op->getSuccessor(0), args);
     return success();
   }
@@ -1386,9 +1621,12 @@ LogicalResult Lowering::lowerOperation(Operation *op) {
       Block *next = nullptr;
       {
         OpBuilder::InsertionGuard guard(builder);
-        load = builder.createBlock(region);
+        auto end = region->end();
+        if (region->getParentOp()->hasAttr("evm.entry"))
+          end = region->back().getIterator();
+        load = builder.createBlock(region, end);
         if (i + 1 != variant.getAlternatives().size())
-          next = builder.createBlock(region);
+          next = builder.createBlock(region, end);
       }
       if (i + 1 == variant.getAlternatives().size())
         cf::BranchOp::create(builder, loc, load);
@@ -1414,7 +1652,7 @@ LogicalResult Lowering::lowerOperation(Operation *op) {
                               "payload", builder.getI32IntegerAttr(index))}));
       }
       append_range(args,
-                   get(op->getOperands().slice(forwarded, segments[i + 1])));
+                   flatten(this->operands.slice(forwarded, segments[i + 1])));
       forwarded += segments[i + 1];
       cf::BranchOp::create(builder, loc, op->getSuccessor(i + 1), args);
       if (next)
@@ -1818,7 +2056,11 @@ public:
                      const EvmOptions &options, NativeLayouts &layouts,
                      const EvmTypes &types, MLIRContext *context)
       : ConversionPattern(types, MatchAnyOpTypeTag(), 1, context),
-        prepared(prepared), options(options), layouts(layouts), types(types) {}
+        prepared(prepared), options(options), layouts(layouts), types(types) {
+    // Structural patterns create logical CF edges. Their grouped branch
+    // conversion recursively uses this pattern once to produce legal lanes.
+    setHasBoundedRewriteRecursion();
+  }
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<ValueRange> operands,
                   ConversionPatternRewriter &rewriter) const override {
@@ -1848,6 +2090,15 @@ public:
         if (!signature)
           return failure();
         rewriter.applySignatureConversion(&block, *signature, &types);
+      }
+      if (info.entry) {
+        // Keep this epilogue last. Every participant exit uses the complete
+        // existing signature, including constructed transcript generation.
+        Block *exit = rewriter.createBlock(
+            &function.getBody(), function.end(), info.signature.getResults(),
+            SmallVector<Location>(info.signature.getNumResults(),
+                                  op->getLoc()));
+        func::ReturnOp::create(rewriter, op->getLoc(), exit->getArguments());
       }
       rewriter.eraseOp(op);
       return success();
@@ -1906,7 +2157,76 @@ LogicalResult convertEndpoint(ModuleOp module, const PreparedEndpoint &prepared,
   RewritePatternSet patterns(module.getContext());
   patterns.add<EndpointConversion>(prepared, options, layouts, types,
                                    module.getContext());
-  return applyFullConversion(module, target, std::move(patterns));
+  ConversionConfig config;
+  // Logical yield edges can temporarily differ from physical destination
+  // signatures. Convert their grouped operands before generic CF folding.
+  config.foldingMode = DialectConversionFoldingMode::AfterPatterns;
+  return applyFullConversion(module, target, std::move(patterns), config);
+}
+
+// Standard CFG restructuring uses i32 dispatch state, casts it to index and
+// creates index_switch. Keep its integer state and original lazy regions while
+// expressing that dispatch with the exporter's existing integer SCF profile.
+LogicalResult integerSwitches(ModuleOp module) {
+  SmallVector<scf::IndexSwitchOp> switches;
+  module.walk<WalkOrder::PostOrder>(
+      [&](scf::IndexSwitchOp op) { switches.push_back(op); });
+  IRRewriter rewriter(module.getContext());
+  for (auto op : switches) {
+    auto cast = op.getArg().getDefiningOp<arith::IndexCastUIOp>();
+    auto type =
+        cast ? dyn_cast<IntegerType>(cast.getIn().getType()) : IntegerType();
+    if (!type || !type.isSignless() || type.getWidth() != 32)
+      return op.emitError(
+          "[evm.control-flow] unexpected structured switch state");
+    rewriter.setInsertionPoint(op);
+    if (op.getCases().empty()) {
+      Block &body = op.getDefaultRegion().front();
+      Operation *yield = body.getTerminator();
+      Values results(yield->getOperands());
+      rewriter.eraseOp(yield);
+      rewriter.inlineBlockBefore(&body, op->getBlock(), op->getIterator());
+      rewriter.replaceOp(op, results);
+    } else {
+      scf::IfOp root, previous;
+      for (auto [i, value] : enumerate(op.getCases())) {
+        if (value < 0 || uint64_t(value) > UINT32_MAX)
+          return op.emitError(
+              "[evm.control-flow] invalid structured switch case");
+        Value label = arith::ConstantOp::create(
+            rewriter, op.getLoc(), type, rewriter.getIntegerAttr(type, value));
+        Value selected = arith::CmpIOp::create(rewriter, op.getLoc(),
+                                               arith::CmpIPredicate::eq,
+                                               cast.getIn(), label);
+        auto branch = scf::IfOp::create(rewriter, op.getLoc(),
+                                        op.getResultTypes(), selected, true);
+        if (!root)
+          root = branch;
+        if (previous)
+          scf::YieldOp::create(rewriter, op.getLoc(), branch.getResults());
+        rewriter.eraseBlock(&branch.getThenRegion().front());
+        rewriter.inlineRegionBefore(op.getCaseRegions()[i],
+                                    branch.getThenRegion(),
+                                    branch.getThenRegion().end());
+        // Result-free If builders insert a default yield. Replace the block
+        // through the rewriter before moving the original default/next arm.
+        rewriter.eraseBlock(&branch.getElseRegion().front());
+        if (i + 1 == op.getCases().size())
+          rewriter.inlineRegionBefore(op.getDefaultRegion(),
+                                      branch.getElseRegion(),
+                                      branch.getElseRegion().end());
+        else {
+          Block *next = rewriter.createBlock(&branch.getElseRegion());
+          rewriter.setInsertionPointToStart(next);
+        }
+        previous = branch;
+      }
+      rewriter.replaceOp(op, root.getResults());
+    }
+    if (cast->use_empty())
+      rewriter.eraseOp(cast);
+  }
+  return success();
 }
 
 // The upstream algorithm only requests fillers for newly introduced inactive
@@ -1988,22 +2308,6 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   auto candidate = endpoint.candidateSnapshot();
   if (auto error = checkEndpointClosure(*source, *candidate, endpoint.role()))
     return std::move(error);
-  // The selected closure holds only the verifier's own completions. This
-  // target realizes no conditional completion outcome, so one refuses by name
-  // before realization rather than through the generic operation refusal.
-  Operation *completion = nullptr;
-  candidate->walk([&](Operation *op) {
-    if (op->getName().getStringRef() != "protocol.finish_if")
-      return WalkResult::advance();
-    completion = op;
-    return WalkResult::interrupt();
-  });
-  if (completion) {
-    completion->emitError("[evm.completion] protocol.finish_if: conditional "
-                          "participant completion has no EVM realization");
-    return zkc::error("evm.completion", "conditional participant completion "
-                                        "has no EVM realization");
-  }
   // Each participant loop's checked maximum lies within the deployment's
   // participant loop maximum; the transcript transitions stay the only global
   // bound.
@@ -2058,6 +2362,8 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
   OwningOpRef<ModuleOp> target(ModuleOp::create(candidate->getLoc()));
   NativeLayouts layouts(*context);
   EvmTypes types(layouts, context);
+  if (auto error = checkStructuralWork(*candidate, types))
+    return std::move(error);
   PreparedEndpoint prepared;
   if (failed(prepared.prepare(*candidate, *target, types, layouts)) ||
       failed(convertEndpoint(*target, prepared, options, layouts, types)))
@@ -2076,6 +2382,9 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
       return zkc::error("evm.control-flow",
                         "could not structure checked endpoint");
   }
+  if (failed(integerSwitches(*target)))
+    return zkc::error("evm.control-flow",
+                      "could not realize structured dispatch");
   // Fold redundant SCF arguments/results and inactive control lanes. This is
   // best-effort optimization; target legality must not depend on convergence.
   // Checked EVM operations retain their ordered effects even for unused

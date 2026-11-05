@@ -881,7 +881,8 @@ int main() {
             "native-codec-control-profile");
       });
   // Selected control outside the selected entry's static closure does not
-  // gate the entry; selected control the entry reaches still refuses.
+  // gate the entry. Reached total Math is value computation, not a
+  // conditional protocol interaction.
   {
     auto schnorr = [] {
       auto buffer =
@@ -952,13 +953,30 @@ int main() {
         take(protocol::oracleRequirements(*source, "main", {}));
       });
     }
-    cases.run("an entry that calls a selected helper still refuses", [&] {
+    cases.run("total selected helpers preserve proof construction", [&] {
       auto source = admitted(context, reached);
-      refuses(constructNativeProof(*source, policy),
-              "native-proof-control-profile");
-      // Oracle planning follows the call into the helper as well.
-      refuses(protocol::oracleRequirements(*source, "main", {}),
-              "oracle-realization-control-profile");
+      auto built = take(constructNativeProof(*source, policy));
+      if (auto e = checkNativeProof(*source, *built.module, policy))
+        throw std::runtime_error(toString(std::move(e)));
+      take(protocol::oracleRequirements(*source, "main", {}));
+      data::BranchOp selected;
+      built.module->walk([&](data::BranchOp branch) {
+        if (!selected && branch->getParentOfType<pir::ParticipantOp>())
+          selected = branch;
+      });
+      require(bool(selected), "construction lost the actual selected Math");
+      auto &arm = selected.getArms().front().front();
+      auto yield = cast<data::YieldOp>(arm.getTerminator());
+      require(arm.getNumArguments() == 2 && yield.getNumOperands() == 1,
+              "unexpected selected helper fixture");
+      yield->setOperand(0, arm.getArgument(1));
+      require(succeeded(admitStage(*built.module)),
+              "mutated Math should remain well formed");
+      auto refused = checkNativeProof(*source, *built.module, policy);
+      require(bool(refused), "changed selected Math passed correspondence");
+      require(namesIdentifier(toString(std::move(refused)),
+                              "native-proof-correspondence"),
+              "changed selected Math failed outside correspondence");
     });
     // Only Alice demands the selection, so projection places it at Alice
     // alone and the projected comparison reads it where Alice sends it.

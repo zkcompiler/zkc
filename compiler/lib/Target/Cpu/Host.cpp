@@ -1,6 +1,7 @@
 #include "zkc/Compiler/Host.h"
-#include "../../Compiler/CompilationState.h"
+#include "../../Compiler/DiagnosticCapture.h"
 #include "../../Compiler/HostReferences.h"
+#include "../../Compiler/LanguageDiagnostics.h"
 #include "../../Compiler/LanguageInterface.h"
 #include "../../Compiler/LanguagePackageReader.h"
 #include "../../Compiler/NativeDeployment.h"
@@ -37,7 +38,7 @@ namespace {
 Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
                                 const EntryOptions &options) {
   TimeTraceScope timing("zkc.lower-entry-calculation");
-  zkc::detail::Diagnostics diagnostics(*original.getContext());
+  zkc::detail::DiagnosticCapture diagnostics(*original.getContext());
   diagnostics.atRoot(original.getLoc());
   auto *observations = options.observations;
   if (observations)
@@ -162,8 +163,8 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
   registerDialects(registry);
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
-  auto module =
-      mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(
+      original.bytes(), &context, originalSourceFilename);
   if (!module)
     return error("entry.original", "admitted Host original no longer parses");
   if (options.observations)

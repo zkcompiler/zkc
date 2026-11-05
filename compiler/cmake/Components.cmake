@@ -441,6 +441,7 @@ add_zkc_component(Compiler
   lib/Compiler/SourceCorrespondence.cpp
   lib/Compiler/NativeArtifact.cpp
   lib/Compiler/Compilation.cpp
+  lib/Compiler/DiagnosticCapture.cpp
   lib/Compiler/ApplicationMap.cpp
   lib/Compiler/ApplicationMapData.cpp
   lib/Compiler/ApplicationMapVerification.cpp

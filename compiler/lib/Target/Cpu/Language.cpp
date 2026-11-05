@@ -7,9 +7,6 @@
 #include "zkc/Support/Refusal.h"
 using namespace llvm;
 namespace zkc::language {
-namespace {
-constexpr StringLiteral filename = "zkc-language-original.mlir";
-}
 namespace detail {
 Error checkCompiledProof(const CheckedOriginal &original,
                          const NativeProofPolicy &selection,
@@ -70,8 +67,8 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     native.releaseStorage = options.releaseStorage;
     native.mathematicalSelection = options.mathematicalSelection;
     native.oracleRealization = options.oracleRealization;
-    auto compiled = compileNativeProof(original.bytes(), filename, native,
-                                       mlir::DialectRegistry());
+    auto compiled = compileNativeProof(original.bytes(), originalSourceFilename,
+                                       native, mlir::DialectRegistry());
     if (!compiled)
       return located(compiled.takeError());
     // Native compilation independently checks the full deployment. Pin its
@@ -89,8 +86,8 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
   run.releaseStorage = options.releaseStorage;
   run.mathematicalSelection = options.mathematicalSelection;
   run.oracleRealization = options.oracleRealization;
-  auto compiled =
-      compileRun(original.bytes(), filename, run, mlir::DialectRegistry());
+  auto compiled = compileRun(original.bytes(), originalSourceFilename, run,
+                             mlir::DialectRegistry());
   if (!compiled)
     return located(compiled.takeError());
   if (auto e = detail::checkCompiledRun(original, protocol.symbol, *compiled))

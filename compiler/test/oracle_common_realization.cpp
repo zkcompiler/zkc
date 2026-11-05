@@ -8,6 +8,7 @@
 #include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -183,6 +184,63 @@ void requestIsolation(Cases &cases, MLIRContext &context) {
               "packet authentication remains a producer request dependency");
     }
   });
+}
+void selectedMathematics(Cases &cases, MLIRContext &context) {
+  auto text = fixtureText("common-input");
+  replace(text, R"mlir("protocol.return"(%answer) : (ui64)->())mlir",
+          R"mlir(%yes = arith.constant true
+  %selected = "data.branch"(%yes,%answer,%position) ({
+   ^then(%left:ui64,%right:ui64):
+    %no = arith.constant false
+    %inner = "data.branch"(%no,%left,%right) ({
+     ^inner_then(%a:ui64,%b:ui64):
+      "data.yield"(%a) : (ui64)->()
+    }, {
+     ^inner_else(%c:ui64,%d:ui64):
+      "data.yield"(%d) : (ui64)->()
+    }) {alternatives=["then","else"]} : (i1,ui64,ui64)->ui64
+    "data.yield"(%inner) : (ui64)->()
+  }, {
+   ^else(%other:ui64,%fallback:ui64):
+    "data.yield"(%fallback) : (ui64)->()
+  }) {alternatives=["then","else"]} : (i1,ui64,ui64)->ui64
+  "protocol.return"(%selected) : (ui64)->())mlir");
+  auto source = parseSourceString<ModuleOp>(text, &context);
+  require(bool(source), "selected Math oracle fixture");
+  auto prepared = mathematical::prepareProtocol(*source, false);
+  require(bool(prepared), "selected Math oracle preparation");
+  auto actual = take(emitOracleRealization(*prepared));
+  auto record = take(serializeOracleRealization(*prepared, actual));
+  auto printed = print(actual.module.get());
+  cases.run("oracle realization preserves native total selected regions", [&] {
+    auto fresh = parseSourceString<ModuleOp>(printed, &context);
+    require(bool(fresh), "selected candidate parse");
+    checked(checkOracleRealization(*prepared, *fresh, record));
+  });
+  for (StringRef mutation : {"capture", "arm yield", "dormant inner yield"})
+    cases.run("oracle realization rejects changed Math " + mutation, [&] {
+      auto fresh = parseSourceString<ModuleOp>(printed, &context);
+      require(bool(fresh), "selected candidate parse");
+      data::BranchOp branch;
+      fresh->walk([&](data::BranchOp op) { branch = op; });
+      require(bool(branch), "missing selected Math candidate");
+      if (mutation == "capture")
+        branch->setOperand(1, branch.getOperand(2));
+      else {
+        if (mutation == "dormant inner yield") {
+          data::BranchOp inner;
+          branch.getArms().front().walk([&](data::BranchOp op) { inner = op; });
+          require(bool(inner), "missing inner selected Math candidate");
+          branch = inner;
+        }
+        auto &arm = branch.getArms().front().front();
+        arm.getTerminator()->setOperand(0, arm.getArgument(1));
+      }
+      require(succeeded(verify(*fresh)),
+              "Math mutation must remain well formed");
+      refused(checkOracleRealization(*prepared, *fresh, record),
+              "oracle-common-body");
+    });
 }
 // These are whole-candidate checks: every mutation is read from a fresh parsed
 // candidate under the frozen original, without reusing producer-owned handles.
@@ -776,6 +834,7 @@ int main(int argc, char **argv) {
     return success();
   });
   Cases cases;
+  selectedMathematics(cases, context);
   bool compile = argc > 1 && (argc < 3 || StringRef(argv[2]) != "checks");
   bool mutations = argc < 3 || StringRef(argv[2]) != "compile";
   bool selectedFixture = false;

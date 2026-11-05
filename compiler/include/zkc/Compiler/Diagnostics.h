@@ -2,10 +2,13 @@
 #define ZKC_COMPILER_DIAGNOSTICS_H
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Source/Source.h"
 namespace zkc {
 struct DiagnosticLocation {
   std::string filename;
   unsigned line, column;
+  /// Present only after mapping through the checked source correspondence.
+  std::optional<source::Span> source = {};
 };
 /// Owned rendering and structured refusal metadata survive context teardown.
 /// An upstream diagnostic may have no zkc refusal identifier.

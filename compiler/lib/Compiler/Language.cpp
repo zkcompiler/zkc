@@ -30,7 +30,6 @@
 using namespace llvm;
 namespace zkc::language {
 namespace {
-constexpr StringLiteral filename = "zkc-language-original.mlir";
 std::string digest(StringRef bytes) {
   return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
 }
@@ -61,7 +60,7 @@ public:
     unsigned number = line - offsets.begin();
     return {source.diagnosticPath.empty() ? source.module
                                           : source.diagnosticPath,
-            number, unsigned(span.begin - *(line - 1) + 1)};
+            number, unsigned(span.begin - *(line - 1) + 1), span};
   }
 };
 void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
@@ -70,7 +69,7 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
   std::set<std::string> declarations;
   std::set<std::pair<unsigned, unsigned>> coordinates;
   for (const auto &location : locations)
-    if (location.filename == filename)
+    if (location.filename == originalSourceFilename)
       coordinates.emplace(location.line, location.column);
   SourceCoordinates source(entry);
   module.walk([&](mlir::Operation *op) {
@@ -242,8 +241,9 @@ CheckedOriginal::admit(const ClosedEntry &entry, StringRef original,
       });
   auto ownedManager = std::make_unique<SourceMgr>();
   auto &manager = *ownedManager;
-  manager.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(original, filename),
-                             SMLoc());
+  manager.AddNewSourceBuffer(
+      MemoryBuffer::getMemBufferCopy(original, originalSourceFilename),
+      SMLoc());
   // Parsing verifies syntax only; whole-module admission runs once below.
   mlir::ParserConfig config(&context, false);
   std::unique_ptr<mlir::AsmParserState> parser;
@@ -256,8 +256,9 @@ CheckedOriginal::admit(const ClosedEntry &entry, StringRef original,
     if (mlir::succeeded(
             mlir::parseAsmSourceFile(manager, &parsed, config, parser.get())))
       module = mlir::detail::constructContainerOpForParserIfNecessary<
-          mlir::ModuleOp>(&parsed, &context,
-                          mlir::FileLineColLoc::get(&context, filename, 1, 1));
+          mlir::ModuleOp>(
+          &parsed, &context,
+          mlir::FileLineColLoc::get(&context, originalSourceFilename, 1, 1));
   }
   if (!module)
     return make_error<CompilationError>(
@@ -427,7 +428,7 @@ Error locateCompilationFailure(const CheckedOriginal &original, Error error) {
                           record.source);
         bool mapped = false;
         for (auto &location : locations)
-          if (location.filename == filename) {
+          if (location.filename == originalSourceFilename) {
             auto found = mapping.find({location.line, location.column});
             if (found != mapping.end()) {
               location = source.location(found->second);

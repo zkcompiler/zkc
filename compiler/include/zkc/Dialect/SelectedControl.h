@@ -22,9 +22,12 @@ selectedPayloadTypes(mlir::Operation *, unsigned arm);
 mlir::Value selectedCapture(mlir::BlockArgument);
 mlir::LogicalResult verifySelectedControl(mlir::Operation *);
 /// Refuse, with `diagnostic`, a transformation whose installed profile
-/// requires unconditional Protocol regions when selected control is in the
-/// static closure of its selected entry. `roots` are the entry definition and
-/// any other definition the transformation selects to execute, such as a
+/// requires unconditional Protocol regions when Protocol or participant
+/// selection is in the static closure of its selected entry. Callers first
+/// establish stage admission. Total Data selection is value computation and
+/// does not introduce conditional protocol events; its arms and symbol uses
+/// still count toward the complete traversal. `roots` are the entry definition
+/// and any other definition the transformation selects to execute, such as a
 /// selected construction. The closure contains every reached definition's
 /// nested operations, including dormant arms, and the definitions its symbol
 /// references name, transitively: applications, helper and local calls,
