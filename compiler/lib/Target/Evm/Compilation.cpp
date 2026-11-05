@@ -1,3 +1,5 @@
+#include "../../Compiler/DiagnosticCapture.h"
+#include "../../Compiler/LanguageDiagnostics.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -65,7 +67,7 @@ struct EvmCompilation::Storage {
     registerDialects(builtins);
     builtins.insert<evm::EvmDialect>();
     context.appendDialectRegistry(builtins);
-    context.loadAllAvailableDialects();
+    context.printOpOnDiagnostic(false);
   }
 };
 EvmCompilation::EvmCompilation(std::unique_ptr<Storage> value)
@@ -164,78 +166,80 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
     return error("evm.source-limit",
                  "source input exceeds the compiler limits");
   auto result = std::make_unique<EvmCompilation::Storage>(registry);
-  std::string diagnostics;
-  ScopedDiagnosticHandler handler(&result->context,
-                                  [&](Diagnostic &diagnostic) {
-                                    raw_string_ostream out(diagnostics);
-                                    diagnostic.print(out);
-                                    out << '\n';
-                                    return success();
-                                  });
-  auto source = parseSourceString<ModuleOp>(bytes, &result->context);
+  detail::DiagnosticCapture diagnostics(result->context);
+  result->context.loadAllAvailableDialects();
+  if (diagnostics.hasErrors())
+    return diagnostics.failure();
+  auto source = parseSourceString<ModuleOp>(bytes, &result->context, filename);
   if (!source || failed(admitStage(source->getOperation())))
-    return error("evm.source", diagnostics);
+    return diagnostics.failure(
+        error("evm.source", "original admission failed"));
+  diagnostics.atRoot(source->getLoc());
   auto policy = options.policy;
   if (!policy.construction.empty() ||
       (policy.suite.empty() &&
        (!policy.services.empty() || !policy.draws.empty() ||
         !policy.gates.empty())) ||
       policy.format != protocol::ProofFormat::Native)
-    return error("evm.construction",
-                 "EVM requires framed transport with no transcript or a "
-                 "managed construction over a realized transcript suite");
+    return diagnostics.failure(
+        error("evm.construction",
+              "EVM requires framed transport with no transcript or a "
+              "managed construction over a realized transcript suite"));
   if (!policy.suite.empty()) {
     evm::NativeLayouts layouts(result->context);
     if (auto realized =
             evm::realizeTranscript(layouts, result->context, policy.suite);
         !realized)
-      return realized.takeError();
+      return diagnostics.failure(realized.takeError());
   }
   if (!policy.suite.empty() && policy.draws.empty()) {
     auto selected = selectNativeProofDraws(*source, policy, options.mathematics,
                                            options.oracleSelection);
     if (!selected)
-      return selected.takeError();
+      return diagnostics.failure(selected.takeError());
     policy = std::move(*selected);
   }
   auto constructed = constructNativeProof(*source, policy, options.mathematics,
                                           options.oracleSelection);
   if (!constructed)
-    return constructed.takeError();
+    return diagnostics.failure(constructed.takeError());
   if (auto checked =
           checkNativeProof(*source, *constructed->module, policy,
                            options.mathematics, options.oracleSelection))
-    return std::move(checked);
+    return diagnostics.failure(std::move(checked));
   auto *descriptor = constructed->descriptor.getAsArray();
   if (!descriptor || descriptor->size() != 9 ||
       (*descriptor)[0].getAsString() != "zkc.native-proof-descriptor/0" ||
       (*descriptor)[1] != encodeNativeProofPolicy(policy) ||
       !(*descriptor)[8].getAsString())
-    return error("evm.descriptor",
-                 "common construction returned an invalid descriptor");
+    return diagnostics.failure(
+        error("evm.descriptor",
+              "common construction returned an invalid descriptor"));
   PassManager pipeline(&result->context);
   buildClosedExecutionPipeline(pipeline, options.simplify, false,
                                options.mathematics);
   if (failed(pipeline.run(*constructed->module)))
-    return error("evm.closed-execution", diagnostics);
+    return diagnostics.failure(
+        error("evm.closed-execution", "closed execution preparation failed"));
   auto endpoint = closeEndpoint(*constructed->module, policy.validator);
   if (!endpoint)
-    return endpoint.takeError();
+    return diagnostics.failure(endpoint.takeError());
   // The exported schemas come from checked rows while the complete source
   // and the candidate are available.
   auto described = evm::describeEndpoint(*endpoint, constructed->descriptor,
                                          policy, digest(bytes));
   if (!described)
-    return described.takeError();
+    return diagnostics.failure(described.takeError());
   EvmOptions selected = options;
   selected.policy = policy;
   auto module = evm::lowerEndpoint(*endpoint, selected);
   if (!module)
-    return joinErrors(module.takeError(),
-                      error("evm.diagnostics", diagnostics));
+    return diagnostics.failure(module.takeError());
   auto yul = evm::exportYul(**module, *described, policy, options.limits);
   if (!yul)
-    return joinErrors(yul.takeError(), error("evm.diagnostics", diagnostics));
+    return diagnostics.failure(yul.takeError());
+  if (diagnostics.hasErrors())
+    return diagnostics.failure();
   result->source = bytes.str();
   result->digest = digest(bytes);
   result->yul = std::move(*yul);
@@ -257,19 +261,27 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
 Expected<EvmCompilation>
 compileEvmEntry(const language::CheckedOriginal &original,
                 const EvmOptions &options) {
+  auto located = [&](Error error) {
+    return language::locateCompilationFailure(original, std::move(error));
+  };
   const auto &view = original.interface();
   if (!view.proof || view.host)
-    return error("evm.entry", "EVM requires a checked proof Entry");
+    return located(error("evm.entry", "EVM requires a checked proof Entry"));
   const auto &proof = *view.proof;
   if (proof.acceptance.native.size() != 1)
-    return error("evm.entry", "EVM requires one selected Boolean acceptance");
+    return located(
+        error("evm.entry", "EVM requires one selected Boolean acceptance"));
   EvmOptions selected = options;
   auto policy = language::proofPolicy(original);
   if (!policy)
-    return policy.takeError();
+    return located(policy.takeError());
   selected.policy = std::move(*policy);
-  return compileEvmProof(original.bytes(), "zkc-language-original.mlir",
-                         selected, DialectRegistry());
+  auto compiled =
+      compileEvmProof(original.bytes(), "zkc-language-original.mlir", selected,
+                      DialectRegistry());
+  if (!compiled)
+    return located(compiled.takeError());
+  return std::move(*compiled);
 }
 
 json::Value encodeEvmCompilation(const EvmCompilation &compiled,

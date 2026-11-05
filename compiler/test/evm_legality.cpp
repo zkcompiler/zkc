@@ -11,6 +11,7 @@
 #include "support/NativeCases.h"
 #include "support/ResourceSources.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Evm.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
@@ -208,6 +209,48 @@ int main() {
     out << '\n';
     return success();
   });
+  cases.run("EVM parser errors retain the supplied filename", [&] {
+    auto result =
+        compileEvmProof("module { @ }", "broken-original.mlir", {}, registry);
+    require(!result, "malformed original compiled");
+    bool owned = false, located = false, boundary = false;
+    handleAllErrors(result.takeError(), [&](const ErrorInfoBase &error) {
+      if (!error.isA<CompilationError>())
+        return;
+      const auto &failure = static_cast<const CompilationError &>(error);
+      owned = true;
+      for (const auto &location : failure.locations)
+        located |= location.filename == "broken-original.mlir" &&
+                   location.line == 1 && location.column > 0;
+      for (const auto &refusal : failure.refusals)
+        boundary |= refusal.code == "evm.source";
+    });
+    require(owned && located && boundary,
+            "parser error lost its owner, filename or admission boundary");
+  });
+  cases.run(
+      "EVM admission preserves verifier metadata after context teardown", [&] {
+        auto result = compileEvmProof(
+            R"mlir(module { func.func private @bad(!poly.table<"f7", "00">) })mlir",
+            "invalid-type.mlir", {}, registry);
+        require(!result, "invalid original rank compiled");
+        bool typed = false, located = false;
+        std::string detail;
+        handleAllErrors(result.takeError(), [&](const ErrorInfoBase &error) {
+          if (!error.isA<CompilationError>())
+            return;
+          const auto &failure = static_cast<const CompilationError &>(error);
+          for (const auto &location : failure.locations)
+            located |= location.filename == "invalid-type.mlir";
+          for (const auto &refusal : failure.refusals)
+            if (refusal.code == "invalid-original-rank") {
+              typed = true;
+              detail = refusal.detail;
+            }
+        });
+        require(typed && located && !detail.empty(),
+                "verifier metadata became prose or borrowed context state");
+      });
   cases.run("typed ordered effects survive CSE and canonicalization", [&] {
     auto module = parseSourceString<ModuleOp>(R"mlir(
       module { func.func @ordered(%scope:i64, %generation:i64, %value:i256,
@@ -1622,7 +1665,20 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
       options.limits.participantLoopMaximum = ceiling;
       auto refused = compileEvmEntry(originalSource(loops(maximum)), options);
       require(!refused, "a loop above the deployment's maximum compiled");
-      auto message = toString(refused.takeError());
+      bool located = false, typed = false;
+      auto failure = refused.takeError();
+      visitErrors(failure, [&](const ErrorInfoBase &error) {
+        if (!error.isA<CompilationError>())
+          return;
+        const auto &compilation = static_cast<const CompilationError &>(error);
+        for (const auto &location : compilation.locations)
+          located |= location.filename == "scalar.zkc" && location.line == 6;
+        for (const auto &refusal : compilation.refusals)
+          typed |= refusal.code == "evm.participant-loop-maximum";
+      });
+      require(located && typed,
+              "EVM lowering lost the source loop location or typed refusal");
+      auto message = toString(std::move(failure));
       require(namesIdentifier(message, "evm.participant-loop-maximum") &&
                   StringRef(message).contains(
                       "loop maximum " + std::to_string(maximum) +
