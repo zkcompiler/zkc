@@ -8,7 +8,9 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeLanguage.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Inspection.h"
 #include "zkc/Translation/Language.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include <algorithm>
 using namespace llvm;
 using namespace zkc::language;
@@ -101,6 +103,23 @@ int main() {
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   cases.run(
+      "structural products sequences and selected folds lower to native Finite",
+      [&] {
+        auto source =
+            llvm::MemoryBuffer::getFile(ZKC_STRUCTURAL_DESCRIPTOR_FIXTURE);
+        require(bool(source), "structural fixture missing");
+        auto project = take(checkAuthored((*source)->getBuffer()));
+        witness(project);
+        auto original =
+            take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+        auto module =
+            mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+        require(bool(module), "structural original did not parse");
+        take(compareOriginal(original.entry(), *module));
+        take(compileEntry(original));
+        take(compileEntry(original, {false, false}));
+      });
+  cases.run(
       "layout finite View composition and forwarding reach both native "
       "consumers",
       [&] {
@@ -124,6 +143,45 @@ int main() {
         take(compileEntry(original));
         take(compileEntry(original, {false, false}));
       });
+  for (unsigned arity : {1u, 2u, 3u, 5u})
+    cases.run(
+        "heterogeneous structural Product native projection " + Twine(arity),
+        [&] {
+          std::string contract, tuple;
+          for (unsigned i = 0; i < arity; ++i) {
+            if (i) {
+              contract += ", ";
+              tuple += ", ";
+            }
+            contract += i % 2 ? "Finite<index>" : "Finite<F>";
+            tuple += i % 2 ? "b" : "a";
+          }
+          if (arity == 1)
+            tuple += ",";
+          auto project = take(
+              check("use zkc::descriptor as ds\nview def pack(a: Finite<F>, b: "
+                    "Finite<index>) -> ds::Product<" +
+                    contract + ">:\n    return (" + tuple +
+                    ")\ndef sum(parts: ds::Product<" + contract +
+                    ">, initial: F) -> F:\n    return fold(parts.0, initial, "
+                    "fn(state, item) => state + item)\npub protocol Demo "
+                    "roles(P)(xs: Vector<F> @P, lo: index @P, "
+                    "hi: index @P, initial: F @P) -> F @P:\n    selected = "
+                    "pack(elements(xs), range(lo, hi))\n    return "
+                    "sum(selected, initial)\n"));
+          witness(project);
+          auto original =
+              take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+          auto module = mlir::parseSourceString<mlir::ModuleOp>(
+              original.bytes(), &context);
+          require(bool(module), "heterogeneous Finite original did not parse");
+          require(StringRef(take(inspectSourceInstances(original.entry())))
+                      .contains("zkc.descriptor-formation/0"),
+                  "closed structural argument did not export its formation "
+                  "envelope");
+          take(compareOriginal(original.entry(), *module));
+          take(compileEntry(original));
+        });
   cases.run("ordinary View forwarding keeps its ordinary value category", [] {
     auto project = take(check(R"(
 view def identity<T: Type + Copy + Drop>(value: T) -> T:

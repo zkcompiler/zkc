@@ -64,11 +64,14 @@ Product/Sequence heads, six bounded schemes and DeclarationIndex associations.
 The common producer, native TableGen/Contracts and Rust catalog independently
 validate and project the exact schema, and installation identity binds it.
 Language head formation and frozen index replay consume the associations.
-Parent aggregate checking, expression/scheme and selected-View fold consumers,
-closure, native bridge and all strict independent reader migrations are required
-before publication. Lean owns its own reader and interpretation changes; its
-current unsupported result is retained. This slice changes no proof-profile gate,
-IR operation, runtime codec or production Lean model.
+The internal [structural formation implementation](language/descriptor-formation.md)
+adds aggregate checking, the six scheme consumers, selected-View Fold,
+immutable ordered formation, independent source/closure witnesses and the
+existing Finite native bridge. Common analyses read one formation cursor.
+Full package integration and strict independent reader migrations remain
+publication gates. Lean owns its own reader and interpretation changes; its
+current unsupported result is retained. This slice changes no proof-profile
+gate, IR operation, runtime codec or production Lean model.
 
 The [closed source-term grammar](formats/structured-source.md#definition-origins)
 adds exact `descriptor-product` and `descriptor-sequence` tags. Language's public
@@ -81,9 +84,14 @@ Public codec fixtures cover this native boundary. Native origin attributes use
 `UnitAttr` for null, distinct from the ordinary Unit term; native declaration
 admission/canonical keys and structured static-domain inventory consume these
 structural tags under their own native allowances. Opaque relation statics
-delegate to the strict origin reader. Actual structural closure and complete
-source-to-native integration, future installed leaf schemas, and the independent
-Lean origin/logical readers remain explicit integration requirements.
+delegate to the strict origin reader. Structural formation and existing Finite
+consumers have an internal native implementation; full package integration,
+future installed leaf schemas and the independent Lean origin/logical readers
+remain explicit integration requirements. The additional
+[formation export](language/descriptor-formation.md#closed-source-export) is
+internal native transport pending joint canonical source-association and
+independent strict-reader review; its local expression ordinals, AVL metadata
+and lookup identities are not semantic authority.
 
 The [distributed record source contract](language/records.md) extends checked
 Language signatures and written type nodes with ordered role applications and
@@ -297,7 +305,8 @@ contract change, not the most recent documentation-only registration.
 | `zkc.compilation-observation/0` source work | [Source work observation](language/definitions.md#bounds-and-scope) | Frontend / Language accounting; compiler driver diagnostic output | Language `Work`, checked/analysis/closure accessors → [source driver](../../compiler/lib/Driver/Language.cpp) → [SDK diagnostic transport](../../crates/zkc/src/project/compiler.rs), CLI reports | Native producer and accessors implemented with source-level regression coverage; execution validation pending. SDK transport accepts diagnostic JSON without a strict field schema. Independent formal readers do not consume this diagnostic surface. Completed ledgers expose every subphase; independent checks and Host children remain explicit | None; diagnostic only, no admission or authority | — |
 | `zkc.source-ast/0` | [Written source](language/source-ast.md) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → future Lean elaboration reader | Partial: both native grammars and neutral formal nodes exported, including explicit target decisions, grouped requests and authored site references; generic bridge inventory retains their node envelope, while typed formal interpretation remains open | None; does not discharge `source.correspondence` | [#186](https://github.com/zkcompiler/zkc/pull/186) |
 | `zkc.source-bindings/0` | [Binding proposals](language/source-ast.md#source-binding-proposals) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: retained resolutions; no elaboration soundness theorem | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
-| `zkc.source-instances/0` | [Closed instances](language/source-ast.md#closed-source-instances) | Frontend / Language | [Compiler](../../compiler/lib/Compiler) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: closed instances, complete node/edge descriptor terms in retained graphs, and mandatory unresolved oracle construction substitutions with whole-Formula lookup keys; independent source/IR occurrence association, expected-type checking and call-edge proof remain open | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
+| `zkc.source-instances/0` | [Closed instances](language/source-ast.md#closed-source-instances) | Frontend / Language | [Compiler](../../compiler/lib/Compiler) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: closed instances, complete node/edge descriptor terms in retained graphs, mandatory unresolved oracle construction substitutions with whole-Formula lookup keys, and the internal structural formation transport below; independent source/IR occurrence association, expected-type checking and call-edge proof remain open | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
+| `zkc.descriptor-formation/0` (internal transport) | [Structural formation export](language/descriptor-formation.md#closed-source-export) | Frontend / Language | [SourceInstances.cpp](../../compiler/lib/Language/SourceInstances.cpp) → parent/Lean strict-reader handoff | Partial: bounded shared payload/occurrence export; no independent semantic reader profile. Canonical owner/path/source-revision association and neutral sharing/coverage interpretation require joint review before publication; local ordinals, AVL metadata and lookup keys grant no authority | None | — |
 | `zkc.source-correspondence/0` | [Checked elaboration](language/elaboration.md), [generated definitions and occurrences](language/source-ast.md#generated-definitions-and-occurrences) | Frontend / Language | [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp) → [bridge inventory](../../lean/bridges/pipeline/source_inventory.py) and future Lean correspondence checker | Native producer and exact-artifact bridge checks cover source context, authored/generated rows, substitutions, complete ordered sites and written references; installed declarations have no captured source spans. Semantic source correspondence remains open | Proposed source-to-admitted connection | [#185](https://github.com/zkcompiler/zkc/pull/185) |
 | Structured source, version 0 | [Structured source](formats/structured-source.md) | IR / Protocol | [StructuredSource.cpp](../../compiler/lib/Compiler/StructuredSource.cpp) → [Lean structured reader](../../lean/Zkc/Source/Structured) | Partial: strict Lean type/binding/parameter reading, logical-record origins and complete oracle input/component logical sorts are installed; new total-word meanings and oracle execution remain outside the ordinary formal profile | Existing source interpretation; wire recognition grants no oracle execution admission | [#194](https://github.com/zkcompiler/zkc/pull/194) |
 | Logical oracle operations and kinds, version 0 | [Protocol oracles](ir/protocols.md#logical-oracle-kinds-and-handles), [wire operations](formats/structured-source.md#logical-oracle-vocabulary) | IR / Protocol | [OracleOps.td](../../compiler/include/zkc/Dialect/Protocol/IR/OracleOps.td), [Protocol formation](../../compiler/lib/Dialect/Protocol/IR/Oracles.cpp) → [realization](../../compiler/lib/Transforms/OracleCommonRealization.cpp), frontend emission, Lean reader | Native table/virtual semantics, checked source projection and realization implemented; the independent Lean reader preserves logical-sort descriptors and sequence capacity; oracle execution still needs independent Lean interpretation | No new registered claim stage | [#194](https://github.com/zkcompiler/zkc/pull/194) |

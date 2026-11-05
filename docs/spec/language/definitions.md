@@ -252,19 +252,19 @@ row join, declaration identity, owning module and installation source.
 `schemeDefinition(id)` joins the immutable scheme table. Parent expression and
 fold checking consume these accessors after ordinary `lookup`; they must not
 resolve a second namespace or infer authority from spelling. Scheme discovery
-has category `ViewScheme`, never an ordinary callable signature. Until that
-consumer is integrated, concrete call elaboration refuses with
-`source.descriptor-scheme`.
+has category `ViewScheme`, never an ordinary callable signature. Layout source
+elaboration consumes the indexed signature through the ordinary argument binder;
+selected View members are a separate operand category.
 
 Indexed Product formation accepts ordered concrete descriptor children,
 including zero children at the internal checked-type boundary. Sequence accepts
 one concrete descriptor and optionally one exact Nat static. Unsized and
 sized-zero contracts differ. Data types, named constructor slots, holes, extra
 arguments and scheme-as-head applications refuse. Existing Nat statics use the
-ordinary Natural parameter kind. No public parser extension is introduced by
-this slice; empty tight type application syntax remains a parent integration
-requirement. Ordinary aggregate checking, scheme application, fold matching,
-closure and native materialization remain parent work.
+ordinary Natural parameter kind. Empty tight type applications already parse. Layout aggregate checking, installed
+scheme application, selected Fold closure and Finite projection follow the
+[structural formation contract](descriptor-formation.md). Native Constraint
+construction and materialization remain separate owner integration work.
 
 There is no runtime source-file lookup. Capture identity and captured file/byte
 limits exclude installed modules; declaration and work limits include reading
@@ -1763,13 +1763,57 @@ constructor association requires a Finite result, even when its declaration
 already selects View mode; an ordinary or omitted result cannot select that
 association.
 
+### Structural descriptor contracts
+
+The checked contract representation distinguishes an installed leaf, an ordered
+product of descriptor contracts, and a finite sequence of one descriptor
+contract with an optional static natural extent. A product may have zero or one
+child. An absent sequence extent differs from extent zero; a sized sequence's
+extent participates in identity even when it has no elements. An unsized
+sequence omits length from contract identity, not from its eventual payload
+admission. Products, sequences, ordinary data tuples/arrays and data Unit are
+different categories. Finite's Cartesian enumeration constructor is not a
+structural descriptor product.
+
+A contract retains one complete source type term. Equality, substitution,
+inference, nominal authority and key construction traverse every child and
+natural extent through the ordinary type machinery. Exact aliases do not
+introduce a second contract identity. Ordered children, extent presence, all
+leaf statics and nested selected module/nominal authorities remain significant.
+A descriptor cannot instantiate an ordinary `Type` binder or enter an ordinary
+data aggregate through substitution. A contract has no symbolic descriptor
+head; generic fields, naturals and selected modules remain ordinary statics.
+
+Candidate preflight validates structural arity and categories, canonical natural
+metadata and the complete expanded depth/node bounds. Mutable C++ fields,
+constructor projections and cached keys confer no source or native authority.
+Installed leaf formation, permissions and each reached consumer's admission are
+still separate checks. Inference bounds the expanded result before allocating
+it, including repeated occurrences of a shared solved child. Substitution
+preflights selected replacements at their actual nesting depth. Copy work and
+framed identity work use distinct charges in the same bounded type traversal;
+key construction additionally charges nested framing and nominal authority
+material. Neither operation starts a new allowance inside an existing phase.
+
+Source aggregate and selected-scheme formation use the ordinary installed
+[declaration associations](../formats/contract-declarations.md#installed-structural-contracts-and-schemes)
+and the [structural formation contract](descriptor-formation.md). The strict
+[source-term schema](source-ast.md#closed-source-instances) represents these
+contracts explicitly; ordinary tuple and Finite encodings are not substitutes.
+Finite remains the installed native consumer family. The separate formation
+transport and its independent semantic readers remain subject to the joint
+source-association contract; encoding support alone grants no proof authority
+or new native descriptor family.
+
 Independent admission derives View obligations from immutable authored
 headers, including abstract members, and rejects missing or reclassified
 candidate declarations. Defined ordinary Views replay their complete bodies
 through the source reader for both explicit and inferred results. Their
 returned SSA values, expression mappings, constants, projections and nested
-View calls must agree with that replay. Finite Views retain their independent
-typed recipe comparison and whole-graph closure checks.
+View calls must agree with that replay. Descriptor Views are checked relationally against immutable WrittenSource, actual
+indexed headers, source expression order and bound routes. Their shared formation
+arena retains entered statements and ordered invocations independently of result
+payload reachability. Native Finite retains whole-graph closure checks.
 
 The legacy `domain fn` / `domain<I>` spelling adapts to View /
 Finite during the parent's source migration. Algebra `domain F = field(...)`

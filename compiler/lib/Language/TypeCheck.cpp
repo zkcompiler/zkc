@@ -88,7 +88,7 @@ Checker::associated(const Declaration &context, const Type &base,
       if (current.symbolic) {
         if (auto *parameter = types.parameter(current.domain);
             parameter && parameter->interface) {
-          owner = &output.declarations[parameter->interface->index];
+          owner = &declarations[parameter->interface->index];
           auto selected = moduleParameterReferences.find(parameter->atom);
           if (selected != moduleParameterReferences.end()) {
             reference = selected->second.reference;
@@ -98,7 +98,7 @@ Checker::associated(const Declaration &context, const Type &base,
         } else if (StringRef(current.domain).starts_with("self:")) {
           if (auto id =
                   index().canonical(StringRef(current.domain).drop_front(5)))
-            owner = &output.declarations[id->index];
+            owner = &declarations[id->index];
         }
       } else
         owner = types.typeDeclaration(current);
@@ -350,7 +350,7 @@ Checker::ElaboratedType Checker::elaborateType(const Declaration &context,
           return {};
         continue;
       }
-      const auto &decl = output.declarations[id->index];
+      const auto &decl = declarations[id->index];
       if (decl.kind != Declaration::Kind::Domain &&
           decl.kind != Declaration::Kind::Associated &&
           decl.kind != Declaration::Kind::Alias)
@@ -383,9 +383,9 @@ Checker::ElaboratedType Checker::elaborateType(const Declaration &context,
                "managed constructor requires a protocol service port", s.span);
     return {};
   }
-  auto &decl = output.declarations[id->index];
+  auto &decl = declarations[id->index];
   if (decl.kind == Declaration::Kind::Associated) {
-    auto &parent = output.declarations[decl.parent->index];
+    auto &parent = declarations[decl.parent->index];
     Type base(K::Module, parent.kind == Declaration::Kind::Interface
                              ? "self:" + parent.qualifiedName
                              : parent.qualifiedName);

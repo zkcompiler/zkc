@@ -263,8 +263,8 @@ std::optional<PlacedType> Checker::placedType(const Declaration &context,
       auto id = probe(context, syntax.name, syntax.span, nullptr);
       if (types.diagnostic)
         return {};
-      if (id && output.declarations[id->index].kind == Declaration::Kind::Alias)
-        alias = &output.declarations[id->index];
+      if (id && declarations[id->index].kind == Declaration::Kind::Alias)
+        alias = &declarations[id->index];
     }
     if (alias && alias->placement && syntax.components) {
       types.fail("source.placement",

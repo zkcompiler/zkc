@@ -392,7 +392,14 @@ int main() {
                       Semantics::Admission::Rejected,
                   "structural descriptor acquired native construction");
           refuses(c.types.nativeLayout(tree), "source.layout");
-          refuses(encodeStaticTerm(tree), "source.static-term");
+          auto encoded = take(encodeStaticTerm(tree));
+          const auto *term = encoded.getAsArray();
+          require(term && (term->size() == 2 || term->size() == 3) &&
+                      (*term)[0].getAsString() ==
+                          (tree.kind == K::DescriptorProduct
+                               ? "descriptor-product"
+                               : "descriptor-sequence"),
+                  "structural source term lost its installed constructor");
         }
       });
   cases.run(

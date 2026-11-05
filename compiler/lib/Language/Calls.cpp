@@ -379,6 +379,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                         argument.span);
           if (!checker.types.charge(1, argument.span))
             return false;
+          // Layout descriptor sources are independently related to the actual
+          // recipe from syntax by DescriptorSourceWitness. No factory replay
+          // inventory is manufactured from the candidate's expression maps.
+          if (syntax.layoutSyntax)
+            return true;
           if (inference->collectionDomains.count(expression) ||
               argument.binding)
             return true;

@@ -849,8 +849,30 @@ validation and typed projections. Installed shells enter the ordinary frozen
 declaration index without a concrete data signature or body. Focused native
 checks cover constructor formation, association identity, aliases, visibility,
 foreign homonyms, Nat parameters and installation drift. This is not complete
-public aggregate or Constraint View support. Parent scheme/fold/closure/native
-consumers and strict Lean reader migration remain publication requirements.
+public package or Constraint View support. The internal
+[structural formation implementation](spec/language/descriptor-formation.md)
+adds strict ordered products, homogeneous sequences with optional exact extents,
+bidirectional fresh aggregate checking, typed locals and static projections.
+The six installed schemes use their indexed associations and ordinary binder;
+Fold selects a bare View member with fixed context and invariant old state.
+Zero Count retains selection, requirements, context and seed admission without
+a fabricated step. Immutable payloads and persistent chunked AVL sequences
+retain ordered statement/invocation/frame blocks separately from result
+reachability. Independent source and closed-shape witnesses check those records;
+common analyses use one read-only formation cursor. Existing Finite consumers
+receive every activated Finite occurrence, including heterogeneous sibling
+guards, under their unchanged native caps and primitive identities. The
+enclosing ordinary Body's unrelated descriptors stay inactive. Native and Host
+controls exercise selected sibling zip/row guards at empty results, zero Fold
+context admission, and both native consumer settings. These are native receipts,
+not package acceptance or formal completion. Combined owner integration,
+independent review and strict Lean readers remain publication requirements.
+Direct installed schemes inside protocol Boolean Math still need joint
+classifier integration; a wrapper View is a different route. Native common
+analysis also distinguishes some custody-specific Finite symbols for the same
+checked lexical callback, so the exact source/native interface check refuses
+those cases. The checked computation identity carrier remains a joint owner
+gate; no common-input or mathematical guard is relaxed.
 The public checked-Type source-term encoder and strict C++/Rust wire readers
 support exact structural descriptor products and sequences, including empty
 products and distinct unsized/zero extents. Shared producer fixtures and bounded
@@ -859,12 +881,13 @@ and limits. Native origin transport preserves null as MLIR UnitAttr through
 textual parsing and strict decoding. Native declaration admission and canonical
 keys recognize structural terms without importing wire widths; declaration and
 structured-export inventories follow structural children. Focused controls
-cover native protocol origins and opaque relation statics. These checks do not
-establish structural source-to-native formation,
-full protocol acceptance, future Constraint leaf schemas or formal support.
-Static natural constructor configuration, callable payloads and heterogeneous
-checked descriptor lists are not implemented by the graph foundation; their
-actual family formation and consumers remain required.
+cover native protocol origins and opaque relation statics. The additional
+formation envelope is internal transport pending joint source-address and
+strict-reader review; private expression ordinals, AVL metadata and cache keys
+are not independent source authority. No full protocol acceptance, native
+Constraint leaf construction/materialization or formal support is claimed.
+Runtime callable payloads and future native descriptor families remain outside
+this slice; heterogeneous sequence element contracts refuse.
 Native source tests cover ordered and Unit state, mixed state dependencies,
 filtered stops, strict zip admission, packed record sequences, repeated calls,
 dependent inner ranges and mutable capture snapshots. Fixed source arrays now

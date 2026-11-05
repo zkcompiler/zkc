@@ -5,6 +5,8 @@
 #include "CallableConstraints.h"
 #include "ConstructionWitness.h"
 #include "DescriptorFactories.h"
+#include "DescriptorFrames.h"
+#include "DescriptorSourceWitness.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "FreePlaces.h"
@@ -299,6 +301,7 @@ class LexicalRegions {
   }
 
 public:
+  bool layoutSource() const { return syntax.layoutSyntax; }
   LexicalRegions(Semantics &types, const SyntaxDeclaration &syntax)
       : types(types), syntax(syntax), exits(types, syntax) {}
   const SourceOccurrences &sourceOccurrences() const { return occurrences; }
@@ -1123,6 +1126,25 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   auto servicePorts = replayHeaderContracts(storage, work);
   if (!servicePorts)
     return servicePorts.takeError();
+  CheckedStorage descriptorScratch(storage.capture, "");
+  std::unique_ptr<Checker> descriptorObservation;
+  auto descriptorReader = [&]() -> Checker * {
+    if (!descriptorObservation) {
+      auto observation =
+          Checker::observe(descriptorScratch, storage, work, SourceAccess{{0}});
+      if (!observation) {
+        types.accept(observation.takeError());
+        return nullptr;
+      }
+      descriptorObservation = std::move(*observation);
+      if (!descriptorObservation->useWrittenParameterRoutes(
+              *storage.authoredReferences)) {
+        types.accept(descriptorObservation->types.takeError());
+        return nullptr;
+      }
+    }
+    return descriptorObservation.get();
+  };
   std::map<uint32_t, std::unique_ptr<LexicalRegions>> lexicalSources;
   for (const auto &[owner, source] : storage.bodySources) {
     if (!source || !source->syntax)
@@ -1202,6 +1224,14 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   };
   std::vector<unsigned> uses(storage.scopedSources.size());
   std::vector<unsigned> callUses(storage.scopedCalls.size());
+  std::map<const Body *, std::set<unsigned>> descriptorCoverage;
+  using DescriptorRegion = std::pair<std::optional<uint32_t>, const Body *>;
+  std::map<std::pair<unsigned, uint32_t>, std::vector<DescriptorRegion>>
+      descriptorRegions;
+  std::map<const Body *, std::pair<const Body *, ArrayRef<unsigned>>>
+      descriptorTransfers;
+  std::map<const Body *, std::pair<const Body *, const Operation *>>
+      descriptorRepeats;
   std::vector<unsigned> intrinsicUses(storage.intrinsicCalls.size());
   std::vector<unsigned> invocationUses(storage.scopedInvocations.size());
   auto authoredCall = [&](const Body &body, const Operation &op,
@@ -1577,6 +1607,27 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
             if (lexical != source.domains.end())
               return lexical->second == index || refuse();
           }
+          if (source.syntax->layoutSyntax) {
+            std::map<BindingId, ValueId> data;
+            auto *reader = descriptorReader();
+            if (!reader)
+              return false;
+            DescriptorSourceWitness witness(
+                *reader, reader->declarations[source.owner.index],
+                *source.syntax, body.descriptorBindings, source.domains,
+                std::move(data), 0, &body, true);
+            auto result = witness.expression(
+                expression, depth, &descriptorType(application.contract));
+            if (!result || *result != index) {
+              if (reader->types.diagnostic)
+                types.accept(reader->types.takeError());
+              return types.diagnostic ? false : refuse();
+            }
+            auto &covered = descriptorCoverage[&body];
+            covered.insert(witness.coverage().begin(),
+                           witness.coverage().end());
+            return true;
+          }
           if (argument.kind == Expression::Kind::DomainProduct) {
             if (argument.children.size() != 2 ||
                 application.children.size() != 2 ||
@@ -1799,6 +1850,12 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           return false;
         if (region && !lexical->cover(body, *region, selectedExpression))
           return false;
+        if (region && lexical->layoutSource()) {
+          if (!types.charge(sizeof(DescriptorRegion) + 3 * sizeof(void *), {}))
+            return false;
+          descriptorRegions[{lexicalOwner.index, *region}].emplace_back(
+              selectedExpression, &body);
+        }
         for (const auto &[expression, value] : body.expressionValues)
           if (!belongs(expression, {}))
             return false;
@@ -1977,8 +2034,19 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               !CaptureCheck(types, source,
                             storage.declarations[source.owner.index], producers)
                    .run(body, binding) ||
-              !checkScopedValues(types, storage, source, binding) ||
-              !visit(*binding.computation->body, captured, depth + 1,
+              !checkScopedValues(types, storage, source, binding))
+            return false;
+          if (source.syntax->layoutSyntax) {
+            if (!types.charge(2 * sizeof(const Body *) +
+                                  sizeof(ArrayRef<unsigned>) +
+                                  4 * sizeof(void *),
+                              binding.span))
+              return false;
+            descriptorTransfers.emplace(
+                binding.computation->body.get(),
+                std::make_pair(&body, ArrayRef(binding.descriptorCaptures)));
+          }
+          if (!visit(*binding.computation->body, captured, depth + 1,
                      source.owner, {}, callbackRegion,
                      source.signature.mode == ScopedSignature::Mode::Math
                          ? Body::Mode::Math
@@ -2092,7 +2160,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           }
           auto nested = [&](ArrayRef<ServiceId> advertised,
                             ArrayRef<unsigned> roles,
-                            ArrayRef<std::shared_ptr<const Body>> regions) {
+                            ArrayRef<std::shared_ptr<const Body>> regions,
+                            std::optional<ArrayRef<unsigned>> descriptors) {
             std::vector<uint32_t> authored;
             if (region) {
               auto expected = lexical->regions(body, op);
@@ -2107,6 +2176,15 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 if (!regions[i])
                   return types.fail("source.binding-witness",
                                     "missing candidate region", op.span);
+                if (descriptors && lexical && lexical->layoutSource()) {
+                  if (!types.charge(2 * sizeof(const Body *) +
+                                        sizeof(ArrayRef<unsigned>) +
+                                        4 * sizeof(void *),
+                                    op.span))
+                    return false;
+                  descriptorTransfers.emplace(
+                      regions[i].get(), std::make_pair(&body, *descriptors));
+                }
                 if (!visit(*regions[i], formals, depth + 1, lexicalOwner,
                            expectedRoots,
                            region ? std::optional(authored[i]) : std::nullopt,
@@ -2144,11 +2222,22 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
             return visitRegions(*expected);
           };
           if (const auto *control = std::get_if<Control>(&op.action))
-            if (!nested(control->services, control->roles, control->regions))
+            if (!nested(control->services, control->roles, control->regions,
+                        ArrayRef(control->descriptorArguments)))
               return false;
-          if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
-            if (!nested(repeat->services, repeat->roles, {repeat->region}))
+          if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+            if (lexical && lexical->layoutSource()) {
+              if (!types.charge(2 * sizeof(const Body *) +
+                                    sizeof(const Operation *) +
+                                    4 * sizeof(void *),
+                                op.span))
+                return false;
+              descriptorRepeats.emplace(repeat->region.get(),
+                                        std::make_pair(&body, &op));
+            }
+            if (!nested(repeat->services, repeat->roles, {repeat->region}, {}))
               return false;
+          }
         }
         auto effects = inferEffects(types, storage.declarations, body);
         if (!effects || *effects != body.effects)
@@ -2189,6 +2278,257 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       return types.diagnostic
                  ? types.takeError()
                  : failure("source.binding-witness", "missing body source");
+    if (source != storage.bodySources.end() && source->second &&
+        source->second->syntax && source->second->syntax->layoutSyntax) {
+      const auto &syntax = *source->second->syntax;
+      using Domains = std::map<BindingId, unsigned>;
+      std::set<const Body *> relatedBodies;
+      std::function<bool(const Body &, uint32_t, Domains, bool,
+                         std::optional<uint32_t>, unsigned)>
+          relateBody = [&](const Body &actual, uint32_t region,
+                           Domains captures, bool root,
+                           std::optional<uint32_t> selected, unsigned depth) {
+            if (depth > work.limits.expressionDepth ||
+                !types.charge(sizeof(const Body *) + 4 * sizeof(void *),
+                              decl.span) ||
+                !relatedBodies.insert(&actual).second)
+              return types.diagnostic
+                         ? false
+                         : types.fail("source.view-witness",
+                                      "descriptor lexical body repeats",
+                                      decl.span);
+            auto *reader = descriptorReader();
+            if (!reader)
+              return false;
+            DescriptorSourceWitness witness(
+                *reader, reader->declarations[decl.id.index], syntax,
+                actual.descriptorBindings, std::move(captures), {}, 0, &actual,
+                true);
+            auto nested = [&](uint32_t expression, uint32_t child,
+                              const Domains &domains) -> std::optional<bool> {
+              bool implicit = child == UINT32_MAX;
+              auto at = descriptorRegions.find(
+                  {decl.id.index, implicit ? region : child});
+              if (at == descriptorRegions.end())
+                return {};
+              const Body *target = nullptr;
+              for (const auto &[selection, body] : at->second)
+                if ((implicit ? selection == expression : !selection) &&
+                    body != &actual) {
+                  if (target)
+                    return types.fail("source.view-witness",
+                                      "descriptor lexical body is ambiguous",
+                                      syntax.expressions[expression].span);
+                  target = body;
+                }
+              if (!target)
+                return {};
+              FreePlaceEnvironment environment;
+              if (!types.charge(indexedWork(domains.size()) +
+                                    domains.size() * (sizeof(BindingId) +
+                                                      4 * sizeof(void *)),
+                                decl.span))
+                return false;
+              for (const auto &[name, node] : domains)
+                environment.domains.insert(name);
+              auto free =
+                  queryFreePlaces(types, syntax, syntax.expressions[expression],
+                                  environment, implicit);
+              if (!free)
+                return false;
+              auto transfer = descriptorTransfers.find(target);
+              auto copied = descriptorRepeats.find(target);
+              if (transfer == descriptorTransfers.end() &&
+                  copied != descriptorRepeats.end()) {
+                // Protocol repetition retains source recipes, not
+                // descriptor parameters. Inspect their exact copied
+                // prefix and source operand suffix; the existing value
+                // witness relates that suffix to the actual captures and
+                // their owning Body inputs.
+                if (copied->second.first != &actual)
+                  return types.fail("source.view-witness",
+                                    "descriptor recipe owner differs",
+                                    decl.span);
+                const auto &op = *copied->second.second;
+                const auto &repeat = std::get<ProtocolRepeat>(op.action);
+                std::vector<unsigned> pending;
+                std::set<unsigned> reachable;
+                if (!types.charge(free->domains.size() * sizeof(unsigned),
+                                  op.span))
+                  return false;
+                for (auto name : free->domains)
+                  pending.push_back(domains.at(name));
+                while (!pending.empty()) {
+                  auto index = pending.back();
+                  pending.pop_back();
+                  if (!types.charge(sizeof(unsigned) + 4 * sizeof(void *),
+                                    op.span))
+                    return false;
+                  if (index >= actual.descriptorBindings.size())
+                    return types.fail("source.view-witness",
+                                      "foreign descriptor recipe", op.span);
+                  if (!reachable.insert(index).second)
+                    continue;
+                  if (!types.charge(
+                          actual.descriptorBindings[index].children.size() *
+                              sizeof(unsigned),
+                          op.span))
+                    return false;
+                  for (const auto &edge :
+                       actual.descriptorBindings[index].children)
+                    pending.push_back(edge.node);
+                }
+                std::map<unsigned, unsigned> mapping, operands;
+                std::vector<ValueId> recipes;
+                unsigned prefix = 0;
+                for (auto index : reachable) {
+                  const auto &before = actual.descriptorBindings[index];
+                  if (prefix >= target->descriptorBindings.size())
+                    return types.fail("source.view-witness",
+                                      "missing copied descriptor", op.span);
+                  const auto &after = target->descriptorBindings[prefix];
+                  if (!chargeDescriptorBindingCopy(types, before) ||
+                      !chargeDescriptorBindingCopy(types, after))
+                    return false;
+                  auto expected =
+                      descriptorOccurrenceAuthority(types, before, {});
+                  auto supplied =
+                      descriptorOccurrenceAuthority(types, after, {});
+                  if (!expected || !supplied)
+                    return false;
+                  if (*expected != *supplied || before.kind != after.kind ||
+                      before.parameter != after.parameter ||
+                      before.axis != after.axis ||
+                      before.expression != after.expression ||
+                      bool(before.factory) != bool(after.factory) ||
+                      before.children.size() != after.children.size() ||
+                      before.operands.size() != after.operands.size())
+                    return types.fail("source.view-witness",
+                                      "copied descriptor differs", op.span);
+                  for (unsigned i = 0; i < before.children.size(); ++i) {
+                    auto child = mapping.find(before.children[i].node);
+                    if (child == mapping.end() ||
+                        after.children[i].node != child->second ||
+                        before.children[i].contract !=
+                            after.children[i].contract)
+                      return types.fail("source.view-witness",
+                                        "copied descriptor edge differs",
+                                        op.span);
+                  }
+                  for (unsigned i = 0; i < before.operands.size(); ++i) {
+                    if (!types.charge(sizeof(ValueId) + 2 * sizeof(unsigned) +
+                                          4 * sizeof(void *),
+                                      op.span))
+                      return false;
+                    auto [at, fresh] = operands.emplace(
+                        before.operands[i].index, operands.size());
+                    if (fresh)
+                      recipes.push_back(before.operands[i]);
+                    // Save the suffix ordinal until its source-derived
+                    // size is known; candidate operand slots never define
+                    // it.
+                    if (after.operands[i].index >= target->values.size())
+                      return types.fail("source.view-witness",
+                                        "foreign copied descriptor input",
+                                        op.span);
+                  }
+                  if (!types.charge(2 * sizeof(unsigned) + 4 * sizeof(void *),
+                                    op.span))
+                    return false;
+                  mapping.emplace(index, prefix++);
+                }
+                const SourceControlSnapshot *snapshot = nullptr;
+                if (source->second->controlSnapshots) {
+                  auto at = source->second->controlSnapshots->find(expression);
+                  if (at != source->second->controlSnapshots->end())
+                    snapshot = &at->second;
+                }
+                if ((!recipes.empty() && !snapshot) ||
+                    (snapshot && !llvm::equal(recipes, snapshot->recipes,
+                                              [](ValueId a, ValueId b) {
+                                                return a.index == b.index;
+                                              })) ||
+                    repeat.captures.size() < recipes.size())
+                  return types.fail("source.view-witness",
+                                    "descriptor recipe snapshot differs",
+                                    op.span);
+                auto inputBase = 1 + repeat.carried.size() +
+                                 repeat.captures.size() - recipes.size();
+                for (const auto &[index, mapped] : mapping) {
+                  const auto &before = actual.descriptorBindings[index];
+                  const auto &after = target->descriptorBindings[mapped];
+                  for (unsigned i = 0; i < before.operands.size(); ++i)
+                    if (after.operands[i].index !=
+                        inputBase + operands.at(before.operands[i].index))
+                      return types.fail(
+                          "source.view-witness",
+                          "copied descriptor input origin differs", op.span);
+                  descriptorCoverage[target].insert(mapped);
+                }
+                Domains captured;
+                for (auto name : free->domains)
+                  captured.emplace(name, mapping.at(domains.at(name)));
+                return relateBody(*target, child, std::move(captured), false,
+                                  {}, depth + 1);
+              }
+              if (transfer == descriptorTransfers.end() ||
+                  transfer->second.first != &actual ||
+                  transfer->second.second.size() != free->domains.size())
+                return types.fail(
+                    "source.view-witness",
+                    "descriptor capture coverage differs from source",
+                    syntax.expressions[expression].span);
+              if (!types.charge(free->domains.size() *
+                                    (sizeof(BindingId) + sizeof(unsigned) +
+                                     4 * sizeof(void *)),
+                                decl.span))
+                return false;
+              Domains captured;
+              unsigned parameter = 0;
+              for (auto name : free->domains) {
+                if (transfer->second.second[parameter] != domains.at(name))
+                  return types.fail(
+                      "source.view-witness",
+                      "descriptor capture origin differs from source",
+                      syntax.expressions[expression].span);
+                const auto &original =
+                    actual.descriptorBindings[domains.at(name)];
+                if (parameter >= target->descriptorBindings.size())
+                  return types.fail("source.view-witness",
+                                    "missing source descriptor capture",
+                                    decl.span);
+                const auto &node = target->descriptorBindings[parameter];
+                if (!types.chargeContract(node.contract, node.span) ||
+                    !types.chargeContract(original.contract, original.span))
+                  return false;
+                if (node.kind != DescriptorBinding::Kind::Parameter ||
+                    node.parameter != parameter ||
+                    node.contract != original.contract ||
+                    !same(node.span, original.span) || !node.operands.empty() ||
+                    !node.children.empty() || node.factory || node.expression ||
+                    node.selectedView || !node.arguments.empty() ||
+                    !node.argumentOrder.empty() || node.axis)
+                  return types.fail("source.view-witness",
+                                    "descriptor capture differs from source",
+                                    node.span);
+                captured.emplace(name, parameter++);
+              }
+              return relateBody(
+                  *target, implicit ? region : child, std::move(captured),
+                  false, implicit ? std::optional(expression) : std::nullopt,
+                  depth + 1);
+            };
+            return witness.bodyDefinitions(descriptorCoverage[&actual], region,
+                                           root, nested, selected);
+          };
+      if (!relateBody(*decl.body, 0, {}, true, {}, 1))
+        return descriptorObservation && descriptorObservation->types.diagnostic
+                   ? descriptorObservation->types.takeError()
+               : types.diagnostic
+                   ? types.takeError()
+                   : failure("source.view-witness",
+                             "missing source descriptor formation");
+    }
     if (decl.effectAllowance &&
         !effectsWithin(types, decl.body->effects, *decl.effectAllowance,
                        decl.span)) {

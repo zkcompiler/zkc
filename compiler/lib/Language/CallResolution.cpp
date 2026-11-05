@@ -2,6 +2,50 @@
 #include "zkc/Language/Diagnostics.h"
 using namespace llvm;
 namespace zkc::language::detail {
+bool Checker::useWrittenParameterRoutes(ArrayRef<ReferenceRecord> references) {
+  // The caller has authenticated these immutable written header routes.
+  // Preserve facade provenance and the original binder owner for abstract
+  // member lookup; a copied candidate signature alone cannot supply either.
+  for (const auto &record : references) {
+    if (record.owner.index >= declarations.size())
+      return types.fail("source.view-witness", "unknown static binder owner",
+                        record.span);
+    const auto &owner = declarations[record.owner.index];
+    if (!types.charge(owner.parameters.size() + 1, record.span))
+      return false;
+    for (unsigned slot = 0; slot < owner.parameters.size(); ++slot) {
+      const auto &parameter = owner.parameters[slot];
+      if (parameter.sort != Parameter::Sort::Module || !parameter.interface ||
+          parameter.interface->index != record.reference.target.index ||
+          !(parameter.span.source.index == record.span.source.index &&
+            parameter.span.begin == record.span.begin &&
+            parameter.span.end == record.span.end))
+        continue;
+      const auto &reference = record.reference;
+      if (!types.charge(parameter.atom.size() +
+                            sizeof(ModuleParameterReference) +
+                            4 * sizeof(void *) +
+                            reference.path.size() * sizeof(ResolutionStep),
+                        record.span))
+        return false;
+      for (const auto &step : reference.path)
+        if (!types.charge(step.name.size(), record.span))
+          return false;
+      if (reference.abstract &&
+          !types.chargeType(reference.abstract->module, record.span))
+        return false;
+      auto [at, fresh] = moduleParameterReferences.emplace(
+          parameter.atom,
+          ModuleParameterReference{reference, record.owner, slot});
+      if (!fresh && (at->second.reference != reference ||
+                     at->second.owner.index != record.owner.index ||
+                     at->second.slot != slot))
+        return types.fail("source.view-witness", "static binder route differs",
+                          record.span);
+    }
+  }
+  return true;
+}
 std::optional<CallableReference>
 resolveHomeMethod(Semantics &types, ArrayRef<Declaration> declarations,
                   const DeclarationIndex &index, const Declaration &context,
@@ -90,9 +134,8 @@ resolveHomeMethod(Semantics &types, ArrayRef<Declaration> declarations,
 std::optional<CallableReference> Checker::method(const Declaration &context,
                                                  const Type &receiver,
                                                  StringRef name, Span span) {
-  auto target =
-      resolveHomeMethod(types, output.declarations, *output.declarationIndex,
-                        context, receiver, name, span);
+  auto target = resolveHomeMethod(types, declarations, *output.declarationIndex,
+                                  context, receiver, name, span);
   if (target && !recordReference(context, ReferenceRoute::Method,
                                  target->reference, name, span))
     return {};
@@ -103,20 +146,31 @@ bool Checker::domainExpression(const Declaration &decl,
   const auto &expr = syntax.expressions[id];
   if (expr.kind == Expression::Kind::Name && expr.binding)
     return syntax.bindings[expr.binding->index].domain;
+  if (syntax.layoutSyntax && (expr.kind == Expression::Kind::Tuple ||
+                              expr.kind == Expression::Kind::Array)) {
+    bool descriptor = false;
+    for (auto child : expr.children)
+      descriptor |= domainExpression(decl, syntax, child);
+    return descriptor;
+  }
+  if (syntax.layoutSyntax && (expr.kind == Expression::Kind::Projection ||
+                              expr.kind == Expression::Kind::Subscript))
+    return !expr.children.empty() &&
+           domainExpression(decl, syntax, expr.children.front());
   if (expr.kind != Expression::Kind::Call || expr.binding ||
       expr.text == "index")
     return false;
   // Classification only: the call records its route when it is checked.
-  auto target = callable(decl, expr.text, expr.span, false);
-  return target &&
-         output.declarations[target->declaration.index].kind ==
-             Declaration::Kind::View &&
-         output.declarations[target->declaration.index]
-             .descriptorResult.has_value();
+  auto target = callable(decl, expr.text, expr.span, false, true);
+  return target && (index().schemeAssociation(target->declaration) ||
+                    (declarations[target->declaration.index].kind ==
+                         Declaration::Kind::View &&
+                     declarations[target->declaration.index].descriptorResult));
 }
 std::optional<CallableReference> Checker::callable(const Declaration &decl,
                                                    StringRef name, Span span,
-                                                   bool record) {
+                                                   bool record,
+                                                   bool descriptorContext) {
   if (!types.charge(decl.parameters.size() + 1, span))
     return {};
   auto parts = name.split("::");
@@ -145,7 +199,13 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
           types.fail("source.call", "unknown interface member", span);
         return {};
       }
-      const auto &bound = moduleParameterReferences.at(parameter.atom);
+      auto original = moduleParameterReferences.find(parameter.atom);
+      if (original == moduleParameterReferences.end()) {
+        types.fail("source.binding-witness",
+                   "missing authored static binder route", span);
+        return {};
+      }
+      const auto &bound = original->second;
       auto reference = bound.reference;
       reference.target = selected->target;
       reference.category = selected->category;
@@ -165,7 +225,7 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
     auto nominal = select(decl, alternative.first, span, false);
     if (types.diagnostic)
       return {};
-    if (nominal && output.declarations[nominal->target.index].kind ==
+    if (nominal && declarations[nominal->target.index].kind ==
                        Declaration::Kind::Variant) {
       if (record && !recordReference(decl, ReferenceRoute::Path, *nominal,
                                      alternative.first, span))
@@ -183,8 +243,9 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
                span);
     return {};
   }
-  if (reference->category == ResolutionCategory::ViewScheme ||
-      reference->category == ResolutionCategory::ContractConstructor) {
+  if (reference->category == ResolutionCategory::ContractConstructor ||
+      (reference->category == ResolutionCategory::ViewScheme &&
+       !descriptorContext)) {
     types.fail(
         "source.descriptor-scheme",
         "installed structural association requires descriptor elaboration",
@@ -193,7 +254,7 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
   }
   if (!signature(reference->target))
     return {};
-  const auto &target = output.declarations[reference->target.index];
+  const auto &target = declarations[reference->target.index];
   if (target.abstract && target.kind != Declaration::Kind::Associated) {
     types.fail("source.call", "abstract call requires a bound module", span);
     return {};

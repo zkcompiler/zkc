@@ -2,6 +2,7 @@
 #include "BodyCheck.h"
 #include "CallableConstraints.h"
 #include "DataRequirements.h"
+#include "DescriptorFactories.h"
 #include "ManagedServices.h"
 #include "OperatorInference.h"
 #include "RecordIntrinsics.h"
@@ -138,7 +139,8 @@ class ExpressionInference {
     }
     scopedEquations.emplace(id, std::move(equations));
   }
-  Variable domainArgument(uint32_t id, unsigned depth) {
+  Variable domainArgument(uint32_t id, unsigned depth,
+                          std::optional<Variable> expected = {}) {
     const auto &expr = syntax.expressions[id];
     if (depth > checker.work.limits.expressionDepth ||
         !checker.types.charge(1, expr.span)) {
@@ -149,6 +151,90 @@ class ExpressionInference {
         found != domainExpressions.end())
       return found->second;
     Variable result = types.fresh(expr.span);
+    if (expected)
+      types.equal(result, *expected, expr.span);
+    // An ordinary data collection keeps its established Finite adaptation.
+    // Structural expectations and authored descriptor routes use the common
+    // author; the collection adapter never classifies an aggregate's category.
+    auto demand =
+        expected ? types.structure(*expected, expr.span) : std::nullopt;
+    bool structuralDemand =
+        demand && (demand->head.kind == T::DescriptorProduct ||
+                   demand->head.kind == T::DescriptorSequence);
+    if (syntax.layoutSyntax && expr.kind != K::DomainProduct &&
+        (structuralDemand || checker.domainExpression(decl, syntax, id))) {
+      std::vector<DescriptorBinding> recipes;
+      std::map<BindingId, unsigned> descriptorNames;
+      auto domainName = [&](BindingId id, const Type &contract) {
+        descriptorNames.emplace(id, recipes.size());
+        recipes.push_back({DescriptorBinding::Kind::Parameter,
+                           DescriptorContract(contract),
+                           {},
+                           {},
+                           0,
+                           unsigned(recipes.size()),
+                           expr.span});
+      };
+      for (const auto &[name, node] : owner.domains)
+        domainName(
+            name, descriptorType(owner.body.descriptorBindings[node].contract));
+      for (const auto &[name, variable] : domains) {
+        auto contract = types.get(variable, expr.span);
+        if (!contract)
+          return result;
+        domainName(name, *contract);
+      }
+      std::map<BindingId, ValueId> dataNames;
+      std::vector<Type> dataTypes;
+      auto dataName = [&](BindingId id, const Type &type) {
+        dataNames.emplace(id, ValueId{unsigned(dataTypes.size())});
+        dataTypes.push_back(type);
+      };
+      for (const auto &[name, state] : owner.bindings)
+        dataName(name, state.type);
+      for (const auto &[name, variable] : bindings) {
+        if (dataNames.count(name))
+          continue;
+        auto type = types.get(variable, expr.span);
+        if (!type)
+          return result;
+        dataName(name, *type);
+      }
+      auto evaluate =
+          [&](uint32_t child,
+              const std::optional<Type> &expected) -> std::optional<ValueId> {
+        auto value = expression(child, depth + 1);
+        if (expected)
+          constrain(value.type, *expected, syntax.expressions[child].span);
+        auto actual = types.get(value.type, syntax.expressions[child].span);
+        if (!actual)
+          return {};
+        ValueId id{unsigned(dataTypes.size())};
+        dataTypes.push_back(std::move(*actual));
+        return id;
+      };
+      auto selected = authorDescriptorExpression(
+          checker, decl, syntax, recipes, descriptorNames, dataNames,
+          [&](ValueId id) -> const Type * { return &dataTypes.at(id.index); },
+          evaluate, id, owner.callDepth, types.get(result, expr.span));
+      if (!selected)
+        return result;
+      constrain(result, descriptorType(recipes[*selected].contract), expr.span);
+      for (const auto &recipe : recipes) {
+        if (!recipe.expression)
+          continue;
+        auto site = *recipe.expression;
+        auto item = known(descriptorType(recipe.contract), recipe.span);
+        domainExpressions.emplace(site, item);
+        if (recipe.factory) {
+          output.callees.emplace(site, *recipe.factory);
+          output.arguments.emplace(site, recipe.arguments);
+          output.inputs.emplace(site, recipe.argumentOrder);
+        }
+      }
+      domainExpressions.insert_or_assign(id, result);
+      return result;
+    }
     if (expr.kind == K::DomainProduct) {
       if (expr.children.size() != 2) {
         fail("source.finite-domain", "domain product requires two operands",
@@ -518,6 +604,20 @@ class ExpressionInference {
       return {};
     output.inputs.emplace(id, *binding);
     calls.push_back({id, callee.id, parameters});
+    // Source checking collects rigid data equations before authoring fresh
+    // descriptor aggregates. Runtime evaluation still follows authored order.
+    if (syntax.layoutSyntax && rows.empty())
+      for (unsigned i = 0; i < expr.children.size(); ++i) {
+        auto slot =
+            callee.inputOrder.empty()
+                ? Declaration::InputSlot{Declaration::InputSlot::Kind::Data,
+                                         (*binding)[i]}
+                : callee.inputOrder[(*binding)[i]];
+        if (slot.kind == Declaration::InputSlot::Kind::Data) {
+          auto value = expression(expr.children[i], depth + 1);
+          types.equal(constraints.inputs[slot.index], value.type, expr.span);
+        }
+      }
     for (unsigned i = 0; i < expr.children.size(); ++i) {
       auto slot = !callee.inputOrder.empty()
                       ? callee.inputOrder[(*binding)[i]]
@@ -531,11 +631,10 @@ class ExpressionInference {
                                         callee.services[slot.index].span),
                       known(*field, expr.span), expr.span);
       } else if (slot.kind == Declaration::InputSlot::Kind::Domain) {
-        types.equal(
-            types.instantiate(
-                descriptorType(callee.descriptorInputs[slot.index].contract),
-                parameters, expr.span),
-            domainArgument(expr.children[i], depth + 1), expr.span);
+        auto contract = types.instantiate(
+            descriptorType(callee.descriptorInputs[slot.index].contract),
+            parameters, expr.span);
+        domainArgument(expr.children[i], depth + 1, contract);
       } else if (slot.kind == Declaration::InputSlot::Kind::Data) {
         auto parameter = constraints.inputs[slot.index];
         auto argument = expression(expr.children[i], depth + 1);
@@ -650,7 +749,10 @@ class ExpressionInference {
           syntax.bindings[statement.pattern.binding->index].domain) {
         auto firstCall = calls.size();
         auto firstExpression = expressionOrder.size();
-        auto item = domainArgument(statement.expression, depth + 1);
+        auto item = domainArgument(
+            statement.expression, depth + 1,
+            statement.type ? std::optional(annotation(*statement.type))
+                           : std::nullopt);
         if (!finishCalls(firstCall, firstExpression, statement.span))
           return {item};
         if (!types.get(item, statement.span))
@@ -1460,7 +1562,13 @@ public:
             types, checker.types, checker.output.declarations)) {}
   std::optional<ExpressionTypes> run(uint32_t id, std::optional<Type> expected,
                                      bool domain) {
-    auto result = domain ? Result{domainArgument(id, 1)} : expression(id, 1);
+    auto result =
+        domain ? Result{domainArgument(
+                     id, 1,
+                     expected ? std::optional(known(
+                                    *expected, syntax.expressions[id].span))
+                              : std::nullopt)}
+               : expression(id, 1);
     if (expected)
       constrain(result.type, *expected, syntax.expressions[id].span);
     if (!finishCalls(0, 0, syntax.expressions[id].span))

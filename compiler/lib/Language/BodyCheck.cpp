@@ -362,7 +362,10 @@ bool BodyChecker::statementBody(const Statement &s) {
     if (syntax.layoutSyntax && orderedRoot)
       return fail("source.action", "a domain alias uses a pure binding",
                   s.span);
-    TypeScope types(*this, s.expression, {}, true);
+    auto expected = s.type ? checker.type(decl, *s.type) : std::nullopt;
+    if (s.type && !expected)
+      return false;
+    TypeScope types(*this, s.expression, expected, true);
     if (!types)
       return false;
     auto value = domainArgument(s.expression, 1);
@@ -799,6 +802,9 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
   return true;
 }
 bool Checker::body(DeclarationId id, unsigned depth) {
+  if (observing)
+    return types.fail("source.binding-witness",
+                      "static observation cannot form a body", {});
   auto &decl = output.declarations[id.index];
   // A rule association has no body; an installed primitive keeps its own.
   if ((decl.generated && decl.generated->operation) ||

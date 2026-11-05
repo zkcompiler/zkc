@@ -4,6 +4,7 @@
 #include "zkc/Language/InspectionData.h"
 #include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/Json.h"
+#include "llvm/ADT/StringExtras.h"
 using namespace llvm;
 namespace zkc::language {
 namespace {
@@ -31,17 +32,19 @@ class Instances {
         {"begin", value.begin},
         {"end", value.end}};
   }
-  Expected<json::Value> shape(const DescriptorShape &shape) {
-    if (auto e = work.charge(shape.inputs.size() + shape.nodes.size() + 1))
+  Expected<json::Value> finiteShape(ArrayRef<Type> sourceInputs,
+                                    ArrayRef<DescriptorBinding> sourceNodes,
+                                    unsigned result) {
+    if (auto e = work.charge(sourceInputs.size() + sourceNodes.size() + 1))
       return std::move(e);
     json::Array inputs, nodes;
-    for (const auto &input : shape.inputs) {
+    for (const auto &input : sourceInputs) {
       auto value = term(input);
       if (!value)
         return value.takeError();
       inputs.push_back(std::move(*value));
     }
-    for (const auto &node : shape.nodes) {
+    for (const auto &node : sourceNodes) {
       StringRef kind;
       using K = DescriptorBinding::Kind;
       switch (node.kind) {
@@ -74,6 +77,16 @@ class Instances {
         break;
       case K::Parameter:
       case K::Application:
+      case K::StructuralProduct:
+      case K::Sequence:
+      case K::ProductProjection:
+      case K::SequenceProjection:
+      case K::Append:
+      case K::Concat:
+      case K::Replace:
+      case K::ForgetExtent:
+      case K::CheckExtent:
+      case K::Fold:
         return failure("source.instances",
                        "domain argument is not a closed constructor graph");
       }
@@ -107,7 +120,118 @@ class Instances {
     }
     return json::Object{{"inputs", std::move(inputs)},
                         {"nodes", std::move(nodes)},
-                        {"result", shape.result}};
+                        {"result", result}};
+  }
+  Expected<json::Value> shape(const DescriptorShape &shape) {
+    if (!shape.arena || shape.payload >= shape.arena->payloads.size())
+      return failure("source.instances",
+                     "descriptor formation arena is absent");
+    const auto &arena = *shape.arena;
+    const auto &selected = arena.payloads[shape.payload];
+    if (finiteDescriptorItem(selected.contract))
+      return finiteShape(shape.inputs, shape.nodes, shape.result);
+    auto contract = term(descriptorType(selected.contract));
+    auto leaves = finiteShape(shape.inputs, arena.leaves, UINT32_MAX);
+    if (!contract)
+      return contract.takeError();
+    if (!leaves)
+      return leaves.takeError();
+    json::Array payloads, sequences, blocks;
+    for (const auto &payload : arena.payloads) {
+      if (auto e = work.charge(1))
+        return std::move(e);
+      auto contract = term(descriptorType(payload.contract));
+      if (!contract)
+        return contract.takeError();
+      json::Object value{{"contract", std::move(*contract)}};
+      if (const auto *leaf = std::get_if<unsigned>(&payload.value)) {
+        value["kind"] = "finite";
+        value["leaf"] = *leaf;
+      } else if (const auto *product =
+                     std::get_if<std::vector<unsigned>>(&payload.value)) {
+        auto edges = indices(*product);
+        if (!edges)
+          return edges.takeError();
+        value["kind"] = "product";
+        value["elements"] = std::move(*edges);
+      } else if (const auto *sequence = std::get_if<uint64_t>(&payload.value)) {
+        value["kind"] = "sequence";
+        value["root"] = *sequence == UINT32_MAX ? json::Value(nullptr)
+                                                : json::Value(*sequence);
+      } else
+        return failure(
+            "source.instances",
+            "source residual cannot be exported as closed formation");
+      payloads.push_back(std::move(value));
+    }
+    for (const auto &node : arena.sequences) {
+      if (auto e = work.charge(1 + node.count))
+        return std::move(e);
+      json::Array elements;
+      for (unsigned i = 0; i < node.count; ++i)
+        elements.push_back(node.elements[i]);
+      sequences.push_back(json::Object{
+          {"length", node.length},
+          {"height", node.height},
+          {"left", node.count ? json::Value(nullptr) : json::Value(node.left)},
+          {"right",
+           node.count ? json::Value(nullptr) : json::Value(node.right)},
+          {"elements", std::move(elements)}});
+    }
+    static constexpr StringLiteral kinds[] = {"parameter",
+                                              "application",
+                                              "elements",
+                                              "indices",
+                                              "range",
+                                              "zip",
+                                              "product",
+                                              "matrix_row",
+                                              "matrix_column",
+                                              "matrix_coordinates",
+                                              "source_array",
+                                              "ordered_product",
+                                              "sequence",
+                                              "product_projection",
+                                              "sequence_projection",
+                                              "append",
+                                              "concat",
+                                              "replace",
+                                              "forget_extent",
+                                              "check_extent",
+                                              "fold"};
+    for (const auto &block : arena.blocks) {
+      json::Array events;
+      for (const auto &event : block) {
+        if (auto e = work.charge(1 + 2 * event.authority.size()))
+          return std::move(e);
+        auto children = indices(event.children);
+        if (!children)
+          return children.takeError();
+        if (unsigned(event.kind) >= std::size(kinds))
+          return failure("source.instances",
+                         "unknown formation occurrence kind");
+        events.push_back(json::Object{
+            {"kind", kinds[unsigned(event.kind)].str()},
+            {"expression", event.expression ? json::Value(*event.expression)
+                                            : json::Value(nullptr)},
+            {"result", event.result},
+            {"children", std::move(*children)},
+            {"invocation", event.invocation ? json::Value(*event.invocation)
+                                            : json::Value(nullptr)},
+            {"authority", toHex(event.authority, true)}});
+      }
+      blocks.push_back(std::move(events));
+    }
+    auto &finite = *leaves->getAsObject();
+    return json::Object{{"format", "zkc.descriptor-formation/0"},
+                        {"contract", std::move(*contract)},
+                        {"inputs", std::move(*finite.get("inputs"))},
+                        {"leaves", std::move(*finite.get("nodes"))},
+                        {"payloads", std::move(payloads)},
+                        {"sequences", std::move(sequences)},
+                        {"blocks", std::move(blocks)},
+                        {"payload", shape.payload},
+                        {"formation", shape.formation}};
   }
   Error oracleObligations(const Body &body, std::vector<unsigned> &path,
                           unsigned depth, json::Array &result) {

@@ -4,6 +4,7 @@
 #include "ClosureInputs.h"
 #include "DataRequirements.h"
 #include "DescriptorClosure.h"
+#include "DescriptorFrames.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "OracleDefinitions.h"
@@ -769,9 +770,13 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             auto domain = resolveDomain(call->descriptorArguments.front());
             if (!domain)
               return false;
-            if (item !=
-                descriptorType(
-                    domain->shape->nodes[domain->shape->result].contract))
+            if (!domain->shape ||
+                domain->shape->result >= domain->shape->nodes.size() ||
+                !finiteDescriptorItem(
+                    domain->shape->nodes[domain->shape->result].contract) ||
+                item !=
+                    descriptorType(
+                        domain->shape->nodes[domain->shape->result].contract))
               return types.fail("source.finite-domain",
                                 "closed domain item type differs", op.span);
             auto step = resolveScoped(call->scopedArguments[finite.body], 1);
@@ -1139,6 +1144,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (!domain || !types.charge(domain->identity.size() + 1, source.span))
           return {};
         frame(key, domain->identity);
+        auto formation = descriptorFormationKey(types, *domain, source.span);
+        if (!formation ||
+            !descriptorIdentityFrame(types, key, *formation, source.span))
+          return {};
       }
       auto layout = providedLayout;
       if (layout.inputs.empty() && source.inputs.size())
@@ -1412,8 +1421,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           const auto &domain = domains[i];
           auto item = types.substitute(result.descriptorInputs[i].contract,
                                        bindings, result.span);
-          if (!item || domain->result >= domain->nodes.size() ||
-              *item != domain->nodes[domain->result].contract) {
+          if (!item || !domain->arena ||
+              domain->payload >= domain->arena->payloads.size() ||
+              *item != domain->arena->payloads[domain->payload].contract) {
             if (!types.diagnostic)
               types.fail("source.finite-domain",
                          "closed domain item type differs", result.span);

@@ -164,6 +164,11 @@ public:
                           const Substitution &extra = {});
   bool assumptions(const Declaration &, const NaturalBound &,
                    const Substitution &, Span);
+  /// Read-only structural View implication: direct domination or one premise
+  /// after additive cancellation. No inference hook is available here.
+  bool structuralAssumptions(const Declaration &, const NaturalBound &,
+                             const Substitution &, Span,
+                             llvm::StringRef code = "source.bound");
   bool capabilityFormation(const CapabilityBound &);
   bool entails(const Declaration *, const CapabilityBound &,
                llvm::StringRef code = "source.capability");

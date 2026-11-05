@@ -196,6 +196,8 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
   return true;
 }
 bool Checker::signature(DeclarationId id, unsigned depth) {
+  if (observing)
+    return id.index < declarations.size() && types.charge(1, {});
   auto &decl = output.declarations[id.index];
   if (signatureState[id.index] == 2)
     return true;

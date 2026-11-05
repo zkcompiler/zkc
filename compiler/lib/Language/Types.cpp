@@ -47,7 +47,9 @@ const Type &descriptorType(const DescriptorContract &contract) {
   return contract.type;
 }
 const Type *finiteDescriptorItem(const DescriptorContract &contract) {
-  const auto &type = descriptorType(contract);
+  return finiteDescriptorItem(descriptorType(contract));
+}
+const Type *finiteDescriptorItem(const Type &type) {
   return type.kind == Type::Kind::Descriptor &&
                  type.family == DescriptorFamily::Finite &&
                  type.arguments.size() == 1 && type.domain.empty() &&

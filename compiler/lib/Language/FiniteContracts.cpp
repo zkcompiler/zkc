@@ -1,7 +1,9 @@
 #include "FiniteContracts.h"
 #include "DataRequirements.h"
+#include "DescriptorClosure.h"
 #include "FiniteCardinality.h"
 #include "FiniteFormation.h"
+#include "FormationCursor.h"
 #include "HelperResults.h"
 #include "MathematicalFacts.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -42,13 +44,6 @@ class ContractCheck {
   std::vector<DomainEvidence> domainEvidence;
   std::vector<ValueOrigin> domainLeaves;
   std::map<ValueOrigin, unsigned> domainLeafIds;
-  struct FactoryFacts {
-    std::vector<ItemBound> bounds;
-    DomainEvidence evidence;
-  };
-  using RecipeKey = std::tuple<unsigned, std::vector<std::string>,
-                               std::vector<ValueOrigin>, std::vector<unsigned>>;
-  std::map<RecipeKey, FactoryFacts> factoryFacts;
   const Declaration *owner = nullptr;
   ArrayRef<DataPrecondition> rootAssumptions;
   const Declaration *typeOwner = nullptr;
@@ -483,99 +478,8 @@ class ContractCheck {
     using Kind = DescriptorBinding::Kind;
     std::vector<ItemBound> facts;
     DomainEvidence evidence;
-    if (binding.kind == Kind::Application) {
-      if (!binding.factory ||
-          binding.factory->declaration.index >= declarations.size()) {
-        refuse(binding.span, "invalid domain factory reference");
-        return {};
-      }
-      auto target =
-          statics
-              ? dispatch(binding.factory->module, binding.factory->declaration,
-                         binding.arguments, binding.span)
-              : std::optional<Semantics::Dispatch>(
-                    Semantics::Dispatch{binding.factory->declaration, {}});
-      if (!target)
-        return {};
-      const auto &callee = declarations[target->declaration.index];
-      if (!types.charge(operands.size() + children.size() + 1, binding.span))
-        return {};
-      std::vector<std::string> argumentKeys;
-      for (const auto &argument : target->arguments) {
-        if (!types.chargeIdentity(argument, binding.span))
-          return {};
-        argumentKeys.push_back(typeIdentity(argument));
-      }
-      RecipeKey key{callee.id.index, std::move(argumentKeys), operands.vec(),
-                    children.vec()};
-      if (auto found = factoryFacts.find(key); found != factoryFacts.end()) {
-        if (!types.charge(found->second.bounds.size() +
-                              found->second.evidence.children.size() + 1,
-                          binding.span))
-          return {};
-        auto result = newDomain(found->second.bounds);
-        domainEvidence[result] = found->second.evidence;
-        return result;
-      }
-      // A generic module's implementation is not evidence available to its
-      // clients. Only the checked recipe of a concrete factory supplies facts.
-      if (!callee.abstract && callee.descriptorDefinition) {
-        std::optional<Substitution> bindings;
-        if (statics) {
-          bindings = frame(callee, target->arguments, binding.span);
-          if (!bindings)
-            return {};
-        }
-        SaveAndRestore<const Substitution *> selectedStatics(
-            statics, bindings ? &*bindings : nullptr);
-        const auto &definition = *callee.descriptorDefinition;
-        std::vector<unsigned> nested;
-        for (const auto &node : definition.bindings) {
-          if (node.parameter) {
-            if (*node.parameter >= children.size()) {
-              refuse(node.span, "domain parameter fact coverage differs");
-              return {};
-            }
-            nested.push_back(children[*node.parameter]);
-            continue;
-          }
-          std::vector<ValueOrigin> data;
-          std::vector<unsigned> domains;
-          if (!types.charge(node.operands.size() + node.children.size() + 1,
-                            node.span))
-            return {};
-          for (auto operand : node.operands) {
-            if (operand.index >= operands.size()) {
-              refuse(node.span, "factory data fact coverage differs");
-              return {};
-            }
-            data.push_back(operands[operand.index]);
-          }
-          for (auto child : node.children) {
-            if (child.node >= nested.size()) {
-              refuse(node.span, "factory child fact coverage differs");
-              return {};
-            }
-            domains.push_back(nested[child.node]);
-          }
-          auto selected = recipe(node, data, domains, depth + 1);
-          if (!selected)
-            return {};
-          nested.push_back(*selected);
-        }
-        if (definition.result >= nested.size()) {
-          refuse(binding.span, "factory result fact coverage differs");
-          return {};
-        }
-        facts = domainBounds[nested[definition.result]];
-        evidence = domainEvidence[nested[definition.result]];
-      }
-      // Only structural constructors and exact operand origins are cached,
-      // never a count or a caller premise. Each application has a fresh item
-      // domain identity even when its evidence references the same leaves.
-      factoryFacts.emplace(std::move(key), FactoryFacts{facts, evidence});
-    } else if (binding.kind == Kind::Indices ||
-               binding.kind == Kind::MatrixCoordinates) {
+    if (binding.kind == Kind::Indices ||
+        binding.kind == Kind::MatrixCoordinates) {
       if (operands.empty()) {
         refuse(binding.span, "index domain has no container");
         return {};
@@ -608,7 +512,6 @@ class ContractCheck {
       constructor.kind = binding.kind;
       constructor.contract = binding.contract;
       constructor.axis = binding.axis;
-      constructor.children = binding.children;
       for (const auto &operand : operands) {
         if (!types.charge(operand.second.size() + 1, binding.span))
           return {};
@@ -619,6 +522,9 @@ class ContractCheck {
         constructor.operands.push_back({found->second});
       }
       evidence.node = cardinalityNode(constructor);
+      // Residual operations retain their actual children in the formation
+      // environment, not in the producer's Body-local edge array.
+      evidence.node.children = children.size();
       evidence.children = children.vec();
     }
     if (!types.charge(facts.size() + evidence.children.size() + 1,
@@ -807,31 +713,45 @@ class ContractCheck {
       result = *context.domains[index];
       return true;
     }
-    const auto &binding = context.body.descriptorBindings[index];
-    if (binding.parameter)
-      return refuse(span, "missing finite domain environment");
-    std::vector<ValueOrigin> data;
-    std::vector<unsigned> children;
-    if (!types.charge(binding.operands.size() + binding.children.size() + 1,
-                      binding.span))
+    auto formation =
+        formDescriptor(types, declarations, context.body, index,
+                       statics ? *statics : Substitution{}, &context.origins);
+    if (!formation)
       return false;
-    for (auto operand : binding.operands) {
-      auto origin = value(context, operand, binding.span);
-      if (!origin)
-        return false;
-      data.push_back(std::move(*origin));
-    }
-    for (auto child : binding.children) {
-      unsigned selected;
-      if (child.node >= index)
-        return refuse(binding.span, "domain child facts must precede use");
-      if (!domain(context, child.node, selected, binding.span, nested + 1))
-        return false;
-      children.push_back(selected);
-    }
-    auto selected = recipe(binding, data, children, context.depth + nested + 1);
-    if (!selected)
+    auto parameter = [&](std::optional<unsigned> port,
+                         const DescriptorContract &) {
+      if (port)
+        for (unsigned i = 0; i < context.body.descriptorBindings.size(); ++i)
+          if (context.body.descriptorBindings[i].parameter == port &&
+              context.domains[i])
+            return *context.domains[i];
+      return newDomain();
+    };
+    auto leaf = [&](const DescriptorBinding &binding,
+                    ArrayRef<ValueId> operands,
+                    ArrayRef<unsigned> children) -> std::optional<unsigned> {
+      if (!finiteDescriptorItem(binding.contract))
+        return newDomain(); // Open structural dependencies establish no item
+                            // facts.
+      std::vector<ValueOrigin> data;
+      for (auto operand : operands) {
+        auto origin = value(context, operand, binding.span);
+        if (!origin)
+          return {};
+        data.push_back(std::move(*origin));
+      }
+      return recipe(binding, data, children, context.depth + nested + 1);
+    };
+    auto compose = [&](DescriptorBinding::Kind, const DescriptorContract &,
+                       ArrayRef<Type>,
+                       ArrayRef<unsigned>) -> std::optional<unsigned> {
+      return newDomain();
+    };
+    auto read =
+        readFormation<unsigned>(types, *formation, parameter, leaf, compose);
+    if (!read)
       return false;
+    auto selected = std::optional(read->selected);
     context.domains[index] = result = *selected;
     return true;
   }

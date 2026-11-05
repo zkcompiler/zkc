@@ -15,6 +15,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <optional>
@@ -324,6 +325,25 @@ struct DescriptorEdge {
     return !(*this == other);
   }
 };
+/// A driver-selected View member is a separate operand category. Its one
+/// member-local Natural remains unbound until an actual Fold frame exists.
+struct SelectedViewMember {
+  CallableReference target;
+  std::vector<Type> arguments;
+  unsigned iteration;
+  DescriptorContract context, state;
+  bool operator==(const SelectedViewMember &other) const {
+    return target.declaration.index == other.target.declaration.index &&
+           target.module == other.target.module &&
+           target.reference == other.target.reference &&
+           target.authoredReference == other.target.authoredReference &&
+           arguments == other.arguments && iteration == other.iteration &&
+           context == other.context && state == other.state;
+  }
+  bool operator!=(const SelectedViewMember &other) const {
+    return !(*this == other);
+  }
+};
 struct DescriptorBinding {
   enum class Kind {
     Parameter,
@@ -336,7 +356,17 @@ struct DescriptorBinding {
     MatrixRow,
     MatrixColumn,
     MatrixCoordinates,
-    SourceArray
+    SourceArray,
+    StructuralProduct,
+    Sequence,
+    ProductProjection,
+    SequenceProjection,
+    Append,
+    Concat,
+    Replace,
+    ForgetExtent,
+    CheckExtent,
+    Fold
   } kind;
   DescriptorContract contract;
   std::vector<ValueId> operands;
@@ -349,6 +379,47 @@ struct DescriptorBinding {
   std::vector<unsigned> argumentOrder = {};
   /// Authored expression identity within the owning lexical declaration.
   std::optional<uint32_t> expression = {};
+  std::optional<SelectedViewMember> selectedView = {};
+};
+/// Sequence nodes contain payload indices in their owning immutable arena.
+struct DescriptorSequenceNode {
+  uint64_t length = 0;
+  unsigned height = 1, count = 0;
+  uint32_t left = UINT32_MAX, right = UINT32_MAX;
+  std::array<unsigned, 32> elements{};
+};
+/// A source judgment whose payload depends on an unselected descriptor input
+/// or Natural. This is not a closed value and cannot cross native closure.
+struct DescriptorResidual {
+  std::optional<unsigned> parameter;
+  /// Typed open application/operation, with data ports in the arena input
+  /// signature and descriptor children in this arena's payload space.
+  std::shared_ptr<const DescriptorBinding> operation;
+  std::vector<unsigned> children;
+};
+struct DescriptorPayload {
+  DescriptorContract contract;
+  /// Finite leaf index, ordered product edges, or a persistent sequence root.
+  std::variant<unsigned, std::vector<unsigned>, uint64_t, DescriptorResidual>
+      value;
+  /// Normalized construction statics for bounded source analysis only.
+  /// Closed native payloads have no open analysis metadata.
+  std::vector<Type> arguments;
+};
+struct DescriptorOccurrence {
+  DescriptorBinding::Kind kind;
+  std::optional<uint32_t> expression;
+  unsigned result;
+  std::vector<unsigned> children;
+  std::optional<unsigned> invocation;
+  std::string authority;
+};
+struct DescriptorArena {
+  std::vector<DescriptorBinding> leaves;
+  std::deque<DescriptorSequenceNode> sequences;
+  std::vector<DescriptorPayload> payloads;
+  /// Shared immutable invocation templates with ordered use edges.
+  std::vector<std::vector<DescriptorOccurrence>> blocks;
 };
 /// Closed static constructor graph. Data ports use ordinary caller operands;
 /// the descriptor itself is not a runtime value or an expression interpreter.
@@ -357,12 +428,16 @@ struct DescriptorShape {
   std::vector<DescriptorBinding> nodes;
   unsigned result;
   std::string identity;
+  std::shared_ptr<const DescriptorArena> arena;
+  unsigned payload = UINT32_MAX, formation = UINT32_MAX;
 };
 struct DescriptorDefinition {
   std::optional<DescriptorBinding::Kind> constructor;
   unsigned axis = 0;
   std::vector<DescriptorBinding> bindings;
   unsigned result = 0;
+  /// Ordered authored statements, including aliases and discarded results.
+  std::vector<std::pair<uint32_t, unsigned>> statements;
 };
 /// Static alias partition for a closed callable. Authored ports remain in the
 /// ABI; input references and hidden captures select their canonical ports.

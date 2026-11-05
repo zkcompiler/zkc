@@ -1443,34 +1443,46 @@ fn example(xs:Pair,other:Vector<Fr>)->(Vector<Fr>,Vector<Fr>,Vector<Fr>){
         zkc::language::detail::Work work{Limits{}};
         zkc::language::detail::Semantics types(declarations, project.assets(),
                                                work);
-        auto result = zkc::language::detail::closeDescriptor(
-            types, declarations, body, 0, {}, {});
-        require(result.has_value(), types.diagnostic ? types.diagnostic->message
-                                                     : "missing closed domain");
-        require(result->shape->nodes.size() == 1 &&
-                    result->shape->inputs.size() == 2,
-                "shared factory graph expanded repeated selected recipes");
-        require(zkc::language::detail::checkDescriptorClosure(
-                    types, declarations, body, 0, {}, {}, *result),
+        auto sourceFormation =
+            zkc::language::detail::formDescriptor(types, declarations, body, 0);
+        require(sourceFormation &&
+                    sourceFormation->shape->arena->leaves.size() == 1 &&
+                    sourceFormation->shape->inputs.size() == 2,
                 types.diagnostic ? types.diagnostic->message
-                                 : "shared factory witness failed");
+                                 : "shared formation lost its template");
+        // Every authored call remains an invocation. This source has 2^40
+        // assertions; materializing it as a native Finite graph exceeds the
+        // unchanged 4095-node allowance even though its source arena is small.
+        Limits closeLimits;
+        zkc::language::detail::Work closeWork{closeLimits};
+        zkc::language::detail::Semantics closure(declarations, project.assets(),
+                                                 closeWork);
+        auto result = zkc::language::detail::closeDescriptor(
+            closure, declarations, body, 0, {}, {});
+        require(
+            !result && closure.diagnostic &&
+                closure.diagnostic->code == "source.limit",
+            "repeated source invocations disappeared from native admission");
       });
   cases.run(
       "inherited domain inputs and descriptor size are checked at closure", [] {
-        auto project = take(check("fn forward(a:index,b:index,rows:"
-                                  "domain<index>)->index{return a;}"));
+        auto project = take(check(
+            "fn seed(a:index,b:index)->index{let rows=range(a,b);return a;}"
+            "fn forward(a:index,b:index,rows:domain<index>)->index{return "
+            "a;}"));
         const auto &body = *declarationNamed(project, "m::forward").body;
         std::vector<Declaration> declarations(project.declarations().begin(),
                                               project.declarations().end());
         for (unsigned mutation = 0; mutation < 3; ++mutation) {
-          auto shape = std::make_shared<DescriptorShape>();
-          shape->inputs = {Type(Type::Kind::Index), Type(Type::Kind::Index)};
-          shape->nodes.push_back(
-              {DescriptorBinding::Kind::Range,
-               {DescriptorFamily::Finite, {Type(Type::Kind::Index)}},
-               {{0}, {1}},
-               {}});
-          shape->result = 0;
+          Limits seedLimits;
+          zkc::language::detail::Work seedWork{seedLimits};
+          zkc::language::detail::Semantics seedTypes(
+              declarations, project.assets(), seedWork);
+          auto seed = zkc::language::detail::closeDescriptor(
+              seedTypes, declarations,
+              *declarationNamed(project, "m::seed").body, 0, {}, {});
+          require(seed.has_value(), "source seed formation failed");
+          auto shape = std::make_shared<DescriptorShape>(*seed->shape);
           if (mutation == 1)
             shape->inputs.front() = Type{};
           if (mutation == 2)
@@ -1533,7 +1545,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
         require(original.has_value(), types.diagnostic
                                           ? types.diagnostic->message
                                           : "closure failed");
-        require(original->shape->nodes.size() == 3 &&
+        require(original->shape->nodes.size() == 4 &&
                     original->shape->result == 0,
                 "missing retained check-only zip");
         Body caller = body;
@@ -1580,12 +1592,10 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
           if (mutation == 12)
             shape->nodes.front().contract.type.arguments.front() = Type{};
           if (mutation == 13)
-            shape->nodes.back().children.front().contract.type.arguments = {
-                Type{}};
+            shape->nodes[2].children.front().contract.type.arguments = {Type{}};
           if (mutation == 14)
-            shape->nodes.back()
-                .children.front()
-                .contract.type.arguments.push_back(Type{});
+            shape->nodes[2].children.front().contract.type.arguments.push_back(
+                Type{});
           if (mutation >= 15) {
             auto &contract = shape->nodes.front().contract;
             Type structural(mutation == 17 ? Type::Kind::DescriptorSequence
@@ -1596,7 +1606,8 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
               structural = Type(Type::Kind::Boolean);
             contract = DescriptorContract(std::move(structural));
           }
-          zkc::language::detail::Work witnessWork{Limits{}};
+          Limits witnessLimits;
+          zkc::language::detail::Work witnessWork{witnessLimits};
           zkc::language::detail::Semantics witness(
               declarations, project.assets(), witnessWork);
           bool valid = zkc::language::detail::checkDescriptorClosure(

@@ -140,6 +140,7 @@ std::optional<DescriptorContract> descriptorContract(const Type &);
 const Type &descriptorType(const DescriptorContract &);
 /// Finite interpretation only: reject every other family and incorrect arity.
 const Type *finiteDescriptorItem(const DescriptorContract &);
+const Type *finiteDescriptorItem(const Type &);
 /// Direct logical handle values; aggregate formation has its own recursive
 /// check.
 bool isOracleHandle(const Type &);

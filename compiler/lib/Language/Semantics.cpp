@@ -954,6 +954,57 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
   }
   return true;
 }
+bool Semantics::structuralAssumptions(const Declaration &caller,
+                                      const NaturalBound &bound,
+                                      const Substitution &bindings, Span span,
+                                      StringRef code) {
+  if (!charge(2 * sizeof(Type), span))
+    return false;
+  auto leftCopy = naturals.add(bound.lhs, Natural{});
+  if (!leftCopy)
+    return accept(leftCopy.takeError(), span);
+  auto rightCopy = naturals.add(bound.rhs, Natural{});
+  if (!rightCopy)
+    return accept(rightCopy.takeError(), span);
+  Type lhs(Type::Kind::Natural), rhs(Type::Kind::Natural);
+  lhs.dimension = std::move(*leftCopy);
+  rhs.dimension = std::move(*rightCopy);
+  auto l = substitute(lhs, bindings, span), r = substitute(rhs, bindings, span);
+  if (!l || !r)
+    return false;
+  auto requested = naturals.cancelCommonTerms(l->dimension, r->dimension);
+  if (!requested)
+    return accept(requested.takeError(), span);
+  auto dominates = [&](const Natural &a, const Natural &b) -> bool {
+    auto result = naturals.dominatedBy(a, b);
+    if (!result) {
+      accept(result.takeError(), span);
+      return false;
+    }
+    return *result;
+  };
+  const auto &[left, right] = *requested;
+  if (dominates(left, right))
+    return true;
+  if (diagnostic)
+    return false;
+  // A closed contradiction cannot be licensed by an inconsistent premise.
+  if (left.isClosed() && right.isClosed())
+    return fail(code, "natural requirement is false", span, {bound.span});
+  for (const auto &given : caller.bounds) {
+    if (!charge(1, span))
+      return false;
+    auto premise = naturals.cancelCommonTerms(given.lhs, given.rhs);
+    if (!premise)
+      return accept(premise.takeError(), span);
+    if (dominates(left, premise->first) && dominates(premise->second, right))
+      return true;
+    if (diagnostic)
+      return false;
+  }
+  return fail(code, "contract does not establish structural View bound", span,
+              {bound.span});
+}
 bool Semantics::assumptions(const Declaration &caller,
                             const NaturalBound &bound,
                             const Substitution &bindings, Span span) {

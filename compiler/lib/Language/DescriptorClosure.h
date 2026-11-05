@@ -15,5 +15,11 @@ closeDescriptor(Semantics &, llvm::ArrayRef<Declaration>, const Body &,
                 unsigned, const Substitution &,
                 llvm::ArrayRef<DescriptorEnvironment>,
                 ValueOrigins *cache = nullptr);
+/// Read a source formation using the same authoring/closure engine. Unselected
+/// inputs and driver-dependent typed payloads remain residual; this result is
+/// for source analyses and never supplies a native descriptor.
+std::optional<DescriptorEnvironment>
+formDescriptor(Semantics &, llvm::ArrayRef<Declaration>, const Body &, unsigned,
+               const Substitution & = {}, ValueOrigins *cache = nullptr);
 } // namespace zkc::language::detail
 #endif

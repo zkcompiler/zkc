@@ -351,13 +351,18 @@ private:
                       "service aliases are immutable unannotated names",
                       s.span);
         bool domain = checker.domainExpression(decl, syntax, s.expression);
+        if (syntax.layoutSyntax && s.type) {
+          auto annotation = checker.placedType(decl, *s.type);
+          if (!annotation)
+            return false;
+          domain |= isDescriptor(annotation->type);
+        }
         if (checker.types.diagnostic)
           return false;
-        if (domain && (s.mutableBinding || s.roles || s.type || s.exchange ||
+        if (domain && (s.mutableBinding || s.roles || s.exchange ||
                        s.pattern.kind != Pattern::Kind::Name))
           return fail("source.finite-domain",
-                      "domain aliases require one immutable unannotated name",
-                      s.span);
+                      "descriptor aliases require one immutable name", s.span);
         std::set<std::string> seen;
         SaveAndRestore bindingVisibility(visibleAfter, s.span.end);
         if (!pattern(s.pattern, s.mutableBinding, service, seen, depth))

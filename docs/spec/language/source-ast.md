@@ -654,9 +654,11 @@ Node and edge contract arity and every typed index are retained; no item-only
 field or graph-wide family substitutes for them. Kinds are `elements`, `indices`, `range`, `zip`, `product`, `matrix_row`,
 `matrix_column`, `matrix_coordinates` and `source_array`. No open parameter or
 factory node, internal shape key, or caller SSA value is serialized as a domain.
-This is the sole current version-0 shape; no item-only compatibility reader is
-provided. Finite is the only installed constructor/consumer family in this
-profile. Independent Lean descriptor interpretation remains unimplemented.
+Finite leaves retain this version-0 shape without an item-only compatibility
+reader. A structural argument uses the explicit
+[descriptor formation envelope](descriptor-formation.md#closed-source-export).
+Finite remains the installed native leaf/consumer family. Independent Lean
+descriptor interpretation remains unimplemented.
 
 `layout.inputs` and `layout.captures` retain the closed source callable's alias
 partition in source argument/hidden-capture slots. They are not flattened

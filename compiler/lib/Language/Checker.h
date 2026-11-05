@@ -38,6 +38,13 @@ public:
   Checker(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
   /// Static selection over completed signatures and frozen source namespaces.
   Checker(CheckedStorage &, Work &, AccessContext);
+  /// Bounded, synchronous observation of completed metadata. The source and
+  /// private scratch storage must outlive this checker. Only scratch receives
+  /// reference bookkeeping; metadata and shared source/index pointees are
+  /// const.
+  static llvm::Expected<std::unique_ptr<Checker>>
+  observe(CheckedStorage &scratch, const CheckedStorage &, Work &,
+          AccessContext);
   // Lazy signature completion captures this driver; keep its address stable.
   Checker(const Checker &) = delete;
   Checker &operator=(const Checker &) = delete;
@@ -61,6 +68,7 @@ public:
     return inferredContracts.count(&output.declarations[id.index]);
   }
   CheckedStorage &output;
+  const std::vector<Declaration> &declarations;
   Work &work;
   Semantics types;
   BodySummaryCache bodySummaries;
@@ -117,10 +125,15 @@ public:
   std::optional<std::vector<bool>>
   enclosingParameters(const Declaration &, const Declaration &, Span);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
+  /// Restore abstract binder routes from the authenticated immutable header
+  /// inventory.
+  bool useWrittenParameterRoutes(llvm::ArrayRef<ReferenceRecord>);
   /// Resolve a callee. Without recording, the lookup only classifies the
   /// written name and the caller records nothing.
-  std::optional<CallableReference>
-  callable(const Declaration &, llvm::StringRef, Span, bool record = true);
+  std::optional<CallableReference> callable(const Declaration &,
+                                            llvm::StringRef, Span,
+                                            bool record = true,
+                                            bool descriptorContext = false);
   std::optional<CallableReference> method(const Declaration &, const Type &,
                                           llvm::StringRef, Span);
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
@@ -171,6 +184,9 @@ public:
   std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
 
 private:
+  Checker(CheckedStorage &scratch, const CheckedStorage &, Work &,
+          AccessContext);
+  bool observing = false;
   bool checkBody(Declaration &, Body &, unsigned);
   bool inferUsage(Declaration &, Body::Mode, unsigned);
   bool collectUsage(const Declaration &, const Type &, Usage, Span,

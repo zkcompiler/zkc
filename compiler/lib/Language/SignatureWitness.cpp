@@ -2,6 +2,7 @@
 #include "Checker.h"
 #include "Conformance.h"
 #include "DescriptorFactories.h"
+#include "DescriptorSourceWitness.h"
 #include "Effects.h"
 #include "Internal.h"
 #include "ScopedWitness.h"
@@ -559,6 +560,7 @@ bool viewBindingsAgree(Semantics &types, ArrayRef<DescriptorBinding> actual,
         x.children != y.children || x.axis != y.axis ||
         x.parameter != y.parameter || x.expression != y.expression ||
         x.arguments != y.arguments || x.argumentOrder != y.argumentOrder ||
+        x.selectedView != y.selectedView ||
         x.span.source.index != y.span.source.index ||
         x.span.begin != y.span.begin || x.span.end != y.span.end ||
         bool(x.factory) != bool(y.factory))
@@ -1192,8 +1194,9 @@ llvm::Error checkViewSources(const CheckedStorage &storage, Work &work) {
     if (found->second->owner.index != id ||
         found->second->syntax->kind != Declaration::Kind::View)
       return refuse(header->span);
-    reader->prepareViewReconstruction(DeclarationId{id},
-                                      *found->second->syntax);
+    if (!replay.declarations[id].descriptorResult)
+      reader->prepareViewReconstruction(DeclarationId{id},
+                                        *found->second->syntax);
   }
   for (const auto &[id, header] : headers.sources) {
     if (header->kind != Declaration::Kind::View)
@@ -1205,7 +1208,8 @@ llvm::Error checkViewSources(const CheckedStorage &storage, Work &work) {
       return refuse(header->span);
     // Infer ordinary results from a fresh body, for explicit and omitted
     // annotations alike. Lazy View dependencies have all been reset above.
-    if (!header->abstract && !reader->body(DeclarationId{id}, 1))
+    if (!header->abstract && !written.descriptorResult &&
+        !reader->body(DeclarationId{id}, 1))
       return reader->types.takeError();
     if (!signatureAgrees(types, storage, actual, written,
                          reader->permitsContractInference(DeclarationId{id})))
@@ -1226,15 +1230,18 @@ llvm::Error checkViewSources(const CheckedStorage &storage, Work &work) {
         return types.takeError();
       continue;
     }
-    if (!actual.descriptorDefinition || !written.descriptorDefinition)
+    if (!actual.descriptorDefinition)
       return refuse(actual.span);
-    const auto &a = *actual.descriptorDefinition,
-               &b = *written.descriptorDefinition;
-    if (a.constructor != b.constructor || a.axis != b.axis ||
-        a.result != b.result || a.bindings.size() != b.bindings.size())
-      return refuse(actual.span);
-    if (!viewBindingsAgree(types, a.bindings, b.bindings, actual.span))
-      return types.takeError();
+    // Fresh immutable source owns the inventory, including unused statements.
+    // The ordinary resolver is read-only with respect to the candidate graph.
+    auto syntax = *header;
+    if (!resolveBindings(*reader, written, syntax))
+      return reader->types.takeError();
+    if (!DescriptorSourceWitness(*reader, written, syntax,
+                                 actual.descriptorDefinition->bindings)
+             .definition(*actual.descriptorDefinition))
+      return reader->types.diagnostic ? reader->types.takeError()
+                                      : refuse(actual.span);
   }
   return Error::success();
 }

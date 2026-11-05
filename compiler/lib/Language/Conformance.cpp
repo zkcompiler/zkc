@@ -280,7 +280,10 @@ bool memberContract(Semantics &types, const Declaration &module,
     if (!types.entails(&available, bound, diagnostic))
       return false;
   for (const auto &bound : provided.bounds)
-    if (!types.assumptions(available, bound, {}, provided.span))
+    if (!(provided.kind == Declaration::Kind::View && provided.descriptorResult
+              ? types.structuralAssumptions(available, bound, {}, provided.span,
+                                            diagnostic)
+              : types.assumptions(available, bound, {}, provided.span)))
       return false;
   for (const auto &bound : provided.permissionBounds) {
     if (!types.chargeType(bound.type, provided.span))
