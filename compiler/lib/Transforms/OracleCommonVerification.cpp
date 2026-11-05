@@ -27,11 +27,27 @@ bool block(const OracleCommonBlock &plan, Block &actual) {
         op.getAttrDictionary() != expected.attributes ||
         !equal(op.getResultTypes(), expected.types) ||
         op.getNumOperands() != expected.inputs.size() ||
-        op.getNumRegions() != unsigned(bool(expected.region)))
+        op.getNumRegions() != (expected.preserved
+                                   ? expected.preserved->getNumRegions()
+                                   : unsigned(bool(expected.region))))
       return false;
     for (auto [id, input] : zip(expected.inputs, op.getOperands()))
       if (!values.contains(id) || values.lookup(id) != input)
         return false;
+    if (expected.preserved) {
+      llvm::DenseMap<Value, Value> mapped;
+      for (auto [source, actual] :
+           zip(expected.preserved->getOperands(), op.getOperands()))
+        mapped[source] = actual;
+      if (!OperationEquivalence::isEquivalentTo(
+              expected.preserved, &op,
+              [&](Value source, Value target) {
+                return success(mapped.lookup(source) == target);
+              },
+              [&](Value source, Value target) { mapped[source] = target; },
+              OperationEquivalence::IgnoreLocations))
+        return false;
+    }
     if (expected.region && (!hasSingleElement(op.getRegion(0)) ||
                             !block(*expected.region, op.getRegion(0).front())))
       return false;
