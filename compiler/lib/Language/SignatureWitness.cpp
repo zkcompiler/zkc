@@ -540,10 +540,12 @@ bool viewBindingsAgree(Semantics &types, ArrayRef<DescriptorBinding> actual,
     if (!types.charge(x.operands.size() + x.children.size() +
                           x.arguments.size() + x.argumentOrder.size() + 1,
                       x.span) ||
-        !types.chargeContract(x.contract, x.span))
+        !types.chargeType(descriptorType(x.contract), x.span,
+                          /*complete=*/false))
       return false;
     for (const auto &edge : x.children)
-      if (!types.chargeContract(edge.contract, x.span))
+      if (!types.chargeType(descriptorType(edge.contract), x.span,
+                            /*complete=*/false))
         return false;
     for (const auto &argument : x.arguments)
       if (!types.chargeType(argument, x.span))
@@ -561,6 +563,13 @@ bool viewBindingsAgree(Semantics &types, ArrayRef<DescriptorBinding> actual,
         x.span.begin != y.span.begin || x.span.end != y.span.end ||
         bool(x.factory) != bool(y.factory))
       return refuse(x.span);
+    // Authored drift keeps the existing witness diagnostic. Candidates that
+    // agree still undergo complete shape validation before acceptance.
+    if (!types.chargeContract(x.contract, x.span))
+      return false;
+    for (const auto &edge : x.children)
+      if (!types.chargeContract(edge.contract, x.span))
+        return false;
     if (x.factory &&
         (x.factory->declaration.index != y.factory->declaration.index ||
          x.factory->module != y.factory->module ||
@@ -908,7 +917,8 @@ bool signatureAgrees(Semantics &types, const CheckedStorage &storage,
                     actual.span))
     return false;
   if (actual.descriptorResult &&
-      !types.chargeContract(*actual.descriptorResult, actual.span))
+      !types.chargeType(descriptorType(*actual.descriptorResult), actual.span,
+                        /*complete=*/false))
     return false;
   if (actual.kind != written.kind || actual.abstract != written.abstract ||
       actual.completes != written.completes ||
@@ -922,6 +932,9 @@ bool signatureAgrees(Semantics &types, const CheckedStorage &storage,
       actual.outputs.size() != written.outputs.size() ||
       actual.descriptorResult != written.descriptorResult)
     return refuse();
+  if (actual.descriptorResult &&
+      !types.chargeContract(*actual.descriptorResult, actual.span))
+    return false;
   if (!headerPremisesAgree(types, storage, actual, written, permitsInference) ||
       !dataPreconditionsAgree(types, actual, written) ||
       !consumerRequirementsAgree(types, actual, written))

@@ -215,9 +215,18 @@ bool Semantics::chargeConstruction(const ConstructionDefinition &value,
   }
   return true;
 }
-bool Semantics::chargeType(const Type &type, Span span) {
+bool Semantics::chargeType(const Type &type, Span span, bool complete) {
   auto cost =
-      typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth);
+      typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth,
+                     work.remaining(), nullptr, complete, TypeWork::Copy);
+  if (!cost)
+    return accept(cost.takeError(), span);
+  return charge(*cost, span);
+}
+bool Semantics::chargeIdentity(const Type &type, Span span) {
+  auto cost =
+      typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth,
+                     work.remaining(), nullptr, true, TypeWork::Identity);
   if (!cost)
     return accept(cost.takeError(), span);
   return charge(*cost, span);
@@ -240,7 +249,8 @@ const Declaration *Semantics::typeDeclaration(const Type &type) const {
                                   : &declarations[found->second.index];
 }
 bool Semantics::symbolic(const Type &type) const {
-  return type.symbolic || !type.dimension.isClosed() ||
+  return type.kind == Type::Kind::Parameter || type.symbolic ||
+         !type.dimension.isClosed() ||
          llvm::any_of(type.arguments, [&](auto &t) { return symbolic(t); });
 }
 Substitution Semantics::substitution(const Declaration &decl,
@@ -263,6 +273,31 @@ std::optional<Type> Semantics::substitute(const Type &input,
   if (depth > work.limits.typeDepth || !charge(1, span)) {
     if (!diagnostic)
       fail("source.limit", "type substitution depth limit", span);
+    return {};
+  }
+  if ((depth == 1 || normalizationDepth == 1) && !bindings.empty()) {
+    // Bound the selected tree as a whole before any recursive result copy.
+    // Each binding is an ordinary static term, not a descriptor-kind variable.
+    auto cost = typeComplexity(
+        input, work.limits.typeNodes, work.limits.typeDepth - depth + 1,
+        work.remaining(),
+        [&](const Type &term) -> const Type * {
+          if (!term.symbolic)
+            return nullptr;
+          auto found = bindings.find(term.domain);
+          return found == bindings.end() ? nullptr : &found->second;
+        },
+        true, TypeWork::Copy);
+    if (!cost) {
+      accept(cost.takeError(), span);
+      return {};
+    }
+    if (!charge(*cost, span))
+      return {};
+  }
+  if (isDescriptor(input) && input.symbolic) {
+    fail("source.descriptor", "descriptor contracts have no symbolic head",
+         span);
     return {};
   }
   if (input.symbolic) {
@@ -365,6 +400,8 @@ std::optional<Type> Semantics::substitute(const Type &input,
         return {};
       }
   if (result.kind == Type::Kind::LogicalRecord && !logicalRecord(result, span))
+    return {};
+  if (!chargeType(result, span))
     return {};
   return result;
 }
@@ -603,6 +640,8 @@ std::optional<Type> Semantics::associated(const Type &base,
 std::optional<Substitution>
 Semantics::boundMemberSubstitution(const Declaration &callee,
                                    const Type &module, Span span) {
+  if (!chargeType(module, span))
+    return {};
   if (!callee.parent) {
     fail("source.call", "bound callable has no interface owner", span);
     return {};

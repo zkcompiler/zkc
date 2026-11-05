@@ -58,7 +58,12 @@ struct Type {
     /// A nominal protocol product whose fields have independent placements.
     LogicalRecord,
     /// Installed structural family; never an ordinary Type argument or value.
-    Descriptor
+    Descriptor,
+    /// Ordered concrete descriptor contracts, including zero or one child.
+    DescriptorProduct,
+    /// One concrete descriptor child, then an optional typed natural extent.
+    /// Absence denotes a bounded finite payload whose length is not identity.
+    DescriptorSequence
   };
   Kind kind = Kind::Boolean;
   DescriptorFamily family = DescriptorFamily::Finite;
@@ -107,18 +112,28 @@ bool isStaticOnly(const Type &);
 bool isDescriptor(const Type &);
 /// Typed signature contract, independent of the callable mode.
 struct DescriptorContract {
-  DescriptorFamily family;
-  std::vector<Type> parameters;
+  /// Candidate representation, not admission evidence. Structural forms use
+  /// dedicated kinds, never installed leaf-family identities or data kinds.
+  Type type = Type(Type::Kind::Descriptor);
+  DescriptorContract() = default;
+  DescriptorContract(DescriptorFamily family, std::vector<Type> parameters)
+      : type(Type::Kind::Descriptor) {
+    type.family = family;
+    type.arguments = std::move(parameters);
+  }
+  explicit DescriptorContract(Type type) : type(std::move(type)) {}
   bool operator==(const DescriptorContract &other) const {
-    return family == other.family && parameters == other.parameters;
+    return type == other.type;
   }
   bool operator!=(const DescriptorContract &other) const {
     return !(*this == other);
   }
 };
+/// Candidate projection only. Admission/replay must bound and validate before
+/// copying an untrusted term; a successful projection grants no authority.
 std::optional<DescriptorContract> descriptorContract(const Type &);
-/// Lossless projection into the existing typed static term traversal.
-Type descriptorType(const DescriptorContract &);
+/// Borrow the sole representation; no recursive copy or parallel walk engine.
+const Type &descriptorType(const DescriptorContract &);
 /// Finite interpretation only: reject every other family and incorrect arity.
 const Type *finiteDescriptorItem(const DescriptorContract &);
 /// Direct logical handle values; aggregate formation has its own recursive
@@ -139,6 +154,8 @@ std::string spelling(const Type &);
 /// Injective lookup key within one checked snapshot; source-facing spelling is
 /// deliberately separate. It binds no source revision, so it never decides
 /// nominal equality across captures.
+/// Callers precharge typeComplexity before copying keys of candidate terms;
+/// this unchecked snapshot helper itself never establishes admission.
 std::string typeIdentity(const Type &);
 /// The defining authority of a nominal declaration path: 64 lowercase hex
 /// for an authored or installed declaration, none for a generated one.
@@ -151,9 +168,18 @@ using NominalAuthority =
 /// frame for a generated declaration. A symbolic module parameter names no
 /// declaration and adds no frame. Associated nodes are bound through their
 /// module argument.
+/// Enforces default candidate depth/node/identity-work ceilings itself;
+/// ledger-owning callers additionally precharge their remaining allowance.
 llvm::Expected<std::string> canonicalTypeKey(const Type &, NominalAuthority);
-/// Bound traversal and expanded identity material before copying a term.
-llvm::Expected<uint64_t> typeComplexity(const Type &, uint64_t nodes,
-                                        uint64_t depth);
+/// Bound traversal, candidate descriptor shapes and the selected operation
+/// before copying a term or constructing its expanded identity. An optional
+/// ordinary static replacement borrows a
+/// complete selected term; its contents are not substituted a second time.
+using TypeReplacement = llvm::function_ref<const Type *(const Type &)>;
+enum class TypeWork { Copy, Identity };
+llvm::Expected<uint64_t>
+typeComplexity(const Type &, uint64_t nodes, uint64_t depth,
+               uint64_t work = UINT64_MAX, TypeReplacement = nullptr,
+               bool complete = true, TypeWork = TypeWork::Identity);
 } // namespace zkc::language
 #endif

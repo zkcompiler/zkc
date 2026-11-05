@@ -199,7 +199,7 @@ uint64_t contextWidth(const CallbackContext &context) {
 bool staticFrame(Semantics &types, const Substitution &statics,
                  StaticFrame &key) {
   for (const auto &[name, value] : statics) {
-    if (!types.charge(name.size() + 1, {}) || !types.chargeType(value, {}))
+    if (!types.charge(name.size() + 1, {}) || !types.chargeIdentity(value, {}))
       return false;
     key.emplace_back(name, typeIdentity(value));
     if (!types.charge(key.back().second.size() + 1, {}))
@@ -617,13 +617,19 @@ std::optional<BodySummaryApplication> BodySummaryCache::apply(
       return {};
     key.computation = binding.computation;
     if (binding.named) {
+      if (binding.named->target.module &&
+          !types.chargeIdentity(*binding.named->target.module, {}))
+        return {};
       key.named.push_back(
           std::to_string(binding.named->target.declaration.index));
       key.named.push_back(binding.named->target.module
                               ? typeIdentity(*binding.named->target.module)
                               : "direct");
-      for (const auto &argument : binding.named->arguments)
+      for (const auto &argument : binding.named->arguments) {
+        if (!types.chargeIdentity(argument, {}))
+          return {};
         key.named.push_back(typeIdentity(argument));
+      }
       for (const auto &part : key.named)
         if (!types.charge(part.size() + 1, {}))
           return {};
@@ -639,8 +645,13 @@ std::optional<BodySummaryApplication> BodySummaryCache::apply(
     key.mode = binding.signature.mode;
     key.mayStop = binding.signature.allowance.mayStop;
     key.opaque = binding.signature.allowance.opaque;
-    for (const auto &input : binding.signature.inputs)
+    for (const auto &input : binding.signature.inputs) {
+      if (!types.chargeIdentity(input, {}))
+        return {};
       key.signature.push_back(typeIdentity(input));
+    }
+    if (!types.chargeIdentity(binding.signature.result, {}))
+      return {};
     key.signature.push_back(typeIdentity(binding.signature.result));
     for (const auto &type : key.signature)
       if (!types.charge(type.size() + 1, {}))

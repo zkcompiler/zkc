@@ -35,11 +35,15 @@ TypeInference::Variable TypeInference::known(const Type &type, Span span) {
 TypeInference::Variable TypeInference::instantiate(const Type &type,
                                                    const Parameters &parameters,
                                                    Span span) {
+  if (!types.chargeType(type, span))
+    return fresh(span);
   return instantiate(type, parameters, span, span, 1);
 }
 TypeInference::Variable TypeInference::instantiate(const Type &type,
                                                    const Parameters &parameters,
                                                    Span span, Span origin) {
+  if (!types.chargeType(type, span))
+    return fresh(span);
   return instantiate(type, parameters, span, origin, 1);
 }
 TypeInference::Variable TypeInference::instantiate(const Type &type,
@@ -163,6 +167,11 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
   b = root(b);
   if (a == b)
     return true;
+  for (auto id : {a, b})
+    if (!types.charge(nodes[id].arguments.size() + 1, span) ||
+        (nodes[id].head &&
+         !types.chargeType(*nodes[id].head, span, /*complete=*/false)))
+      return false;
   const auto left = nodes[a], right = nodes[b];
   auto kinds = left.kinds & right.kinds;
   auto conflict = [&] {
@@ -176,7 +185,8 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
         return formatType(*node.head);
       }
       std::string choices;
-      for (unsigned kind = 0; kind <= unsigned(Type::Kind::Descriptor); ++kind)
+      for (unsigned kind = 0; kind <= unsigned(Type::Kind::DescriptorSequence);
+           ++kind)
         if (node.kinds & (uint32_t(1) << kind)) {
           if (!choices.empty())
             choices += " or ";
@@ -246,13 +256,32 @@ bool TypeInference::allows(Variable id, Type::Kind kind) {
   return nodes[root(id)].kinds & (uint32_t(1) << unsigned(kind));
 }
 std::optional<Type> TypeInference::get(Variable id, Span span) {
+  // Equations can share a solved child many times. Bound the expanded result,
+  // not just each stored head, before the first reconstructed Type allocation.
+  uint64_t remaining = types.work.limits.typeNodes;
+  std::function<bool(Variable, unsigned)> preflight = [&](Variable variable,
+                                                          unsigned depth) {
+    if (!remaining || depth > types.work.limits.typeDepth)
+      return types.fail("source.limit", "expanded inference type limit", span);
+    --remaining;
+    const auto &node = nodes[root(variable)];
+    if (!node.head || !types.chargeType(*node.head, span, /*complete=*/false) ||
+        !types.charge(node.arguments.size() + 1, span))
+      return false;
+    for (auto child : node.arguments)
+      if (!preflight(child, depth + 1))
+        return false;
+    return true;
+  };
+  if (!preflight(id, 1))
+    return {};
   return get(id, span, 1);
 }
 std::optional<TypeInference::Structure> TypeInference::structure(Variable id,
                                                                  Span span) {
   const auto &node = nodes[root(id)];
   if (!types.charge(node.arguments.size() + 1, span) || !node.head ||
-      !types.chargeType(*node.head, span))
+      !types.chargeType(*node.head, span, /*complete=*/false))
     return {};
   return Structure{*node.head, node.arguments};
 }
@@ -264,7 +293,7 @@ std::optional<Type> TypeInference::get(Variable id, Span span, unsigned depth) {
     return {};
   }
   const auto &node = nodes[root(id)];
-  if (!node.head)
+  if (!node.head || !types.chargeType(*node.head, span, /*complete=*/false))
     return {};
   Type result = *node.head;
   for (auto child : node.arguments) {
@@ -305,7 +334,7 @@ bool TypeInference::save(Variable id, Span span) {
     return true;
   const auto &node = nodes[id];
   if (!types.charge(node.arguments.size() + 1, span) ||
-      (node.head && !types.chargeType(*node.head, span)))
+      (node.head && !types.chargeType(*node.head, span, /*complete=*/false)))
     return false;
   trail.emplace_back(id, node);
   return true;

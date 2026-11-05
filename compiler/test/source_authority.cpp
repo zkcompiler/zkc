@@ -441,18 +441,23 @@ std::vector<Inputs> maintainedInputs() {
   }
   return result;
 }
-std::optional<CheckedProject> checkMaintained(const Inputs &inputs) {
+std::optional<CheckedProject> checkMaintained(const Inputs &inputs,
+                                              std::string &failure) {
   for (StringRef format : {StringRef(inputs.format), StringRef("zkc-layout")}) {
     CaptureOptions options;
     options.format = format.str();
     auto captured = capture(inputs.sources, inputs.assets, options);
     if (!captured) {
-      consumeError(captured.takeError());
+      failure += "\n" + format.str() + ": " + toString(captured.takeError());
       continue;
     }
-    auto project = analyze(*captured).checkedProject();
+    auto analysis = analyze(*captured);
+    auto project = analysis.checkedProject();
     if (project)
       return std::move(*project);
+    for (const auto &diagnostic : analysis.diagnostics())
+      failure += "\n" + format.str() + ": " + diagnostic.code + ": " +
+                 diagnostic.message;
     consumeError(project.takeError());
   }
   return {};
@@ -835,9 +840,10 @@ protocol Run roles(V)(coins:facade::Random<F>@V)->(){
     unsigned packages = 0, fixtures = 0;
     for (const auto &inputs : maintainedInputs()) {
       bool package = StringRef(inputs.name).ends_with("zkc.toml");
-      auto project = checkMaintained(inputs);
+      std::string diagnostic;
+      auto project = checkMaintained(inputs, diagnostic);
       require(project.has_value() || !package,
-              "maintained package does not check: " + inputs.name);
+              "maintained package does not check: " + inputs.name + diagnostic);
       if (!project)
         continue;
       auto failure = crossCheck(*project);

@@ -178,7 +178,8 @@ Error chargeConsumerRequirement(const ConsumerRequirement &requirement,
       return error;
   auto type = [&](const Type &value) -> Error {
     auto cost =
-        typeComplexity(value, work.limits.typeNodes, work.limits.typeDepth);
+        typeComplexity(value, work.limits.typeNodes, work.limits.typeDepth,
+                       work.remaining(), nullptr, true, TypeWork::Copy);
     if (!cost)
       return cost.takeError();
     return work.charge(*cost);
@@ -196,7 +197,8 @@ Error chargeRequirementSnapshot(const Declaration &declaration, Work &work) {
       return error;
   for (const auto &admission : declaration.admissions) {
     auto cost = typeComplexity(admission.type, work.limits.typeNodes,
-                               work.limits.typeDepth);
+                               work.limits.typeDepth, work.remaining(), nullptr,
+                               true, TypeWork::Copy);
     if (!cost)
       return cost.takeError();
     if (auto error = work.charge(*cost, admission.span))

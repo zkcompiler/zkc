@@ -1,6 +1,7 @@
 #include "zkc/Language/Types.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Project.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
@@ -33,23 +34,28 @@ StringRef assetSort(const Type &type) {
   return type.kind == Type::Kind::Asset ? StringRef(type.sort) : StringRef();
 }
 bool isDescriptor(const Type &type) {
-  return type.kind == Type::Kind::Descriptor;
+  return type.kind == Type::Kind::Descriptor ||
+         type.kind == Type::Kind::DescriptorProduct ||
+         type.kind == Type::Kind::DescriptorSequence;
 }
 std::optional<DescriptorContract> descriptorContract(const Type &type) {
   if (!isDescriptor(type))
     return {};
-  return DescriptorContract{type.family, type.arguments};
+  return DescriptorContract{type};
 }
-Type descriptorType(const DescriptorContract &contract) {
-  Type result(Type::Kind::Descriptor);
-  result.family = contract.family;
-  result.arguments = contract.parameters;
-  return result;
+const Type &descriptorType(const DescriptorContract &contract) {
+  return contract.type;
 }
 const Type *finiteDescriptorItem(const DescriptorContract &contract) {
-  return contract.family == DescriptorFamily::Finite &&
-                 contract.parameters.size() == 1
-             ? &contract.parameters.front()
+  const auto &type = descriptorType(contract);
+  return type.kind == Type::Kind::Descriptor &&
+                 type.family == DescriptorFamily::Finite &&
+                 type.arguments.size() == 1 && type.domain.empty() &&
+                 type.sort.empty() && !type.symbolic &&
+                 type.dimension == Natural{} &&
+                 type.assumptions == Permissions{} &&
+                 !isStaticOnly(type.arguments.front())
+             ? &type.arguments.front()
              : nullptr;
 }
 bool isStaticOnly(const Type &type) {
@@ -92,6 +98,10 @@ StringRef oracleConstructor(const Type &type) {
 }
 StringRef typeKindName(Type::Kind kind) {
   switch (kind) {
+  case Type::Kind::DescriptorProduct:
+    return "descriptor_product";
+  case Type::Kind::DescriptorSequence:
+    return "descriptor_sequence";
   case Type::Kind::Descriptor:
     return "descriptor";
   case Type::Kind::Boolean:
@@ -145,6 +155,17 @@ StringRef typeKindName(Type::Kind kind) {
 std::string spelling(const Type &type) {
   using K = Type::Kind;
   switch (type.kind) {
+  case K::DescriptorProduct:
+  case K::DescriptorSequence: {
+    // Diagnostic notation only; neither head installs a source constructor.
+    std::string result = typeKindName(type.kind).str() + "(";
+    for (unsigned i = 0; i < type.arguments.size(); ++i) {
+      if (i)
+        result += ", ";
+      result += spelling(type.arguments[i]);
+    }
+    return result + ")";
+  }
   case K::Boolean:
     return "bool";
   case K::Index:
@@ -205,7 +226,7 @@ Error typeKey(const Type &type, const NominalAuthority *authority,
     return Error::success();
   }
   out << type.symbolic << ':';
-  if (isDescriptor(type))
+  if (type.kind == Type::Kind::Descriptor)
     out << static_cast<unsigned>(type.family) << ':';
   frame(type.domain);
   if (authority && !type.symbolic &&
@@ -237,33 +258,126 @@ std::string typeIdentity(const Type &type) {
 }
 Expected<std::string> canonicalTypeKey(const Type &type,
                                        NominalAuthority authority) {
+  const Limits limits;
+  auto cost =
+      typeComplexity(type, limits.typeNodes, limits.typeDepth, limits.work);
+  if (!cost)
+    return cost.takeError();
   std::string result;
   if (auto error = typeKey(type, &authority, result))
     return std::move(error);
   return result;
 }
+namespace {
+bool descriptorNatural(const Type &term) {
+  // Natural equality and keys intentionally use the normalized polynomial.
+  // No ignored candidate metadata may hide typed statics in a contract.
+  return term.kind == Type::Kind::Natural && term.arguments.empty() &&
+         term.sort.empty() && term.assumptions == Permissions{} &&
+         term.family == DescriptorFamily::Finite &&
+         term.symbolic == !term.dimension.isClosed() &&
+         (term.domain.empty() ||
+          (term.symbolic && term.dimension.terms().size() == 1 &&
+           term.dimension.terms().begin()->second == 1 &&
+           term.dimension.terms().begin()->first.size() == 1 &&
+           term.dimension.terms().begin()->first.front().kind ==
+               Natural::Factor::Kind::Atom &&
+           term.dimension.terms().begin()->first.front().name == term.domain));
+}
+Error checkDescriptorHead(const Type &type, bool contract) {
+  using K = Type::Kind;
+  if (contract && type.kind == K::Natural && !descriptorNatural(type))
+    return error("source.descriptor", "invalid descriptor natural static");
+  if (isDescriptor(type)) {
+    if (!type.domain.empty() || !type.sort.empty() || type.symbolic ||
+        type.dimension != Natural{} || !(type.assumptions == Permissions{}) ||
+        type.family != DescriptorFamily::Finite)
+      return error("source.descriptor", "foreign descriptor metadata");
+    if (type.kind == K::Descriptor) {
+      if (type.arguments.size() != 1 || isStaticOnly(type.arguments.front()))
+        return error("source.descriptor", "invalid Finite contract");
+    } else if (type.kind == K::DescriptorProduct) {
+      for (const auto &child : type.arguments)
+        if (!isDescriptor(child))
+          return error("source.descriptor",
+                       "product child is not a descriptor");
+    } else {
+      if ((type.arguments.size() != 1 && type.arguments.size() != 2) ||
+          !isDescriptor(type.arguments.front()))
+        return error("source.descriptor", "invalid sequence element contract");
+      if (type.arguments.size() == 2 &&
+          !descriptorNatural(type.arguments.back()))
+        return error("source.descriptor", "invalid sequence extent term");
+    }
+  } else {
+    for (const auto &child : type.arguments)
+      if (isDescriptor(child))
+        return error("source.descriptor",
+                     "descriptor in ordinary type arguments");
+  }
+  return Error::success();
+}
+} // namespace
 Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,
-                                  uint64_t depth) {
+                                  uint64_t depth, uint64_t work,
+                                  TypeReplacement replacement, bool complete,
+                                  TypeWork operation) {
   uint64_t cost = 0;
-  std::function<Error(const Type &, uint64_t)> visit =
-      [&](const Type &term, uint64_t level) -> Error {
+  auto charge = [&](uint64_t amount) {
+    if (amount > work - cost)
+      return false;
+    cost += amount;
+    return true;
+  };
+  std::function<Error(const Type &, uint64_t, bool, bool)> visit =
+      [&](const Type &input, uint64_t level, bool replace,
+          bool contract) -> Error {
+    if (replace && replacement)
+      if (const auto *selected = replacement(input))
+        return visit(*selected, level, false, contract);
+    const auto &term = input;
+    contract |= isDescriptor(term);
     if (!nodes || level > depth)
       return error("source.limit", "expanded source type limit exceeded");
     --nodes;
-    cost += 1 + term.domain.size() + term.sort.size();
+    if (unsigned(term.kind) > unsigned(Type::Kind::DescriptorSequence))
+      return error("source.type", "invalid source type kind");
+    // Copying a Type does not construct a framed identity. Key construction
+    // separately accounts for each ancestor copying the nested framing.
+    const bool identity = operation == TypeWork::Identity;
+    auto expanded = [&](uint64_t amount) {
+      auto multiplier = identity ? level : 1;
+      return amount <= (work - cost) / multiplier &&
+             charge(amount * multiplier);
+    };
+    if (!expanded(identity ? 32 : 1) || !expanded(term.domain.size()) ||
+        !expanded(term.sort.size()) ||
+        (identity && (term.arguments.size() > (work - cost) / level / 22 ||
+                      !expanded(term.arguments.size() * 22))) ||
+        ((identity && !term.symbolic &&
+          (term.kind == Type::Kind::Record ||
+           term.kind == Type::Kind::LogicalRecord ||
+           term.kind == Type::Kind::Variant ||
+           term.kind == Type::Kind::Module)) &&
+         !expanded(67)))
+      return error("source.limit", "expanded type identity work exceeded");
     for (auto &[factors, coefficient] : term.dimension.terms()) {
       (void)coefficient;
-      cost += 1;
+      if (!expanded(identity ? 24 : 1))
+        return error("source.limit", "natural identity work exceeded");
       for (auto &factor : factors)
-        cost += 1 + factor.name.size();
+        if (!expanded(identity ? 48 : 1) || !expanded(factor.name.size()) ||
+            !expanded(factor.member.size()))
+          return error("source.limit", "natural identity work exceeded");
     }
     for (auto &argument : term.arguments)
-      if (auto e = visit(argument, level + 1))
+      if (auto e = visit(argument, level + 1, replace, contract))
         return e;
-    return Error::success();
+    return complete ? checkDescriptorHead(term, contract) : Error::success();
   };
-  if (auto e = visit(type, 1))
+  if (auto e = visit(type, 1, true, false))
     return std::move(e);
   return cost;
 }
+
 } // namespace zkc::language

@@ -51,11 +51,11 @@ struct Formation {
       for (auto child : children)
         pair.arguments.push_back(
             *finiteDescriptorItem(shape->nodes[child].contract));
-      node.contract.parameters = {std::move(pair)};
+      node.contract.type.arguments = {std::move(pair)};
     } else if (kind == DescriptorBinding::Kind::MatrixCoordinates) {
       Type pair(Type::Kind::Tuple);
       pair.arguments = {Type(Type::Kind::Index), Type(Type::Kind::Index)};
-      node.contract.parameters = {std::move(pair)};
+      node.contract.type.arguments = {std::move(pair)};
     }
     for (auto child : children)
       node.children.push_back({child, shape->nodes[child].contract});
@@ -140,11 +140,11 @@ int main() {
     for (unsigned mutation = 0; mutation != 3; ++mutation) {
       node.contract = original;
       if (mutation == 0)
-        node.contract.family = static_cast<DescriptorFamily>(99);
+        node.contract.type.family = static_cast<DescriptorFamily>(99);
       if (mutation == 1)
-        node.contract.parameters.clear();
+        node.contract.type.arguments.clear();
       if (mutation == 2)
-        node.contract.parameters.push_back(Type{});
+        node.contract.type.arguments.push_back(Type{});
       require(source::cardinalityNode(node).kind ==
                   zkc::facts::DomainKind::Unknown,
               "cardinality interpreted a malformed Finite contract");

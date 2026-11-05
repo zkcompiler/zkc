@@ -25,8 +25,6 @@ bool memberInputs(Semantics &types, const Declaration &required,
       required.outputs.size() != provided.outputs.size() ||
       required.services.size() != provided.services.size() ||
       bool(required.descriptorResult) != bool(provided.descriptorResult) ||
-      (required.descriptorResult && required.descriptorResult->family !=
-                                        provided.descriptorResult->family) ||
       required.inputOrder.size() != provided.inputOrder.size() ||
       required.descriptorInputs.size() != provided.descriptorInputs.size() ||
       required.scopedInputs.size() != provided.scopedInputs.size())

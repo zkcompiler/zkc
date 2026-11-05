@@ -61,14 +61,15 @@ public:
     Type resultType() const;
   };
 
-  bool chargeType(const Type &, Span);
+  /// Inference heads and witness candidates awaiting source comparison need
+  /// resource preflight before complete shape validation. Neither preflight
+  /// alone nor a partial solver head establishes an admitted contract.
+  bool chargeType(const Type &, Span, bool complete = true);
+  bool chargeIdentity(const Type &, Span);
   bool chargeContract(const DescriptorContract &contract, Span span) {
-    if (!charge(contract.parameters.size() + 1, span))
-      return false;
-    for (const auto &parameter : contract.parameters)
-      if (!chargeType(parameter, span))
-        return false;
-    return true;
+    return chargeType(descriptorType(contract), span) &&
+           (isDescriptor(descriptorType(contract)) ||
+            fail("source.descriptor", "expected a descriptor contract", span));
   }
   std::optional<DescriptorContract>
   substitute(const DescriptorContract &contract, const Substitution &bindings,

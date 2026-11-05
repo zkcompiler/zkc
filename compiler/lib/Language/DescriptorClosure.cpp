@@ -50,10 +50,21 @@ class Closure {
   std::optional<DescriptorContract>
   closedContract(const DescriptorContract &source,
                  const Substitution &substitution, Span span) {
+    if (!finiteDescriptorItem(source)) {
+      refuse(span, "finite closure requires a Finite leaf contract");
+      return {};
+    }
     if (!types.chargeContract(source, span))
       return {};
     auto term = type(descriptorType(source), substitution, span);
-    return term ? descriptorContract(*term) : std::nullopt;
+    if (!term)
+      return {};
+    auto contract = descriptorContract(*term);
+    if (!contract || !finiteDescriptorItem(*contract)) {
+      refuse(span, "finite closure requires a Finite leaf contract");
+      return {};
+    }
+    return contract;
   }
   std::optional<ValueId> input(ValueId value,
                                const DescriptorContract &contract, Span span) {
@@ -71,7 +82,7 @@ class Closure {
       }
       return ValueId{found->second};
     }
-    if (contract.family == DescriptorFamily::Finite) {
+    if (descriptorType(contract).kind == Type::Kind::Descriptor) {
       auto permissions = types.permissions(*closed, span);
       if (!finiteDescriptorItem(contract) || !permissions ||
           !permissions->copy || !permissions->drop) {
@@ -249,7 +260,7 @@ class Closure {
     std::string key;
     frame(key, std::to_string(target.index));
     for (const auto &argument : arguments) {
-      if (!types.chargeType(argument, binding.span))
+      if (!types.chargeIdentity(argument, binding.span))
         return {};
       frame(key, typeIdentity(argument));
     }
@@ -416,13 +427,14 @@ public:
     shape.result = *result;
     frame(shape.identity, "descriptor");
     for (const auto &input : shape.inputs) {
-      if (!types.chargeType(input, {}))
+      if (!types.chargeIdentity(input, {}))
         return {};
       frame(shape.identity, typeIdentity(input));
     }
     frame(shape.identity, "constructors");
     for (const auto &node : shape.nodes) {
       if (!types.chargeContract(node.contract, node.span) ||
+          !types.chargeIdentity(descriptorType(node.contract), node.span) ||
           !types.charge(node.operands.size() + node.children.size() + 1,
                         node.span))
         return {};
@@ -434,7 +446,8 @@ public:
         frame(shape.identity, std::to_string(operand.index));
       frame(shape.identity, std::to_string(node.children.size()));
       for (const auto &child : node.children) {
-        if (!types.chargeContract(child.contract, node.span))
+        if (!types.chargeContract(child.contract, node.span) ||
+            !types.chargeIdentity(descriptorType(child.contract), node.span))
           return {};
         frame(shape.identity, std::to_string(child.node));
         frame(shape.identity, typeIdentity(descriptorType(child.contract)));

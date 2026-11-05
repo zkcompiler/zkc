@@ -474,8 +474,10 @@ class ContractCheck {
                                  ArrayRef<unsigned> children, unsigned depth) {
     if (!bounded(depth, binding.span))
       return {};
-    if (!finiteDescriptorItem(binding.contract))
-      return newDomain();
+    if (!finiteDescriptorItem(binding.contract)) {
+      refuse(binding.span, "finite contract requires a Finite leaf");
+      return {};
+    }
     if (!types.chargeContract(binding.contract, binding.span))
       return {};
     using Kind = DescriptorBinding::Kind;
@@ -499,8 +501,11 @@ class ContractCheck {
       if (!types.charge(operands.size() + children.size() + 1, binding.span))
         return {};
       std::vector<std::string> argumentKeys;
-      for (const auto &argument : target->arguments)
+      for (const auto &argument : target->arguments) {
+        if (!types.chargeIdentity(argument, binding.span))
+          return {};
         argumentKeys.push_back(typeIdentity(argument));
+      }
       RecipeKey key{callee.id.index, std::move(argumentKeys), operands.vec(),
                     children.vec()};
       if (auto found = factoryFacts.find(key); found != factoryFacts.end()) {

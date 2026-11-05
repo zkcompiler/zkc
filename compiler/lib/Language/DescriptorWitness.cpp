@@ -47,10 +47,21 @@ class DescriptorCheck {
   std::optional<DescriptorContract>
   closedContract(const DescriptorContract &source,
                  const Substitution &substitution, Span span) {
+    if (!finiteDescriptorItem(source)) {
+      refuse(span, "finite witness requires a Finite leaf contract");
+      return {};
+    }
     if (!types.chargeContract(source, span))
       return {};
     auto term = type(descriptorType(source), substitution, span);
-    return term ? descriptorContract(*term) : std::nullopt;
+    if (!term)
+      return {};
+    auto contract = descriptorContract(*term);
+    if (!contract || !finiteDescriptorItem(*contract)) {
+      refuse(span, "finite witness requires a Finite leaf contract");
+      return {};
+    }
+    return contract;
   }
   bool bindPort(unsigned index, ValueId value,
                 const DescriptorContract &contract, Span span) {
@@ -58,7 +69,7 @@ class DescriptorCheck {
       return refuse(span,
                     "descriptor operand mapping is outside its input space");
     auto actual = type(caller.values[value.index].type, statics, span);
-    if (actual && contract.family == DescriptorFamily::Finite) {
+    if (actual && descriptorType(contract).kind == Type::Kind::Descriptor) {
       auto permissions = types.permissions(*actual, span);
       if (!finiteDescriptorItem(contract) || !permissions ||
           !permissions->copy || !permissions->drop)
@@ -90,12 +101,19 @@ class DescriptorCheck {
       return {};
     }
     const auto &actual = candidate.nodes[next];
+    if (!finiteDescriptorItem(actual.contract)) {
+      refuse(source.span, "finite witness requires a Finite leaf contract");
+      return {};
+    }
     if (!types.chargeContract(actual.contract, source.span) ||
         !types.charge(actual.operands.size() + actual.children.size() + 1,
                       source.span))
       return {};
     for (const auto &child : actual.children)
-      if (!types.chargeContract(child.contract, source.span))
+      if (!finiteDescriptorItem(child.contract)) {
+        refuse(source.span, "finite witness child requires a Finite leaf");
+        return {};
+      } else if (!types.chargeContract(child.contract, source.span))
         return {};
     auto contract = closedContract(source.contract, substitution, source.span);
     if (!contract || source.kind != actual.kind ||
@@ -221,7 +239,7 @@ class DescriptorCheck {
     Factory identity;
     std::get<0>(identity) = target.index;
     for (const auto &argument : arguments) {
-      if (!types.chargeType(argument, binding.span))
+      if (!types.chargeIdentity(argument, binding.span))
         return {};
       std::get<1>(identity).push_back(typeIdentity(argument));
     }

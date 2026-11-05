@@ -13,8 +13,8 @@ class Instances {
   const WrittenIndex &written;
   Work &work;
   Expected<json::Value> term(const Type &type) {
-    auto complexity =
-        typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth);
+    auto complexity = typeComplexity(type, work.limits.typeNodes,
+                                     work.limits.typeDepth, work.remaining());
     if (!complexity)
       return complexity.takeError();
     if (auto e = work.charge(*complexity))

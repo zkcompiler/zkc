@@ -278,8 +278,9 @@ class Requirements {
     auto found = components.find(role);
     return found == components.end() ? unknown(type) : found->second;
   }
-  bool chargeStaticType(const Type &type, Span span) {
-    if (types.chargeType(type, span))
+  bool chargeStaticType(const Type &type, Span span, bool identity = false) {
+    if (identity ? types.chargeIdentity(type, span)
+                 : types.chargeType(type, span))
       return true;
     if (types.diagnostic && !failure)
       failure = make_error<DiagnosticError>(*types.diagnostic);
@@ -411,7 +412,7 @@ class Requirements {
       bool closed = true;
       for (const auto &[name, type] : bindings)
         if (!charge(name.size() + 1, callee.span) ||
-            !types.chargeType(type, callee.span)) {
+            !types.chargeIdentity(type, callee.span)) {
           if (types.diagnostic && !failure)
             failure = make_error<DiagnosticError>(*types.diagnostic);
           break;
@@ -999,7 +1000,7 @@ class Requirements {
       if (found == actual.end())
         continue;
       const auto &type = found->second->type;
-      if (!chargeStaticType(type, span))
+      if (!chargeStaticType(type, span, /*identity=*/true))
         return {};
       detail::frame(key, std::to_string(r));
       detail::frame(key, typeIdentity(type));
@@ -1037,11 +1038,11 @@ class Requirements {
       detail::frame(key, std::to_string(binding->signature.allowance.opaque));
       detail::frame(key, std::to_string(binding->signature.inputs.size()));
       for (const auto &type : binding->signature.inputs) {
-        if (!chargeStaticType(type, span))
+        if (!chargeStaticType(type, span, /*identity=*/true))
           return result;
         detail::frame(key, typeIdentity(type));
       }
-      if (!chargeStaticType(binding->signature.result, span))
+      if (!chargeStaticType(binding->signature.result, span, /*identity=*/true))
         return result;
       detail::frame(key, typeIdentity(binding->signature.result));
       detail::frame(key, binding->statics ? "statics" : "no-statics");
@@ -1049,7 +1050,7 @@ class Requirements {
         identity(key, binding->statics->environment.get());
         detail::frame(key, std::to_string(binding->statics->parameters.size()));
         for (const auto &type : binding->statics->parameters) {
-          if (!chargeStaticType(type, span))
+          if (!chargeStaticType(type, span, /*identity=*/true))
             return result;
           detail::frame(key, typeIdentity(type));
         }
@@ -1736,7 +1737,7 @@ class Requirements {
           componentKeys.push_back(std::move(key));
         }
       }
-      if (!chargeStaticType(first.type, span))
+      if (!chargeStaticType(first.type, span, /*identity=*/true))
         return false;
       auto type = typeIdentity(first.type);
       for (unsigned i = 1; i < requirement.components.size(); ++i) {
@@ -1771,6 +1772,8 @@ class Requirements {
       // Compared by lookup keys; local to this one requirement.
       std::string path;
       for (const auto &step : first.loop->path) {
+        if (!chargeStaticType(step.type, span, /*identity=*/true))
+          return false;
         detail::frame(path, step.payload ? "payload" : "field");
         detail::frame(path, std::to_string(step.alternative));
         detail::frame(path, std::to_string(step.index));

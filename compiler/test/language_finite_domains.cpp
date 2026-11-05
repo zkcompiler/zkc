@@ -49,17 +49,17 @@ int main() {
                 "complete contract projection lost its Finite item");
         const auto key = typeIdentity(descriptorType(contract));
         auto different = contract;
-        different.parameters.front() = Type{};
+        different.type.arguments.front() = Type{};
         require(typeIdentity(descriptorType(different)) != key,
                 "descriptor identity erased its parameter");
         for (bool empty : {false, true}) {
           different = contract;
           if (empty)
-            different.parameters.clear();
+            different.type.arguments.clear();
           else {
             Type natural(Type::Kind::Natural);
             natural.dimension = Natural::constant(32);
-            different.parameters.push_back(natural);
+            different.type.arguments.push_back(natural);
           }
           require(!finiteDescriptorItem(different) &&
                       typeIdentity(descriptorType(different)) != key &&
@@ -68,13 +68,13 @@ int main() {
                   "invalid Finite arity was truncated or accepted");
           if (!empty) {
             auto original = typeIdentity(descriptorType(different));
-            different.parameters.back().dimension = Natural::constant(64);
+            different.type.arguments.back().dimension = Natural::constant(64);
             require(typeIdentity(descriptorType(different)) != original,
                     "full contract identity erased a later typed index");
           }
         }
         different = contract;
-        different.family = static_cast<DescriptorFamily>(99);
+        different.type.family = static_cast<DescriptorFamily>(99);
         require(!finiteDescriptorItem(different) &&
                     typeIdentity(descriptorType(different)) != key,
                 "finite interpretation ignored family identity");
@@ -582,7 +582,7 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return fold(xs,0,fn(state, item)=>state
           if (mutation == 3)
             domain.kind = DescriptorBinding::Kind::SourceArray;
           if (mutation == 4)
-            domain.contract.parameters = {Type{}};
+            domain.contract.type.arguments = {Type{}};
           auto error = checkScopedElaboration(project);
           require(bool(error), "corrupt collection conversion accepted");
           require(toString(std::move(error)).find("source.scoped-witness") !=
@@ -612,7 +612,7 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
           if (mutation == 3)
             child.kind = DescriptorBinding::Kind::SourceArray;
           if (mutation == 4)
-            child.contract.parameters = {Type{}};
+            child.contract.type.arguments = {Type{}};
           if (mutation == 5)
             std::swap(application.argumentOrder[0],
                       application.argumentOrder[1]);
@@ -1549,7 +1549,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
         for (unsigned i = 0; i < inputs->size(); ++i)
           require((*inputs)[i].index == original->operands[i].index + 1,
                   "domain witness confused template and caller SSA spaces");
-        for (unsigned mutation = 0; mutation < 15; ++mutation) {
+        for (unsigned mutation = 0; mutation < 19; ++mutation) {
           auto candidate = *original;
           auto shape = std::make_shared<DescriptorShape>(*candidate.shape);
           candidate.shape = shape;
@@ -1571,19 +1571,31 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
           if (mutation == 8)
             shape->nodes.front().expression = 7;
           if (mutation == 9)
-            shape->nodes.front().contract.family =
+            shape->nodes.front().contract.type.family =
                 static_cast<DescriptorFamily>(99);
           if (mutation == 10)
-            shape->nodes.front().contract.parameters.clear();
+            shape->nodes.front().contract.type.arguments.clear();
           if (mutation == 11)
-            shape->nodes.front().contract.parameters.push_back(Type{});
+            shape->nodes.front().contract.type.arguments.push_back(Type{});
           if (mutation == 12)
-            shape->nodes.front().contract.parameters.front() = Type{};
+            shape->nodes.front().contract.type.arguments.front() = Type{};
           if (mutation == 13)
-            shape->nodes.back().children.front().contract.parameters = {Type{}};
+            shape->nodes.back().children.front().contract.type.arguments = {
+                Type{}};
           if (mutation == 14)
-            shape->nodes.back().children.front().contract.parameters.push_back(
-                Type{});
+            shape->nodes.back()
+                .children.front()
+                .contract.type.arguments.push_back(Type{});
+          if (mutation >= 15) {
+            auto &contract = shape->nodes.front().contract;
+            Type structural(mutation == 17 ? Type::Kind::DescriptorSequence
+                                           : Type::Kind::DescriptorProduct);
+            if (mutation == 16 || mutation == 17)
+              structural.arguments = {descriptorType(contract)};
+            if (mutation == 18)
+              structural = Type(Type::Kind::Boolean);
+            contract = DescriptorContract(std::move(structural));
+          }
           zkc::language::detail::Work witnessWork{Limits{}};
           zkc::language::detail::Semantics witness(
               declarations, project.assets(), witnessWork);
@@ -1613,16 +1625,16 @@ fn example(a:index,b:index,c:index,d:index)->bool {
           Body body = *declarationNamed(project, "m::example").body;
           auto &result = body.descriptorBindings.back();
           if (mutation == 0)
-            result.contract.parameters = {Type{}};
+            result.contract.type.arguments = {Type{}};
           if (mutation == 1)
-            result.contract.parameters.push_back(Type{});
+            result.contract.type.arguments.push_back(Type{});
           if (mutation == 2)
-            result.children.front().contract.parameters = {Type{}};
+            result.children.front().contract.type.arguments = {Type{}};
           if (mutation == 3)
-            result.children.front().contract.parameters.clear();
+            result.children.front().contract.type.arguments.clear();
           if (mutation == 4) {
             auto &child = body.descriptorBindings[result.children.front().node];
-            child.contract.parameters = {Type{}};
+            child.contract.type.arguments = {Type{}};
             result.children.front().contract = child.contract;
           }
           std::vector<Declaration> declarations(project.declarations().begin(),

@@ -8,9 +8,17 @@ namespace {
 Expected<json::Value> encode(const Type &type, unsigned &remaining,
                              unsigned depth = 0) {
   using K = Type::Kind;
+  if (!depth) {
+    auto cost = typeComplexity(type, remaining, 64, Limits{}.work);
+    if (!cost)
+      return cost.takeError();
+  }
   if (!remaining || depth >= 64)
     return error("source.limit", "static term limit exceeded");
   --remaining;
+  if (type.kind == K::DescriptorProduct || type.kind == K::DescriptorSequence)
+    return error("source.static-term",
+                 "structural descriptor source schema is not installed");
   if (type.symbolic || type.kind == K::Parameter)
     return error("source.static-term", "static term is not closed");
   if (type.domain.size() > 512 || type.sort.size() > 512)

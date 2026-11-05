@@ -304,7 +304,8 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
       [&](const Type &type, unsigned depth) -> Error {
     if (depth > limits.typeDepth)
       return detail::failure("source.limit", "component declaration depth");
-    auto complexity = typeComplexity(type, limits.typeNodes, limits.typeDepth);
+    auto complexity = typeComplexity(type, limits.typeNodes, limits.typeDepth,
+                                     work.remaining());
     if (!complexity)
       return complexity.takeError();
     if (auto e = work.charge(*complexity))

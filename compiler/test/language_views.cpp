@@ -106,11 +106,11 @@ int main() {
       [&] {
         auto project = take(check(composition));
         const auto &relay = named(project, "m::relay");
-        require(relay.kind == Declaration::Kind::View && relay.inputs.empty() &&
-                    relay.descriptorInputs.size() == 1 &&
-                    relay.descriptorResult &&
-                    relay.descriptorResult->family == DescriptorFamily::Finite,
-                "mode and finite result contract were not retained separately");
+        require(
+            relay.kind == Declaration::Kind::View && relay.inputs.empty() &&
+                relay.descriptorInputs.size() == 1 && relay.descriptorResult &&
+                relay.descriptorResult->type.family == DescriptorFamily::Finite,
+            "mode and finite result contract were not retained separately");
         auto original =
             take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
         for (StringRef operation : {"data.domain_elements", "data.domain_zip",
@@ -454,7 +454,7 @@ pub protocol Demo roles(P, V)(xs: Vector<F> @)") +
           } else
             refuses(check(source), "source.roles");
         });
-  for (unsigned mutation = 0; mutation != 14; ++mutation)
+  for (unsigned mutation = 0; mutation != 17; ++mutation)
     cases.run(
         "authored recipe replay refuses typed graph drift " + Twine(mutation),
         [&] {
@@ -471,7 +471,7 @@ pub protocol Demo roles(P)(xs: Vector<F> @P, ys: Vector<F> @P, initial: F @P) ->
               *named(project, "m::graph").descriptorDefinition);
           auto &binding = definition.bindings.back();
           if (mutation == 0)
-            binding.contract.family = static_cast<DescriptorFamily>(99);
+            binding.contract.type.family = static_cast<DescriptorFamily>(99);
           if (mutation == 1)
             binding.kind = DescriptorBinding::Kind::Product;
           if (mutation == 2)
@@ -491,24 +491,31 @@ pub protocol Demo roles(P)(xs: Vector<F> @P, ys: Vector<F> @P, initial: F @P) ->
           if (mutation == 7)
             binding.arguments.front() = Type(Type::Kind::Index);
           if (mutation == 8)
-            binding.contract.parameters.clear();
+            binding.contract.type.arguments.clear();
           if (mutation == 9)
-            binding.contract.parameters.push_back(Type{});
+            binding.contract.type.arguments.push_back(Type{});
           if (mutation == 10)
-            binding.children.front().contract.parameters.clear();
+            binding.children.front().contract.type.arguments.clear();
           if (mutation == 11)
-            binding.children.front().contract.parameters = {Type{}};
+            binding.children.front().contract.type.arguments = {Type{}};
           if (mutation == 12) {
             auto changed = binding.contract;
-            changed.parameters = {Type{}};
+            changed.type.arguments = {Type{}};
             binding.contract = changed;
             const_cast<Declaration &>(named(project, "m::graph"))
                 .descriptorResult = changed;
           }
           if (mutation == 13) {
             auto &child = definition.bindings[binding.children.front().node];
-            child.contract.parameters = {Type{}};
+            child.contract.type.arguments = {Type{}};
             binding.children.front().contract = child.contract;
+          }
+          if (mutation >= 14) {
+            Type structural(mutation == 15 ? Type::Kind::DescriptorSequence
+                                           : Type::Kind::DescriptorProduct);
+            if (mutation != 14)
+              structural.arguments = {descriptorType(binding.contract)};
+            binding.contract = DescriptorContract(std::move(structural));
           }
           // Changing the declaration result as well reaches header replay
           // before recipe replay; both use the immutable authored source.

@@ -74,8 +74,11 @@ class HelperResults::Extraction {
                   ArrayRef<unsigned> children, unsigned depth) {
     if (pending || !enter(depth))
       return 0;
-    if (!finiteDescriptorItem(node.contract))
-      return remember({});
+    if (!finiteDescriptorItem(node.contract)) {
+      types.fail("source.descriptor", "finite summary requires a Finite leaf",
+                 span);
+      return 0;
+    }
     if (!types.chargeContract(node.contract, span))
       return 0;
     if (node.kind == DescriptorBinding::Kind::Application) {

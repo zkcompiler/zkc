@@ -658,7 +658,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!decl.descriptorResult)
         decl.descriptorResult =
             DescriptorContract{DescriptorFamily::Finite, {*resolved}};
-      if (decl.descriptorResult->family == DescriptorFamily::Finite) {
+      if (descriptorType(*decl.descriptorResult).kind ==
+          Type::Kind::Descriptor) {
         auto *item = finiteDescriptorItem(*decl.descriptorResult);
         if (!item)
           return types.fail("source.descriptor", "invalid Finite result arity",
@@ -721,7 +722,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                   : types.executableType(*t, src.span)))
           return false;
         if (decl.kind == Declaration::Kind::View && decl.descriptorResult &&
-            decl.descriptorResult->family == DescriptorFamily::Finite &&
+            finiteDescriptorItem(*decl.descriptorResult) &&
             !types.requireUsage(*t, Usage::Copy, src.span, &decl,
                                 "source.finite-domain",
                                 "domain operands require Copy"))
@@ -821,7 +822,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!contract)
         contract = DescriptorContract{DescriptorFamily::Finite, {*resolved}};
       // These are Finite's item rules, not universal descriptor rules.
-      if (contract->family == DescriptorFamily::Finite) {
+      if (descriptorType(*contract).kind == Type::Kind::Descriptor) {
         auto *item = finiteDescriptorItem(*contract);
         if (!item)
           return types.fail("source.descriptor", "invalid Finite input arity",

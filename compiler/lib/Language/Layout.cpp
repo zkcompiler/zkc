@@ -45,7 +45,8 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
     return error("source.limit", "schema identity depth limit exceeded");
   ++depth;
   auto restoreDepth = llvm::scope_exit([&] { --depth; });
-  auto complexity = typeComplexity(layout.type, remaining, Limits{}.typeDepth);
+  auto complexity =
+      typeComplexity(layout.type, remaining, Limits{}.typeDepth, remaining);
   if (!complexity)
     return complexity.takeError();
   if (*complexity > remaining)
@@ -303,7 +304,8 @@ Expected<bool> detail::Semantics::nativeMessagePayload(const Type &type) {
 Expected<OracleKindLayout> Layouts::oracleKind(const Type &kind) {
   if (kind.kind != Type::Kind::OracleKind || kind.symbolic)
     return error("source.oracle-kind", "oracle layout requires a closed kind");
-  auto complexity = typeComplexity(kind, limits.typeNodes, limits.typeDepth);
+  auto complexity = typeComplexity(kind, limits.typeNodes, limits.typeDepth,
+                                   state->work.remaining());
   if (!complexity)
     return complexity.takeError();
   if (auto e = charge(*complexity))
@@ -871,7 +873,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     return error("source.limit", "logical layout depth exceeded");
   if (auto e = charge(1))
     return e;
-  auto cost = typeComplexity(type, limits.typeNodes, limits.typeDepth);
+  auto cost = typeComplexity(type, limits.typeNodes, limits.typeDepth,
+                             state->work.remaining());
   if (!cost)
     return cost.takeError();
   if (auto e = charge(*cost))
