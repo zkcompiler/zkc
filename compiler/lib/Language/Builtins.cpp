@@ -157,6 +157,10 @@ Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
 }
 Type::Kind logicalHeadKind(protocol::FrontendConstructorForm form) {
   switch (form) {
+  case protocol::FrontendConstructorForm::DescriptorProduct:
+    return K::DescriptorProduct;
+  case protocol::FrontendConstructorForm::DescriptorSequence:
+    return K::DescriptorSequence;
   case protocol::FrontendConstructorForm::FiniteDescriptor:
     return K::Descriptor;
   case protocol::FrontendConstructorForm::OracleHandle:
@@ -178,6 +182,10 @@ Expected<Type> logicalHeadType(protocol::FrontendConstructorForm form,
     result.arguments.assign(arguments.begin(), arguments.end());
     return result;
   }
+  if (form == protocol::FrontendConstructorForm::DescriptorProduct ||
+      form == protocol::FrontendConstructorForm::DescriptorSequence)
+    return error("source.descriptor",
+                 "structural heads require indexed installation authority");
   bool sequence = logicalHeadKind(form) == K::OracleSequence;
   if (arguments.size() != (sequence ? 2u : 1u) ||
       arguments[0].kind != K::OracleKind ||

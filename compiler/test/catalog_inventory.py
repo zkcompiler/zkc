@@ -22,7 +22,7 @@ def main():
         assert catalog.keys() == {"format", "sorts", "types", "operations", "members", "rules",
                                   "capabilities", "exports", "families", "associatedTypes",
                                   "mathematicalIdentities", "mathematicalIntrinsics", "consumerProfiles",
-                                  "frontendDeclarations", "frontendRules", "frontendNotations",
+                                  "frontendDeclarations", "frontendRules", "frontendSchemes", "frontendNotations",
                                   "frontendConstructors", "frontendHomes", "serviceSignatures",
                                   "serviceMethods",
                                   "domains", "logicalTypes", "frameTags", "codecs", "aggregateFrames",

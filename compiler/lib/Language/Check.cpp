@@ -187,6 +187,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   auto &written = reconstructedSources[id.index];
   // Body trees and nested declarations are not part of a signature replay.
   written.kind = source.kind;
+  written.installedDeclaration = source.installedDeclaration;
   written.name = source.name;
   written.span = source.span;
   written.roles = source.roles;
@@ -524,6 +525,7 @@ bool Checker::collect() {
     decl.id = {uint32_t(output.declarations.size())};
     decl.module = source.kind == Declaration::Kind::Module ? decl.id : module;
     decl.kind = source.kind;
+    decl.installedDeclaration = source.installedDeclaration;
     if (source.generated) {
       auto target = *parent;
       if (output.declarations[target.index].generated)

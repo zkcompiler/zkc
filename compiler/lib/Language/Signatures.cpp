@@ -36,7 +36,7 @@ bool Checker::requirements(Declaration &decl) {
         auto *installed = index().ruleAssociation(reference->target);
         if (!installed ||
             installed->kind != protocol::SourceDeclarationKind::Requirement ||
-            installed->rule != protocol::FrontendSignature::NativeMessage ||
+            installed->rule() != protocol::FrontendSignature::NativeMessage ||
             req.arguments.size() != 1)
           return types.fail("source.requirement",
                             "expected one complete native message payload type",
@@ -414,6 +414,19 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
   }
   deferredApplications.erase(id.index);
+  if (decl.kind == Declaration::Kind::InstalledContractConstructor ||
+      decl.kind == Declaration::Kind::InstalledViewScheme) {
+    auto *row = index().association(decl.id);
+    if (!row || row != source.installedDeclaration ||
+        row != decl.installedDeclaration ||
+        (decl.kind == Declaration::Kind::InstalledContractConstructor
+             ? !index().constructorAssociation(decl.id)
+             : !index().schemeDefinition(decl.id)))
+      return types.fail("source.installation",
+                        "installed shell association differs", decl.span);
+    signatureState[id.index] = 2;
+    return true;
+  }
   if (decl.kind == Declaration::Kind::Construction) {
     auto target = resolve(decl, source.target, source.span);
     if (!target || !signature(*target, depth + 1))

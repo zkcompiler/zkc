@@ -3,8 +3,10 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
+#include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace zkc::protocol {
@@ -86,7 +88,14 @@ enum class FrontendSignature {
   RandomConstructor,
   NativeMessage
 };
-enum class SourceDeclarationKind { Math, Local, Interface, Requirement };
+enum class SourceDeclarationKind {
+  Math,
+  Local,
+  Interface,
+  Requirement,
+  ContractConstructor,
+  View
+};
 /// A static parameter, optionally its associated member, or a parameterless
 /// constructor.
 struct SourceTerm {
@@ -100,19 +109,110 @@ struct SourceInput {
   std::string name;
   SourceTerm type;
 };
-/// One installed source declaration with exactly one association: a rule, or
-/// a primitive mathematical intrinsic (Math) or operation (Local). It grants
-/// source resolution and elaboration facts, never execution authority.
-struct FrontendDeclaration {
-  std::string identity, module, name;
-  SourceDeclarationKind kind;
+enum class PatternSort { Contract, OptionalExtent };
+struct UnsizedExtent {};
+struct ExtentVariable {
+  unsigned variable;
+};
+struct NatStatic {
+  unsigned index;
+};
+using ExtentPattern = std::variant<UnsizedExtent, ExtentVariable, NatStatic>;
+struct ContractPattern;
+using PatternRef = std::shared_ptr<const ContractPattern>;
+struct ContractVariable {
+  unsigned variable;
+};
+struct ProductPattern {
+  std::vector<PatternRef> elements;
+};
+struct SequencePattern {
+  PatternRef element;
+  ExtentPattern extent;
+};
+/// Installation-only patterns, never source Type binders or runtime values.
+struct ContractPattern {
+  std::variant<ContractVariable, ProductPattern, SequencePattern> value;
+};
+struct DescriptorPort {
+  PatternRef contract;
+};
+struct SelectedViewPort {
+  PatternRef context, state;
+};
+using SchemePort = std::variant<DescriptorPort, SelectedViewPort>;
+struct NamedSchemePort {
+  std::string name;
+  SchemePort port;
+};
+enum class DescriptorForm {
+  Append,
+  Concat,
+  Replace,
+  ForgetExtent,
+  CheckExtent,
+  Fold
+};
+struct FrontendScheme {
+  std::string name;
+  DescriptorForm form;
+  std::vector<PatternSort> variables;
+  std::vector<StaticParameter> statics;
+  std::vector<SchemePort> inputs;
+  PatternRef output;
+};
+struct SchemeId {
+  unsigned index;
+};
+struct ConcreteSourceSignature {
   std::vector<SourceStatic> statics;
   std::vector<SourceInput> inputs;
   std::optional<SourceTerm> output;
   std::optional<FrontendSignature> rule;
   std::string primitive;
-  bool prelude;
 };
+struct InstalledContractHead {
+  std::string constructor;
+};
+struct InstalledViewSignature {
+  std::vector<SourceStatic> statics;
+  std::vector<NamedSchemePort> inputs;
+  PatternRef output;
+  SchemeId scheme;
+};
+using InstalledSignature =
+    std::variant<ConcreteSourceSignature, InstalledContractHead,
+                 InstalledViewSignature>;
+/// One exact installed signature alternative. Shells have no concrete callable
+/// signature; consumers must select the typed alternative after index lookup.
+struct FrontendDeclaration {
+  std::string identity, module, name;
+  SourceDeclarationKind kind;
+  InstalledSignature signature;
+  bool prelude;
+  const ConcreteSourceSignature *concrete() const {
+    return std::get_if<ConcreteSourceSignature>(&signature);
+  }
+  const InstalledContractHead *contractHead() const {
+    return std::get_if<InstalledContractHead>(&signature);
+  }
+  const InstalledViewSignature *viewScheme() const {
+    return std::get_if<InstalledViewSignature>(&signature);
+  }
+  std::optional<FrontendSignature> rule() const {
+    auto *value = concrete();
+    return value ? value->rule : std::nullopt;
+  }
+  llvm::ArrayRef<SourceStatic> statics() const {
+    if (auto *value = concrete())
+      return value->statics;
+    if (auto *value = viewScheme())
+      return value->statics;
+    return {};
+  }
+};
+llvm::ArrayRef<FrontendScheme> frontendSchemes();
+const FrontendScheme *frontendScheme(SchemeId);
 /// An installed notation of a declaration of its module. An empty fixity keeps
 /// the symbol's fixed syntax.
 struct FrontendNotation {
@@ -126,7 +226,9 @@ struct FrontendNotation {
 enum class FrontendConstructorForm {
   OracleHandle,
   OracleHandleSequence,
-  FiniteDescriptor
+  FiniteDescriptor,
+  DescriptorProduct,
+  DescriptorSequence
 };
 /// A structural head the source language owns that is not a catalog data
 /// constructor. The row owns the head's spelling; the frontend owns the

@@ -333,8 +333,11 @@ int main() {
           require(isDescriptor(tree) && isStaticOnly(tree) &&
                       !valueType(tree) && !isLogicalValue(tree) &&
                       !finiteDescriptorItem(DescriptorContract(tree)) &&
-                      frontendTypeConstructor(tree).empty(),
-                  "structural category acquired installed or data authority");
+                      frontendTypeConstructor(tree) ==
+                          (tree.kind == K::DescriptorProduct
+                               ? "descriptor_product"
+                               : "descriptor_sequence"),
+                  "structural category or installed head projection differs");
           require(c.types.admission(tree, Boundary::Construction, {}) ==
                       Semantics::Admission::Rejected,
                   "structural descriptor acquired native construction");

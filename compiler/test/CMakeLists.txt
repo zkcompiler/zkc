@@ -359,6 +359,7 @@ add_zkc_test(language_entry_components Compiler language-entry-components)
 add_zkc_test(language_roster_capacity CpuTarget language-roster-capacity)
 add_zkc_test(language_role_bounds Compiler language-role-bounds)
 add_zkc_test(installed_declarations Language installed-declarations)
+add_zkc_test(installed_descriptor_contracts Language installed-descriptor-contracts)
 add_zkc_test(language_entry_components_interface Compiler language-entry-components-interface)
 target_compile_definitions(zkc-language_entry_components_interface-test PRIVATE
   ZKC_ENTRY_COMPONENT_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/entry-components/ordinary.zkc")

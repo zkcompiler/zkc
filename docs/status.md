@@ -843,6 +843,14 @@ callbacks; Local and descriptor operand refusals remain checked. The maintained
 library still uses the legacy source adapter until the parent source cutover.
 Construction descriptor families, Constraint Views and independent Lean readers
 remain separate integration work.
+An internal installed structural declaration slice adds exact Product/Sequence
+head and six bounded View scheme rows, independent Python/TableGen/Rust catalog
+validation and typed projections. Installed shells enter the ordinary frozen
+declaration index without a concrete data signature or body. Focused native
+checks cover constructor formation, association identity, aliases, visibility,
+foreign homonyms, Nat parameters and installation drift. This is not complete
+public aggregate or Constraint View support. Parent scheme/fold/closure/native
+consumers and strict Lean reader migration remain publication requirements.
 Static natural constructor configuration, callable payloads and heterogeneous
 checked descriptor lists are not implemented by the graph foundation; their
 actual family formation and consumers remain required.

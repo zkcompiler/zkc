@@ -169,6 +169,8 @@ enum class ResolutionCategory {
   ServiceConstructor,
   ServiceMethod,
   ConsumerRequirement,
+  ContractConstructor,
+  ViewScheme,
   Other
 };
 struct ResolutionStep {
@@ -984,7 +986,9 @@ struct Declaration {
     Module,
     Associated,
     Relation,
-    Requirement
+    Requirement,
+    InstalledContractConstructor,
+    InstalledViewScheme
   } kind;
   struct Generated {
     DeclarationId target;
@@ -998,6 +1002,9 @@ struct Declaration {
   };
   std::optional<Generated> generated;
   DeclarationId id;
+  /// Exact materializer association; null for every captured declaration.
+  /// The frozen DeclarationIndex independently retains and replays this join.
+  const protocol::FrontendDeclaration *installedDeclaration = nullptr;
   /// Cached owning module, derived from the declaration tree; self for modules.
   DeclarationId module;
   std::string name, qualifiedName, symbol;

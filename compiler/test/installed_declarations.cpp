@@ -59,7 +59,7 @@ int main() {
   });
   cases.run("managed methods are installed beneath their constructor row", [] {
     for (const auto &constructor : zkc::protocol::frontendDeclarations()) {
-      if (constructor.rule !=
+      if (constructor.rule() !=
           zkc::protocol::FrontendSignature::RandomConstructor)
         continue;
       auto module = read(constructor.module);
@@ -138,6 +138,11 @@ int main() {
     maximum.dimension = Natural::constant(4);
     std::vector<Type::Kind> formed;
     for (const auto &row : zkc::protocol::frontendConstructors()) {
+      if (row.form ==
+              zkc::protocol::FrontendConstructorForm::DescriptorProduct ||
+          row.form ==
+              zkc::protocol::FrontendConstructorForm::DescriptorSequence)
+        continue;
       bool finite =
           row.form == zkc::protocol::FrontendConstructorForm::FiniteDescriptor;
       std::vector<Type> arguments{finite ? Type(Type::Kind::Index) : kind};
@@ -177,9 +182,9 @@ int main() {
     }
   });
   cases.run("installed modules are the declaration owners", [] {
-    require(installedModules() == std::vector<std::string>{"zkc::prelude",
-                                                           "zkc::records",
-                                                           "zkc::transport"},
+    require(installedModules() ==
+                std::vector<std::string>{"zkc::prelude", "zkc::records",
+                                         "zkc::transport", "zkc::descriptor"},
             "installed module inventory differs");
   });
   cases.run("rows the frontend cannot express refuse", [] {
@@ -192,7 +197,9 @@ int main() {
     auto absent = rows;
     for (auto &row : absent)
       if (row.name == "field_add")
-        row.inputs[0].type.index = 3;
+        std::get<zkc::protocol::ConcreteSourceSignature>(row.signature)
+            .inputs[0]
+            .type.index = 3;
     refuses("zkc::prelude", absent, notations, "an absent static");
     auto symbol = notations;
     symbol.front().symbol = "plus";
@@ -203,5 +210,35 @@ int main() {
     refuses("zkc::prelude", rows, fixity, "changed ASCII operator syntax");
     refuses("zkc::elsewhere", rows, notations, "an empty installed module");
   });
+  cases.run(
+      "ordinary concrete Nat statics use the existing source parameter kind",
+      [] {
+        zkc::protocol::FrontendDeclaration row{
+            "scalar.constant",
+            "zkc::scalars",
+            "constant",
+            zkc::protocol::SourceDeclarationKind::Local,
+            zkc::protocol::ConcreteSourceSignature{
+                {{"value", "Nat", ""}},
+                {},
+                zkc::protocol::SourceTerm{std::nullopt, "", "index"},
+                std::nullopt,
+                "index.constant"},
+            false};
+        auto module = read("zkc::scalars", {row}, {});
+        const auto &member = module.members.front();
+        require(member.parameters.size() == 1 &&
+                    member.parameters.front().constraint.name == "nat" &&
+                    member.outputs.size() == 1 &&
+                    member.outputs.front().type.name == "index" &&
+                    member.primitive == "index.constant" &&
+                    member.bodies.empty(),
+                "ordinary Nat row acquired a descriptor or fake signature");
+        auto malformed =
+            *zkc::protocol::frontendDeclaration("zkc::descriptor::Product");
+        malformed.kind = zkc::protocol::SourceDeclarationKind::Local;
+        refuses("zkc::descriptor", {malformed}, {},
+                "a mismatching signature alternative");
+      });
   return cases.result();
 }

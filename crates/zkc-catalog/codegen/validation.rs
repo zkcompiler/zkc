@@ -14,7 +14,7 @@ type Rows<'a> = BTreeMap<&'a str, &'a Value>;
 fn require(value: bool, message: &str) -> Result<()> {
     if value { Ok(()) } else { Err(message.into()) }
 }
-fn identifier(value: &str) -> bool {
+pub(super) fn identifier(value: &str) -> bool {
     !value.is_empty()
         && value
             .bytes()
@@ -843,6 +843,10 @@ fn frontend<'a>(
             "duplicate frontend ownership",
         )?;
         declared.insert((module, name));
+        if string(&r["kind"])? == "ContractConstructor" {
+            continue;
+        }
+        let scheme = string(&r["kind"])? == "View";
         let mut parameters = BTreeSet::new();
         let mut statics = Vec::new();
         for s in list(&r["statics"])? {
@@ -861,6 +865,9 @@ fn frontend<'a>(
                 "invalid or duplicate source parameter name",
             )?;
             inputs.push(&s["type"]);
+        }
+        if scheme {
+            continue;
         }
         let kind_name = string(&r["kind"])?;
         let shape = source_shape(catalog, kind_name, statics, &inputs, &r["output"])?;
@@ -1089,7 +1096,7 @@ pub(super) fn validate(v: &Value, installation: &Value) -> Result<()> {
     // A home names a catalog type constructor or a declared frontend
     // constructor, a structural head the source language owns. Exactly one
     // row spells each form, the structural meaning the frontend gives a head.
-    const FORMS: &[&str] = &["OracleHandle", "OracleHandleSequence", "FiniteDescriptor"];
+    const FORMS: &[&str] = super::descriptor::HEADS;
     let mut constructors = BTreeSet::new();
     let mut forms = BTreeSet::new();
     for r in list(&v["frontendConstructors"])? {
