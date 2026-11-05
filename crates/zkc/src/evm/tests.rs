@@ -68,6 +68,97 @@ fn source(body: &str) -> Source {
     Source::capture(&serde_json::to_vec(&source_record("Main::Proof", body)).unwrap()).unwrap()
 }
 
+#[test]
+fn limits_use_every_generated_name_and_inclusive_range() {
+    let defaults = Limits::default();
+    assert_eq!(Limits::parse(b"{}").unwrap(), defaults);
+    let full = defaults.canonical_json();
+    assert_eq!(Limits::parse(full.as_bytes()).unwrap(), defaults);
+    assert_eq!(
+        serde_json::from_str::<Value>(&full)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .len(),
+        crate::evm_target::LIMITS.len()
+    );
+    assert_eq!(defaults.get("unknown"), None);
+    assert_eq!(
+        defaults.clone().with("unknown", 1).unwrap_err().0,
+        "evm-limits"
+    );
+    for row in &crate::evm_target::LIMITS {
+        assert_eq!(defaults.get(row.name), Some(row.maximum));
+        for value in [row.minimum, row.maximum] {
+            let selected = defaults.clone().with(row.name, value).unwrap();
+            let partial = json!({row.name: value}).to_string();
+            assert_eq!(Limits::parse(partial.as_bytes()).unwrap(), selected);
+            assert_eq!(selected.get(row.name), Some(value));
+            for other in &crate::evm_target::LIMITS {
+                if other.name != row.name {
+                    assert_eq!(selected.get(other.name), Some(other.maximum));
+                }
+            }
+        }
+        for value in [row.minimum - 1, row.maximum + 1, u64::MAX] {
+            assert_eq!(
+                defaults.clone().with(row.name, value).unwrap_err().0,
+                "evm-limits"
+            );
+            assert_eq!(
+                Limits::parse(json!({row.name: value}).to_string().as_bytes())
+                    .unwrap_err()
+                    .0,
+                "evm-limits"
+            );
+        }
+    }
+}
+
+#[test]
+fn limits_json_refuses_duplicates_nonintegers_and_nonobjects() {
+    for text in [
+        "",
+        "[]",
+        "null",
+        "{}{}",
+        r#"{"unknown":1}"#,
+        r#"{"public_elements":1,"public_elements":2}"#,
+        r#"{"public_elements":1,"\u0070ublic_elements":1}"#,
+        r#"{"public_elements":1.0}"#,
+        r#"{"public_elements":1e1}"#,
+        r#"{"public_elements":-0}"#,
+        r#"{"public_elements":-1}"#,
+        r#"{"public_elements":18446744073709551616}"#,
+        r#"{"public_elements":"1"}"#,
+        r#"{"public_elements":true}"#,
+        r#"{"public_elements":null}"#,
+        r#"{"public_elements":{}}"#,
+        r#"{"public_elements":[]}"#,
+    ] {
+        assert_eq!(
+            Limits::parse(text.as_bytes()).unwrap_err().0,
+            "evm-limits",
+            "{text}"
+        );
+    }
+    assert_eq!(
+        Limits::parse(&vec![b' '; 65537]).unwrap_err().0,
+        "evm-limits"
+    );
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("limits.json");
+    assert_eq!(Limits::read(&path).unwrap_err().0, "evm-limits-read");
+    fs::write(&path, b"{}").unwrap();
+    assert_eq!(Limits::read(&path).unwrap(), Limits::default());
+    fs::write(&path, vec![b' '; 65537]).unwrap();
+    assert_eq!(Limits::read(&path).unwrap_err().0, "evm-limits-read");
+    assert_eq!(
+        Limits::read(directory.path()).unwrap_err().0,
+        "evm-limits-read"
+    );
+}
+
 // Keep malformed JSON at the selected location. Value cannot retain duplicate
 // keys.
 fn with_raw_json(value: &Value, path: &str, raw: &str) -> String {
@@ -116,14 +207,14 @@ fn with_raw_json(value: &Value, path: &str, raw: &str) -> String {
     }
 }
 #[cfg(unix)]
-fn fake_tool(directory: &Path, response: &str) -> Solc {
+pub(crate) fn fake_tool(directory: &Path, response: &str) -> Solc {
     use std::os::unix::fs::PermissionsExt;
     let path = directory.join("solc");
     fs::write(&path, format!("#!/bin/sh\nif [ \"$1\" = --version ]; then\n printf 'Version: {SOLC_VERSION}.Linux.g++\\n'\nelse\n cat >/dev/null\n printf '%s' '{}'\nfi\n", response.replace('\'', "'\\''"))).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
     Solc::new(&path, &hash(&fs::read(&path).unwrap())).unwrap()
 }
-const RESPONSE: &str = r#"{"contracts":{"verifier.yul":{"Verifier":{"evm":{"bytecode":{"object":"60006000f3"},"deployedBytecode":{"object":"00"}}}}}}"#;
+pub(crate) const RESPONSE: &str = r#"{"contracts":{"verifier.yul":{"Verifier":{"evm":{"bytecode":{"object":"60006000f3"},"deployedBytecode":{"object":"00"}}}}}}"#;
 #[test]
 fn source_transport_is_explicit_and_bounded() {
     assert!(Source::capture(br#"{"format":"zkc.native-package/0","yul":"x"}"#).is_err());
@@ -287,7 +378,7 @@ fn requested_and_normalized_oracle_selections_must_agree() {
 
 #[test]
 #[cfg(unix)]
-fn fork_and_effective_options_seal_artifact_identity_and_reuse() {
+fn fork_options_and_every_limit_seal_artifact_identity_and_reuse() {
     let directory = tempfile::tempdir().unwrap();
     let tool = fake_tool(directory.path(), RESPONSE);
     let source = source("same Yul across forks and options");
@@ -302,6 +393,15 @@ fn fork_and_effective_options_seal_artifact_identity_and_reuse() {
     let mut record = source.metadata().clone();
     record["fork"] = json!(EvmFork::Prague);
     let mut selections = vec![record];
+    // Identical Yul/solc input is deliberate: source metadata alone must bind
+    // every effective ceiling, including limits not reached by this fixture.
+    for row in &crate::evm_target::LIMITS {
+        if row.minimum < row.maximum {
+            let mut record = source.metadata().clone();
+            record["limits"][row.name] = json!(row.minimum);
+            selections.push(record);
+        }
+    }
     for field in [
         "simplify",
         "finite_bulk",
@@ -316,6 +416,7 @@ fn fork_and_effective_options_seal_artifact_identity_and_reuse() {
     }
     for record in selections {
         let selected = Source::capture(&encode(&record).unwrap()).unwrap();
+        assert_eq!(json!(selected.limits()), record["limits"]);
         assert_eq!(
             tool.compile(Build {
                 source: &selected,

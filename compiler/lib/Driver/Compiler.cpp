@@ -62,6 +62,8 @@ int zkc::runCompiler(int argc, char **argv,
            "    language-evm selects a proof Entry and emits checked Yul for "
            "--evm-version="
         << forks << " (default " << evmForkName(EvmOptions().fork) << ").\n"
+        << "    [--evm-limits=JSON] selects every declared deployment ceiling "
+           "as one complete inline object (defaults are the maxima).\n"
         << "    language-check may omit --entry to check definitions alone.\n"
            "    Output commands accept [--entry-kind=function|proof] and "
            "select the "

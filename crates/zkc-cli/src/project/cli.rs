@@ -217,6 +217,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                 "--reuse",
                 "--reuse-sha256",
                 "--evm-version",
+                "--evm-limits",
             ]
             .iter()
             .any(|flag| args.has(flag))

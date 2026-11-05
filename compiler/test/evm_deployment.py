@@ -32,6 +32,63 @@ with case('help names the declared forks and their default'):
     help_text = commands.run([compiler, '--help'])
     assert (f"--evm-version={'|'.join(FORKS)} (default {DECLARATION['default_fork']})"
             in help_text), help_text
+    assert '--evm-limits=JSON' in help_text
+
+LIMITS = {row['name']: row['maximum'] for row in DECLARATION['limits']}
+
+with case('deployment limits are a unique EVM-only inline complete object'):
+    encoded = json.dumps(LIMITS)
+    for mode, selections in (
+        ('language-evm', [encoded, encoded]),
+        ('language-package', [encoded]),
+        ('language-emit', [encoded]),
+        ('language-check', [encoded]),
+    ):
+        commands.run([compiler, mode, *inputs,
+                      *['--evm-limits=' + value for value in selections]], refuses='evm.limits')
+
+for row in DECLARATION['limits']:
+    name = row['name']
+    for label, value in (
+        ('below-minimum', row['minimum'] - 1), ('above-maximum', row['maximum'] + 1),
+        ('boolean', True), ('string', '1'), ('null', None), ('object', {}), ('array', []),
+    ):
+        with case(f'deployment {name} refuses {label}'):
+            selection = dict(LIMITS, **{name: value})
+            commands.run([compiler, 'language-evm', *inputs,
+                          '--evm-limits=' + json.dumps(selection)], refuses='evm.limits')
+    with case(f'deployment {name} must be present'):
+        selection = {key: value for key, value in LIMITS.items() if key != name}
+        commands.run([compiler, 'language-evm', *inputs,
+                      '--evm-limits=' + json.dumps(selection)], refuses='evm.limits')
+
+for label, text in (
+    ('empty', ''), ('partial', '{}'), ('nonobject', '[]'), ('path', 'limits.json'),
+    ('unknown', json.dumps(dict(LIMITS, unknown=1))),
+    ('unknown-replaces-known', json.dumps({
+        ('unknown' if key == 'public_elements' else key): value for key, value in LIMITS.items()})),
+    ('duplicate', '{"public_elements":1,' + json.dumps(LIMITS)[1:]),
+    ('escaped-duplicate', r'{"\u0070ublic_elements":1,' + json.dumps(LIMITS)[1:]),
+    *[(label, json.dumps(LIMITS).replace('"public_elements": ' + str(LIMITS['public_elements']),
+                                      '"public_elements": ' + value))
+      for label, value in [('fraction', '1.0'), ('exponent', '1e1'), ('negative', '-1'),
+                           ('negative-zero', '-0'), ('overflow', '18446744073709551616')]],
+    ('trailing', json.dumps(LIMITS) + '{}'), ('oversize', ' ' * 65537),
+):
+    with case(f'deployment limit JSON refuses {label}'):
+        commands.run([compiler, 'language-evm', *inputs, '--evm-limits=' + text], refuses='evm.limits')
+
+with case('explicit maxima preserve the default source product exactly'):
+    default = commands.run([compiler, 'language-evm', *inputs])
+    explicit = commands.run([compiler, 'language-evm', *inputs, '--evm-limits=' + json.dumps(LIMITS)])
+    assert json.loads(explicit) == json.loads(default)
+
+for name in ('transcript_transitions', 'public_elements', 'memory_bytes'):
+    with case(f'lower {name} retains complete effective selection in compiler source'):
+        lowered = dict(LIMITS, **{name: LIMITS[name] - 1})
+        response = json.loads(commands.run([compiler, 'language-evm', *inputs,
+                                            '--evm-limits=' + json.dumps(lowered)]))
+        assert response['limits'] == lowered
 
 with case('CPU physical and storage selections refuse at the EVM boundary'):
     for option in ('--cpu-target=portable', '--release-storage', '--dump=closed'):

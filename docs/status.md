@@ -188,7 +188,10 @@ Cancun, Prague or Osaka (the default). One declaration,
 [`zkc.evm-target/0`](spec/targets/evm.md#target-declaration), states the forks,
 solc pin, verifier ABI, deployment ceilings and revert classes. The compiler,
 SDK and CLI read its generated tables, and the deployed runner and harness read
-and check the declaration itself. Authored empty transcripts and managed
+and check the declaration itself. SDK `evm::Limits` and CLI
+`compile --target=evm --evm-limits=FILE` select lower ceilings from those rows;
+the driver requires a complete inline object and the SDK checks the returned
+effective selection before source adoption or artifact reuse. Authored empty transcripts and managed
 constructions over a transcript suite whose facts the target realizes, the BLS
 Fr and KoalaBear quartic/octic Keccak hash chains among the installed suites,
 use the common framed proof format. Managed index requests and native index
