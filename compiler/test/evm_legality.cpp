@@ -11,6 +11,7 @@
 #include "support/NativeCases.h"
 #include "support/ResourceSources.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Evm.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
@@ -24,6 +25,7 @@
 #include "zkc/Target/Evm/Wire.h"
 #include "zkc/Transforms/EndpointClosure.h"
 #include "zkc/Transforms/Stages.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/Signals.h"
@@ -207,6 +209,46 @@ int main() {
     out << '\n';
     return success();
   });
+  cases.run("EVM parser errors retain the supplied filename", [&] {
+    auto result =
+        compileEvmProof("module { @ }", "broken-original.mlir", {}, registry);
+    require(!result, "malformed original compiled");
+    bool owned = false, located = false, boundary = false;
+    handleAllErrors(result.takeError(), [&](const ErrorInfoBase &error) {
+      if (!error.isA<CompilationError>())
+        return;
+      const auto &failure = static_cast<const CompilationError &>(error);
+      owned = true;
+      for (const auto &location : failure.locations)
+        located |= location.filename == "broken-original.mlir" &&
+                   location.line == 1 && location.column > 0;
+      for (const auto &refusal : failure.refusals)
+        boundary |= refusal.code == "evm.source";
+    });
+    require(owned && located && boundary,
+            "parser error lost its owner, filename or admission boundary");
+  });
+  cases.run(
+      "EVM admission preserves verifier metadata after context teardown", [&] {
+        auto result = compileEvmProof(
+            R"mlir(module { func.func private @bad(!poly.table<"f7", "00">) })mlir",
+            "invalid-type.mlir", {}, registry);
+        require(!result, "invalid original rank compiled");
+        bool typed = false, located = false;
+        handleAllErrors(result.takeError(), [&](const ErrorInfoBase &error) {
+          if (!error.isA<CompilationError>())
+            return;
+          const auto &failure = static_cast<const CompilationError &>(error);
+          for (const auto &location : failure.locations)
+            located |= location.filename == "invalid-type.mlir";
+          for (const auto &refusal : failure.refusals)
+            if (refusal.code == "invalid-original-rank") {
+              typed = true;
+            }
+        });
+        require(typed && located,
+                "verifier metadata became prose or borrowed context state");
+      });
   cases.run("typed ordered effects survive CSE and canonicalization", [&] {
     auto module = parseSourceString<ModuleOp>(R"mlir(
       module { func.func @ordered(%scope:i64, %generation:i64, %value:i256,
@@ -405,8 +447,9 @@ int main() {
                         "retired operation remains registered");
               });
   auto close = [&](StringRef text) {
+    diagnostics.clear();
     auto source = parseSourceString<ModuleOp>(text, &context);
-    require(bool(source), "numeric source failed to parse");
+    require(bool(source), "numeric source failed to parse: " + diagnostics);
     PassManager pm(&context);
     buildProjectionPipeline(pm, false);
     buildClosedExecutionPipeline(pm);
@@ -415,6 +458,64 @@ int main() {
     return source;
   };
   auto closed = [&] { return close(sourceText); };
+  auto lowerControl = [&](const CheckedEndpoint &endpoint) {
+    diagnostics.clear();
+    auto target = evm::lowerEndpoint(endpoint, {});
+    if (!target)
+      throw std::runtime_error(toString(target.takeError()) + ": " +
+                               diagnostics);
+    return std::move(*target);
+  };
+  auto guardCall = [](func::CallOp call) {
+    if (!call->getParentOfType<func::FuncOp>()->hasAttr("evm.entry"))
+      return false;
+    SmallVector<func::FuncOp> pending;
+    llvm::SmallPtrSet<Operation *, 16> seen;
+    if (auto callee = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+            call, call.getCalleeAttr()))
+      pending.push_back(callee);
+    bool stops = false;
+    while (!pending.empty()) {
+      auto function = pending.pop_back_val();
+      if (!seen.insert(function).second)
+        continue;
+      function.walk([&](evm::SourceStopOp) { stops = true; });
+      function.walk([&](func::CallOp nested) {
+        if (auto callee = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+                nested, nested.getCalleeAttr()))
+          pending.push_back(callee);
+      });
+    }
+    return stops;
+  };
+  // Resolve only pure constant/call/if expressions in the constant fixtures.
+  // Shared preparation may outline these constants into total helpers.
+  std::function<uint64_t(Value, unsigned)> constantValue =
+      [&](Value value, unsigned depth) -> uint64_t {
+    require(depth < 32, "cyclic constant fixture expression");
+    if (auto constant = value.getDefiningOp<arith::ConstantOp>())
+      return cast<IntegerAttr>(constant.getValue()).getUInt();
+    auto result = dyn_cast<OpResult>(value);
+    require(bool(result), "nonconstant fixture block argument");
+    if (auto call = dyn_cast<func::CallOp>(result.getOwner())) {
+      auto function = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+          call, call.getCalleeAttr());
+      require(function && function.getBody().hasOneBlock(),
+              "constant helper lost its total body");
+      return constantValue(
+          function.getBody().front().getTerminator()->getOperand(
+              result.getResultNumber()),
+          depth + 1);
+    }
+    auto branch = dyn_cast<scf::IfOp>(result.getOwner());
+    require(bool(branch), "unsupported constant fixture expression");
+    auto &selected = constantValue(branch.getCondition(), depth + 1)
+                         ? branch.getThenRegion()
+                         : branch.getElseRegion();
+    return constantValue(
+        selected.front().getTerminator()->getOperand(result.getResultNumber()),
+        depth + 1);
+  };
   auto proofSource = [](StringRef helper, StringRef outputs, StringRef body) {
     return ("module scalar; domain Fr=field(\"bls12-381.fr\"); " + helper +
             " protocol Work roles(P,V)(a:Fr@V,b:Fr@V,c:Fr@V,"
@@ -744,31 +845,503 @@ module { "protocol.module"() ({
     require(StringRef(diagnostics).contains("evm.unsupported-type"),
             "unsupported capability lost its type refusal");
   });
-  cases.run("conditional verifier completion refuses by name", [&] {
-    auto source = close(R"mlir(
+  cases.run(
+      "conditional verifier completion uses the ordinary full return", [&] {
+        auto source = close(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
   "protocol.func"() ({ ^entry(%a:!F,%b:!F,%go:i1):
     %same = algebra.field_equal %a,%b : (!F,!F)->i1
     "protocol.finish_if"(%go,%same) {owner="V",site="early"} : (i1,i1)->()
+    protocol.guard %go {owner="V",site="suffix"}
     "protocol.return"(%same) : (i1)->()
   }) {sym_name="main",function_type=(!F,!F,i1)->i1,roles=["V"],
       input_roles=[["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir");
-    unsigned completions = 0;
-    source->walk([&](Operation *op) {
-      completions += op->getName().getStringRef() == "protocol.finish_if";
+        auto target = lowerControl(take(closeEndpoint(*source, "V")));
+        unsigned returns = 0, guards = 0;
+        target->walk([&](func::ReturnOp op) {
+          if (!op->getParentOfType<func::FuncOp>()->hasAttr("evm.entry"))
+            return;
+          ++returns;
+          require(isa<func::FuncOp>(op->getParentOp()) &&
+                      op.getNumOperands() == 1 &&
+                      op.getOperand(0).getType().isInteger(1),
+                  "completion lost its direct function return signature");
+        });
+        target->walk([&](func::CallOp op) {
+          if (!guardCall(op))
+            return;
+          ++guards;
+          require(bool(op->getParentOfType<scf::IfOp>()),
+                  "completion suffix guard became unconditional");
+        });
+        require(returns == 1 && guards == 1 &&
+                    succeeded(evm::checkTarget(*target)),
+                "conditional completion lost normal return or suffix effects");
+      });
+  for (bool finish : {false, true})
+    cases.run(
+        finish ? "true completion returns normal false acceptance"
+               : "false completion continues to normal final return",
+        [&] {
+          std::string text = R"mlir(
+module { "protocol.module"() ({
+  "protocol.func"() ({
+    %go = arith.constant CONDITION
+    %no = arith.constant false
+    "protocol.finish_if"(%go,%no) {owner="V",site="early"} : (i1,i1)->()
+    %yes = arith.constant true
+    "protocol.return"(%yes) : (i1)->()
+  }) {sym_name="main",function_type=()->i1,roles=["V"],input_roles=[],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+          text = replaceFixture(text, "CONDITION", finish ? "true" : "false");
+          auto source = close(text);
+          auto target = lowerControl(take(closeEndpoint(*source, "V")));
+          unsigned returns = 0, stops = 0;
+          target->walk([&](func::ReturnOp op) {
+            if (!op->getParentOfType<func::FuncOp>()->hasAttr("evm.entry"))
+              return;
+            ++returns;
+            require(constantValue(op.getOperand(0), 0) == !finish,
+                    "conditional completion returned the wrong acceptance");
+          });
+          target->walk([&](evm::SourceStopOp) { ++stops; });
+          require(returns == 1 && stops == 0,
+                  "normal false acceptance acquired a source stop");
+        });
+  for (bool managed : {false, true})
+    cases.run(
+        managed
+            ? "managed completion preserves the outer verification boundary"
+            : "authored completion preserves the outer verification boundary",
+        [&] {
+          std::string text =
+              managed
+                  ? proofSource(
+                        "", "echo:Fr@V,accepted:bool@V",
+                        "let (_,_)=finish_if @V(a==b)(echo=a,accepted=false);"
+                        "return(echo=c,accepted=a*b==c);")
+                  : R"zkc(module scalar;
+domain Fr=field("bls12-381.fr");
+protocol Work roles(P,V)(a:Fr@V,b:Fr@V)->(echo:Fr@V,accepted:bool@V) completes {
+  let (_,_)=finish_if @V(a==b)(echo=a,accepted=false);
+  return(echo=b,accepted=true);
+}
+proof Proof=Work{prover P;verifier V;public{a,b};accept accepted;construction authored;}
+)zkc";
+          if (managed)
+            text = replaceFixture(text, "){let challenge",
+                                  ") completes {let challenge");
+          EvmOptions options;
+          options.simplify = false;
+          auto compiled = take(compileEvmEntry(originalSource(text), options));
+          auto target = compiled.targetSnapshot();
+          unsigned returns = 0;
+          target->walk([&](func::FuncOp function) {
+            if (!function->hasAttr("evm.entry"))
+              return;
+            require(function.getFunctionType().getNumResults() ==
+                        (managed ? 3u : 2u),
+                    "completion appended an additional transcript output");
+            function.walk([&](func::ReturnOp op) {
+              ++returns;
+              require(isa<func::FuncOp>(op->getParentOp()) &&
+                          op.getNumOperands() == (managed ? 3u : 2u),
+                      "complete output tuple lost its ordinary function exit");
+            });
+          });
+          StringRef yul = compiled.yul();
+          auto eof = yul.find("if iszero(eq(mload(0x140), mload(0x160)))");
+          auto root = yul.find("if iszero(eq(mload(0x80), rootScope))", eof);
+          auto result = yul.find("mstore(0, ", root);
+          require(
+              returns == 1 && yul.contains("leave") && eof != StringRef::npos &&
+                  root != StringRef::npos && result != StringRef::npos &&
+                  eof < root && root < result,
+              "normal early completion bypassed EOF/root/acceptance checks");
+          if (managed) {
+            auto owner = yul.find("if iszero(eq(mload(0xa0), rootScope))", eof);
+            require(owner != StringRef::npos && eof < owner && owner < root &&
+                        yul.slice(eof, owner).contains(", mload(0xc0)))"),
+                    "managed completion bypassed generation or owner checking");
+          }
+        });
+  // This is a checked direct-lowering fixture. It exercises the physical
+  // consumer independently of the pending common native-proof preparation.
+  constexpr StringLiteral selectedCompletion = R"mlir(
+!V = !data.field_vector<"bls12-381.fr">
+!U = !runtime.capability<resource_unit,"Slot.A">
+!T = !runtime.capability<transcript,"hash-chain.keccak256.bls12-381.fr64be/0">
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%n:ui64,%choice:i1,%go:i1,%value:!V,%unit:!U,%state:!T):
+   %outer:3 = "protocol.repeat"(%n,%value,%unit,%state,%n,%choice,%go) ({
+   ^outer(%i:ui64,%v:!V,%u:!U,%t:!T,%count:ui64,%pick:i1,%enabled:i1):
+     %inner:3 = "protocol.repeat"(%count,%v,%u,%t,%pick,%enabled) ({
+     ^inner(%j:ui64,%vv:!V,%uu:!U,%tt:!T,%selected:i1,%exit:i1):
+       %arm:3 = "protocol.branch"(%selected,%vv,%uu,%tt,%exit) ({
+       ^then(%x:!V,%resource:!U,%generation:!T,%condition:i1):
+         %no = arith.constant false
+         %next:2 = "protocol.finish_if"(%condition,%x,%no,%resource,%generation)
+           {owner="V",site="nested_exit"} : (i1,!V,i1,!U,!T)->(!U,!T)
+         protocol.guard %condition {owner="V",site="after_finish"}
+         "protocol.yield"(%x,%next#0,%next#1) : (!V,!U,!T)->()
+       }, {
+       ^else(%x:!V,%resource:!U,%generation:!T,%condition:i1):
+         protocol.guard %condition {owner="V",site="alternative"}
+         "protocol.yield"(%x,%resource,%generation) : (!V,!U,!T)->()
+       }) {site="choose",roles=["V"],output_roles=[["V"],["V"],["V"]],alternatives=["then","else"]} : (i1,!V,!U,!T,i1)->(!V,!U,!T)
+       protocol.guard %exit {owner="V",site="inner_suffix"}
+       "protocol.yield"(%arm#0,%arm#1,%arm#2) : (!V,!U,!T)->()
+     }) {site="inner",carried=3:i64,maximum=3:i64,roles=["V"],carried_roles=[["V"],["V"],["V"]]} : (ui64,!V,!U,!T,i1,i1)->(!V,!U,!T)
+     protocol.guard %enabled {owner="V",site="outer_suffix"}
+     "protocol.yield"(%inner#0,%inner#1,%inner#2) : (!V,!U,!T)->()
+   }) {site="outer",carried=3:i64,maximum=3:i64,roles=["V"],carried_roles=[["V"],["V"],["V"]]} : (ui64,!V,!U,!T,ui64,i1,i1)->(!V,!U,!T)
+   %yes = arith.constant true
+   "protocol.return"(%outer#0,%yes,%outer#1,%outer#2) : (!V,i1,!U,!T)->()
+ }) {sym_name="main",function_type=(ui64,i1,i1,!V,!U,!T)->(!V,i1,!U,!T),roles=["V"],input_roles=[["V"],["V"],["V"],["V"],["V"],["V"]],output_roles=[["V"],["V"],["V"],["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+  cases.run("nested selected completion converts zero one and many lanes", [&] {
+    auto source = close(selectedCompletion);
+    auto endpoint = take(closeEndpoint(*source, "V"));
+    auto target = lowerControl(endpoint);
+    unsigned returns = 0, bounds = 0, guards = 0, whiles = 0;
+    target->walk([&](func::FuncOp op) {
+      if (!op->hasAttr("evm.entry"))
+        return;
+      require(op.getFunctionType().getNumInputs() == 6 &&
+                  op.getFunctionType().getNumResults() == 4,
+              "unit erasure or transcript result count changed");
+      require(op.getFunctionType().getResult(2).isInteger(1) &&
+                  op.getFunctionType().getResult(3).isInteger(64),
+              "complete result order or unique transcript generation changed");
     });
-    require(completions == 1, "closed candidate lost its completion");
-    diagnostics.clear();
-    refuses(evm::lowerEndpoint(take(closeEndpoint(*source, "V")), {}),
-            "evm.completion");
-    require(StringRef(diagnostics)
-                    .contains("[evm.completion] protocol.finish_if") &&
-                !StringRef(diagnostics).contains("evm.unsupported-operation"),
-            "completion did not refuse by name: " + diagnostics);
+    target->walk([&](func::ReturnOp op) {
+      if (!op->getParentOfType<func::FuncOp>()->hasAttr("evm.entry"))
+        return;
+      ++returns;
+      require(isa<func::FuncOp>(op->getParentOp()) && op.getNumOperands() == 4,
+              "nested completion did not leave through the full epilogue");
+    });
+    target->walk([&](evm::LoopBoundOp) { ++bounds; });
+    target->walk([&](func::CallOp op) {
+      if (guardCall(op))
+        ++guards;
+    });
+    target->walk([&](scf::WhileOp) { ++whiles; });
+    require(
+        returns == 1 && bounds == 2 && guards == 4 && whiles >= 2,
+        "nested completion lost bounded dynamic control or ordered effects");
+    require(succeeded(verify(*target)) && succeeded(evm::checkTarget(*target)),
+            "nested completion left illegal operations or materializations");
   });
+  cases.run("checked nested completion reaches the existing Yul exporter", [&] {
+    auto source = close(R"mlir(
+module { "protocol.module"() ({
+ "protocol.func"() ({
+   %n = "data.index"() {value=2:ui64} : ()->ui64
+   %pick = arith.constant true
+   %go = arith.constant true
+   %no = arith.constant false
+   %outer = "protocol.repeat"(%n,%no,%n,%pick,%go) ({
+   ^outer(%i:ui64,%held:i1,%count:ui64,%choice:i1,%exit:i1):
+     %inner = "protocol.repeat"(%count,%held,%choice,%exit) ({
+     ^inner(%j:ui64,%accepted:i1,%selected:i1,%condition:i1):
+       %arm = "protocol.branch"(%selected,%accepted,%condition) ({
+       ^then(%result:i1,%finish:i1):
+         "protocol.finish_if"(%finish,%result) {owner="V",site="nested_exit"} : (i1,i1)->()
+         protocol.guard %finish {owner="V",site="suffix"}
+         "protocol.yield"(%result) : (i1)->()
+       }, { ^else(%result:i1,%finish:i1):
+         "protocol.yield"(%result) : (i1)->()
+       }) {site="choose",roles=["V"],output_roles=[["V"]],alternatives=["then","else"]} : (i1,i1,i1)->i1
+       "protocol.yield"(%arm) : (i1)->()
+     }) {site="inner",carried=1:i64,maximum=3:i64,roles=["V"],carried_roles=[["V"]]} : (ui64,i1,i1,i1)->i1
+     "protocol.yield"(%inner) : (i1)->()
+   }) {site="outer",carried=1:i64,maximum=3:i64,roles=["V"],carried_roles=[["V"]]} : (ui64,i1,ui64,i1,i1)->i1
+   "protocol.return"(%outer) : (i1)->()
+ }) {sym_name="main",function_type=()->i1,roles=["V"],input_roles=[],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+    auto checked = take(closeEndpoint(*source, "V"));
+    auto target = lowerControl(checked);
+    NativeProofPolicy policy;
+    policy.entry = "independent";
+    policy.producer = "P";
+    policy.validator = "V";
+    json::Value descriptor = json::Array{"zkc.native-proof-descriptor/0",
+                                         encodeNativeProofPolicy(policy),
+                                         "binding-test",
+                                         json::Array{},
+                                         json::Array{},
+                                         json::Array{},
+                                         json::Array{},
+                                         json::Array{},
+                                         json::Array{}};
+    // Like the exporter boundary fixtures below, this is a target test
+    // descriptor, not a selected native-proof construction fixture.
+    auto endpoint =
+        take(evm::describeEndpoint(checked, descriptor, policy,
+                                   toHex(SHA256::hash(arrayRefFromStringRef(
+                                             "selected control target test")),
+                                         true)));
+    auto yul = take(evm::exportYul(*target, endpoint, policy, {}));
+    unsigned loops = 0;
+    target->walk([&](scf::WhileOp) { ++loops; });
+    require(loops >= 2 && StringRef(yul).count("for {} 1 {} {") == loops &&
+                StringRef(yul).contains("leave") &&
+                StringRef(yul).contains(
+                    "if iszero(eq(mload(0x140), mload(0x160)))"),
+            "nested completion escaped structured Yul or outer EOF checking");
+    std::string printed;
+    raw_string_ostream out(printed);
+    target->print(out);
+    auto reparsed = parseSourceString<ModuleOp>(printed, &context);
+    require(bool(reparsed) &&
+                take(evm::exportYul(*reparsed, endpoint, policy, {})) == yul,
+            "nested completion target round trip changed Yul");
+  });
+  cases.run(
+      "nominal participant selection loads payload before exact captures", [&] {
+        auto source = close(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !data.field_vector<"bls12-381.fr">
+!Choice = !data.variant<#data.identity<["atom","ControlChoice"]>, [#data.alternative<"empty">, #data.alternative<"one",[!F]>, #data.alternative<"many",[!V]>]>
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%choice:!Choice,%fallback:!V,%go:i1):
+   %selected = "protocol.branch"(%choice,%fallback,%go) ({
+   ^empty(%held:!V,%exit:i1):
+     protocol.guard %exit {owner="V",site="empty"}
+     "protocol.yield"(%held) : (!V)->()
+   }, {
+   ^one(%payload:!F,%held:!V,%exit:i1):
+     %no = arith.constant false
+     "protocol.finish_if"(%exit,%held,%no) {owner="V",site="one_exit"} : (i1,!V,i1)->()
+     protocol.guard %exit {owner="V",site="one"}
+     "protocol.yield"(%held) : (!V)->()
+   }, {
+   ^many(%payload:!V,%held:!V,%exit:i1):
+     protocol.guard %exit {owner="V",site="many"}
+     "protocol.yield"(%payload) : (!V)->()
+   }) {site="choose",roles=["V"],output_roles=[["V"]],alternatives=["empty","one","many"]} : (!Choice,!V,i1)->!V
+   %yes = arith.constant true
+   "protocol.return"(%selected,%yes) : (!V,i1)->()
+ }) {sym_name="main",function_type=(!Choice,!V,i1)->(!V,i1),roles=["V"],input_roles=[["V"],["V"],["V"]],output_roles=[["V"],["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+        auto target = lowerControl(take(closeEndpoint(*source, "V")));
+        unsigned tags = 0, payloads = 0, lanes = 0, guards = 0;
+        target->walk([&](evm::VariantTagOp) { ++tags; });
+        target->walk([&](evm::VariantGetOp op) {
+          ++payloads;
+          lanes += op->getNumResults();
+          require(op->getParentOfType<scf::IfOp>() ||
+                      op->getParentOfType<scf::IndexSwitchOp>(),
+                  "participant payload was eagerly loaded before selection");
+        });
+        target->walk([&](func::CallOp op) {
+          if (guardCall(op))
+            ++guards;
+        });
+        require(tags == 1 && payloads == 2 && lanes == 3 && guards == 3,
+                "nominal selection lost zero one or many payload lanes");
+        require(succeeded(evm::checkTarget(*target)),
+                "nominal participant control did not fully convert");
+      });
+  for (bool zero : {false, true})
+    cases.run(
+        zero ? "zero trips gate selected effects behind the loop entry test"
+             : "zero-lane participant loop retains selected effects",
+        [&] {
+          std::string text = R"mlir(
+!U = !runtime.capability<resource_unit,"Slot.A">
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%n:ui64,%choice:i1,%go:i1,%unit:!U):
+   %out = "protocol.repeat"(%n,%unit,%choice,%go) ({
+   ^body(%i:ui64,%u:!U,%pick:i1,%condition:i1):
+     "protocol.branch"(%pick,%condition) ({ ^then(%ok:i1):
+       protocol.guard %ok {owner="V",site="then"}
+       "protocol.yield"() : ()->()
+     }, { ^else(%ok:i1):
+       protocol.guard %ok {owner="V",site="else"}
+       "protocol.yield"() : ()->()
+     }) {site="choose",roles=["V"],output_roles=[],alternatives=["then","else"]} : (i1,i1)->()
+     %next = "protocol.finish_if"(%condition,%u) {owner="V",site="exit"} : (i1,!U)->!U
+     protocol.guard %condition {owner="V",site="suffix"}
+     "protocol.yield"(%next) : (!U)->()
+   }) {site="rounds",carried=1:i64,maximum=3:i64,roles=["V"],carried_roles=[["V"]]} : (ui64,!U,i1,i1)->!U
+   "protocol.return"(%out) : (!U)->()
+ }) {sym_name="main",function_type=(ui64,i1,i1,!U)->!U,roles=["V"],input_roles=[["V"],["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+          if (zero) {
+            text = replaceFixture(text, "%n:ui64", "%unused:ui64");
+            text = replaceFixture(text, "   %out =",
+                                  "   %n = \"data.index\"() {value=0:ui64} : "
+                                  "()->ui64\n   %out =");
+          }
+          auto source = close(text);
+          auto target = lowerControl(take(closeEndpoint(*source, "V")));
+          unsigned returns = 0, guards = 0, bounds = 0;
+          target->walk([&](func::ReturnOp op) {
+            if (!op->getParentOfType<func::FuncOp>()->hasAttr("evm.entry"))
+              return;
+            ++returns;
+            require(op.getNumOperands() == 0,
+                    "unit exit acquired physical lanes");
+          });
+          target->walk([&](func::CallOp op) {
+            if (guardCall(op))
+              ++guards;
+          });
+          target->walk([&](evm::LoopBoundOp op) {
+            ++bounds;
+            if (!zero)
+              return;
+            Value count = op->getOperand(0);
+            require(constantValue(count, 0) == 0,
+                    "zero-trip fixture lost its zero count");
+            unsigned entryTests = 0;
+            target->walk([&](arith::CmpIOp test) {
+              if (test.getPredicate() != arith::CmpIPredicate::ult ||
+                  test.getRhs() != count)
+                return;
+              ++entryTests;
+              auto index = dyn_cast<BlockArgument>(test.getLhs());
+              auto loop =
+                  index
+                      ? dyn_cast<scf::WhileOp>(index.getOwner()->getParentOp())
+                      : scf::WhileOp();
+              require(loop && index.getOwner() == &loop.getBefore().front() &&
+                          constantValue(loop.getInits()[index.getArgNumber()],
+                                        0) == 0,
+                      "zero-trip loop lost its zero induction start");
+              scf::IfOp entryGate;
+              for (Operation *user : test.getResult().getUsers())
+                if (auto gate = dyn_cast<scf::IfOp>(user))
+                  entryGate = gate;
+              require(bool(entryGate),
+                      "zero-trip loop entry is not conditional");
+              target->walk([&](func::CallOp call) {
+                if (guardCall(call))
+                  require(entryGate.getThenRegion().isAncestor(
+                              call->getParentRegion()),
+                          "zero-trip loop executed a body guard before entry");
+              });
+            });
+            require(entryTests == 1,
+                    "zero-trip body lost its unsigned count entry test");
+          });
+          require(returns == 1 && guards == 3 && bounds == 1,
+                  "zero-lane control erased reached effects");
+        });
+  cases.run("total helper selection preserves complete grouped captures", [&] {
+    auto source = close(R"mlir(
+!V = !data.field_vector<"bls12-381.fr">
+module { "protocol.module"() ({
+ func.func private @choose(%pick:i1,%xs:!V,%ys:!V)->!V {
+   %selected = "data.branch"(%pick,%xs,%ys) ({ ^then(%x:!V,%y:!V):
+     "data.yield"(%x) : (!V)->()
+   }, { ^else(%x:!V,%y:!V):
+     "data.yield"(%y) : (!V)->()
+   }) {alternatives=["then","else"]} : (i1,!V,!V)->!V
+   func.return %selected : !V
+ }
+ "protocol.func"() ({ ^entry(%pick:i1,%xs:!V,%ys:!V):
+   %selected = func.call @choose(%pick,%xs,%ys) : (i1,!V,!V)->!V
+   "protocol.return"(%selected) : (!V)->()
+ }) {sym_name="main",function_type=(i1,!V,!V)->!V,roles=["V"],input_roles=[["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+    auto target = lowerControl(take(closeEndpoint(*source, "V")));
+    unsigned choices = 0;
+    target->walk([&](arith::SelectOp op) {
+      auto function = op->getParentOfType<func::FuncOp>();
+      require(function.getNumArguments() == 5 &&
+                  function.getFunctionType().getNumResults() == 2,
+              "total selection lost its complete physical signature");
+      unsigned lane = choices++;
+      require(lane < 2 && op.getCondition() == function.getArgument(0) &&
+                  op.getTrueValue() == function.getArgument(1 + lane) &&
+                  op.getFalseValue() == function.getArgument(3 + lane),
+              "total selection reordered grouped capture lanes");
+    });
+    require(choices == 2 && succeeded(evm::checkTarget(*target)),
+            "total selection lost complete two-lane result grouping");
+  });
+  for (StringRef defect : {"owner", "tuple", "affine"})
+    cases.run("selected completion preserves native refusal: " + defect, [&] {
+      auto source = close(selectedCompletion);
+      Operation *completion = nullptr;
+      source->walk([&](Operation *op) {
+        if (op->getName().getStringRef() == "protocol.finish_if")
+          completion = op;
+      });
+      require(completion, "missing selected completion fixture");
+      if (defect == "owner")
+        completion->setAttr("owner", StringAttr::get(&context, "absent"));
+      else if (defect == "tuple")
+        completion->eraseOperand(2);
+      else
+        completion->setOperand(4, completion->getOperand(3));
+      diagnostics.clear();
+      refuses(closeEndpoint(*source, "V"), "endpoint-source");
+      require(StringRef(diagnostics).contains("interactive-return-type"),
+              "malformed completion escaped shared tuple/policy checking");
+    });
+  cases.run(
+      "structural rewrite work refuses before changing checked input", [&] {
+        auto source = closed();
+        Operation *participant = nullptr;
+        source->walk([&](Operation *op) {
+          if (op->getName().getStringRef() == "protocol.participant" &&
+              op->getAttrOfType<StringAttr>("role").getValue() == "V")
+            participant = op;
+        });
+        require(participant, "missing budget fixture participant");
+        func::FuncOp helper;
+        participant->walk([&](Operation *op) {
+          if (!helper && op->getName().getStringRef() == "protocol.local_call")
+            helper = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+                op, op->getAttrOfType<SymbolRefAttr>("callee"));
+        });
+        require(bool(helper), "missing budget fixture helper");
+        func::FuncOp computation;
+        helper.walk([&](Operation *op) {
+          if (op->getName().getStringRef() == "exec.compute")
+            computation = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+                op, op->getAttrOfType<SymbolRefAttr>("callee"));
+        });
+        require(bool(computation), "missing retained budget computation");
+        OpBuilder builder(&context);
+        builder.setInsertionPointToStart(&computation.getBody().front());
+        // This admitted source is small in native operation count, but exceeds
+        // the target's cumulative operation/result/lane work metric.
+        for (unsigned i = 0; i < 34000; ++i)
+          arith::ConstantOp::create(builder, participant->getLoc(),
+                                    builder.getI1Type(),
+                                    builder.getBoolAttr(true));
+        require(succeeded(verify(*source)), diagnostics);
+        auto admitted = closeEndpoint(*source, "V");
+        require(bool(admitted),
+                admitted ? ""
+                         : toString(admitted.takeError()) + ": " + diagnostics);
+        auto endpoint = std::move(*admitted);
+        diagnostics.clear();
+        refuses(evm::lowerEndpoint(endpoint, {}), "evm.structural-work-limit");
+        require(
+            StringRef(diagnostics).contains("structural rewrite work count") &&
+                StringRef(diagnostics).contains("exceeds target limit 100000"),
+            "structural work refusal lost its count or target ceiling");
+        auto unchanged = endpoint.candidateSnapshot();
+        unsigned constants = 0;
+        unchanged->walk([&](arith::ConstantOp) { ++constants; });
+        require(constants >= 34000 && succeeded(verify(*unchanged)),
+                "work refusal mutated its checked source");
+      });
   constexpr StringLiteral bytesSource = R"zkc(
 module scalar;
 type Bytes=builtin("bytes");
@@ -1090,7 +1663,20 @@ proof Proof=Copies{prover A;verifier B;public{a,rounds};accept accepted;construc
       options.limits.participantLoopMaximum = ceiling;
       auto refused = compileEvmEntry(originalSource(loops(maximum)), options);
       require(!refused, "a loop above the deployment's maximum compiled");
-      auto message = toString(refused.takeError());
+      bool located = false, typed = false;
+      auto failure = refused.takeError();
+      visitErrors(failure, [&](const ErrorInfoBase &error) {
+        if (!error.isA<CompilationError>())
+          return;
+        const auto &compilation = static_cast<const CompilationError &>(error);
+        for (const auto &location : compilation.locations)
+          located |= location.filename == "scalar.zkc" && location.line == 6;
+        for (const auto &refusal : compilation.refusals)
+          typed |= refusal.code == "evm.participant-loop-maximum";
+      });
+      require(located && typed,
+              "EVM lowering lost the source loop location or typed refusal");
+      auto message = toString(std::move(failure));
       require(namesIdentifier(message, "evm.participant-loop-maximum") &&
                   StringRef(message).contains(
                       "loop maximum " + std::to_string(maximum) +

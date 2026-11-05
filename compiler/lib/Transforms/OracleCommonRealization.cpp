@@ -1,6 +1,7 @@
 #include "OracleCommonPlan.h"
 #include "OracleQuerySchedule.h"
 #include "RealizationEmission.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -58,6 +59,16 @@ void body(OpBuilder &builder, Location loc, const OracleCommonBlock &plan,
     environment[plan.arguments[i]] = block.addArgument(type, loc);
   for (const auto &instruction : plan.instructions) {
     builder.setInsertionPointToEnd(&block);
+    if (instruction.preserved) {
+      IRMapping mapping;
+      for (auto [input, source] :
+           zip(instruction.inputs, instruction.preserved->getOperands()))
+        mapping.map(source, environment.lookup(input));
+      auto *op = builder.clone(*instruction.preserved, mapping);
+      for (auto [id, value] : zip(instruction.outputs, op->getResults()))
+        environment[id] = value;
+      continue;
+    }
     OperationState state(loc, instruction.name);
     state.addAttributes(instruction.attributes.getValue());
     state.addTypes(instruction.types);

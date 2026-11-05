@@ -590,8 +590,23 @@ in count, order and bytes; a Merkle-only prefix cannot pass.
 
 The original eight-query scalar native subject uses 122 transcript transitions,
 above the unchanged EVM ceiling of 64. Its independent budget-64 replay records
-the exact `resource/8` frontier. Actual EVM source lowering also exposes solc
-stack pressure in wide helper signatures; native or reference success alone is
-not successful deployed FRI. Smaller diagnostics, target resource stops and
+the exact `resource/8` frontier. The smaller source diagnostic exceeds the static
+target conversion allowance; earlier emitted variants exposed solc stack
+pressure. Native or reference success alone is not successful deployed FRI.
+Smaller diagnostics, target resource stops and
 primitive tests establish their stated boundaries only. Full STARK deployment,
 fixed-strength feasibility and formal/security correspondence remain separate.
+
+The foundation driver's `--suite completion` checks flat authored and managed
+conditional completion through the public compiler, native prover and deployed
+verifier. Default and unsimplified/unbatched controls cover complete result
+tuples, normal true and false acceptance, skipped rejecting suffixes and trailing
+proof bytes, with the exact reached managed hash frontier. Nested selected proof
+production remains dependent on common preparation and origin support.
+
+The foundation driver's `--suite loops` also exercises nested participant repeats
+with zero, one and multiple trips. Native/deployed controls change reached
+message values and append unread proof bytes, including zero-trip completions.
+A false accumulated result still reaches a malformed scalar in the next outer
+iteration and preserves its decoding failure. These controls use the existing
+proof ABI to check the exporter's structured while exits.

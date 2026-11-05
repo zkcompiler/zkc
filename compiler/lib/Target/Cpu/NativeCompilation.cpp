@@ -1,5 +1,6 @@
 #include "zkc/Compiler/NativeCompilation.h"
 #include "../../Compiler/CompilationState.h"
+#include "../../Compiler/DiagnosticCapture.h"
 #include "../../Compiler/NativeDeployment.h"
 #include "../../Compiler/PublicCoin.h"
 #include "../../Transforms/PreparedProtocol.h"
@@ -36,12 +37,11 @@ using namespace llvm;
 using namespace mlir;
 namespace zkc {
 using detail::compilationError;
-using detail::Diagnostics;
+using detail::DiagnosticCapture;
 namespace {
-Expected<OwningOpRef<ModuleOp>> parseNativeSource(StringRef text,
-                                                  StringRef filename,
-                                                  MLIRContext &context,
-                                                  Diagnostics &diagnostics) {
+Expected<OwningOpRef<ModuleOp>>
+parseNativeSource(StringRef text, StringRef filename, MLIRContext &context,
+                  DiagnosticCapture &diagnostics) {
   if (text.size() > 16 * 1024 * 1024 || filename.size() > 4096 ||
       !mlirNestingWithinLimit(text))
     return diagnostics.failure(error("run-input-limit"));
@@ -120,7 +120,7 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       !mlirNestingWithinLimit(text))
     return compilationError(error("run-input-limit"));
   auto result = std::make_unique<Compilation::Storage>(registry);
-  Diagnostics diagnostics(result->context);
+  DiagnosticCapture diagnostics(result->context);
   auto parsed = parseNativeSource(text, filename, result->context, diagnostics);
   if (!parsed)
     return parsed.takeError();
@@ -316,7 +316,7 @@ compileNativeProof(StringRef text, StringRef filename,
                    const NativeProofOptions &options,
                    const DialectRegistry &registry) {
   auto result = std::make_unique<Compilation::Storage>(registry);
-  Diagnostics diagnostics(result->context);
+  DiagnosticCapture diagnostics(result->context);
   std::optional<NativeProofPolicy> policy;
   if (const auto *explicitPolicy = std::get_if<std::string>(&options.policy)) {
     auto parsed = parseNativeProofPolicy(*explicitPolicy);

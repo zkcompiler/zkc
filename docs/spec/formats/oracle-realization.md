@@ -35,6 +35,17 @@ correspondence report are retained. Whole-module realization APIs continue to
 realize the caller-supplied module; they do not infer deployment roots from
 visibility or call-graph degree.
 
+Total isolated Math selections in the common body retain their native MLIR
+regions. They are value computations, not oracle or transcript events. The
+planner charges every nested operation, including dormant arms, against the
+same construction allowance; logical oracle handles or sequences inside these
+retained regions are refused. Emission remaps their explicit external operands
+without evaluating a selector. The independent reader compares every actual
+region, capture, type, attribute and yield against the immutable prepared
+source, ignoring only locations. No new serialized region grammar is introduced.
+Conditional Protocol interactions and reverse-request reconstruction retain
+their separately checked support profiles.
+
 ## Requested selection
 
 The compiler, CLI and SDK use one requested selection, encoded as

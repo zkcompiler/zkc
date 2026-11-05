@@ -183,10 +183,15 @@ int runLanguageCompiler(int argc, char **argv) {
           for (const auto &refusal : ArrayRef(error.refusals).take_front(16))
             append(refusal.code, refusal.detail);
           appendLines(error.message);
-          for (const auto &location : ArrayRef(error.locations).take_front(4))
+          // A compilation can contain several independent diagnostics. Keep
+          // mapped coordinates as their own records: flattened refusal metadata
+          // does not establish a particular code-to-location association.
+          for (const auto &location : ArrayRef(error.locations).take_front(4)) {
             append("", "at " + location.filename + ":" +
                            std::to_string(location.line) + ":" +
                            std::to_string(location.column));
+            messages.back().primary = location.source;
+          }
         },
         [&](const ErrorInfoBase &error) { appendLines(error.message()); });
     for (const auto &message : messages) {

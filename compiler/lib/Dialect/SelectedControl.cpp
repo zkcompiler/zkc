@@ -34,7 +34,10 @@ Error requireUnconditionalProtocolControl(ArrayRef<Operation *> roots,
     SmallVector<Operation *> pending{definition};
     while (!pending.empty()) {
       Operation *op = pending.pop_back_val();
-      if (!remaining-- || isSelectedControl(op))
+      // Total Math selection has no protocol events. Still traverse its arms
+      // and references: this is not a selector-based reachability shortcut.
+      if (!remaining-- ||
+          isa<protocol_ir::BranchOp, protocol_ir::ParticipantBranchOp>(op))
         return error(diagnostic);
       for (Region &region : op->getRegions())
         for (Block &block : region)

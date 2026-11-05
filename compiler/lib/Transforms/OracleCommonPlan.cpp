@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
@@ -1379,6 +1380,51 @@ struct PlanBuilder {
               pir::OracleSequenceAppendOp, pir::OracleSequenceAtOp>(op)) {
         if (auto e = sequence(block, op, path))
           return e;
+        continue;
+      }
+      if (isa<data::BranchOp>(op)) {
+        // Admission establishes isolated total Math, including every dormant
+        // arm. It has no protocol events and needs no oracle representation
+        // rewrite. Retain its actual native regions rather than translating
+        // them into the oracle recipe grammar or evaluating a selector here.
+        auto ordinary = [&](Type type) {
+          bool found = false;
+          type.walk([&](Type nested) { found |= logical(nested); });
+          return !found;
+        };
+        bool supported = true;
+        bool exhausted = false;
+        Operation *preserved = &op;
+        op.walk([&](Operation *nested) {
+          if (nested != preserved) {
+            if (!allowance) {
+              exhausted = true;
+              return WalkResult::interrupt();
+            }
+            --allowance;
+          }
+          supported &= all_of(nested->getOperandTypes(), ordinary) &&
+                       all_of(nested->getResultTypes(), ordinary);
+          for (Region &region : nested->getRegions())
+            for (Block &body : region)
+              supported &= all_of(body.getArgumentTypes(), ordinary);
+          return WalkResult::advance();
+        });
+        if (exhausted)
+          return error("oracle-common-limit");
+        if (!supported)
+          return error("oracle-common-interface");
+        auto arguments = inputs(op.getOperands());
+        if (!arguments)
+          return arguments.takeError();
+        auto output =
+            make(block, op.getName().getStringRef(), op.getResultTypes(),
+                 *arguments, op.getAttrDictionary());
+        if (!output)
+          return output.takeError();
+        block.instructions.back().preserved = &op;
+        for (auto [original, mapped] : zip(op.getResults(), *output))
+          values[original] = mapped;
         continue;
       }
       if (op.getName().getStringRef().starts_with("protocol.oracle_"))
