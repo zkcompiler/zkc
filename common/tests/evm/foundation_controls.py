@@ -135,7 +135,7 @@ class Subjects:
         self.args, self.cases = args, []
         args.output.mkdir(parents=True, exist_ok=True)
 
-    def compile(self, name, text, module="calculation", flags=()):
+    def compile(self, name, text, module="calculation", flags=(), *, evm_flags=()):
         path = self.args.output / name
         path.mkdir(exist_ok=True)
         source = path / "subject.zkc"
@@ -144,7 +144,8 @@ class Subjects:
                    f"--module={module}={source}", *flags]
         products = []
         for mode in ("language-package", "language-evm"):
-            process = subprocess.run([command[0], mode, *command[1:]], text=True,
+            selected_flags = evm_flags if mode == "language-evm" else ()
+            process = subprocess.run([command[0], mode, *command[1:], *selected_flags], text=True,
                                      capture_output=True, timeout=90)
             if process.returncode:
                 raise AssertionError(f"{name} {mode}: {process.stderr}")

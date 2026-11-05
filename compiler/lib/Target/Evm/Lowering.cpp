@@ -21,6 +21,7 @@
 #include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Authentication.h"
+#include "zkc/Target/Evm/Curve.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Target.h"
 #include "zkc/Target/Evm/Transcript.h"
@@ -234,6 +235,9 @@ struct PreparedEndpoint {
                                       "bytes.get",
                                       "bytes.length",
                                       "control.require",
+                                      "curve.add",
+                                      "curve.scale",
+                                      "curve.equal",
                                       "field.add",
                                       "field.constant",
                                       "field.embed",
@@ -473,6 +477,9 @@ struct PreparedEndpoint {
                                     "algebra.field_subtract",
                                     "algebra.field_multiply",
                                     "algebra.field_equal",
+                                    "algebra.group_add",
+                                    "algebra.group_scale",
+                                    "algebra.group_equal",
                                     "data.make",
                                     "exec.variant",
                                     "data.is",
@@ -652,6 +659,40 @@ std::optional<LogicalResult> Lowering::lowerScalar(Operation *op,
                                                    ValueRange operands,
                                                    ArrayAttr parameters) {
   Location loc = op->getLoc();
+  if (code == "curve.add" || code == "curve.scale" || code == "curve.equal") {
+    TypeRange inputs =
+        TypeRange(op->getOperandTypes())
+            .drop_front(op->getName().getStringRef() == "exec.apply" ? 1 : 0);
+    auto group = inputs.empty() ? algebra::GroupType()
+                                : dyn_cast<algebra::GroupType>(inputs.front());
+    if (!group || !parameters || !parameters.empty())
+      return refuse(
+          op, "curve operation requires exact group and empty parameters");
+    auto facts = realizeGroup(group);
+    if (!facts) {
+      consumeError(facts.takeError());
+      return refuse(op, "unsupported curve adapter facts");
+    }
+    auto resultTypes = op->getResultTypes();
+    TypeRange results = resultTypes;
+    if (results.size() == 1)
+      if (auto outcome = dyn_cast<exec::OutcomeType>(results.front()))
+        results = outcome.getPayload();
+    Type second = code == "curve.scale" ? Type(facts->scalar) : Type(group);
+    Type output =
+        code == "curve.equal" ? Type(builder.getI1Type()) : Type(group);
+    if (inputs.size() != 2 || inputs[1] != second || results.size() != 1 ||
+        results.front() != output)
+      return refuse(
+          op, "curve operation has mismatched logical group/Scalar signature");
+    SmallVector<NamedAttribute> attributes{
+        builder.getNamedAttr("value_type", TypeAttr::get(group))};
+    if (code == "curve.add")
+      return bind(op, emitResult<GroupAddOp>(op, operands, attributes));
+    if (code == "curve.scale")
+      return bind(op, emitResult<GroupScaleOp>(op, operands, attributes));
+    return bind(op, emitResult<GroupEqualOp>(op, operands, attributes));
+  }
   if (code == "field.select") {
     if (!parameters || !parameters.empty() || operands.size() != 3)
       return refuse(op, "field.select requires exact empty parameters");
@@ -1539,6 +1580,9 @@ LogicalResult Lowering::lowerOperation(Operation *op) {
                          .Case("algebra.field_subtract", "field.sub")
                          .Case("algebra.field_multiply", "field.mul")
                          .Case("algebra.field_equal", "field.equal")
+                         .Case("algebra.group_add", "curve.add")
+                         .Case("algebra.group_scale", "curve.scale")
+                         .Case("algebra.group_equal", "curve.equal")
                          .Default("");
   if (name == "arith.andi" && op->getResult(0).getType().isInteger(1))
     scalar = "bool.and";
@@ -1985,6 +2029,26 @@ Expected<OwningOpRef<ModuleOp>> lowerEndpoint(const CheckedEndpoint &endpoint,
             " exceeds the deployment's participant loop "
             "maximum " +
             std::to_string(options.limits.participantLoopMaximum));
+  bool hasGroup = false;
+  auto inspectType = [&](Type type) {
+    type.walk(
+        [&](Type nested) { hasGroup |= isa<algebra::GroupType>(nested); });
+  };
+  candidate->walk([&](Operation *op) {
+    for (Type type : op->getOperandTypes())
+      inspectType(type);
+    for (Type type : op->getResultTypes())
+      inspectType(type);
+    if (auto attr = op->getAttrOfType<TypeAttr>("function_type"))
+      inspectType(attr.getValue());
+    for (Region &region : op->getRegions())
+      for (Block &block : region)
+        for (BlockArgument argument : block.getArguments())
+          inspectType(argument.getType());
+  });
+  if (hasGroup)
+    if (auto error = verifyGroupFork(options.fork))
+      return std::move(error);
   auto *context = candidate->getContext();
   context->getOrLoadDialect<EvmDialect>();
   context->getOrLoadDialect<scf::SCFDialect>();

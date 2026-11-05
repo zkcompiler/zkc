@@ -36,6 +36,7 @@ struct ValueLayout {
     Boolean,
     Index,
     Field,
+    Group,
     FieldVector,
     Indices,
     Bytes,

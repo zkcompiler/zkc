@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Target/Evm/Authentication.h"
+#include "zkc/Target/Evm/Curve.h"
 #include "zkc/Target/Evm/Layout.h"
 #include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
@@ -155,6 +156,36 @@ LogicalResult stop(Operation *op) {
   return success();
 }
 } // namespace
+LogicalResult GroupAddOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (c.layout->kind != ValueLayout::Kind::Group)
+    return emitOpError("[evm.value-type] requires the supported group adapter");
+  return c.signature({c.i64, c.i64}, {c.i64});
+}
+LogicalResult GroupScaleOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (c.layout->kind != ValueLayout::Kind::Group)
+    return emitOpError("[evm.value-type] requires the supported group adapter");
+  return c.signature({c.i64, c.i256}, {c.i64});
+}
+LogicalResult GroupEqualOp::verify() {
+  if (failed(attributes(*this)))
+    return failure();
+  LayoutCheck c(*this);
+  if (failed(c.load()))
+    return failure();
+  if (c.layout->kind != ValueLayout::Kind::Group)
+    return emitOpError("[evm.value-type] requires the supported group adapter");
+  return c.signature({c.i64, c.i64}, {c.i1});
+}
 LogicalResult FieldConstantOp::verify() {
   if (failed(attributes(*this)))
     return failure();
