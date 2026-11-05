@@ -115,7 +115,10 @@ bool oracleOperation(Operation &op) {
              pir::OracleSequenceAtOp, pir::OracleSequenceLengthOp>(op);
 }
 bool admittedOperation(Operation &op, bool beforePreparation) {
-  return !op.getNumRegions() &&
+  // Stage admission has checked every Math arm. A total data selection cannot
+  // contain protocol events. Keep it intact in both event readers; checked
+  // projection and computation realization own its selected value semantics.
+  return (!op.getNumRegions() || isa<data::BranchOp>(op)) &&
          (isa<pir::QueryOp, pir::ExchangeOp, pir::StatementOp, pir::GuardOp,
               pir::LocalCallOp, pir::MathematicalReturnOp, pir::FinishIfOp,
               pir::RestrictRolesOp, pir::AssembleRolesOp>(op) ||
@@ -170,7 +173,7 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
       auto repeat = dyn_cast<pir::RepeatOp>(op);
       if (!admittedOperation(op, true) && !repeat &&
           !isa<pir::ProtocolYieldOp>(op))
-        return error("native-proof-operation");
+        return error("native-proof-operation", op.getName().getStringRef());
       auto site = op.getAttrOfType<StringAttr>("site");
       if (!site)
         continue;
@@ -454,7 +457,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         continue;
       }
       if (!admittedOperation(op, false) && !isa<pir::ProtocolYieldOp>(op))
-        return error("native-proof-operation");
+        return error("native-proof-operation", op.getName().getStringRef());
       if (auto start = dyn_cast<pir::ConstructionStartOp>(op)) {
         if (pending)
           return error("native-proof-prefix");

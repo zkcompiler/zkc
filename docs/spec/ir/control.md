@@ -121,8 +121,9 @@ operations inside matches. Neither structural control admission nor a local
 Boolean result proves public transcript schedule safety.
 
 Native proof construction, reverse request planning, native codec construction
-and oracle realization admit an entry whose static closure contains no selected
-region, and refuse one whose closure does, with
+and oracle realization require unconditional protocol interactions. After stage
+admission, they refuse Protocol and participant selected regions in the entry's
+static closure, with
 `native-proof-control-profile`, `native-request-control-profile`,
 `native-codec-control-profile` and `oracle-realization-control-profile`
 respectively, before any candidate mutation. The closure starts at the selected
@@ -135,6 +136,17 @@ declaration outside the closure, such as an uncalled helper with a Math
 selection or an uncalled protocol with a Protocol selection, does not change
 the judgment. One allowance of 100,000 operations and symbol uses bounds the
 traversal, and exhausting it refuses with the same code.
+
+Total `data.branch` regions are mathematical value computations, not conditional
+protocol interactions. Stage admission checks every arm and excludes protocol
+events from that total vocabulary. Event readers retain the complete selection;
+checked projection and recursive computation realization preserve lazy execution,
+captures and arm yields. No eager Boolean rewrite or target-specific bypass is
+used. This does not widen reverse-request dependency reconstruction, structured
+formal export or conditional protocol-event support: their separate profiles
+still apply. In particular a request whose replicated dependency is an unsupported
+selected expression refuses at request admission; a successful value selection
+does not establish an event schedule or a sampling law.
 
 ## Formal interpretation and assurance boundary
 

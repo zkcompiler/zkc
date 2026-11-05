@@ -54,10 +54,14 @@ Recursive schema/component mapping and actual
 SDK input admission are covered separately below.
 
 Oracle capacity, observation and storage inventories retain alternative arm
-coordinates. The existing oracle realization recipe refuses selected control
-with `oracle-realization-control-profile`; native transcript construction,
+coordinates. The existing oracle realization recipe refuses selected Protocol
+or participant control with `oracle-realization-control-profile`; native transcript construction,
 reverse requests and codecs likewise refuse their unsupported selected Protocol
-profiles before mutation. Checked source syntax, emission, structured-source and
+profiles before mutation. Total Data selections remain mathematical values:
+proof event readers preserve them and the existing checked projection and
+computation recipes preserve lazy execution. Reverse-request dependency
+reconstruction and formal export retain their separate support profiles.
+Checked source syntax, emission, structured-source and
 application-map carriers retain selected arms. Common-input derivation,
 publication and native SDK admission are integrated for the supported profile.
 The integrated Program and Rust runtime execute the selected native forms;
