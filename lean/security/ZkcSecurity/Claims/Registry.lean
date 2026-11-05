@@ -175,6 +175,14 @@ end Links
 
 /-- The registry. Identifiers are stable: a report or manifest names them. -/
 def entries : List Entry := [
+  ⟨"wellformed.query-tree-cache", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.QueryTree.Consistent,
+    "Every recorded macro-answer table agrees with the fixed complete oracle table."⟩,
+  ⟨"wellformed.batch-verification-shape", .wellFormedness,
+    some `ZkcSecurity.Commitment.BatchVerification.ValidShape,
+    "The selected table has positive width and height, admissible height, and a representable \
+    element count within the fixed resource ceiling."⟩,
+
   ⟨"model.history-oracle", .model, some `OracleSpec.randomOracle,
     "The transcript challenge on an absorbed history is a uniformly random function of the \
     typed history, shared by the prover and verification (a lazily sampled random oracle)."⟩,

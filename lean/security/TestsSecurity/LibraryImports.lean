@@ -246,6 +246,7 @@ import ZkcSecurity.ProgramLogic.WeakestPrecondition
 import ZkcSecurity.Transformations.Commitment.AdaptiveOpening
 import ZkcSecurity.Transformations.Commitment.Application
 import ZkcSecurity.Transformations.Commitment.BatchOpening
+import ZkcSecurity.Transformations.Commitment.BatchVerification
 import ZkcSecurity.Transformations.Commitment.Charges
 import ZkcSecurity.Transformations.Commitment.Cost
 import ZkcSecurity.Transformations.Commitment.Escape
@@ -270,6 +271,9 @@ import ZkcSecurity.Transformations.FiatShamir.Knowledge
 import ZkcSecurity.Transformations.FiatShamir.Laws
 import ZkcSecurity.Transformations.FiatShamir.Obligations
 import ZkcSecurity.Transformations.FiatShamir.ProviderSimulation
+import ZkcSecurity.Transformations.FiatShamir.QueryTree
+import ZkcSecurity.Transformations.FiatShamir.QueryTreeRandomness
+import ZkcSecurity.Transformations.FiatShamir.QueryTreeSimulation
 import ZkcSecurity.Transformations.FiatShamir.Replay
 import ZkcSecurity.Transformations.FiatShamir.Roles
 import ZkcSecurity.Transformations.FiatShamir.Sampling
@@ -310,6 +314,7 @@ import TestsSecurity.ABIInstallations.Repeated
 import TestsSecurity.ABIInstallations.WitnessOnly
 import TestsSecurity.ArtifactBinding
 import TestsSecurity.BatchOpening
+import TestsSecurity.BatchVerification
 import TestsSecurity.BindingCodecs
 import TestsSecurity.BoundedSearch
 import TestsSecurity.CallComposition
@@ -459,6 +464,7 @@ import TestsSecurity.PropertyAssembly
 import TestsSecurity.PropertyCost
 import TestsSecurity.ProtocolObligations
 import TestsSecurity.ProviderSimulation
+import TestsSecurity.QueryTree
 import TestsSecurity.QuotientConnections
 import TestsSecurity.ReferenceDiscovery
 import TestsSecurity.RegisteredExtraction

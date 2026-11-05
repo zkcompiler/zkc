@@ -1311,6 +1311,35 @@ one property, one provider and one class of bounded executions.
   translates by drawing the tape and running the simulator, transports the
   budget `q` to `cost q` and loses `loss q (expansion b)`.
 
+**Adaptive query-tree grouping.** `QueryTree.Node` includes depth and the full
+prefix of observable replies. `path_product` identifies the decoded path law
+with independent draws; it does not identify the path with the complete tree.
+`QueryTreeSimulation` instantiates the existing `Provider.Simulator`: first
+access to any constituent coordinate allocates its root's complete answer
+table, and later accesses reuse it. This includes suffix-first adversarial
+queries and off-path coordinates. The exact theorem permits arbitrary roots,
+finite coordinates and sampleable finite raw replies. A finite restriction
+covers all branches of the supplied adaptive program; it does not require a
+uniform distribution on an infinite set of histories.
+
+`adaptive_interleaved_logged_exact` preserves the result and full ordered
+primitive log, including repeats, with private sampling interleaved anywhere
+in the computation. `privatePrograms_stateful` moves private choices to an
+outer mixture for every stochastic stateful interpreter, preserving the final
+state. Private draws at equal parameters remain independent occurrences.
+`privatePrograms_queryBound` transports arbitrary structural budgets to every
+program in this mixture's support. `privatePrograms_translate_budget` then
+bounds macro queries by the sum of primitive family budgets, without dividing
+by path length. This is an information-theoretic translation; no efficient
+complete-tree construction is asserted.
+
+A source adapter must supply the two parser laws of `KeyEncoding`, actual
+raw-answer decoding, the complete request and delivery history, and the
+first-any-node checkpoint. The verifier must make its own logical macro
+access even when the adversary has already allocated the table. The generic
+simulation does not establish these source facts or an application certificate.
+A whole-path probability is not a conditional bound after exposing a prefix.
+
 **Hash-chain suites.** `ZkcSecurity.HashChain` instantiates this type for the
 [native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites),
 with the byte hash read as a random oracle whose digests `S` are the states
@@ -1531,6 +1560,26 @@ for non-power-of-two tables. The theorem neither binds shape through an
 untagged root nor identifies the pre-challenge extraction checkpoint. Logical
 query coverage, source association, shared provider history and application bad
 event coverage remain separate required premises of a realized security claim.
+
+`BatchVerification.verifyFramed` is an independent formal interpretation of
+the binary, single-table, cap-zero pruned walk. It checks actual-height bounds,
+row framing, unconditional duplicate-row agreement, verifier-derived boundary
+count, row codecs, and complete proof consumption. Invalid requests stop with
+`refused`; malformed authentication returns false; decode reservation failure
+stops with `exhausted`. Shared parents issue one hash call each. The successful
+execution theorem derives `Reduction` and `RowsRecorded` from its actual hash
+history, together with the exact unique-leaf and grouped-compression count.
+These counts are at the `LeafHashing` leaf-computation and node-compression
+interface. A Poseidon sponge leaf can expand into several shared permutation
+calls; the leaf and node primitive input ranges need not be disjoint.
+
+`verify_agrees_or_collision` applies the existing extractor to that same log.
+Completeness is currently relative to an answer-consistent recorded reduction;
+it is not yet the honest native commit/open theorem. The operation is not a
+proof of Rust execution. A realization must connect the selected decoder and
+row framing, native lead-path restoration, primitive hashing, logical reads,
+and the pre-challenge extraction checkpoint. It must also provide the provider
+loss and application event implication required above.
 
 ## Stage relations
 
