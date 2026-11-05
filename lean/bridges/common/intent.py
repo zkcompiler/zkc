@@ -1,4 +1,4 @@
-"""Resolve named DSL intent and propose a checked scalar relation adapter.
+"""Associate named DSL intent and propose a checked registered relation adapter.
 
 The native interface is a tested name/selector boundary, not a proof. The relation
 body is exported and admitted independently; a matching name never proves it.
@@ -11,101 +11,80 @@ import json
 
 from structured import entry, profile
 from bridges.structured.snapshot import render, text
-from bridges.common import interface as language_interface
+from bridges.common.intent_association import SourceAssociation
 from bridges.common.schema import interpreted_type
 from request_support import require
 from verify import validate, VERSION
 
 
-def native_leaf(port, types):
-    """The typed native leaf of a single-leaf port, from the structured export."""
-    native = port['native']
-    if len(native) != 1 or not 0 <= native[0] < len(types):
-        return None
-    return interpreted_type(types[native[0]], payload=True)
-
-
-def boolean_decision(port, data):
-    """Whether an output port is one Boolean leaf."""
-    return port['schema']['kind'] == 'boolean' and native_leaf(port, entry(data)[5]) == ['bool']
-
-
-def witness_field(port, formal, data, field):
-    """Whether an input port has the relation witness formal's schema and is one
-    leaf of the requested field."""
-    schema = port['schema']
-    return (schema['kind'] == 'field' and
-            (schema['kind'], schema['identity']) == (formal['schema']['kind'], formal['schema']['identity']) and
-            native_leaf(port, entry(data)[4]) == ['field', field])
-
-
 def resolve(spec, data, interface, compiler, output):
-    interface = language_interface.decode(interface)
     require(isinstance(spec, dict) and set(spec) == {
         'format', 'contract', 'properties', 'experiment', 'role', 'inputs', 'wiring', 'target'},
         'spec-shape', 'Expected the named verification-spec fields')
     require(spec['format'] == 'zkc.verification-spec/0', 'spec-version', 'Unsupported verification specification')
-    require(data[2] == 'sha256:' + interface['original'] and data[3] == interface['protocol'],
-            'intent-identity', 'Interface and program export must describe the same source and selected protocol')
-    protocols = [p for p in interface['protocols'] if p['symbol'] == data[3]]
-    require(len(protocols) == 1, 'intent-protocol', 'The selected protocol must occur exactly once')
-    protocol = protocols[0]
+    association = SourceAssociation(data, interface)
+    interface, protocol = association.interface, association.protocol
     roles = protocol['roles']
     require(isinstance(spec['role'], str) and spec['role'] in roles,
             'intent-role', 'Select a declared verifier role by name')
+    target = spec['target']
+    require(isinstance(target, dict) and set(target) == {'clause', 'relation'} and
+            target['relation'] == 'discrete-log/0' and spec['contract'] == 'schnorr.verifier/0',
+            'intent-relation-adapter', 'No registered meaning adapter for this relation and contract')
+    clause, relation_declaration = association.clause(target['clause'])
+    association.require_scalar_root(clause)
+    operands = clause['subject']['operands']
+    require(len(operands) == 3 and [formal['purpose'] for formal in relation_declaration['inputs']] ==
+            ['parameter', 'statement', 'witness'],
+            'intent-relation-formals', 'Discrete-log expects ordered parameter, statement and witness formals')
     request = {k: copy.deepcopy(spec[k]) for k in ('contract', 'properties', 'experiment', 'wiring')}
     request.update(format=VERSION, role=roles.index(spec['role']), inputs=[None] * len(entry(data)[4]))
     require(isinstance(request['wiring'], dict) and request['wiring'].get('prover') in roles,
             'intent-prover', 'Select a declared prover role by name')
     request['wiring']['prover'] = roles.index(request['wiring']['prover'])
     require(isinstance(spec['inputs'], dict) and all(isinstance(v, str) for v in spec['inputs'].values()),
-            'intent-inputs', 'Map contract inputs to named scalar ports or services')
+            'intent-inputs', 'Map contract inputs to named logical ports or services')
+    from registry import CONTRACTS
+    require(set(spec['inputs']) == set(CONTRACTS[spec['contract']].inputs),
+            'intent-inputs', 'Bindings must cover the independently registered semantic inputs exactly')
+    semantic_selectors = dict(zip(('base', 'key'), operands[:2]))
     ports = {}
     for port in protocol['inputs']:
         require(port['name'] not in ports, 'intent-inputs', 'Ambiguous input name')
-        ports[port['name']] = (port, port['native'])
+        ports[port['name']] = (port, False)
     for service in protocol['services']:
         require(service['name'] not in ports, 'intent-inputs', 'Ambiguous input/service name')
-        ports[service['name']] = (service, [service['native']])
+        ports[service['name']] = (service, True)
     for binding, name in spec['inputs'].items():
         require(name in ports, 'intent-inputs', f'Unknown input or service: {name}')
-        _, native = ports[name]
-        require(len(native) == 1 and type(native[0]) is int and 0 <= native[0] < len(entry(data)[4]),
-                'intent-layout', 'This profile requires one scalar native leaf per binding')
-        require(request['inputs'][native[0]] is None, 'intent-inputs', 'Two bindings select the same native leaf')
-        request['inputs'][native[0]] = binding
+        port, service = ports[name]
+        if service:
+            native = port['native']
+        else:
+            selector = semantic_selectors.get(binding)
+            if selector is None or selector['direction'] != 'input' or selector['port'] != port['index']:
+                selector = {'direction': 'input', 'port': port['index'], 'role': spec['role'], 'path': []}
+            native = association.select(selector).scalar()
+        require(request['inputs'][native] is None, 'intent-inputs', 'Two bindings select the same native leaf')
+        request['inputs'][native] = binding
     validate(data, request)
-    target = spec['target']
-    require(isinstance(target, dict) and set(target) == {'clause', 'relation'} and
-            target['relation'] == 'discrete-log/0' and request['contract'] == 'schnorr.verifier/0',
-            'intent-relation-adapter', 'This relation adapter connects a discrete-log target to Schnorr')
-    clauses = [c for c in protocol['clauses'] if c['name'] == target['clause']]
-    require(len(clauses) == 1 and clauses[0]['kind'] == 'target' and clauses[0]['residual'] is None,
-            'intent-clause', 'Select one authored target clause')
-    clause = clauses[0]
-    outputs = protocol['outputs']
-    decision = clause['decision']
-    require(decision == {'direction': 'output', 'port': 0, 'role': spec['role'], 'path': []}
-            and len(outputs) == 1 and outputs[0]['native'] == [0] and boolean_decision(outputs[0], data),
+    require(clause['decision'] is not None, 'intent-decision', 'The target needs an actual decision selector')
+    decision = association.select(clause['decision'])
+    require(clause['decision']['direction'] == 'output' and clause['decision']['role'] == spec['role'] and
+            decision.scalar() == 0 and decision.schema['kind'] == 'boolean' and
+            association.scalar_type(decision) == ['bool'],
             'intent-decision', 'The target must use the actual Boolean verifier output')
-    operands = clause['subject']['operands']
-    require(len(operands) == 3, 'intent-relation-bindings', 'Discrete-log expects base, key and witness')
     for binding, selector in zip(('base', 'key'), operands[:2]):
-        port, _ = ports[spec['inputs'][binding]]
-        require(selector == {'direction': 'input', 'port': port['index'], 'role': spec['role'], 'path': []},
+        selected = association.select(selector)
+        require(selector['direction'] == 'input' and selector['role'] == spec['role'] and
+                request['inputs'][selected.scalar()] == binding,
                 'intent-relation-bindings', f'Target {binding} must select the verified role-local input')
-    witness = operands[2]
-    require(witness.get('direction') == 'input' and witness.get('path') == [] and
-            witness.get('role') == roles[request['wiring']['prover']] and
-            type(witness.get('port')) is int and 0 <= witness['port'] < len(protocol['inputs']),
-            'intent-relation-bindings', 'Select a scalar prover witness input')
-    witness_port = protocol['inputs'][witness['port']]
-    relations = [r for r in interface['relations'] if r['symbol'] == clause['subject']['relation']]
-    require(len(relations) == 1 and [x['purpose'] for x in relations[0]['inputs']] ==
-            ['parameter', 'statement', 'witness'], 'intent-relation-formals', 'Wrong relation purposes')
-    require(witness_field(witness_port, relations[0]['inputs'][2], data, request['wiring']['fieldDomain']),
+    witness = association.select(operands[2])
+    require(operands[2]['direction'] == 'input' and operands[2]['role'] == roles[request['wiring']['prover']] and
+            witness.schema['kind'] == 'field' and
+            association.scalar_type(witness) == ['field', request['wiring']['fieldDomain']],
             'intent-relation-bindings', 'Witness field differs from the requested scalar field')
-    definition = relations[0]['definition']
+    definition = relation_declaration['definition']
     require(definition.get('kind') == 'formula', 'intent-relation-body', 'An opaque target needs its own proved adapter')
     # Select the retained named formula from this same Structured unit. There is
     # no relation-only Common export or second reader.
@@ -114,7 +93,7 @@ def resolve(spec, data, interface, compiler, output):
     (output / 'relation.json').write_text(json.dumps(relation, indent=2) + '\n')
     return request, relation, {'clause': target['clause'], 'relation': clause['subject']['relation'],
         'interface_sha256': hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest(),
-        'binding_scope': 'tested native interface name and selector resolution'}
+        'binding_scope': 'tested root logical selectors and exact retained declaration/ABI association'}
 
 
 def validate_relation(data, request):

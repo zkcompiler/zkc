@@ -415,13 +415,30 @@ and strings up to 512 bytes and checks exact constructor arities. Native and
 Lean JSON interfaces can admit a wider string repertoire; that does not imply
 the bounded proof generator supports it.
 
-The named resolver checks interface/source/symbol identity, the selected target
-and Boolean decision, role-local base/key selectors, witness purpose/type, and
-scalar native layouts. It exports the relation's actual formula function from
-the same retained native source. Lean proves that admitted function denotes
+The named resolver uses `LogicalInterface` and `SourceAssociation` to join
+selectors to the complete retained interface and the selected original snapshot.
+A selector follows authored field ordinals and the checked component inventory;
+it does not flatten a logical record by guessed offsets or combine participant
+copies. Two operands may select different fields of the same named port. Empty
+fields, private ancestors, custody, sealing and placement remain in the metadata.
+Internal authored projections do not grant external ingress: the separate
+external projection check requires an accessible, unsealed, custody-free path.
+
+The association checks the complete native port/service inventory, all retained
+root clauses in order, exact relation declaration and typed static arguments,
+ordered formal ABI and purposes, actual operands, residual and decision selectors,
+and the linked Math helper's signature. The bounded scalar adapter still needs
+one scalar target, an actual Boolean decision, and an exact discrete-log meaning.
+It refuses extra uncovered clauses and nested call/repeat contexts for which it
+has no checked ancestry/capture association. Recognizing a larger logical record
+or an oracle anchor does not admit its execution or give it a security meaning.
+
+The proposal retains the relation's actual formula from the same snapshot.
+Lean independently admits that helper and proves its meaning is
 `key = secret • base`. The generated `target_special_soundness` theorem then
 connects two accepting executions of the actual imported verifier to a witness
-accepted by the actual imported relation.
+accepted by the actual imported relation. Python association remains a tested
+boundary; it cannot establish formula adequacy or a proof status.
 
 ## Contract proof and property application
 
