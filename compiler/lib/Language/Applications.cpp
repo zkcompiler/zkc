@@ -140,6 +140,12 @@ BodyChecker::application(const Expression &expr) {
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     auto child = expr.children[i];
     const auto &slot = callee.inputOrder[binding[i]];
+    if (slot.kind != Declaration::InputSlot::Kind::Data &&
+        slot.kind != Declaration::InputSlot::Kind::Service) {
+      fail("source.call", "protocol inputs require data or managed services",
+           expr.span);
+      return {};
+    }
     if (slot.kind == Declaration::InputSlot::Kind::Service) {
       auto root = service(syntax.expressions[child]);
       if (!root)

@@ -108,6 +108,39 @@ class Generated(unittest.TestCase):
                         with self.assertRaises(Refused):
                             installed_catalogue.render(changed)
 
+    def test_consumer_requirements_have_no_formal_catalog_effect(self):
+        before = installed_catalogue.render(self.declarations)
+        changed = copy.deepcopy(self.declarations)
+        declared = next(row for row in changed["frontendDeclarations"]
+                        if row["kind"] == "Requirement")
+        changed["frontendDeclarations"].remove(declared)
+        self.assertEqual(before, installed_catalogue.render(changed))
+        for key, value in [("inputs", [{"name": "x", "type": {"static": 0}}]),
+                           ("output", {"static": 0}),
+                           ("association", {"kind": "primitive", "target": "bool.and"})]:
+            invalid = copy.deepcopy(self.declarations)
+            row = next(row for row in invalid["frontendDeclarations"]
+                       if row["kind"] == "Requirement")
+            row[key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(Refused, "invalid consumer requirement shape"):
+                installed_catalogue.render(invalid)
+        invalid = copy.deepcopy(self.declarations)
+        rule = next(row for row in invalid["frontendRules"] if row["kind"] == "Requirement")
+        rule["statics"] = []
+        with self.assertRaisesRegex(Refused, "consumer requirement rule signature mismatch"):
+            installed_catalogue.render(invalid)
+
+    def test_requirement_kind_matches_in_both_directions(self):
+        # Classifying only the declaration lets a changed row bypass the
+        # requirement checks while still selecting a Requirement rule.
+        for table in ("frontendDeclarations", "frontendRules"):
+            for kind in ("Math", "Local", "Interface"):
+                changed = copy.deepcopy(self.declarations)
+                row = next(row for row in changed[table] if row["kind"] == "Requirement")
+                row["kind"] = kind
+                with self.subTest(table=table, kind=kind), self.assertRaises(Refused):
+                    installed_catalogue.render(changed)
+
     def test_exact_source_row_fields(self):
         for table in ("frontendDeclarations", "serviceSignatures", "serviceMethods"):
             for field in self.declarations[table][0]:

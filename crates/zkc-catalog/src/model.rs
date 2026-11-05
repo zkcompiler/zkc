@@ -355,6 +355,7 @@ pub enum SourceDeclarationKind {
     Math,
     Local,
     Interface,
+    Requirement,
 }
 /// A source declaration type: a static parameter, optionally its associated
 /// member, or a parameterless constructor.

@@ -96,7 +96,7 @@ struct ExpressionTypes {
   };
   std::map<uint32_t, Operator> operators;
   std::map<uint32_t, ScopedSignature> scopedSignatures;
-  std::map<uint32_t, Type> domainItems;
+  std::map<uint32_t, Type> descriptorTypes;
   std::set<uint32_t> collectionDomains;
 };
 } // namespace zkc::language::detail

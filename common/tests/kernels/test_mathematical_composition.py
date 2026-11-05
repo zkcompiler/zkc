@@ -8,7 +8,7 @@ from entry import Entry, joint_execution
 from input_files import input_files
 from source_modules import core_packages, library_modules
 
-MODULES = library_modules(*core_packages())
+MODULES = library_modules(*core_packages('zkc'))
 PRELUDE = '''module sample;
 use zkc::vector as vec;
 use zkc::finite as finite;

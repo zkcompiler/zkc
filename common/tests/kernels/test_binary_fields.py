@@ -74,7 +74,7 @@ def little_endian(words):
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_binary_kernels_match_carry_less_arithmetic(toolchain, journal, directory, flags):
-    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules(*core_packages()), *flags))
+    entry = Entry(toolchain, journal, directory, SOURCE, (*library_modules(*core_packages('zkc')), *flags))
     rng = random.Random(2063)
 
     def word():
@@ -156,7 +156,7 @@ def test_prime_and_odd_characteristic_operations_refuse(toolchain, journal, dire
     path = directory / 'refused.zkc'
     path.write_text(REFUSED.format(field=field, result=result, body=body))
     journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
-                 f'--module=sample={path}', *library_modules(*core_packages()), 'sample::Demo',
+                 f'--module=sample={path}', *library_modules(*core_packages('zkc')), 'sample::Demo',
                  f'--output={directory / "refused.zkpkg"}'], refuses=code)
 
 
@@ -166,5 +166,5 @@ def test_refusal_source_compiles_with_admitted_operations(toolchain, journal, di
     path.write_text(REFUSED.format(field=CUBIC, result='K',
                                    body='return kernel<K>("field.constant"; "0x1b") * a;'))
     journal.run([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
-                 f'--module=sample={path}', *library_modules(*core_packages()), 'sample::Demo',
+                 f'--module=sample={path}', *library_modules(*core_packages('zkc')), 'sample::Demo',
                  f'--output={directory / "admitted.zkpkg"}'])

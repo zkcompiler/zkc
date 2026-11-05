@@ -41,6 +41,8 @@ declaration(const protocol::FrontendDeclaration &row, Span span, Work &work) {
                     ? Declaration::Kind::Math
                 : row.kind == protocol::SourceDeclarationKind::Local
                     ? Declaration::Kind::Local
+                : row.kind == protocol::SourceDeclarationKind::Requirement
+                    ? Declaration::Kind::Requirement
                     : Declaration::Kind::Interface;
   result.name = row.name;
   result.isPublic = result.explicitPublic = true;

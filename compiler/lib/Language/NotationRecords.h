@@ -29,7 +29,7 @@ struct NotationBindingRecord {
   std::vector<Span> authoredArguments;
   std::vector<std::string> holes;
   std::string identity;
-  bool isPublic = false, local = false;
+  bool isPublic = false, local = false, filteredOnly = false;
   std::optional<NotationTargetRecord> filtered;
 };
 struct NotationImportRecord {

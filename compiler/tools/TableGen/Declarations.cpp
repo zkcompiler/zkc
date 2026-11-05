@@ -291,8 +291,9 @@ void Model::validate() {
                          ArrayRef<const Record *> statics,
                          ArrayRef<const Record *> inputs,
                          ArrayRef<const Record *> output) {
-    require(kind == "Math" || kind == "Local" || kind == "Interface", r,
-            "unknown source declaration kind");
+    require(kind == "Math" || kind == "Local" || kind == "Interface" ||
+                kind == "Requirement",
+            r, "unknown source declaration kind");
     auto term = [&](const Record *t) -> Term {
       auto index = t->getValueAsInt("index");
       auto member = t->getValueAsString("member");
@@ -327,9 +328,11 @@ void Model::validate() {
                                       parameter(p).second.str());
     for (const auto *t : inputs)
       std::get<2>(shape).push_back(term(t));
-    require(output.size() <= 1 && (kind == "Interface") == output.empty() &&
-                (kind != "Interface" || inputs.empty()),
-            r, "source declaration kind and signature disagree");
+    require(
+        output.size() <= 1 &&
+            (kind == "Interface" || kind == "Requirement") == output.empty() &&
+            ((kind != "Interface" && kind != "Requirement") || inputs.empty()),
+        r, "source declaration kind and signature disagree");
     if (!output.empty())
       std::get<3>(shape) = term(output.front());
     return shape;
@@ -386,6 +389,7 @@ void Model::validate() {
     } else
       require(
           association == "primitive" && kind != "Interface" &&
+              kind != "Requirement" &&
               (kind == "Math" ? intrinsicNames : operationNames).count(target),
           r, "frontend primitive kind mismatch");
     if (r->getValueAsBit("prelude"))
@@ -414,10 +418,10 @@ void Model::validate() {
             "duplicate frontend notation");
   }
   // A home names a catalog type constructor or a declared frontend
-  // constructor, a logical type head the source language owns. Exactly one
-  // row spells each form, the logical meaning the frontend gives a head.
+  // constructor, a structural head the source language owns. Exactly one
+  // row spells each form, the structural meaning the frontend gives a head.
   static constexpr StringRef frontendConstructorForms[] = {
-      "OracleHandle", "OracleHandleSequence"};
+      "OracleHandle", "OracleHandleSequence", "FiniteDescriptor"};
   std::set<StringRef> heads, forms;
   for (const auto *t : types)
     heads.insert(name(t));

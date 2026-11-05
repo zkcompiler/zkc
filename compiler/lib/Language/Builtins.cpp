@@ -157,6 +157,8 @@ Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
 }
 Type::Kind logicalHeadKind(protocol::FrontendConstructorForm form) {
   switch (form) {
+  case protocol::FrontendConstructorForm::FiniteDescriptor:
+    return K::Descriptor;
   case protocol::FrontendConstructorForm::OracleHandle:
     return K::Oracle;
   case protocol::FrontendConstructorForm::OracleHandleSequence:
@@ -166,6 +168,16 @@ Type::Kind logicalHeadKind(protocol::FrontendConstructorForm form) {
 }
 Expected<Type> logicalHeadType(protocol::FrontendConstructorForm form,
                                ArrayRef<Type> arguments) {
+  if (form == protocol::FrontendConstructorForm::FiniteDescriptor) {
+    if (arguments.size() != 1 || isStaticOnly(arguments[0]) ||
+        isLogicalValue(arguments[0]) || arguments[0].kind == K::Formal)
+      return error("source.descriptor",
+                   "finite requires one ordinary item type");
+    Type result(K::Descriptor);
+    result.family = DescriptorFamily::Finite;
+    result.arguments.assign(arguments.begin(), arguments.end());
+    return result;
+  }
   bool sequence = logicalHeadKind(form) == K::OracleSequence;
   if (arguments.size() != (sequence ? 2u : 1u) ||
       arguments[0].kind != K::OracleKind ||

@@ -138,14 +138,17 @@ int main() {
     maximum.dimension = Natural::constant(4);
     std::vector<Type::Kind> formed;
     for (const auto &row : zkc::protocol::frontendConstructors()) {
-      std::vector<Type> arguments{kind};
+      bool finite =
+          row.form == zkc::protocol::FrontendConstructorForm::FiniteDescriptor;
+      std::vector<Type> arguments{finite ? Type(Type::Kind::Index) : kind};
       if (row.form ==
           zkc::protocol::FrontendConstructorForm::OracleHandleSequence)
         arguments.push_back(maximum);
       auto type = take(builtinType(row.name, arguments));
-      require(isOracleHandle(type) && type.kind == logicalHeadKind(row.form),
+      require((finite ? isDescriptor(type) : isOracleHandle(type)) &&
+                  type.kind == logicalHeadKind(row.form),
               "row formed another head: " + row.name);
-      require(oracleConstructor(type) == row.name &&
+      require(frontendTypeConstructor(type) == row.name &&
                   StringRef(spelling(type))
                       .starts_with("builtin(\"" + row.name + "\", "),
               "head is not spelled by its row: " + row.name);
@@ -153,7 +156,8 @@ int main() {
     }
     llvm::sort(formed);
     require(formed == std::vector<Type::Kind>{Type::Kind::Oracle,
-                                              Type::Kind::OracleSequence},
+                                              Type::Kind::OracleSequence,
+                                              Type::Kind::Descriptor},
             "a logical handle has no frontend constructor row");
   });
   cases.run("a spelling no frontend constructor row names is not a head", [] {
@@ -173,8 +177,9 @@ int main() {
     }
   });
   cases.run("installed modules are the declaration owners", [] {
-    require(installedModules() ==
-                std::vector<std::string>{"zkc::prelude", "zkc::records"},
+    require(installedModules() == std::vector<std::string>{"zkc::prelude",
+                                                           "zkc::records",
+                                                           "zkc::transport"},
             "installed module inventory differs");
   });
   cases.run("rows the frontend cannot express refuse", [] {

@@ -288,10 +288,12 @@ int main() {
     exactInputs(paired(context, replaceText(pure(false), "max 4", "max 1")),
                 {0, 1});
   });
-  cases.run("received transition refuses when demanded", [&] {
+  cases.run("communicated transition preserves common control", [&] {
     auto source = loop("        received <- send state from P to V\n"
                        "        state := @(P = state, V = received)\n");
-    refuses(check(source), "source.common-provenance");
+    require(paired(context, source).empty(), "communicated step was refused");
+    refuses(check(replaceText(source, "V = received", "V = !received")),
+            "source.common-provenance");
     require(
         paired(context, replaceText(source, "index<2>", "index<1>")).empty(),
         "unused received transition demanded");
@@ -338,8 +340,16 @@ int main() {
   });
   cases.run("inner recurrence cannot hide enclosing divergent step",
             [&] { refuses(check(nested(true)), "source.common-provenance"); });
-  cases.run("pure enum constructor formation remains an explicit frontend gap",
-            [&] { refuses(check(variants()), "source.mode"); });
+  cases.run("pure enum tags agree without demanding divergent payloads", [&] {
+    require(paired(context, variants()).empty(),
+            "equal constructed tags acquired payload obligations");
+  });
+  cases.run("constructed enum payload control requires exact agreement", [&] {
+    refuses(check(variants(true)), "source.common-provenance");
+  });
+  cases.run("different constructed tags cannot drive common recurrence", [&] {
+    refuses(check(variants(false, true)), "source.common-provenance");
+  });
   for (bool payloadControl : {false, true})
     cases.run(payloadControl ? "exact base and step alternative payload paths"
                              : "base and step tags omit payload obligations",
@@ -372,14 +382,14 @@ int main() {
                           "base/step observation missing");
                 }
               });
-  cases.run("zero-trip dormant body still refuses direct received control",
-            [&] {
-              auto source =
-                  replaceText(divergent(0), header("state"),
+  cases.run("zero-trip dormant body admits actual communicated control", [&] {
+    auto source = replaceText(divergent(0), header("state"),
                               "        received <- send state from P to V\n" +
                                   header("@(P = state, V = received)"));
-              refuses(check(source), "source.common-provenance");
-            });
+    require(paired(context, source).empty(), "dormant delivery refused");
+    refuses(check(replaceText(source, "V = received", "V = !received")),
+            "source.common-provenance");
+  });
   cases.run("every insufficient work allowance refuses exactly", [&] {
     auto project = take(check(pure()));
     auto target = named(project, "Run").id;
@@ -661,11 +671,14 @@ protocol Run roles(P,V)(base:Vector<Fr>@(P,V),step:Vector<Fr>@(P,V))->() {
         zkc::language::deriveCommonControlRequirements(project, target, limits),
         "source.limit");
   });
-  cases.run("received enum tags refuse only on demanded transitions", [&] {
+  cases.run("received enum tags retain only the initial tag premise", [&] {
     auto source = replaceText(variantInputs(false), "        state := step\n",
                               "        received <- send step from P to V\n"
                               "        state := @(P = step, V = received)\n");
-    refuses(check(source), "source.common-provenance");
+    auto sentRows = paired(context, source);
+    require(sentRows.size() == 1 && sentRows[0].tagOnly &&
+                sentRows[0].components[0].input == 0,
+            "communicated step acquired a tag premise");
     auto rows = paired(context, replaceText(source, "index<2>", "index<1>"));
     require(rows.size() == 1 && rows[0].tagOnly &&
                 rows[0].components[0].input == 0,
@@ -763,24 +776,21 @@ protocol Run<N:nat,M:nat> roles(P,V)(flag:bool@(P,V))->(){
             source += std::string("let n=choose<N,") + (distinct ? "M" : "N") +
                       ">(" + (receivedSelector ? "both" : "flag") +
                       ");for _ in 0..n roles(P,V) max 4 {}return();}";
-            if (distinct && receivedSelector) {
-              refuses(check(source, true), "source.common-provenance");
-              return;
-            }
             auto project = take(check(source, true));
             auto raw = take(zkc::language::deriveCommonControlRequirements(
                 project, named(project, "Run").id));
-            require(raw.size() == unsigned(distinct),
+            require(raw.size() == unsigned(distinct && !receivedSelector),
                     "staged math identity changed selector demand");
             auto entry =
                 take(closeNativeRun(project, "m::Run", {},
                                     {naturalArgument(0), naturalArgument(1)}));
             exactInputs(pairedEntry(context, entry),
-                        distinct ? std::vector<unsigned>{0}
-                                 : std::vector<unsigned>{});
+                        distinct && !receivedSelector
+                            ? std::vector<unsigned>{0}
+                            : std::vector<unsigned>{});
           });
-  cases.run("staged math statics do not equate received count operands", [&] {
-    refuses(check(R"(module m;
+  cases.run("staged math statics preserve communicated count operands", [&] {
+    auto project = take(check(R"(module m;
 math fn number<N:nat>(x:bool)->index{return if x{index<N>()}else{index<0>()};}
 math fn inner<N:nat>(x:bool)->index{return number<pow2(N)>(x);}
 math fn outer<M:nat>(x:bool)->index{return inner<pow2(M)>(x);}
@@ -788,8 +798,15 @@ protocol Run<N:nat> roles(P,V)(x:bool@(P,V))->(){
  let received=send P->V(x);let both=@(P=x,V=received);let n=outer<N>(both);
  for _ in 0..n roles(P,V) max 4 {}return();
 })",
-                  true),
-            "source.common-provenance");
+                              true));
+    require(take(zkc::language::deriveCommonControlRequirements(
+                     project, named(project, "Run").id))
+                .empty(),
+            "communicated count acquired an input premise");
+    require(pairedEntry(context, take(closeNativeRun(project, "m::Run", {},
+                                                     {naturalArgument(0)})))
+                .empty(),
+            "closed communicated count acquired an input premise");
   });
   cases.run("staged identity keeps authored natural refusals", [&] {
     refuses(check(R"(module m;
@@ -904,28 +921,29 @@ protocol Run roles(P,V)(flag:bool@(P,V),left:bool@(P,V),right:bool@(P,V))->(r:bo
     exactInputs(paired(context, source, true), {0, 1, 2});
   });
   for (bool protocolControl : {false, true})
-    cases.run(protocolControl
-                  ? "ordered equal-result branch still demands its header"
-                  : "pure equal-result branch ignores an ordered selector",
-              [&] {
-                auto source = std::string(R"(module m;
+    cases.run(
+        protocolControl
+            ? "communicated ordered header remains independently checked"
+            : "pure equal-result branch ignores a communicated selector",
+        [&] {
+          auto source = std::string(R"(module m;
 math fn constant(flag:bool)->bool{return if flag{true}else{true};}
 protocol Run roles(P,V)(seed:bool@(P,V))->(r:bool@(P,V)){
  let received=send P->V(seed);let both=@(P=seed,V=received);
  let condition=)") +
-                              (protocolControl ? "if both {true}else{true}"
-                                               : "constant(both)") +
-                              R"(;
+                        (protocolControl ? "if both {true}else{true}"
+                                         : "constant(both)") +
+                        R"(;
  let r=if condition {true}else{false};return(r=r);
 })";
-                if (protocolControl)
-                  refuses(check(source, true), "source.common-provenance");
-                else {
-                  rawInputs(source, {});
-                  require(paired(context, source, true).empty(),
-                          "pure constant gained agreement");
-                }
-              });
+          rawInputs(source, {});
+          require(paired(context, source, true).empty(),
+                  "communicated constant gained an input premise");
+          if (protocolControl)
+            refuses(
+                check(replaceText(source, "V=received", "V=!received"), true),
+                "source.common-provenance");
+        });
   cases.run("generic tuple result preserves tag-only dependence", [&] {
     auto source = R"(module m;
 enum Choice{Some(bool),None()}
@@ -1055,26 +1073,27 @@ protocol Run roles(P,V)(n:index@(P,V),keep:bool@(P,V),x:bool@(P,V))->(r:bool@(P,
     exactInputs(paired(context, source, true), {0, 1, 2});
   });
   for (bool demanded : {false, true})
-    cases.run(demanded ? "actual scoped capture cannot hide received provenance"
-                       : "unused received scoped capture creates no obligation",
-              [&] {
-                auto source = std::string(R"(module m;
+    cases.run(
+        demanded ? "actual scoped capture retains communicated provenance"
+                 : "unused received scoped capture creates no obligation",
+        [&] {
+          auto source = std::string(R"(module m;
 math fn apply(x:bool,body:math fn(bool)->bool)->bool{return body(x);}
 protocol Run roles(P,V)(flag:bool@(P,V),seed:bool@(P,V))->(r:bool@(P,V)){
  let received=send P->V(seed);let both=@(P=seed,V=received);
  let condition=apply(flag,fn(y)=>)") +
-                              (demanded ? "both" : "{let ignored=both;true}") +
-                              R"();
+                        (demanded ? "both" : "{let ignored=both;true}") +
+                        R"();
  let r=if condition {true}else{false};return(r=r);
 })";
-                if (demanded)
-                  refuses(check(source, true), "source.common-provenance");
-                else {
-                  rawInputs(source, {});
-                  require(paired(context, source, true).empty(),
-                          "unused captured data was demanded");
-                }
-              });
+          rawInputs(source, {});
+          require(paired(context, source, true).empty(),
+                  "communicated capture gained an input premise");
+          if (demanded)
+            refuses(
+                check(replaceText(source, "V=received", "V=!received"), true),
+                "source.common-provenance");
+        });
   for (bool demanded : {false, true})
     cases.run(
         demanded
@@ -1564,8 +1583,8 @@ protocol Run<M:nat> roles(P,V)(flag:bool@(P,V))->(r:bool@(P,V)){
           refuses(closeNativeRun(project, "m::Run", {}, {naturalArgument(6)}),
                   "source.natural");
         });
-  cases.run("staged helper traversal does not equate received data", [&] {
-    refuses(check(R"(module m;
+  cases.run("staged helper traversal forwards communicated data", [&] {
+    auto project = take(check(R"(module m;
 math fn ignore<N:nat>(x:bool)->bool{return x;}
 math fn inner<N:nat>(x:bool)->bool{return ignore<pow2(N)>(x);}
 math fn outer<M:nat>(x:bool)->bool{return inner<pow2(M)>(x);}
@@ -1575,8 +1594,15 @@ protocol Run<M:nat> roles(P,V)(flag:bool@(P,V))->(){
  let condition=outer<M>(shared);
  if condition {()}else{()};return();
 })",
-                  true),
-            "source.common-provenance");
+                              true));
+    require(take(zkc::language::deriveCommonControlRequirements(
+                     project, named(project, "Run").id))
+                .empty(),
+            "communicated helper acquired an input premise");
+    require(pairedEntry(context, take(closeNativeRun(project, "m::Run", {},
+                                                     {naturalArgument(0)})))
+                .empty(),
+            "closed communicated helper acquired an input premise");
   });
   cases.run("staged environments substitute demanded array shapes", [&] {
     auto project = take(check(R"(module m;
@@ -1661,12 +1687,9 @@ protocol Run roles(P,V)(flag:bool@(P,V),x:bool@(P,V))->(){
             source += std::string("let condition=choose(") +
                       (receivedSelector ? "both" : "flag") +
                       ",x);if condition {()}else{()};return();}";
-            if (distinct && receivedSelector) {
-              refuses(check(source, true), "source.common-provenance");
-              return;
-            }
-            auto expected = distinct ? std::vector<unsigned>{0, 1}
-                                     : std::vector<unsigned>{1};
+            auto expected = distinct && !receivedSelector
+                                ? std::vector<unsigned>{0, 1}
+                                : std::vector<unsigned>{1};
             rawInputs(source, expected);
             exactInputs(paired(context, source, true), expected);
           });
@@ -1711,11 +1734,10 @@ protocol Run roles(P,V)(flag:bool@(P,V),x:bool@(P,V),cap:bool@(P,V),other:bool@(
           source, "let condition=choose(flag,x,cap,other,n,m,fn(y)=>y);",
           "let received=send P->V(flag);let both=@(P=flag,V=received);let "
           "condition=choose(both,x,cap,other,n,m,fn(y)=>y);");
-      if (difference == "same") {
-        rawInputs(source, expected);
-        exactInputs(paired(context, source, true), expected);
-      } else
-        refuses(check(source, true), "source.common-provenance");
+      if (difference != "same")
+        expected.erase(expected.begin());
+      rawInputs(source, expected);
+      exactInputs(paired(context, source, true), expected);
     });
   cases.run("finite callback identity closes nested static actuals in stages",
             [&] {
@@ -1856,5 +1878,306 @@ protocol Run<N:nat,M:nat> roles(P,V)(flag:bool@(P,V),x:bool@(P,V))->(){
                                                       naturalArgument(1)}))),
             {1});
       });
+  cases.run("private configuration controls after an actual helper send", [&] {
+    auto source = R"(struct Config:
+    pub count: index
+    pub enabled: bool
+protocol Deliver roles(A,B)(cfg: Config @A) -> Config @(A,B):
+    received <- send cfg from A to B
+    return @(A = cfg, B = received)
+def enabled(cfg: Config) -> bool:
+    return !cfg.enabled
+pub protocol Run roles(P,V)(cfg: Config @P) -> () @(P,V):
+    common <- Deliver(cfg) @(P,V)
+    for i in 0..common.count roles(P,V) max 4:
+        if enabled(common):
+            ()
+        else:
+            ()
+    return ()
+)";
+    require(paired(context, source).empty(),
+            "sent configuration needs external equality");
+    auto wrong =
+        replaceText(source, "B = received",
+                    "B = Config { count: index<0>(), enabled: false }");
+    refuses(check(wrong), "source.common-provenance");
+  });
+  cases.run(
+      "a received component can be forwarded to another actual recipient", [&] {
+        auto source = R"(protocol Deliver roles(A,B)(x: bool @A) -> bool @(A,B):
+    received <- send x from A to B
+    return @(A = x, B = received)
+pub protocol Run roles(P,V,W)(x: bool @P) -> () @(P,V,W):
+    first <- Deliver(x) @(P,V)
+    second <- Deliver(first) @(V,W)
+    common = @(P = first, V = second, W = second)
+    if !common:
+        ()
+    else:
+        ()
+    return ()
+)";
+        require(paired(context, source).empty(),
+                "forwarded value needs an external premise");
+        refuses(check(replaceText(source, "W = second", "W = false")),
+                "source.common-provenance");
+      });
+  cases.run(
+      "a subset send leaves exact external requirements for nonreceivers", [&] {
+        auto source =
+            R"(pub protocol Run roles(P,V,W)(x: bool @(P,W)) -> () @(P,V,W):
+    received <- send x from P to V
+    common = @(P = x, V = received, W = x)
+    if common:
+        ()
+    else:
+        ()
+    return ()
+)";
+        auto rows = paired(context, source);
+        require(rows.size() == 1 && rows[0].components.size() == 2 &&
+                    rows[0].components[0].role == 0 &&
+                    rows[0].components[1].role == 2,
+                "nonreceiver acquired communication-derived equality");
+        refuses(check(replaceText(source, "W = x", "W = false")),
+                "source.common-provenance");
+      });
+  for (bool different : {false, true})
+    cases.run(
+        different ? "different Local subjects survive identical calls"
+                  : "communicated opaque tuple projections remain congruent",
+        [&] {
+          auto source =
+              std::string(
+                  R"(local def make(n: index, flag: bool) -> (index, bool):
+    return (n, flag)
+pub protocol Run roles(P,V)(n: index @P, flag: bool @P) -> () @(P,V):
+    first: (index, bool) @P <- make(n, flag)
+    second: (index, bool) @P <- make(n, flag)
+    received <- send first from P to V
+    common = @(P = )") +
+              (different ? "second" : "first") + R"(, V = received)
+    for i in 0..common.0 roles(P,V) max 4:
+        if !common.1:
+            ()
+        else:
+            ()
+    return ()
+)";
+          if (different)
+            refuses(check(source), "source.common-provenance");
+          else
+            require(paired(context, source).empty(),
+                    "opaque projected delivery refused");
+        });
+  cases.run(
+      "a sampled service result gains agreement only after delivery", [&] {
+        auto source = R"(domain F = field("bls12-381.fr")
+pub protocol Run roles(P,V)(coins: Random<F> @P) -> () @(P,V):
+    sample <- coins.draw()
+    received <- send sample from P to V
+    common = @(P = sample, V = received)
+    if common == common:
+        ()
+    else:
+        ()
+    return ()
+)";
+        require(paired(context, source).empty(), "delivered sample refused");
+        auto later = replaceText(
+            source, "    common =", "    later <- coins.draw()\n    common =");
+        refuses(check(replaceText(later, "P = sample", "P = later")),
+                "source.common-provenance");
+      });
+  cases.run("a changed sender value cannot reuse an earlier delivery", [&] {
+    auto source = R"(pub protocol Run roles(P,V)(flag: bool @P) -> () @(P,V):
+    mut current = flag
+    received <- send current from P to V
+    current := !current
+    common = @(P = current, V = received)
+    if common:
+        ()
+    else:
+        ()
+    return ()
+)";
+    refuses(check(source), "source.common-provenance");
+    require(
+        paired(context, replaceText(source, "    current := !current\n", ""))
+            .empty(),
+        "unchanged sent subject refused");
+  });
+  cases.run("branch joins retain delivered values only in their actual arms", [&] {
+    auto source =
+        R"(pub protocol Run roles(P,V)(flag: bool @P, x: bool @P, y: bool @P) -> () @(P,V):
+    received <- send flag from P to V
+    selector = @(P = flag, V = received)
+    common = if selector:
+        value <- send x from P to V
+        @(P = x, V = value)
+    else:
+        value <- send y from P to V
+        @(P = y, V = value)
+    if common:
+        ()
+    else:
+        ()
+    return ()
+)";
+    require(paired(context, source).empty(),
+            "selected delivered result refused");
+    refuses(check(replaceText(source, "V = value)\n    if common",
+                              "V = false)\n    if common")),
+            "source.common-provenance");
+    refuses(check(replaceText(source, "common = if selector",
+                              "common = if @(P = flag, V = false)")),
+            "source.common-provenance");
+  });
+  for (bool crossCall : {false, true})
+    cases.run(crossCall ? "repeated helper samples keep distinct sent subjects"
+                        : "a helper exports its actual sent Local result",
+              [&] {
+                auto source = std::string(R"(local def compute(x: bool) -> bool:
+    return x
+protocol Produce roles(A,B)(x: bool @A) -> bool @(A,B):
+    value: bool @A <- compute(x)
+    received <- send value from A to B
+    return @(A = value, B = received)
+pub protocol Run roles(P,V)(x: bool @P) -> () @(P,V):
+    left <- Produce(x) @(P,V)
+    right <- Produce(x) @(P,V)
+    common = @(P = left, V = )") +
+                              (crossCall ? "right" : "left") + R"()
+    if common:
+        ()
+    else:
+        ()
+    return ()
+)";
+                if (crossCall)
+                  refuses(check(source), "source.common-provenance");
+                else
+                  require(paired(context, source).empty(),
+                          "helper-returned sent value refused");
+              });
+  cases.run("source requirements never supply missing communication", [&] {
+    auto source =
+        R"(pub protocol Run roles(P,V)(flag: bool @(P,V)) -> () @(P,V):
+    if flag:
+        ()
+    else:
+        ()
+    return ()
+spec for Run:
+    requires flag@P == flag@V
+pub spec Optional for Run:
+    security: formal::common_control()
+)";
+    exactInputs(paired(context, source), {0});
+    auto stopped =
+        replaceText(source, "    if flag:", "    guard @V flag\n    if flag:");
+    exactInputs(paired(context, stopped), {0});
+  });
+  cases.run("abstract Protocol results cannot promise communication", [&] {
+    auto source = R"(interface Delivery:
+    protocol deliver roles(A,B)(x: bool @A) -> bool @(A,B) effects()
+module Delivered: Delivery:
+    protocol deliver roles(A,B)(x: bool @A) -> bool @(A,B):
+        received <- send x from A to B
+        return @(A = x, B = received)
+module Unsent: Delivery:
+    protocol deliver roles(A,B)(x: bool @A) -> bool @(A,B):
+        return @(A = x, B = false)
+pub protocol Run roles(P,V)(x: bool @P) -> () @(P,V):
+    common <- Delivered::deliver(x) @(P,V)
+    if common:
+        ()
+    else:
+        ()
+    return ()
+)";
+    require(paired(context, source).empty(),
+            "actual selected delivery body lost its rule");
+    refuses(check(replaceText(source,
+                              "common <- Delivered::", "common <- Unsent::")),
+            "source.common-provenance");
+    auto abstract = replaceText(source, "pub protocol Run roles",
+                                "pub protocol Run<C: Delivery> roles");
+    abstract = replaceText(abstract, "common <- Delivered::", "common <- C::");
+    refuses(check(abstract), "source.common-provenance");
+  });
+  cases.run("sending an extent preserves the original receiver component", [&] {
+    auto source = R"(module m;
+domain Fr=field("koala-bear");type Vector<F:Field>=builtin("vector",F);
+math fn extent(xs:Vector<Fr>)->index{return intrinsic<Fr>("vector.length",xs);}
+protocol Run roles(P,V)(xs:Vector<Fr>@(P,V))->(){
+ let original=extent(xs);let received=send P->V(original);
+ let common=@(P=original,V=received);
+ for _ in 0..common roles(P,V) max 4 {}
+ for _ in 0..original roles(P,V) max 4 {}
+ return();
+})";
+    auto rows = paired(context, source, true);
+    require(rows.size() == 1 && rows[0].extentAxis == 0 && !rows[0].tagOnly &&
+                rows[0].components[0].input == 0 &&
+                rows[0].components[1].input == 0,
+            "sending an extent rewrote the original receiver component");
+  });
+  cases.run("sending a count does not equate unrelated payload values", [&] {
+    auto source =
+        R"(pub protocol Run roles(P,V)(xs: [bool;2] @(P,V)) -> () @(P,V):
+    count = index<2>()
+    received <- send count from P to V
+    common = @(P = count, V = received)
+    for i in 0..common roles(P,V) max 2:
+        if xs[0]:
+            ()
+        else:
+            ()
+    return ()
+)";
+    auto rows = paired(context, source);
+    require(rows.size() == 1 && !rows[0].tagOnly && !rows[0].extentAxis &&
+                rows[0].components[0].input == 0 &&
+                rows[0].components[0].path.size() == 1 &&
+                rows[0].components[0].path[0].kind ==
+                    CommonControlStep::Kind::Field &&
+                rows[0].components[0].path[0].index == 0,
+            "sent count supplied payload agreement");
+  });
+  cases.run("native exchange mappings are independently authenticated", [&] {
+    auto project =
+        take(check(R"(pub protocol Run roles(P,V)(x: bool @(P,V)) -> () @(P,V):
+    received <- send x from P to V
+    common = @(P = x, V = received)
+    if common:
+        ()
+    else:
+        ()
+    return ()
+)"));
+    auto entry = take(closeNativeRun(project, "m::Run"));
+    require(pairedEntry(context, entry).empty(),
+            "honest exchange acquired a premise");
+    auto bytes = take(emitOriginal(entry, context));
+    auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
+    require(bool(module), "emitted original did not parse");
+    protocol_ir::ExchangeOp exchange;
+    module->walk([&](protocol_ir::ExchangeOp value) { exchange = value; });
+    require(bool(exchange), "emitted original omitted exchange");
+    auto sender = exchange.getSenderAttr(),
+         receiver = exchange.getReceiverAttr();
+    exchange.setSenderAttr(receiver);
+    exchange.setReceiverAttr(sender);
+    uint64_t remaining = 8000000;
+    facts::Work work(remaining);
+    auto rows = take(zkc::deriveCommonControlRequirements(
+        nativeProtocol(*module, entry.protocol().symbol), work));
+    require(rows.size() == 1, "forged sender reused communicated agreement");
+    auto comparison = compareOriginal(entry, *module);
+    require(!comparison, "forged native sender passed original comparison");
+    consumeError(comparison.takeError());
+  });
   return cases.result();
 }

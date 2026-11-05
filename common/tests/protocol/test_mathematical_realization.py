@@ -10,7 +10,7 @@ import pytest
 from entry import Entry, joint_artifact
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules(*core_packages())
+MODULES = library_modules(*core_packages('zkc'))
 HEADER = """module sample;
 use zkc::vector::{Vector, indexing []};
 use zkc::matrix::{Matrix};

@@ -36,7 +36,7 @@ bool Checker::collectUsage(const Declaration &scope, const Type &type,
   // a use plan. Completed definitions leave inferredContracts, like bodies.
   if (signatureState[scope.id.index] != 1 &&
       scope.kind != Declaration::Kind::Construction &&
-      scope.kind != Declaration::Kind::DomainFunction)
+      scope.kind != Declaration::Kind::View)
     return false;
   auto &decl = output.declarations[scope.id.index];
   return appendRequirements(types, decl, decl.permissionBounds, type, usage,

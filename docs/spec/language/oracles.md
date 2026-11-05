@@ -97,8 +97,10 @@ Append and selection are ordered checked operations. Selection requires its
 index to be available to the whole family and to have common provenance; it
 cannot let each receiver choose a different anchor. An ordinary input index
 creates a `common_input_requirements` value obligation for that family. Source
-checking and native admission derive it independently; opaque Local, service,
-or received provenance cannot supply agreement. This coordinate obligation
+checking and native admission derive it independently. Actual completed sends
+and congruent total computations can instead establish the coordinate's
+[normal-path agreement](selected-control.md#derived-admission-obligations);
+distinct opaque Local/service subjects cannot. This coordinate obligation
 does not equate handles or discharge ordered anchor-history coherence.
 Appended handles must preserve kind and custody family.
 The static sequence capacity is independent of each table's row shape.

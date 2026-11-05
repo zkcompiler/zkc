@@ -27,7 +27,7 @@ class FiniteEmitter {
   Error failure = Error::success();
   std::vector<Types> itemTypes;
   std::vector<unsigned> bodyPorts, predicatePorts;
-  Values domainOperands, captures, initial;
+  Values descriptorOperands, captures, initial;
   exec::ScopedExecutionBuilder *scoped;
   /// Reports each generated definition with its part.
   function_ref<void(StringRef, StringRef)> generated;
@@ -107,19 +107,20 @@ class FiniteEmitter {
   std::optional<std::vector<unsigned>> capturePorts(ArrayRef<ValueId> inputs) {
     std::vector<unsigned> result;
     for (auto value : flatten(inputs)) {
-      if (!charge(domainOperands.size() + captures.size() + 1))
+      if (!charge(descriptorOperands.size() + captures.size() + 1))
         return {};
-      auto domain = llvm::find(domainOperands, value);
-      if (domain != domainOperands.end()) {
-        result.push_back(domain - domainOperands.begin());
+      auto domain = llvm::find(descriptorOperands, value);
+      if (domain != descriptorOperands.end()) {
+        result.push_back(domain - descriptorOperands.begin());
         continue;
       }
       auto found = llvm::find(captures, value);
       if (found == captures.end()) {
-        result.push_back(domainOperands.size() + captures.size());
+        result.push_back(descriptorOperands.size() + captures.size());
         captures.push_back(value);
       } else
-        result.push_back(domainOperands.size() + (found - captures.begin()));
+        result.push_back(descriptorOperands.size() +
+                         (found - captures.begin()));
     }
     return result;
   }
@@ -128,7 +129,7 @@ class FiniteEmitter {
   // domain input, preserving product and Unit elements without a new ABI.
   std::optional<mlir::Value> array(unsigned index) {
     const auto &source = finite.domain->inputs[index];
-    auto input = values[finite.domainOperands[index].index];
+    auto input = values[finite.descriptorOperands[index].index];
     auto packed = take(layouts.packed(source.arguments.front()));
     if (!packed)
       return {};
@@ -200,21 +201,21 @@ class FiniteEmitter {
     auto *call = make("func.call", {sequence}, input, attrs);
     return call ? std::optional<mlir::Value>(call->getResult(0)) : std::nullopt;
   }
-  bool domainInputs() {
-    for (unsigned i = 0; i < finite.domainOperands.size(); ++i) {
+  bool descriptorInputs() {
+    for (unsigned i = 0; i < finite.descriptorOperands.size(); ++i) {
       if (finite.domain->inputs[i].kind == Type::Kind::Array) {
         auto adapted = array(i);
         if (!adapted)
           return false;
-        domainOperands.push_back(*adapted);
+        descriptorOperands.push_back(*adapted);
       } else {
-        const auto &input = values[finite.domainOperands[i].index];
+        const auto &input = values[finite.descriptorOperands[i].index];
         if (input.size() != 1) {
           failure = error("source.layout",
                           "domain input requires one native carrier");
           return false;
         }
-        domainOperands.push_back(input.front());
+        descriptorOperands.push_back(input.front());
       }
     }
     return true;
@@ -226,20 +227,21 @@ class FiniteEmitter {
     std::vector<mlir::Value> nodes;
     for (const auto &node : shape.nodes) {
       Types items;
-      if (node.kind == DomainBinding::Kind::Zip ||
-          node.kind == DomainBinding::Kind::Product) {
+      if (node.kind == DescriptorBinding::Kind::Zip ||
+          node.kind == DescriptorBinding::Kind::Product) {
         for (auto child : node.children)
-          llvm::append_range(items, itemTypes.at(child));
-      } else if ((node.kind == DomainBinding::Kind::Elements ||
-                  node.kind == DomainBinding::Kind::SourceArray) &&
+          llvm::append_range(items, itemTypes.at(child.node));
+      } else if ((node.kind == DescriptorBinding::Kind::Elements ||
+                  node.kind == DescriptorBinding::Kind::SourceArray) &&
                  mlir::isa<data::SequenceType>(
-                     domainOperands[node.operands.front().index].getType())) {
+                     descriptorOperands[node.operands.front().index]
+                         .getType())) {
         items.push_back(
             mlir::cast<data::SequenceType>(
-                domainOperands[node.operands.front().index].getType())
+                descriptorOperands[node.operands.front().index].getType())
                 .getElementType());
       } else {
-        auto flat = types(node.item);
+        auto flat = types(*finiteDescriptorItem(node.contract));
         if (!flat)
           return false;
         items = std::move(*flat);
@@ -252,19 +254,19 @@ class FiniteEmitter {
         data::DomainType::get(builder.getContext(), itemTypes[shape.result]);
     if (generated)
       generated(prefix + "_domain", "domain");
-    auto *declaration =
-        make("data.domain", {}, {},
-             {text("sym_name", prefix + "_domain"),
-              text("sym_visibility", "private"),
-              builder.getNamedAttr(
-                  "function_type",
-                  mlir::TypeAttr::get(builder.getFunctionType(
-                      mlir::ValueRange(domainOperands).getTypes(), {output})))},
-             true);
+    auto *declaration = make(
+        "data.domain", {}, {},
+        {text("sym_name", prefix + "_domain"),
+         text("sym_visibility", "private"),
+         builder.getNamedAttr(
+             "function_type",
+             mlir::TypeAttr::get(builder.getFunctionType(
+                 mlir::ValueRange(descriptorOperands).getTypes(), {output})))},
+        true);
     if (!declaration)
       return false;
     auto &block = declaration->getRegion(0).front();
-    for (auto value : domainOperands)
+    for (auto value : descriptorOperands)
       block.addArgument(value.getType(), location);
     builder.setInsertionPointToEnd(&block);
     for (unsigned i = 0; i < shape.nodes.size(); ++i) {
@@ -273,35 +275,35 @@ class FiniteEmitter {
       for (auto input : node.operands)
         operands.push_back(block.getArgument(input.index));
       for (auto child : node.children)
-        operands.push_back(nodes[child]);
+        operands.push_back(nodes[child.node]);
       StringRef name;
       SmallVector<mlir::NamedAttribute> attributes;
       switch (node.kind) {
-      case DomainBinding::Kind::Elements:
-      case DomainBinding::Kind::SourceArray:
+      case DescriptorBinding::Kind::Elements:
+      case DescriptorBinding::Kind::SourceArray:
         name = "data.domain_elements";
         break;
-      case DomainBinding::Kind::Indices:
+      case DescriptorBinding::Kind::Indices:
         name = "data.domain_indices";
         attributes.push_back(
             builder.getNamedAttr("axis", builder.getI64IntegerAttr(node.axis)));
         break;
-      case DomainBinding::Kind::Range:
+      case DescriptorBinding::Kind::Range:
         name = "data.domain_range";
         break;
-      case DomainBinding::Kind::Zip:
+      case DescriptorBinding::Kind::Zip:
         name = "data.domain_zip";
         break;
-      case DomainBinding::Kind::Product:
+      case DescriptorBinding::Kind::Product:
         name = "data.domain_product";
         break;
-      case DomainBinding::Kind::MatrixRow:
+      case DescriptorBinding::Kind::MatrixRow:
         name = "data.domain_matrix_row";
         break;
-      case DomainBinding::Kind::MatrixColumn:
+      case DescriptorBinding::Kind::MatrixColumn:
         name = "data.domain_matrix_column";
         break;
-      case DomainBinding::Kind::MatrixCoordinates:
+      case DescriptorBinding::Kind::MatrixCoordinates:
         name = "data.domain_matrix_coordinates";
         attributes.push_back(
             text("order", node.axis ? "column_major" : "row_major"));
@@ -326,30 +328,31 @@ class FiniteEmitter {
     if (!charge(inputs.size() + 1))
       return {};
     const auto &node = finite.domain->nodes[index];
-    if (node.kind == DomainBinding::Kind::Zip ||
-        node.kind == DomainBinding::Kind::Product) {
+    if (node.kind == DescriptorBinding::Kind::Zip ||
+        node.kind == DescriptorBinding::Kind::Product) {
       Values result;
       unsigned offset = 0;
       for (auto child : node.children) {
-        auto nested = item(child, inputs.slice(offset, itemTypes[child].size()),
-                           ordinal, control);
+        auto nested =
+            item(child.node, inputs.slice(offset, itemTypes[child.node].size()),
+                 ordinal, control);
         if (!nested)
           return {};
         llvm::append_range(result, *nested);
-        offset += itemTypes[child].size();
+        offset += itemTypes[child.node].size();
       }
       return result;
     }
-    if ((node.kind == DomainBinding::Kind::Elements ||
-         node.kind == DomainBinding::Kind::SourceArray) &&
+    if ((node.kind == DescriptorBinding::Kind::Elements ||
+         node.kind == DescriptorBinding::Kind::SourceArray) &&
         mlir::isa<data::SequenceType>(
-            domainOperands[node.operands.front().index].getType())) {
-      auto packed = take(layouts.packed(node.item));
+            descriptorOperands[node.operands.front().index].getType())) {
+      auto packed = take(layouts.packed(*finiteDescriptorItem(node.contract)));
       if (!packed ||
           !canInsert(packed->product ? packed->flat->leaves.size() : 0))
         return {};
       if (control && packed->product) {
-        auto flat = types(node.item);
+        auto flat = types(*finiteDescriptorItem(node.contract));
         if (!flat)
           return {};
         auto itemSite = "item_" + std::to_string(ordinal++);
@@ -389,7 +392,7 @@ class FiniteEmitter {
     builder.setInsertionPointToEnd(&definitions);
     Types inputs(states.begin(), states.end());
     llvm::append_range(inputs, itemTypes[finite.domain->result]);
-    llvm::append_range(inputs, mlir::ValueRange(domainOperands).getTypes());
+    llvm::append_range(inputs, mlir::ValueRange(descriptorOperands).getTypes());
     llvm::append_range(inputs, mlir::ValueRange(captures).getTypes());
     auto outputs = types(helper.outputs.front().type);
     if (!outputs)
@@ -528,7 +531,29 @@ public:
     (void)!!failure;
   }
   Expected<Values> run() {
-    if (!domainInputs())
+    if (!finite.domain ||
+        finite.domain->result >= finite.domain->nodes.size() ||
+        llvm::any_of(finite.domain->nodes, [](const DescriptorBinding &node) {
+          return !finiteDescriptorItem(node.contract);
+        }))
+      return error("source.descriptor",
+                   "finite emission requires the Finite family");
+    for (unsigned i = 0; i < finite.domain->nodes.size(); ++i) {
+      const auto &node = finite.domain->nodes[i];
+      if (!charge(node.children.size() + 1))
+        return std::move(failure);
+      for (const auto &edge : node.children) {
+        auto *item = finiteDescriptorItem(edge.contract);
+        if (!item || edge.node >= i)
+          return error("source.descriptor", "finite child contract differs");
+        // Bound and charge the complete item before structural comparison.
+        if (!take(layouts.get(*item)))
+          return std::move(failure);
+        if (edge.contract != finite.domain->nodes[edge.node].contract)
+          return error("source.descriptor", "finite child contract differs");
+      }
+    }
+    if (!descriptorInputs())
       return std::move(failure);
     initial = flatten(finite.operands);
     auto body = capturePorts(finite.body.captures);
@@ -550,7 +575,7 @@ public:
     auto outputs = types(resultType);
     if (!outputs)
       return std::move(failure);
-    Values operands = domainOperands;
+    Values operands = descriptorOperands;
     llvm::append_range(operands, initial);
     llvm::append_range(operands, captures);
     SmallVector<mlir::NamedAttribute> attrs{

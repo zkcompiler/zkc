@@ -1,0 +1,9 @@
+module reductions
+use collections::{Finite, fold, fold_where}
+pub def sum<I: Type + Copy + Drop, F: Field>(rows: Finite<I>, term: fn(item: I) -> F where item_from(item, rows)) -> F:
+    return fold(rows, 0, fn(state, item) => state + term(item))
+pub local def sum_where<I: Type + Copy + Drop, F: Field>(rows: Finite<I>, keep: fn(item: I) -> bool where item_from(item, rows), term: fn(item: I) -> F where item_from(item, rows)) -> F effects(stop):
+    result <- fold_where(rows, 0, fn(item) => keep(item), fn(state, item) => state + term(item))
+    return result
+pub notation ∑ x ∈ D, body = sum(D, fn(x) => body)
+pub notation ∑ x ∈ D with p, body = sum_where(D, fn(x) => p, fn(x) => body)

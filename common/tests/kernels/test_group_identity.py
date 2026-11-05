@@ -42,7 +42,7 @@ def test_group_identity(toolchain, journal, directory, group, flags):
     protocol Run roles(P)()->(ok:bool@P){{let ok @P=check();return(ok=ok);}}
     entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
     '''
-    libraries = library_modules(*core_packages())
+    libraries = library_modules(*core_packages('zkc'))
     entry = Entry(toolchain, journal, directory, source, (*flags, *libraries))
     package = json.loads(entry.package.read_text())
     assert 'algebra.group_identity' in joint_package(package)['original']
@@ -80,7 +80,7 @@ def test_curve_bulk_api(toolchain, journal, directory, group, flags):
     protocol Run roles(P)(malformed:bool@P)->(ok:bool@P){{return check(malformed);}}
     entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
     '''
-    libraries = library_modules(*core_packages())
+    libraries = library_modules(*core_packages('zkc'))
     entry = Entry(toolchain, journal, directory, source, (*flags, *libraries))
     assert entry.run('bulk', {'malformed': False})['ok'] is True
     entry.run('mismatched-lengths', {'malformed': True}, refuses=True)
