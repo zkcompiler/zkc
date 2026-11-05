@@ -595,3 +595,10 @@ stack pressure in wide helper signatures; native or reference success alone is
 not successful deployed FRI. Smaller diagnostics, target resource stops and
 primitive tests establish their stated boundaries only. Full STARK deployment,
 fixed-strength feasibility and formal/security correspondence remain separate.
+
+The foundation driver's `--suite completion` checks flat authored and managed
+conditional completion through the public compiler, native prover and deployed
+verifier. Default and unsimplified/unbatched controls cover complete result
+tuples, normal true and false acceptance, skipped rejecting suffixes and trailing
+proof bytes, with the exact reached managed hash frontier. Nested selected proof
+production remains dependent on common preparation and origin support.

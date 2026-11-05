@@ -13,10 +13,20 @@ participant and its transitive executable symbols. Selection retains the full
 checked construction source separately from the executable closure. Target
 legality examines reachable operations and types, including nested helpers;
 unsupported reachable code refuses compilation. Unused producer mathematics
-does not make a supported verifier illegal. The target realizes no conditional
-participant completion: a `protocol.finish_if` in the selected verifier refuses
-with `evm.completion` before realization. Completions owned by other
-participants do not enter the verifier closure.
+does not make a supported verifier illegal. Participant selection, bounded
+repeats and conditional completion lower through function control flow before
+standard MLIR restructuring to the target's structured profile. The full result
+tuple reaches one function epilogue, including managed transcript state exactly
+once. Completing with false acceptance is a normal result and still checks
+proof EOF and transcript ownership; a source stop retains its distinct failure
+and unread suffix. Completions owned by other participants do not enter the
+verifier closure.
+
+The target consumes shared checked construction and origin facts. Flat
+conditional completion is supported. Nested selected proof control still needs
+the common preparation producer and its dynamic-origin layout; target control
+lowering does not supply that shared source correspondence. A selected origin
+outside the available layout profile continues to refuse compilation.
 
 Arithmetic consumes the installed domain catalog: prime fields with a modulus
 of at most 256 bits and installed ascending binomial extensions of degree 2–8.
@@ -258,7 +268,16 @@ Checked conditional numeric loops consume their leading Boolean through
 `runtime.take_condition`. Lowering checks the live transfer ticket, returns the
 Boolean lane and preserves that one ticket with the exact remaining payload.
 It allocates no second ownership ticket and does not move or erase effects.
-This does not enable conditional participant completion.
+This numerical loop ticket is distinct from participant completion: participant
+completion exits the full selected function, including enclosing repeats.
+
+Target control conversion has a separate cumulative weighted preflight allowance
+of 100,000. It counts operations, operand and result occurrences, successors,
+regions, blocks, arguments, converted lanes and estimated structural expansion
+across the selected closure before transferring its executable regions. It does not
+reset per function, arm or loop. This implementation bound is distinct from
+native execution allowances, deployment ceilings and gas; it is not a claim
+that every later compiler pass takes at most that many steps.
 
 ## Target declaration
 
@@ -557,10 +576,10 @@ The compiler's EVM target refuses, in pipeline order:
 | `evm.closed-execution` | A constructed module the closed-execution pipeline refuses; the detail is the captured diagnostics |
 | `evm.endpoint` | A checked endpoint that is not exactly one selected validator with one checked projection record, unconsumed inputs or affine results, a transcript capability other than the managed suite's, a public row that does not name the validator, port and type, outputs out of source order, or an acceptance that is not exactly one Boolean |
 | `evm.layout` | A public input type without an EVM value layout: not complete Copy and Drop logical data, a vector object other than a commitment or proof, or no local EVM representation |
-| `evm.completion` | A `protocol.finish_if` in the selected verifier |
 | `evm.participant-loop-maximum` | A `protocol.loop` in the selected verifier whose checked maximum exceeds the deployment's `participant_loop_maximum` |
+| `evm.structural-work-limit` | Target inspection and estimated structural expansion exceeds the cumulative static work limit of 100,000; the diagnostic names the observed count and limit |
 | `evm.lowering` | A reachable operation or type without an EVM realization; the joined `evm.diagnostics` names it with `[evm.unsupported-operation]` or `[evm.unsupported-type]` |
-| `evm.control-flow` | A lowered function whose control flow cannot be structured, such as a statically infinite loop |
+| `evm.control-flow` | A lowered function whose control flow cannot be structured, or an internal dispatch shape outside the integer target profile, such as a statically infinite loop |
 | `evm.target-legality` | An operation or type that remains outside the closed target after lowering or before export |
 | `evm.yul` | A Yul export failure at the invocation boundary or in a target function; the joined `evm.diagnostics` carries the exporter's reason, `[evm.yul]` followed by the coded refusal: `evm.wire-type` for a message type without a supported wire frame, `evm.wire-operation` for a sequence, bytes or variant operation without a wire implementation, `evm.arithmetic` for a field or vector operation without an implementation; a static invocation root above `root_bytes` reports `[evm.root-limit]` |
 
