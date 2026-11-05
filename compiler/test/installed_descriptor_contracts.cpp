@@ -244,7 +244,7 @@ int main() {
         }
       });
   for (StringRef name : {"Product", "Sequence", "append", "fold"})
-    for (unsigned mutation = 0; mutation < 8; ++mutation)
+    for (unsigned mutation = 0; mutation < 22; ++mutation)
       cases.run("installation drift " + name + " " + Twine(mutation), [&] {
         auto project = take(check("use zkc::descriptor as ds\n"));
         auto &storage =
@@ -278,6 +278,37 @@ int main() {
           parameter.name = "fake";
           decl.parameters.push_back(std::move(parameter));
         }
+        if (mutation == 8)
+          decl.origin = DeclarationId{0};
+        if (mutation == 9)
+          decl.staticArguments.push_back(Type(Type::Kind::Boolean));
+        if (mutation == 10)
+          decl.scopedArguments.push_back(DeclarationId{0});
+        if (mutation == 11)
+          decl.symbol = "foreign";
+        if (mutation == 12)
+          decl.target = DeclarationId{0};
+        if (mutation == 13)
+          decl.specificationBlock = Span{};
+        if (mutation == 14)
+          decl.oraclePredicateOwner = DeclarationId{0};
+        if (mutation == 15)
+          decl.closureLayout.inputs.push_back(0);
+        if (mutation == 16)
+          decl.closureLayout.captures.push_back(0);
+        if (mutation == 17)
+          decl.scopedOrigin = std::make_pair(DeclarationId{0}, uint32_t(0));
+        if (mutation == 18)
+          decl.configuration = ProofEntry{};
+        if (mutation == 19)
+          decl.proofFormat = ProofFormat::Native;
+        if (mutation == 20) {
+          Declaration::Generated generated;
+          generated.target = DeclarationId{0};
+          decl.generated = std::move(generated);
+        }
+        if (mutation == 21)
+          decl.body = std::make_shared<const Body>();
         auto error = checkScopedElaboration(project);
         require(bool(error) && namesIdentifier(toString(std::move(error)),
                                                "source.installation"),

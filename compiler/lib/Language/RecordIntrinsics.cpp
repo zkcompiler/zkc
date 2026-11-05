@@ -133,6 +133,13 @@ bool checkDeclarationAssociations(Semantics &types,
     };
     if (!row->concrete()) {
       bool constructor = row->contractHead();
+      // Installed shells receive ordinary source symbols during formation.
+      // Replay that derivation rather than admitting specialization metadata.
+      if (!types.charge(decl.qualifiedName.size(), decl.span))
+        return false;
+      auto symbol = encodeSymbol(decl.qualifiedName, types.work.limits);
+      if (!symbol)
+        return types.accept(symbol.takeError(), decl.span);
       if (decl.installedDeclaration != row || !decl.isPublic || decl.abstract ||
           decl.kind != (constructor
                             ? Declaration::Kind::InstalledContractConstructor
@@ -152,7 +159,17 @@ bool checkDeclarationAssociations(Semantics &types,
           !decl.associatedSort.empty() || !decl.fields.empty() ||
           !decl.alternatives.empty() || decl.implementation ||
           !decl.conformance.empty() || decl.descriptorDefinition ||
-          !decl.descriptorArguments.empty())
+          !decl.descriptorArguments.empty() || decl.generated || decl.origin ||
+          !decl.staticArguments.empty() || !decl.scopedArguments.empty() ||
+          decl.symbol != *symbol || !decl.closureLayout.inputs.empty() ||
+          !decl.closureLayout.captures.empty() || decl.scopedOrigin ||
+          decl.oracleDefinition || decl.oraclePredicateOwner ||
+          decl.specificationBlock || decl.relation ||
+          !decl.specifications.empty() || !decl.sourceClaims.empty() ||
+          !decl.sourceVerifications.empty() || decl.target ||
+          decl.proofFormat || decl.construction ||
+          !std::holds_alternative<RunEntry>(decl.configuration) ||
+          !decl.setups.empty())
         return refuse();
       for (unsigned i = 0; i < decl.parameters.size(); ++i)
         if (decl.parameters[i].sort != Parameter::Sort::Natural ||

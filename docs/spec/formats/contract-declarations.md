@@ -802,7 +802,12 @@ exactly `identity`, `owner`, `name`, `kind`, `association` and `prelude`; its
 association is `{kind: "constructor", target}`. It has no static telescope,
 ports, output or source body. The target names a `frontendConstructors` row
 whose form is `DescriptorProduct` or `DescriptorSequence`. Each such head is
-associated exactly once. Both installed exports are in `zkc::descriptor`, named
+associated exactly once. Checked installation shells retain their derived source
+symbols and exact row association. They cannot carry specialization origins,
+static or scoped actual arguments, closure captures, generated entry metadata,
+or authored protocol/specification/Oracle definitions. Independent source replay
+checks those invariants as well as the absence of a concrete signature or body.
+Both installed exports are in `zkc::descriptor`, named
 `Product` and `Sequence`, with explicit non-prelude membership.
 
 A `View` scheme row has the same nine outer fields as a concrete row, but its
@@ -854,7 +859,7 @@ Nat static, `D(P)` is a descriptor port, and `V(C,A)` is a selected View port.
 | Fold | C, A | count | V(C,A), D(C), D(A) | A |
 
 Their installed names are respectively `append`, `concat`, `replace`,
-`unsized`, `check_extent` and `fold`. The schema carries their exact association
+`unsized`, `sized` and `fold`. The schema carries their exact association
 and shape; it supplies no evaluator or operation row. Installation identity
 frames signature alternatives, constructor/scheme joins, internal sorts,
 ordered recursive patterns, optional extents, statics and port labels.

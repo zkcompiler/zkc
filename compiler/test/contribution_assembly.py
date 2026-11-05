@@ -482,6 +482,26 @@ def Cross : ZKC_Contribution<"cross", ["base"], CrossRecords>;
         inventory(prefix + first + dag_cross.replace(
             '["base"], CrossRecords', '["first"], CrossRecords'))
 
+    # Shared metadata reaches the same dependency through record, list and DAG
+    # edges. Traversal sharing must not erase the ownership check.
+    shared_metadata = """
+class MetadataLeaf<dag Value> { dag value = Value; }
+class MetadataPair<list<MetadataLeaf> Values> {
+  list<MetadataLeaf> values = Values;
+}
+def SharedLeaf : MetadataLeaf<(TypeParameter ExtraType)>;
+def SharedPair : MetadataPair<[SharedLeaf, SharedLeaf]>;
+defset list<ZKC_Declaration> CrossRecords = {
+def CrossOp : ZKC_Operation<"cross.identity", [], [], []> {
+  list<MetadataPair> metadata = [SharedPair, SharedPair];
+}
+}
+def Cross : ZKC_Contribution<"cross", ["base"], CrossRecords>;
+"""
+    inventory(prefix + first + shared_metadata, "undeclared contribution dependency")
+    inventory(prefix + first + shared_metadata.replace(
+        '["base"], CrossRecords', '["first"], CrossRecords'))
+
     cmake_controls(args)
     print("Contribution assembly: baseline, ordering, dependency, ownership and CMake controls passed")
 
