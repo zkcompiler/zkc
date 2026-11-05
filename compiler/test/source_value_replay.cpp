@@ -84,6 +84,44 @@ Operation &control(Body &root) {
   require(found != root.operations.end(), "missing control");
   return *found;
 }
+// Insert aliases before the final recipe restriction, retaining its eager root.
+// An optional proper-subset restriction exercises composition with aliases.
+std::vector<ValueId> recipeIdentityChain(Body &root, unsigned length,
+                                         bool restrictFirst = false) {
+  auto &repeat = std::get<ProtocolRepeat>(control(root).action);
+  auto result = repeat.captures.back();
+  auto at = llvm::find_if(root.operations, [&](const auto &op) {
+    return op.results.size() == 1 && op.results.front().index == result.index;
+  });
+  require(at != root.operations.end(), "missing recipe restriction");
+  auto &restriction = std::get<Restriction>(at->action);
+  auto input = restriction.input;
+  const auto position = at - root.operations.begin();
+  const auto span = at->span;
+  auto value = root.values[input.index];
+  std::vector<Operation> operations;
+  if (restrictFirst) {
+    value.components = {0, 1};
+    value.placement = DataPlacement{{0, 1}};
+    auto restricted = ValueId{uint32_t(root.values.size())};
+    root.values.push_back(value);
+    operations.push_back(
+        Operation{Restriction{input, {0, 1}}, {restricted}, span, 0});
+    input = restricted;
+  }
+  std::vector<ValueId> aliases;
+  for (unsigned i = 0; i < length; ++i) {
+    auto alias = ValueId{uint32_t(root.values.size())};
+    root.values.push_back(value);
+    operations.push_back(Operation{Projection{input, {}}, {alias}, span, 0});
+    aliases.push_back(alias);
+    input = alias;
+  }
+  restriction.input = input;
+  root.operations.insert(root.operations.begin() + position, operations.begin(),
+                         operations.end());
+  return aliases;
+}
 } // namespace
 int main() {
   Cases cases;
@@ -777,6 +815,124 @@ protocol Run roles(P)(x:bool@P,n:index@P)->(r:bool@P){
             replay(project);
             specialized(take(closeInvocation(project, runInvocation(project))));
           }
+        });
+  for (bool nested : {false, true})
+    for (bool restrictFirst : {false, true})
+      cases.run("recipe identity chain retains eager generations " +
+                    Twine(nested) + "/" + Twine(restrictFirst),
+                [&] {
+                  auto project = check(recipeSource(true, nested));
+                  replay(project);
+                  recipeIdentityChain(body(project), 4, restrictFirst);
+                  replay(project);
+                  specialized(
+                      take(closeInvocation(project, runInvocation(project))));
+                });
+  for (StringRef boundary : {"source", "closure", "closed-source"})
+    for (StringRef mutation :
+         {"participants", "component-order", "holder", "placement",
+          "placement-kind", "placement-absence", "unavailable", "later"})
+      cases.run(
+          "recipe identity restored endpoint refuses " + mutation + "/" +
+              boundary,
+          [&] {
+            auto project = check(recipeSource(true, true));
+            replay(project);
+            auto &root = body(project);
+            auto aliases = recipeIdentityChain(root, 3);
+            replay(project);
+            auto closed =
+                take(closeInvocation(project, runInvocation(project)));
+            specialized(closed);
+            const auto savedValues = root.values;
+            const auto savedOperations = root.operations;
+            auto &intermediate = root.values[aliases.front().index];
+            if (mutation == "participants")
+              intermediate.components = {1};
+            else if (mutation == "component-order")
+              intermediate.components = {2, 1, 0};
+            else if (mutation == "holder")
+              intermediate.oracleHolder = 0;
+            else if (mutation == "placement")
+              intermediate.placement = DataPlacement{{1}};
+            else if (mutation == "placement-kind")
+              intermediate.placement = OraclePlacement{0, {0, 1, 2}};
+            else if (mutation == "placement-absence")
+              intermediate.placement.reset();
+            else {
+              auto at = llvm::find_if(root.operations, [&](const auto &op) {
+                return op.results.size() == 1 &&
+                       op.results.front().index == aliases.front().index;
+              });
+              require(at != root.operations.end(), "missing first alias");
+              if (mutation == "later")
+                std::get<Projection>(at->action).input = aliases.back();
+              else {
+                auto missing = ValueId{uint32_t(root.values.size())};
+                root.values.push_back(intermediate);
+                std::get<Projection>(at->action).input = missing;
+              }
+            }
+            if (boundary == "source")
+              rejects(project);
+            else if (boundary == "closure")
+              refuses(closeInvocation(project, runInvocation(project)),
+                      "source.binding-witness");
+            else
+              witnessRefusal(checkScopedSpecialization(closed));
+            root.values = savedValues;
+            root.operations = savedOperations;
+            replay(project);
+            specialized(closed);
+            specialized(take(closeInvocation(project, runInvocation(project))));
+          });
+  for (unsigned length : {8, 256, 1024})
+    cases.run(
+        "recipe identity chain cumulative exact allowance " + Twine(length),
+        [&] {
+          auto project = check(recipeSource(true, true));
+          recipeIdentityChain(body(project), length, true);
+          std::vector<SourceWorkBudget> observed;
+          if (auto error = checkScopedElaboration(project, {}, &observed))
+            throw std::runtime_error(toString(std::move(error)));
+          require(observed.size() == 1, "missing alias work ledger");
+          const auto work = observed.front().ledger.total;
+          outs() << "recipe identity length=" << length << " replay=" << work
+                 << '\n';
+          require(work == observed.front().ledger.used(
+                              SourceWorkPhase::ScopedElaboration),
+                  "alias work escaped cumulative replay ledger");
+          for (bool oneShort : {false, true}) {
+            namespace detail = zkc::language::detail;
+            Limits limits;
+            limits.work = work - oneShort;
+            detail::Work bounded{limits};
+            detail::Work::Scope phase(bounded,
+                                      SourceWorkPhase::ScopedElaboration);
+            auto error = detail::checkScopedSources(
+                detail::DeclarationAccess::storage(project), bounded);
+            if (oneShort) {
+              require(bool(error), "one-short alias chain passed");
+              auto message = toString(std::move(error));
+              require(namesIdentifier(message, "source.limit"), message);
+            } else {
+              if (error)
+                throw std::runtime_error(toString(std::move(error)));
+              require(bounded.used == work,
+                      "exact alias allowance was not consumed");
+            }
+          }
+          Limits originalAllowance;
+          originalAllowance.work = project.checkedWork();
+          auto exhausted = checkScopedElaboration(project, originalAllowance);
+          if (length == 1024) {
+            require(bool(exhausted), "long aliases escaped original cap");
+            auto message = toString(std::move(exhausted));
+            require(namesIdentifier(message, "source.limit"), message);
+          } else
+            consumeError(std::move(exhausted));
+          replay(project);
+          specialized(take(closeInvocation(project, runInvocation(project))));
         });
   for (bool nested : {false, true})
     cases.run("restricted recipe exact allowance and one short " +
