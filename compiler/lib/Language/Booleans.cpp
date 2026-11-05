@@ -126,7 +126,7 @@ std::optional<ValueId> BodyChecker::boolean(const Expression &expr,
   auto summary = checker.bodySummaries.apply(
       checker.types, checker.output.declarations, *binding->computation->body,
       binding->statics, binding->captures, binding->scoped, 1, binding->domains,
-      binding->lexical, callDepth + 1);
+      binding->lexical, callDepth + 1, binding->owner);
   if (!summary || summary->results.size() != 1)
     return {};
   if (callDepth > checker.work.limits.callDepth ||

@@ -59,13 +59,16 @@ public:
   BodySummaryCache &operator=(const BodySummaryCache &) = delete;
   /// Depth bounds summary traversal. Source depth counts enclosing helper and
   /// callback frames for lazy completion; zero selects the application depth.
+  /// A root from a temporary source-checking body must supply its immutable
+  /// computation owner, just as callback environments retain their owners.
   std::optional<BodySummaryApplication>
   apply(Semantics &, llvm::ArrayRef<Declaration>, const Body &,
         const Substitution &, llvm::ArrayRef<Dependencies>,
         llvm::ArrayRef<ScopedSummaryBinding>, unsigned = 1,
         llvm::ArrayRef<Dependencies> domains = {},
         std::shared_ptr<const BodySummaryStatics> lexical = {},
-        unsigned sourceDepth = 0);
+        unsigned sourceDepth = 0,
+        std::shared_ptr<const ScopedComputation> owner = {});
   /// Whether completed logical dependencies are independent of static dispatch.
   std::optional<bool> staticIndependent(Semantics &,
                                         llvm::ArrayRef<Declaration>,

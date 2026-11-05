@@ -299,7 +299,7 @@ struct BodySummaryCache::Storage {
       instances;
   std::unordered_map<const ScopedComputation *,
                      std::shared_ptr<const ScopedComputation>>
-      callbackOwners;
+      computationOwners;
   std::set<const Body *> formingTemplates;
   std::vector<Construction> constructing;
 
@@ -546,13 +546,24 @@ bool BodySummaryCache::observeType(Semantics &types, const Type &type,
   }
   return true;
 }
-std::optional<BodySummaryApplication>
-BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
-                        const Body &body, const Substitution &statics,
-                        ArrayRef<Dependencies> inputs,
-                        ArrayRef<ScopedSummaryBinding> environment,
-                        unsigned depth, ArrayRef<Dependencies> domains,
-                        LexicalStatics lexical, unsigned sourceDepth) {
+std::optional<BodySummaryApplication> BodySummaryCache::apply(
+    Semantics &types, ArrayRef<Declaration> declarations, const Body &body,
+    const Substitution &statics, ArrayRef<Dependencies> inputs,
+    ArrayRef<ScopedSummaryBinding> environment, unsigned depth,
+    ArrayRef<Dependencies> domains, LexicalStatics lexical,
+    unsigned sourceDepth, std::shared_ptr<const ScopedComputation> owner) {
+  // Protocol Boolean expressions are also completed scoped roots. Usage
+  // inference discards their containing scratch body; keep the computation
+  // alive before caching its body or any nested region by address.
+  if (owner) {
+    if (owner->body.get() != &body) {
+      types.fail("source.scoped-summary", "root lifetime owner differs", {});
+      return {};
+    }
+    if (!types.charge(1, {}))
+      return {};
+    storage->computationOwners.emplace(owner.get(), owner);
+  }
   if (inputs.size() != body.inputs) {
     types.fail("source.scoped-summary", "summary input arity differs", {});
     return {};
@@ -623,7 +634,7 @@ BodySummaryCache::apply(Semantics &types, ArrayRef<Declaration> declarations,
                    {});
         return {};
       }
-      storage->callbackOwners.emplace(binding.computation, binding.owner);
+      storage->computationOwners.emplace(binding.computation, binding.owner);
     }
     key.mode = binding.signature.mode;
     key.mayStop = binding.signature.allowance.mayStop;

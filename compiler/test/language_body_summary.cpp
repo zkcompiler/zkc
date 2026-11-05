@@ -514,6 +514,63 @@ math fn caller(x:bool)->bool { return relay(x); }
           "unused predicate intermediate or eager domain operand vanished");
     }
   });
+  cases.run("completed scratch roots retain their immutable lifetime", [] {
+    const std::vector<Declaration> declarations;
+    Limits limits;
+    Work work{limits};
+    Semantics types(declarations, {}, work);
+    std::weak_ptr<const ScopedComputation> root;
+    std::weak_ptr<const Body> nested;
+    {
+      BodySummaryCache cache;
+      {
+        auto body = inputs(2);
+        Control control;
+        control.kind = Control::Kind::If;
+        control.operands = {{0}, {1}};
+        auto arm = identityBody();
+        nested = arm;
+        control.regions = {arm, constant()};
+        body->results = {operation(*body, std::move(control), {0, 1})};
+        auto selected = computation(body);
+        root = selected;
+        auto result = cache.apply(types, declarations, *body, {},
+                                  {{{10}, false}, {{20}, false}}, {}, 1, {}, {},
+                                  0, selected);
+        require(bool(result), "owned root summary failed");
+        dependency(result->results.front(), {10, 20});
+      }
+      require(!root.expired() && !nested.expired(),
+              "discarded scratch root invalidated retained body keys");
+      // Independent roots must retain separate dependency slots even after
+      // their callers discard all external ownership.
+      auto selected = computation(identityBody());
+      auto result = cache.apply(types, declarations, *selected->body, {},
+                                {{{31}, false}}, {}, 1, {}, {}, 0, selected);
+      require(bool(result), "second owned root summary failed");
+      dependency(result->results.front(), {31});
+    }
+    require(root.expired() && nested.expired(),
+            "root or nested body lifetime escaped its summary owner");
+  });
+  cases.run("retained roots refuse a different computation owner", [] {
+    const std::vector<Declaration> declarations;
+    Limits limits;
+    Work work{limits};
+    Semantics types(declarations, {}, work);
+    BodySummaryCache cache;
+    auto body = identityBody();
+    auto foreign = computation(identityBody());
+    require(!cache.apply(types, declarations, *body, {}, {{{17}, false}}, {}, 1,
+                         {}, {}, 0, foreign),
+            "foreign root owner was accepted");
+    refused(types, "source.scoped-summary");
+    auto own = computation(body);
+    auto result = cache.apply(types, declarations, *body, {}, {{{17}, false}},
+                              {}, 1, {}, {}, 0, own);
+    require(bool(result), "correct root owner failed after refusal");
+    dependency(result->results.front(), {17});
+  });
   cases.run("completed scratch callback lifetimes belong to the summary owner",
             [] {
               const std::vector<Declaration> declarations;
