@@ -57,7 +57,12 @@ to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`
 3. Respond to review on the branch. What review confirms is fixed in the
    same pull request rather than deferred to a later one.
 
-Pull requests merge by squash.
+Pull requests merge by squash. For a reviewed batch, constituent pull requests
+may first merge into an explicit integration branch. One final pull request from
+that branch to `main` carries the complete batch and its integration fixes. The
+required CI check applies to that final candidate; merging into the integration
+branch does not mean a package has landed on `main`. See the
+[batch integration procedure](../docs/development/maintenance.md#batch-integration).
 
 ## Commit and pull request messages
 

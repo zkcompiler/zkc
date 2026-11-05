@@ -137,6 +137,37 @@ CMake, Cargo or Lake mutations. Serialize writes to one build/profile. Use
 bounded relevant checks before broad integration, and retain resource-boundary
 cases in the scope that owns them.
 
+## Batch integration
+
+Automatic pull-request CI targets `main`; pushes to `main` remain checked.
+A stack or batch can use one explicit integration branch so the required gate
+validates the complete combined candidate. Manual scopes remain available for
+individual branch investigations. This does not reduce the required checks on
+`main` or turn local evidence into a GitHub check result.
+
+1. Create the integration branch from current `main`. Record each constituent
+   PR, reviewed head, base and affected contracts. Review their interactions and
+   apply necessary corrections before declaring the batch ready.
+2. Retarget constituent PRs to that branch and squash-merge the reviewed heads.
+   Review any changed diff after retargeting. Record these as merged into the
+   integration branch, not yet landed on `main`. Include coordinator fixes in
+   the same candidate through the final integration PR.
+3. Open one integration PR to `main`, naming every constituent and the added
+   changes. Run affected local checks once on the stabilized combined source;
+   reuse older evidence only where its source, inputs, toolchain and relevant
+   dependencies remain valid. Run the required CI on this final PR.
+4. If `main` or the candidate changes, reconcile and rerun the checks that the
+   change invalidates. The protected main branch must accept the actual final
+   candidate; never copy a green status from a different head or bypass a
+   required check to simulate batch validation.
+5. Squash-merge the integration PR only after review and its required checks
+   pass. Compare the complete landed tree with the validated candidate and
+   record which packages are now on `main`.
+
+GitHub merge-queue merge limits do not combine its individual merge-group
+builds. They are not a substitute for this single-candidate workflow. A staging
+merge is deliberately not an independent main-branch acceptance receipt.
+
 ## Public documentation
 
 A published guide should describe current commands and support. Move durable
