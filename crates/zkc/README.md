@@ -510,6 +510,56 @@ canonical wire values and native framed proof; it does not reinterpret them.
 The [target contract](../../docs/spec/targets/evm.md) defines supported operations,
 outcomes, ceilings, tool pins, authenticated reuse and atomic publication.
 
+`calldata_named()` accepts an independently admitted `BoundInterface` and an
+exact map of public invocation aliases to slices of canonical native wire frames.
+For the Sumcheck Entry above, a service that already supplies canonical frames
+can prepare a call without managing descriptor positions:
+
+```rust,ignore
+use zkc::{entry::BoundInterface, evm::Artifact};
+
+fn named_sumcheck_call(
+    artifact: &Artifact, interface: &BoundInterface,
+    values: &[u8], claim: &[u8], rounds: &[u8], proof: &[u8],
+) -> Result<Vec<u8>, zkc::evm::Error> {
+    artifact.calldata_named(interface, &[
+        ("rounds", &[rounds]), ("values", &[values]), ("claim", &[claim]),
+    ], b"application", proof)
+}
+```
+
+Obtain the Interface with `BoundInterface::read(&package, interface_limits)`
+from a package authenticated with its independently trusted publication digest.
+The artifact and package must agree on original source, Entry, capture and
+compiler toolchain. The adapter checks the Interface's proof-policy facts and
+complete public native port/type map against the captured descriptor, then orders
+frames by that descriptor. The artifact's trusted compiler correspondence still
+owns message/query schedules and realized codecs.
+
+For ordinary public arguments, use the aliases shown by the Interface's `public`
+input group, including its collision-resolved selected-path aliases. Initialized
+public verifier keys also require their existing supply alias, even though the
+logical-value input group omits them. For example, a public key supplied as `vk`
+requires `("vk", key_frames)`; this adapter transports an existing canonical key
+frame and does not provide a key encoder or imply EVM key-realization support.
+Each alias supplies the native leaves
+of that exact admitted subtree in schema order. A product can require several
+frames. Every empty input remains a required entry with an empty frame slice;
+it contributes no ABI value. A selected child never authorizes its logical root
+or an unselected sibling. Duplicate, missing, extra or ambiguous names refuse;
+the adapter never invents leaf names or infers them from positions.
+
+This is a native-wire transport adapter. Logical `entry::Value` conversion and
+canonical frame production retain their existing owners; this EVM-only API does
+not require CPU or implement another cryptographic encoder. Byte/count checks
+precede adapter storage allocation and honor the artifact's immutable deployment
+limits. Frames and the proof retain all on-chain decoding and refusal behavior.
+The raw `calldata(Invocation)` API remains the generic positional adapter.
+Named preparation reports `evm-calldata-subject`, `evm-calldata-policy`,
+`evm-calldata-names`, `evm-calldata-width` or `evm-calldata-descriptor` for the
+respective association, roster and mapping refusals; `evm-calldata-limit` reports
+name/ABI size overflow or a selected byte ceiling.
+
 The focused compiler/SDK pairing test compiles fresh source packages with the
 selected native tool. After building the native producer, run from the checkout:
 
