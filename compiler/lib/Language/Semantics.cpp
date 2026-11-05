@@ -11,8 +11,8 @@ Semantics::Semantics(const std::vector<Declaration> &declarations,
       naturals(work.limits.work, work.limits.naturalTerms,
                work.limits.naturalFactors,
                [&work](uint64_t amount) { return work.charge(amount); }),
-      declarations(declarations), assets(assets), qualified(ownedQualified),
-      parameters(ownedParameters), complete(std::move(complete)) {
+      declarations(declarations), assets(assets), ownedIndex(std::in_place),
+      index(*ownedIndex), complete(std::move(complete)) {
   for (const auto &decl : declarations) {
     indexDeclaration(decl);
     for (unsigned i = 0; i < decl.parameters.size(); ++i)
@@ -24,16 +24,14 @@ Semantics::Semantics(const Semantics &owner, Work &work)
       naturals(work.limits.work, work.limits.naturalTerms,
                work.limits.naturalFactors,
                [&work](uint64_t amount) { return work.charge(amount); }),
-      declarations(owner.declarations), assets(owner.assets),
-      qualified(owner.qualified), parameters(owner.parameters) {
-  authorities = owner.authorities;
-}
+      authorities(owner.authorities), declarations(owner.declarations),
+      index(owner.index) {}
 Expected<std::optional<std::string>>
 Semantics::nominalAuthority(StringRef path) const {
   if (authorities.final)
     return definingAuthority(*authorities.final, path);
-  auto found = qualified.find(path.str());
-  if (found == qualified.end())
+  auto found = index.qualified.find(path.str());
+  if (found == index.qualified.end())
     return failure("source.authority",
                    "no checked declaration has path " + path);
   if (declarations[found->second.index].generated)
@@ -41,12 +39,14 @@ Semantics::nominalAuthority(StringRef path) const {
   return std::optional<std::string>(std::string(64, '-'));
 }
 void Semantics::indexDeclaration(const Declaration &decl) {
+  assert(ownedIndex && "only the semantic index owner can add declarations");
   if (!decl.origin && !decl.anonymous)
-    ownedQualified.emplace(decl.qualifiedName, decl.id);
+    ownedIndex->qualified.emplace(decl.qualifiedName, decl.id);
 }
 void Semantics::indexParameter(const Parameter &parameter, DeclarationId id,
                                unsigned index) {
-  ownedParameters.emplace(parameter.atom, std::make_pair(id, index));
+  assert(ownedIndex && "only the semantic index owner can add parameters");
+  ownedIndex->parameters.emplace(parameter.atom, std::make_pair(id, index));
 }
 // Private memo routing only. Collisions always compare the complete owned
 // Type; this hash is never an identity or source/native admission witness.
@@ -107,7 +107,8 @@ bool Semantics::fail(StringRef code, const Twine &message, Span span,
   return false;
 }
 bool Semantics::accept(Error error, std::optional<Span> fallback) {
-  auto found = diagnose(std::move(error), fallback);
+  auto found =
+      diagnose(work.contextualize(std::move(error), fallback), fallback);
   if (!found)
     return true;
   if (!diagnostic)
@@ -271,9 +272,24 @@ bool Semantics::chargeIdentity(const Type &type, Span span) {
     return accept(cost.takeError(), span);
   return charge(*cost, span);
 }
+std::optional<bool> Semantics::sameSnapshot(const Type &type,
+                                            const Type &expected, Span span,
+                                            bool complete) {
+  TypeComparison comparison{expected};
+  auto cost = typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth,
+                             work.remaining(), nullptr, complete,
+                             TypeWork::Copy, &comparison);
+  if (!cost) {
+    accept(cost.takeError(), span);
+    return {};
+  }
+  if (!charge(*cost, span))
+    return {};
+  return comparison.equal;
+}
 const Parameter *Semantics::parameter(StringRef atom) const {
-  auto found = parameters.find(atom.str());
-  if (found == parameters.end())
+  auto found = index.parameters.find(atom.str());
+  if (found == index.parameters.end())
     return nullptr;
   auto [id, index] = found->second;
   return &declarations[id.index].parameters[index];
@@ -284,9 +300,9 @@ const Declaration *Semantics::typeDeclaration(const Type &type) const {
       type.kind != K::Variant && type.kind != K::Associated &&
       type.kind != K::Module)
     return nullptr;
-  auto found = qualified.find(type.domain);
-  return found == qualified.end() ? nullptr
-                                  : &declarations[found->second.index];
+  auto found = index.qualified.find(type.domain);
+  return found == index.qualified.end() ? nullptr
+                                        : &declarations[found->second.index];
 }
 bool Semantics::symbolic(const Type &type) const {
   return type.kind == Type::Kind::Parameter || type.symbolic ||
@@ -462,8 +478,8 @@ std::optional<Type> Semantics::substitute(const Type &input,
     if (result.arguments.front().kind != Type::Kind::Module)
       return associated(result.arguments.front(),
                         StringRef(result.domain).rsplit("::").second, span);
-    auto found = qualified.find(result.domain);
-    if (found == qualified.end()) {
+    auto found = index.qualified.find(result.domain);
+    if (found == index.qualified.end()) {
       fail("source.type", "unknown associated declaration", span);
       return {};
     }
@@ -556,8 +572,8 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
     if (auto p = parameter(base.domain); p && p->interface)
       owner = &declarations[p->interface->index];
     else if (StringRef(base.domain).starts_with("self:")) {
-      auto found = qualified.find(base.domain.substr(5));
-      if (found != qualified.end())
+      auto found = index.qualified.find(base.domain.substr(5));
+      if (found != index.qualified.end())
         owner = &declarations[found->second.index];
     }
   } else

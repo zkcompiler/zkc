@@ -153,18 +153,11 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
   bool checked = false;
   if (found != declaredFields.end())
     for (const auto &entry : llvm::reverse(found->second)) {
-      TypeComparison comparison{entry.type};
-      auto cost = typeComplexity(type, work.limits.typeNodes,
-                                 work.limits.typeDepth, work.remaining(),
-                                 nullptr, true, TypeWork::Copy, &comparison);
-      if (!cost) {
-        accept(cost.takeError(), span);
-        return {};
-      }
-      if (!charge(*cost, span))
+      auto equal = sameSnapshot(type, entry.type, span);
+      if (!equal)
         return {};
       checked = true;
-      if (comparison.equal) {
+      if (*equal) {
         if (depth <= entry.depth)
           return entry.fields;
         break;
@@ -252,9 +245,10 @@ bool Semantics::logicalRecord(const Type &type, Span span) {
     return fail("source.type", "expected a nominal logical record", span);
   auto &checked = checkedLogicalRecords[size_t(typeLookupHash(type))];
   for (const auto &candidate : checked) {
-    if (!chargeType(type, span, /*complete=*/false))
+    auto equal = sameSnapshot(type, candidate, span, /*complete=*/false);
+    if (!equal)
       return false;
-    if (candidate == type)
+    if (*equal)
       return true;
   }
   auto retain = [&] {

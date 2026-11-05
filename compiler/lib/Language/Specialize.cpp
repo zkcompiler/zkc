@@ -195,6 +195,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                        ArrayRef<Asset> assets, Work &work,
                        DeclarationId selected,
                        std::optional<HostInvocation::Kind> operation) {
+  // This owner constructs the lookup maps once. Nested layout observations
+  // borrow them; their work must not pay for repeated index reconstruction.
+  if (auto error = chargeSemanticIndex(declarations, work))
+    return error;
   Semantics types(declarations, assets, work);
   auto close = [&]() -> bool {
     const unsigned templates = declarations.size();

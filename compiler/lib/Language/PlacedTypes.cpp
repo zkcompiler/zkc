@@ -9,11 +9,10 @@ Semantics::remapPlacement(const ValuePlacement &value, ArrayRef<unsigned> map,
                           unsigned participants, Span span) {
   if (!charge(0, span))
     return {};
-  auto remaining = work.remaining();
-  const auto before = remaining;
-  auto result = substitutePlacement(value, map, participants, remaining,
+  Work::Budget budget(work);
+  auto result = substitutePlacement(value, map, participants, budget.remaining,
                                     work.limits.typeDepth);
-  const bool charged = charge(before - remaining, span);
+  const bool charged = accept(budget.finish(span), span);
   if (!result) {
     accept(result.takeError(), span);
     return {};
@@ -32,11 +31,10 @@ std::optional<ValuePlacement> Semantics::placement(const Type &type,
       fail("source.limit", "placed type depth limit exceeded", span);
     return {};
   }
-  auto remaining = work.remaining();
-  const auto before = remaining;
-  auto error =
-      validatePlacement(seed, participants, remaining, work.limits.typeDepth);
-  const bool charged = charge(before - remaining, span);
+  Work::Budget budget(work);
+  auto error = validatePlacement(seed, participants, budget.remaining,
+                                 work.limits.typeDepth);
+  const bool charged = accept(budget.finish(span), span);
   if (error) {
     accept(std::move(error), span);
     return {};

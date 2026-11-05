@@ -75,6 +75,9 @@ public:
   /// alone nor a partial solver head establishes an admitted contract.
   bool chargeType(const Type &, Span, bool complete = true);
   bool chargeIdentity(const Type &, Span);
+  /// Bounded private memo equality; nominal identity omits observed metadata.
+  std::optional<bool> sameSnapshot(const Type &, const Type &, Span,
+                                   bool complete = true);
   bool chargeContract(const DescriptorContract &contract, Span span) {
     return chargeType(descriptorType(contract), span) &&
            (isDescriptor(descriptorType(contract)) ||
@@ -253,10 +256,14 @@ private:
   Semantics(const Semantics &owner, Work &);
   const std::vector<Declaration> &declarations;
   llvm::ArrayRef<Asset> assets;
-  std::map<std::string, DeclarationId> ownedQualified;
-  std::map<std::string, std::pair<DeclarationId, unsigned>> ownedParameters;
-  const decltype(ownedQualified) &qualified;
-  const decltype(ownedParameters) &parameters;
+  struct Index {
+    std::map<std::string, DeclarationId> qualified;
+    std::map<std::string, std::pair<DeclarationId, unsigned>> parameters;
+  };
+  std::optional<Index> ownedIndex;
+  // Entries are IDs/ordinals into the live vector object. Only the root's
+  // explicit indexing methods mutate storage; borrowers have no owned index.
+  const Index &index;
   std::function<bool(DeclarationId)> complete;
   unsigned normalizationDepth = 0;
   /// Keyed by lookup key. Like every memo below, it is confined to this view,

@@ -211,6 +211,42 @@ struct Work {
     return allowance ? std::min(local, *allowance) : local;
   }
   llvm::Error charge(uint64_t amount = 1, std::optional<Span> span = {});
+  /// Attach this caller's phase to helper limit refusals and preserve terminal
+  /// cancellation priority. No numeric work is transferred by this boundary.
+  llvm::Error contextualize(llvm::Error, std::optional<Span> span = {});
+  /// A synchronous helper admits work against `remaining` before performing
+  /// it. Retain its debit even if allocation throws or cancellation arrives
+  /// before return. No other operation may debit `work` before finish().
+  class Budget {
+    Work &work;
+    const uint64_t available;
+    bool committed = false;
+    void commit() noexcept {
+      if (committed)
+        return;
+      assert(remaining <= available);
+      const auto performed = available - remaining;
+      assert(performed <= work.remaining());
+      work.used += performed;
+      work.ledger.total += performed;
+      work.ledger.phases[static_cast<size_t>(work.phase)] += performed;
+      if (work.allowance)
+        *work.allowance -= performed;
+      committed = true;
+    }
+
+  public:
+    uint64_t remaining;
+    explicit Budget(Work &work)
+        : work(work), available(work.remaining()), remaining(available) {}
+    Budget(const Budget &) = delete;
+    Budget &operator=(const Budget &) = delete;
+    ~Budget() { commit(); }
+    llvm::Error finish(std::optional<Span> span = {}) {
+      commit();
+      return work.charge(0, span);
+    }
+  };
   llvm::Error count(uint64_t &counter, uint64_t limit, llvm::StringRef what,
                     std::optional<Span> span = {});
 };

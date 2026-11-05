@@ -168,6 +168,19 @@ Error Work::charge(uint64_t amount, std::optional<Span> span) {
     *allowance -= amount;
   return Error::success();
 }
+Error Work::contextualize(Error error, std::optional<Span> span) {
+  auto diagnostic = diagnose(std::move(error), span);
+  if (auto cancelled = charge(0, diagnostic ? diagnostic->primary : span))
+    return cancelled;
+  if (!diagnostic)
+    return Error::success();
+  if (diagnostic->code == "source.limit") {
+    const auto context = (" in " + sourceWorkPhaseName(phase)).str();
+    if (!StringRef(diagnostic->message).ends_with(context))
+      diagnostic->message += context;
+  }
+  return make_error<DiagnosticError>(std::move(*diagnostic));
+}
 Error chargeConsumerRequirement(const ConsumerRequirement &requirement,
                                 Work &work) {
   if (auto error = work.charge(requirement.reference.path.size() +
@@ -181,7 +194,7 @@ Error chargeConsumerRequirement(const ConsumerRequirement &requirement,
         typeComplexity(value, work.limits.typeNodes, work.limits.typeDepth,
                        work.remaining(), nullptr, true, TypeWork::Copy);
     if (!cost)
-      return cost.takeError();
+      return work.contextualize(cost.takeError());
     return work.charge(*cost);
   };
   for (const auto &argument : requirement.arguments)
@@ -200,7 +213,7 @@ Error chargeRequirementSnapshot(const Declaration &declaration, Work &work) {
                                work.limits.typeDepth, work.remaining(), nullptr,
                                true, TypeWork::Copy);
     if (!cost)
-      return cost.takeError();
+      return work.contextualize(cost.takeError());
     if (auto error = work.charge(*cost, admission.span))
       return error;
     if (auto error = work.charge(admission.calls.size() + 1, admission.span))

@@ -199,7 +199,7 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
 }
 struct Layouts::State {
   Limits workLimits;
-  detail::Work ownedWork;
+  std::optional<detail::Work> ownedWork;
   detail::Work &work;
   const std::vector<Declaration> &declarations;
   ArrayRef<Asset> assets;
@@ -207,11 +207,11 @@ struct Layouts::State {
   std::unique_ptr<detail::Semantics> types;
   State(const std::vector<Declaration> &declarations, const Limits &limits,
         detail::AuthorityView authorities, ArrayRef<Asset> assets = {})
-      : workLimits(limits), ownedWork{workLimits}, work(ownedWork),
-        declarations(declarations), assets(assets), authorities(authorities) {}
-  State(detail::Semantics &owner)
-      : workLimits(owner.work.limits), ownedWork{workLimits}, work(owner.work),
-        declarations(owner.declarations), assets(owner.assets),
+      : workLimits(limits), ownedWork(detail::Work{workLimits}),
+        work(*ownedWork), declarations(declarations), assets(assets),
+        authorities(authorities) {}
+  explicit State(detail::Semantics &owner)
+      : work(owner.work), declarations(owner.declarations),
         authorities(owner.authorities),
         types(new detail::Semantics(owner, work)) {}
 };
@@ -255,8 +255,16 @@ detail::Semantics::nativeLayout(const Type &type) {
   if (isNativeData(type) &&
       !(type.kind == Type::Kind::Builtin && type.domain == "sequence"))
     return builtinLayout(type);
+  if (auto error = work.charge(1))
+    return error;
   Layouts layouts(*this);
   auto result = layouts.packed(type);
+  // Preserve cancellation priority without charging the observation twice.
+  if (auto error = work.charge(0)) {
+    if (!result)
+      consumeError(result.takeError());
+    return error;
+  }
   if (!result)
     return result.takeError();
   return std::move(result->carrier);
@@ -265,14 +273,30 @@ Expected<ProtocolPortLayout>
 detail::Semantics::nativePortLayout(const Port &port) {
   if (auto e = work.charge(0))
     return e;
+  if (auto error = work.charge(1))
+    return error;
   Layouts layouts(*this);
-  return layouts.protocolPort(port);
+  auto result = layouts.protocolPort(port);
+  if (auto error = work.charge(0)) {
+    if (!result)
+      consumeError(result.takeError());
+    return error;
+  }
+  return result;
 }
 Expected<bool> detail::Semantics::nativeMessagePayload(const Type &type) {
   if (auto e = work.charge(0))
     return e;
+  if (auto error = work.charge(1))
+    return error;
   Layouts layouts(*this);
   auto layout = layouts.get(type);
+  // Preserve cancellation priority without charging the observation twice.
+  if (auto error = work.charge(0)) {
+    if (!layout)
+      consumeError(layout.takeError());
+    return error;
+  }
   if (!layout)
     return layout.takeError();
   return !(*layout)->formal && !(*layout)->leaves.empty() &&
@@ -287,7 +311,7 @@ Expected<OracleKindLayout> Layouts::oracleKind(const Type &kind) {
       typeComplexity(kind, limits.typeNodes, limits.typeDepth,
                      state->work.remaining(), nullptr, true, TypeWork::Copy);
   if (!complexity)
-    return complexity.takeError();
+    return state->work.contextualize(complexity.takeError());
   if (auto e = charge(*complexity))
     return std::move(e);
   auto formed = builtinType(oracleConstructor(kind), kind.arguments);
@@ -782,11 +806,10 @@ Expected<ProtocolPortLayout> Layouts::protocolPort(const Port &port,
       return error("source.layout", "port row maximum is not a closed natural");
     maximum = port.oracle->maximumRows->dimension.closedValue();
   }
-  const auto available = state->work.remaining();
-  auto remaining = available;
-  auto result = observeProtocolPort(*body, placed, remaining, limits, maximum,
-                                    checkBounds);
-  auto charged = charge(available - remaining);
+  detail::Work::Budget budget(state->work);
+  auto result = observeProtocolPort(*body, placed, budget.remaining, limits,
+                                    maximum, checkBounds);
+  auto charged = budget.finish();
   if (!result) {
     consumeError(std::move(charged));
     return result.takeError();
@@ -874,7 +897,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       typeComplexity(type, limits.typeNodes, limits.typeDepth,
                      state->work.remaining(), nullptr, true, TypeWork::Copy);
   if (!cost)
-    return cost.takeError();
+    return state->work.contextualize(cost.takeError());
   if (auto e = charge(*cost))
     return std::move(e);
   auto key = detail::typeLookupHash(type);
@@ -882,9 +905,11 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   for (const auto &known : bucket) {
     // Hashes only route. No text key or Type copy is materialized on a hit;
     // every complete collision comparison consumes this caller's allowance.
-    if (!state->types->chargeType(type, {}, /*complete=*/false))
+    auto equal = state->types->sameSnapshot(type, known->type, {},
+                                            /*complete=*/false);
+    if (!equal)
       return state->types->takeError();
-    if (known->type == type)
+    if (*equal)
       return known;
   }
   if (type.symbolic || !type.dimension.isClosed())
@@ -922,7 +947,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
         limits, state->work.remaining(),
         [&](uint64_t amount) { return charge(amount); });
     if (!canonical)
-      return canonical.takeError();
+      return state->work.contextualize(canonical.takeError());
     if (auto e = charge(canonical->size()))
       return e;
     result->identity.digest = detail::digest(*canonical);

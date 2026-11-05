@@ -463,13 +463,18 @@ Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,
         !charge(term.sort.size()))
       return error("source.limit", "expanded type work exceeded");
     auto compareHead = [&] {
-      if (expected && comparison->equal && !term.sameHead(*expected))
+      if (expected && comparison->equal &&
+          (term.kind != expected->kind || term.family != expected->family ||
+           term.domain != expected->domain || term.sort != expected->sort ||
+           term.symbolic != expected->symbolic ||
+           !(term.assumptions == expected->assumptions) ||
+           term.dimension != expected->dimension ||
+           term.arguments.size() != expected->arguments.size()))
         comparison->equal = false;
     };
     auto expectedChild = [&](unsigned index) -> const Type * {
-      return expected && comparison->equal && term.kind != Type::Kind::Natural
-                 ? &expected->arguments[index]
-                 : nullptr;
+      return expected && comparison->equal ? &expected->arguments[index]
+                                           : nullptr;
     };
     if (!identity) {
       for (const auto &[factors, coefficient] : term.dimension.terms()) {

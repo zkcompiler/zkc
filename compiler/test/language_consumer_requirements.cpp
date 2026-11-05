@@ -828,11 +828,13 @@ def keep<T: Type + Copy + Drop, N: nat>(x: T) -> T where NativeMessage(T):
               admission.calls.assign(64, admission.span);
             auto [largeCost, largeOK] =
                 specializeSnapshot(project, Limits{}.work, copies);
-            // For this fixture, argument admission, body summaries and callable
-            // snapshots traverse each provenance chain three times per
-            // instance. Callback checking and its cached/helper snapshots raise
-            // that to eight.
-            const auto traversals = (callback ? 8 : 3) * instances;
+            // Root index preparation scans this metadata once. Each instance
+            // pays for argument admission and its declaration snapshot. A
+            // callback adds the same two traversals for its helper instance,
+            // plus one shared helper-template snapshot. Nested layouts borrow
+            // the index instead of rescanning the provenance chains.
+            const auto traversals =
+                1 + 2 * instances + (callback ? 1 + 2 * instances : 0);
             outs() << "admission snapshots callback=" << callback
                    << " instances=" << instances << " small=" << smallCost
                    << " large=" << largeCost << " traversals=" << traversals

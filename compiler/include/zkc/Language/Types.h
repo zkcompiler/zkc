@@ -196,8 +196,10 @@ using TypeReplacement = llvm::function_ref<const Type *(const Type &)>;
 /// Snapshot keys carry no nominal authority frames. Only canonical keys pay
 /// for authority resolution/text; neither is an ordinary Type copy.
 enum class TypeWork { Copy, Identity, CanonicalIdentity, StaticExport };
-/// Optional equality observation fused into the bounded traversal. This is
-/// only a comparison result, never validation or source admission authority.
+/// Optional exact snapshot comparison fused into the bounded traversal. Every
+/// retained field (including assumptions and Natural metadata) participates,
+/// recursively. This is deliberately stricter than nominal Type equality.
+/// Only a comparison result, never validation or source admission authority.
 struct TypeComparison {
   const Type &expected;
   bool equal = true;
