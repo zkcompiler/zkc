@@ -1,0 +1,12 @@
+module example;
+use schnorr::{Schnorr};
+domain G = group("bls12-381.g1");
+
+proof Proof = Schnorr<G> {
+  prover P;
+  verifier V;
+  public { base, point };
+  accept accepted;
+  target knowledge;
+  construction fiat_shamir("hash-chain.keccak256.bls12-381.fr64be/0", challenges);
+}

@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Target/Evm/Curve.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace mlir;
@@ -119,6 +120,14 @@ Expected<const ValueLayout *> NativeLayouts::get(Type type) {
     result->kind = Kind::Field;
     result->lanes.push_back(
         IntegerType::get(&storage->context, (*facts)->degree == 1 ? 256 : 64));
+  } else if (auto group = dyn_cast<algebra::GroupType>(type)) {
+    auto facts = realizeGroup(group);
+    if (!facts)
+      return facts.takeError();
+    result->kind = Kind::Group;
+    // Immutable canonical EIP-2537 padded affine coordinates, never a general
+    // Fq381 scalar or an unchecked compressed byte pointer.
+    result->lanes.push_back(i64);
   } else if (isa<data::FieldVectorType, data::FieldArrayType>(type)) {
     StringRef domain = isa<data::FieldVectorType>(type)
                            ? cast<data::FieldVectorType>(type).getDomain()

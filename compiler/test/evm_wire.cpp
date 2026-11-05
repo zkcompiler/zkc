@@ -13,6 +13,7 @@
 #include "zkc/Dialect/Evm/Evm.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Target/Evm/Curve.h"
 #include "zkc/Target/Evm/Target.h"
 #include "zkc/Target/Evm/Wire.h"
 #include "llvm/Support/raw_ostream.h"
@@ -47,6 +48,8 @@ data::VariantType variant(MLIRContext &context, StringRef name,
 Type fixture(MLIRContext &context, StringRef name) {
   if (name.consume_front("field:"))
     return algebra::FieldType::get(&context, name);
+  if (name.consume_front("group:"))
+    return algebra::GroupType::get(&context, name);
   if (name.consume_front("vector:"))
     return data::FieldVectorType::get(&context, name);
   if (name.consume_front("root:"))
@@ -68,6 +71,11 @@ Type fixture(MLIRContext &context, StringRef name) {
     return data::IndicesType::get(&context);
   if (name == "empty")
     return variant(context, "Empty", {{}});
+  if (name == "group-scalar") {
+    auto group = fixture(context, "group:bls12-381.g1");
+    auto scalar = fixture(context, "field:bls12-381.fr");
+    return variant(context, "GroupScalar", {{group, scalar}, {scalar, group}});
+  }
   if (name == "nested") {
     auto item =
         variant(context, "Item",
@@ -382,8 +390,10 @@ if eq(mload(v0), 1) {
 }
 return(result, sub(cursor, result))
 )YUL";
-    } else if (layout->kind == evm::ValueLayout::Kind::Field &&
-               take(layouts.field(cast<algebra::FieldType>(type)))->degree > 1)
+    } else if (layout->kind == evm::ValueLayout::Kind::Group)
+      outs() << "return(v0, 128)\n";
+    else if (layout->kind == evm::ValueLayout::Kind::Field &&
+             take(layouts.field(cast<algebra::FieldType>(type)))->degree > 1)
       outs() << "return(v0, "
              << take(layouts.field(cast<algebra::FieldType>(type)))
                     ->coefficientBytes()
@@ -411,6 +421,86 @@ return(result, sub(cursor, result))
          << evm::detail::runtimeHelpers(limits, nullptr) << wire.definitions()
          << "} } }\n";
 }
+// Test consumers expose the production codec/adapter directly to the existing
+// solc/revm infrastructure. They do not compile source or rewrite an equation.
+void emitGroup(MLIRContext &context, StringRef mode) {
+  evm::NativeLayouts layouts(context);
+  EvmLimits limits;
+  evm::WireGenerator wire(layouts, limits);
+  auto group = fixture(context, "group:bls12-381.g1");
+  auto decode = take(wire.decoder(group));
+  auto encode = take(wire.encoder(group));
+  outs() << "object \"Group\" { code { datacopy(0, dataoffset(\"Runtime\"), "
+            "datasize(\"Runtime\")) return(0, datasize(\"Runtime\")) }\n"
+         << "object \"Runtime\" { code { {\n"
+         << "let base := memoryguard(0x400) mstore(0x40, base) mstore(0x200, "
+            "base)\n";
+  if (mode == "status") {
+    outs() << "evm_g1_return(calldataload(0), calldataload(32), "
+              "calldataload(64), calldataload(96), 32)\n"
+           << "mstore(0, 1) return(0, 32)\n";
+  } else if (mode == "fund") {
+    outs() << "evm_g1_fund(calldataload(0)) mstore(0, 1) return(0, 32)\n";
+  } else if (mode == "modexp") {
+    outs() << "let h, l := evm_g1_modexp(calldataload(0), calldataload(32), "
+              "calldataload(64), calldataload(96))\n"
+           << "mstore(0, h) mstore(32, l) return(0, 64)\n";
+  } else if (mode == "negative" || mode == "rhs") {
+    outs() << "let h, l := "
+           << (mode == "negative" ? "evm_g1_negative" : "evm_g1_rhs")
+           << "(calldataload(0), calldataload(32))\n"
+           << "mstore(0, h) mstore(32, l) return(0, 64)\n";
+  } else if (mode == "sign") {
+    outs() << "mstore(0, evm_g1_sign(calldataload(0), calldataload(32))) "
+              "return(0, 32)\n";
+  } else if (mode == "mixed-missing") {
+    auto mixed = take(wire.decoder(fixture(context, "group-scalar")));
+    outs() << "let p := evm_alloc(calldatasize()) calldatacopy(p, 0, "
+              "calldatasize())\n"
+           << "let value := " << mixed << "(p, calldatasize())\n"
+           << "mstore(0, 1) return(0, 32)\n";
+  } else {
+    require(mode == "add" || mode == "scale" || mode == "equal" ||
+                mode == "unused" || mode == "missing",
+            "unknown group helper control");
+    unsigned bytes = mode == "scale"                         ? 92
+                     : mode == "unused" || mode == "missing" ? 54
+                                                             : 108;
+    outs() << "if iszero(eq(calldatasize(), " << bytes
+           << ")) { evm_decode(2) }\n"
+           << "let p := evm_alloc(calldatasize()) calldatacopy(p, 0, "
+              "calldatasize())\n"
+           << "let a := " << decode << "(p, 54)\n";
+    if (mode == "unused" || mode == "missing")
+      outs() << "mstore(0, 1) return(0, 32)\n";
+    else if (mode == "scale") {
+      auto scalar = take(wire.decoder(fixture(context, "field:bls12-381.fr")));
+      outs() << "let scalar := " << scalar << "(add(p, 54), 38)\n"
+             << "let result := evm_g1_scale(a, scalar)\n"
+             << "let output, n := " << encode << "(result) return(output, n)\n";
+    } else {
+      outs() << "let b := " << decode << "(add(p, 54), 54)\n";
+      if (mode == "equal")
+        outs() << "mstore(0, evm_g1_equal(a, b)) return(0, 32)\n";
+      else
+        outs() << "let result := evm_g1_add(a, b)\n"
+               << "let output, n := " << encode
+               << "(result) return(output, n)\n";
+    }
+  }
+  auto definitions = wire.definitions();
+  if (mode == "missing" || mode == "mixed-missing") {
+    // Only the test artifact is mutated. Calling an empty account is a real
+    // empty-success control for the production exact-return check.
+    auto at = definitions.find("staticcall(12000, 0x0c,");
+    require(at != std::string::npos, "missing production subgroup call");
+    definitions.replace(at, StringRef("staticcall(12000, 0x0c,").size(),
+                        "staticcall(12000, 0x100,");
+  }
+  outs() << "}\n"
+         << evm::detail::runtimeHelpers(limits, nullptr) << definitions
+         << "} } }\n";
+}
 } // namespace
 int main(int argc, char **argv) {
   DialectRegistry registry;
@@ -421,6 +511,15 @@ int main(int argc, char **argv) {
   if (argc == 2 && StringRef(argv[1]) == "--emit-tree-hex") {
     try {
       emitTreeHex();
+    } catch (const std::exception &failure) {
+      errs() << failure.what() << '\n';
+      return 1;
+    }
+    return 0;
+  }
+  if (argc == 3 && StringRef(argv[1]) == "--emit-g1") {
+    try {
+      emitGroup(context, argv[2]);
     } catch (const std::exception &failure) {
       errs() << failure.what() << '\n';
       return 1;
@@ -484,6 +583,46 @@ int main(int argc, char **argv) {
   }
   Cases cases;
   evm::NativeLayouts layouts(context);
+  cases.run("nongroup wire codecs do not emit curve helpers", [&] {
+    evm::WireGenerator wire(layouts, {});
+    require(!wire.emitsCurveHelpers(),
+            "fresh generator requires curve helpers");
+    auto scalar = fixture(context, "field:bls12-381.fr");
+    take(wire.decoder(scalar));
+    take(wire.encoder(scalar));
+    require(!wire.emitsCurveHelpers(), "scalar codec requires curve helpers");
+    require(!StringRef(wire.definitions()).contains("function evm_g1_decode("),
+            "scalar codec emitted curve helpers");
+  });
+  cases.run("strict G1 frames and nested complete wire permission", [&] {
+    for (StringRef name : {"group:bls12-381.g1", "sequence:group:bls12-381.g1",
+                           "group-scalar"}) {
+      auto type = fixture(context, name);
+      auto error = evm::verifyWireType(layouts, type);
+      require(!error, "supported G1 wire codec refused");
+      evm::WireGenerator wire(layouts, {});
+      take(wire.decoder(type));
+      require(wire.emitsCurveHelpers(), "group decoder lost curve capability");
+      take(wire.encoder(type));
+      require(wire.emitsCurveHelpers(), "group encoder lost curve capability");
+      require(StringRef(wire.definitions()).count("function evm_g1_decode(") ==
+                  1,
+              "group codec did not share one production adapter");
+      evm::WireGenerator encoder(layouts, {});
+      take(encoder.encoder(type));
+      require(encoder.emitsCurveHelpers(),
+              "encoder-only group codec lost curve capability");
+      require(
+          StringRef(encoder.definitions()).count("function evm_g1_decode(") ==
+              1,
+          "encoder-only group codec did not share one production adapter");
+    }
+    for (StringRef name : {"group:bls12-381.g2", "group:bn254.g1"}) {
+      auto error = evm::verifyWireType(layouts, fixture(context, name));
+      require(bool(error), "unsupported curve acquired wire permission");
+      consumeError(std::move(error));
+    }
+  });
   for (StringRef domain :
        {"bls12-381.fr", "bn254.fr", "ristretto255.scalar", "koala-bear",
         "koala-bear.ext4-binomial3", "koala-bear.ext8-binomial3", "baby-bear",
@@ -912,8 +1051,8 @@ module { "protocol.module"() ({
     // difference from a reparsed original.
     refuses(
         describe(compiled.descriptor(),
-                 algebra::GroupType::get(target->getContext(), "bls12-381.g1")),
-        "evm.layout");
+                 algebra::GroupType::get(target->getContext(), "bls12-381.g2")),
+        "evm.group");
   });
   return cases.result();
 }

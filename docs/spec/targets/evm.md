@@ -61,8 +61,8 @@ a nonzero witness refuses before transcript consumption. For positive
 difficulty, the complete request and its atomic transition precede a failed
 gate; no result or successor is published on that failure. The existing target
 transition, element and memory ceilings and EVM gas remain separate from the
-native numerical-work allowance. External services, curve operations, other
-authentication schemes and full STARK deployment require further target support.
+native numerical-work allowance. External services, additional curve operations, other
+authentication schemes and full FRI/STARK deployment require further target support.
 
 ### Authenticated rows and univariate polynomials
 
@@ -133,6 +133,76 @@ controls. Scalar and product-block query policies are separate authored
 applications. Their source implementations do not establish deployed closure,
 production security or a FRI soundness theorem. Unchanged participant-loop,
 transcript, proof, allocation, deployment-size and gas ceilings still apply.
+
+### BLS12-381 G1 adapter
+
+The target has a bounded operation adapter for installed `bls12-381.g1`:
+`curve.add`, `curve.scale` and `curve.equal`, represented by ordered typed
+`evm.group.add`, `evm.group.scale` and `evm.group.equal` operations. Static
+parameters, exact logical signatures, implementation restrictions, installed
+`Group`/`ScalarAction` facts, `Scalar = bls12-381.fr`, and the exact subgroup
+order are checked. This selects no protocol, function name, generator or
+verification equation. G2, pairing, other curves and other curve operations
+remain explicit refusals.
+
+Each group value is one pointer lane to an immutable 128-byte
+[EIP-2537](https://eips.ethereum.org/EIPS/eip-2537) affine encoding: x then y,
+each a canonical 64-byte big-endian integer with 16 leading zero bytes.
+Infinity is 128 zero bytes. This is an internal representation; it grants no
+raw affine ingress or general 381-bit field type. Scalar operands use the
+existing Fr word layout and must be below the subgroup order; the adapter
+stores the scalar in a 32-byte big-endian precompile input.
+
+Wire admission selects the installed native `zkcv.group.bls12-381.g1/0` codec,
+including its declared frame tag and exact 48-byte payload width. Its native
+big-endian compressed codec uses compression/infinity/sign bits `80/40/20` in
+the first byte. Sign compares y lexicographically with -y, not by parity.
+Only `c0` followed by 47 zero bytes represents infinity. The decoder rejects
+missing compression, noncanonical infinity/sign/x, nonsquares and points
+outside the prime subgroup. It uses fixed 48-byte ModExp operands for x cubed,
+the square root exponent `(p+1)/4`, and square verification for `y²=x³+4`.
+Two-word addition/subtraction preserves carry and borrow. Native frames do not
+admit a point until a one-term G1MSM with scalar one succeeds and returns the
+same affine value. Cofactor clearing is not performed. Canonical infinity is
+accepted directly. Managed observations encode through this same wire owner.
+
+The adapter requires Prague or Osaka, including codecs for group values whose
+results are unused. The current declaration has no EIP-2537 capability bit;
+the target explicitly restricts the existing fork enum to these two forks and
+refuses Cancun with `evm.group-fork`. ADD uses address `0x0b`, 256 input bytes,
+128 output bytes and 375 forwarded gas. Scale and subgroup validation use
+address `0x0c`, 160 input bytes, 128 output bytes and 12000 forwarded gas.
+Bounded wide ModExp uses address 5, 240 input bytes, 48 output bytes and 65536
+forwarded gas. That allowance exceeds the 48-byte operand tariffs on both
+supported forks, including [EIP-7883](https://eips.ethereum.org/EIPS/eip-7883).
+Input and output memory is expanded before gas admission; EIP-150 and call
+overhead headroom is required before forwarding a fixed allowance.
+
+Malformed group frames and a funded subgroup rejection are `decode(4)`;
+wrong frame length/tag retain `decode(2/3)`. Insufficient call headroom is
+`resource(30)`. Failed ModExp, malformed ModExp output or a noncanonical result
+is `fault(31)`. Failed group arithmetic or malformed group output is
+`fault(32)`. A failed validation call with unexpected return bytes is also a
+target fault. Empty-success from an unavailable precompile cannot pass the
+exact-size check. Broken internal affine/scalar invariants are `fault(30)`.
+Machine out-of-gas remains a machine outcome. These are target adapter
+contracts, not evidence that a complete deployment meets gas/code ceilings.
+
+Group decoding retains the existing allocation-free structural scan and
+budget checks. Mathematical point validation occurs in materialization, in
+child order, before the enclosing receive or observation completes. Frames
+containing a group also check scalar canonicality in that order, so a later
+scalar cannot bypass an earlier subgroup call or target fault. Every
+materialized group is checked, including unused children. Transient ModExp
+and subgroup buffers are reclaimed without exposing pointers; retained group
+buffers remain immutable. Their transient memory is additionally bounded by
+the ordinary target allocator. The typed operations have ordered effects even
+when their results are unused.
+
+The maintained Keccak Schnorr example uses this adapter through the generic
+Schnorr library. Differential controls compare native and deployed outcomes,
+ordered hashes and physical precompile calls on Prague and Osaka. These
+bounded checks do not establish a formal refinement or cryptographic theorem.
 
 Target MLIR combines exact standard Func, SCF and Arith operations with
 separate ODS-defined EVM operations for checked arithmetic, collections, wire
@@ -268,7 +338,8 @@ codec again.
 Wire sites require the complete native message type and an exact supported
 installed codec. Supported leaves are Boolean, index, indices, bytes, the
 installed BLS Fr, BN254 Fr, Ristretto scalar and Plonky3 field/vector codecs,
-BLS Fr fixed arrays, and installed Keccak/Poseidon row-root and path envelopes.
+BLS Fr fixed arrays, BLS G1 compressed frames on Prague/Osaka, and installed
+Keccak/Poseidon row-root and path envelopes.
 Every byte fact of a leaf comes from the catalog's
 [frame tags and codecs](../formats/contract-declarations.md#frame-tags-and-codecs):
 the codec row's tag and element width, the aggregate frame's tag, and the

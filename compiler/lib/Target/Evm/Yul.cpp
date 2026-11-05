@@ -13,6 +13,7 @@
 #include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Target/Evm/Curve.h"
 #include "zkc/Target/Evm/Target.h"
 #include "zkc/Target/Evm/Transcript.h"
 #include "zkc/Target/Evm/Wire.h"
@@ -55,6 +56,7 @@ private:
   StringMap<std::string> dataNames;
   std::vector<std::string> returns;
   uint64_t serial = 0;
+  bool groups = false;
   std::string fresh() { return "v" + std::to_string(serial++); }
   std::string name(Value value) {
     auto &result = names[value];
@@ -328,12 +330,18 @@ LogicalResult Exporter::operation(Operation *op) {
     }
     Expected<std::string> helper =
         zkc::error("evm.yul", "unsupported checked helper");
-    if (isa<FieldConstantOp, FieldAddOp, FieldSubOp, FieldMulOp, FieldNegOp,
-            FieldEqualOp, FieldFromIndexOp, FieldEmbedOp, FieldInverseOp,
-            VectorConstantOp, VectorEmptyOp, VectorLengthOp, VectorAppendOp,
-            VectorSplitOp, VectorSumOp, VectorAllocOp, VectorGetOp, VectorSetOp,
-            VectorEqualOp, PolyDomainRootOp, PolyDomainPointOp,
-            PolyFromCoefficientsOp, PolyEvaluateOp>(op))
+    if (isa<GroupAddOp, GroupScaleOp, GroupEqualOp>(op)) {
+      groups = true;
+      helper = std::string(isa<GroupAddOp>(op)     ? "evm_g1_add"
+                           : isa<GroupScaleOp>(op) ? "evm_g1_scale"
+                                                   : "evm_g1_equal");
+    } else if (isa<FieldConstantOp, FieldAddOp, FieldSubOp, FieldMulOp,
+                   FieldNegOp, FieldEqualOp, FieldFromIndexOp, FieldEmbedOp,
+                   FieldInverseOp, VectorConstantOp, VectorEmptyOp,
+                   VectorLengthOp, VectorAppendOp, VectorSplitOp, VectorSumOp,
+                   VectorAllocOp, VectorGetOp, VectorSetOp, VectorEqualOp,
+                   PolyDomainRootOp, PolyDomainPointOp, PolyFromCoefficientsOp,
+                   PolyEvaluateOp>(op))
       helper = arithmetic.helper(op);
     else if (isa<OracleCheckOp>(op))
       helper = authentication.helper(op);
@@ -851,6 +859,10 @@ Expected<std::string> Exporter::run() {
   for (auto function : module.getOps<func::FuncOp>())
     if (failed(this->function(function)))
       return zkc::error("evm.yul", "could not emit target function");
+  // WireGenerator owns the same helpers when a group codec is reached.
+  // Include one copy for arithmetic-only closures with no group wire values.
+  if (groups && !wire.emitsCurveHelpers())
+    out << detail::curveHelpers();
   out << arithmetic.helpers() << authentication.helpers() << wire.definitions();
   out << "}\n";
   for (const auto &item : data)

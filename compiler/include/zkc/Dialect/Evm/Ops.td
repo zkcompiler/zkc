@@ -30,6 +30,24 @@ def Evm_NativeOrigin
 // unused-result elimination; no checked operation is speculatable.
 class Evm_OrderedOp<string name>
     : Op<Evm_Dialect, name, [MemoryEffects<[MemRead, MemWrite]>]>;
+def Evm_GroupAddOp : Evm_OrderedOp<"group.add"> {
+  let summary = "Checked BLS G1 addition on immutable padded affine points";
+  let arguments = (ins I64:$lhs, I64:$rhs, TypeAttr:$value_type);
+  let results = (outs I64:$result);
+  let hasVerifier = 1;
+}
+def Evm_GroupScaleOp : Evm_OrderedOp<"group.scale"> {
+  let summary = "Checked BLS G1 one-term MSM with a canonical Fr scalar";
+  let arguments = (ins I64:$point, I256:$scalar, TypeAttr:$value_type);
+  let results = (outs I64:$result);
+  let hasVerifier = 1;
+}
+def Evm_GroupEqualOp : Evm_OrderedOp<"group.equal"> {
+  let summary = "Equality of canonical immutable BLS G1 affine points";
+  let arguments = (ins I64:$lhs, I64:$rhs, TypeAttr:$value_type);
+  let results = (outs I1:$result);
+  let hasVerifier = 1;
+}
 def Evm_IndexAddOp : Evm_OrderedOp<"index.add"> {
   let summary = "Ordered checked unsigned index add";
   let arguments = (ins I64:$lhs, I64:$rhs);
