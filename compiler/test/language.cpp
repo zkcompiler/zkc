@@ -261,7 +261,6 @@ module C: I { type State: Copy + Drop = bool; }
   for (unsigned i = 0; i < width; ++i)
     wide += "type T" + std::to_string(i) + ": Copy + Drop=bool;";
   wide += "}";
-  auto baseWork = check(wide).checkedWork();
   auto projected = wide, unprojected = wide;
   for (unsigned i = 0; i < uses; ++i) {
     projected +=
@@ -272,8 +271,14 @@ module C: I { type State: Copy + Drop = bool; }
   require(check(projected).checkedWork() >=
               check(unprojected).checkedWork() + 2 * width * uses,
           "associated projection scans escaped the work budget");
-  for (unsigned i = 0; i < uses; ++i)
+  // Compare identical helper bodies so their required checking and source
+  // retention work does not count as lookup traversal.
+  auto direct = wide;
+  for (unsigned i = 0; i < uses; ++i) {
+    direct += "fn f" + std::to_string(i) + "(x:bool)->bool{return x;}";
     wide += "fn f" + std::to_string(i) + "(x:C::T511)->C::T511{return x;}";
+  }
+  auto baseWork = check(direct).checkedWork();
   auto full = check(wide);
   require(full.checkedWork() >= baseWork + 2 * uses,
           "indexed module lookups escaped the work budget");
