@@ -190,6 +190,7 @@ import ZkcSecurity.Families.Sigma.Schnorr
 import ZkcSecurity.Families.Sigma.SigmaAnd
 import ZkcSecurity.Families.Sigma.SigmaAndSchnorr
 import ZkcSecurity.Families.Stark.Batching
+import ZkcSecurity.Families.Stark.CandidateTesting
 import ZkcSecurity.Families.Stark.ConstraintBatching
 import ZkcSecurity.Families.Stark.DeepBatching
 import ZkcSecurity.Families.Stark.OutOfDomain
@@ -222,6 +223,7 @@ import ZkcSecurity.Mathematics.Oracle.Memo
 import ZkcSecurity.Mathematics.Oracle.Pruning
 import ZkcSecurity.Mathematics.Oracle.UniformChallenge
 import ZkcSecurity.Mathematics.Oracle.UntilBad
+import ZkcSecurity.Mathematics.Probability.FiniteSelection
 import ZkcSecurity.Mathematics.Probability.UniformTape
 import ZkcSecurity.ProgramLogic.Derivation
 import ZkcSecurity.ProgramLogic.Games.Relation
@@ -243,6 +245,7 @@ import ZkcSecurity.ProgramLogic.Transcript.Typed
 import ZkcSecurity.ProgramLogic.WeakestPrecondition
 import ZkcSecurity.Transformations.Commitment.AdaptiveOpening
 import ZkcSecurity.Transformations.Commitment.Application
+import ZkcSecurity.Transformations.Commitment.BatchOpening
 import ZkcSecurity.Transformations.Commitment.Charges
 import ZkcSecurity.Transformations.Commitment.Cost
 import ZkcSecurity.Transformations.Commitment.Escape
@@ -306,9 +309,11 @@ import TestsSecurity.ABIInstallations.Permuted
 import TestsSecurity.ABIInstallations.Repeated
 import TestsSecurity.ABIInstallations.WitnessOnly
 import TestsSecurity.ArtifactBinding
+import TestsSecurity.BatchOpening
 import TestsSecurity.BindingCodecs
 import TestsSecurity.BoundedSearch
 import TestsSecurity.CallComposition
+import TestsSecurity.CandidateTesting
 import TestsSecurity.CanonicalAuthority
 import TestsSecurity.CausalSumcheck.Execution
 import TestsSecurity.CausalSumcheck.UniformService
@@ -352,6 +357,7 @@ import TestsSecurity.ExecutionReadback
 import TestsSecurity.ExtractionCounterexample
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.FiniteRecoveryRegistration
+import TestsSecurity.FiniteSelection
 import TestsSecurity.GenerateClaimLibraries
 import TestsSecurity.GenerateCompletenessClaims
 import TestsSecurity.GenerateRootControls

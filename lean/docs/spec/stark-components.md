@@ -38,6 +38,50 @@ the **total degree** and a uniform product draw. An individual-variable degree
 bound needs a separately justified total-degree bound; it cannot be substituted
 directly in the numerator.
 
+## Adaptive quotient candidates
+
+`Families.Stark.CandidateTesting` separates three times at which data is fixed.
+Trace candidates and their constraint polynomials precede the batching challenge
+`alpha`. A finite family of quotient candidates may depend on `alpha`, but
+precedes the evaluation challenge `zeta`. The accepted candidate may be selected
+after `zeta`: the probability event ranges over the entire family simultaneously.
+
+For each fixed trace, `adaptive_quotient_candidates_uniform_le` assumes an actual
+domain violation: some constraint evaluates nonzero at some `s` in the AIR
+domain `S`. This is stronger than saying the constraint polynomial is nonzero;
+a nonzero polynomial can vanish on all of `S` and have an exact quotient.
+Outside at most `(m - 1)/|F|` of the uniform batching challenges, the batched
+constraint remains nonzero at `s`. Consequently every supplied quotient has a
+nonzero residual `batch - V_S * quotient`, even when chosen after `alpha`.
+
+If each quotient family has at most `L` members and every residual has natural
+degree at most `D`, a fresh uniform evaluation draw on `T` gives
+
+```text
+Pr[exists q in candidates(alpha), residual(alpha, q)(zeta) = 0]
+  <= (m - 1)/|F| + L * D/|T|.
+```
+
+`trace_quotient_candidates_uniform_le` additionally unions this event over a
+finite trace family fixed before `alpha`. Its cardinality multiplies the entire
+bound. Quotient families may depend on the trace and `alpha`. This is a safe
+list bound, not an independence claim or a claim that the supplied families
+cover the source protocol's possible committed words.
+
+`exists_component_disagrees_of_no_candidate_collision` isolates the logical
+composition boundary. If simultaneous compatibility of candidate components
+with the received claims would force a residual collision, and all such
+collisions are absent, some component disagrees with **every** allowed candidate.
+The application must prove the compatibility-to-collision implication and the
+coverage of its candidate families. Merely exhibiting one incompatible candidate
+does not discharge this premise of quotient distance preservation.
+
+Controls over `ZMod 3` show why the domain-violation and list-cardinality premises
+are necessary: `X` vanishes on `{0}` and admits quotient `1`, while the three
+nonzero polynomials `X - c` collectively contain every evaluation point as a
+root. These laws retain the existing model and do not establish a source-bound
+STARK verifier theorem on their own.
+
 ## Out-of-domain sampling
 
 `outsidePoints` in `Families.Stark.OutOfDomain` is `F \ domain(Index)`. Its cardinality is exactly
@@ -55,6 +99,41 @@ nearby Reed–Solomon codewords agree at every independently sampled OOD point.
 Its bound is
 `L(L - 1)/2 * ((d - 1)/(|F| - |Index|))^samples`, with explicit list-decodability,
 radius, list-size and nonempty-complement premises. Repeated samples are allowed.
+
+### Bounded first-admissible selection
+
+`Mathematics.Probability.FiniteSelection` defines executable selection from a
+complete finite history and a Mathlib `PMF` model of iid draws. `retain` keeps
+all draws, including those after the first admissible result. This matches the
+bounded sampler's intended draw schedule without asserting source correspondence.
+The caller supplies the actual admissibility predicate: the bounded STARK sampler
+also excludes zero, while the single-table client's one-shot check has its own
+predicate and challenge conversion.
+
+For any joint history law, `selectedBad_le_sum` bounds a selected bad output by
+the sum of admissible-bad events at the individual attempts. It assumes no
+independence. Under the explicitly constructed iid history law, let `r` be the
+one-draw invalid mass, `q` the valid mass and `b` the valid-and-bad mass. The
+exact laws are
+
+```text
+Pr[exhaustion]   = r^n
+Pr[success]     = q * sum(k < n, r^k)
+Pr[selected bad] = b * sum(k < n, r^k).
+```
+
+For positive attempt count and positive valid mass, the successful output's
+conditional bad mass is `b/q`. Positivity of success is proved as part of that
+result. The finite-uniform specialization gives the ratio of admissible bad
+points to admissible points. A one-shot theorem retains refusal; it does not
+replace it by an unconditionally uniform point of the allowed set.
+
+These are marginal distribution laws. The unchanged full-history marginal is
+proved separately and cannot be discarded in a transcript or query-cost
+argument. Applying iid laws after an adaptive protocol prefix requires the
+actual reached-history sampling law, including the decoder. Uniform coordinate
+marginals alone are insufficient: a repeated cached draw is a checked
+counterexample in `TestsSecurity.FiniteSelection`.
 
 ## DEEP quotient and batching
 

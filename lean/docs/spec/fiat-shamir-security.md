@@ -1505,6 +1505,33 @@ committed tables by the typed certificate of its ideal reading.
 - **FRI.** [Committed words](fri-security.md#committed-words) applies the theorem
   to the FRI verifier.
 
+### Shared batch authentication
+
+`ZkcSecurity.Commitment.BatchOpening` relates a recorded binary frontier to its
+parents and then to one root. Active siblings share a recorded compression;
+a missing sibling consumes exactly one boundary digest. Each layer preserves
+the remaining proof suffix. The root rule fixes the depth, root index and empty
+suffix. `Reduction.proof_length` derives the exact boundary demand from the
+verifier's frontier, independently of hash assumptions.
+
+`Reduction.paths` recovers a `LeafHashing.Climbs` witness for every active leaf
+from the same log. It does not rehash each scalar path. `RowsRecorded` preserves
+the complete ordered request and whole-row lists, including repeated positions.
+`batch_agrees_or_collision` proves that the existing extractor returns that
+entire row list or two different complete hash queries in the log have the same
+answer. The hash is not assumed injective; a quantitative collision reduction
+belongs to the selected provider model.
+
+The relation is library mathematics, not a second verifier. A source/native
+connection must derive its witnesses from the actual accepted batch execution,
+including sorted unique frontier construction, duplicate consistency, actual
+height and width, codecs, shape, complete proof consumption and all refusal
+outcomes. The derived `index < 2^depth` is not the stronger actual-height check
+for non-power-of-two tables. The theorem neither binds shape through an
+untagged root nor identifies the pre-challenge extraction checkpoint. Logical
+query coverage, source association, shared provider history and application bad
+event coverage remain separate required premises of a realized security claim.
+
 ## Stage relations
 
 A verification stage relates two attack games (`ZkcSecurity.Stage`). A game
