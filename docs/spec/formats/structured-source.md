@@ -396,7 +396,31 @@ term   := ["nat", decimal] | ["field", id] | ["group", id]
         | ["tuple", [term...]] | ["array", term, decimal]
         | ["nominal", "record"|"logical_record"|"variant"|"associated"|"module", path, [term...]]
         | ["builtin"|"formal", name, [term...]]
+        | ["descriptor-product", [descriptor...]]
+        | ["descriptor-sequence", descriptor, null | ["nat", decimal]]
+descriptor := ["descriptor-product", [descriptor...]]
+            | ["descriptor-sequence", descriptor, null | ["nat", decimal]]
+            | ["builtin", "finite", [term]]
 ```
+
+The two structural descriptor tags have exactly two and three slots respectively.
+Product children are ordered descriptor terms, including an empty list. Sequence
+has exactly one descriptor element and a required extent slot: `null` is unsized,
+whereas `["nat","0"]` is sized zero. Every present Natural counts as a term node
+at the next term level; `null` does not. Extents are closed canonical decimals,
+never symbolic terms. Ordinary tuple/array tags and generic builtin spellings do
+not stand for these structural forms.
+
+Descriptor-child recognition is a contextual restriction of this wire grammar,
+not a second source Type system. The existing primitive Finite leaf has exactly
+the unchanged bytes `["builtin","finite",[term]]`; its payload uses the general
+term grammar. This syntax check does not establish the payload's data category,
+source formation, installed family authority, permissions or native meaning.
+Those remain separate checked-source and consumer judgments. Other builtin or
+formal names cannot grant descriptor-child category. General term positions
+retain their existing alternatives, including generic builtin/formal terms.
+Future catalog-native descriptor leaves require explicit leaf-schema integration
+in each independent reader; no Constraint leaf is installed by this grammar.
 
 The template path is the logical qualified NFC declaration path, without a
 filesystem path, capped at 2048 UTF-8 bytes. Named arguments occur in declaration
@@ -412,6 +436,13 @@ alone establishes neither body equality nor native/formal correspondence.
 Handwritten native IR may omit this source metadata, but cannot then be exported
 by this profile; no origin is inferred from its symbol. Local and protocol
 origins are decoded by definition kind and do not share a binding-value grammar.
+
+The public C++ checked-Type producer and strict C++/Rust readers implement these
+structural terms at version `0`, with no compatibility reader. This wire
+consumer's bounds do not bound the internal generic descriptor container.
+Structural source formation and its actual native bridge remain separate
+integration gates. Independent Lean origin/logical readers and interpretation
+require their own migration; native codec acceptance does not establish it.
 
 Math helpers are private.
 Native protocol formation permits no explicit `sym_visibility`

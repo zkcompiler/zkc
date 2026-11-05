@@ -70,6 +70,17 @@ before publication. Lean owns its own reader and interpretation changes; its
 current unsupported result is retained. This slice changes no proof-profile gate,
 IR operation, runtime codec or production Lean model.
 
+The [closed source-term grammar](formats/structured-source.md#definition-origins)
+adds exact `descriptor-product` and `descriptor-sequence` tags. Language's public
+checked-Type encoder, Contracts' static-term/protocol-origin validators and the
+Rust interface static-argument serde reader consume the same current version-0
+schema. Descriptor-child syntax recognizes these structures and the exact
+existing primitive Finite leaf; Type formation/category and native authority
+remain independent. General terms and existing Finite bytes are unchanged.
+Public codec fixtures cover this native boundary. Actual structural closure and
+source-to-native consumers, future installed leaf schemas, and the independent
+Lean origin/logical readers remain explicit integration requirements.
+
 The [distributed record source contract](language/records.md) extends checked
 Language signatures and written type nodes with ordered role applications and
 recursive field placements. The source producer retains private/empty fields

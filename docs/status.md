@@ -851,6 +851,12 @@ checks cover constructor formation, association identity, aliases, visibility,
 foreign homonyms, Nat parameters and installation drift. This is not complete
 public aggregate or Constraint View support. Parent scheme/fold/closure/native
 consumers and strict Lean reader migration remain publication requirements.
+The public checked-Type source-term encoder and strict C++/Rust wire readers
+support exact structural descriptor products and sequences, including empty
+products and distinct unsized/zero extents. Shared producer fixtures and bounded
+reader controls cover this codec boundary with unchanged Finite/ordinary bytes
+and limits. These checks do not establish structural source-to-native formation,
+full protocol acceptance, future Constraint leaf schemas or formal support.
 Static natural constructor configuration, callable payloads and heterogeneous
 checked descriptor lists are not implemented by the graph foundation; their
 actual family formation and consumers remain required.

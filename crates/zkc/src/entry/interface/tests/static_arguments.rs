@@ -225,3 +225,205 @@ fn static_argument_limits_are_aggregate_and_inclusive() {
         .join()
         .unwrap();
 }
+
+#[test]
+fn public_cpp_descriptor_terms_retain_structure_and_existing_bytes() {
+    let fixtures: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../compiler/test/fixtures/source-terms/descriptors.json"
+    )))
+    .unwrap();
+    assert_eq!(fixtures["format"], "zkc.source-term-fixtures/0");
+    let terms: Vec<_> = fixtures["terms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["term"].clone())
+        .collect();
+    let view = read(&with_arguments(json!(terms))).unwrap();
+    let actual = &view.document.relations[0].static_arguments;
+    use OriginTerm::*;
+    let boolean = || Builtin("finite".into(), vec![Boolean]);
+    let field = || Builtin("finite".into(), vec![Field("bls12-381.fr".into())]);
+    assert_eq!(actual[0], boolean());
+    assert_eq!(actual[1], field());
+    assert_eq!(actual[2], DescriptorProduct(vec![]));
+    assert_eq!(actual[3], DescriptorProduct(vec![boolean(), field()]));
+    assert_eq!(actual[4], DescriptorProduct(vec![field(), boolean()]));
+    assert_ne!(actual[3], actual[4]);
+    assert_eq!(actual[5], DescriptorSequence(Box::new(boolean()), None));
+    assert_eq!(
+        actual[6],
+        DescriptorSequence(Box::new(boolean()), Some("0".into()))
+    );
+    assert_ne!(actual[5], actual[6]);
+    assert_eq!(
+        actual[7],
+        DescriptorSequence(Box::new(field()), Some("7".into()))
+    );
+    assert_eq!(
+        actual[8],
+        DescriptorProduct(vec![
+            DescriptorSequence(
+                Box::new(DescriptorProduct(vec![field(), boolean()])),
+                Some("2".into())
+            ),
+            DescriptorSequence(Box::new(DescriptorProduct(vec![])), None),
+            DescriptorProduct(vec![boolean()]),
+        ])
+    );
+    assert_eq!(actual[9], Boolean);
+    assert_eq!(actual[10], Tuple(vec![Boolean, Index]));
+    assert_eq!(actual[11], Array(Box::new(Boolean), "0".into()));
+    assert_eq!(
+        actual[12],
+        Formal("vendor.Family".into(), vec![Field("koala-bear".into())])
+    );
+    assert_eq!(
+        actual[13],
+        Nominal(
+            NominalKind::LogicalRecord,
+            "sample::Logical".into(),
+            vec![Boolean]
+        )
+    );
+}
+
+#[test]
+fn structural_descriptors_refuse_small_wrong_shapes_categories_and_extents() {
+    for term in [
+        json!(["descriptor-product"]),
+        json!(["descriptor-product", [], 0]),
+        json!(["descriptor-product", {}]),
+        json!(["descriptor-product", [["bool"]]]),
+        json!(["descriptor-product", [["tuple", []]]]),
+        json!(["descriptor-product", [["array", ["bool"], "0"]]]),
+        json!([
+            "descriptor-product",
+            [["builtin", "descriptor_product", []]]
+        ]),
+        json!(["descriptor-product", [["builtin", "Constraint", []]]]),
+        json!(["descriptor-product", [["formal", "finite", [["bool"]]]]]),
+        json!(["descriptor-product", [["builtin", "Finite", [["bool"]]]]]),
+        json!(["descriptor-product", [["builtin", "finite", []]]]),
+        json!([
+            "descriptor-product",
+            [["builtin", "finite", [["bool"], ["index"]]]]
+        ]),
+        json!(["descriptor-product", [["builtin", "finite", [["bool"]], 0]]]),
+        json!(["descriptor-sequence", ["descriptor-product", []]]),
+        json!(["descriptor-sequence", ["descriptor-product", []], null, 0]),
+        json!(["descriptor-sequence", ["bool"], null]),
+        json!(["descriptor-sequence", ["descriptor-product", []], "0"]),
+        json!(["descriptor-sequence", ["descriptor-product", []], 0]),
+        json!([
+            "descriptor-sequence",
+            ["descriptor-product", []],
+            ["nat", 0]
+        ]),
+        json!([
+            "descriptor-sequence",
+            ["descriptor-product", []],
+            ["nat", "00"]
+        ]),
+        json!([
+            "descriptor-sequence",
+            ["descriptor-product", []],
+            ["nat", "-1"]
+        ]),
+        json!([
+            "descriptor-sequence",
+            ["descriptor-product", []],
+            ["nat", "1e2"]
+        ]),
+        json!([
+            "descriptor-sequence",
+            ["descriptor-product", []],
+            ["nat", "0", 0]
+        ]),
+        json!(["descriptor-sequence", ["descriptor-product", []], ["index"]]),
+        json!([
+            "descriptor-sequence",
+            ["descriptor-product", []],
+            ["parameter", "N"]
+        ]),
+        json!(["descriptor_sequence", ["descriptor-product", []], null]),
+    ] {
+        assert_eq!(
+            read(&with_arguments(json!([term]))).unwrap_err(),
+            InterfaceError::Format,
+            "{term}"
+        );
+    }
+    // General closed terms remain general; syntax alone is not source formation.
+    for term in [
+        json!(["builtin", "finite", []]),
+        json!(["builtin", "Constraint", []]),
+        json!([
+            "descriptor-product",
+            [["builtin", "finite", [["nat", "0"]]]]
+        ]),
+    ] {
+        read(&with_arguments(json!([term]))).unwrap();
+    }
+}
+
+#[test]
+fn descriptor_wire_limits_count_present_naturals_and_preserve_null() {
+    let empty = json!(["descriptor-product", []]);
+    read(&with_arguments(json!([[
+        "descriptor-product",
+        vec![empty.clone(); 512]
+    ]])))
+    .unwrap();
+    assert_eq!(
+        read(&with_arguments(json!([[
+            "descriptor-product",
+            vec![empty.clone(); 513]
+        ]])))
+        .unwrap_err(),
+        InterfaceError::Format
+    );
+    for size in [512, 513] {
+        let result = read(&with_arguments(json!([[
+            "descriptor-sequence",
+            empty,
+            ["nat", "9".repeat(size)]
+        ]])));
+        assert_eq!(result.is_ok(), size == 512);
+    }
+    // Eight roots of 512 terms each; size and value are independent of allocation.
+    let mut arguments = vec![json!(["descriptor-product", vec![empty.clone(); 511]]); 8];
+    arguments[0][1][0] = json!(["descriptor-sequence", empty, null]); // 4097.
+    arguments[7][1].as_array_mut().unwrap().pop(); // 4096 with null.
+    read(&with_arguments(json!(arguments))).unwrap();
+    arguments[0][1][0][2] = json!(["nat", "0"]); // 4097: present Natural counted.
+    assert_eq!(
+        read(&with_arguments(json!(arguments))).unwrap_err(),
+        InterfaceError::Format
+    );
+    arguments[7][1].as_array_mut().unwrap().pop(); // 4096 with Natural.
+    read(&with_arguments(json!(arguments))).unwrap();
+    arguments.push(json!(["nat", "0"])); // Aggregate includes later roots.
+    assert_eq!(
+        read(&with_arguments(json!(arguments))).unwrap_err(),
+        InterfaceError::Format
+    );
+    std::thread::Builder::new()
+        .stack_size(2 * 1024 * 1024)
+        .spawn(move || {
+            let mut tree = json!(["descriptor-sequence", empty, ["nat", "0"]]);
+            for _ in 0..62 {
+                tree = json!(["descriptor-sequence", tree, null]);
+            }
+            read(&with_arguments(json!([tree]))).unwrap(); // Both children at level 64.
+            tree = json!(["descriptor-sequence", tree, null]);
+            assert_eq!(
+                read(&with_arguments(json!([tree]))).unwrap_err(),
+                InterfaceError::Format
+            );
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
