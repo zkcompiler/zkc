@@ -3,6 +3,8 @@
 The C++ test consumer emits production WireGenerator helpers. Round trips check
 exact canonical bytes; separate raw-value views check coefficient order, widths
 and canonical (non-Montgomery) memory independently of the encoder.
+Logical-tree hex controls call the production runtime helper with disjoint,
+guarded input/output allocations and compare the complete memory snapshots.
 """
 
 import argparse
@@ -348,6 +350,40 @@ def main():
                          "value": value, "reserved": reserved,
                          "error": error, "code_size": result["code_size"],
                          "gas": result["runtime_gas"]})
+    yul = subprocess.check_output([str(args.consumer), "--emit-tree-hex"], text=True)
+    artifact = compile_request(args.solc, {
+        "language": "Yul", "sources": {"tree-hex.yul": {"content": yul}},
+        "settings": settings()})
+    artifacts[("tree-hex",)] = artifact
+    (args.output / "tree-hex.yul").write_text(yul)
+    samples = [(f"length-{n}", bytes((73*i + 19) % 256 for i in range(n)))
+               for n in (0, 1, 15, *range(16, 34), 47, 48, 49, 63, 64, 65)]
+    samples += [("all-byte-values", bytes(range(256))),
+                ("all-byte-values-reversed-tail", bytes(range(255, -1, -1)) + b"\xff")]
+    samples += [(f"repeated-{v:02x}", bytes([v])*33)
+                for v in (0, 9, 10, 15, 16, 0x90, 0x99, 0xaa, 0xff)]
+    padding = bytes(range(0x80, 0xa0))
+    for name, data in samples:
+        encoded = encode_tree(data.hex())
+        for source_offset, destination_offset in ((0, 0), (1, 3), (31, 23)):
+            # Inspect the full rounded allocations, including guards and padding.
+            input_memory = bytearray(b"\xa5"*((len(data) + 127) & ~31))
+            source = 32 + source_offset
+            input_memory[source:source + len(data) + 32] = data + padding
+            output_memory = bytearray(b"\x5a"*((len(encoded) + 127) & ~31))
+            destination = 32 + destination_offset
+            output_memory[destination:destination + len(encoded)] = encoded
+            expected = word(len(encoded)) + input_memory + output_memory
+            calldata = b"".join(map(word, (len(data), source_offset, destination_offset)))
+            result = execute(args.runner, artifact, calldata + data + padding)
+            try:
+                check_return(result, expected.hex(), [])
+            except AssertionError as cause:
+                raise AssertionError(f"tree-hex/{name}/{source_offset}/{destination_offset}: {cause}") from cause
+            receipts.append({"fixture": "tree-hex", "mode": name, "length": len(data),
+                "source_offset": source_offset, "destination_offset": destination_offset,
+                "expected": expected.hex(), "code_size": result["code_size"],
+                "gas": result["runtime_gas"], "memory_high_water": result["memory_high_water"]})
     receipt = {"cases": receipts, "artifacts": len(artifacts), "solc": target.SOLC_RELEASE,
                "max_code_size": max(r["code_size"] for r in receipts),
                "max_gas": max(r["gas"] for r in receipts)}
