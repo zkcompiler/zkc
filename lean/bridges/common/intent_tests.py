@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import unittest
 
 import intent
 from verify import read_json, verify
@@ -18,9 +19,16 @@ HERE = Path(__file__).resolve().parent
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--compiler', type=Path, required=True)
-    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--compiler', type=Path)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--python-only', action='store_true', help='Run focused association controls without tools or builds')
     args = parser.parse_args()
+    if args.python_only:
+        import intent_association_tests
+        suite = unittest.defaultTestLoader.loadTestsFromModule(intent_association_tests)
+        return 0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1
+    if args.compiler is None or args.output is None:
+        parser.error('--compiler and --output are required unless --python-only is selected')
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     compiler = args.compiler.resolve()
@@ -122,4 +130,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
