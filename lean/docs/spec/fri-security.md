@@ -165,6 +165,37 @@ tends to zero, the radius exceeds the unique-decoding radius exactly when
 the unique-decoding radius `7/16`, with no remaining premise (`lowRate_bound` in
 `TestsArkLib.FriSecurity`).
 
+## Johnson and weighted-Johnson instances
+
+`ZkcArkLib.Fri.Johnson` exposes the pinned ArkLib all-candidate agreement
+bounds for binary folds. The ordinary instance uses the integer threshold
+`ceil((sqrt(degree/n) + eta) * n)` and its exact exceptional-set count.
+The weighted instance takes a checked `IsJohnsonWeightedCertificate`, an
+integer agreement threshold and an explicit ceiling inequality for the requested
+radius. Neither instance adds a field-characteristic assumption.
+
+The exceptional set is fixed for the two input words before the challenge,
+and its guarantee holds for every qualifying candidate polynomial. The
+`foldingProximity_cons_johnson` and `foldingProximity_cons_weightedJohnson`
+constructors prepend these bounds to the existing `FoldingProximity` chain.
+The same `foldingEscapes_of_proximity`, ideal soundness theorem and residual
+certificate consume the result. There is no second FRI security model.
+
+These heads require post-fold code dimension at least two. The unchanged
+terminal-dimension-one example therefore retains its applicable analysis;
+the new constructors do not prove that every round fits a Johnson instance.
+`TestsArkLib.FriAdoption` checks a two-round weighted chain, its existing
+soundness consumer, the exact integer thresholds and this dimension boundary.
+This is a mathematical client, not an installed parameter or security-level claim.
+
+`ZkcArkLib.Fri.SourceCalculations` supplies the mathematical halves of the current
+helper contracts: masked u64 pair indices under representability bounds,
+Horner evaluation after zero padding, the exact padded-length condition,
+prepared-inverse folding and equality at each ordered query occurrence.
+Repeated positions are retained. These equations do not prove source-body
+association, successful ingress, primitive implementation or complete source
+outcomes. In particular, equality at queried positions is not global word equality.
+
 ## Certificate over verifier residuals
 
 `ZkcArkLib.Fri.Certificate` states the certificate over the residual
@@ -300,9 +331,11 @@ commitments, as a [verifier with committed tables](fiat-shamir-security.md#verif
 - The returned first-layer values are tied to the initial word
   (`firstValue_eq`); binding them to a caller's opening equations is the caller's
   obligation.
-- The unique-decoding and cube-root radius instances are proved. Larger
-  radii, up to the Johnson radius `1 - ρ^(1/2)`, need other proximity results as
-  the named hypothesis; at the pinned revision ArkLib's Johnson-range
-  Reed–Solomon bounds are still admitted without proof.
-- ArkLib pull request #992 is applied to the pinned revision as a declared patch
-  until it merges ([dependencies](../dependencies.md)).
+- Unique-decoding, cube-root, and the conditional Johnson/weighted-Johnson
+  heads above are proved against the pinned roots. A complete parameter chain
+  must meet every head's degree, threshold and certificate premises; dimension
+  one is not covered by the new Johnson heads. General upstream combination
+  results with admitted dependencies are not used as proof authority.
+- The pinned ArkLib includes the end-to-end FRI results previously carried by
+  pull request #992. This integration uses unmodified upstream sources
+  ([dependencies](../dependencies.md)).
