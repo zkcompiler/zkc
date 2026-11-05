@@ -377,12 +377,15 @@ std::unique_ptr<Checker> reconstructHeaders(const CheckedStorage &storage,
                                             Semantics &types, Work &work) {
   // The shared semantic index charges consumer requirements and admissions.
   // Preflight premise structures before the existing snapshot, including
-  // candidate premises whose owner has no authored header.
+  // candidate premises whose owner has no authored header. Effect maps on
+  // unrelated declarations are copied too, before any signature comparison.
   for (const auto &decl : storage.declarations)
     if (!chargeDataPreconditions(types, decl.dataPreconditions, decl.span) ||
         !chargePremiseParameters(types, decl.parameters, decl.span) ||
         !chargePremiseBounds(types, decl.bounds, decl.permissionBounds,
-                             decl.capabilityBounds, decl.span))
+                             decl.capabilityBounds, decl.span) ||
+        (decl.effectAllowance &&
+         !types.charge(decl.effectAllowance->dependencies.size(), decl.span)))
       return {};
   if (auto error = chargeSemanticIndex(storage.declarations, work)) {
     types.accept(std::move(error));
