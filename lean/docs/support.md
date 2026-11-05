@@ -21,6 +21,16 @@ prove ordered whole-row agreement with the existing extractor, or a collision
 in the recorded hash calls. Native batch correspondence, selected row codecs,
 provider bounds and application-event coverage are separate obligations.
 
+The [shared-permutation record laws](spec/fiat-shamir-security.md#fixed-extraction-from-a-shared-permutation-record)
+use one request-fixed extractor for fixed-width overwrite-sponge leaves and
+Merkle nodes, including multiblock rows and cross-role input aliases. The
+monitored finite two-sided ideal lazy permutation records every primitive call
+and proves a bound on disagreement with any recorded scalar opening or ordered
+batch. The bound counts cached, inverse and pre-allocation queries as well as
+fresh calls. Source/native operation correspondence and security of unrestricted
+public fixed Poseidon2 computation are not established by this ideal-service
+result.
+
 The [explicit-table model](spec/table-relations.md) proves complete Boolean
 laws for finite masked membership and exact indexed reads, including duplicate
 and empty cases. Exact body equations and `FormulaLaw` proofs connect the

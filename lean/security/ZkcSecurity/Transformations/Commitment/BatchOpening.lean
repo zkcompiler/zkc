@@ -283,25 +283,38 @@ theorem responseInjective_iff {log : HashLog Query Y} :
     exact noCollision ⟨first, firstMem, second, secondMem, different, same⟩
 
 /-- One shared frontier reduction authenticates the exact ordered batch in the extracted table.
-The premise concerns collisions in a finite record, not injectivity of an actual hash function. -/
-theorem batch_agrees [DecidableEq Y] {model : LeafHashing Row Query Y}
+Each decoding role must be consistent; cross-role aliases are permitted. -/
+theorem batch_agrees_of_decoderConsistent [DecidableEq Y] {model : LeafHashing Row Query Y}
     {log : HashLog Query Y} {depth : ℕ} {frontier : Frontier Y} {proof : List Y} {root : Y}
     {positions : List ℕ} {rows : List Row}
     (reduction : Reduction model log depth frontier proof root)
     (recorded : RowsRecorded model log frontier positions rows)
-    (injective : MerkleTreeExtractor.ResponseInjectiveOn log) :
+    (nodes : DecoderConsistent model.children log)
+    (leaves : DecoderConsistent model.leafRow log) :
     positions.map (model.extract log depth root) = rows.map some := by
   induction recorded with
   | nil => rfl
   | @cons index row positions rows head rest ih =>
       obtain ⟨label, inFrontier, inLog⟩ := head
       obtain ⟨bound, path, length, climbs⟩ := reduction.paths inFrontier
-      have recovered := model.extractLabel_of_climbs injective depth index path label root
+      have recovered := model.extractLabel_of_climbs_of_decoderConsistent nodes depth index path label root
         length bound climbs
       have entry : model.extract log depth root index = some row := by
         simp only [LeafHashing.extract, bound, ↓reduceIte, recovered, Option.bind_some]
-        exact model.findRow_of_mem injective inLog (model.leafRow_leaf row)
+        exact model.findRow_of_mem_of_decoderConsistent leaves inLog (model.leafRow_leaf row)
       simp only [List.map_cons, entry, ih]
+
+/-- Global response injectivity supplies both role-specific consistency laws. -/
+theorem batch_agrees [DecidableEq Y] {model : LeafHashing Row Query Y}
+    {log : HashLog Query Y} {depth : ℕ} {frontier : Frontier Y} {proof : List Y} {root : Y}
+    {positions : List ℕ} {rows : List Row}
+    (reduction : Reduction model log depth frontier proof root)
+    (recorded : RowsRecorded model log frontier positions rows)
+    (injective : MerkleTreeExtractor.ResponseInjectiveOn log) :
+    positions.map (model.extract log depth root) = rows.map some :=
+  batch_agrees_of_decoderConsistent reduction recorded
+    (.of_responseInjective model.children injective)
+    (.of_responseInjective model.leafRow injective)
 
 /-- Deterministic batch consistency or an explicit collision in the shared record. -/
 theorem batch_agrees_or_collision [DecidableEq Y] {model : LeafHashing Row Query Y}

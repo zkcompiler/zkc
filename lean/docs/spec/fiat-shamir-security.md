@@ -1581,6 +1581,84 @@ row framing, native lead-path restoration, primitive hashing, logical reads,
 and the pre-challenge extraction checkpoint. It must also provide the provider
 loss and application event implication required above.
 
+`DecoderConsistent decode log` weakens the sufficient record premise to the
+role actually decoded. Equal labels for two queries recognized by `decode`
+must produce the same decoded value. `batch_agrees_of_decoderConsistent` uses
+one law for node children and one for leaf rows. Cross-role aliases are allowed;
+the first-match extractor and the complete ordered batch are unchanged. Global
+response injectivity implies both laws and still supplies the existing
+`batch_agrees` theorem. These deterministic conditions carry no probability
+bound by themselves.
+
+`BatchVerification.verify_agrees_in_record_of_decoderConsistent` derives the
+same agreement from the actual successful batch operation when its query log
+is included in that record. `verify_agrees_at_checkpoint` uses the existing
+`GoodFrom` invariant, exact transcript-key membership and committed-root bound
+to move agreement to the prefix before that key's first query. Log inclusion
+alone proves neither chronological source association nor checkpoint stability.
+
+`verify_complete` proves completeness of the entire decoded operation from an
+answer-consistent tree reduction, public shape and allocation bounds, and
+valid selected rows. The reduction determines the exact proof length.
+`verify_table_complete` additionally discharges duplicate consistency and
+representative selection for rows read from one fixed table, preserving the
+original request order. An independent tree witness exercises this theorem;
+acceptance is not used to manufacture its premise.
+
+
+### Fixed extraction from a shared permutation record
+
+`Commitment.PoseidonRows` defines a straight-line extractor from the full shared
+permutation record. The request fixes the positive flattened row width, actual
+height, depth and zero completion. Extraction normalizes repeated oriented pairs
+in first-exposure order, descends the recorded Merkle path, and recovers the
+overwrite sponge backwards through capacity links. It uses forward-born pairs;
+inverse-born pairs retain their original direction even after a forward cache hit.
+The last partial block checks the retained rate suffix. Exact block boundaries
+introduce no extra padding call. Leaf and node inputs may alias.
+
+`SpongeTrace`, `NodeClimb` and the existing `BatchOpening.Reduction` describe
+concrete recorded operations. Their generic theorems derive extraction agreement
+for ordered scalar/batch readings, including duplicate positions. The extractor
+does not choose a witness or use a supplied successful decoder. Request height
+excludes padded leaves independently of Merkle depth.
+
+`PoseidonRows.Monitored.handler` constructs the history through one two-sided
+ideal lazy permutation. Every primitive call is recorded, including cache hits,
+inverse queries, prequeries and calls in computations that later fail. Successful
+allocation attempts create physical markers and retain root occurrences, including
+duplicates. Over-budget allocation returns false without silently registering
+roots. Extraction uses the first marker for its key.
+
+The support invariant proves that the absence of the charged bad event implies
+`GoodHistory` for this actual history. Forward queries test sampled output
+coordinates; inverse queries test sampled input coordinates. The inverse query's
+adversary-chosen output is not treated as random. Root and capacity protection
+prevent later exposure from changing an earlier checkpoint extraction.
+
+`Monitored.extraction_disagreement_le` bounds disagreement for any concretely
+recorded scalar or ordered batch operation, including zero completion. With
+`d = |Fin rate → F|`, total primitive budget `Q`, and enforced root-occurrence
+budget `b`, its bound is
+
+```text
+min(1, d * (5 * (Q * (Q - 1) / 2) + (b + 4) * Q) / (d^2 - Q)), if Q < d^2;
+1 otherwise.
+```
+
+The triangular expression is natural-number arithmetic before casting to
+`ENNReal`; the final fraction is `ENNReal` division. Allocation attempts do not
+consume the primitive budget. Private randomization may select a reply-adaptive
+program with the same all-path budget. The theorem reuses VCVio's potential
+composition theorem and the shared lazy sampler. It is not an eager-permutation
+equivalence theorem.
+
+A source realization must derive the recorded-operation witnesses and align the
+request, allocation identity and primitive budget with the actual accepted
+execution. This library theorem is relative to the stated ideal primitive access
+model. It does not assert a result for unrestricted local computation of the
+public fixed Poseidon2 permutation or a native Rust refinement.
+
 ## Stage relations
 
 A verification stage relates two attack games (`ZkcSecurity.Stage`). A game
