@@ -23,7 +23,7 @@ the run; the nonce arm does not inspect the challenge. Stopped replies preserve
 the reached request prefix. Sends at the expected sites always succeed. -/
 def replyHandler {F G : Type} (service : Nat) (nonce challenge : PIR.Outcome F) :
     PIR.Handler (participantInterface F G) Unit (Action F G)
-  | action@(.query site domain args), state =>
+  | action@(.query site (.draw domain) args), state =>
       let field : String := domain
       let handle : Nat := args.get .here
       if site = SchnorrInteractive.nonceSite ∧ field = scalarDomain ∧ handle = service then
@@ -48,7 +48,7 @@ endpoint, handle and order checks. No prefix, extra action or stop is totalized.
 def extract {F G : Type} (service : Nat) (execution : Execution F G) : Option (G × F) :=
   match execution.outcome, execution.events with
   | .returned none,
-      [.query querySite queryDomain args,
+      [.query querySite (.draw queryDomain) args,
        .send (ty := .group commitmentDomain) commitmentSite commitmentPeer commitment,
        .receive (.field challengeDomain) challengeSite challengePeer,
        .send (ty := .field responseDomain) responseSite responsePeer response] =>
@@ -85,7 +85,8 @@ theorem run_replies_eq (base key : G) (secret : F) (service : Nat)
     (nonce challenge : PIR.Outcome F) :
     (SchnorrInteractive.proverProcess base key secret service).run
         (replyHandler service nonce challenge) () =
-      (⟨nonce, (), [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)]⟩ :
+      (⟨nonce, (), [.query SchnorrInteractive.nonceSite (.draw scalarDomain)
+        (.cons service .nil)]⟩ :
         PIR.Execution Unit (Action F G) F).follow (fun n _ ↦
         (⟨challenge, (),
           [.send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (n • base),
@@ -97,7 +98,6 @@ theorem run_replies_eq (base key : G) (secret : F) (service : Nat)
   rw [SchnorrInteractive.prover_equation]
   cases nonce <;> cases challenge <;>
     simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
-  all_goals rfl
 
 /-- Recover the actual tuple for arbitrary replies, rather than inventing a
 successful prover output. The return inverse is just the singleton ABI. -/
@@ -123,7 +123,7 @@ already been erased by `Program.participant`. -/
 theorem execution_eq (base key : G) (secret nonce challenge : F) (service : Nat) :
     execution base key secret nonce challenge service =
       ⟨.returned none, (),
-        [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil),
+        [.query SchnorrInteractive.nonceSite (.draw scalarDomain) (.cons service .nil),
          .send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base),
          .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1,
          .send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1
@@ -208,7 +208,8 @@ theorem accepts (proverBase proverKey verifierBase verifierKey : G)
 theorem nonce_stopped (base key : G) (secret challenge : F) (service : Nat) (why : PIR.Stop) :
     (SchnorrInteractive.proverProcess base key secret service).run
         (replyHandler service (.stopped why) (.returned challenge)) () =
-      ⟨.stopped why, (), [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)]⟩ := by
+      ⟨.stopped why, (), [.query SchnorrInteractive.nonceSite (.draw scalarDomain)
+        (.cons service .nil)]⟩ := by
   rw [run_replies_eq]
   rfl
 
@@ -217,7 +218,7 @@ theorem challenge_stopped (base key : G) (secret nonce : F) (service : Nat) (why
     (SchnorrInteractive.proverProcess base key secret service).run
         (replyHandler service (.returned nonce) (.stopped why)) () =
       ⟨.stopped why, (),
-        [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil),
+        [.query SchnorrInteractive.nonceSite (.draw scalarDomain) (.cons service .nil),
          .send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base),
          .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1]⟩ := by
   rw [run_replies_eq]

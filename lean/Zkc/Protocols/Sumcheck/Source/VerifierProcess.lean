@@ -44,7 +44,7 @@ def roundPlain (ctx : ProtocolContext) (service : Option Nat)
       | none => .halt .incomplete
       | some handle =>
         .call (.query (challengeSite ctx)
-          "bls12-381.fr" (.cons handle .nil)) fun (cv : F) =>
+          (.draw "bls12-381.fr") (.cons handle .nil)) fun (cv : F) =>
         .call (.send (ty := .field "bls12-381.fr")
           (deliverySite ctx)
           (ctx.roles 0) cv) fun _ =>
@@ -62,7 +62,7 @@ def roundPresent (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
     (highSite ctx) (ctx.roles 0)) fun (hi : F) =>
   if pc.2 = lo + hi then
     .call (.query (challengeSite ctx)
-      "bls12-381.fr" (.cons handle .nil)) fun (cv : F) =>
+      (.draw "bls12-381.fr") (.cons handle .nil)) fun (cv : F) =>
     .call (.send (ty := .field "bls12-381.fr")
       (deliverySite ctx)
       (ctx.roles 0) cv) fun _ =>

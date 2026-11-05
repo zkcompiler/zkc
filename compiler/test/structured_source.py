@@ -606,5 +606,203 @@ for label, origin in [
         changed = simple().replace('origin=["main",[]]', 'origin=' + json.dumps(origin, ensure_ascii=False))
         export(changed, 'mathematical-formation')
 
+
+
+# These controls exercise producer formation only. They do not invoke the
+# independent participant evaluator, whose admitted primitive subset is smaller.
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'common/catalog'))
+from generate import validate
+catalog = json.loads((Path(__file__).resolve().parents[2] / 'common/catalog/declarations.json').read_text())
+validate(catalog)
+members = next(p for p in catalog['consumerProfiles'] if p['name'] == 'structured-source-primitives')['operations']
+# Each added ABI is rederived by native formation, including dormant rows.
+extra_names = ['bool.and', 'bool.not', 'bool.or', 'field.constant', 'field.inverse', 'field.mul', 'indices.append', 'indices.at', 'indices.empty', 'indices.length', 'poly.coefficients', 'poly.coset_interpolate', 'poly.domain_point', 'poly.domain_root', 'poly.even_odd_fold', 'poly.from_coefficients', 'poly.univariate_evaluate', 'vector.concat', 'vector.fill', 'vector.get', 'field.add', 'field.sub', 'poly.domain_points', 'poly.coset_evaluate_batch', 'poly.coset_evaluate_at', 'poly.coset_extend', 'poly.opening_quotient_sum', 'vector.add', 'vector.sub', 'vector.mul', 'vector.scale', 'vector.inverse', 'vector.geometric', 'vector.slice', 'vector.transpose', 'vector.embed', 'vector.rotate', 'vector.bit_reverse_rows', 'vector.prefix_sum', 'vector.prefix_product']
+wire = {'index': 'ui64', 'bool': 'i1', 'indices': '!data.indices',
+        'field': '!algebra.field<"koala-bear.ext8-binomial3">',
+        'vector': '!data.field_vector<"koala-bear.ext8-binomial3">',
+        'polynomial': '!poly.univariate<"koala-bear.ext8-binomial3">'}
+for member in members:
+    name = member['operation']
+    if name not in extra_names:
+        continue
+    # Embedding ports use the associated BaseField; test separately below.
+    if name == 'vector.embed':
+        continue
+    with case('expanded-primitive-binding-' + name):
+        ports = member['signature']
+        inputs = [wire[p['constructor']] for p in ports['inputs']]
+        outputs = [wire[p['constructor']] for p in ports['outputs']]
+        arguments = ['koala-bear.ext8-binomial3'] if member['scope'] else []
+        declaration = ('"runtime.binding"() {sym_name="expanded",contract=' + json.dumps(name) +
+            ',arguments=' + json.dumps(arguments) + ',implementation="",function_type=(!runtime.scope' +
+            (',' if inputs else '') + ','.join(inputs) + ')->!exec.outcome<(' + ','.join(outputs) +
+            ')>} : ()->()')
+        result = export(simple(declaration))
+        assert result[6][0][1:5] == ['expanded', name,
+            [['domain', 'Field', 'koala-bear.ext8-binomial3']] if arguments else [], '']
+        assert [p[1] for p in result[6][0][5]] == [p['constructor'] for p in ports['inputs']]
+        assert [p[1] for p in result[6][0][6]] == [p['constructor'] for p in ports['outputs']]
+with case('vector-embedding-exact-associated-base-and-refusals'):
+    declaration = ('"runtime.binding"() {sym_name="embedding",contract="vector.embed",'
+        'arguments=["koala-bear.ext8-binomial3"],implementation="",function_type=(!runtime.scope,'
+        '!data.field_vector<"koala-bear">)->!exec.outcome<(!data.field_vector<"koala-bear.ext8-binomial3">)>} : ()->()')
+    assert export(simple(declaration))[6][0][5] == [['apply', 'vector', [['domain', 'Field', 'koala-bear']]]]
+    wrong = declaration.replace('!runtime.scope,!data.field_vector<"koala-bear">',
+        '!runtime.scope,!data.field_vector<"koala-bear.ext8-binomial3">')
+    export(simple(wrong), refusal='structured-source-original')
+    unknown = declaration.replace('contract="vector.embed"', 'contract="unknown.embed"')
+    export(simple(unknown), refusal='structured-source-original')
+
+def sampling_source(method, bound=32, count=8):
+    scalar = method == 'index'
+    output = 'ui64' if scalar else '!data.indices'
+    constants = '%bound = "data.index"() {value=' + str(bound) + ' : ui64} : ()->ui64'
+    arguments = '%coins,%bound'
+    input_types = '!S,ui64'
+    if not scalar:
+        constants += '\n%count = "data.index"() {value=' + str(count) + ' : ui64} : ()->ui64'
+        arguments += ',%count'
+        input_types += ',ui64'
+    return ('!S = !protocol.service_ref<"random.koala-bear.ext8-binomial3/0">\n'
+        'module { "protocol.module"() ({\n"protocol.func"() ({ ^entry(%coins:!S):\n' + constants +
+        '\n%result = "protocol.query"(' + arguments + ') {method=' + json.dumps(method) +
+        ',owner="V",site="position"} : (' + input_types + ')->' + output +
+        '\n"protocol.return"(%result) : (' + output + ')->()\n}) {sym_name="main",origin=["main",[]],'
+        'function_type=(!S)->' + output + ',roles=["P","V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()\n'
+        '}) {profile=#protocol.profile<protocol>} : ()->() }')
+
+
+for method in ('index', 'indices'):
+    with case('sampling-descriptor-' + method):
+        result = export(sampling_source(method))
+        rows = instructions(table(result)['main'])
+        query = rows[-1]
+        assert query[0] == ['sample_' + method, 'V', 'random.koala-bear.ext8-binomial3/0']
+        # Newest-first coordinates retain service, bound and count independently.
+        assert query[1] == ([1, 0] if method == 'index' else [2, 1, 0])
+        assert query[2] == ([index] if method == 'index' else [['apply', 'indices', []]])
+        assert query[4] == 'position'
+        assert result[9][1] == [['service', 'random.koala-bear.ext8-binomial3/0',
+            'koala-bear.ext8-binomial3', ['draw', 'index', 'indices']]]
+        export(sampling_source(method, bound=0), refusal='structured-source-original')
+        if method == 'indices':
+            export(sampling_source(method, count=0), refusal='structured-source-original')
+            assert export(sampling_source(method, count=1))
+            assert export(sampling_source(method, count=2**64 - 1))
+            dynamic_count = sampling_source(method).replace(
+                '%count = "data.index"() {value=8 : ui64} : ()->ui64',
+                '%a = "data.index"() {value=4 : ui64} : ()->ui64\n'
+                '%count = "data.index_wrapping_add"(%a,%a) : (ui64,ui64)->ui64')
+            export(dynamic_count, refusal='structured-source-original')
+        wrong_field = sampling_source(method).replace('koala-bear.ext8-binomial3', 'bls12-381.fr')
+        export(wrong_field, refusal='structured-source-original')
+        # The source contract admits all positive u64 bounds. The selected CPU
+        # sampler separately restricts them to powers of two; formation does not.
+        assert export(sampling_source(method, bound=3))
+        assert export(sampling_source(method, bound=1))
+        assert export(sampling_source(method, bound=2**64 - 1))
+        dynamic = sampling_source(method).replace(
+            '%bound = "data.index"() {value=32 : ui64} : ()->ui64',
+            '%a = "data.index"() {value=16 : ui64} : ()->ui64\n'
+            '%bound = "data.index_wrapping_add"(%a,%a) : (ui64,ui64)->ui64')
+        export(dynamic, refusal='structured-source-original')
+        unknown = sampling_source(method).replace('method="' + method + '"',
+                                                  'method="unknown"')
+        export(unknown, refusal='structured-source-original')
+        wrong_owner = sampling_source(method).replace('owner="V"', 'owner="P"')
+        export(wrong_owner, refusal='structured-source-original')
+        shared_owner = sampling_source(method).replace('input_roles=[["V"]]',
+                                                       'input_roles=[["P","V"]]')
+        export(shared_owner, refusal='structured-source-original')
+
+
+# Literal attributes carry an exact field and presentation. Export never
+# treats them as index parameters or reduces them modulo the characteristic.
+from scoped_sources import invocation, scoped_function
+
+
+def literal_source(identity, value, width):
+    field_type = f'!algebra.field<"{identity}">'
+    declaration = ('"runtime.binding"() {sym_name="literal",contract="field.constant",'
+        f'arguments=["{identity}"],implementation="",function_type=(!runtime.scope)'
+        f'->!exec.outcome<({field_type})>}} : ()->()')
+    parameter = f'#algebra.literal<<"{identity}">, {value} : ui{width}> : {field_type}'
+    body = invocation('exec.apply', [], [field_type],
+        f'binding=@literal,parameters=[{parameter}],site="literal"')
+    return simple(declaration + '\n' + scoped_function('literal_helper', [],
+        [field_type], body, ['%r'], private=True)), parameter
+
+
+for identity, value, width, encoding, canonical in [
+    ('koala-bear.ext8-binomial3', 0, 31, 'natural', '0'),
+    ('koala-bear.ext8-binomial3', 1, 31, 'natural', '1'),
+    ('koala-bear.ext8-binomial3', 2130706432, 31, 'natural', '2130706432'),
+    ('gf2-64.pentanomial-4-3-1', 1, 64, 'natural', '1'),
+    ('gf2-64.pentanomial-4-3-1', 171, 64, 'bits', '0xab'),
+]:
+    with case('field-literal-parameter-' + identity + '-' + canonical):
+        source, parameter = literal_source(identity, value, width)
+        result = export(source)
+        helper = table(result)['literal_helper']
+        assert instructions(helper)[0][0] == ['exec', 'exec.apply', 'literal',
+            [['field_literal', identity, encoding, canonical]]]
+        export(source.replace(parameter, '0 : ui64'), refusal='structured-source-original')
+        export(source.replace('parameters=[' + parameter + ']', 'parameters=[]'),
+               refusal='structured-source-original')
+        export(source.replace('parameters=[' + parameter + ']',
+               'parameters=[' + parameter + ',' + parameter + ']'),
+               refusal='structured-source-original')
+
+with case('field-literal-parameter-nominal-and-characteristic-refusals'):
+    source, parameter = literal_source('koala-bear.ext8-binomial3', 0, 31)
+    export(source.replace(parameter, parameter.replace('koala-bear.ext8-binomial3',
+           'koala-bear')), refusal='structured-source-original')
+    source, _ = literal_source('koala-bear.ext8-binomial3', 2130706433, 31)
+    export(source, refusal='structured-source-original')
+
+
+# Preserve both complete FRI originals, including honest-prover code. Their
+# transitive multi-role Math folds are retained with their original dependencies;
+# choosing the inner subject must not prune the honest-prover definitions.
+from project import project_inputs
+from tools import compiler
+
+root = Path(__file__).resolve().parents[2]
+for variant, query_method in [('ScalarLowDegree', 'index'),
+                              ('BlockLowDegree', 'indices')]:
+    with case('actual-fri-full-original-numerical-export-' + variant):
+        modules, assets = project_inputs(root / 'examples/projects/fri/zkc.toml')
+        assert not assets
+        before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in modules.values()}
+        text = modules['example'].read_text()
+        assert 'ScalarLowDegree' in text
+        assert 'return (accepted = accepted);' in text
+        source_path = commands.directory / (variant + '.zkc')
+        source_path.write_text(text.replace('ScalarLowDegree', variant))
+        modules['example'] = source_path
+        flags = ['--source-format=zkc', '--subject=example::Fri',
+            *[f'--module={name}={path}' for name, path in sorted(modules.items())]]
+        emitted = commands.run([compiler, 'language-emit', *flags])
+        interface = json.loads(commands.run([compiler, 'language-interface', *flags]))
+        assert interface['original'] == hashlib.sha256(emitted.encode()).hexdigest()
+        subject_header = next(line for line in emitted.splitlines()
+            if '"protocol.func"()' in line and 'origin = ["fri::' + variant + '"' in line)
+        subject = re.search(r'sym_name = "([^"]+)"', subject_header)[1]
+        wrapper = export(emitted, symbol=interface['protocol'])
+        actual = export(emitted, symbol=subject)
+        assert wrapper[2] == actual[2] == 'sha256:' + hashlib.sha256(emitted.encode()).hexdigest()
+        assert wrapper[3] == interface['protocol'] and actual[3] == subject
+        # Selection changes only the root, never the retained definitions.
+        assert wrapper[4:10] == actual[4:10]
+        assert 'method = "' + query_method + '"' in emitted
+        assert 'contract = "poly.coset_interpolate"' in emitted
+        assert '"protocol.oracle_query"' in emitted
+        assert '"data.finite_fold"' in emitted and '"data.domain_range"' in emitted
+        assert '#algebra.literal<' in emitted
+        assert all(hashlib.sha256(path.read_bytes()).hexdigest() == digest
+            for path, digest in before.items())
+
+
 commands.save()
 print(f"structured-source: {counted()} cases")

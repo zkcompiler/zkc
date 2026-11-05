@@ -178,6 +178,11 @@ import all Zkc.Source.Structured.Operations
 import all Zkc.Source.Structured.Origin
 import all Zkc.Source.Structured.OutputSelection
 import all Zkc.Source.Structured.Participant
+import all Zkc.Source.Structured.PolynomialValue
+import all Zkc.Source.Structured.Numerical
+import all Zkc.Source.Structured.NumericalCapabilities
+import all Zkc.Source.Structured.NumericalEvaluation
+import all Zkc.Source.Structured.NumericalLaws
 import all Zkc.Source.Structured.PreparationAdmission
 import all Zkc.Source.Structured.PrimitiveEvaluation
 import all Zkc.Source.Structured.Primitives
@@ -323,6 +328,34 @@ import all ZkcTools.ConstructionBindings.LibraryPlan
 import all ZkcTools.ConstructionBindings.Readback
 import all ZkcTools.ConstructionBindings.Root
 import all ZkcTools.ConstructionBindings.Syntax
+import all Zkc.Construction.ConnectionServiceCoverage
+import all Zkc.Construction.ConnectionServiceRequests
+import all Zkc.Construction.ConnectionServiceRoutes
+import all Zkc.Construction.ConnectionTargetPlacement
+import all Zkc.Construction.ServiceConnection
+import all Zkc.Construction.ServiceRequests
+import all Zkc.Source.LogicalFormat
+import all Zkc.Source.RegionDerivation
+import all Zkc.Source.Structured.Addresses
+import all Zkc.Source.Structured.Bindings.Assembly
+import all Zkc.Source.Structured.Bindings.Component
+import all Zkc.Source.Structured.CatalogueEnvironment
+import all Zkc.Source.Structured.CustodyAdmission
+import all Zkc.Source.Structured.DomainLaws
+import all Zkc.Source.Structured.IndexWords
+import all Zkc.Source.Structured.InstalledCatalogue
+import all Zkc.Source.Structured.NormalForm.Presentation
+import all Zkc.Source.Structured.NormalForm.Sites
+import all Zkc.Source.Structured.OracleAdmission
+import all Zkc.Source.Structured.OracleBody
+import all Zkc.Source.Structured.OracleOperations
+import all Zkc.Source.Structured.OracleProtocolAdmission
+import all Zkc.Source.Structured.OracleValues
+import all Zkc.Source.Structured.ServiceAdmission
+import all Zkc.Source.Structured.ServiceExecution
+import all Zkc.Source.Structured.ServiceOperations
+import all Zkc.Source.Structured.SourceDeclarations
+import all Zkc.Source.Structured.SourcePlacementShape
 public import Lean
 
 /-! Full type/body and axiom audit. Missing dependencies fail. -/

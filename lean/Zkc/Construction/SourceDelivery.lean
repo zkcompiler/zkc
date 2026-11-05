@@ -76,6 +76,7 @@ def resultOrigins (descriptor : Structured.Descriptor) (site : String)
   match descriptor, arguments, types with
   | .draw _ field, _, [.field result] =>
       if field = result then [some site] else [none]
+  | .sampleIndex .., _, [.index] | .sampleIndices .., _, [.indices] => [some site]
   | .restrict _, [origin], [_] => [origin]
   | _, _, _ => types.map fun _ => none
 
@@ -105,7 +106,8 @@ def checked (snapshot : Structured.Snapshot) (context : Context)
     (query message : Template) : Bool := Id.run do
   if !SourceOccurrences.valid snapshot context query ||
       !SourceOccurrences.valid snapshot context message || query.steps != message.steps then return false
-  let ["query", _, querySite, _, _, "draw", queryOwner] := query.event | return false
+  let ["query", _, querySite, _, _, method, queryOwner] := query.event | return false
+  if !(["draw", "index", "indices"].contains method) then return false
   let ["message", _, messageSite, _, sender, receiver] := message.event | return false
   if queryOwner != context.role context.validator || sender != queryOwner ||
       receiver != context.role context.producer then return false

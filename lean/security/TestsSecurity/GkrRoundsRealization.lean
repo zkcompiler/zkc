@@ -48,7 +48,7 @@ theorem first_message :
   change invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
     (.cons [1, 2, 3, 4] (.cons [2, 5, 7, 11] (.cons [2, 2, 6, 6] (.cons [2, 6, 2, 6] .nil)))) = _
   rw [round_equation]
-  norm_num [raw, RawState.values, round, split, Primitive.evaluate, primitiveOutcome,
+  norm_num [raw, RawState.values, round, split, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
     mapped, Evaluation.mapShape, Evaluation.mapShapeRemaining, indexLimit, Finite.admitThen,
     PIR.Process.bind, get_there, Values.get_cons, Values.get, Environment.push, valuesFormula, quadraticsFormula, Gate.value, Gate.quadratic,
     List.range_succ, List.sum_cons]
@@ -70,7 +70,7 @@ theorem second_message :
   change invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper (.cons [5, 6]
     (.cons [12, 17] (.cons [10, 10] (.cons [2, 6] .nil)))) = _
   rw [round_equation]
-  norm_num [round, split, Primitive.evaluate, primitiveOutcome, mapped,
+  norm_num [round, split, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, mapped,
     Evaluation.mapShape, Evaluation.mapShapeRemaining, indexLimit, Finite.admitThen,
     PIR.Process.bind, get_there, Values.get_cons, Values.get, Environment.push, valuesFormula, quadraticsFormula, Gate.value, Gate.quadratic, List.range_succ]
 
@@ -107,7 +107,7 @@ theorem unequal_maps_refuse :
       (.cons [1, 2] (.cons [1, 2, 3, 4] (.cons [1, 2] (.cons [1, 2] .nil)))) =
       .halt .refused := by
   rw [round_equation]
-  norm_num [round, split, Primitive.evaluate, primitiveOutcome, mapped,
+  norm_num [round, split, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, mapped,
     Evaluation.mapShape, Evaluation.mapShapeRemaining, indexLimit, Finite.admitThen, PIR.Process.bind, get_there, Values.get_cons, Values.get, Environment.push]
 
 theorem even_once_is_insufficient :
@@ -142,7 +142,7 @@ theorem stale_factor_refuses :
     invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
       (.cons [5, 6] (.cons [12, 17] (.cons raw.left (.cons [2, 6] .nil)))) = .halt .refused := by
   rw [round_equation]
-  norm_num [raw, round, split, Primitive.evaluate, primitiveOutcome, mapped,
+  norm_num [raw, round, split, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, mapped,
     Evaluation.mapShape, Evaluation.mapShapeRemaining, indexLimit, Finite.admitThen, PIR.Process.bind, get_there, Values.get_cons, Values.get, Environment.push]
 
 /-- Even a stale factor with the right shape changes the off-cube observation. -/
@@ -186,7 +186,7 @@ theorem actual_cubic_message :
   change invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
     (.cons [0, 0] (.cons [0, 1] (.cons [0, 1] (.cons [0, 1] .nil)))) = _
   rw [round_equation]
-  norm_num [round, split, Primitive.evaluate, primitiveOutcome, mapped,
+  norm_num [round, split, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, mapped,
     Evaluation.mapShape, Evaluation.mapShapeRemaining, indexLimit, Finite.admitThen,
     PIR.Process.bind, get_there, Values.get_cons, Values.get, Environment.push,
     valuesFormula, quadraticsFormula, Gate.value, Gate.quadratic, List.range_succ]

@@ -114,7 +114,8 @@ theorem validator_every_reply (base point : Option Group)
       (singleSignature domains randomizedMetadata) {} 1
       (.cons base (.cons point (.cons hiddenWitness (.cons hiddenService (.cons (some 7) .nil))))) =
     (.call (.action (.receive (.group domains.group) singleSites.commitment 0)) fun commitment =>
-      .call (.action (.query singleSites.challenge domains.scalar (.cons 7 .nil))) fun challenge =>
+      .call (.action (.query singleSites.challenge (.draw domains.scalar)
+        (.cons 7 .nil))) fun challenge =>
       .call (.action (.send singleSites.delivery 0 challenge)) fun _ =>
       .call (.action (.receive (.field domains.scalar) singleSites.response 0)) fun response =>
       .done (.cons (equal model domains.group (scale model domains base (some response))

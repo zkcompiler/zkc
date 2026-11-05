@@ -43,7 +43,7 @@ def Carriers.valueType (carriers : Carriers) (ty : Ty) : String :=
   | .domain model, .field d => paren model ++ ".Field " ++ quoted d
   | .domain model, .vector d => app "List" [paren (paren model ++ ".Field " ++ quoted d)]
   | .domain model, .group d => paren model ++ ".Group " ++ quoted d
-  | _, .indices | _, .groups _ | _, .oracle _ | _, .oracleSequence ..
+  | _, .polynomial _ | _, .indices | _, .groups _ | _, .oracle _ | _, .oracleSequence ..
   | _, .sequence _ | _, .product .. => app carriers.value [tyText ty]
 
 def emptyLabels : (Δ : Scope) → Values (fun _ => Option String) Δ
@@ -192,7 +192,7 @@ def processText (naming : Naming laws callees initial) {out : List Ty} (finish :
       tail
   | _, names, .query site request args next, indent => do
     let name ← fresh naming
-    let action := app ".query" [siteExpression naming site, quoted request, valuesText (termsText naming names args)]
+    let action := app ".query" [siteExpression naming site, serviceOpText request, valuesText (termsText naming names args)]
     let tail ← processText naming finish (name :: names) next indent
     let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
     return pad indent ++ ".call " ++ action ++ " fun (" ++ binder ++ " : " ++

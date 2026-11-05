@@ -65,7 +65,7 @@ def protocol0Role0Signature : Signature := ⟨projectionKeys, false, false, prog
 def protocol0Role0Pattern : InputPattern definition0.inputs := (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil)))))
 
 noncomputable def protocol0Role0Form : Form protocol0Role0Signature.laws calleeKeys protocol0Role0Pattern.scope [.boolean] :=
-  (.split (.input (.there (.there (.there .here)))) (.halt .incomplete) (.query "s0" "bls12-381.fr" (.cons (.var .here) .nil) (.split (.input (.there (.there .here))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there .here)) .nil)) .here) (.receive (.field "bls12-381.fr") "label_64656c6976657279_0" 1 (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var .here) .nil)) .here) .nil)) .here) (.done (.cons .absent .nil)))))))))
+  (.split (.input (.there (.there (.there .here)))) (.halt .incomplete) (.query "s0" (.draw "bls12-381.fr") (.cons (.var .here) .nil) (.split (.input (.there (.there .here))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there .here)) .nil)) .here) (.receive (.field "bls12-381.fr") "label_64656c6976657279_0" 1 (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var .here) .nil)) .here) .nil)) .here) (.done (.cons .absent .nil)))))))))
 
 noncomputable def protocol0Role0Process (ctx : ProtocolContext) (b0 : (Option (G))) (_b1 : (Option (G))) (b2 : (Option (F))) (b3 : (Option (Nat))) (_b4 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
@@ -73,7 +73,7 @@ noncomputable def protocol0Role0Process (ctx : ProtocolContext) (b0 : (Option (G
   | none =>
     .halt .incomplete
   | some b5 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "s0") "bls12-381.fr" (.cons (b5) .nil)) fun (b6 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "s0") (.draw "bls12-381.fr") (.cons (b5) .nil)) fun (b6 : F) =>
     match b0 with
     | none =>
       .halt .incomplete
@@ -159,7 +159,7 @@ def protocol0Role1Signature : Signature := ⟨projectionKeys, false, false, prog
 def protocol0Role1Pattern : InputPattern definition0.inputs := (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil)))))
 
 noncomputable def protocol0Role1Form : Form protocol0Role1Signature.laws calleeKeys protocol0Role1Pattern.scope [.boolean] :=
-  (.receive (.group "bls12-381.g1") "label_636f6d6d69746d656e74_0" 0 (.split (.input (.there (.there (.there (.there (.there .here)))))) (.halt .incomplete) (.query "label_6368616c6c656e6765" "bls12-381.fr" (.cons (.var .here) .nil) (.send (.field "bls12-381.fr") "label_64656c6976657279_0" 0 (.var .here) (.receive (.field "bls12-381.fr") "label_726573706f6e7365_0" 0 (.split (.input (.there (.there (.there (.there .here))))) (.split (.input (.there (.there (.there (.there (.there .here)))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.done (.cons .absent .nil)) (.done (.cons (.present (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var (.there (.there .here))) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there (.there .here)))) .nil)) .here) .nil)) .here) .nil)) .here)) .nil)))))))))
+  (.receive (.group "bls12-381.g1") "label_636f6d6d69746d656e74_0" 0 (.split (.input (.there (.there (.there (.there (.there .here)))))) (.halt .incomplete) (.query "label_6368616c6c656e6765" (.draw "bls12-381.fr") (.cons (.var .here) .nil) (.send (.field "bls12-381.fr") "label_64656c6976657279_0" 0 (.var .here) (.receive (.field "bls12-381.fr") "label_726573706f6e7365_0" 0 (.split (.input (.there (.there (.there (.there .here))))) (.split (.input (.there (.there (.there (.there (.there .here)))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.done (.cons .absent .nil)) (.done (.cons (.present (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var (.there (.there .here))) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there (.there .here)))) .nil)) .here) .nil)) .here) .nil)) .here)) .nil)))))))))
 
 noncomputable def protocol0Role1Process (ctx : ProtocolContext) (b0 : (Option (G))) (b1 : (Option (G))) (_b2 : (Option (F))) (_b3 : (Option (Nat))) (b4 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
@@ -168,7 +168,7 @@ noncomputable def protocol0Role1Process (ctx : ProtocolContext) (b0 : (Option (G
   | none =>
     .halt .incomplete
   | some b6 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") "bls12-381.fr" (.cons (b6) .nil)) fun (b7 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") (.draw "bls12-381.fr") (.cons (b6) .nil)) fun (b7 : F) =>
     .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_64656c6976657279_0") ((ctx).roles 0) (b7)) fun _ =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_726573706f6e7365_0") ((ctx).roles 0)) fun (b8 : F) =>
     match b0 with

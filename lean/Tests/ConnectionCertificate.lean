@@ -296,7 +296,7 @@ example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout 
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout [.value (.service "random.bls12-381.fr/0")]) (.query "query" "bls12-381.fr" (.cons (.var .here) .nil) (.done .nil)) (fun _ => Domain.View.empty) := by
+example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout [.value (.service "random.bls12-381.fr/0")]) (.query "query" (.draw "bls12-381.fr") (.cons (.var .here) .nil) (.done .nil)) (fun _ => Domain.View.empty) := by
   derive_connection_alignment
 
 /-- error: alignment-return-or-view-mismatch -/

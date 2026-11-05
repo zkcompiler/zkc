@@ -2,6 +2,9 @@ module
 
 public import Zkc.Source.Structured.ProtocolOperations
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 @[expose] public section
 
 /-! Formed declarations and structural linking evidence, independent of source
@@ -145,3 +148,8 @@ theorem CheckedProtocol.body_eq_of_raw (root : CheckedProtocol)
   exact (Except.ok.inj formed).symm
 
 end Zkc.Source.Structured
+
+-- Realize shared equations here so every client imports the same stored proof.
+-- Independent lazy generation can attach different private helpers to one public name.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getUnfoldEqnFor? ``Zkc.Source.Structured.DeclarationsLinked

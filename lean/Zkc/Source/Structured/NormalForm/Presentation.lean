@@ -249,8 +249,10 @@ theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
     simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
     exact congrArg (PIR.Process.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
   | _, .query site request args next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
-    exact congrArg (PIR.Process.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn,
+      PIR.Process.bind_assoc]
+    exact congrArg (PIR.Process.bind _) (funext fun reply =>
+      denote_finish spec next finishes (.cons reply binders))
   | _, .split subject absent present, finishes, binders => by
     simp only [Form.finishes, Bool.and_eq_true] at finishes
     simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn]
@@ -302,8 +304,8 @@ theorem denoteWith_runs {out : List Ty} {A : Type}
     exact congrArg (PIR.Process.call _) (funext fun reply =>
       denoteWith_runs leaf first second agree next (.cons reply binders))
   | _, .query _ _ _ next, binders => by
-    simp only [Form.denoteWith, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
-    exact congrArg (PIR.Process.call _) (funext fun reply =>
+    simp only [Form.denoteWith, Form.denoteWithOn]
+    exact congrArg (PIR.Process.bind _) (funext fun reply =>
       denoteWith_runs leaf first second agree next (.cons reply binders))
   | _, .split subject absent present, binders => by
     simp only [Form.denoteWith, Form.denoteWithOn]

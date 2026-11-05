@@ -37,6 +37,14 @@ mutual
       let [.str "field", .str actual, value] ← Format.array json | throw "structured-input-type"
       if actual != domain then throw "structured-input-domain"
       scalar value
+    | .polynomial domain, json => do
+      let [.str "polynomial", .str actual, values] ← Format.array json
+        | throw "structured-input-type"
+      if actual != domain then throw "structured-input-domain"
+      let coefficients ← (← Format.array values 4096).mapM scalar
+      let p := PolynomialValue.ofCoefficients 0 coefficients
+      if p.coefficients != coefficients then throw "structured-input-polynomial-canonical"
+      return p
     | .vector domain, json => do
       let [.str "vector", .str actual, values] ← Format.array json | throw "structured-input-type"
       if actual != domain then throw "structured-input-domain"
@@ -86,6 +94,10 @@ mutual
     | .boolean, value => .ok (.arr #[.str "bool", .bool value])
     | .index, value => .ok (.arr #[.str "index", toJson value])
     | .field domain, value => .ok (.arr #[.str "field", .str domain, scalarJson value])
+    | .polynomial domain, value => do
+      if value.zero != 0 then throw "structured-input-polynomial-zero"
+      return .arr #[.str "polynomial", .str domain,
+        .arr (value.coefficients.map scalarJson).toArray]
     | .vector domain, values =>
         .ok (.arr #[.str "vector", .str domain,
           .arr ((show List Scalar from values).map scalarJson).toArray])

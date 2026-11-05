@@ -101,6 +101,54 @@ theorem strictComponent_adequate (meaning : RegionMeaning dialect interface) :
   intro op args bodies
   simp only [strictComponent, RoleFamily.sequence_present]
 
+/-- Missing any strict operand skips the whole operation, even with no results. -/
+theorem strictComponent_absent (meaning : RegionMeaning dialect interface)
+    (op : dialect.Op) (args : Values (Component meaning.Value) (dialect.arguments op))
+    (bodies : Values (RegionFunction meaning.Value interface) (dialect.regions op))
+    (absent : RoleFamily.sequence args = none) :
+    strictComponent meaning op args bodies =
+      .done (Values.absent meaning.Value (dialect.results op)) := by
+  simp only [strictComponent, absent]
+
+/-- A reached strict stop retains its reason, including empty and unused results. -/
+theorem strictComponent_stops (meaning : RegionMeaning dialect interface)
+    (op : dialect.Op) (args : Values meaning.Value (dialect.arguments op))
+    (bodies : Values (RegionFunction meaning.Value interface) (dialect.regions op))
+    (reason : PIR.Stop) (stops : meaning.operation op args bodies = .halt reason) :
+    strictComponent meaning op args.present bodies = .halt reason := by
+  rw [strictComponent_adequate meaning op args bodies, stops]
+  rfl
+
+theorem Values.get_absent {T : Type} {V : T → Type} {types : List T} {ty : T}
+    (ref : Var types ty) : (Values.absent V types).get ref = none := by
+  induction ref with
+  | here => rfl
+  | there ref ih => exact ih
+
+/-- Presence is exact on a returned path; this theorem does not assert return. -/
+theorem strictComponent_return_presence {d : Dialect} {I : PIR.Signature}
+    (m : RegionMeaning d I) (op : d.Op)
+    (args : Values (Component m.Value) (d.arguments op))
+    (bodies : Values (RegionFunction m.Value I) (d.regions op))
+    (result : Values (Component m.Value) (d.results op))
+    (returned : strictComponent m op args bodies = .done result)
+    {ty : d.Ty} (ref : Var (d.results op) ty) :
+    (result.get ref).isSome = (RoleFamily.sequence args).isSome := by
+  cases sequenced : RoleFamily.sequence args with
+  | none =>
+    rw [strictComponent_absent m op args bodies sequenced] at returned
+    cases returned
+    simp only [Values.get_absent, Option.isSome_none]
+  | some values =>
+    simp only [strictComponent, sequenced] at returned
+    cases process : m.operation op values bodies with
+    | done output =>
+      simp only [process, PIR.Process.bind, PIR.Process.done.injEq] at returned
+      subst result
+      simp only [Values.get_present, Option.isSome_some]
+    | halt reason => simp only [process, PIR.Process.bind] at returned; cases returned
+    | call action next => simp only [process, PIR.Process.bind] at returned; cases returned
+
 /-- All-present adequacy preserves the complete process, including stops, actions
 and nested regions. Callbacks on both sides use precisely the same meaning. -/
 theorem Region.component_present (meaning : RegionMeaning dialect interface)

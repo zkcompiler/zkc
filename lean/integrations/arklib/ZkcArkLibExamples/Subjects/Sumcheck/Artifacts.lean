@@ -19,6 +19,8 @@ generated per-Entry fact the kernel checked. -/
 namespace ZkcSecurity.Examples.Subjects.Sumcheck
 open Zkc.Source Zkc.Source.Structured ZkcSecurity.Endpoint
 
+-- Generated connection types traverse nested occurrence certificates.
+set_option maxRecDepth 4096
 set_option smartUnfolding false
 
 /-- The artifacts of the compiled `example::Proof` Entry. -/

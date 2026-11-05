@@ -6,6 +6,7 @@ helper name as a mathematical specification.
 """
 
 from functools import partial
+import json
 import re
 from pathlib import Path
 import sys
@@ -326,17 +327,30 @@ def protocol_contract(value):
     return f"⟨{text(owner)}, {seq(clauses, contract_clause)}⟩"
 
 
-def source_primitives():
-    """The operations of the catalog's structured-source consumer profile.
+NUMERICAL_SOURCE_PRIMITIVES = frozenset({
+    "bool.and", "bool.or", "bool.not", "field.constant", "field.inverse", "field.mul",
+    "field.add", "field.sub", "indices.empty", "indices.append", "indices.at", "indices.length",
+    "poly.coefficients", "poly.from_coefficients", "poly.univariate_evaluate",
+    "poly.coset_interpolate", "poly.domain_root", "poly.domain_point", "poly.domain_points",
+    "poly.even_odd_fold", "poly.coset_evaluate_batch", "poly.coset_evaluate_at",
+    "poly.coset_extend", "poly.opening_quotient_sum", "vector.concat", "vector.fill", "vector.get",
+    "vector.add", "vector.sub", "vector.mul", "vector.scale", "vector.inverse", "vector.geometric",
+    "vector.slice", "vector.transpose", "vector.embed", "vector.rotate", "vector.bit_reverse_rows",
+    "vector.prefix_sum", "vector.prefix_product",
+})
 
-    This only stops the renderer from refusing ahead of Lean: the closed
-    primitive inventory of `Zkc.Source.Structured` admits or refuses.
+
+def source_primitives():
+    """The installed profile plus the independently implemented numerical set.
+
+    This permits producer/reader package staging; Lean checks the closed enum,
+    exact nominal roots, capabilities and ordered ports independently.
     """
     profiles = [profile for profile in schema.declarations()["consumerProfiles"]
                 if profile["name"] == "structured-source-primitives"]
     if len(profiles) != 1:
         raise ValueError("missing structured-source consumer profile")
-    return frozenset(entry["operation"] for entry in profiles[0]["operations"])
+    return frozenset(entry["operation"] for entry in profiles[0]["operations"]) | NUMERICAL_SOURCE_PRIMITIVES
 
 
 SOURCE_PRIMITIVES = source_primitives()
@@ -344,9 +358,11 @@ SOURCE_PRIMITIVES = source_primitives()
 
 def render_parameter(value):
     schema.parameter(value)
+    if value[0] == "field_literal":
+        return f".fieldLiteral {text(value[1])} {text(value[2])} {text(value[3])}"
     if value[0] != "natural":
         raise ValueError("parameter has no installed source interpretation")
-    return text(value[1])
+    return f".natural {text(value[1])}"
 
 
 def binding_argument(value):
@@ -588,8 +604,15 @@ def render(data, namespace):
             _, operation, name, parameters = record(value, 4)
             if operation != "exec.apply" or name not in installed:
                 raise ValueError("unknown source primitive binding")
-            op, _ = schema.resolve_signature(installed[name], member_resolver(rows), SOURCE_PRIMITIVES)
-            schema.validate_parameters(parameters, op["parameters"])
+            op, terms = schema.resolve_signature(installed[name], member_resolver(rows), SOURCE_PRIMITIVES)
+            if op["name"] == "field.constant":
+                root = terms[0][2]
+                matches = [row for row in rows[0] if row[1] == root and row[2] == "Field"]
+                if len(matches) != 1 or matches[0][5] is None:
+                    raise ValueError("field parameter needs independent domain admission")
+                schema.validate_parameters(parameters, op["parameters"], root, int(matches[0][5]))
+            else:
+                schema.validate_parameters(parameters, op["parameters"])
         for child in value:
             invocations(child)
     invocations(definitions)

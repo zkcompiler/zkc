@@ -38,7 +38,7 @@ noncomputable def program :
       (SumcheckVerifierLaws.highSite context.protocol) (context.protocol.roles 0))) fun high =>
     .done (some (low, high))
   query context _ _ := .action (.query (SumcheckVerifierLaws.challengeSite context.protocol)
-    "bls12-381.fr" (.cons context.handle .nil))
+    (.draw "bls12-381.fr") (.cons context.handle .nil))
   challenge _ _ _ reply := reply
   deliver context state _ challenge :=
     .call (.action (.send (ty := .field "bls12-381.fr")

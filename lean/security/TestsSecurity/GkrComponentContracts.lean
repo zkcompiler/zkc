@@ -62,7 +62,7 @@ def occurrenceHandler : PIR.Handler (Occurrence.signature (uniformCarriers ℚ �
     (List ℚ × Nat × Nat) Unit
   | .action (.receive (.field _) _ _), (value :: proof, queries, deliveries) =>
       ⟨.returned value, (proof, queries, deliveries), []⟩
-  | .action (.query _ _ _), (proof, queries, deliveries) => by
+  | .action (.query _ (.draw _) _), (proof, queries, deliveries) => by
       change PIR.Execution (List ℚ × Nat × Nat) Unit ℚ
       exact ⟨.returned 0, (proof, queries + 1, deliveries), []⟩
   | .action (.send ..), (proof, queries, deliveries) =>

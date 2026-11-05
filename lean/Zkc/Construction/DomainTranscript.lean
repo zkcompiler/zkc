@@ -2,6 +2,7 @@ module
 
 public import Zkc.Construction.Context
 public import Zkc.Construction.Binding
+public import Zkc.Construction.ServiceRequests
 public import Zkc.Transcript.Interface
 public import Zkc.Source.Structured.DomainParticipant
 
@@ -132,10 +133,7 @@ information, and the participant interface never decodes them as challenges. -/
 abbrev Raw {carriers : Structured.Carriers} : Event carriers → Type
   | .challenge origin =>
       match origin.request with
-      | some request =>
-          match request.sort with
-          | .field domain => carriers.Field domain
-          | _ => Unit
+      | some request => Request.Raw carriers request
       | none => Unit
   | _ => Unit
 
@@ -158,10 +156,28 @@ def interface {carriers : Structured.Carriers} (context : Context) :
       | some payload =>
           .send (.message (context.message site context.validator receiver) payload) ()
       | none => .refuse
-  | .query site field _ =>
+  | .query site (.draw field) _ =>
       match context.profile with
       | .plain => .refuse
       | .fiatShamir _ => .query (.challenge (context.query site (.draw field))) some
+
+  | .query site (.sampleIndex contract) (.cons _ (.cons bound .nil)) =>
+      match context.profile with
+      | .plain => .refuse
+      | .fiatShamir _ =>
+        let request := Request.sampleIndex bound
+        if request.valid && contract == context.contract then
+          .query (.challenge (context.query site request)) (fun value => some value.val)
+        else .refuse
+  | .query site (.sampleIndices contract) (.cons _ (.cons bound (.cons count .nil))) =>
+      match context.profile with
+      | .plain => .refuse
+      | .fiatShamir _ =>
+        let request := Request.sampleIndices bound count
+        if request.valid && contract == context.contract then
+          .query (.challenge (context.query site request))
+            (fun values => some (List.ofFn fun i => (values i).val))
+        else .refuse
 
 def transform {carriers : Structured.Carriers} {m : Type → Type} [Monad m]
     {A : Type} (context : Context)

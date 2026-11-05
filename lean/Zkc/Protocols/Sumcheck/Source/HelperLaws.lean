@@ -172,7 +172,7 @@ theorem append_then_length (table : Meanings F G) (xs : List F) (x : F) :
       if (xs ++ [x]).length < indexLimit then .done (.cons (xs ++ [x]).length .nil)
       else .halt .exhausted := by
   rw [append_body]
-  simp only [PIR.Process.bind, Evaluation.operation, Primitive.evaluate]
+  simp only [PIR.Process.bind, Evaluation.operation, Primitive.evaluate, Primitive.evaluateOn]
   split <;> rfl
 
 /-- Pure component arithmetic preserves independent absent operands. -/

@@ -31,7 +31,7 @@ noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (O
   | none =>
     .halt .incomplete
   | some b7 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "s0") "bls12-381.fr" (.cons (b7) .nil)) fun (b8 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "s0") (.draw "bls12-381.fr") (.cons (b7) .nil)) fun (b8 : F) =>
     match b0 with
     | none =>
       .halt .incomplete
@@ -79,7 +79,7 @@ noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (O
   | none =>
     .halt .incomplete
   | some b9 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") "bls12-381.fr" (.cons (b9) .nil)) fun (b10 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") (.draw "bls12-381.fr") (.cons (b9) .nil)) fun (b10 : F) =>
     .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_64656c6976657279_0") ((ctx).roles 0) (b10)) fun _ =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_726573706f6e7365_0") ((ctx).roles 0)) fun (b11 : F) =>
     match b0 with

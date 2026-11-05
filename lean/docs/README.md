@@ -17,6 +17,10 @@ that all native behavior already has a Lean model.
 - [Verification](spec/verification.md): explicit intent, contracts, consumers,
   authored targets, candidate generation and receipt semantics.
 - [Derived Common scalar views](spec/common-source.md): Structured participants and retained mathematical contracts.
+- [Numerical source primitives](spec/numerical-source.md): nominal polynomial
+  values, fixed FRI/STARK equations, exact literals and optional model data.
+- [Typed index services](spec/index-services.md): scalar/block requests, finite
+  ideal replies, source association, private services and exact transcript seams.
 - [Structured import](spec/structured-source.md): checked original protocol-stage
   programs with shared helpers, participants, services, retained contracts,
   protocol applications and repeats.

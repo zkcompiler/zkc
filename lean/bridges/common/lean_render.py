@@ -111,7 +111,7 @@ def namespace(name):
 
 # Internal, interpreted scalar descriptors. Wire types are decoded separately
 # by bridges.common.schema; this function is not a source-format reader.
-TYPE_TAGS = ("field", "vector", "group", "service")
+TYPE_TAGS = ("field", "vector", "polynomial", "group", "service")
 
 
 def interpreted_ty(value, tags=TYPE_TAGS, index=True, string=lambda value: text(value, 512)):
@@ -143,7 +143,8 @@ NULLARY_OPERATIONS = {
 # Operations with two domain or name arguments.
 BINARY_OPERATIONS = {
     "field.constant": "fieldConstant", "group.scale": "groupScale",
-    "exchange": "exchange", "draw": "draw", "local_call": "localCall",
+    "exchange": "exchange", "draw": "draw",
+    "sample_index": "sampleIndex", "sample_indices": "sampleIndices", "local_call": "localCall",
 }
 # Every named operation constructor, for profiles that select a subset.
 OPERATIONS = {**UNARY_OPERATIONS, **NULLARY_OPERATIONS, **BINARY_OPERATIONS,

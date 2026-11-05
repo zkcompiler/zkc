@@ -43,6 +43,7 @@ mutual
     | .indices => wireApplication "indices"
     | .field domain => wireDomainApplication "field" "Field" domain
     | .vector domain => wireDomainApplication "vector" "Field" domain
+    | .polynomial domain => wireDomainApplication "polynomial" "Field" domain
     | .group domain => wireDomainApplication "group" "Group" domain
     | .groups domain => wireDomainApplication "groups" "Group" domain
     | .oracle (.table row rows) => .arr #[.str "oracle", .str "table", wireOracleArguments row rows]

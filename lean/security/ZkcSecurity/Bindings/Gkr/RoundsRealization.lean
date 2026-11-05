@@ -94,7 +94,7 @@ theorem split_success {n : Nat} (xs : List F) (s : Table F (n + 1))
     constructor
     · positivity
     · omega
-  simp only [split, Primitive.evaluate, even, and_self, ite_true, primitiveOutcome]
+  simp only [split, Primitive.evaluate, Primitive.evaluateOn, even, and_self, ite_true, primitiveOutcome]
 
 omit [DecidableEq F] in
 /-- Flat sums are in the same MSB-first order as the mathematical Boolean sum. -/

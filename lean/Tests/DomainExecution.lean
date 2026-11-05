@@ -74,7 +74,7 @@ private def oracle : Oracle Id model.toCarriers Nat := fun _ event counter =>
   match event with
   | .challenge origin =>
       if h : origin.request = some (.draw "extension") then
-        (.returned (by simpa [Raw, h, Request.draw, model] using (2 : ZMod 5)), counter + 1)
+        (.returned (by simpa [Raw, h, Request.draw, Request.Raw, model] using (2 : ZMod 5)), counter + 1)
       else (.stopped .refused, counter)
   | _ => (.stopped .refused, counter)
 

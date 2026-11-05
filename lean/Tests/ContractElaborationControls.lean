@@ -62,7 +62,7 @@ private noncomputable def payload (changed reordered : Bool) : UnitPayload :=
     by cases reordered <;> cases changed <;> decide +kernel,
     by cases reordered <;> cases changed <;> rfl,
     by cases reordered <;> cases changed <;> decide +kernel,
-    by cases reordered <;> cases changed <;> decide +kernel⟩
+    by cases reordered <;> cases changed <;> decide +kernel, none⟩
 
 noncomputable def imported : Imported (snapshot false false) :=
   ⟨⟨snapshot false false, payload false false⟩, by rfl⟩

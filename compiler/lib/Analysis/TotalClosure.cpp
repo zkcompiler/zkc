@@ -261,6 +261,14 @@ public:
         if (finite::isComputation(op) &&
             failed(finite::summarize(op, finiteSummary)))
           return failure();
+        // Strict formation is an operation obligation, including when there
+        // are no results or every result is unused.
+        BitVector required(size);
+        for (auto operand : op->getOperands())
+          required |= environment.lookup(operand);
+        if (failed(charge(op, required.count())))
+          return failure();
+        summary.requirements.insert(indices(required));
         for (auto [index, value] : enumerate(op->getResults())) {
           BitVector dependency(size);
           auto inputs = operandDependencies(op, index);
@@ -270,7 +278,6 @@ public:
             dependency |= environment.lookup(op->getOperand(input));
           if (failed(charge(op, dependency.count())))
             return failure();
-          summary.requirements.insert(indices(dependency));
           environment[value] = std::move(dependency);
         }
       } else if (auto call = dyn_cast<func::CallOp>(op)) {

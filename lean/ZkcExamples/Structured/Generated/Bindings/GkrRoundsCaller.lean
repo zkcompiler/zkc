@@ -143,7 +143,7 @@ noncomputable def protocol2Role1Callback1SetupContinuation (ctx : ProtocolContex
               | none =>
                 .halt .incomplete
               | some b33 =>
-                .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6c696e655f6368616c6c656e6765") "bls12-381.fr" (.cons (b33) .nil)) fun (b34 : F) =>
+                .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6c696e655f6368616c6c656e6765") (.draw "bls12-381.fr") (.cons (b33) .nil)) fun (b34 : F) =>
                 .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_6c696e655f64656c6976657279_0") ((ctx).roles 0) (b34)) fun _ =>
                 (Participant.owned ((ctx).roles 1) ((ctx).roles 1) (invoke ((helpers (F := F) (G := G) payload).toOn).closed (⟨"zkl_1f2e31017a1a0403a56241b1d83eac39d1ecc40b298cd066516f78ae9c5b3434", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr")]⟩ : Helper)) (.cons ((b17).get .here) (.cons ((b17).get (.there .here)) (.cons ((some (b34))) .nil)))).bind fun (b35 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr")])) =>
                 (Participant.owned ((ctx).roles 1) ((ctx).roles 1) (invoke ((helpers (F := F) (G := G) payload).toOn).closed (⟨"zkl_21465134b1aa848c616c790eff1907b1a442ba76730b77da2be48acd923d6ff7", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)) (.cons ((b21).get .here) (.cons ((some (b34))) .nil))).bind fun (b36 : (Values (Component (assignment F G)) [(.field "bls12-381.fr")])) =>

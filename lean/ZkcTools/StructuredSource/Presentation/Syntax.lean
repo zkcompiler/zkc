@@ -66,6 +66,7 @@ mutual
     | .field d => app ".field" [quoted d] | .vector d => app ".vector" [quoted d]
     | .group d => app ".group" [quoted d] | .service d => app ".service" [quoted d]
     | .groups d => app ".groups" [quoted d]
+    | .polynomial d => app ".polynomial" [quoted d]
     | .oracle kind => app ".oracle" [oracleKindText kind]
     | .oracleSequence kind maximum => app ".oracleSequence" [oracleKindText kind, toString maximum]
     | .resourceUnit slot => app ".resourceUnit" [quoted slot]
@@ -94,6 +95,9 @@ def repeatText (spec : RepeatSpec) : String :=
     scopesText spec.stateScopes, toString spec.maximum] ++ "⟩ : RepeatSpec)"
 
 def primitiveText : Primitive → String
+  | .numerical op d base => app ".numerical" [reprStr op, quoted d, quoted base]
+  | .binaryConstant d bits => app ".binaryConstant" [quoted d, toString bits]
+  | .booleanNot => ".booleanNot"
   | .indexConstant n => app ".indexConstant" [toString n]
   | .indexEqual => ".indexEqual" | .indexLess => ".indexLess" | .indexAdd => ".indexAdd"
   | .indexMul => ".indexMul" | .indexSub => ".indexSub" | .indexDiv => ".indexDiv" | .indexMod => ".indexMod"
@@ -169,7 +173,57 @@ def opText : Op → String
   | .passUnit slot => app ".passUnit" [quoted slot]
   | .consumeUnit slot => app ".consumeUnit" [quoted slot]
 
+def namedCountsText (values : List (String × Nat)) : String :=
+  listText (values.map fun (name, value) => "(" ++ quoted name ++ ", " ++ toString value ++ ")")
+
+def logicalSortText : OracleLogicalSort → String
+  | .singleton kind => app ".singleton" [oracleKindText kind]
+  | .sequence kind maximum => app ".sequence" [oracleKindText kind, toString maximum]
+
+def oracleSignatureText (signature : OracleSignature) : String :=
+  "⟨" ++ ", ".intercalate [quoted signature.name, typesText signature.inputs,
+    oracleKindText signature.kind, quoted signature.admissibility,
+    namedCountsText signature.shapeArguments, namedCountsText signature.shapeBounds] ++ "⟩"
+
+def oracleOpText : OracleOp → String
+  | .input sort holder receivers bounds => app ".input"
+      [logicalSortText sort, toString holder, natsText receivers, namedCountsText bounds]
+  | .send kind holder receivers bounds => app ".send"
+      [oracleKindText kind, toString holder, natsText receivers, namedCountsText bounds]
+  | .query kind owner => app ".query" [oracleKindText kind,
+      match owner with | none => "none" | some owner => app "some" [toString owner]]
+  | .contents kind holder => app ".contents" [oracleKindText kind, toString holder]
+  | .components sort holder receivers => app ".components"
+      [logicalSortText sort, toString holder, natsText receivers]
+  | .shape kind dimension => app ".shape" [oracleKindText kind, quoted dimension]
+  | .forgetShape source target => app ".forgetShape" [oracleKindText source, oracleKindText target]
+  | .virtual signature holder receivers => app ".virtual"
+      [oracleSignatureText signature, toString holder, natsText receivers]
+  | .sequenceEmpty kind maximum roles => app ".sequenceEmpty"
+      [oracleKindText kind, toString maximum, natsText roles]
+  | .sequenceAppend kind maximum roles => app ".sequenceAppend"
+      [oracleKindText kind, toString maximum, natsText roles]
+  | .sequenceAt kind maximum roles => app ".sequenceAt"
+      [oracleKindText kind, toString maximum, natsText roles]
+  | .sequenceLength kind maximum => app ".sequenceLength" [oracleKindText kind, toString maximum]
+
+def invocationFrameText : InvocationFrame → String
+  | .application caller row => app ".application" [toString caller, natsText row]
+  | .iteration owner row index => app ".iteration" [toString owner, natsText row, toString index]
+
+def oracleLocationText (location : OracleLocation) : String :=
+  "⟨⟨" ++ toString location.invocation.root ++ ", " ++
+    listText (location.invocation.frames.map invocationFrameText) ++ "⟩, " ++
+    toString location.definition ++ ", " ++ natsText location.row ++ "⟩"
+
+def serviceOpText : ServiceOp → String
+  | .draw field => app ".draw" [quoted field]
+  | .sampleIndex contract => app ".sampleIndex" [quoted contract]
+  | .sampleIndices contract => app ".sampleIndices" [quoted contract]
+
 def protocolOpText : ProtocolOp → String
+  | .oracle op location => app ".oracle" [oracleOpText op, oracleLocationText location]
+  | .query owner operation site => app ".query" [toString owner, serviceOpText operation, quoted site]
   | .calculate op _ => app ".calculate" [opText op, "rfl"]
   | .localCall helper _ owner site => app ".localCall" [helperText helper, "rfl", toString owner, quoted site]
   | .guard owner site => app ".guard" [toString owner, quoted site]
@@ -279,7 +333,7 @@ def formLiteralWith (callbackName : (spec : RepeatSpec) →
   | _, .send ty site peer value next => app ".send" [tyText ty, quoted site, toString peer,
       termLiteral value, formLiteralWith callbackName next]
   | _, .receive ty site peer next => app ".receive" [tyText ty, quoted site, toString peer, formLiteralWith callbackName next]
-  | _, .query site request args next => app ".query" [quoted site, quoted request, termsLiteral args, formLiteralWith callbackName next]
+  | _, .query site request args next => app ".query" [quoted site, serviceOpText request, termsLiteral args, formLiteralWith callbackName next]
   | _, .split subject absent present => app ".split" [compLiteral subject, formLiteralWith callbackName absent, formLiteralWith callbackName present]
   | _, .guard equality left right next => app ".guard" [equalityText equality, termLiteral left,
       termLiteral right, formLiteralWith callbackName next]

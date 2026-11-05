@@ -1,7 +1,9 @@
 module
 
 public import ZkcSecurity.Bindings.Transcript.FieldSourceSupport
-public import ZkcSecurity.Bindings.Transcript.OccurrenceReading
+public import ZkcSecurity.Bindings.Transcript.OccurrenceSampling
+public import Zkc.Source.Structured.CommonAdapter
+public import ZkcSecurity.ProgramLogic.Derivation
 public import ZkcSecurity.ProgramLogic.Transcript.CostComposition
 
 @[expose] public section
@@ -22,6 +24,11 @@ variable {F G A : Type}
 
 abbrev scalar (source : PIR.Process (Occurrence.signature (uniformCarriers F G)) A) :=
   (source.interpret Occurrence.erase).interpret CommonAdapter.project
+
+private theorem project_draw (site field : String) (handle : Nat) :
+    CommonAdapter.project (F := F) (G := G)
+      (.query site (.draw field) (.cons handle .nil)) =
+      .call (.query site field (.cons handle .nil)) .done := rfl
 
 variable [SampleableType F]
 attribute [local instance] OccurrenceReading.rawSampleable
@@ -86,31 +93,34 @@ theorem charged (routing : Original.Routing) (mode : routing.mode = .validator)
           simp only [DomainSourceReading.record, PIR.Process.bind, Interface.charged_call,
             NominalDomain.interface, Absorption.ChargedNode]
           exact ih () (supported ()) _ _ holds
-      | query site field arguments =>
-        cases arguments with
-        | cons handle rest =>
-          cases rest
-          simp only [scalar, PIR.Process.interpret, Occurrence.erase, CommonAdapter.project,
-            PIR.Process.bind, Interface.charged_call, Context.interface, Absorption.ChargedNode] at holds
-          change NominalDomain.interface.Charged (boundedEscape (fun _ _ => price))
-            (fun _ result => P result.1)
-            ((DomainSourceReading.query routing state site field handle).bind fun result =>
-              DomainSourceReading.presentation routing (next result.1) result.2) state.history
-          simp only [DomainSourceReading.query, mode]
-          cases route : routing.draw state.frames site field handle with
-          | none => trivial
-          | some origin =>
-            have request := Original.Routing.draw_request route
-            rcases origin with ⟨entry, events, asked⟩
-            change asked = some (.draw field) at request
-            subst asked
-            simp only [DomainSourceReading.queryField, ↓reduceDIte, PIR.Process.bind,
-              Interface.charged_call, NominalDomain.interface, Absorption.ChargedNode,
-              Domain.Raw, Request.draw, Original.fieldReply]
-            apply (boundedEscape_antitone (fun _ _ => price)) _ _ _ _ ?_ holds
-            rintro raw ⟨value, decoded, outside⟩
-            cases Option.some.inj decoded
-            exact ⟨raw, rfl, fun inside => outside (ih raw (supported raw) _ _ inside)⟩
+      | query site operation arguments =>
+        cases operation with
+        | sampleIndex | sampleIndices => exact False.elim allowed
+        | draw field =>
+          cases arguments with
+          | cons handle rest =>
+            cases rest
+            simp only [scalar, PIR.Process.interpret, Occurrence.erase, project_draw,
+              PIR.Process.bind, Interface.charged_call, Context.interface, Absorption.ChargedNode] at holds
+            change NominalDomain.interface.Charged (boundedEscape (fun _ _ => price))
+              (fun _ result => P result.1)
+              ((DomainSourceReading.query routing state site field handle).bind fun result =>
+                DomainSourceReading.presentation routing (next result.1) result.2) state.history
+            simp only [DomainSourceReading.query, mode]
+            cases route : routing.draw state.frames site field handle with
+            | none => trivial
+            | some origin =>
+              have request := Original.Routing.draw_request route
+              rcases origin with ⟨entry, events, asked⟩
+              change asked = some (.draw field) at request
+              subst asked
+              simp only [DomainSourceReading.queryField, ↓reduceDIte, PIR.Process.bind,
+                Interface.charged_call, NominalDomain.interface, Absorption.ChargedNode,
+                Domain.Raw, Request.draw, Original.fieldReply]
+              apply (boundedEscape_antitone (fun _ _ => price)) _ _ _ _ ?_ holds
+              rintro raw ⟨value, decoded, outside⟩
+              cases Option.some.inj decoded
+              exact ⟨raw, rfl, fun inside => outside (ih raw (supported raw) _ _ inside)⟩
 
 omit [SampleableType F] in
 /-- Pathwise constant-price cost transport uses the same actual nominal
@@ -171,26 +181,29 @@ theorem cost (routing : Original.Routing) (mode : routing.mode = .validator)
           simp only [DomainSourceReading.record, PIR.Process.bind, Typed.ChargedCostBound,
             NominalDomain.interface]
           exact ih () (supported ()) _ _ _ holds
-      | query site field arguments =>
-        cases arguments with
-        | cons handle rest =>
-          cases rest
-          simp only [scalar, PIR.Process.interpret, Occurrence.erase, CommonAdapter.project,
-            PIR.Process.bind, Typed.ChargedCostBound, Context.interface] at holds
-          change Typed.ChargedCostBound NominalDomain.interface (fun _ _ => price)
-            ((DomainSourceReading.query routing state site field handle).bind fun result =>
-              DomainSourceReading.presentation routing (next result.1) result.2) state.history budget
-          simp only [DomainSourceReading.query, mode]
-          cases route : routing.draw state.frames site field handle with
-          | none => trivial
-          | some origin =>
-            have request := Original.Routing.draw_request route
-            rcases origin with ⟨entry, events, asked⟩
-            change asked = some (.draw field) at request
-            subst asked
-            simp only [DomainSourceReading.queryField, ↓reduceDIte, PIR.Process.bind,
-              Typed.ChargedCostBound, NominalDomain.interface]
-            obtain ⟨remaining, le, after⟩ := holds
-            exact ⟨remaining, le, fun value => ih value (supported value) _ _ _ (after value)⟩
+      | query site operation arguments =>
+        cases operation with
+        | sampleIndex | sampleIndices => exact False.elim allowed
+        | draw field =>
+          cases arguments with
+          | cons handle rest =>
+            cases rest
+            simp only [scalar, PIR.Process.interpret, Occurrence.erase, project_draw,
+              PIR.Process.bind, Typed.ChargedCostBound, Context.interface] at holds
+            change Typed.ChargedCostBound NominalDomain.interface (fun _ _ => price)
+              ((DomainSourceReading.query routing state site field handle).bind fun result =>
+                DomainSourceReading.presentation routing (next result.1) result.2) state.history budget
+            simp only [DomainSourceReading.query, mode]
+            cases route : routing.draw state.frames site field handle with
+            | none => trivial
+            | some origin =>
+              have request := Original.Routing.draw_request route
+              rcases origin with ⟨entry, events, asked⟩
+              change asked = some (.draw field) at request
+              subst asked
+              simp only [DomainSourceReading.queryField, ↓reduceDIte, PIR.Process.bind,
+                Typed.ChargedCostBound, NominalDomain.interface]
+              obtain ⟨remaining, le, after⟩ := holds
+              exact ⟨remaining, le, fun value => ih value (supported value) _ _ _ (after value)⟩
 
 end ZkcSecurity.FiatShamir.FieldSourceProperties

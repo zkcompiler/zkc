@@ -87,12 +87,13 @@ def helperSnapshot (slot : String) : Snapshot :=
 #guard !(records.check (helperSnapshot "zkl_resource_undeclared") []).isOk
 
 -- Distributed declarations decode with ordered telescopes and placement trees;
--- execution admission is a separate unsupported profile.
+-- placement admission checks their declaration-local formulas independently.
 def logical : SourceDeclarations :=
   { records := [⟨.nominal .logicalRecord "probe::Claim" [], "ordinary", false,
       .fields [⟨"value", .boolean, some (.data ["receiver"])⟩], ["holder", "receiver"], none⟩],
     authorities := [("probe::Claim", none)] }
 #guard logical.checkShape.isOk
+#guard (logical.records.mapM logical.checkRecordPlacement).isOk
 #guard !( { logical with records := logical.records.map fun row =>
   { row with roles := ["holder"] } } : SourceDeclarations).checkShape.isOk
 #guard !( { logical with records := logical.records.map fun row =>

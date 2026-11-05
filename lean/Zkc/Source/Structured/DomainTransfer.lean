@@ -7,14 +7,13 @@ public import Zkc.Source.RegionCongruence
 
 /-! Transfer between domain models that differ only in the inverse.
 
-A model built from a commutative ring has no inverse; a model built from a
-field supplies one, and only the latter can satisfy the inverse law that a
-`Field` fact of a catalogue row selects. For bodies that never invert a field
-element the two models give the same denotation, so a theorem proved for every
-lawful model applies at the ring model for such bodies, with the lawful
-model's assumptions. The congruence behind it is `Region.denote_congr`: two
-meanings with the same values that agree on every operation a region stores
-give it the same denotation. -/
+The ring-only model has no inverse. A model that enables inversion must supply
+an inverse and discharge its separate completeness premise; the conditional
+`DomainLaws.inverse` alone does not imply availability. For bodies whose stored
+operations never invert, replacing only that optional capability preserves
+denotation. The congruence behind this per-operation result is
+`Region.denote_congr`: two meanings with the same values that agree on every
+operation a region stores give it the same denotation. -/
 
 set_option autoImplicit false
 namespace Zkc.Source.Structured
@@ -24,16 +23,28 @@ abbrev DomainModel.withInverse (model : DomainModel)
     (inverse : ∀ d, Option (model.Field d → model.Field d)) : DomainModel :=
   { model with inverse := inverse }
 
-/-- Whether an operation evaluates a field inverse. The current vocabulary has
-no inverse operation. -/
+/-- Optional inverse dependencies are explicit for each fixed primitive. -/
+def Primitive.usesInverse : Primitive → Bool
+  | .numerical op _ _ => op.usesInverse
+  | _ => false
+
+/-- Structural transfer requires each stored operation to avoid inversion. -/
 def Op.usesInverse : Op → Bool
+  | .exec primitive => primitive.usesInverse
   | _ => false
 
 theorem Primitive.evaluateOn_inverse_congr (model : FieldModel)
-    (inverse : ∀ d, Option (model.Field d → model.Field d)) :
-    Primitive.evaluateOn { model with inverse := inverse } = Primitive.evaluateOn model := by
-  funext primitive args
-  cases primitive <;> (iterate 3 (try (rcases args with _ | ⟨_, args⟩))) <;> rfl
+    (inverse : ∀ d, Option (model.Field d → model.Field d)) (primitive : Primitive)
+    (free : primitive.usesInverse = false) (args : Values model.Value primitive.arguments) :
+    Primitive.evaluateOn { model with inverse := inverse } primitive args =
+      Primitive.evaluateOn model primitive args := by
+  cases primitive with
+  | numerical op d base =>
+    cases op <;> simp only [usesInverse, Numerical.usesInverse] at free <;>
+      try contradiction
+    all_goals rfl
+  | binaryConstant d bits => cases args; rfl
+  | _ => (iterate 3 (try (rcases args with _ | ⟨_, args⟩))); rfl
 
 namespace Evaluation
 
@@ -41,7 +52,7 @@ namespace Evaluation
 theorem operationOn_inverse_congr (model : DomainModel)
     (inverse : ∀ d, Option (model.Field d → model.Field d)) {interface : PIR.Signature}
     (observations : SiteObservations interface) (table : MeaningsOn model.toCarriers interface)
-    (op : Op) (_free : op.usesInverse = false) :
+    (op : Op) (free : op.usesInverse = false) :
     operationOn (model.withInverse inverse) observations table op =
       operationOn model observations table op := by
   funext args bodies
@@ -49,7 +60,7 @@ theorem operationOn_inverse_congr (model : DomainModel)
   | exec primitive =>
     rcases bodies with _ | _
     exact congrArg primitiveOutcome
-      (congrFun (congrFun (Primitive.evaluateOn_inverse_congr model.toFieldModel inverse) primitive) args)
+      (Primitive.evaluateOn_inverse_congr model.toFieldModel inverse primitive free args)
   | invoke helper => rcases bodies with _ | _; rfl
   | fold spec | collect spec => rcases bodies with _ | _; rfl
   | map spec => rcases bodies with _ | _; rfl
@@ -86,10 +97,6 @@ theorem denote_inverse_free (model : DomainModel)
   Region.denote_congr _ _ region fun op member =>
     operationOn_inverse_congr model inverse observations table op (free op member)
 
-/-- Every region of the current vocabulary is inverse-free. -/
-theorem inverse_free {Γ out : List Ty} (region : Region dialect Γ out) :
-    ∀ op ∈ region.erase.operations, op.usesInverse = false :=
-  fun _ _ => rfl
 
 end Evaluation
 

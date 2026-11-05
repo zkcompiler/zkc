@@ -104,7 +104,8 @@ def zeroReplies : PIR.Handler (Occurrence.signature model.toCarriers) Unit Strin
   | .leave _, _ => ⟨.returned (), (), []⟩
   | .action (.receive (.field _) _ _), _ => ⟨.returned 0, (), ["receive"]⟩
   | .action (.receive _ _ _), _ => ⟨.stopped .refused, (), ["refused"]⟩
-  | .action (.query _ _ (.cons _ .nil)), _ => ⟨.returned (by change ℚ; exact 0), (), ["query"]⟩
+  | .action (.query _ (.draw _)
+    (.cons _ .nil)), _ => ⟨.returned (by change ℚ; exact 0), (), ["query"]⟩
   | .action (.send ..), _ => ⟨.returned (), (), ["deliver"]⟩
 
 def small (raw : List ℚ) (scalar : ℚ) (count : Nat) :=

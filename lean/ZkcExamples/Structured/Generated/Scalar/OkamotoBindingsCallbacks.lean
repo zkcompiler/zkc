@@ -31,8 +31,8 @@ noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (O
   | none =>
     .halt .incomplete
   | some b7 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_66697273745f6e6f6e6365") "bls12-381.fr" (.cons (b7) .nil)) fun (b8 : F) =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f6e6f6e6365") "bls12-381.fr" (.cons (b7) .nil)) fun (b9 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_66697273745f6e6f6e6365") (.draw "bls12-381.fr") (.cons (b7) .nil)) fun (b8 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f6e6f6e6365") (.draw "bls12-381.fr") (.cons (b7) .nil)) fun (b9 : F) =>
     match b0 with
     | none =>
       match b1 with
@@ -87,7 +87,7 @@ noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (O
   | none =>
     .halt .incomplete
   | some b8 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") "bls12-381.fr" (.cons (b8) .nil)) fun (b9 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") (.draw "bls12-381.fr") (.cons (b8) .nil)) fun (b9 : F) =>
     .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_64656c6976657279_0") ((ctx).roles 0) (b9)) fun _ =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_66697273745f726573706f6e7365_0") ((ctx).roles 0)) fun (b10 : F) =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f726573706f6e7365_0") ((ctx).roles 0)) fun (b11 : F) =>

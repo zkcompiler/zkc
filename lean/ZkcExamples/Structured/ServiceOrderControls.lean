@@ -57,7 +57,7 @@ structure ProviderState where
 
 @[expose] def handler : PIR.Handler (observedInterface ℚ ℚ) ProviderState Event
   | .mark site, state => ⟨.returned (), { state with site }, []⟩
-  | .action (.query site _ (.cons handle .nil)), state =>
+  | .action (.query site (.draw _) (.cons handle .nil)), state =>
       scalarReply (.draw site handle) (.drawStop site handle)
         { state with counts := countRequest handle state.counts }
   | .action (.send (ty := .field _) site peer value), state =>

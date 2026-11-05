@@ -559,7 +559,7 @@ theorem literalTerm_eval (results : LawResults model laws) {Δ : Scope} (binders
   | .index, _ => rfl
   | .boolean, _ => rfl
   | .field _, _ => rfl
-  | .vector _, _ => rfl
+  | .vector _, _ | .polynomial _, _ => rfl
   | .group _, _ => rfl
   | .service _, _ => rfl
   | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
@@ -988,6 +988,35 @@ theorem calculate_present (op : Op) (allowed : op.isCalculation = true) (total :
     rw [operationOn_total model _ tables.closed op total]
     rfl
 
+/-- Strict partial calculations preserve absence without invoking their closed meaning. -/
+theorem partialCalculation_absent (op : Op) (allowed : op.isCalculation = true)
+    (notCall : ∀ helper, op ≠ .invoke helper)
+    (args : Values (Component model.Value) op.arguments)
+    (callbacks : Values (RegionFunction (Component model.Value) I) [])
+    (absent : RoleFamily.sequence args = none) :
+    protocolOperationWithOn model (.silent I) actions tables self (.calculate op allowed)
+      args callbacks protocols context iterations =
+      .done (Values.absent model.Value op.results) := by
+  simp only [protocolOperationWithOn]
+  rw [Evaluation.componentOperationOn_strict_calculation model _ tables op allowed notCall]
+  simp only [strictComponent, absent]
+  rfl
+
+/-- Present operands execute the original calculation, retaining every complete outcome. -/
+theorem partialCalculation_present (op : Op) (allowed : op.isCalculation = true)
+    (notCall : ∀ helper, op ≠ .invoke helper) (values : Values model.Value op.arguments)
+    (callbacks : Values (RegionFunction (Component model.Value) I) []) :
+    protocolOperationWithOn model (.silent I) actions tables self (.calculate op allowed)
+      values.present callbacks protocols context iterations =
+      (Evaluation.operationOn model (.silent I) tables.closed op values
+        (op.calculationRegions allowed)).bind
+        (fun result => .done result.present) := by
+  cases callbacks
+  simp only [protocolOperationWithOn]
+  rw [Evaluation.componentOperationOn_strict_calculation model _ tables op allowed notCall]
+  exact strictComponent_adequate (Evaluation.meaningOn model (.silent I) tables.closed)
+    op values _
+
 theorem boundedAt_absent (domain : String)
     (args : Values (Component model.Value) (Op.boundedAt domain).arguments)
     (callbacks : Values (RegionFunction (Component model.Value) I) [])
@@ -1043,7 +1072,17 @@ theorem draw_rule (owner : Nat) (field site : String)
       (ProtocolOp.draw owner field site).regions) :
     protocolOperationWithOn model (SiteObservations.silent I) actions tables self (.draw owner field site) args callbacks protocols context iterations =
       ((Participant.query (services := services) self (context.roles owner)
-        (qualifyProtocolSite context.applicationPrefix site) field args).interpret
+        (qualifyProtocolSite context.applicationPrefix site) (.draw field) args).interpret
+          actions).bind fun result => .done (.cons result .nil) := rfl
+
+theorem query_rule (owner : Nat) (operation : ServiceOp) (site : String)
+    (args : Values (Component model.Value) (ProtocolOp.query owner operation site).arguments)
+    (callbacks : Values (RegionFunction (Component model.Value) I)
+      (ProtocolOp.query owner operation site).regions) :
+    protocolOperationWithOn model (SiteObservations.silent I) actions tables self
+        (.query owner operation site) args callbacks protocols context iterations =
+      (((Participant.query (services := services) self (context.roles owner)
+        (qualifyProtocolSite context.applicationPrefix site) operation args).interpret serviceAction).interpret
           actions).bind fun result => .done (.cons result .nil) := rfl
 
 theorem guard_rule (owner : Nat) (site : String) (condition : Option Bool)
@@ -1305,6 +1344,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
     (bodies.denote (meaningAtOn model actions iterations tables protocols context role)) protocols context iterations).bind _ = _
   rw [← comps_eval_operands, ← lookup_eq_eval]
   cases op with
+  | oracle => cases normalized
   | calculate op allowed =>
     simp only [operation, calculateOperation] at normalized
     split at normalized
@@ -1366,6 +1406,33 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
             exact continue_weaken_push sig results processes _ inputs nextRegion next sound state _ values _ restForm rest
               matched binders inputsEq _ (comps_eval_reads (types := helper.outputs) results binders values)
         · cases normalized
+      case fold spec =>
+        simp only [dite_eq_left allowed] at normalized
+        simp only [partialCalculation] at normalized
+        split at normalized
+        · rename_i absent
+          refine (bind_congr_left (partialCalculation_absent model actions tables protocols
+            context _ (.fold spec) allowed (by intro helper same; cases same) _ _
+            (anyAbsent_sequence results binders _ absent)) _).trans ?_
+          exact continue_push sig results processes role inputs nextRegion next sound state _
+            form normalized matched binders inputsEq _
+            (comps_eval_absent results binders spec.state)
+        · split at normalized
+          · cases normalized
+          · rename_i terms found
+            erw [presentTerms_eval results binders _ terms found]
+            obtain ⟨restForm, rest, built⟩ := except_bind_ok_inv normalized
+            cases built
+            refine (bind_congr_left (partialCalculation_present model actions tables protocols
+              context _ (.fold spec) allowed (by intro helper same; cases same) _ _) _).trans ?_
+            simp only [Form.denoteOn, Form.denoteWithOn]
+            refine (PIR.Process.bind_assoc _ _ _).trans ?_
+            apply congrArg
+            funext values
+            exact continue_weaken_push sig results processes _ inputs nextRegion next sound state _
+              values _ restForm rest matched binders inputsEq _
+              (comps_eval_positions results (.cons values binders)
+                (fun position => Term.result .here position) values (fun _ => rfl))
       case boundedAt domain =>
         simp only [partialCalculation] at normalized
         split at normalized
@@ -1559,6 +1626,42 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
           rw [assemble_eval distinct results state.env binders roles (by simpa using bounded) args]
           simp only [lookup_eq_eval, comps_eval_operands]
           rfl)
+  | query owner request site =>
+    simp only [operation] at normalized
+    split at normalized
+    · cases normalized
+    · rename_i bounded
+      refine (bind_congr_left (query_rule model actions tables protocols context _ owner request site _ _) _).trans ?_
+      split at normalized
+      · rename_i other
+        have different : context.roles owner ≠ context.roles role :=
+          distinct owner (by omega) (by simpa using other)
+        simp only [Participant.query, different, ite_false, PIR.Process.interpret, PIR.Process.bind]
+        exact continue_push sig results processes role inputs nextRegion next sound state _ form normalized matched binders inputsEq
+          _ (by rfl)
+      · rename_i own
+        have same : owner = role := by simpa using own
+        subst same
+        split at normalized
+        · rename_i absent
+          cases normalized
+          simp only [Participant.query, ite_true]
+          erw [anyAbsent_sequence results binders _ absent]
+          rfl
+        · split at normalized
+          · cases normalized
+          · rename_i terms found
+            obtain ⟨restForm, rest, built⟩ := except_bind_ok_inv normalized
+            cases built
+            rw [presentTerms_eval results binders _ terms found]
+            simp only [Participant.query, ite_true]
+            erw [RoleFamily.sequence_present]
+            simp only [PIR.Process.interpret, Form.denoteOn, Form.denoteWithOn,
+              PIR.Process.interpret_bind, PIR.Process.bind_assoc]
+            apply congrArg (PIR.Process.bind _)
+            funext reply
+            exact continue_weaken_push sig results processes _ inputs nextRegion next sound state _ reply _ restForm rest
+              matched binders inputsEq _ rfl
   | draw owner field site =>
     rcases args with _ | ⟨arg, _ | _⟩
     simp only [operation] at normalized
@@ -1583,7 +1686,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
           simp only [Participant.query, ite_true, stored]
           rfl
         · rename_i handle stored
-          cases rest : next ((state.weaken (.value (services.result field))).push (.cons (.present (.var .here)) .nil))
+          cases rest : next ((state.weaken (.value (services.result (.draw field)))).push (.cons (.present (.var .here)) .nil))
             with
           | error refusal => rw [rest, except_bind_error] at normalized; cases normalized
           | ok restForm =>
@@ -1591,7 +1694,8 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
             cases normalized
             simp only [Participant.query, ite_true, stored, Comp.eval,
               Form.denoteOn, Form.denoteWithOn, Terms.eval,
-              PIR.Process.bind_assoc]
+              serviceAction, ServiceOp.validInputs, ServiceOp.validReply,
+              PIR.Process.interpret, PIR.Process.bind_assoc]
             have present : RoleFamily.sequence (Value := model.Value)
                 (.cons (some (handle.eval results binders)) (.nil : Values (Component model.Value) [])) =
                   some (.cons (handle.eval results binders) .nil) := rfl

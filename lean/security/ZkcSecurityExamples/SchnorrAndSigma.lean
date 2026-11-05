@@ -92,8 +92,10 @@ theorem prover_sends (firstBase firstKey secondBase secondKey : G) (firstWitness
           (SchnorrAndViews.program.participant F G 0 (SchnorrAnd.proverInputs firstBase firstKey
             secondBase secondKey firstWitness secondWitness nonceService)) =
         ⟨.returned (.cons none .nil), (),
-          [.query SchnorrAnd.firstNonceSite Zkc.Source.Structured.scalarDomain (.cons nonceService .nil),
-           .query SchnorrAnd.secondNonceSite Zkc.Source.Structured.scalarDomain (.cons nonceService .nil),
+          [.query SchnorrAnd.firstNonceSite (.draw Zkc.Source.Structured.scalarDomain)
+            (.cons nonceService .nil),
+           .query SchnorrAnd.secondNonceSite (.draw Zkc.Source.Structured.scalarDomain)
+             (.cons nonceService .nil),
            .send (ty := .group Zkc.Source.Structured.groupDomain) SchnorrAnd.firstCommitmentSite 1
              (firstNonce • firstBase),
            .send (ty := .group Zkc.Source.Structured.groupDomain) SchnorrAnd.secondCommitmentSite 1

@@ -57,7 +57,7 @@ theorem marks_preserve_latest_site_without_replies (state : ReplayState) :
   rfl
 
 theorem exact_handle_request :
-    actionRequest roles 0 (.query "draw.site" scalarDomain (.cons 29 .nil)) =
+    actionRequest roles 0 (.query "draw.site" (.draw scalarDomain) (.cons 29 .nil)) =
       .ok (strings ["draw", "draw.site", "P", scalarServiceContract, "29", scalarDomain]) := by
   rfl
 

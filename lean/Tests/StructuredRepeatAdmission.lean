@@ -344,7 +344,13 @@ def run : IO Unit := do
     ("maximum zero", accepted (unit [root (repeatInstruction 0)])),
     ("maximum endpoint", accepted (unit [root (repeatInstruction 1048576)])),
     ("maximum beyond endpoint", refuses (unit [root (repeatInstruction 1048577)]) "structured-number-limit"),
-    ("carried exceeds bound", refuses (unit [root (repeatInstruction (carried := 513))]) "structured-number-limit"),
+    ("carried descriptor bound", (match resolveRepeatSpec
+      ⟨["P"], [["P"], ["P"]], [["P"]]⟩ [.index, .boolean] [.boolean]
+        513 2 ["P"] [["P"]] with
+      | .error code => code == "structured-number-limit"
+      | .ok _ => false)),
+    ("malformed carried ABI precedes typed resolution",
+      refuses (unit [root (repeatInstruction (carried := 513))]) "structured-protocol-signature"),
     ("carried equals operand count", refuses (unit [root (repeatInstruction (carried := 2))]) "structured-protocol-signature"),
     ("wrong count type", refuses (unit [root (repeatInstruction (inputs := [.boolean, .boolean]))
       [.boolean, .boolean]]) "structured-protocol-signature"),
@@ -455,8 +461,8 @@ def run : IO Unit := do
       protocol "guarded" [.boolean] [] [["A"]] []
         (.block [.instruction (.guard "A") [0] [] [] "q"] (.ret [])) ["A"]])
       "structured-effective-site-collision"),
-    ("singleton repeat preserves containing multi-role partial Math refusal",
-      refuses partialMathSubset "structured-availability-partial-math"),
+    ("singleton repeat admits co-located finite Math in a multi-role root",
+      accepted partialMathSubset),
     ("exact descriptor", (wire "[\"protocol_repeat\",1,2,[\"P\"],[[\"P\"]]]").isOk),
     ("descriptor missing field", wireRefuses "[\"protocol_repeat\",1,2,[\"P\"]]" "structured-operation-unsupported"),
     ("descriptor extra field", wireRefuses "[\"protocol_repeat\",1,2,[\"P\"],[[\"P\"]],0]" "structured-operation-unsupported"),

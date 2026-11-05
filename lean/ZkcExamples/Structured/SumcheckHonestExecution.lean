@@ -25,12 +25,12 @@ open Zkc.Protocols.Sumcheck.Multilinear (restrictValues_sum)
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-/-- Answers every query in order from a supplied tape, whatever its site, field
+/-- Answers every field draw in order from a supplied tape, whatever its site, field
 or handle; the Sumcheck verifier's only queries are its challenges. An empty
 tape stops incomplete; every other action refuses. -/
 def challengeTape : PIR.Handler (participantInterface F G) (List F) Unit
-  | .query _ _ _, r :: rest => ⟨.returned r, rest, []⟩
-  | .query _ _ _, [] => ⟨.stopped .incomplete, [], []⟩
+  | .query _ (.draw _) _, r :: rest => ⟨.returned r, rest, []⟩
+  | .query _ (.draw _) _, [] => ⟨.stopped .incomplete, [], []⟩
   | _, tape => ⟨.stopped .refused, tape, []⟩
 
 /-- Honest delivery between the prover endpoint and the verifier endpoint of `ctx`. -/
@@ -40,11 +40,11 @@ abbrev network {A : Type} (ctx : ProtocolContext) :
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The next tape value answers a verifier query; the prover is untouched. -/
-theorem tape_query {A B : Type} (ctx : ProtocolContext) (site : String) (field : services.Op)
+theorem tape_query {A B : Type} (ctx : ProtocolContext) (site : String) (field : String)
     (handle : Nat)
     (prover : PIR.Process (participantInterface F G) A) (r : F) (tape : List F)
     (continuation : F → PIR.Process (participantInterface F G) B) :
-    (PIR.Process.call (Action.query site field (.cons handle .nil)) continuation).run
+    (PIR.Process.call (Action.query site (ServiceOp.draw field) (.cons handle .nil)) continuation).run
         (network (G := G) ctx) ⟨prover, r :: tape⟩ =
       (continuation r).run (network ctx) ⟨prover, tape⟩ := by
   simp only [PIR.Process.run, network, peerHandler, challengeTape, PIR.Execution.follow, List.nil_append]
@@ -62,7 +62,7 @@ private theorem restricted_even (raw : List F) (count : Nat) (shape : raw.length
   simp
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
--- The service operation type is a definitional alias of String in the source vocabulary.
+-- The coupling theorem specializes to the verifier's field draw operation.
 set_option backward.isDefEq.respectTransparency false in
 /-- One coupled round: the verifier receives the prover's actual half sums, its
 guard holds because the claim is the true sum of the prover's current table,

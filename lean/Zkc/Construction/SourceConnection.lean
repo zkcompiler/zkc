@@ -43,10 +43,20 @@ artifact fixes its physical sorts; certificate evidence cannot hide a visible
 source input or permute same-typed statement coordinates. -/
 def canonicalABI (program : Program) (role : Nat) (artifact : Participant) :
     Except String Original.InputABI := do
+  if program.snapshot.requiresOracleRuntime then
+    throw "source-connection-oracle-runtime"
   let signature := program.payload.entry.signature
   let locations ← ConnectionRootInputs.locations signature role
     (ConnectionRootInputs.serviceCapabilities signature.inputs)
   return ⟨artifact.inputs, locations⟩
+
+/-- This boundary uses the ordinary source signature. An Oracle-bearing source must select
+its checked Oracle runtime instead of the ordinary interpretation's refusal branch. -/
+theorem canonicalABI_oracle_refused (program : Program) (role : Nat) (artifact : Participant)
+    (required : program.snapshot.requiresOracleRuntime = true) :
+    canonicalABI program role artifact = .error "source-connection-oracle-runtime" := by
+  simp only [canonicalABI, required, ite_true]
+  rfl
 
 /-- The proposition does not name a certificate, generator or proof route.
 Its parameters are the fixed semantic boundary, not existential evidence fields.
@@ -69,6 +79,16 @@ structure Connected (program : Program) (routing : Original.Routing) (role : Nat
 namespace Connected
 variable {program : Program} {routing : Original.Routing} {role : Nat}
   {abi : Original.InputABI} {artifact : Participant}
+
+/-- An ordinary connection cannot certify a source requiring the Oracle runtime. -/
+theorem ordinary (connection : Connected program routing role abi artifact) :
+    program.snapshot.requiresOracleRuntime = false := by
+  cases selected : program.snapshot.requiresOracleRuntime with
+  | false => rfl
+  | true =>
+      have refused := canonicalABI_oracle_refused program role artifact selected
+      rw [connection.canonical] at refused
+      contradiction
 
 /-- The source equation follows from the fixed snapshot; it is not another
 instance obligation or a Boolean check that could replace either semantic field. -/

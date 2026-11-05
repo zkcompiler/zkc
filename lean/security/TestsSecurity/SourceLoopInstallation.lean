@@ -222,7 +222,7 @@ theorem open_cost (index count state : Nat) (site : String) (price budget : ENNR
 /-- A charged query tests a nonzero symbolic price. Every actual reply is
 retained by the loop; cost has no honest or No premise. -/
 def queryStep (state : Nat) : PIR.Process (Occurrence.signature carriers) Nat :=
-  .call (.action (.query "draw" "field" (.cons 7 .nil))) (fun _ => .done (state + 1))
+  .call (.action (.query "draw" (.draw "field") (.cons 7 .nil))) (fun _ => .done (state + 1))
 
 theorem query_cost (state : Nat) (price : ENNReal)
     (history : List (PublicProperties.Event carriers)) :

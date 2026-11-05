@@ -141,19 +141,22 @@ def run : IO Unit := do
   test "unknown-contract-cannot-enroll" (!(Format.binding
     (binding "field.unknown" [root "Field" "f"] [field, field] [app "bool"])).isOk)
   for (wire, expected) in [(arr [], []),
-      (arr [strs ["natural", "0"]], ["0"]),
-      (arr [strs ["natural", "18446744073709551615"]], ["18446744073709551615"])] do
+      (arr [strs ["natural", "0"]], [PrimitiveParameter.natural "0"]),
+      (arr [strs ["natural", "18446744073709551615"]], [.natural "18446744073709551615"])] do
     test "structured-natural" (match Format.primitiveParameters wire with
       | .ok actual => actual == expected | _ => false)
   for bad in [strs ["0"], arr [strs ["natural", "01"]],
       arr [strs ["natural", "18446744073709551616"]], arr [strs ["natural", "-1"]],
       arr [arr [.str "natural", Json.num 0]],
-      arr [strs ["field_literal", "f", "natural", "0"]],
+      arr [strs ["field_literal", "f", "unknown", "0"]],
       arr [arr [.str "expression", arr []]]] do
     test "parameter-refusal" (!(Format.primitiveParameters bad).isOk)
+  test "field-parameter-retains-domain-and-encoding" (match Format.primitiveParameters
+      (arr [strs ["field_literal", "f", "natural", "0"]]) with
+    | .ok [.fieldLiteral "f" "natural" "0"] => true | _ => false)
   test "exec-structured-parameters" (match Format.descriptor (arr [
       .str "exec", .str "exec.apply", .str "primitive", arr [strs ["natural", "7"]]]) with
-    | .ok (.exec "exec.apply" "primitive" ["7"]) => true | _ => false)
+    | .ok (.exec "exec.apply" "primitive" [.natural "7"]) => true | _ => false)
   let digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
   let origin := arr [.str "Library::specialize", arr [arr [.str "F", strs ["field", "f"]]]]
   let definition := arr [.str "function", .str "main", .str "protocol", .str "public",

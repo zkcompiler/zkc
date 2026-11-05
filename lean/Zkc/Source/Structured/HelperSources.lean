@@ -81,7 +81,8 @@ theorem checkUnitHelpers_sources {snapshot : Snapshot} {domains : List DomainSpe
     · simp at absurd
     · obtain ⟨original, retained, formed⟩ := (checkedMap_sources (by assumption)).1 _ candidate
       obtain ⟨present, kind⟩ := List.mem_filter.mp retained
-      exact ⟨original, present, by simpa using kind, formed⟩
+      have kinds : original.kind ≠ .protocol ∧ original.kind ≠ .oracle := by simpa using kind
+      exact ⟨original, present, kinds.1, formed⟩
 
 /-- Every checked helper is the exact checked form of a retained non-protocol
 declaration, under the unit's own resolved domains and identity summaries. -/

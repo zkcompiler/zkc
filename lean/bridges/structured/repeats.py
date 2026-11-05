@@ -626,21 +626,32 @@ def profile_cases(suite):
         observe(suite, subject, f"repeat-finite-{count}-{len(values)}", "P",
                 [str(count), encoded(values), "1", "2"], [], returned(expected))
     for maximum in (2, 0):
-        # Native refusal and reader refusal are separate boundaries.
+        # The finite Math profile applies inside multi-role roots too. Role-local
+        # absence and repeat bounds remain independent execution checks.
         native = replace_exactly_once(source, 'roles=["P"],\n', 'roles=["P","Q"],\n')
         if maximum != 2:
             native = replace_exactly_once(native, 'maximum=2', f'maximum={maximum}')
         label = f"repeat-native-multirole-math-max{maximum}"
-        suite.case(label, lambda n=label, text=native:
-                   suite.refuse_native(n, text, "structured-source-multirole-math"))
+        multi = suite.export(label, native)
+        for count in sorted({0, maximum, maximum + 1}):
+            expected = (stopped("refused", "loop") if count > maximum else
+                        returned(["1", "2"] if count == 0 else ["5", "7"]))
+            observe(suite, multi, f"{label}-P-count{count}", "P",
+                    [str(count), encoded([3, 5, 7]), "1", "2"], [], expected)
+        observe(suite, multi, f"{label}-Q-absent", "Q", [None] * 4, [], returned([None, None]))
         if not suite.args.native_only:
-            bad = copy.deepcopy(subject[2]); main = definition(bad, "main")
+            shared = copy.deepcopy(subject[2]); main = definition(shared, "main")
             main[6][1] = ["P", "Q"]
             main[6][2] = [["P", "Q"] for _ in main[4]]
             row = main[9][1][0]; row[0][2] = maximum; row[0][3] = ["P", "Q"]
             label = f"wire-multirole-math-max{maximum}"
-            suite.case(label, lambda n=label, b=bad:
-                       suite.refuse_snapshot(n, b, "structured-availability-partial-math"))
+            def admitted(n=label, snapshot=shared):
+                path = suite.directory / (n + ".json")
+                write_json(path, snapshot)
+                result = json.loads(suite.command(n, [suite.tools["lean"], "check", path]))
+                if result != ["checked", snapshot[2], snapshot[3]]:
+                    raise AssertionError(result)
+            suite.case(label, admitted)
 
 
 def closed_boundary(suite, subject):

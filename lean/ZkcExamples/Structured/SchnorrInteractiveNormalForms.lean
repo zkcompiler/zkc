@@ -45,7 +45,7 @@ def proverReplies (nonce delivery : F) : ReplyScript F G where
 theorem prover_run (base key : G) (witness : F) (nonces : Nat) (nonce delivery : F) :
     (proverReplies nonce delivery).run (program.participant F G 0 (proverInputs base key witness nonces)) =
       ⟨.returned (.cons none .nil), (),
-        [.query nonceSite scalarDomain (.cons nonces .nil),
+        [.query nonceSite (.draw scalarDomain) (.cons nonces .nil),
          .send (ty := .group groupDomain) commitmentSite 1 (nonce • base),
          .receive (.field scalarDomain) deliverySite 1,
          .send (ty := .field scalarDomain) responseSite 1 (nonce + (delivery * witness))]⟩ := by
@@ -71,7 +71,7 @@ theorem verifier_run (base key : G) (challenges : Nat) (commitment : G) (challen
     (verifierReplies commitment challenge response).run (program.participant F G 1 (verifierInputs base key challenges)) =
       ⟨.returned (.cons (some (decide (response • base = commitment + (challenge • key)))) .nil), (),
         [.receive (.group groupDomain) commitmentSite 0,
-         .query challengeSite scalarDomain (.cons challenges .nil),
+         .query challengeSite (.draw scalarDomain) (.cons challenges .nil),
          .send (ty := .field scalarDomain) deliverySite 0 challenge,
          .receive (.field scalarDomain) responseSite 0]⟩ := by
   rw [Generated.Scalar.SchnorrInteractive.Root.verifier_participant]

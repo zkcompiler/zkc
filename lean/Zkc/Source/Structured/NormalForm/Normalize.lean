@@ -2,6 +2,9 @@ module
 
 public import Zkc.Source.Structured.NormalForm.Denote
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 @[expose] public section
 
 /-! The normalizer: one role's form of a typed protocol body.
@@ -254,10 +257,11 @@ and a kept owned call takes its operands as components, so neither demands them.
 def demanded (sig : Signature) {Δ : Scope} (role : Nat) :
     (op : ProtocolOp) → Values (Comp sig.laws Δ) op.arguments → Bool
   | .calculate (.boundedAt _) _, operands => !anyAbsent operands
+  | .calculate (.fold _) _, operands => !anyAbsent operands
   | .calculate op _, operands => op.total && !anyAbsent operands
   | .localCall helper _ owner _, operands => owner == role && !anyAbsent operands && !sig.keeps helper
   | .exchange _ sender _ _, _ => sender == role
-  | .draw owner _ _, operands => owner == role && !anyAbsent operands
+  | .draw owner _ _, operands | .query owner _ _, operands => owner == role && !anyAbsent operands
   | .guard owner _, operands => owner == role && !anyAbsent operands
   | _, _ => false
 
@@ -330,7 +334,7 @@ def literalTerm {Δ : Scope} : (ty : Ty) → Nat → Option (Term laws Δ ty)
   | .index, value => some (.index value)
   | .boolean, value => some (.bool (value == 1))
   | .field domain, value => some (.field domain value)
-  | .vector _, _ => none
+  | .vector _, _ | .polynomial _, _ => none
   | .group _, _ => none
   | .service _, _ => none
   | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
@@ -622,6 +626,10 @@ def calculateOperation (sig : Signature) {Γ : List Ty} (op : Op) (args : Operan
     match op, args, @next with
     | .invoke helper, args, next => mathCall sig helper args state next
     | .boundedAt domain, args, next => partialCalculation sig (.boundedAt domain) rfl args state next
+    | .fold spec, args, next =>
+      if allowed : (Op.fold spec).isCalculation = true then
+        partialCalculation sig (.fold spec) allowed args state next
+      else .error "calculation-can-stop"
     | _, _, _ => .error "calculation-can-stop"
 
 /-- A call presented by a returning law: its results, then the continuation. -/
@@ -687,6 +695,7 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     Regions protocolDialect op.regions → {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
     ({Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) →
     Except Refusal (Form sig.laws sig.callees Δ out)
+  | .oracle .., _, _, _, _, _ => .error "oracle-normalization-unavailable"
   | .calculate op _, args, _, _, state, next => calculateOperation sig op args state next
   | .localCall helper _ owner _, args, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
@@ -722,6 +731,18 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     if roles.any (roster ≤ ·) then .error "role-outside-roster"
     else next (state.push (.cons
       (assembleComponent (fun owner => owner == role) .absent roles (lookup state.env args)) .nil))
+  | .query owner request site, args, _, _, state, next =>
+    if roster ≤ owner then .error "role-outside-roster"
+    else if owner != role then next (state.push (.cons .absent .nil))
+    else
+      let operands := lookup state.env args
+      if anyAbsent operands then .ok (.halt .incomplete)
+      else match presentTerms operands with
+      | none => .error "undecided-operand"
+      | some terms => do
+        let rest ← next ((state.weaken (.value (services.result request))).push
+          (.cons (.present (.var .here)) .nil))
+        pure (.query site request terms rest)
   | .draw owner field site, .cons arg .nil, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push (.cons .absent .nil))
@@ -729,9 +750,9 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
       match entryAt state.env arg with
       | .absent => .ok (.halt .incomplete)
       | .present handle => do
-        let rest ← next ((state.weaken (.value (services.result field))).push
+        let rest ← next ((state.weaken (.value (services.result (.draw field)))).push
           (.cons (.present (.var .here)) .nil))
-        pure (.query site field (.cons handle .nil) rest)
+        pure (.query site (.draw field) (.cons handle .nil) rest)
       | _ => .error "undecided-operand"
   | .guard owner _, .cons arg .nil, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
@@ -824,3 +845,9 @@ def normalize (sig : Signature) {Γ out : List Ty} (body : Region protocolDialec
 
 end NormalForm
 end Zkc.Source.Structured
+
+-- Realize shared equations here so every client imports the same stored proof.
+-- Independent lazy generation can attach different private helpers to one public name.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getUnfoldEqnFor? ``Zkc.Source.Structured.NormalForm.Term.rename
+  discard <| Lean.Meta.getUnfoldEqnFor? ``Zkc.Source.Structured.NormalForm.Terms.rename

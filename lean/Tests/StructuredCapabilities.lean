@@ -15,7 +15,7 @@ def body (field : String) : Region protocolDialect [.service ("random." ++ field
   .letOp (.draw 0 field "draw") (.cons .here .nil) .nil (.ret (.cons .here .nil))
 
 def form (field : String) (handle : Nat) : Form [] [] [] [.field field] :=
-  .query "draw" field (.cons (.capability ("random." ++ field ++ "/0") handle) .nil)
+  .query "draw" (.draw field) (.cons (.capability ("random." ++ field ++ "/0") handle) .nil)
     (.done (.cons (.present (.var .here)) .nil))
 
 example (field : String) (handle : Nat) :

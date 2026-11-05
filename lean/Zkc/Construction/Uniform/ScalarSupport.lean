@@ -22,7 +22,8 @@ inductive Message : Ty → Prop where
 def Action : (participantInterface F G).Op → Prop
   | .receive ty _ _ => Message ty
   | @Participant.Action.send _ _ _ _ ty _ _ _ => Message ty
-  | .query _ _ _ => True
+  | .query _ (.draw _) _ => True
+  | .query _ (.sampleIndex _) _ | .query _ (.sampleIndices _) _ => False
 
 /-- All continuations are checked, including replies never produced honestly.
 Iteration support is selected from the actual artifact before this evidence. -/

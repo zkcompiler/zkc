@@ -60,6 +60,8 @@ mutual
       return .field (← field name)
     | [.str "apply", .str "vector", .arr #[.arr #[.str "domain", .str "Field", name]]] =>
       return .vector (← field name)
+    | [.str "apply", .str "polynomial", .arr #[.arr #[.str "domain", .str "Field", name]]] =>
+      return .polynomial (← field name)
     | [.str "apply", .str "group", .arr #[.arr #[.str "domain", .str "Group", name]]] =>
       return .group (← group name)
     | [.str "apply", .str "groups", .arr #[.arr #[.str "domain", .str "Group", name]]] =>
@@ -109,15 +111,65 @@ def type (json : Json) : Except String Ty := typeAt 64 json
 def types (json : Json) : Except String (List Ty) := do
   (← array json).mapM type
 
-/-- The fixed primitive interpretation currently admits only the Natural and
-None parameter schemas. A structured natural lowers exactly to the existing
-canonical internal decimal; other structured parameter families refuse. -/
-def primitiveParameters (json : Json) : Except String (List String) := do
+/-- Literal parameters retain their field and encoding through parsing. The
+binding-specific field and bound checks run before internal value lowering. -/
+def primitiveParameters (json : Json) : Except String (List PrimitiveParameter) := do
   (← array json).mapM fun parameter => do
-    let [.str "natural", value] ← array parameter | throw "structured-primitive-parameters"
-    let text ← string value
-    discard <| indexDecimal text
-    return text
+    match ← array parameter with
+    | [.str "natural", value] =>
+      let text ← string value
+      discard <| indexDecimal text
+      return .natural text
+    | [.str "field_literal", domain, .str encoding, digits] =>
+      let domain ← field domain
+      let digits ← string digits
+      if encoding != "natural" && encoding != "bits" then
+        throw "structured-field-literal-encoding"
+      return .fieldLiteral domain encoding digits
+    | _ => throw "structured-primitive-parameters"
+
+/-- Independent installed binary presentations, in prime-field bits. -/
+def binaryWidth : String → Option Nat
+  | "gf2-64.pentanomial-4-3-1" => some 64
+  | "gf2-64.pentanomial-4-3-1.ext3-trinomial1" => some 192
+  | _ => none
+
+def hexadecimal (text : String) : Except String Nat := do
+  let '0' :: 'x' :: digits := text.toList | throw "structured-field-literal-canonical"
+  if digits.isEmpty || digits.head? == some '0' then throw "structured-field-literal-canonical"
+  let value ← digits.foldlM (fun acc c => do
+    let digit ← if '0' ≤ c && c ≤ '9' then pure (c.toNat - '0'.toNat)
+      else if 'a' ≤ c && c ≤ 'f' then pure (c.toNat - 'a'.toNat + 10)
+      else throw "structured-field-literal-canonical"
+    pure (16 * acc + digit)) 0
+  if value ≤ 1 then throw "structured-field-literal-canonical"
+  return value
+
+inductive FieldLiteral where
+  | natural (value : Nat)
+  | bits (value : Nat)
+  deriving DecidableEq, Repr
+
+def fieldLiteral (catalogue : Catalogue) (root : String)
+    (parameter : PrimitiveParameter) : Except String FieldLiteral := do
+  let .fieldLiteral actual encoding digits := parameter
+    | throw "structured-field-literal"
+  if actual != root then throw "structured-field-literal-domain"
+  let nominal ← catalogue.expect root .field
+  let some modulus := nominal.modulus | throw "structured-domain-modulus"
+  match encoding with
+  | "natural" =>
+    let value ← decimal digits
+    if value ≥ modulus then throw "structured-field-literal-range"
+    return .natural value
+  | "bits" =>
+    let some width := binaryWidth root | throw "structured-field-literal-encoding"
+    if modulus != 2 then throw "structured-field-literal-encoding"
+    let value ← hexadecimal digits
+    if value ≥ 2 ^ width then throw "structured-field-literal-range"
+    return .bits value
+  | _ => throw "structured-field-literal-encoding"
+
 /-- JSON mask elements must be Booleans, including in unused declarations. -/
 def booleans (json : Json) : Except String (List Bool) := do
   (← array json).mapM fun value => match value with
@@ -264,6 +316,10 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "restrict", roles] => return .restrict (← strings roles Limits.protocolRoles)
   | [.str "assemble", roles] => return .assemble (← strings roles Limits.protocolRoles)
   | [.str "exchange", sender, receiver] => return .exchange (← string sender) (← string receiver)
+  | [.str "sample_index", owner, contract] =>
+      return .sampleIndex (← string owner) (← string contract)
+  | [.str "sample_indices", owner, contract] =>
+      return .sampleIndices (← string owner) (← string contract)
   | [.str "draw", owner, f] => return .draw (← string owner) (← field f)
   | [.str "statement", relation, selectors, acceptance, target] =>
       let target ← match target with
@@ -418,7 +474,7 @@ def binding (json : Json) : Except String Binding := do
     let value : Binding := ⟨← string name, ← string contract, roots,
       ← string implementation true, some schema⟩
     if !value.valid then throw "structured-binding"
-    if value.contract != "field.embed" then
+    if value.contract != "field.embed" && value.contract != "vector.embed" then
       value.checkSignature (roots.headD "") ""
     return value
   | _ => throw "structured-binding"

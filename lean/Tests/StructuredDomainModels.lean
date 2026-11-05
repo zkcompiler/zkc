@@ -61,10 +61,11 @@ example : operationOn model SiteObservations.closed [] (.fieldConstant "small" 9
 -- The uniform carriers give the uniform values by definition.
 example (F G : Type) : (uniformCarriers F G).Value = assignment F G := by with_reducible rfl
 
--- Models that differ only in the inverse agree on every current body.
-example {Γ out : List Ty} (region : Region dialect Γ out) :
+-- Transfer checks the actual operations of the selected region.
+example {Γ out : List Ty} (region : Region dialect Γ out)
+    (free : ∀ op ∈ region.erase.operations, op.usesInverse = false) :
     region.denote (meaningOn (model.withInverse fun _ => none) SiteObservations.closed []) =
       region.denote (meaningOn model SiteObservations.closed []) :=
-  denote_inverse_free model (fun _ => none) SiteObservations.closed [] region (inverse_free region)
+  denote_inverse_free model (fun _ => none) SiteObservations.closed [] region free
 
 end Tests.StructuredDomainModels

@@ -62,14 +62,14 @@ theorem split_pending_plain (left right : List F) (sameLength : right.length = l
     simp [GkrSourceBodies.helper27Body, Region.denote, meaning, Evaluation.meaning,
       Evaluation.operation, Operands.eval, Regions.denote, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
       Environment.prepend, Environment.push, SiteObservations.closed,
-      SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+      SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
       checkedIndices, show 0 < indexLimit by decide, Evaluation.invokeCallback]
   · have nonempty : left ≠ [] := by intro h; simp [h] at empty
     have positive : 0 < (left ++ right).length := by simp only [List.length_append]; omega
     simp [GkrSourceBodies.helper27Body, Region.denote, meaning, Evaluation.meaning,
       Evaluation.operation, Operands.eval, Regions.denote, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
       Environment.prepend, Environment.push, SiteObservations.closed,
-      SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+      SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
       checkedIndices, bounded, joinedBound, show 0 < indexLimit by decide, Evaluation.invokeCallback,
       nonempty, empty, positive, even, half, joinedHalf, joinedEven,
       show 0 < left.length by omega, Values.get, List.take_left, List.drop_left]

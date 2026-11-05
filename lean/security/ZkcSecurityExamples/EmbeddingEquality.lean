@@ -99,7 +99,7 @@ def deliverySite : String := "label_64656c6976657279_0"
 value; no equality to the honest producer expression is assumed. -/
 def verifierView (a b : Base) : PIR.Process (Construction.Domain.Actions model.toCarriers) (Option Bool) :=
   .call (.receive (.field octicIdentity) messageSite context.producer) fun u =>
-    .call (.query challengeSite octicIdentity (.cons 0 .nil)) fun c =>
+    .call (.query challengeSite (.draw octicIdentity) (.cons 0 .nil)) fun c =>
       .call (.send (ty := .field octicIdentity) deliverySite context.producer c) fun _ =>
         .done (some (decision a b u c))
 

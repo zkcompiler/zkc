@@ -25,7 +25,7 @@ def embed {F G : Type} : PIR.OperationInterpretation
   | .receive (.field domain) site sender => .call (.receive (.field domain) site sender) .done
   | .receive (.group domain) site sender => .call (.receive (.group domain) site sender) .done
   | .receive (.service contract) site sender => .call (.receive (.service contract) site sender) .done
-  | .query site field (.cons handle .nil) => .call (.query site field (.cons handle .nil)) .done
+  | .query site field (.cons handle .nil) => .call (.query site (.draw field) (.cons handle .nil)) .done
 
 def project {F G : Type} : PIR.OperationInterpretation
     (participantInterface F G) (commonInterface F G)
@@ -38,6 +38,7 @@ def project {F G : Type} : PIR.OperationInterpretation
   | .send (ty := .indices) .. | .send (ty := .groups _) ..
   | .send (ty := .oracle _) .. | .send (ty := .oracleSequence ..) ..
   | .send (ty := .sequence _) .. | .send (ty := .product ..) ..
+  | .send (ty := .polynomial _) ..
   | .send (ty := .resourceUnit _) .. => .halt .refused
   | .receive .boolean site sender => .call (.receive .boolean site sender) .done
   | .receive (.field domain) site sender => .call (.receive (.field domain) site sender) .done
@@ -47,8 +48,11 @@ def project {F G : Type} : PIR.OperationInterpretation
   | .receive .indices .. | .receive (.groups _) ..
   | .receive (.oracle _) .. | .receive (.oracleSequence ..) ..
   | .receive (.sequence _) .. | .receive (.product ..) ..
+  | .receive (.polynomial _) ..
   | .receive (.resourceUnit _) .. => .halt .refused
-  | .query site field (.cons handle .nil) => .call (.query site field (.cons handle .nil)) .done
+  | .query site (.draw field) (.cons handle .nil) => .call (.query site field (.cons handle .nil)) .done
+
+  | .query _ (.sampleIndex _) _ | .query _ (.sampleIndices _) _ => .halt .refused
 
 theorem project_embed_operation {F G : Type} (op : (commonInterface F G).Op) :
     (embed op).interpret project = .call op .done := by

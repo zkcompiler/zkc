@@ -127,6 +127,52 @@ def Routing.local (routing : Routing) (frames : Frames) (site field : String)
     candidate.template (frames.map (·.index))
   return (candidate.port, origin)
 
+/-- Select a typed request only after source-owned constant/request checking.
+The same occurrence resolver retains complete loop ancestry and source paths. -/
+def Routing.serviceRequest (routing : Routing) (frames : Frames) (site : String)
+    (request : Request) (handle : Nat) : Option Origin :=
+  if handle = routing.selectedHandle ∧ routing.context.service.isSome = true ∧ request.valid then
+    let context := routing.context.mapReplacement fun replacement =>
+      { replacement with request := some request }
+    let candidates := routing.draws.filter fun template =>
+      SourceOccurrences.requestAt routing.snapshot routing.context template == some request
+    OccurrenceResolution.resolve routing.snapshot context (context.query site request) frames candidates
+  else none
+
+/-- Local source services authenticate the exact bound/count as well as the
+actual capability and owner; their replies do not enter public history. -/
+def Routing.localRequest (routing : Routing) (frames : Frames) (site : String)
+    (request : Request) (handle : Nat) : Option (ServicePort × Origin) := do
+  let candidates := routing.locals.filter fun candidate =>
+    candidate.handle == handle &&
+      candidate.template.qualify (candidate.template.event[2]?.getD "") == site &&
+      SourceOccurrences.localValid routing.snapshot routing.context candidate.port request candidate.template &&
+      SourceOccurrences.repeatSites candidate.template == frames.map (·.site)
+  let [candidate] := candidates | none
+  let origin ← Domain.localOrigin routing.context candidate.port request candidate.template (frames.map (·.index))
+  return (candidate.port, origin)
+
+/-- A delivery obtains its request from its original source query, never from
+its result type or the constructed annotation. Ambiguous associations refuse. -/
+def Routing.typedDelivery (routing : Routing) (frames : Frames) (site : String)
+    (type : Structured.Ty) (sender : Nat) : Option (Request × Origin × Origin) := do
+  if !(routing.context.draws.map Prod.fst).Nodup ||
+      !(routing.context.draws.map Prod.snd).Nodup then none else pure ()
+  let candidates := routing.deliveries.filter fun candidate =>
+    deliveryValid routing.snapshot routing.context candidate.draw candidate.message &&
+      candidate.message.qualify (candidate.message.event[2]?.getD "") == site &&
+      routing.context.draws.contains (candidate.draw.qualify (candidate.draw.event[2]?.getD ""), site)
+  let [candidate] := candidates | none
+  let request ← SourceOccurrences.requestAt routing.snapshot routing.context candidate.draw
+  if request.sort ≠ type then none else pure ()
+  let context := routing.context.mapReplacement fun replacement => { replacement with request := some request }
+  let message ← OccurrenceResolution.resolve routing.snapshot context
+    (context.message site sender context.producer) frames [candidate.message]
+  let querySite := candidate.draw.qualify (candidate.draw.event[2]?.getD "")
+  let query ← OccurrenceResolution.resolve routing.snapshot context
+    (context.query querySite request) frames [candidate.draw]
+  return (request, query, message)
+
 /-- Resolution cannot change a public draw's nominal reply carrier. -/
 theorem Routing.draw_request {routing : Routing} {frames : Frames} {site field : String}
     {handle : Nat} {origin : Origin}

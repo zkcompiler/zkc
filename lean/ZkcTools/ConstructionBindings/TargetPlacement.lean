@@ -172,7 +172,21 @@ def propose (goal : MVarId) (entry placement : Expr) (solve : MVarId → TacticM
       let mut equationsOnly := true
       for _ in [:2 * parameters.size + 2] do
         let before ← parameters.filterM fun parameter => return !(← parameter.mvarId!.isAssigned)
+        -- The fixed target determines a service's physical references. A
+        -- layout can contain several equal history or coordinate cells;
+        -- solving a readback first must not select a different valid cell
+        -- and thereby make the exact Challenge premise impossible.
+        for parameter in before do
+          let type ← whnf (← instantiateMVars (← parameter.mvarId!.getType))
+          if type.isAppOf ``Zkc.Construction.ConnectionServiceRequests.Challenge then
+            let attempt ← saveState
+            try solve parameter.mvarId!
+            catch error =>
+              if error.isRuntime || error.isInterrupt then throw error
+              lastFailure := error.toMessageData
+              attempt.restore
         for parameter in before, index in [:before.size] do
+          if ← parameter.mvarId!.isAssigned then continue
           let type ← instantiateMVars (← parameter.mvarId!.getType)
           let operand := if type.isAppOf ``Eq then type.getAppArgs[0]!.getAppFn.constName? else none
           phase s!"family fact {index}/{before.size}: operand={operand}; open={type.hasExprMVar}"

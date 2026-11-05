@@ -25,7 +25,9 @@
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/Origins.h"
+#include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/SemanticFields.h"
@@ -262,6 +264,8 @@ Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
     return nominal("field", "Field", field.getDomain());
   if (auto vector = dyn_cast<data::FieldVectorType>(type))
     return nominal("vector", "Field", vector.getDomain());
+  if (auto polynomial = dyn_cast<poly::UnivariateType>(type))
+    return nominal("polynomial", "Field", polynomial.getDomain());
   if (auto group = dyn_cast<algebra::GroupType>(type))
     return nominal("group", "Group", group.getDomain());
   if (auto groups = dyn_cast<data::GroupVectorType>(type))
@@ -1137,15 +1141,31 @@ class Exporter {
     if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
       if (auto e = attributes(op))
         return std::move(e);
-      auto result = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
-      auto service = op.getNumOperands() == 1
-                         ? dyn_cast<protocol_ir::ServiceReferenceType>(
-                               op.getOperand(0).getType())
-                         : protocol_ir::ServiceReferenceType();
-      if (query.getMethod() != "draw" || !service || !result ||
-          result.getDomain() != randomServiceField(service.getContract()))
+      auto service = dyn_cast<protocol_ir::ServiceReferenceType>(
+          query.getReference().getType());
+      auto method =
+          service ? serviceMethod(service.getContract(), query.getMethod())
+                  : std::nullopt;
+      if (owner != "protocol" || !method ||
+          !protocol_ir::matchesServiceSignature(
+              query.getInputs().getTypes(), query.getResultTypes(), *method))
         return error("structured-source-service");
-      return json::Array{"draw", query.getOwner(), result.getDomain()};
+      // Preserve the source rule: bounds/counts are positive constant u64s,
+      // not values selected by an earlier message or a sampled result.
+      if (query.getMethod() == "index" || query.getMethod() == "indices")
+        for (Value input : query.getInputs()) {
+          auto bound = input.getDefiningOp<data::IndexOp>();
+          if (!bound || !uniformIndexBound(bound.getValue()))
+            return error("structured-source-service");
+        }
+      if (query.getMethod() == "draw")
+        return json::Array{"draw", query.getOwner(),
+                           randomServiceField(service.getContract())};
+      if (query.getMethod() == "index" || query.getMethod() == "indices")
+        return json::Array{query.getMethod() == "index" ? "sample_index"
+                                                        : "sample_indices",
+                           query.getOwner(), service.getContract()};
+      return error("structured-source-service");
     }
     if (auto statement = dyn_cast<protocol_ir::StatementOp>(op)) {
       if (auto e = attributes(op))
@@ -2009,31 +2029,6 @@ public:
       return std::move(e);
     if (auto e = effectiveSites())
       return std::move(e);
-    // Multi-role Math finite work needs separate partial-component semantics.
-    // Follow only Math calls: owned Local finite work keeps its closed ABI.
-    llvm::DenseSet<Operation *> checked;
-    std::function<Error(Operation *)> scalarMath =
-        [&](Operation *function) -> Error {
-      if (!checked.insert(function).second)
-        return Error::success();
-      SmallVector<Operation *> operations;
-      function->getRegion(0).walk<WalkOrder::PreOrder>(
-          [&](Operation *op) { operations.push_back(op); });
-      for (Operation *operation : operations) {
-        Operation &op = *operation;
-        if (isa<data::FiniteFoldOp, data::BoundedAtOp>(op))
-          return error("structured-source-multirole-math");
-        if (auto call = dyn_cast<func::CallOp>(op))
-          if (auto e = scalarMath(symbols.lookup(call.getCallee())))
-            return e;
-      }
-      return Error::success();
-    };
-    for (auto protocol :
-         unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
-      if (protocol.getRoles().size() > 1)
-        if (auto e = scalarMath(protocol))
-          return std::move(e);
     json::Value declarations =
         json::Array{json::Array{}, json::Array{}, json::Array{}};
     if (auto attr = unit->getAttr("source_declarations")) {

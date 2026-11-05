@@ -181,11 +181,11 @@ theorem transitive_read_flag :
     (summarizeHelpers [readHelper, nestedRead]).map
       (fun summaries => summaries.map (·.partial)) = .ok [true, true] := by decide +kernel
 
-theorem reachable_read_refused_even_when_colocated :
+theorem reachable_read_accepted_when_colocated :
     checkUnitAvailability [readHelper, nestedRead]
       [root [[0], [0]] [[0]]
         (mathCall nestedRead.helper rfl (.cons .here (.cons (.there .here) .nil))
-          (.ret (.cons .here .nil)))] = .error "structured-availability-partial-math" := by
+          (.ret (.cons .here .nil)))] = .ok () := by
   decide +kernel
 
 theorem singleton_read_profile_preserved :
@@ -389,19 +389,19 @@ theorem singleton_fold_profile_preserved :
         (mathCall nestedFold.helper rfl (.cons .here (.cons (.there .here) .nil))
           (.ret (.cons .here .nil))) ["P"]] = .ok () := by decide +kernel
 
-theorem transitive_fold_multirole_refused :
+theorem transitive_fold_multirole_accepted :
     checkUnitAvailability [foldStep, foldHelper, nestedFold]
       [root [[0], [0]] [[0]]
         (mathCall nestedFold.helper rfl (.cons .here (.cons (.there .here) .nil))
-          (.ret (.cons .here .nil)))] = .error "structured-availability-partial-math" := by
+          (.ret (.cons .here .nil)))] = .ok () := by
   decide +kernel
 
-theorem direct_fold_multirole_refused :
+theorem direct_fold_multirole_accepted :
     checkUnitAvailability [foldStep]
       [root (inputs := [vector, scalar]) [[0], [0]] [[0]]
         (.letOp (.calculate (.fold foldSpec) rfl)
           (.cons .here (.cons (.there .here) .nil)) .nil (.ret (.cons .here .nil)))] =
-        .error "structured-availability-partial-math" := by decide +kernel
+        .ok () := by decide +kernel
 
 private def localFoldStep : CheckedDefinition := formed "local-step" .local foldStep.body
 private def localFold : CheckedDefinition := formed "local-fold" .local

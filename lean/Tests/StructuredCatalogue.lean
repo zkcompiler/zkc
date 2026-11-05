@@ -58,7 +58,7 @@ private def nativeBinaryRows : Catalogue where
   services := []
 
 example : code nativeBinaryRows.check = "" := by decide +kernel
-example : code (nativeBinaryRows.agrees admittedCatalogue) = "structured-catalogue-unknown" := by
+example : code (nativeBinaryRows.agrees admittedCatalogue) = "" := by
   decide +kernel
 
 theorem nativeBinaryRows_justified : nativeBinaryRows.Justified := by

@@ -66,11 +66,11 @@ def sourceLabel (site : String) : Except String String := do
 /-- Source identity, including specialization, determines the alias name.
 Hex encoding avoids Lean keyword/identifier collisions and never reverses a
 compiled symbol hash. Reordering the helper table only changes its witness. -/
-def sourceAliasName (alias : SourceAlias) : String :=
+def sourceAliasName (sourceAlias : SourceAlias) : String :=
   let hex := fun (value : String) => String.join (value.toByteArray.data.toList.map fun byte =>
     let digits := "0123456789abcdef".toList
     String.ofList [digits[byte.toNat / 16]!, digits[byte.toNat % 16]!])
-  "source_" ++ hex alias.origin.toJson.compress
+  "source_" ++ hex sourceAlias.origin.toJson.compress
 
 def originTermSource : Zkc.Source.Structured.OriginTerm → String
   | .natural value => "(.natural " ++ quoted value ++ ")"
@@ -111,17 +111,17 @@ def sourceAliasSource (namespaceName sourceModule : String)
     "set_option maxRecDepth 50000\nset_option maxHeartbeats 16000000\nnoncomputable section\n\n" ++
     "abbrev imported := " ++ sourceModule ++ ".imported\n" ++
     "abbrev original := " ++ sourceModule ++ ".program.snapshot\n\n"
-  for alias in aliases do
-    let name := sourceAliasName alias
-    let table := match alias.origin with
+  for sourceAlias in aliases do
+    let name := sourceAliasName sourceAlias
+    let table := match sourceAlias.origin with
       | .local .. => "definitions"
       | .protocol _ => "protocols"
     text := text ++ "abbrev " ++ name ++ " := imported.program.payload." ++ table ++ ".get ⟨" ++
-      toString alias.index ++ ", by decide +kernel⟩\n" ++
-      "theorem " ++ name ++ "_symbol : " ++ name ++ ".name = " ++ quoted alias.symbol ++ " := by kernel_rfl\n" ++
+      toString sourceAlias.index ++ ", by decide +kernel⟩\n" ++
+      "theorem " ++ name ++ "_symbol : " ++ name ++ ".name = " ++ quoted sourceAlias.symbol ++ " := by kernel_rfl\n" ++
       "theorem " ++ name ++ "_origin :\n" ++
       "    ((original.definitions.filterMap (fun | .function function => some function | _ => none)).find? (fun function => function.name == " ++ name ++ ".name)).bind\n" ++
-      "      (fun function => function.origin) = some " ++ originSource alias.origin ++
+      "      (fun function => function.origin) = some " ++ originSource sourceAlias.origin ++
       " := by kernel_rfl\n\n"
   return text ++ "end\nend " ++ namespaceName ++ "\n"
 

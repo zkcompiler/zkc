@@ -99,6 +99,13 @@ def operationKind : Structured.Op → String
   | .mark _ => "mark"
   | .createUnit _ | .passUnit _ | .consumeUnit _ => "custody"
 
+/-- Admission to the selected scalar codec, independent of source primitive support.
+Both sides are checked: unsupported inputs cannot decode, and unsupported outputs
+would lose their meaning as `Value.unsupported`. Such primitives need a different
+codec and recipe; the evaluator's refusal and exhaustion outcomes are unchanged. -/
+def primitiveDataProfile (primitive : Primitive) : Bool :=
+  primitive.arguments.all dataType && primitive.results.all dataType
+
 /-- Whether an installed operation implements a structured operation without
 nested regions: on arguments that encode the structured arguments, it returns
 the encoded structured results or stops for the same reason. A carrier
@@ -111,7 +118,8 @@ def implements : Structured.Op → Resolved → Bool
       value == value' && decide (value < indexLimit)
   | .exec .indexEqual, .calculate .indexEqual => true
   | .exec (.fieldEqual domain), .calculate (.fieldEqual domain') => domain == domain'
-  | .exec primitive, .compute (.primitive primitive') => primitive == primitive'
+  | .exec primitive, .compute (.primitive primitive') =>
+      primitive == primitive' && primitiveDataProfile primitive
   | operation, .calculate calculation =>
       match Calculation.ofOp? operation with
       | some calculation' => calculation' == calculation && calculation.op.arguments.all dataType
@@ -135,8 +143,10 @@ def resultsBounded : Structured.Op → Bool
 /-- Whether a structured operation without nested regions has a recipe: a
 carrier calculation or a primitive. -/
 def hasRecipe (op : Structured.Op) : Bool :=
-  (Calculation.ofOp? op).isSome ||
-    (op matches .exec _ | .createUnit _ | .passUnit _ | .consumeUnit _)
+  match op with
+  | .exec primitive => primitiveDataProfile primitive
+  | _ => (Calculation.ofOp? op).isSome ||
+      (op matches .createUnit _ | .passUnit _ | .consumeUnit _)
 
 /-- The names a walk has bound so far, and those of its index names whose value
 is known to be below the index limit. -/

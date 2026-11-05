@@ -48,7 +48,7 @@ def main() -> None:
     )
     (directory / "regenerate.log").write_text(result.stdout + result.stderr)
     if result.returncode:
-        raise AssertionError("generation failed; see regenerate.log")
+        raise AssertionError(f"generation failed (exit {result.returncode}); see {directory / 'regenerate.log'}")
     generated = []
     relative = Path("ZkcExamples/Structured/Generated/Bindings")
     for client in CLIENTS:

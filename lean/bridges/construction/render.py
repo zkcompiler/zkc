@@ -43,7 +43,7 @@ def sort(value):
         suite = value[2][0][2]
         return f".transcript {text(suite)}", ("transcript", suite)
     if value == ["apply", "indices", []]:
-        return ".indices", ("indices", None)
+        return ".data .indices", ("data", ["indices"])
     slot = schema.custody_slot(value)
     if slot is not None:
         # A custody permission: a sort of its own, never an ordinary payload.
@@ -104,11 +104,12 @@ def one_parameter(attrs):
 # members are projected through the export's catalogue rows, never inferred
 # from supplied signature ports or parsed from a suite's display name.
 CONSTRUCTION_PRIMITIVES = frozenset((
-    "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
+    "index.constant", "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
+    "transcript.native.indexed.index", "transcript.native.indexed.indices",
     "transcript.native.indexed.challenge", "field.embed"))
 
 
-def operation(name, attrs, binding, operand_kinds, result_kinds, rows):
+def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_values=None):
     """Classify one exported operation strictly; return its Lean term."""
     schema.binding(binding)
     boolean, index = ("boolean", None), ("index", None)
@@ -149,9 +150,16 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows):
                                                       CONSTRUCTION_PRIMITIVES)
         catalogue.require_capabilities(declaration, terms, rows)
         schema.validate_parameters(parameters, declaration["parameters"])
-        require([sort(value)[1] for value in inputs] == operand_kinds
-                and [sort(value)[1] for value in outputs] == result_kinds,
+        def logical_kind(kind):
+            return ("data", ["indices"]) if kind == ("indices", None) else kind
+        require([sort(value)[1] for value in inputs] == [logical_kind(k) for k in operand_kinds]
+                and [sort(value)[1] for value in outputs] == [logical_kind(k) for k in result_kinds],
                 "execution binding actual ports")
+        if contract == "index.constant":
+            require(not arguments and not operand_kinds and result_kinds == [index]
+                    and len(parameters) == 1, "index constant shape")
+            value = int(parameters[0][1])
+            return f".calculate (.indexConstant {value})"
         if contract == "indices.empty":
             require(not arguments and not parameters and not operand_kinds
                     and result_kinds == [("indices", None)], "indices empty shape")
@@ -167,10 +175,12 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows):
             suite_arg, leaf_arg = record(arguments, 2)
             suite, leaf = suite_arg[2], schema.interpreted_type(leaf_arg[1])
             require(len(operand_kinds) == 3 and operand_kinds[0] == ("transcript", suite)
-                    and operand_kinds[1][0] in ("field", "group")
+                    and operand_kinds[1][0] in ("boolean", "index", "field", "group", "vector", "data")
                     and operand_kinds[2] == ("indices", None)
                     and result_kinds == [("transcript", suite)]
-                    and leaf == list(operand_kinds[1]), "observed leaf type")
+                    and leaf == (operand_kinds[1][1] if operand_kinds[1][0] == "data"
+                                 else [operand_kinds[1][0]] if operand_kinds[1][0] in ("boolean", "index")
+                                 else list(operand_kinds[1])), "observed leaf type")
             return f".observe {text(suite)} {origin(one_parameter(attrs))}"
         if contract == "transcript.native.indexed.challenge":
             event = schema.origin_structure(parameters[0][1])
@@ -181,6 +191,31 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows):
                     and len(result_kinds) == 2 and result_kinds[0][0] == "field"
                     and result_kinds[1] == ("transcript", suite), "challenge results")
             return f".challenge {text(suite)} {text(result_kinds[0][1])} {origin(one_parameter(attrs))}"
+        if contract == "transcript.native.indexed.index":
+            event = schema.origin_structure(parameters[0][1])
+            require(event[0] == "query" and event[5] == "index", "index challenge origin method")
+            (suite_arg,) = record(arguments, 1)
+            suite = suite_arg[2]
+            require(operand_kinds == [("transcript", suite), index, ("indices", None)]
+                    and result_kinds == [index, ("transcript", suite)], "index challenge ports")
+            require(operand_values is not None and type(operand_values[1]) is int
+                    and 0 < operand_values[1] < 1 << 64, "index challenge constant bound")
+            bound = operand_values[1]
+            require(bound <= 1 << 63 and bound & (bound - 1) == 0,
+                    "index challenge provider bound")
+            return (f".indexChallenge {text(suite)} {operand_values[1]} "
+                    f"{origin(one_parameter(attrs))}")
+        if contract == "transcript.native.indexed.indices":
+            event = schema.origin_structure(parameters[0][1])
+            require(event[0] == "query" and event[5] == "indices", "block challenge origin method")
+            (suite_arg,) = record(arguments, 1)
+            suite = suite_arg[2]
+            require(operand_kinds == [("transcript", suite), ("indices", None)]
+                    and result_kinds == [("data", ["indices"]), ("transcript", suite)],
+                    "block challenge ports")
+            bound, count = (int(parameter[1]) for parameter in parameters[1:])
+            return (f".blockChallenge {text(suite)} {bound} {count} "
+                    f"{origin(schema.origin_hex(parameters[0]))}")
         if contract == "field.embed":
             require(not parameters, "field embedding attributes")
             require(len(operand_kinds) == 1 and operand_kinds[0][0] == "field"
@@ -254,16 +289,32 @@ def service_port(value):
             f"{decimal(input_)}, {text(contract)}⟩")
 
 
-def local_service(attrs, binding, operands, result_kinds, retained, ports, places, kinds, rows):
+def local_service(attrs, binding, operands, result_kinds, retained, ports, places, kinds, rows, constants):
     require(set(attrs) == {"port", "method", "site"} and binding == [], "local service attributes")
     name, method, site = (string_attribute(attrs, key) for key in ("port", "method", "site"))
     require(name in ports, "undeclared local service port")
     port = ports[name]
-    require(method == "draw" and not operands and len(result_kinds) == 1
-            and result_kinds[0][0] == "field", "unsupported local service request")
-    field = result_kinds[0][1]
     service = catalogue.service(rows, port[4])
-    require(service[2] == field and "draw" in service[3], "local service nominal domain")
+    require(method in service[3], "local service method")
+    if method == "draw":
+        require(not operands and len(result_kinds) == 1 and result_kinds[0][0] == "field",
+                "local draw shape")
+        field = result_kinds[0][1]
+        require(service[2] == field and port[4] == f"random.{field}/0", "local service nominal domain")
+        request = f"Request.draw {text(field)}"
+    elif method in ("index", "indices"):
+        arity = 1 if method == "index" else 2
+        expected = [("index", None)] if method == "index" else [("data", ["indices"])]
+        require(len(operands) == arity and result_kinds == expected
+                and all(kinds[reference] == ("index", None) for reference in operands),
+                "local index service shape")
+        values = [constants.get(reference) for reference in operands]
+        require(all(type(value) is int and 0 < value < 1 << 64 for value in values),
+                "local index service constant operands")
+        constructor = "sampleIndex" if method == "index" else "sampleIndices"
+        request = "Request." + constructor + " " + " ".join(str(value) for value in values)
+    else:
+        raise Refused("unsupported local service request")
     encoded, coordinates = record(retained, 2)
     template = origin(encoded)
     _, _, steps, _, event = lean_render.template(encoded)
@@ -280,7 +331,7 @@ def local_service(attrs, binding, operands, result_kinds, retained, ports, place
     require(all(kinds[index] == ("index", None) for index in mapped), "local service coordinate sort")
     # Source/path/owner/root association is checked independently in Lean.
     require(isinstance(site, str) and site, "missing local service site")
-    return (f".localService ({service_port(port)}) (Request.draw {text(field)}) "
+    return (f".localService ({service_port(port)}) ({request}) "
             f"{template} {seq(mapped, nat)}")
 
 
@@ -295,12 +346,13 @@ def references(values, places, what):
     return [places[o] for o in values]
 
 
-def block(instructions, kinds, places, indent, rows, depth=0, ports=None):
+def block(instructions, kinds, places, indent, rows, depth=0, ports=None, constants=None):
     """Render one block. `kinds` are the sorts of the rendered environment and
     `places` maps every exported reference in scope to its rendered reference.
     Return the rendered instructions, the final kinds and the final map."""
     require(depth <= 64 and isinstance(instructions, list) and len(instructions) <= 4096, "invalid block")
     rendered = []
+    constants = dict(constants or {})
     for item in instructions:
         record(item)
         is_service = bool(item) and item[0] == "protocol.service_query"
@@ -310,7 +362,12 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None):
         require(isinstance(name, str) and isinstance(regions, list), "operation name")
         mapped = references(operands, places, "operand")
         result_kinds = [sort(value)[1] for value in results]
-        result_terms = seq(results, lambda v: sort(v)[0])
+        coordinate_result = (name == "exec.apply" and len(binding) > 0
+                             and binding[0] in ("indices.empty", "indices.append"))
+        if coordinate_result:
+            require(results == [["apply", "indices", []]], "coordinate result shape")
+            result_kinds = [("indices", None)]
+        result_terms = "[.indices]" if coordinate_result else seq(results, lambda v: sort(v)[0])
         fresh = len(kinds)
         if name == "protocol.loop":
             attributes_ = attributes(attrs)
@@ -328,7 +385,7 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None):
             inner, _, inner_places = block(
                 nested, kinds + argument_kinds[:1 + carried],
                 places + list(range(fresh, fresh + 1 + carried)) + captured, indent + "    ", rows, depth + 1,
-                ports)
+                ports, constants)
             yielded = references(yielded, inner_places, "yielded")
             maximum = decimal(integer_attribute(attributes_, "maximum"), 1048577)
             require(maximum is not None, "loop maximum")
@@ -339,11 +396,15 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None):
             require(regions == [], "unexpected operation region")
             if is_service:
                 term = local_service(attributes(attrs), binding, mapped, result_kinds,
-                                     item[6], ports or {}, places, kinds, rows)
+                                     item[6], ports or {}, places, kinds, rows, constants)
             else:
                 term = operation(name, attributes(attrs), binding, [kinds[o] for o in mapped], result_kinds,
-                                 rows)
+                                 rows, [constants.get(reference) for reference in mapped])
             rendered.append(f"{indent}⟨{term}, {seq(mapped, nat)}, {result_terms}, []⟩")
+        if name == "exec.apply" and binding and binding[0] == "index.constant":
+            constants[fresh] = int(attributes(attrs)["parameters"][1][0][1][1])
+        if name == "data.index":
+            constants[fresh] = int(integer_attribute(attributes(attrs), "value", signedness="unsigned"))
         kinds = kinds + result_kinds
         places = places + list(range(fresh, fresh + len(result_kinds)))
     return rendered, kinds, places

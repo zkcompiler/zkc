@@ -61,10 +61,22 @@ def checkOperationCatalogue (catalogue : Structured.Catalogue) : Operation → E
   | .challenge suite field _ => do
       let row ← requireSuite catalogue suite "FieldTranscript"
       if row.member "ChallengeField" != some field then throw "structured-domain-member"
+  | .indexChallenge suite _ _ => discard <| requireSuite catalogue suite "IndexTranscript"
+  | .blockChallenge suite _ _ _ => discard <| requireSuite catalogue suite "IndexBlockTranscript"
   | .localService port request _ _ => do
       let service ← catalogue.findService port.contract
-      if !service.methods.contains request.method || request.sort != .field service.sampled then
-        throw "structured-service-contract"
+      if !request.valid || !(request.operation port.contract).isSome ||
+          !service.methods.contains request.method then throw "structured-service-contract"
+      match request.method, request.sort with
+      | "draw", .field field =>
+          if field != service.sampled then throw "structured-service-contract"
+      | "index", .index =>
+          let row ← catalogue.expect service.sampled .field
+          if !row.holds "IndexRandomness" then throw "structured-domain-capability"
+      | "indices", .indices =>
+          let row ← catalogue.expect service.sampled .field
+          if !row.holds "IndexBlockRandomness" then throw "structured-domain-capability"
+      | _, _ => throw "structured-service-contract"
   | .calculate (.fieldEmbed extension base) => catalogue.requireEmbedding extension base
   | .calculate (.groupScale group field) => catalogue.requireScale group field
   | _ => pure ()

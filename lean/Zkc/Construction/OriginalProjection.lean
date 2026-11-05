@@ -20,6 +20,39 @@ private theorem queryField_forget (state : State carriers) (origin : Origin) (fi
 private theorem record_forget (state : State carriers) (origin : Origin) (payload : Domain.Payload carriers) :
     (record state origin payload).interpret forgetCheckpoints = record state origin payload := rfl
 
+private theorem requestValue_forget (origin : Origin) (request : Request)
+    (effect : (Domain.effects carriers).Op) :
+    (Domain.requestValue origin request effect).interpret forgetCheckpoints =
+      Domain.requestValue origin request effect := by
+  unfold Domain.requestValue
+  split <;> try rfl
+  split <;> try rfl
+  cases effect <;> try rfl
+  all_goals
+    simp only [PIR.Process.interpret, forgetCheckpoints, PIR.Process.bind]
+    congr 1
+    funext reply
+    split <;> rfl
+
+private theorem queryRequest_forget (state : State carriers) (origin : Origin)
+    (request : Request) :
+    (queryRequest state origin request).interpret forgetCheckpoints =
+      queryRequest state origin request := by
+  simp only [queryRequest, PIR.Process.interpret_bind, requestValue_forget,
+    PIR.Process.interpret]
+
+private theorem receiveRequest_forget (routing : Routing) (state : State carriers)
+    (ty : Structured.Ty) (site : String) (sender : Nat) :
+    (receiveRequest routing state ty site sender).interpret forgetCheckpoints =
+      receiveRequest routing state ty site sender := by
+  unfold receiveRequest
+  split <;> try rfl
+  split <;> try rfl
+  simp only [PIR.Process.interpret_bind, queryRequest_forget]
+  congr 1
+  funext result
+  split <;> rfl
+
 private theorem receive_forget (routing : Routing) (state : State carriers) (ty : Structured.Ty)
     (site : String) (sender : Nat) :
     (receive routing state ty site sender).interpret forgetCheckpoints =
@@ -29,11 +62,14 @@ private theorem receive_forget (routing : Routing) (state : State carriers) (ty 
       dsimp only [receive]
       simp only [mode]
       cases ty <;> try rfl
-      dsimp only
-      split
-      · rfl
-      · simp only [PIR.Process.interpret_bind, queryField_forget]
-        congr 1
+      case field field =>
+        dsimp only
+        split
+        · rfl
+        · simp only [PIR.Process.interpret_bind, queryField_forget]
+          congr 1
+      case index => exact receiveRequest_forget _ _ _ _ _
+      case indices => exact receiveRequest_forget _ _ _ _ _
   | validator =>
       dsimp only [receive]
       simp only [mode]
@@ -64,6 +100,17 @@ private theorem query_forget (routing : Routing) (state : State carriers)
     · split <;> rfl
     · rfl
 
+private theorem service_forget (routing : Routing) (state : State carriers)
+    (site contract : String) (request : Request) (handle : Nat) :
+    (service routing state site contract request handle).interpret forgetCheckpoints =
+      service routing state site contract request handle := by
+  unfold service
+  split
+  · exact queryRequest_forget _ _ _
+  · split <;> try rfl
+    split <;> try rfl
+    simp only [PIR.Process.interpret_bind, requestValue_forget, PIR.Process.interpret]
+
 /-- Every original effect expands to non-checkpoint nominal effects only. -/
 theorem operations_forget (routing : Routing)
     (operation : (Structured.Occurrence.signature carriers).Op) (state : State carriers) :
@@ -87,9 +134,23 @@ theorem operations_forget (routing : Routing)
           | plain =>
               simp only [operations, profile, sendPlain]
               split <;> rfl
-      | query site field args =>
-          cases args with
-          | cons handle tail => cases tail; exact query_forget _ _ _ _ _
+      | query site operation args =>
+          cases operation with
+          | draw field =>
+              cases args with
+              | cons handle tail => cases tail; exact query_forget _ _ _ _ _
+          | sampleIndex contract =>
+              cases args with
+              | cons handle tail =>
+                  cases tail with
+                  | cons bound tail => cases tail; exact service_forget _ _ _ _ _ _
+          | sampleIndices contract =>
+              cases args with
+              | cons handle tail =>
+                  cases tail with
+                  | cons bound tail =>
+                      cases tail with
+                      | cons count tail => cases tail; exact service_forget _ _ _ _ _ _
 
 /-- Erasing physical checkpoints is the identity on the complete original fold,
 including original values, construction state, all replies and all stops. -/

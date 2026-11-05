@@ -68,7 +68,12 @@ theorem resolved_challenge_native (context : Context) (challenge : History F G â
         .transcript (live ++ [.challenge (context.query (template.qualify site) (.draw field))])],
         live ++ [.challenge (context.query (template.qualify site) (.draw field))], 1)) <$>
         challenge (live ++ [.challenge (context.query (template.qualify site) (.draw field))]) := by
-  simp only [Resolved.apply, Template.origin, event, request, Option.map_some, ite_true]
+  have origin : template.origin context =
+      some (context.query (template.qualify site) (.draw field)) := by
+    unfold Template.origin
+    rw [event, request]
+    rfl
+  simp only [Resolved.apply, origin, ite_true]
 
 /-- Observation updates the reached nominal transcript; its handler consumes
 no proof message. The scalar image is supplied by mapped_message. -/

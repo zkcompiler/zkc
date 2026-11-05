@@ -8,6 +8,7 @@ public import ZkcExamples.Executable.SumcheckCharges
 /-! Honest source success transported through the retained artifact's full
 checked connection. Output, transcript readback and cost use that same artifact. -/
 set_option autoImplicit false
+set_option maxRecDepth 50000
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcExamples.Executable.SumcheckDomainHonest

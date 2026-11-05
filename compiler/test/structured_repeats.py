@@ -595,7 +595,13 @@ with case('native-multirole-finite-math-profile-reaches-repeat-body'):
              ('b', '!algebra.field<"bls12-381.fr">', ('P',)), ('xs', '!data.field_vector<"bls12-381.fr">', ('P',)))
     source = definitions + protocol('main', body, inputs=ports, outputs=(), returns=()) + tail
     commands.verified(source)
-    refuse(source, 'structured-source-multirole-math', 'structured-reference-unsupported')
+    export(source)
+    assert run(source, ['0', '1', '2', []]) == returned([])
+    assert run(source, [None, None, None, None], 'Q') == returned([])
+    nonempty = source.replace('maximum=0:i64', 'maximum=2:i64')
+    export(nonempty)
+    assert run(nonempty, ['2', '1', '2', ['3', '5', '7']]) == returned([])
+    assert run(nonempty, [None, None, None, None], 'Q') == returned([])
 
 
 with case('zero-state-application-effects-repeat-with-static-label'):

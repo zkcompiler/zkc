@@ -56,21 +56,25 @@ def verifierObserved (parent : Option String) (go : Bool) (first second : Nat) :
   let site := qualifyProtocolSite parent
   let child := qualifyProtocolSite (some (site "s3"))
   .call (.mark (site "s0")) <| fun _ =>
-  .call (.action (.query (site "s0") "bls12-381.fr" (.cons first .nil))) <| fun (before : F) =>
+  .call (.action (.query (site "s0") (.draw "bls12-381.fr")
+    (.cons first .nil))) <| fun (before : F) =>
   .call (.mark (site "s2")) <| fun _ =>
   if go then
     .call (.mark (site "s3")) <| fun _ =>
     .call (.mark (child "s0")) <| fun _ =>
-    .call (.action (.query (child "s0") "bls12-381.fr" (.cons first .nil))) <| fun (a : F) =>
+    .call (.action (.query (child "s0") (.draw "bls12-381.fr")
+      (.cons first .nil))) <| fun (a : F) =>
     .call (.mark (child "s2")) <| fun _ =>
-    .call (.action (.query (child "s2") "bls12-381.fr" (.cons second .nil))) <| fun (b : F) =>
+    .call (.action (.query (child "s2") (.draw "bls12-381.fr")
+      (.cons second .nil))) <| fun (b : F) =>
     .call (.mark "") <| fun _ =>
     .call (.mark (child "s5_0")) <| fun _ =>
     .call (.action (.send (ty := fieldType) (child "s5_0") 0 (a + b))) <| fun _ =>
     .call (.mark "") <| fun _ =>
     .call (.mark "") <| fun _ =>
     .call (.mark (site "s6")) <| fun _ =>
-    .call (.action (.query (site "s6") "bls12-381.fr" (.cons first .nil))) <| fun (after : F) =>
+    .call (.action (.query (site "s6") (.draw "bls12-381.fr")
+      (.cons first .nil))) <| fun (after : F) =>
     .call (.mark "") <| fun _ =>
     .call (.mark "") <| fun _ =>
     .done (.cons none (.cons (some (before + (a + b) + after)) .nil))
@@ -101,12 +105,12 @@ def verifierProcess (parent : Option String) (go : Bool) (first second : Nat) :
     PIR.Process (participantInterface F G) (Values (Component (assignment F G)) resultTypes) :=
   let site := qualifyProtocolSite parent
   let child := qualifyProtocolSite (some (site "s3"))
-  .call (.query (site "s0") "bls12-381.fr" (.cons first .nil)) <| fun (before : F) =>
+  .call (.query (site "s0") (.draw "bls12-381.fr") (.cons first .nil)) <| fun (before : F) =>
   if go then
-    .call (.query (child "s0") "bls12-381.fr" (.cons first .nil)) <| fun (a : F) =>
-    .call (.query (child "s2") "bls12-381.fr" (.cons second .nil)) <| fun (b : F) =>
+    .call (.query (child "s0") (.draw "bls12-381.fr") (.cons first .nil)) <| fun (a : F) =>
+    .call (.query (child "s2") (.draw "bls12-381.fr") (.cons second .nil)) <| fun (b : F) =>
     .call (.send (ty := fieldType) (child "s5_0") 0 (a + b)) <| fun _ =>
-    .call (.query (site "s6") "bls12-381.fr" (.cons first .nil)) <| fun (after : F) =>
+    .call (.query (site "s6") (.draw "bls12-381.fr") (.cons first .nil)) <| fun (after : F) =>
     .done (.cons none (.cons (some (before + (a + b) + after)) .nil))
   else .halt .reject
 
@@ -177,7 +181,7 @@ theorem receiver_participant (go : Option Bool) (first second : Option Nat) :
 theorem false_guard_observed (first second : Nat) :
     program.observed F G 1 (inputs (some false) (some first) (some second)) =
       .call (.mark "s0") (fun _ =>
-        .call (.action (.query "s0" "bls12-381.fr" (.cons first .nil))) (fun _ =>
+        .call (.action (.query "s0" (.draw "bls12-381.fr") (.cons first .nil))) (fun _ =>
           .call (.mark "s2") (fun _ => .halt .reject))) := by
   rw [observed_verifier]
   rfl

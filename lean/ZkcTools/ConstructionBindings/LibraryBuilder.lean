@@ -23,6 +23,12 @@ namespace ZkcTools.ConstructionBindings.LibraryBuilder
 open Lean Meta Elab Tactic
 open Zkc.Source Zkc.Source.Structured NormalForm Zkc.Construction ConnectionLibrary
 
+private def phase (message : String) : TacticM Unit := do
+  if !(← getOptions).getBool `zkc.connection.trace false then return
+  let destination := (← getOptions).get `zkc.connection.traceFile ("" : String)
+  unless destination.isEmpty do
+    IO.FS.withFile destination .append fun handle => handle.putStrLn s!"library {message}"
+
 initialize normalizedBodies : SimplePersistentEnvExtension Name (Array Name) ←
   registerSimplePersistentEnvExtension {
     -- Library discovery can run inside a theorem task. Only checked names
@@ -100,7 +106,7 @@ private def listNodes (value : Expr) : MetaM (Array Expr) := do
   let mut cursor := value
   let mut result := #[]
   while true do
-    cursor ← withTransparency .all <| whnf cursor
+    cursor ← Syntax.head cursor
     if cursor.isAppOf ``List.nil then return result
     unless cursor.isAppOf ``List.cons do throwError "connection-library-discovery-not-finite"
     let arguments := cursor.getAppArgs
@@ -112,8 +118,10 @@ private def listNodes (value : Expr) : MetaM (Array Expr) := do
 refuse. The kernel checks every installed template without a caller-supplied
 process equation, slot map, or protocol-specific method. -/
 def propose (payload roles : Expr) : TacticM (Expr × Expr) := do
+  phase "plan start"
   let plan ← mkAppM ``LibraryPlan.forPayload #[payload, roles]
-  let result ← withTransparency .all <| whnf plan
+  let result ← Syntax.head plan
+  phase "plan reduced"
   unless result.isAppOf ``Except.ok do throwError "connection-library-discovery-refused: {result}"
   let selections ← listNodes result.getAppArgs.back!
   let cache ← Syntax.newCache
@@ -138,6 +146,7 @@ private def deriveLibrary (rolesSyntax : Option Syntax) : TacticM Unit := withMa
     let expected ← whnf (← goal.getType)
     unless expected.isAppOf ``Bundle do throwError "expected a source library bundle"
     let payload := expected.getAppArgs[0]!
+    phase "roles start"
     let roles ← match rolesSyntax with
       | some selectedRoles => Term.elabTerm selectedRoles (some (← mkAppM ``List #[mkConst ``Nat]))
       | none => do
@@ -146,7 +155,9 @@ private def deriveLibrary (rolesSyntax : Option Syntax) : TacticM Unit := withMa
         let roster ← mkAppM ``ProtocolSignature.roles #[signature]
         mkAppM ``List.range #[← mkAppM ``List.length #[roster]]
     let (keys, library) ← propose payload roles
+    phase "bundle start"
     goal.assign (← mkAppM ``Bundle.mk #[keys, library])
+    phase "bundle complete"
     replaceMainGoal []
 
 elab "derive_connection_library" : tactic => deriveLibrary none

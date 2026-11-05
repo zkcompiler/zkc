@@ -1,4 +1,5 @@
 import ZkcSecurity.Bindings.Transcript.HonestCompiled
+import ZkcSecurity.Bindings.Transcript.ServiceSampling
 import Mathlib.Data.ZMod.Basic
 
 /-! Actual constructed instruction controls. The small participants below are
@@ -65,22 +66,10 @@ def validator : Participant := constructed (queryInstructions ++
 def inputs : Environment model.toCarriers := [.transcript "suite" []]
 def computation := FiatShamir.HonestCompiled.computation model program context producer validator inputs inputs
 
--- Each raw answer type is the actual requested nominal field or Unit.
-instance sampleRaw (event : Event model.toCarriers) : SampleableType (Raw event) := by
-  cases event with
-  | challenge origin =>
-      rcases origin with ⟨port, occurrence, request⟩
-      cases request with
-      | none => exact inferInstanceAs (SampleableType Unit)
-      | some request =>
-          rcases request with ⟨method, arguments, sort⟩
-          cases sort with
-          | field domain => change SampleableType Scalar; infer_instance
-          | boolean | index | vector _ | group _ | groups _ | indices
-          | service _ | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ | resourceUnit _ =>
-              change SampleableType Unit; infer_instance
-  | message => exact inferInstanceAs (SampleableType Unit)
-  | publicBinding => exact inferInstanceAs (SampleableType Unit)
+-- Raw answers follow the typed request; nonquery keys retain the singleton carrier.
+noncomputable instance sampleRaw (event : Event model.toCarriers) : SampleableType (Raw event) :=
+  FiatShamir.ServiceSampling.raw model.toCarriers
+    (fun _ ↦ inferInstanceAs (SampleableType Scalar)) event
 
 noncomputable instance : DecidableEq (Event model.toCarriers) := Classical.decEq _
 
@@ -104,7 +93,7 @@ theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.Dom
     queryOrigin, templateOrigin, Template.origin, Template.qualify, Template.repeats,
     Template.applicationPrefix, atCoordinates, Context.query, Context.role, Origin.query,
     Structured.qualifyProtocolSite, context, Context.fiatShamir, query, decimal, decimalDigit, Domain.read,
-    Domain.dataType, field_encodes, Domain.Value.sort, drawRequest, Request.draw,
+    Domain.dataType, field_encodes, Domain.Value.sort, drawRequest, Request.draw, Request.valid,
     FiatShamir.HonestCompiled.tableOracle, Typed.readTable,
     booleanConstant_calculates, fieldEqual_calculates,
     Domain.Payload.value, Context.replacement?, Context.suite, Context.contract,
@@ -132,7 +121,11 @@ def tableOracle : Oracle Id model.toCarriers Unit := by
           rcases request with ⟨method, arguments, sort⟩
           cases sort with
           | field domain => exact (.returned (0 : Scalar), state)
-          | boolean | index | vector _ | group _ | groups _ | indices
+          | index =>
+              exact (.returned ⟨0, Request.replyBound_positive (arguments.headD 0)⟩, state)
+          | indices =>
+              exact (.returned (fun _ => ⟨0, Request.replyBound_positive (arguments.headD 0)⟩), state)
+          | boolean | vector _ | polynomial _ | group _ | groups _
           | service _ | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ | resourceUnit _ =>
               exact (.returned (), state)
   | message => exact (.returned (), state)

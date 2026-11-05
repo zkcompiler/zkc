@@ -41,7 +41,7 @@ def stopQuery : PIR.Handler (participantInterface ℚ ℚ) Unit (participantInte
   | action, state => ⟨.stopped .refused, state, [action]⟩
 
 def stopDelivery : PIR.Handler (participantInterface ℚ ℚ) Unit (participantInterface ℚ ℚ).Op
-  | action@(.query ..), state => ⟨.returned (2 : ℚ), state, [action]⟩
+  | action@(.query _ (.draw _) _), state => ⟨.returned (2 : ℚ), state, [action]⟩
   | action, state => ⟨.stopped .exhausted, state, [action]⟩
 
 theorem query_stop : (caller.run stopQuery ()).outcome = .stopped .refused ∧
