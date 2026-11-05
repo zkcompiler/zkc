@@ -1,0 +1,18 @@
+module evidence
+
+pub protocol Demo roles(P, V)(value: bool @V) -> (accepted: bool @V):
+    return value
+
+spec for Demo:
+    requires true
+    target statement: Valid(value) accept accepted
+    reduces Before(value) to After(value)
+    ensures accepted
+    security:
+        formal::completeness(target.statement)
+        knowledge: formal::knowledge(target.statement, challenge: site nested.challenge)
+    security: formal::audit(site delivery)
+
+pub spec Audit for Demo:
+    security:
+        expected: formal::knowledge(target.statement, challenge: site nested.challenge)

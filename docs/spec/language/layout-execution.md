@@ -153,8 +153,11 @@ attachment information, not a typed proposition. `language-check` reports
 `assurance.status` as `no-claim` when no layout spec exists, otherwise
 `open`, with `outcome: unresolved` and the pending specifications. Each declared
 postcondition and each request is an open obligation, including unlabeled clauses
-and postconditions not mentioned by a security request. The inventory retains
-its source span and [companion key](companions.md). Native `status: checked` refers
+and postconditions not mentioned by a security request. Security groups are
+flattened in written order for this inventory; their syntax remains grouped in
+the authored export. Target acceptance expressions and formal `site` references
+are retained but not interpreted as native values or established associations.
+The inventory retains its source span and [companion key](companions.md). Native `status: checked` refers
 to native checking. Requesting `--source-claims` with a retained layout spec
 refuses with `source.assurance-unavailable`; it cannot return an empty claim
 export that hides the request. Typed catalogues, generated obligations,

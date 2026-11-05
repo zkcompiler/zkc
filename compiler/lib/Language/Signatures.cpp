@@ -164,17 +164,6 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   if (signatureState[id.index] == 1)
     return types.fail("source.cycle", "recursive type or static signature",
                       decl.span);
-  if (decl.kind == Declaration::Kind::Associated) {
-    if (!decl.associatedSort.empty() && decl.associatedSort != "Type" &&
-        !isDomainSort(decl.associatedSort))
-      return types.fail("source.type", "unknown associated domain sort",
-                        decl.span);
-    if (decl.associatedSort == "Field" || decl.associatedSort == "Group") {
-      if (!decl.permissions)
-        decl.permissions.emplace();
-      decl.permissions->copy = decl.permissions->drop = true;
-    }
-  }
   auto &source = *sources[id.index];
   if (decl.logical && decl.kind != Declaration::Kind::Record)
     return types.fail("source.oracle-aggregate",
@@ -211,18 +200,6 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                       "participant roster exceeds the protocol.roles limit",
                       decl.span);
   std::set<std::string> usedShapes;
-  if ((decl.resource || decl.sealed) &&
-      decl.kind == Declaration::Kind::Associated &&
-      isDomainSort(decl.associatedSort))
-    return types.fail("source.resource",
-                      "resource attributes require an opaque runtime type",
-                      decl.span);
-  if (decl.resource && decl.permissions &&
-      (decl.permissions->copy ||
-       (*decl.resource == Resource::Linear && decl.permissions->drop)))
-    return types.fail("source.resource",
-                      "associated promises contradict the resource restriction",
-                      decl.span);
   if (decl.kind == Declaration::Kind::Associated && !source.parameters.empty())
     return types.fail(
         "source.unsupported",
@@ -247,6 +224,47 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     decl.capabilityBounds =
         output.declarations[decl.parent->index].capabilityBounds;
   }
+  if (decl.kind == Declaration::Kind::Associated) {
+    // A representation-only definition inherits its selected interface's
+    // domain sort. Reconstruct that selection from the owner and frozen
+    // namespace, so replay never relies on candidate conformance edges.
+    if (decl.associatedSort.empty() && source.definition && decl.parent) {
+      const auto &owner = output.declarations[decl.parent->index];
+      if (owner.kind == Declaration::Kind::Module && owner.implementation) {
+        auto path = owner.implementation->domain + "::" + decl.name;
+        if (!types.charge(path.size() + 1, decl.span))
+          return false;
+        auto required = index().canonical(path);
+        if (required) {
+          if (!signature(*required, depth + 1))
+            return false;
+          const auto &sort =
+              output.declarations[required->index].associatedSort;
+          if (isDomainSort(sort))
+            decl.associatedSort = sort;
+        }
+      }
+    }
+    if (!decl.associatedSort.empty() && decl.associatedSort != "Type" &&
+        !isDomainSort(decl.associatedSort))
+      return types.fail("source.type", "unknown associated domain sort",
+                        decl.span);
+    if (decl.associatedSort == "Field" || decl.associatedSort == "Group") {
+      if (!decl.permissions)
+        decl.permissions.emplace();
+      decl.permissions->copy = decl.permissions->drop = true;
+    }
+    if ((decl.resource || decl.sealed) && isDomainSort(decl.associatedSort))
+      return types.fail("source.resource",
+                        "resource attributes require an opaque runtime type",
+                        decl.span);
+  }
+  if (decl.resource && decl.permissions &&
+      (decl.permissions->copy ||
+       (*decl.resource == Resource::Linear && decl.permissions->drop)))
+    return types.fail("source.resource",
+                      "associated promises contradict the resource restriction",
+                      decl.span);
   if (source.oraclePredicate) {
     if (!oraclePredicateSignature(decl))
       return false;

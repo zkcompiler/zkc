@@ -324,6 +324,11 @@ protocol Run roles(P)()->(r:Secret@P){let x @P =make();return(r=x);}
           "private output lost its reusable usage");
 }
 void typing() {
+  check(prefix +
+        "interface I{fn f<T:Type+Copy+Drop>(x:T)->T effects(stop, "
+        "opaque);}module C:I{fn f<T:Type+Copy+Drop>(x:T)->T{return x;}}"
+        "fn use_member<Impl:I>(x:Fr)->Fr{return Impl::f(x);}"
+        "fn use_concrete(x:Fr)->Fr{return use_member<C>(x);}");
   for (
       auto &[source, code] : std::vector<std::pair<std::string, std::string>>{
           {"math fn bad<T:Type>(x:T)->T where (){return x;}", "source.mode"},
@@ -395,10 +400,6 @@ void typing() {
           {"interface I{}interface J{}module C:I{}fn f<T:J>()->bool{return "
            "true;}fn bad()->bool{return f<C>();}",
            "source.conformance"},
-          {"interface I{fn f<T:Type+Copy+Drop>(x:T)->T effects(stop, "
-           "opaque);}module C:I{fn "
-           "f<T:Type+Copy+Drop>(x:T)->T{return x;}}",
-           "source.unsupported"},
       })
     refuses(prefix + source, code);
   refuses(prefix + "enum Opt<T:Type>{Some(T),None()}fn "

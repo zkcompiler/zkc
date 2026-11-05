@@ -791,7 +791,7 @@ protocol Run<N:nat> roles(P,V)(x:bool@(P,V))->(){
                   true),
             "source.common-provenance");
   });
-  cases.run("staged identity keeps authored natural and schema refusals", [&] {
+  cases.run("staged identity keeps authored natural refusals", [&] {
     refuses(check(R"(module m;
 protocol Run<N:nat> roles(P,V)()->(){let n=index<pow2(pow2(N))>();return();}
 )",
@@ -809,14 +809,13 @@ math fn bad<M:nat>()->bool{return accept<pow2(M)>();}
 )",
                   true),
             "source.natural");
-    refuses(check(R"(module m;
+    take(check(R"(module m;
 interface Operation {math fn number<N:nat>()->index;}
 module Concrete:Operation {math fn number<N:nat>()->index{return index<N>();}}
 )",
-                  true),
-            "source.unsupported");
-    // This abstract Math member schema is already refused by the source
-    // checker without any Protocol/common-control traversal.
+               true));
+    // Member-generic conformance is supported, but composing authored natural
+    // expressions still has to respect the bounded natural representation.
     refuses(check(R"(module m;
 interface Operation {math fn number<N:nat>()->index;}
 math fn inner<N:nat,C:Operation>()->index{return C::number<pow2(N)>();}

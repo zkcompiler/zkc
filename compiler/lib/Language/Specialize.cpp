@@ -623,14 +623,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           height = std::max(height, heights.at(instance->index) + 1);
         } else if (auto *application =
                        std::get_if<ProtocolApplication>(&op.action)) {
-          for (auto &argument : application->arguments)
-            if (!closeType(argument, bindings, op.span))
-              return false;
           DeclarationId target = application->callee;
-          if (auto origin = declarations[target.index].origin) {
-            application->arguments = declarations[target.index].staticArguments;
-            target = *origin;
-          }
+          // Protocol actions retain their abstract provider in the checked
+          // invocation binding. Reuse ordinary dispatch so owner and member
+          // arguments select the same implementation as helper calls.
+          auto module = op.binding ? op.binding->target.module : std::nullopt;
+          if (!closeCallable(target, module, application->arguments, bindings,
+                             op.span))
+            return false;
           auto instance = instantiate(target, application->arguments, depth + 1,
                                       {}, {}, {});
           if (!instance)

@@ -794,5 +794,181 @@ protocol Run roles(V)(coins:facade::Random<F>@V)->(){let a=coins.draw();return (
                                                "source.scoped-specialization"),
                 "closed managed statics certified one another");
       });
+  for (bool chained : {false, true})
+    for (bool call : {false, true})
+      for (bool keepExpression : {false, true})
+        cases.run(
+            "alias redirection cannot erase its source obligation " +
+                Twine(chained) + " " + Twine(call) + " " +
+                Twine(keepExpression),
+            [&] {
+              std::string code = R"(
+module m;
+fn identity(value:index)->index{return value;}
+fn Run(source:index,other:index)->index{let first=source;
+)";
+              if (chained)
+                code += "let second=first;";
+              std::string result = chained ? "second" : "first";
+              code += "return " + (call ? "identity(" + result + ")" : result) +
+                      ";}";
+              auto project = checked(code);
+              accepted(project);
+              auto &run = body(project, "Run");
+              auto found = llvm::find_if(run.operations, [](const auto &op) {
+                const auto *projection = std::get_if<Projection>(&op.action);
+                return projection && projection->path.empty();
+              });
+              require(found != run.operations.end() &&
+                          found->results.size() == 1,
+                      "missing authored alias");
+              std::get<Projection>(found->action).input = ValueId{1};
+              found->span.begin = code.rfind("first");
+              found->span.end = found->span.begin + 5;
+              run.values.at(found->results.front().index).span = found->span;
+              if (!keepExpression)
+                found->expression.reset();
+              rejected(project);
+            });
+  for (StringRef mode : {"math fn", "fn", "protocol"})
+    for (bool alias : {false, true})
+      cases.run(
+          "ordinary control selector source edge " + mode +
+              (alias ? " alias" : " direct"),
+          [&] {
+            const bool protocol = mode == "protocol";
+            std::string source = mode.str() + " Run";
+            source += protocol
+                          ? " roles(P)(go:bool@P,other:bool@P)->(r:bool@P){"
+                          : "(go:bool,other:bool)->bool{";
+            source +=
+                alias ? "let selected=go;return if selected{true}else{false};}"
+                      : "return if go{true}else{false};}";
+            auto project = checked("module m;" + source);
+            accepted(project);
+            auto &root = body(project, "Run");
+            auto found = llvm::find_if(root.operations, [](const auto &op) {
+              return std::holds_alternative<Control>(op.action);
+            });
+            require(found != root.operations.end(), "missing selected control");
+            std::get<Control>(found->action).operands.front() = ValueId{1};
+            rejected(project);
+          });
+  for (unsigned bound : {0u, 1u})
+    cases.run("local loop bound source edge " + Twine(bound), [&] {
+      auto project = checked("module m;"
+                             "fn Run(lo:index,hi:index)->index{for _ in lo..hi{"
+                             "let _:index=7;}return hi;}");
+      accepted(project);
+      auto &root = body(project, "Run");
+      auto found = llvm::find_if(root.operations, [](const auto &op) {
+        return std::holds_alternative<Control>(op.action);
+      });
+      require(found != root.operations.end(), "missing loop control");
+      auto &control = std::get<Control>(found->action);
+      control.operands[bound] = control.operands[1 - bound];
+      rejected(project);
+    });
+  cases.run("protocol loop count source edge", [&] {
+    auto project =
+        checked("module m;"
+                "protocol Run roles(P)(n:index@P,other:index@P)->(r:index@P){"
+                "for _ in 0..n roles(P) max 8{}return n;}");
+    accepted(project);
+    auto &root = body(project, "Run");
+    auto found = llvm::find_if(root.operations, [](const auto &op) {
+      return std::holds_alternative<ProtocolRepeat>(op.action);
+    });
+    require(found != root.operations.end(), "missing protocol repeat");
+    std::get<ProtocolRepeat>(found->action).count = ValueId{1};
+    rejected(project);
+  });
+
+  for (StringRef mode : {"math fn", "fn", "protocol"})
+    for (bool eraseMap : {false, true})
+      cases.run("root return source edge " + mode + " " + Twine(eraseMap), [&] {
+        bool protocol = mode == "protocol";
+        std::string code = "module m;" + mode.str() + " Run";
+        code += protocol ? " roles(P)(go:bool@P,other:bool@P)->(r:bool@P){"
+                         : "(go:bool,other:bool)->bool{";
+        code += "return if go{true}else{false};}";
+        auto project = checked(code);
+        accepted(project);
+        auto &root = body(project, "Run");
+        auto found = llvm::find_if(root.operations, [](const auto &op) {
+          return std::holds_alternative<Control>(op.action);
+        });
+        require(found != root.operations.end() && found->expression,
+                "missing selected return");
+        root.results.front() = ValueId{1};
+        if (eraseMap)
+          root.expressionValues.erase(*found->expression);
+        rejected(project);
+      });
+  for (StringRef mode : {"math fn", "fn", "protocol"})
+    cases.run("selected arm yield source edge " + mode, [&] {
+      bool protocol = mode == "protocol";
+      std::string code = "module m;" + mode.str() + " Run";
+      code += protocol ? " roles(P)(go:bool@P,other:bool@P)->(r:bool@P){"
+                       : "(go:bool,other:bool)->bool{";
+      code += "return if go{let unused=other;true}else{false};}";
+      auto project = checked(code);
+      accepted(project);
+      auto &root = body(project, "Run");
+      auto found = llvm::find_if(root.operations, [](const auto &op) {
+        return std::holds_alternative<Control>(op.action);
+      });
+      require(found != root.operations.end(), "missing selected yield");
+      auto &arm =
+          const_cast<Body &>(*std::get<Control>(found->action).regions.front());
+      require(arm.inputs && arm.values.front().type.kind == Type::Kind::Boolean,
+              "missing captured Boolean");
+      arm.results.front() = ValueId{0};
+      rejected(project);
+    });
+  cases.run("control yield packing retains its explicit result", [&] {
+    auto project = checked(R"(
+module m;fn Run(go:bool,other:bool)->bool{
+  let mut state=other;
+  let answer=if go{state=false;true}else{state=true;false};
+  return answer && state;
+})");
+    accepted(project);
+    auto &root = body(project, "Run");
+    auto found = llvm::find_if(root.operations, [](const auto &op) {
+      return std::holds_alternative<Control>(op.action);
+    });
+    require(found != root.operations.end(), "missing mutable-state selection");
+    auto &arm =
+        const_cast<Body &>(*std::get<Control>(found->action).regions.front());
+    auto pack = llvm::find_if(arm.operations, [&](const auto &op) {
+      return op.results.size() == 1 &&
+             op.results.front().index == arm.results.front().index;
+    });
+    require(pack != arm.operations.end() &&
+                std::holds_alternative<Construct>(pack->action),
+            "missing selected result/state packing");
+    auto &fields = std::get<Construct>(pack->action).operands;
+    require(fields.size() == 2, "unexpected selected result/state packing");
+    fields.front() = fields.back();
+    rejected(project);
+  });
+  cases.run("named protocol return order is independently reconstructed", [&] {
+    auto project = checked(R"(
+module m;protocol Run roles(P)(left:bool@P,right:bool@P)->(a:bool@P,b:bool@P){
+  return(b=right,a=left);
+})");
+    accepted(project);
+    auto &root = body(project, "Run");
+    std::swap(root.results[0], root.results[1]);
+    rejected(project);
+  });
+  cases.run("all-stopped selected arms do not invent a returned value", [&] {
+    auto project = checked(R"(
+module m;fn Run(go:bool)->bool{return if go{stop "reject";}else{stop "abort";};}
+)");
+    accepted(project);
+  });
+
   return cases.result();
 }

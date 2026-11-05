@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "FormalSource.h"
 #include "zkc/Language/Companions.h"
+#include <functional>
 
 using namespace llvm;
 namespace zkc::language::detail {
@@ -52,7 +53,28 @@ bool Checker::layoutSpecifications() {
       std::set<std::pair<unsigned, std::string>> labels;
       std::vector<PendingObligation> obligations;
       unsigned postconditions = 0, requests = 0;
-      for (auto clauseId : body.elements) {
+      std::vector<FormalNodeId> clauses;
+      std::function<bool(ArrayRef<FormalNodeId>, unsigned)> collect =
+          [&](ArrayRef<FormalNodeId> nodes, unsigned depth) {
+            if (depth > work.limits.typeDepth)
+              return types.fail("source.limit", "request group depth", span);
+            for (auto id : nodes) {
+              const auto &node = authored.nodes[id.index];
+              if (!types.charge(1, node.span))
+                return false;
+              if (const auto *group =
+                      std::get_if<FormalSecurity>(&node.value)) {
+                if (!collect(group->requests, depth + 1))
+                  return false;
+              } else {
+                clauses.push_back(id);
+              }
+            }
+            return true;
+          };
+      if (!collect(body.elements, 1))
+        return false;
+      for (auto clauseId : clauses) {
         const auto &node = authored.nodes[clauseId.index];
         const auto *clause = std::get_if<FormalClause>(&node.value);
         if (!clause)

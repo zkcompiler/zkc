@@ -70,6 +70,24 @@ class Reader {
       auto name = std::move(*projected2);
       return FormalReference{std::move(name)};
     }
+    case K::SiteReference: {
+      if (auto error = arity(1, 1))
+        return error;
+      auto path = read(nodes.front());
+      if (!path)
+        return path.takeError();
+      return FormalSite{*path};
+    }
+    case K::Security: {
+      if (auto error = arity(1, 1))
+        return error;
+      auto members =
+          kind(nodes.front()) == K::Suite ? children(nodes.front()) : nodes;
+      auto requests = list(members);
+      if (!requests)
+        return requests.takeError();
+      return FormalSecurity{std::move(*requests)};
+    }
     case K::Literal: {
       auto projected3 = spelling(id);
       if (!projected3)
@@ -375,11 +393,14 @@ class Reader {
                     : kind(id) == K::Request   ? C::Request
                     : kind(id) == K::GoalAlias ? C::Alias
                                                : C::Law;
+      bool hasDecision = kind(id) == K::Target && !nodes.empty() &&
+                         kind(nodes.back()) == K::Acceptance;
       unsigned operands = kind(id) == K::Reduces ? 2 : 1;
-      if (auto error = arity(operands, operands + 1))
+      unsigned suffixes = hasDecision ? 1 : 0;
+      if (auto error = arity(operands + suffixes, operands + suffixes + 1))
         return error;
       unsigned at = 0;
-      if (nodes.size() > operands) {
+      if (nodes.size() > operands + suffixes) {
         auto projected31 = read(nodes[at++]);
         if (!projected31)
           return projected31.takeError();
@@ -389,11 +410,20 @@ class Reader {
       if (!projected32)
         return projected32.takeError();
       result.value = std::move(*projected32);
-      if (at < nodes.size()) {
-        auto projected33 = read(nodes[at]);
-        if (!projected33)
-          return projected33.takeError();
-        result.residual = std::move(*projected33);
+      if (kind(id) == K::Reduces) {
+        auto residual = read(nodes[at++]);
+        if (!residual)
+          return residual.takeError();
+        result.residual = std::move(*residual);
+      }
+      if (hasDecision) {
+        auto decisionNodes = children(nodes[at]);
+        if (decisionNodes.size() != 1)
+          return fail(nodes[at], "invalid target acceptance shape");
+        auto decision = read(decisionNodes.front());
+        if (!decision)
+          return decision.takeError();
+        result.decision = std::move(*decision);
       }
       return result;
     }

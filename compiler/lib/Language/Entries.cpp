@@ -301,7 +301,7 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
     value.services = {*service};
   }
   value.gates = source.gates;
-  auto order = types.proofGateOrder(protocol, value);
+  auto order = types.proofGateOrder(protocol, value, entry.staticArguments);
   if (!order)
     return false;
   auto gates = std::move(value.gates);

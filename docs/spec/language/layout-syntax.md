@@ -83,9 +83,17 @@ written recipients; sender omission is retained for checking. Random services
 remain explicit inputs and calls, such as `coins.draw()`.
 
 A specification retains `requires`, `ensures`, `target` and
-`reduces R(...) to S(...)` separately, with optional clause labels. Other request
-labels are ordinary names. Clause heads have priority in that suite. No request
-name becomes a reserved security property. Retired `impl`, `require`,
+`reduces R(...) to S(...)` separately, with optional clause labels. A target
+may retain an explicit acceptance expression: `target statement: R(x) accept accepted`.
+No acceptance expression is inferred from an output position. `security:` groups
+request expressions in an indented suite, or introduces one inline expression.
+Requests may have ordinary labels (`knowledge: library::knowledge(...)`) or omit
+them. The group itself is not a request label or a security property. Clause heads
+have priority in that suite. A request-only suite cannot redefine the subject's
+contract. Within formal expressions, `site path` retains an authored event
+selector, including dotted paths; `site(value)` remains an ordinary call. Neither
+parsing a selector nor grouping requests establishes a proof. No request name
+becomes a reserved security property. Retired `impl`, `require`,
 `deployment`, `proof`, `pub spec protocol` and receiver-less `send` spellings
 are not aliases.
 
@@ -150,7 +158,8 @@ because it occurs in this table.
 | Header continuation | `roles`, `where`, `effects`, `for`, `as`, `lean` where the owning production admits them |
 | Statement head | `return`, `for`, `if`, `else`, `match`, `mut`; `guard` has the explicit exceptions described above |
 | Ordered action | `send`, `from`, `to`, `query`, `at` |
-| Contract suite | `requires`, `ensures`, `target`, `reduces`, `to`; other request labels remain ordinary names |
+| Contract suite | `requires`, `ensures`, `target`, `accept`, `reduces`, `to`, `security`; other request labels remain ordinary names |
+| Formal expression | `site` before an identifier path; callable `site(...)` remains ordinary |
 | Expression/binder | `true`, `false`, `if`, `else`, `match`, `and`, `or`, `not`, `ghost` in an actual argument; parameter-purpose words in parameter lists |
 
 This is contextual parsing: naming a declaration with a word does not suppress

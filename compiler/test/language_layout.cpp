@@ -517,10 +517,90 @@ spec for Demo:
     refuses(check(R"(protocol Demo roles(P)(value: bool @P) -> bool @P:
     return value
 spec for Demo:
-    security: First()
-    security: Second()
+    security:
+        repeated: First()
+    repeated: Second()
 )"),
             "source.spec.label");
+  });
+  cases.run(
+      "security groups preserve ordered mandatory anonymous requests", [] {
+        auto project =
+            take(check(R"(protocol Demo roles(P)(value: bool @P) -> bool @P:
+    return value
+spec for Demo:
+    target statement: Valid(value) accept result
+    ensures value
+    security:
+        Complete(target.statement)
+        sound: Sound(target.statement, challenge: site inner.challenge)
+    security: Another(target.statement)
+)"));
+        const auto &obligations =
+            project.pendingSpecifications()[0].obligations;
+        require(obligations.size() == 4 &&
+                    obligations[0].kind ==
+                        PendingObligation::Kind::Postcondition &&
+                    obligations[1].kind == PendingObligation::Kind::Request &&
+                    !obligations[1].label && obligations[1].ordinal == 0 &&
+                    obligations[2].label == "sound" &&
+                    obligations[2].ordinal == 1 && !obligations[3].label &&
+                    obligations[3].ordinal == 2,
+                "grouping changed mandatory coverage or request identity");
+        auto written = take(json::parse(take(inspectWrittenSource(project))));
+        unsigned targets = 0, groups = 0, sites = 0;
+        for (const auto &declaration :
+             *written.getAsObject()->getArray("declarations"))
+          for (const auto &value :
+               *declaration.getAsObject()->getArray("nodes")) {
+            const auto &node = *value.getAsObject();
+            auto kind = node.getString("kind");
+            if (kind == "formal.target") {
+              ++targets;
+              require(node.get("decision") &&
+                          !node.get("decision")->getAsNull(),
+                      "target acceptance was erased");
+            }
+            if (kind == "formal.security") {
+              ++groups;
+              require(node.getArray("requests") &&
+                          !node.getArray("requests")->empty(),
+                      "security group lost its ordered requests");
+            }
+            if (kind == "formal.site") {
+              ++sites;
+              require(node.get("value") && !node.get("value")->getAsNull(),
+                      "site selector lost its authored path");
+            }
+          }
+        require(targets == 1 && groups == 2 && sites == 1,
+                "neutral request shapes differ");
+        refuses(inspectSourceClaims(take(closeNativeRun(project, "m::Demo"))),
+                "source.assurance-unavailable");
+      });
+  cases.run("grouped audit cannot redefine an owner contract", [] {
+    refuses(check(R"(protocol Demo roles(P)(value: bool @P) -> bool @P:
+    return value
+pub spec Audit for Demo:
+    security:
+        ensures value
+)"),
+            "syntax.spec");
+  });
+  cases.run("site remains an ordinary executable function name", [] {
+    auto project = take(check(R"(def site(value: bool) -> bool:
+    value
+pub protocol Demo roles(P)(value: bool @P) -> bool @P:
+    result = site(value)
+    return result
+spec for Demo:
+    target Valid(value)
+    security: Checked(site(value))
+)"));
+    take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+    auto written = take(inspectWrittenSource(project));
+    require(!StringRef(written).contains("formal.site"),
+            "ordinary call acquired event-reference syntax");
   });
   cases.run("unnamed reduction relations are not clause labels", [] {
     take(check(R"(protocol Demo roles(P)(value: bool @P) -> bool @P:

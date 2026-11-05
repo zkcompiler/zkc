@@ -1202,6 +1202,15 @@ installed native type declarations:
 - Message transport requires an installed codec for the concrete native type.
   Public construction authority alone does not supply one.
 
+A module implementation must not introduce a deferred boundary requirement that
+its interface and selected owner do not promise. Conformance discharges a
+concrete admitted boundary immediately or matches a substituted, reconstructed
+boundary obligation. Unsupported implication refuses. Thus a generic member
+that merely promises to return its argument cannot secretly send it: that would
+exclude sealed or codec-less types allowed by the advertised signature. This
+rule introduces no `Share` or `Wire` permission. Direct generic protocols still
+retain and propagate their derived conditions as described below.
+
 Boundary admission is derived rather than expressed as a generic usage bound.
 An open generic message retains its constructor and codec obligations. Generic calls substitute and propagate
 these conditions; concrete application and Entry closure must discharge them.
@@ -1323,7 +1332,20 @@ and owner types coincide. Installed record invocations retain their caller's
 authority and actual child provenance. Agreement between an operation and its
 call binding alone does not establish any of these source relationships.
 Specialization preserves the occurrence and checks substituted types and value
-mapping against the authenticated source.
+mapping against the authenticated source. Oracle query occurrences independently
+bind both handle identity and position to their written operands. Oracle
+constructor source indices are reconstructed through typed identity aliases;
+equal oracle types do not authorize substituting another input. Removing an
+originating-expression hint does not remove this obligation. Every retained
+query occurrence must have exactly one corresponding candidate producer, and
+every candidate query must belong to an authored occurrence.
+Selected-control conditions, Match subjects, Local loop bounds and Protocol
+loop counts must match their retained written operands. Returning a different
+same-typed value is not permitted: root output names select declaration slots,
+and each continuing selected arm yields its authored tail. Administrative
+identity projections and the result component of a mutable-state join preserve
+this association. Stopped arms have no normal value obligation. Removing a
+candidate expression map does not remove a required header or return edge.
 
 Helper and protocol calls infer bare static parameters from data argument types,
 managed-service fields and expected helper results. Static arguments also accept
@@ -1401,6 +1423,14 @@ candidate enumerator. Inconsistent evidence refuses with `source.binding-witness
 the definition's target/family identities; it never resolves notation in a caller's
 scope. This executable check is not a formal proof of elaboration correctness.
 
+Native invocation replay derives ordinary data-read obligations from retained
+lexical bindings. Candidate operation/value spans may locate a proposed binding,
+but a missing match must refuse; it cannot remove an authored read from coverage.
+Service, scoped-computation and domain aliases are classified from retained
+source and checked by their respective rules, rather than treated as ordinary
+SSA data bindings. Changing a candidate value and its span together grants no
+new source association.
+
 ### Primitive function definitions
 
 A function can name an installed operation as its complete body:
@@ -1447,18 +1477,41 @@ redefined by library equality bindings.
 
 ### Modules and body modes
 
-An interface declares associated types/domains and math/local member signatures.
-A module may select one interface and must define every required member exactly
+An interface declares associated types/domains and Math, Local or Protocol member
+signatures. A module may select one interface and must define every required member exactly
 once. Additional declarations and private helpers are allowed. A generic `M: I`
 client sees only `I`; concrete module paths may use additional public members. Associated
 abstract runtime types expose only their promised usage properties. Concrete
 associated types derive usage properties from their representation; explicit
-resource attributes can strengthen those restrictions. Associated `Field` and `Group` declarations expose their
-selected domain. Conformance checks callable modes, types, permissions, natural
-preconditions, callback acceptance contracts and implementation effects. An
-implementation cannot require more than its interface allows. Interfaces and
+resource attributes can strengthen those restrictions. Associated `Field` and
+`Group` declarations expose their selected domain. A representation-only
+associated definition inherits its selected interface's domain sort and must
+define a domain of that exact sort. Conformance checks callable modes, types,
+permissions, natural preconditions, callback acceptance contracts and
+implementation effects. An implementation cannot require more than its interface
+allows. Interfaces and
 modules may have static parameters;
 abstract callable signatures may declare member-specific generic parameters.
+Callable conformance is universal over the complete ordered member telescope,
+after specializing the interface's owner arguments to the implementing module.
+The implementation must have exactly as many member binders, in the same sorts;
+domain/asset sorts and selected module interfaces and their substituted static
+arguments must match. Binder names may differ. Renaming uses declaration-bound
+identities, so an implementation owner binder cannot capture a member binder
+with the same spelling. A callable specialized to one field or natural does not
+satisfy a universally quantified member.
+
+Only the implementing module's own admitted premises and the specialized
+interface member's promises are available when checking implementation
+requirements. Parameter permissions, associated permission requirements,
+natural inequalities and installed capability requirements must follow using
+the existing bounded rules. Implementation member requirements and cached type
+permissions cannot supply their own proof. A weaker supported requirement is
+allowed; an unsupported implication is refused. Protocol conformance preserves
+the ordered role telescope, exact placed ports and oracle bounds, service
+constructor identities, fields and owners, results and completion contract.
+Callback modes, ceilings and whole-item origins remain exact under substitution;
+body effects stay within the interface allowance for every callback assignment.
 Associated types use only their owner's static parameters; member-specific
 parameters on associated types are rejected.
 `Module::method<F, ...>(value)` supplies the module parameters directly;
@@ -1476,6 +1529,11 @@ members and includes associated types and domain factories. Imports and members
 of other modules cannot supply an edge. The implementing module's exact static
 arguments and selected interface instance supply its substitution context;
 identical member names in two implementations do not identify one dispatch.
+Dispatch substitutes the selected implementation's owner arguments followed by
+the call's member arguments in telescope order. Helper and Protocol calls retain
+their authored abstract route in their invocation binding; closure and its
+independent witness select the same implementing declaration and both argument
+telescopes through that route.
 Checking forms the edges before dependent signatures and bodies, and validates
 all obligations before admitting a checked project. A source witness reconstructs
 the expected edges and signatures from retained authored headers and refuses
@@ -2098,8 +2156,7 @@ admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
 Receive-only setup slots, per-receive setup pins, general private ingress validators,
-dynamic source arrays and member-generic conformance remain outside the implemented
-profile. Reserved future syntax
-refuses explicitly. Existing IR support remains independent. Structural source
+dynamic source arrays remain outside the implemented profile. Reserved future
+syntax refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor
 protocol security.
