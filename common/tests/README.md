@@ -8,6 +8,15 @@ maintains independent research models and checks.
 
 ## Selecting checks
 
+Retained source value replay changes use the compiler's `source-value-replay`
+and `total-computation` CTest cases, with affected scoped/control/oracle cases.
+These check source event snapshots, literal semantics and typed administrative
+carriers, including complete literal producer envelopes and eager recipe
+captures under participant restriction. The replay case also checks its exact
+work allowance independently of the earlier formation-budget floor.
+`protocol/test_language_total_computation.py` provides separate Host execution
+evidence for literals, natural statics and nested restricted recipe captures.
+
 Retained structured protocol changes use the compiler's `structured-source`,
 `structured-applications` and `structured-repeats` CTest cases. The repeat case
 captures complete original sources and interfaces, checks optional participant

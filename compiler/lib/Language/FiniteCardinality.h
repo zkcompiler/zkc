@@ -6,9 +6,11 @@ namespace zkc::language::detail {
 /// Borrow the source constructor's scalar operands and child arity. The
 /// caller supplies the actual operand and child environments independently;
 /// constructor admission remains separate from count derivation.
-inline facts::DomainNode cardinalityNode(const DomainBinding &source) {
-  using Kind = DomainBinding::Kind;
+inline facts::DomainNode cardinalityNode(const DescriptorBinding &source) {
+  using Kind = DescriptorBinding::Kind;
   facts::DomainNode view;
+  if (!finiteDescriptorItem(source.contract))
+    return view;
   view.children = source.children.size();
   switch (source.kind) {
   case Kind::Elements:

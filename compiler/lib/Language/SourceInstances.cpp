@@ -35,7 +35,7 @@ class Instances {
         {"begin", value.begin},
         {"end", value.end}};
   }
-  Expected<json::Value> shape(const DomainShape &shape) {
+  Expected<json::Value> shape(const DescriptorShape &shape) {
     if (auto e = work.charge(shape.inputs.size() + shape.nodes.size() + 1))
       return std::move(e);
     json::Array inputs, nodes;
@@ -47,7 +47,7 @@ class Instances {
     }
     for (const auto &node : shape.nodes) {
       StringRef kind;
-      using K = DomainBinding::Kind;
+      using K = DescriptorBinding::Kind;
       switch (node.kind) {
       case K::Elements:
         kind = "elements";
@@ -85,21 +85,28 @@ class Instances {
           !node.argumentOrder.empty())
         return failure("source.instances",
                        "domain argument retains a source factory");
-      auto item = term(node.item);
-      if (!item)
-        return item.takeError();
+      auto contract = term(descriptorType(node.contract));
+      if (!contract)
+        return contract.takeError();
       if (auto e = work.charge(node.operands.size()))
         return std::move(e);
       json::Array operands;
       for (auto operand : node.operands)
         operands.push_back(operand.index);
-      auto children = indices(node.children);
-      if (!children)
-        return children.takeError();
+      json::Array children;
+      if (auto e = work.charge(node.children.size()))
+        return std::move(e);
+      for (const auto &edge : node.children) {
+        auto contract = term(descriptorType(edge.contract));
+        if (!contract)
+          return contract.takeError();
+        children.push_back(json::Object{{"node", edge.node},
+                                        {"contract", std::move(*contract)}});
+      }
       nodes.push_back(json::Object{{"kind", kind.str()},
-                                   {"item", std::move(*item)},
+                                   {"contract", std::move(*contract)},
                                    {"operands", std::move(operands)},
-                                   {"children", std::move(*children)},
+                                   {"children", std::move(children)},
                                    {"axis", node.axis}});
     }
     return json::Object{{"inputs", std::move(inputs)},
@@ -246,7 +253,7 @@ public:
           return std::move(e);
         scoped.push_back(selected.symbol);
       }
-      for (const auto &domain : decl.domainArguments) {
+      for (const auto &domain : decl.descriptorArguments) {
         if (!domain)
           return failure("source.instances", "missing closed domain argument");
         auto value = shape(*domain);

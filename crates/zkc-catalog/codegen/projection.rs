@@ -772,7 +772,7 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
                             variant(
                                 &r["kind"],
                                 "SourceDeclarationKind",
-                                &["Math", "Local", "Interface"],
+                                &["Math", "Local", "Interface", "Requirement"],
                             )?,
                         ),
                         (

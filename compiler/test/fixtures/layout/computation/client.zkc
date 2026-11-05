@@ -1,0 +1,8 @@
+module m
+use collections::{Vector, elements, relay}
+use reductions::{∑}
+domain F = field("koala-bear")
+pub protocol Demo roles(P)(xs: Vector<F> @P, needle: F @P, shift: F @P) -> F @P:
+    plain = ∑ x ∈ relay(elements(xs)), (x + shift)
+    filtered <- ∑ x ∈ elements(xs) with x == needle, x * x
+    return plain + filtered

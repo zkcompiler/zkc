@@ -1,5 +1,6 @@
 #include "../lib/Compiler/NativeCodec.h"
 #include "../lib/Compiler/NativeProofVerification.h"
+#include "../lib/Language/SignatureWitness.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -100,6 +101,24 @@ std::string replace(StringRef from, StringRef to) {
   text.replace(position, from.size(), to.str());
   return text;
 }
+std::string consumerProgram(StringRef requirement) {
+  auto source = replace("for Round<T>{",
+                        ("for Round<T> where " + requirement + "{").str());
+  source.insert(source.find(';') + 1, " use zkc::transport::{NativeMessage};");
+  return source + deployment.str();
+}
+std::string inheritedConsumerProgram(StringRef argument) {
+  auto source = replace(
+      "construction Derived<",
+      "module Header<U:Type> where NativeMessage(U){pub construction Derived<");
+  source.insert(source.find(';') + 1, " use zkc::transport::{NativeMessage};");
+  source += "}\n";
+  auto selected = deployment.str();
+  auto position = selected.find("Derived<F,Provider>");
+  selected.replace(position, StringRef("Derived<F,Provider>").size(),
+                   ("Header::Derived<" + argument + ",F,Provider>").str());
+  return source + selected;
+}
 } // namespace
 int main() {
   zkc::test::Cases cases;
@@ -107,6 +126,124 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  for (StringRef requirement :
+       {"()", "NativeMessage(bool)", "NativeMessage(T)"})
+    cases.run(
+        "construction handlers inherit consumer headers " + requirement, [&] {
+          auto project = take(checked(consumerProgram(requirement)));
+          auto replay = [&](uint64_t allowance) {
+            Limits limits;
+            limits.work = allowance;
+            zkc::language::detail::Work work{limits};
+            zkc::language::detail::Work::Scope phase(
+                work, SourceWorkPhase::ScopedElaboration);
+            auto result = zkc::language::detail::replayHeaderContracts(
+                zkc::language::detail::DeclarationAccess::storage(project),
+                work);
+            const bool ok = bool(result);
+            if (!result)
+              require(
+                  namesIdentifier(toString(result.takeError()), "source.limit"),
+                  "header replay returned the wrong budget refusal");
+            require(work.ledger.total == work.used && work.used <= allowance,
+                    "header replay ledger overspent");
+            return std::make_pair(work.used, ok);
+          };
+          auto [cost, ok] = replay(Limits{}.work);
+          require(ok && cost > 0, "cold header replay failed");
+          require(replay(cost) == std::make_pair(cost, true),
+                  "warm exact header replay changed work");
+          require(!replay(cost - 1).second,
+                  "one-short header replay succeeded");
+          require(replay(cost) == std::make_pair(cost, true),
+                  "header replay failure changed retry");
+          outs() << "handler replay " << requirement << " work=" << cost
+                 << " exact=pass one_short=refused retry=pass\n";
+          for (unsigned attempt = 0; attempt < 2; ++attempt) {
+            if (auto error = checkScopedElaboration(project))
+              throw std::runtime_error(toString(std::move(error)));
+            take(closeEntry(project, "m::Demo"));
+          }
+        });
+  cases.run("construction handlers inherit module consumer clauses", [] {
+    auto project = take(checked(inheritedConsumerProgram("bool")));
+    take(closeEntry(project, "m::Demo"));
+    unsigned handlers = 0;
+    for (const auto &decl : project.declarations()) {
+      if (!decl.anonymous || decl.consumerRequirements.empty())
+        continue;
+      ++handlers;
+      auto &handler = const_cast<Declaration &>(decl);
+      auto original = handler;
+      handler.consumerRequirements.clear();
+      handler.admissions.clear();
+      auto error = checkScopedElaboration(project);
+      require(bool(error), "handler erased its enclosing module demand");
+      require(
+          namesIdentifier(toString(std::move(error)), "source.scoped-witness"),
+          "inherited handler returned the wrong refusal");
+      handler = std::move(original);
+    }
+    require(handlers == 5, "module fixture lost its grouped handlers");
+    take(closeEntry(project, "m::Demo"));
+    refuses(checked(inheritedConsumerProgram("()")), "source.message-payload");
+  });
+  for (unsigned mutation = 0; mutation < 14; ++mutation)
+    cases.run("construction handler consumer replay " + Twine(mutation), [&] {
+      auto project = take(checked(consumerProgram("NativeMessage(T)")));
+      if (auto error = checkScopedElaboration(project))
+        throw std::runtime_error(toString(std::move(error)));
+      take(closeEntry(project, "m::Demo"));
+      std::vector<Declaration *> handlers;
+      for (const auto &decl : project.declarations())
+        if (decl.anonymous && !decl.consumerRequirements.empty())
+          handlers.push_back(&const_cast<Declaration &>(decl));
+      require(handlers.size() == 5,
+              "fixture lost start, grouped message or query handlers");
+      for (auto *handler : handlers) {
+        auto original = *handler;
+        if (mutation == 0 || mutation == 2)
+          handler->consumerRequirements.clear();
+        if (mutation == 1 || mutation == 2)
+          handler->admissions.clear();
+        if (mutation == 3)
+          handler->consumerRequirements.front().arguments.front() =
+              Type(Type::Kind::Boolean);
+        if (mutation == 4)
+          handler->consumerRequirements.front().reference.provider =
+              handler->id;
+        if (mutation == 5)
+          ++handler->consumerRequirements.front().span.begin;
+        if (mutation == 6)
+          handler->parent = project.declarations().front().id;
+        if (mutation == 7)
+          handler->module = handler->id;
+        if (mutation == 8)
+          handler->anonymous = false;
+        if (mutation == 9)
+          handler->qualifiedName += "foreign";
+        if (mutation == 10)
+          handler->id = handlers.front() == handler ? handlers.back()->id
+                                                    : handlers.front()->id;
+        if (mutation == 11)
+          handler->consumerRequirements.push_back(
+              handler->consumerRequirements.front());
+        if (mutation == 12)
+          handler->name += "foreign";
+        if (mutation == 13)
+          handler->kind = Declaration::Kind::Math;
+        auto error = checkScopedElaboration(project);
+        require(bool(error), "mutated handler passed source replay");
+        require(namesIdentifier(toString(std::move(error)),
+                                "source.scoped-witness"),
+                "handler replay returned the wrong diagnostic");
+        refuses(closeEntry(project, "m::Demo"), "source.scoped-witness");
+        *handler = std::move(original);
+      }
+      if (auto error = checkScopedElaboration(project))
+        throw std::runtime_error(toString(std::move(error)));
+      take(closeEntry(project, "m::Demo"));
+    });
   cases.run("construction targets use completed protocol contracts", [] {
     refuses(checked(R"(module m;
 protocol Dup<T:Type> roles(P)(x:T@P)->(a:T@P,b:T@P){return(a=x,b=x);}
@@ -140,7 +277,7 @@ construction Derived<T:Type> for Relay<T>{base Base<T>;}
       require(decl.permissionBounds.size() == 1 &&
                   decl.permissionBounds.front().permissions.copy,
               "construction lost inferred target usage");
-      require(decl.admissions.size() == 2,
+      require(decl.admissions.size() == 3,
               "construction lost target boundary obligations");
     }
     refuses(checked(R"(module m;

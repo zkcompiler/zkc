@@ -533,7 +533,7 @@ Semantics::dispatch(const std::optional<Type> &module, DeclarationId required,
   const bool callable = target.kind == Declaration::Kind::Math ||
                         target.kind == Declaration::Kind::Local ||
                         target.kind == Declaration::Kind::Protocol ||
-                        target.kind == Declaration::Kind::DomainFunction;
+                        target.kind == Declaration::Kind::View;
   if (callable && completeDispatchBody &&
       !completeDispatchBody(*provided, enclosingCalls))
     return {};

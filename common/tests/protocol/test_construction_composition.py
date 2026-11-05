@@ -101,7 +101,7 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
     source.write_text(composed_source(empty, nested).replace(
         'State(unpack(t)*3+v)',
         'State(zkc::finite::fold(zkc::vector::fill(unpack(t),3),v,fn(s,x)=>s+x))'))
-    modules = library_modules(*core_packages())
+    modules = library_modules(*core_packages('zkc'))
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
@@ -208,7 +208,7 @@ def test_native_root_can_delegate_to_an_explicit_managed_child(toolchain, journa
     source.write_text(text)
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
-                             *library_modules(*core_packages(), overrides={'sample': source}),
+                             *library_modules(*core_packages('zkc'), overrides={'sample': source}),
                              'sample::Composed', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5'})
     witness = journal.write('witness.json', {'secret': '7'})

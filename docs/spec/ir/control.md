@@ -217,8 +217,23 @@ no input equality. A statically constructed enum tag needs no payload equality,
 even when the payload has ordered provenance. These groups are
 requirements for actual entry admission; formation, a public flag, a producer
 annotation and the existence of an API result discharge none of them. A common
-enum tag establishes no payload equality. Local actions, entropy, received
-values and unsupported provenance cannot establish common control. Calls
+enum tag establishes no payload equality. An actual `protocol.exchange` forwards
+the immutable input component at its actual sender to its output components at
+exactly that sender and receiver on the completed normal path. This establishes
+agreement without an external input requirement, including when that very
+opaque Local or entropy result is delivered. Other input components and
+nonreceivers retain their distinct subjects. Ordered multicast prefixes grant
+no fact to undelivered recipients or stopped continuations. No messages, transport
+outcomes, acknowledgements or participant completion rules are changed.
+
+Independent native reconstruction retains fresh opaque result/role/invocation
+identities, actual SSA operands and actual selected call/role mappings. Distinct
+Local actions, entropy results and unsupported provenance cannot agree merely
+through matching operations or dependency sets. Congruent admitted total work
+and typed observations may follow actual forwarding. This is a prescribed
+normal-path control rule, with no statement/schema authority or adversarial
+honesty premise. Source requirements and optional specifications discharge none
+of these checks. Calls
 substitute actual ports and role maps through checked acyclic bodies. Repeats
 retain initializer, recurrence and zero-path dependencies separately.
 
@@ -245,7 +260,7 @@ Unknown state in an unrelated carry creates no agreement obligation.
 Tag, guarded payload and extent observations project the initial and transition
 values separately. Projecting a selected value rejoins the arm observations:
 an identical known observation in every arm is independent of the selector.
-Unknown observations cannot establish equality, and a Protocol branch's own
+Distinct unknown observations cannot establish equality, and a Protocol branch's own
 scheduling demand remains separate. Payload alternatives and ordinals remain
 distinct; an
 inactive constructor alternative has no payload obligation on that guarded

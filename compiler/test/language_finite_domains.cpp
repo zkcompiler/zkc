@@ -1,8 +1,8 @@
 #include "../lib/Language/BodyMapping.h"
 #include "../lib/Language/BodySummary.h"
 #include "../lib/Language/ClosureInputs.h"
-#include "../lib/Language/DomainClosure.h"
-#include "../lib/Language/DomainWitness.h"
+#include "../lib/Language/DescriptorClosure.h"
+#include "../lib/Language/DescriptorWitness.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Language/Inspection.h"
@@ -38,6 +38,66 @@ const Declaration &declarationNamed(const CheckedProject &project,
 } // namespace
 int main() {
   Cases cases;
+
+  cases.run(
+      "complete contracts preserve family, arity and every typed index", [] {
+        DescriptorContract contract{DescriptorFamily::Finite,
+                                    {Type(Type::Kind::Index)}};
+        require(descriptorContract(descriptorType(contract)) == contract &&
+                    finiteDescriptorItem(contract) &&
+                    *finiteDescriptorItem(contract) == Type(Type::Kind::Index),
+                "complete contract projection lost its Finite item");
+        const auto key = typeIdentity(descriptorType(contract));
+        auto different = contract;
+        different.parameters.front() = Type{};
+        require(typeIdentity(descriptorType(different)) != key,
+                "descriptor identity erased its parameter");
+        for (bool empty : {false, true}) {
+          different = contract;
+          if (empty)
+            different.parameters.clear();
+          else {
+            Type natural(Type::Kind::Natural);
+            natural.dimension = Natural::constant(32);
+            different.parameters.push_back(natural);
+          }
+          require(!finiteDescriptorItem(different) &&
+                      typeIdentity(descriptorType(different)) != key &&
+                      descriptorContract(descriptorType(different)) ==
+                          different,
+                  "invalid Finite arity was truncated or accepted");
+          if (!empty) {
+            auto original = typeIdentity(descriptorType(different));
+            different.parameters.back().dimension = Natural::constant(64);
+            require(typeIdentity(descriptorType(different)) != original,
+                    "full contract identity erased a later typed index");
+          }
+        }
+        different = contract;
+        different.family = static_cast<DescriptorFamily>(99);
+        require(!finiteDescriptorItem(different) &&
+                    typeIdentity(descriptorType(different)) != key,
+                "finite interpretation ignored family identity");
+      });
+
+  cases.run("later contract parameters share the caller's type budget", [] {
+    Limits limits;
+    limits.typeDepth = 2;
+    zkc::language::detail::Work work{limits};
+    const std::vector<Declaration> declarations;
+    zkc::language::detail::Semantics types(declarations, {}, work);
+    Type nested(Type::Kind::Tuple);
+    nested.arguments = {Type(Type::Kind::Index)};
+    Type outer(Type::Kind::Tuple);
+    outer.arguments = {nested};
+    // An intentionally malformed Finite arity exercises the generic shell's
+    // traversal without installing a synthetic family or constructor.
+    DescriptorContract contract{DescriptorFamily::Finite,
+                                {Type(Type::Kind::Index), outer}};
+    require(!types.chargeContract(contract, {}) && types.diagnostic &&
+                types.diagnostic->code == "source.limit",
+            "a later typed parameter bypassed the caller's depth ceiling");
+  });
 
   cases.run("domain factories infer operand and called usage requirements", [] {
     auto project = take(check(R"(
@@ -512,7 +572,7 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return fold(xs,0,fn(state, item)=>state
 )"));
           auto &body =
               const_cast<Body &>(*declarationNamed(project, "m::work").body);
-          auto &domain = body.domainBindings.front();
+          auto &domain = body.descriptorBindings.front();
           if (mutation == 0)
             domain.expression = 999;
           if (mutation == 1)
@@ -520,9 +580,9 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return fold(xs,0,fn(state, item)=>state
           if (mutation == 2)
             domain.operands.front() = ValueId{1};
           if (mutation == 3)
-            domain.kind = DomainBinding::Kind::SourceArray;
+            domain.kind = DescriptorBinding::Kind::SourceArray;
           if (mutation == 4)
-            domain.item = Type{};
+            domain.contract.parameters = {Type{}};
           auto error = checkScopedElaboration(project);
           require(bool(error), "corrupt collection conversion accepted");
           require(toString(std::move(error)).find("source.scoped-witness") !=
@@ -539,19 +599,20 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
 )"));
           auto &body =
               const_cast<Body &>(*declarationNamed(project, "m::work").body);
-          auto &application = body.domainBindings.back();
-          auto &child = body.domainBindings[application.children[0]];
+          auto &application = body.descriptorBindings.back();
+          auto &child = body.descriptorBindings[application.children[0].node];
           if (mutation == 0)
             child.expression = 999;
           if (mutation == 1)
             child.operands[0] =
-                body.domainBindings[application.children[1]].operands[0];
+                body.descriptorBindings[application.children[1].node]
+                    .operands[0];
           if (mutation == 2)
             std::swap(application.children[0], application.children[1]);
           if (mutation == 3)
-            child.kind = DomainBinding::Kind::SourceArray;
+            child.kind = DescriptorBinding::Kind::SourceArray;
           if (mutation == 4)
-            child.item = Type{};
+            child.contract.parameters = {Type{}};
           if (mutation == 5)
             std::swap(application.argumentOrder[0],
                       application.argumentOrder[1]);
@@ -561,9 +622,9 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
           if (mutation == 7)
             application.arguments[0] = Type{};
           if (mutation == 8)
-            application.children[0] = body.domainBindings.size();
+            application.children[0].node = body.descriptorBindings.size();
           if (mutation == 9)
-            application.children[0] = body.domainBindings.size() - 1;
+            application.children[0].node = body.descriptorBindings.size() - 1;
           auto error = checkScopedElaboration(project);
           require(bool(error), "corrupt nested conversion accepted");
           require(toString(std::move(error)).find("source.scoped-witness") !=
@@ -577,9 +638,10 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
 }
 )"));
     auto &body = const_cast<Body &>(*declarationNamed(project, "m::work").body);
-    auto &application = body.domainBindings.back();
-    auto &left = body.domainBindings[application.children[0]];
-    left.operands[0] = body.domainBindings[application.children[1]].operands[0];
+    auto &application = body.descriptorBindings.back();
+    auto &left = body.descriptorBindings[application.children[0].node];
+    left.operands[0] =
+        body.descriptorBindings[application.children[1].node].operands[0];
     auto error = checkScopedElaboration(project);
     require(bool(error), "changed factory data operand accepted");
     consumeError(std::move(error));
@@ -998,7 +1060,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){retur
         const auto &finite =
             std::get<FiniteComputation>(decl.body->operations.front().action);
         require(finite.domain && finite.domain->nodes.size() == 1 &&
-                    finite.domainOperands.size() == 1 &&
+                    finite.descriptorOperands.size() == 1 &&
                     finite.operands.size() == 1 &&
                     finite.body.captures.size() == 1 && !finite.predicate,
                 "finite closure lost its domain or callback environment");
@@ -1031,7 +1093,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){retur
                       finite.body.helper = decl.id;
                     else {
                       auto domain =
-                          std::make_shared<DomainShape>(*finite.domain);
+                          std::make_shared<DescriptorShape>(*finite.domain);
                       domain->nodes.front().axis = 1;
                       finite.domain = std::move(domain);
                     }
@@ -1080,15 +1142,17 @@ protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:F
     auto project = take(check(""));
     const auto &zip = declarationNamed(project, "m::zip");
     require(zip.inputs.empty() && zip.outputs.empty() &&
-                zip.domainInputs.size() == 2 && zip.domainResult &&
-                zip.domainDefinition && !zip.body,
+                zip.descriptorInputs.size() == 2 && zip.descriptorResult &&
+                zip.descriptorDefinition && !zip.body,
             "domain signature became a runtime callable");
     const auto &result =
-        zip.domainDefinition->bindings[zip.domainDefinition->result];
-    require(result.kind == DomainBinding::Kind::Zip &&
-                result.children == std::vector<unsigned>({0, 1}),
+        zip.descriptorDefinition->bindings[zip.descriptorDefinition->result];
+    require(result.kind == DescriptorBinding::Kind::Zip &&
+                result.children == std::vector<DescriptorEdge>(
+                                       {{0, zip.descriptorInputs[0].contract},
+                                        {1, zip.descriptorInputs[1].contract}}),
             "domain order was lost");
-    require(take(inspectDeclarations(project)).find("domain_inputs") !=
+    require(take(inspectDeclarations(project)).find("descriptor_inputs") !=
                 std::string::npos,
             "inspection omitted static domains");
   });
@@ -1101,7 +1165,7 @@ pub domain fn paired<G:Group>(points:Groups<G>,scalars:Vector<G::Scalar>)->domai
 pub domain fn forward<T:Type+Copy+Drop>(rows:domain<T>)->domain<T>{return rows;}
 )"));
         const auto &paired =
-            *declarationNamed(project, "m::paired").domainDefinition;
+            *declarationNamed(project, "m::paired").descriptorDefinition;
         require(paired.bindings.size() == 3 && paired.bindings[0].expression &&
                     paired.bindings[1].expression &&
                     paired.bindings[2].expression,
@@ -1109,10 +1173,12 @@ pub domain fn forward<T:Type+Copy+Drop>(rows:domain<T>)->domain<T>{return rows;}
         require(paired.bindings[0].operands[0].index == 0 &&
                     paired.bindings[1].operands[0].index == 1 &&
                     paired.bindings[2].children ==
-                        std::vector<unsigned>({0, 1}),
+                        std::vector<DescriptorEdge>(
+                            {{0, paired.bindings[0].contract},
+                             {1, paired.bindings[1].contract}}),
                 "composition changed source operand identities");
         require(declarationNamed(project, "m::forward")
-                        .domainDefinition->bindings[0]
+                        .descriptorDefinition->bindings[0]
                         .parameter == 0,
                 "forwarding lost the domain parameter");
       });
@@ -1142,11 +1208,11 @@ fn example<F:Field>(xs:Vector<F>,fallback:F)->F {
 }
 )"));
     const auto &body = *declarationNamed(project, "m::example").body;
-    require(body.domainBindings.size() == 1 &&
-                body.domainBindings.front().expression.has_value(),
+    require(body.descriptorBindings.size() == 1 &&
+                body.descriptorBindings.front().expression.has_value(),
             "domain aliases copied or erased their recipe");
     const auto &call = std::get<HelperCall>(body.operations.back().action);
-    require(call.domainArguments == std::vector<unsigned>{0},
+    require(call.descriptorArguments == std::vector<unsigned>{0},
             "domain call lost recipe identity");
   });
   cases.run("abstract module factory survives typed composition", [] {
@@ -1157,8 +1223,9 @@ domain fn selected<F:Field,C:Domain<F>>(xs:Vector<F>)->domain<(F,F)> {
 }
 )"));
     const auto &definition =
-        *declarationNamed(project, "m::selected").domainDefinition;
-    require(definition.bindings[0].kind == DomainBinding::Kind::Application &&
+        *declarationNamed(project, "m::selected").descriptorDefinition;
+    require(definition.bindings[0].kind ==
+                    DescriptorBinding::Kind::Application &&
                 definition.bindings[0].factory->module.has_value(),
             "abstract factory selection was not retained");
   });
@@ -1180,19 +1247,19 @@ fn example(a:Vector<Fr>,b:Vector<Fr>)->bool {
     zkc::language::detail::Work work{Limits{}};
     zkc::language::detail::Semantics types(declarations, project.assets(),
                                            work);
-    auto selected = zkc::language::detail::closeDomain(types, declarations,
-                                                       body, 3, {}, {});
+    auto selected = zkc::language::detail::closeDescriptor(types, declarations,
+                                                           body, 3, {}, {});
     require(selected.has_value(),
             types.diagnostic ? types.diagnostic->message : "closure failed");
-    require(selected->shape->nodes.size() == 3 &&
-                selected->shape->result == 0 &&
-                selected->shape->nodes.back().kind == DomainBinding::Kind::Zip,
-            "factory admission lost unused zip or included unrelated caller "
-            "domain");
+    require(
+        selected->shape->nodes.size() == 3 && selected->shape->result == 0 &&
+            selected->shape->nodes.back().kind == DescriptorBinding::Kind::Zip,
+        "factory admission lost unused zip or included unrelated caller "
+        "domain");
     require(selected->shape->inputs.size() == 2,
             "distinct containers became identical");
-    auto shared = zkc::language::detail::closeDomain(types, declarations, body,
-                                                     4, {}, {});
+    auto shared = zkc::language::detail::closeDescriptor(types, declarations,
+                                                         body, 4, {}, {});
     require(shared.has_value() && shared->shape->inputs.size() == 1,
             "aliases of one immutable operand were not preserved");
     require(selected->shape->identity != shared->shape->identity,
@@ -1212,12 +1279,13 @@ fn example(xs:Vector<Fr>)->bool {let rows=selected<Fr,All<Fr>>(xs);return true;}
     zkc::language::detail::Work work{Limits{}};
     zkc::language::detail::Semantics types(declarations, project.assets(),
                                            work);
-    auto selected = zkc::language::detail::closeDomain(types, declarations,
-                                                       body, 0, {}, {});
+    auto selected = zkc::language::detail::closeDescriptor(types, declarations,
+                                                           body, 0, {}, {});
     require(selected.has_value(),
             types.diagnostic ? types.diagnostic->message : "closure failed");
     require(selected->shape->nodes.size() == 1 &&
-                selected->shape->nodes[0].kind == DomainBinding::Kind::Elements,
+                selected->shape->nodes[0].kind ==
+                    DescriptorBinding::Kind::Elements,
             "module factory did not close to its selected constructor");
   });
   cases.run("named factory arguments preserve child admission order", [] {
@@ -1232,14 +1300,17 @@ fn example(a:index,b:index,c:index,d:index)->bool {
     zkc::language::detail::Work work{Limits{}};
     zkc::language::detail::Semantics types(declarations, project.assets(),
                                            work);
-    auto selected = zkc::language::detail::closeDomain(types, declarations,
-                                                       body, 2, {}, {});
+    auto selected = zkc::language::detail::closeDescriptor(types, declarations,
+                                                           body, 2, {}, {});
     require(selected.has_value(),
             types.diagnostic ? types.diagnostic->message : "closure failed");
-    require(
-        selected->operands[0].index == 2 && selected->operands[1].index == 3 &&
-            selected->shape->nodes[2].children == std::vector<unsigned>({1, 0}),
-        "named mapping reordered constructor admission or item positions");
+    require(selected->operands[0].index == 2 &&
+                selected->operands[1].index == 3 &&
+                selected->shape->nodes[2].children ==
+                    std::vector<DescriptorEdge>(
+                        {{1, selected->shape->nodes[1].contract},
+                         {0, selected->shape->nodes[0].contract}}),
+            "named mapping reordered constructor admission or item positions");
   });
   cases.run("scoped and control regions capture static domains", [] {
     auto project = take(check(R"(
@@ -1252,10 +1323,11 @@ fn example<F:Field>(xs:Vector<F>,x:F,choose:bool)->F {
 )"));
     const auto &body = *declarationNamed(project, "m::example").body;
     const auto &binding = body.scopedBindings.front();
-    require(binding.domainCaptures == std::vector<unsigned>{0} &&
-                binding.computation->domainCaptures.size() == 1,
+    require(binding.descriptorCaptures == std::vector<unsigned>{0} &&
+                binding.computation->descriptorCaptures.size() == 1,
             "callback lost captured domain identity");
-    require(binding.computation->body->domainBindings.front().parameter == 0,
+    require(binding.computation->body->descriptorBindings.front().parameter ==
+                0,
             "captured domain became a data parameter");
   });
   cases.run(
@@ -1371,14 +1443,14 @@ fn example(xs:Pair,other:Vector<Fr>)->(Vector<Fr>,Vector<Fr>,Vector<Fr>){
         zkc::language::detail::Work work{Limits{}};
         zkc::language::detail::Semantics types(declarations, project.assets(),
                                                work);
-        auto result = zkc::language::detail::closeDomain(types, declarations,
-                                                         body, 0, {}, {});
+        auto result = zkc::language::detail::closeDescriptor(
+            types, declarations, body, 0, {}, {});
         require(result.has_value(), types.diagnostic ? types.diagnostic->message
                                                      : "missing closed domain");
         require(result->shape->nodes.size() == 1 &&
                     result->shape->inputs.size() == 2,
                 "shared factory graph expanded repeated selected recipes");
-        require(zkc::language::detail::checkDomainClosure(
+        require(zkc::language::detail::checkDescriptorClosure(
                     types, declarations, body, 0, {}, {}, *result),
                 types.diagnostic ? types.diagnostic->message
                                  : "shared factory witness failed");
@@ -1391,12 +1463,13 @@ fn example(xs:Pair,other:Vector<Fr>)->(Vector<Fr>,Vector<Fr>,Vector<Fr>){
         std::vector<Declaration> declarations(project.declarations().begin(),
                                               project.declarations().end());
         for (unsigned mutation = 0; mutation < 3; ++mutation) {
-          auto shape = std::make_shared<DomainShape>();
+          auto shape = std::make_shared<DescriptorShape>();
           shape->inputs = {Type(Type::Kind::Index), Type(Type::Kind::Index)};
-          shape->nodes.push_back({DomainBinding::Kind::Range,
-                                  Type(Type::Kind::Index),
-                                  {{0}, {1}},
-                                  {}});
+          shape->nodes.push_back(
+              {DescriptorBinding::Kind::Range,
+               {DescriptorFamily::Finite, {Type(Type::Kind::Index)}},
+               {{0}, {1}},
+               {}});
           shape->result = 0;
           if (mutation == 1)
             shape->inputs.front() = Type{};
@@ -1405,7 +1478,7 @@ fn example(xs:Pair,other:Vector<Fr>)->(Vector<Fr>,Vector<Fr>,Vector<Fr>){
           zkc::language::detail::Work work{Limits{}};
           zkc::language::detail::Semantics types(declarations, project.assets(),
                                                  work);
-          auto result = zkc::language::detail::closeDomain(
+          auto result = zkc::language::detail::closeDescriptor(
               types, declarations, body, 0, {}, {{shape, {{0}, {1}}}});
           if (mutation == 0)
             require(result.has_value(), types.diagnostic
@@ -1432,7 +1505,7 @@ fn example(a:index,b:index)->index{return ignore(range(a,b),a);}
             const_cast<Declaration &>(declarationNamed(project, "m::example"));
         auto body = std::make_shared<Body>(*decl.body);
         decl.body = body;
-        ++*body->domainBindings.front().expression;
+        ++*body->descriptorBindings.front().expression;
         auto error = checkScopedElaboration(project);
         require(bool(error), "changed domain expression identity was accepted");
         require(toString(std::move(error)).find("source.scoped-witness") !=
@@ -1455,8 +1528,8 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
         zkc::language::detail::Work work{Limits{}};
         zkc::language::detail::Semantics types(declarations, project.assets(),
                                                work);
-        auto original = zkc::language::detail::closeDomain(types, declarations,
-                                                           body, 0, {}, {});
+        auto original = zkc::language::detail::closeDescriptor(
+            types, declarations, body, 0, {}, {});
         require(original.has_value(), types.diagnostic
                                           ? types.diagnostic->message
                                           : "closure failed");
@@ -1468,7 +1541,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
         ++caller.inputs;
         auto shifted = [](ValueId value) { return ValueId{value.index + 1}; };
         zkc::language::detail::mapBodyValues(caller, shifted);
-        auto inputs = zkc::language::detail::bindDomainInputs(
+        auto inputs = zkc::language::detail::bindDescriptorInputs(
             types, declarations, body, caller, shifted, 0, {}, {},
             *original->shape);
         require(inputs && inputs->size() == original->operands.size(),
@@ -1476,9 +1549,9 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
         for (unsigned i = 0; i < inputs->size(); ++i)
           require((*inputs)[i].index == original->operands[i].index + 1,
                   "domain witness confused template and caller SSA spaces");
-        for (unsigned mutation = 0; mutation < 9; ++mutation) {
+        for (unsigned mutation = 0; mutation < 15; ++mutation) {
           auto candidate = *original;
-          auto shape = std::make_shared<DomainShape>(*candidate.shape);
+          auto shape = std::make_shared<DescriptorShape>(*candidate.shape);
           candidate.shape = shape;
           shape->identity = "untrusted producer key";
           if (mutation == 1)
@@ -1497,10 +1570,24 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
             shape->inputs.front() = Type{};
           if (mutation == 8)
             shape->nodes.front().expression = 7;
+          if (mutation == 9)
+            shape->nodes.front().contract.family =
+                static_cast<DescriptorFamily>(99);
+          if (mutation == 10)
+            shape->nodes.front().contract.parameters.clear();
+          if (mutation == 11)
+            shape->nodes.front().contract.parameters.push_back(Type{});
+          if (mutation == 12)
+            shape->nodes.front().contract.parameters.front() = Type{};
+          if (mutation == 13)
+            shape->nodes.back().children.front().contract.parameters = {Type{}};
+          if (mutation == 14)
+            shape->nodes.back().children.front().contract.parameters.push_back(
+                Type{});
           zkc::language::detail::Work witnessWork{Limits{}};
           zkc::language::detail::Semantics witness(
               declarations, project.assets(), witnessWork);
-          bool valid = zkc::language::detail::checkDomainClosure(
+          bool valid = zkc::language::detail::checkDescriptorClosure(
               witness, declarations, body, 0, {}, {}, candidate);
           if (mutation == 0)
             require(valid, witness.diagnostic ? witness.diagnostic->message
@@ -1513,6 +1600,45 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
                         std::to_string(mutation));
         }
       });
+  for (unsigned mutation = 0; mutation != 5; ++mutation)
+    cases.run(
+        "closure refuses source result and independent child contract drift " +
+            Twine(mutation),
+        [&] {
+          auto project = take(check(R"(
+fn example(a:index,b:index,c:index,d:index)->bool {
+ let rows=zip(range(a,b),range(c,d));return true;
+}
+)"));
+          Body body = *declarationNamed(project, "m::example").body;
+          auto &result = body.descriptorBindings.back();
+          if (mutation == 0)
+            result.contract.parameters = {Type{}};
+          if (mutation == 1)
+            result.contract.parameters.push_back(Type{});
+          if (mutation == 2)
+            result.children.front().contract.parameters = {Type{}};
+          if (mutation == 3)
+            result.children.front().contract.parameters.clear();
+          if (mutation == 4) {
+            auto &child = body.descriptorBindings[result.children.front().node];
+            child.contract.parameters = {Type{}};
+            result.children.front().contract = child.contract;
+          }
+          std::vector<Declaration> declarations(project.declarations().begin(),
+                                                project.declarations().end());
+          zkc::language::detail::Work work{Limits{}};
+          zkc::language::detail::Semantics types(declarations, project.assets(),
+                                                 work);
+          auto selected = zkc::language::detail::closeDescriptor(
+              types, declarations, body, body.descriptorBindings.size() - 1, {},
+              {});
+          require(
+              !selected && types.diagnostic &&
+                  types.diagnostic->code == "source.finite-domain",
+              "closure accepted a mismatched source result or child contract");
+        });
+
   const std::vector<std::pair<std::string, std::string>> invalid = {
       {R"(domain fn bad(x:index)->domain<index>=domain("unknown");)",
        "source.finite-domain"},
@@ -1554,10 +1680,12 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,fallback:Fr@P)->(r:Fr@P){return forward(e
     unsigned forwarded = 0;
     for (const auto &decl : closed.declarations())
       if (decl.body) {
-        require(decl.domainInputs.empty() && decl.body->domainBindings.empty(),
+        require(decl.descriptorInputs.empty() &&
+                    decl.body->descriptorBindings.empty(),
                 "static domain survived in runtime signature");
         if (decl.name == "forward" || decl.name == "ignore") {
-          require(decl.domainArguments.size() == 1 && decl.inputs.size() == 2 &&
+          require(decl.descriptorArguments.size() == 1 &&
+                      decl.inputs.size() == 2 &&
                       decl.closureLayout.captures == std::vector<unsigned>{1},
                   "domain operand did not become an explicit helper input");
           ++forwarded;
@@ -1594,7 +1722,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P)->(r:Fr@P){return outer(xs,x);}ent
     bool found = false;
     for (const auto &decl : closed.declarations())
       if (decl.body && decl.scopedOrigin) {
-        require(decl.domainArguments.size() == 1 && decl.inputs.size() == 2,
+        require(decl.descriptorArguments.size() == 1 && decl.inputs.size() == 2,
                 "callback lost static captured domain");
         found = true;
       }
@@ -1628,9 +1756,9 @@ protocol Demo roles(P)(a:index@P,b:index@P,x:Fr@P)->(r:Fr@P){return ignore(range
             candidate.closureLayout.captures[1] =
                 candidate.closureLayout.captures[0];
           else {
-            auto shape = std::make_shared<DomainShape>(
-                *candidate.domainArguments.front());
-            candidate.domainArguments.front() = shape;
+            auto shape = std::make_shared<DescriptorShape>(
+                *candidate.descriptorArguments.front());
+            candidate.descriptorArguments.front() = shape;
             if (mutation == 0)
               std::swap(shape->nodes.back().operands[0],
                         shape->nodes.back().operands[1]);
@@ -1712,19 +1840,19 @@ fn example(xs:Matrix<Fr>,i:index)->bool {
     zkc::language::detail::Work work{limits};
     zkc::language::detail::Semantics types(declarations, project.assets(),
                                            work);
-    auto row = zkc::language::detail::closeDomain(types, declarations, body, 0,
-                                                  {}, {});
-    auto column = zkc::language::detail::closeDomain(types, declarations, body,
-                                                     1, {}, {});
+    auto row = zkc::language::detail::closeDescriptor(types, declarations, body,
+                                                      0, {}, {});
+    auto column = zkc::language::detail::closeDescriptor(types, declarations,
+                                                         body, 1, {}, {});
     require(row && column && row->shape->identity != column->shape->identity,
             types.diagnostic ? types.diagnostic->message
                              : "factory recipes collapsed");
-    require(zkc::language::detail::checkDomainClosure(types, declarations, body,
-                                                      0, {}, {}, *row) &&
-                zkc::language::detail::checkDomainClosure(
+    require(zkc::language::detail::checkDescriptorClosure(
+                types, declarations, body, 0, {}, {}, *row) &&
+                zkc::language::detail::checkDescriptorClosure(
                     types, declarations, body, 1, {}, {}, *column),
             "independent domain witness rejected recorded dispatch");
-    require(!zkc::language::detail::checkDomainClosure(
+    require(!zkc::language::detail::checkDescriptorClosure(
                 types, declarations, body, 0, {}, {}, *column),
             "independent domain witness accepted a different implementation");
   });

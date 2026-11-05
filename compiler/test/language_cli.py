@@ -37,14 +37,17 @@ with case('observation files cannot replace source or prior evidence'):
         attempted = commands.attempt([compiler, 'language-check', *inputs, f'--{option}=-'])
         assert attempted.returncode > 0 and not attempted.stdout
 
-with case('diagnostic source indices include both installed catalog modules'):
+with case('diagnostic source indices include installed catalog modules'):
     observation = OUT / 'source-indices.json'
     commands.run([compiler, 'language-check', *options, f'--diagnostics={observation}'])
     sources = json.loads(observation.read_text())['sources']
-    assert [s['module'] for s in sources] == ['algebra', 'transfer', 'zkc::prelude', 'zkc::records']
-    assert [s['origin'] for s in sources] == ['captured', 'captured', 'installation', 'installation']
-    assert [s['path'] for s in sources[-2:]] == ['<installation>/catalog/zkc::prelude',
-                                               '<installation>/catalog/zkc::records']
+    assert [s['module'] for s in sources] == ['algebra', 'transfer', 'zkc::prelude',
+                                            'zkc::records', 'zkc::transport']
+    assert [s['origin'] for s in sources] == ['captured', 'captured', 'installation',
+                                            'installation', 'installation']
+    assert [s['path'] for s in sources[-3:]] == ['<installation>/catalog/zkc::prelude',
+                                               '<installation>/catalog/zkc::records',
+                                               '<installation>/catalog/zkc::transport']
 
 def exact_source_work(observation):
     charged = observation['charged']

@@ -8,7 +8,7 @@ from entry import Entry, joint_execution
 from source_modules import core_packages, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules(*core_packages())
+MODULES = library_modules(*core_packages('zkc'))
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])

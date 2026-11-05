@@ -25,6 +25,7 @@ struct ScopedSummaryBinding {
   /// body. Retained instances extend its immutable lifetime explicitly.
   std::shared_ptr<const ScopedComputation> owner = {};
   std::shared_ptr<const BodySummaryStatics> lexical = {};
+  std::shared_ptr<const SelectedCallable> named = {};
 };
 struct BodySummary {
   // Math dependencies compose exactly at logical-value granularity. Local
@@ -58,13 +59,16 @@ public:
   BodySummaryCache &operator=(const BodySummaryCache &) = delete;
   /// Depth bounds summary traversal. Source depth counts enclosing helper and
   /// callback frames for lazy completion; zero selects the application depth.
+  /// A root from a temporary source-checking body must supply its immutable
+  /// computation owner, just as callback environments retain their owners.
   std::optional<BodySummaryApplication>
   apply(Semantics &, llvm::ArrayRef<Declaration>, const Body &,
         const Substitution &, llvm::ArrayRef<Dependencies>,
         llvm::ArrayRef<ScopedSummaryBinding>, unsigned = 1,
         llvm::ArrayRef<Dependencies> domains = {},
         std::shared_ptr<const BodySummaryStatics> lexical = {},
-        unsigned sourceDepth = 0);
+        unsigned sourceDepth = 0,
+        std::shared_ptr<const ScopedComputation> owner = {});
   /// Whether completed logical dependencies are independent of static dispatch.
   std::optional<bool> staticIndependent(Semantics &,
                                         llvm::ArrayRef<Declaration>,
@@ -102,9 +106,9 @@ summarizeScopedBinding(Semantics &, const Body &, unsigned,
 /// Resolve a domain's eager operand dependencies in the caller's value space.
 /// Unknown domain formals remain parameterized rather than appearing constant.
 std::optional<Dependencies>
-summarizeDomainBinding(Semantics &, const Body &, unsigned,
-                       llvm::ArrayRef<Dependencies> values,
-                       llvm::ArrayRef<Dependencies> environment = {},
-                       unsigned depth = 1, bool identityValues = false);
+summarizeDescriptorBinding(Semantics &, const Body &, unsigned,
+                           llvm::ArrayRef<Dependencies> values,
+                           llvm::ArrayRef<Dependencies> environment = {},
+                           unsigned depth = 1, bool identityValues = false);
 } // namespace zkc::language::detail
 #endif

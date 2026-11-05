@@ -740,10 +740,10 @@ order. A row has exactly:
 | `identity` | Unique installation identity, such as `record.unpack`, distinct from every frontend declaration and service method identity. |
 | `owner` | The installed module path that declares it, a `zkc::` path. |
 | `name` | Its identifier in that module. |
-| `kind` | `Math`, `Local` or `Interface`. |
+| `kind` | `Math`, `Local`, `Interface` or `Requirement`. |
 | `statics` | Ordered static parameters, each `{name, parameter}` with a `{kind, sort}` of `Domain`, `Type` or `Nat`. |
 | `inputs` | Ordered data inputs, each `{name, type}`. |
-| `output` | The result type, or null for an interface. |
+| `output` | The result type, or null for an interface or consumer requirement. |
 | `association` | Exactly one `{kind, target}`: a `primitive` or a `rule`. |
 | `prelude` | Boolean membership in the installed prelude scope. This does not grant fallback permission after a selected binding fails. |
 
@@ -751,7 +751,7 @@ A type is `{static}`, the index of a static parameter, optionally with an
 associated `member` of that parameter's sort from `members`, or
 `{constructor}`, a parameterless installed type constructor. A `primitive`
 association names a mathematical intrinsic for a `Math` declaration and an
-executable operation for a `Local` one; an interface has no primitive. A `rule`
+executable operation for a `Local` one; interfaces and consumer requirements have no primitive. A `rule`
 association names a `frontendRules` row, and the declaration's kind, static
 kinds, inputs and output must equal that row's shape. Identities, the owner
 and name pair, static and input names within a row, and prelude names are
@@ -761,6 +761,21 @@ A rule row has exactly `name`, `kind`, `statics` (parameter kinds), `inputs`
 (types) and `output`. Rule shapes are data: a validator checks a rule
 association against the declared shape, not against a fixed list of rules.
 The frontend implements the semantics of the rules it names and refuses others.
+
+`Requirement` rows have only static indices: `inputs` is empty and `output` is
+null. They install consumer demands, with no executable body, descriptor value,
+user implementation or general capability implication. The current
+`NativeMessage` rule has exactly one `Type` static index. Its export is
+`zkc::transport::NativeMessage`, identity `consumer.native-message`.
+The source checker resolves it through the declaration index, including normal
+imports and aliases. Its expansion and discharge are defined in the
+[consumer requirement contract](../language/definitions.md#installed-consumer-requirements).
+This extends the existing frontend kind vocabulary; all version-0 row fields
+and exact unknown-field validation remain unchanged. The Python, TableGen and
+Rust catalog readers validate and project the new kind independently. The
+independent Lean Python installed-catalog reader accepts its exact static shape
+without adding any formal interpretation or changing numerical profile rows.
+
 
 The installed modules are the distinct owners. The frontend reads each module's
 rows as its checker input: the module keeps an empty installation buffer at
@@ -800,17 +815,22 @@ constructor authority. Ordinary unrestricted unpack is pure; custody retirement,
 inspection and repacking require ordered execution and an outer `<-` in layout
 source. Custody-retiring restricted destructuring has the same ordered requirement.
 
-`frontendConstructors` lists the logical type heads the source language owns
+`frontendConstructors` lists the structural type heads the source language owns
 that are not catalog type constructors. A row has exactly `name` and `form`.
 The name is the head's spelling, an identifier that is unique and names no
-`types` row. The form is the logical meaning the frontend gives the head:
-`OracleHandle`, one logical oracle handle over an oracle kind, or
+`types` row. The form is the structural meaning the frontend gives the head:
+`OracleHandle`, one logical oracle handle over an oracle kind;
 `OracleHandleSequence`, a bounded ordered sequence of such handles with a
-static maximum. Exactly one row has each form; the installed rows spell them
-`oracle` and `oracle_sequence`. The rows own the spelling and the frontend owns
-each form's meaning: the frontend forms, prints, encodes in static terms and
-looks up the home of a logical handle only through its row, and a spelling that
-no row names is not a logical head. The interface schema kinds `oracle` and
+static maximum; or `FiniteDescriptor`, a static traversal descriptor with one
+ordinary Copy/Drop item parameter. Exactly one row has each form; the installed
+rows spell them `oracle`, `oracle_sequence` and `finite`. The Finite form is
+a descriptor category, not an ordinary `Type`, logical handle or runtime
+representation. An installed source alias may export it as `Finite<I>`;
+that alias's visible name grants no family authority. The rows own the spelling
+and the frontend owns each form's meaning: it forms, prints, encodes in static
+terms and looks up the home of these structural heads through their rows.
+A spelling that no row names grants no frontend-constructor authority.
+The interface schema kinds `oracle` and
 `oracle_sequence` belong to the [Entry format](entry.md) and do not follow the
 rows. The installation identity frames each row's name and form.
 

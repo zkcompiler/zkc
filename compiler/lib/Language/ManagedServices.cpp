@@ -80,11 +80,12 @@ bool checkServiceInvocation(Semantics &types,
       query->service.index >= body.services.size() ||
       binding.arguments.size() != 1 + serviceStaticCount(row->signature) ||
       !binding.operands.empty() || !binding.argumentOrder.empty() ||
-      !binding.scopedArguments.empty() || !binding.domainArguments.empty() ||
-      binding.notation || binding.origin || !binding.symbol.empty() ||
-      !binding.family.empty() || binding.filteredReduction ||
-      binding.installedSignature || binding.intrinsicSource ||
-      binding.lexicalOwner || !binding.scopedSource || op.results.size() != 1 ||
+      !binding.scopedArguments.empty() ||
+      !binding.descriptorArguments.empty() || binding.notation ||
+      binding.origin || !binding.symbol.empty() || !binding.family.empty() ||
+      binding.filteredReduction || binding.installedSignature ||
+      binding.intrinsicSource || binding.lexicalOwner ||
+      !binding.scopedSource || op.results.size() != 1 ||
       op.results.front().index >= body.values.size())
     return refuse();
   const auto &port = body.services[query->service.index];

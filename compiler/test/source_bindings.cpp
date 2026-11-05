@@ -287,6 +287,59 @@ int main() {
     }
     require(matched, "call lookup absent");
   });
+  cases.run("data, service, scoped and domain aliases retain distinct coverage",
+            [] {
+              auto project = check(R"(
+      domain F=field("koala-bear");
+      domain fn range(lo:index,hi:index)->domain<index>=domain("range");
+      math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,
+        step:math fn(S,item:I)->S where item_from(item,rows))->S=finite("math.fold");
+      math fn visit(rows:domain<index>,accepts:math fn(index)->bool)->bool{
+        let alias=rows;
+        return fold(alias,true,fn(acc,i)=>acc&&accepts(i));
+      }
+      protocol Run roles(V)(coins:Random<F>@V,n:index@V)->(result:bool@V){
+        let rng=coins;
+        let sample=rng.draw();
+        let rows=range(0,n);
+        let result=visit(rows,fn(i)=>true);
+        return result;
+      }
+    )");
+              if (auto error = checkScopedElaboration(project))
+                throw std::runtime_error(toString(std::move(error)));
+              take(inspectSourceBindings(project));
+            });
+  cases.run("binding coverage shares bounded source work", [] {
+    auto measure = [](unsigned count) {
+      std::string source = "module written;fn Run(value:index)->index{";
+      for (unsigned i = 0; i < count; ++i)
+        source += "let alias" + std::to_string(i) + "=" +
+                  (i ? "alias" + std::to_string(i - 1) : "value") + ";";
+      source += "return alias" + std::to_string(count - 1) + ";}";
+      auto captured = take(capture({{"written", source, "bindings.zkc"}}));
+      auto project = take(analyze(captured).checkedProject());
+      std::vector<SourceWorkBudget> observations;
+      if (auto error = checkScopedElaboration(project, {}, &observations))
+        throw std::runtime_error(toString(std::move(error)));
+      require(observations.size() == 1 &&
+                  observations.front().ledger.total ==
+                      observations.front().ledger.used(
+                          SourceWorkPhase::ScopedElaboration),
+              "binding coverage escaped the shared ledger");
+      Limits limits;
+      limits.work = project.checkedWork();
+      take(analyze(captured, limits).checkedProject());
+      --limits.work;
+      refuses(analyze(captured, limits).checkedProject(), "source.limit");
+      outs() << count << " bindings: analysis " << project.checkedWork()
+             << ", replay " << observations.front().ledger.total << '\n';
+      return observations.front().ledger.total;
+    };
+    auto small = measure(64), large = measure(128);
+    require(large > small && large < 3 * small,
+            "binding coverage repeated sibling work");
+  });
   cases.run("inspection is immutable and bounded before publication", [] {
     auto project = check("fn f(x:bool)->bool{return x;}");
     auto bytes = take(inspectSourceBindings(project));

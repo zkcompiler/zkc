@@ -5,8 +5,12 @@ namespace zkc::language::detail {
 std::optional<RegionInputs>
 queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
                 const Expression &control,
-                const FreePlaceEnvironment &environment) {
+                const FreePlaceEnvironment &environment, bool includeHead) {
   RegionInputs result;
+  auto data = [&](BindingId binding) {
+    return environment.dataBinding ? environment.dataBinding(binding)
+                                   : environment.data.count(binding) != 0;
+  };
   // A free input is a read before whole assignment on some continuing path.
   // Merely mentioning a restored binding must not capture its old moved value.
   struct Flow {
@@ -29,7 +33,7 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
           if (!visit(s.expression, depth + 1, flow))
             return false;
           if (!flow.stopped && s.kind == Statement::Kind::Assign &&
-              environment.data.count(*s.pattern.binding)) {
+              data(*s.pattern.binding)) {
             result.writes.insert(*s.pattern.binding);
             flow.assigned.insert(*s.pattern.binding);
           }
@@ -75,7 +79,7 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
           result.services.insert(*name.binding);
           return true;
         }
-        if (environment.data.count(*name.binding)) {
+        if (data(*name.binding)) {
           auto place = environment.place(id);
           if (!place && types.diagnostic)
             return false;
@@ -145,11 +149,16 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
     }
     return true;
   };
-  for (auto id : control.regions) {
+  if (includeHead) {
     Flow flow;
-    if (!region(id, 1, flow))
+    if (!visit(uint32_t(&control - syntax.expressions.data()), 1, flow))
       return {};
-  }
+  } else
+    for (auto id : control.regions) {
+      Flow flow;
+      if (!region(id, 1, flow))
+        return {};
+    }
   // A whole-place capture subsumes its descendants. The sorted antichain avoids
   // manufacturing duplicate moves for overlapping source projections.
   std::set<FreePlace> minimal;

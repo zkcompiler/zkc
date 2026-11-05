@@ -394,6 +394,40 @@
           }
         }
       ]
+    },
+    {
+      "name": "a renamed finite descriptor constructor retains its installed form",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "set",
+          "where": {
+            "name": "finite"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "traversal"
+        }
+      ]
+    },
+    {
+      "name": "a renamed consumer requirement keeps its installed identity",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "NativePayload"
+        }
+      ]
     }
   ],
   "refused": [
@@ -6310,6 +6344,143 @@
         "generator": "invalid service method",
         "native": "invalid or duplicate service method",
         "rust": "invalid or duplicate service method"
+      }
+    },
+    {
+      "name": "a finite descriptor form without an installed row",
+      "rule": "installed finite descriptor authority",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "delete",
+          "where": {
+            "name": "finite"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "missing frontend constructor form",
+        "native": "missing frontend constructor form",
+        "rust": "missing frontend constructor form"
+      }
+    },
+    {
+      "name": "a duplicate finite descriptor form",
+      "rule": "installed finite descriptor authority",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "insert",
+          "value": {
+            "name": "another_finite",
+            "form": "FiniteDescriptor"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend constructor form",
+        "native": "duplicate frontend constructor form",
+        "rust": "duplicate frontend constructor form"
+      }
+    },
+    {
+      "name": "consumer requirements cannot have executable signatures",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "kind"
+          ],
+          "value": "Math"
+        }
+      ],
+      "diagnostics": {
+        "generator": "source declaration kind and signature disagree",
+        "native": "source declaration kind and signature disagree",
+        "rust": "source declaration kind and signature disagree"
+      }
+    },
+    {
+      "name": "consumer requirements cannot use primitive authority",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "association"
+          ],
+          "value": {
+            "kind": "primitive",
+            "target": "bool.and"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "consumer requirement indices match their registered rule",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "statics"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
+      }
+    },
+    {
+      "name": "consumer requirement family cannot select a record helper",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "association"
+          ],
+          "value": {
+            "kind": "rule",
+            "target": "RecordUnpack"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
       }
     }
   ]

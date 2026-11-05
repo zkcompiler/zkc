@@ -67,6 +67,13 @@ pub struct Checked {
     pub entries: Vec<Entry>,
     /// Compiler-owned diagnostics only; these entries do not authorize claims.
     pub source_claim_inventory: Vec<serde_json::Value>,
+    /// Raw pending source intent, not typed formal terms or assurance receipts.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_pending_assurance",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub assurance: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,6 +84,90 @@ pub struct Checked {
     pub notations: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api: Option<serde_json::Value>,
+}
+
+fn deserialize_pending_assurance<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+
+    fn fields(value: &Value, names: &[&str]) -> bool {
+        value.as_object().is_some_and(|object| {
+            object.len() == names.len() && names.iter().all(|name| object.contains_key(*name))
+        })
+    }
+    fn nullable_string(value: &Value) -> bool {
+        value.is_null() || value.is_string()
+    }
+    fn unsigned(value: &Value) -> bool {
+        value.as_u64().is_some_and(|n| u32::try_from(n).is_ok())
+    }
+    fn span(value: &Value) -> bool {
+        unsigned(&value["begin"])
+            && unsigned(&value["end"])
+            && value["begin"].as_u64() <= value["end"].as_u64()
+    }
+    fn obligation(value: &Value) -> bool {
+        fields(
+            value,
+            &[
+                "role",
+                "label",
+                "ordinal",
+                "begin",
+                "end",
+                "companion",
+                "status",
+                "reason",
+            ],
+        ) && matches!(value["role"].as_str(), Some("postcondition" | "request"))
+            && nullable_string(&value["label"])
+            && unsigned(&value["ordinal"])
+            && span(value)
+            && nullable_string(&value["companion"])
+            && value["status"] == "open"
+            && value["reason"] == "formal elaboration pending"
+    }
+    fn specification(value: &Value) -> bool {
+        fields(
+            value,
+            &[
+                "module",
+                "protocol",
+                "name",
+                "owner",
+                "public",
+                "source",
+                "begin",
+                "end",
+                "obligations",
+            ],
+        ) && value["module"].is_string()
+            && value["protocol"].is_string()
+            && nullable_string(&value["name"])
+            && value["owner"].is_boolean()
+            && value["public"].is_boolean()
+            && unsigned(&value["source"])
+            && span(value)
+            && value["obligations"]
+                .as_array()
+                .is_some_and(|rows| rows.iter().all(obligation))
+    }
+
+    let value = Value::deserialize(deserializer)?;
+    if !fields(&value, &["status", "outcome", "specifications"])
+        || value["outcome"] != "unresolved"
+        || !value["specifications"].as_array().is_some_and(|rows| {
+            value["status"] == if rows.is_empty() { "no-claim" } else { "open" }
+                && rows.iter().all(specification)
+        })
+    {
+        return Err(serde::de::Error::custom("invalid pending source assurance"));
+    }
+    Ok(Some(value))
 }
 #[derive(Debug)]
 pub struct Error {
@@ -412,6 +503,8 @@ impl Compiler {
             || report.get("notations").is_some() != options.notations.is_some()
             || report.get("api").is_some() != options.api
             || (options.api && report["api"]["format"] != "zkc.source-api/0")
+            || report.get("assurance").is_some()
+                != (project.source_format() == super::SourceFormat::ZkcLayout)
         {
             return Err("source-check-format".into());
         }
@@ -718,6 +811,236 @@ mod tests {
         let mut unknown = baseline;
         unknown["unrecognized"] = json!([]);
         assert!(serde_json::from_value::<Checked>(unknown).is_err());
+    }
+
+    fn pending_assurance() -> Value {
+        json!({
+            "status": "open", "outcome": "unresolved", "specifications": [{
+                "module": "example", "protocol": "example::Run", "name": null,
+                "owner": true, "public": false, "source": 0, "begin": 10, "end": 200,
+                "obligations": [{
+                    "role": "postcondition", "label": null, "ordinal": 0,
+                    "begin": 20, "end": 30, "companion": null,
+                    "status": "open", "reason": "formal elaboration pending"
+                }, {
+                    "role": "request", "label": "sound", "ordinal": 0,
+                    "begin": 40, "end": 80,
+                    "companion": "[\"zkc.companion/0\",\"example::Run\"]",
+                    "status": "open", "reason": "formal elaboration pending"
+                }]
+            }]
+        })
+    }
+
+    fn checked_record(assurance: Value) -> Value {
+        json!({
+            "capture": "capture", "installation": "installation", "entries": [],
+            "source_claim_inventory": [], "assurance": assurance
+        })
+    }
+
+    fn malformed_assurances() -> Vec<Value> {
+        let baseline = pending_assurance();
+        let mut invalid = vec![Value::Null, json!([]), json!("open")];
+        // Every field is required, including explicitly nullable fields.
+        for path in ["", "/specifications/0", "/specifications/0/obligations/0"] {
+            let object = baseline.pointer(path).unwrap().as_object().unwrap();
+            for key in object.keys() {
+                let mut missing = baseline.clone();
+                missing
+                    .pointer_mut(path)
+                    .unwrap()
+                    .as_object_mut()
+                    .unwrap()
+                    .remove(key);
+                invalid.push(missing);
+                if !object[key].is_null() {
+                    let mut null = baseline.clone();
+                    null.pointer_mut(path).unwrap()[key] = Value::Null;
+                    invalid.push(null);
+                }
+            }
+            let mut unknown = baseline.clone();
+            unknown.pointer_mut(path).unwrap()["unknown"] = json!(true);
+            invalid.push(unknown);
+        }
+        for (path, values) in [
+            (
+                "/status",
+                vec![
+                    json!("no-claim"),
+                    json!("certified"),
+                    json!("incomplete"),
+                    json!("proved"),
+                ],
+            ),
+            ("/outcome", vec![json!("established"), json!("open")]),
+            ("/specifications", vec![json!([]), json!({})]),
+            ("/specifications/0/name", vec![json!(false)]),
+            ("/specifications/0/module", vec![json!(0)]),
+            ("/specifications/0/protocol", vec![json!([])]),
+            ("/specifications/0/owner", vec![json!("true")]),
+            ("/specifications/0/public", vec![json!(0)]),
+            ("/specifications/0/obligations", vec![json!({})]),
+            (
+                "/specifications/0/obligations/0/role",
+                vec![json!("law"), json!("ensures")],
+            ),
+            ("/specifications/0/obligations/0/label", vec![json!(0)]),
+            ("/specifications/0/obligations/0/companion", vec![json!({})]),
+            (
+                "/specifications/0/obligations/0/status",
+                vec![json!("proved"), json!("no-claim")],
+            ),
+            (
+                "/specifications/0/obligations/0/reason",
+                vec![json!("proved")],
+            ),
+            ("/specifications/0/begin", vec![json!(201)]),
+            ("/specifications/0/obligations/0/begin", vec![json!(31)]),
+        ] {
+            for value in values {
+                let mut changed = baseline.clone();
+                *changed.pointer_mut(path).unwrap() = value;
+                invalid.push(changed);
+            }
+        }
+        for path in [
+            "/specifications/0/source",
+            "/specifications/0/begin",
+            "/specifications/0/end",
+            "/specifications/0/obligations/0/ordinal",
+            "/specifications/0/obligations/0/begin",
+            "/specifications/0/obligations/0/end",
+        ] {
+            for value in [json!(-1), json!(4294967296u64), json!(1.5), json!("1")] {
+                let mut changed = baseline.clone();
+                *changed.pointer_mut(path).unwrap() = value;
+                invalid.push(changed);
+            }
+        }
+        invalid
+    }
+
+    #[test]
+    fn pending_source_assurance_preserves_exact_diagnostic_values() {
+        let mut audit = pending_assurance();
+        let spec = &mut audit["specifications"][0];
+        spec["name"] = json!("Audit");
+        spec["owner"] = json!(false);
+        spec["public"] = json!(true);
+        spec["source"] = json!(u32::MAX);
+        spec["begin"] = json!(0);
+        spec["end"] = json!(u32::MAX);
+        spec["obligations"][0]["label"] = json!("named");
+        spec["obligations"][0]["ordinal"] = json!(u32::MAX);
+        spec["obligations"][0]["begin"] = json!(0);
+        spec["obligations"][0]["end"] = json!(u32::MAX);
+        spec["obligations"][1]["label"] = Value::Null;
+        let mut empty_spec = pending_assurance();
+        empty_spec["specifications"][0]["obligations"] = json!([]);
+        for assurance in [
+            json!({"status": "no-claim", "outcome": "unresolved", "specifications": []}),
+            pending_assurance(),
+            audit,
+            empty_spec,
+        ] {
+            let baseline = checked_record(assurance);
+            let checked: Checked = serde_json::from_value(baseline.clone()).unwrap();
+            assert_eq!(serde_json::to_value(checked).unwrap(), baseline);
+        }
+    }
+
+    #[test]
+    fn pending_source_assurance_refuses_missing_unknown_and_weakened_records() {
+        for assurance in malformed_assurances() {
+            assert!(
+                serde_json::from_value::<Checked>(checked_record(assurance.clone())).is_err(),
+                "{assurance}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn source_check_validates_assurance_for_the_capture_format_in_both_scopes() {
+        use crate::project::{CheckOptions, Compiler, Project, SourceFormat};
+        use std::{collections::BTreeMap, os::unix::fs::PermissionsExt};
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("compiler");
+        let response = directory.path().join("response.json");
+        std::fs::write(&path, format!("#!/bin/sh\ncat '{}'\n", response.display())).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let compiler = Compiler::new(path.to_str().unwrap()).unwrap();
+        let source = directory.path().join("main.zkc");
+        std::fs::write(&source, "pub def identity(x: bool) -> bool:\n    x\n").unwrap();
+        for format in [SourceFormat::Zkc, SourceFormat::ZkcLayout] {
+            let project = Project::explicit(
+                format,
+                BTreeMap::from([("example".into(), source.to_str().unwrap().into())]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            for entry in [None, Some("example::Run")] {
+                let mut baseline = checked_record(pending_assurance());
+                if format == SourceFormat::Zkc {
+                    baseline.as_object_mut().unwrap().remove("assurance");
+                }
+                baseline["format"] = json!("zkc.source-check/0");
+                baseline["status"] = json!("checked");
+                baseline["phase"] = json!("complete");
+                baseline["scope"] = json!(if entry.is_some() {
+                    "entry"
+                } else {
+                    "definitions"
+                });
+                if let Some(entry) = entry {
+                    baseline["entries"] = json!([{"name": entry, "kind": "function"}]);
+                    baseline["entry"] = json!(entry);
+                    baseline["original"] = json!("original");
+                }
+                std::fs::write(&response, baseline.to_string()).unwrap();
+                let checked = compiler
+                    .check(&project, entry, CheckOptions::default())
+                    .unwrap();
+                assert_eq!(checked.assurance.as_ref(), baseline.get("assurance"));
+
+                let mut invalid = Vec::new();
+                let mut presence = baseline.clone();
+                if format == SourceFormat::ZkcLayout {
+                    presence.as_object_mut().unwrap().remove("assurance");
+                    invalid.extend(malformed_assurances().into_iter().map(|assurance| {
+                        let mut report = baseline.clone();
+                        report["assurance"] = assurance;
+                        report
+                    }));
+                } else {
+                    presence["assurance"] = pending_assurance();
+                }
+                invalid.push(presence);
+                let mut missing_claims = baseline.clone();
+                missing_claims
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("source_claim_inventory");
+                invalid.push(missing_claims);
+                let mut unknown = baseline.clone();
+                unknown["unknown"] = json!(true);
+                invalid.push(unknown);
+                for report in invalid {
+                    std::fs::write(&response, report.to_string()).unwrap();
+                    assert_eq!(
+                        compiler
+                            .check(&project, entry, CheckOptions::default())
+                            .unwrap_err()
+                            .code,
+                        "source-check-format",
+                        "{report}"
+                    );
+                }
+            }
+        }
     }
 
     #[cfg(all(feature = "evm", target_os = "linux"))]

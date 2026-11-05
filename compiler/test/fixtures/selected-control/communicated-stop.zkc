@@ -1,0 +1,11 @@
+protocol Deliver roles(A,B)(flag: bool @A) -> bool @(A,B):
+    received <- send flag from A to B
+    guard @B received
+    return @(A = flag, B = received)
+pub protocol Run roles(P,V)(flag: bool @P) -> bool @(P,V):
+    common <- Deliver(flag) @(P,V)
+    result = if common:
+        true
+    else:
+        false
+    return result

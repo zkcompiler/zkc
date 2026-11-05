@@ -6,16 +6,19 @@ namespace zkc::language::detail {
 bool checkFiniteFormation(Semantics &types, const FiniteComputation &finite,
                           const Type &result, bool total, Span span,
                           const FiniteFormationEvidence &evidence) {
+  if (!finite.domain || finite.domain->result >= finite.domain->nodes.size())
+    return types.fail("source.descriptor",
+                      "finite consumer requires the Finite family", span);
   const auto &shape = *finite.domain;
   facts::Work work([&](uint64_t amount) {
     return !types.diagnostic && types.charge(amount, span);
   });
-  using Kind = DomainBinding::Kind;
+  using Kind = DescriptorBinding::Kind;
   auto node = [&](facts::DomainRef id) {
     return cardinalityNode(shape.nodes[id]);
   };
   auto child = [&](facts::DomainRef id, size_t index) -> facts::DomainRef {
-    return shape.nodes[id].children[index];
+    return shape.nodes[id].children[index].node;
   };
   auto exhausted = [&] {
     if (types.diagnostic && types.diagnostic->code == "source.limit")
@@ -80,14 +83,26 @@ bool checkFiniteFormation(Semantics &types, const FiniteComputation &finite,
   // Check every constructor's admission, even when the result count is zero
   // or the selected result does not reach an earlier constructor.
   for (const auto &source : shape.nodes) {
+    if (!finiteDescriptorItem(source.contract))
+      return types.fail("source.descriptor",
+                        "finite constructor family differs", source.span);
     if (!work.charge(source.operands.size() + source.children.size() + 1))
       return established(facts::Status::Capacity, "finite formation work");
+    for (const auto &edge : source.children) {
+      if (!types.chargeContract(edge.contract, source.span))
+        return false;
+      if (edge.node >= shape.nodes.size() ||
+          edge.contract != shape.nodes[edge.node].contract)
+        return types.fail("source.descriptor", "finite child contract differs",
+                          source.span);
+    }
     if (!total)
       continue;
     if (source.kind == Kind::Zip)
       for (auto selected : ArrayRef(source.children).drop_front())
-        if (!established(cardinality.equal(source.children.front(), selected),
-                         "total zip requires equal cardinality evidence"))
+        if (!established(
+                cardinality.equal(source.children.front().node, selected.node),
+                "total zip requires equal cardinality evidence"))
           return false;
     if (source.kind == Kind::MatrixRow || source.kind == Kind::MatrixColumn)
       if (!evidence.bound(source.operands[1], source.operands[0],
