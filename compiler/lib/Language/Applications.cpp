@@ -40,6 +40,11 @@ BodyChecker::application(const Expression &expr) {
   std::optional<ValueId> receiver;
   const auto &arguments = inference->arguments.at(id);
   auto substitution = checker.types.substitution(callee, arguments);
+  if (target.module && callee.parent)
+    substitution.emplace(
+        "self:" +
+            checker.output.declarations[callee.parent->index].qualifiedName,
+        *target.module);
   if (method) {
     const auto &port = callee.inputs.front();
     auto type = checker.types.substitute(port.type, substitution, expr.span);

@@ -1311,6 +1311,35 @@ one property, one provider and one class of bounded executions.
   translates by drawing the tape and running the simulator, transports the
   budget `q` to `cost q` and loses `loss q (expansion b)`.
 
+**Adaptive query-tree grouping.** `QueryTree.Node` includes depth and the full
+prefix of observable replies. `path_product` identifies the decoded path law
+with independent draws; it does not identify the path with the complete tree.
+`QueryTreeSimulation` instantiates the existing `Provider.Simulator`: first
+access to any constituent coordinate allocates its root's complete answer
+table, and later accesses reuse it. This includes suffix-first adversarial
+queries and off-path coordinates. The exact theorem permits arbitrary roots,
+finite coordinates and sampleable finite raw replies. A finite restriction
+covers all branches of the supplied adaptive program; it does not require a
+uniform distribution on an infinite set of histories.
+
+`adaptive_interleaved_logged_exact` preserves the result and full ordered
+primitive log, including repeats, with private sampling interleaved anywhere
+in the computation. `privatePrograms_stateful` moves private choices to an
+outer mixture for every stochastic stateful interpreter, preserving the final
+state. Private draws at equal parameters remain independent occurrences.
+`privatePrograms_queryBound` transports arbitrary structural budgets to every
+program in this mixture's support. `privatePrograms_translate_budget` then
+bounds macro queries by the sum of primitive family budgets, without dividing
+by path length. This is an information-theoretic translation; no efficient
+complete-tree construction is asserted.
+
+A source adapter must supply the two parser laws of `KeyEncoding`, actual
+raw-answer decoding, the complete request and delivery history, and the
+first-any-node checkpoint. The verifier must make its own logical macro
+access even when the adversary has already allocated the table. The generic
+simulation does not establish these source facts or an application certificate.
+A whole-path probability is not a conditional bound after exposing a prefix.
+
 **Hash-chain suites.** `ZkcSecurity.HashChain` instantiates this type for the
 [native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites),
 with the byte hash read as a random oracle whose digests `S` are the states
@@ -1504,6 +1533,131 @@ committed tables by the typed certificate of its ideal reading.
   (`run_queryBound`).
 - **FRI.** [Committed words](fri-security.md#committed-words) applies the theorem
   to the FRI verifier.
+
+### Shared batch authentication
+
+`ZkcSecurity.Commitment.BatchOpening` relates a recorded binary frontier to its
+parents and then to one root. Active siblings share a recorded compression;
+a missing sibling consumes exactly one boundary digest. Each layer preserves
+the remaining proof suffix. The root rule fixes the depth, root index and empty
+suffix. `Reduction.proof_length` derives the exact boundary demand from the
+verifier's frontier, independently of hash assumptions.
+
+`Reduction.paths` recovers a `LeafHashing.Climbs` witness for every active leaf
+from the same log. It does not rehash each scalar path. `RowsRecorded` preserves
+the complete ordered request and whole-row lists, including repeated positions.
+`batch_agrees_or_collision` proves that the existing extractor returns that
+entire row list or two different complete hash queries in the log have the same
+answer. The hash is not assumed injective; a quantitative collision reduction
+belongs to the selected provider model.
+
+The relation is library mathematics, not a second verifier. A source/native
+connection must derive its witnesses from the actual accepted batch execution,
+including sorted unique frontier construction, duplicate consistency, actual
+height and width, codecs, shape, complete proof consumption and all refusal
+outcomes. The derived `index < 2^depth` is not the stronger actual-height check
+for non-power-of-two tables. The theorem neither binds shape through an
+untagged root nor identifies the pre-challenge extraction checkpoint. Logical
+query coverage, source association, shared provider history and application bad
+event coverage remain separate required premises of a realized security claim.
+
+`BatchVerification.verifyFramed` is an independent formal interpretation of
+the binary, single-table, cap-zero pruned walk. It checks actual-height bounds,
+row framing, unconditional duplicate-row agreement, verifier-derived boundary
+count, row codecs, and complete proof consumption. Invalid requests stop with
+`refused`; malformed authentication returns false; decode reservation failure
+stops with `exhausted`. Shared parents issue one hash call each. The successful
+execution theorem derives `Reduction` and `RowsRecorded` from its actual hash
+history, together with the exact unique-leaf and grouped-compression count.
+These counts are at the `LeafHashing` leaf-computation and node-compression
+interface. A Poseidon sponge leaf can expand into several shared permutation
+calls; the leaf and node primitive input ranges need not be disjoint.
+
+`verify_agrees_or_collision` applies the existing extractor to that same log.
+Completeness is currently relative to an answer-consistent recorded reduction;
+it is not yet the honest native commit/open theorem. The operation is not a
+proof of Rust execution. A realization must connect the selected decoder and
+row framing, native lead-path restoration, primitive hashing, logical reads,
+and the pre-challenge extraction checkpoint. It must also provide the provider
+loss and application event implication required above.
+
+`DecoderConsistent decode log` weakens the sufficient record premise to the
+role actually decoded. Equal labels for two queries recognized by `decode`
+must produce the same decoded value. `batch_agrees_of_decoderConsistent` uses
+one law for node children and one for leaf rows. Cross-role aliases are allowed;
+the first-match extractor and the complete ordered batch are unchanged. Global
+response injectivity implies both laws and still supplies the existing
+`batch_agrees` theorem. These deterministic conditions carry no probability
+bound by themselves.
+
+`BatchVerification.verify_agrees_in_record_of_decoderConsistent` derives the
+same agreement from the actual successful batch operation when its query log
+is included in that record. `verify_agrees_at_checkpoint` uses the existing
+`GoodFrom` invariant, exact transcript-key membership and committed-root bound
+to move agreement to the prefix before that key's first query. Log inclusion
+alone proves neither chronological source association nor checkpoint stability.
+
+`verify_complete` proves completeness of the entire decoded operation from an
+answer-consistent tree reduction, public shape and allocation bounds, and
+valid selected rows. The reduction determines the exact proof length.
+`verify_table_complete` additionally discharges duplicate consistency and
+representative selection for rows read from one fixed table, preserving the
+original request order. An independent tree witness exercises this theorem;
+acceptance is not used to manufacture its premise.
+
+
+### Fixed extraction from a shared permutation record
+
+`Commitment.PoseidonRows` defines a straight-line extractor from the full shared
+permutation record. The request fixes the positive flattened row width, actual
+height, depth and zero completion. Extraction normalizes repeated oriented pairs
+in first-exposure order, descends the recorded Merkle path, and recovers the
+overwrite sponge backwards through capacity links. It uses forward-born pairs;
+inverse-born pairs retain their original direction even after a forward cache hit.
+The last partial block checks the retained rate suffix. Exact block boundaries
+introduce no extra padding call. Leaf and node inputs may alias.
+
+`SpongeTrace`, `NodeClimb` and the existing `BatchOpening.Reduction` describe
+concrete recorded operations. Their generic theorems derive extraction agreement
+for ordered scalar/batch readings, including duplicate positions. The extractor
+does not choose a witness or use a supplied successful decoder. Request height
+excludes padded leaves independently of Merkle depth.
+
+`PoseidonRows.Monitored.handler` constructs the history through one two-sided
+ideal lazy permutation. Every primitive call is recorded, including cache hits,
+inverse queries, prequeries and calls in computations that later fail. Successful
+allocation attempts create physical markers and retain root occurrences, including
+duplicates. Over-budget allocation returns false without silently registering
+roots. Extraction uses the first marker for its key.
+
+The support invariant proves that the absence of the charged bad event implies
+`GoodHistory` for this actual history. Forward queries test sampled output
+coordinates; inverse queries test sampled input coordinates. The inverse query's
+adversary-chosen output is not treated as random. Root and capacity protection
+prevent later exposure from changing an earlier checkpoint extraction.
+
+`Monitored.extraction_disagreement_le` bounds disagreement for any concretely
+recorded scalar or ordered batch operation, including zero completion. With
+`d = |Fin rate → F|`, total primitive budget `Q`, and enforced root-occurrence
+budget `b`, its bound is
+
+```text
+min(1, d * (5 * (Q * (Q - 1) / 2) + (b + 4) * Q) / (d^2 - Q)), if Q < d^2;
+1 otherwise.
+```
+
+The triangular expression is natural-number arithmetic before casting to
+`ENNReal`; the final fraction is `ENNReal` division. Allocation attempts do not
+consume the primitive budget. Private randomization may select a reply-adaptive
+program with the same all-path budget. The theorem reuses VCVio's potential
+composition theorem and the shared lazy sampler. It is not an eager-permutation
+equivalence theorem.
+
+A source realization must derive the recorded-operation witnesses and align the
+request, allocation identity and primitive budget with the actual accepted
+execution. This library theorem is relative to the stated ideal primitive access
+model. It does not assert a result for unrestricted local computation of the
+public fixed Poseidon2 permutation or a native Rust refinement.
 
 ## Stage relations
 

@@ -26,6 +26,14 @@ class Writer {
   json::Value write(const FormalReference &form, source::Span span) {
     return emit("formal.reference", span, json::Object{{"name", form.name}});
   }
+  json::Value write(const FormalSite &form, source::Span span) {
+    return emit("formal.site", span,
+                json::Object{{"value", edge("value", form.path)}});
+  }
+  json::Value write(const FormalSecurity &form, source::Span span) {
+    return emit("formal.security", span,
+                json::Object{{"requests", edges("requests", form.requests)}});
+  }
   json::Value write(const FormalLiteral &form, source::Span span) {
     StringRef kind;
     switch (form.kind) {
@@ -224,10 +232,12 @@ class Writer {
       kind = "formal.law";
       break;
     }
-    return emit(kind, span,
-                json::Object{{"label", edge("label", form.label)},
-                             {"value", edge("value", form.value)},
-                             {"residual", edge("residual", form.residual)}});
+    json::Object fields{{"label", edge("label", form.label)},
+                        {"value", edge("value", form.value)},
+                        {"residual", edge("residual", form.residual)}};
+    if (form.kind == FormalClause::Kind::Target)
+      fields["decision"] = edge("decision", form.decision);
+    return emit(kind, span, std::move(fields));
   }
   json::Value write(const FormalImport &form, source::Span span) {
     return emit("formal.import", span,

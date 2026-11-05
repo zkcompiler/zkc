@@ -311,6 +311,39 @@ quartic Keccak scheme and hash-chain transcript; select it with
 exact native/browser proof bytes, and the same negative controls as Schnorr and
 FRI. It is an engine/codec check, not a full STARK or security result.
 
+`--case quartic-keccak-fri` explicitly generates a separate, bounded library
+consumer for this manual roundtrip. It reuses
+`common/tests/evm/fixtures/fri_keccak.zkc` verbatim, including
+`ScalarLowDegree<Direct<F>,5,0,3,8>` and the quartic
+`hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0` transcript.
+Its closed measurement profile selects individual leaves, natural table order,
+after-final-draw ordering and atomic-block authentication with
+`rows.merkle-keccak256.koala-bear.ext4-binomial3/0`. The generator uses the
+independent integer `CosetReference` to evaluate a degree-seven polynomial with
+eight quartic coefficients at 32 natural-order points, with shift `(3,1,0,0)`, three rounds
+and eight queries, matching `fri_closure.py`.
+
+```sh
+python3 common/benchmarks/run.py browser-fixtures \
+  --compiler /absolute/path/to/zkc-compile --case quartic-keccak-fri \
+  --output build/experiments/quartic-keccak-fri
+ZKC_PLAYWRIGHT=/absolute/path/to/playwright/index.mjs \
+  ZKC_BROWSER_FIXTURES=quartic-keccak-fri ZKC_WEB_VARIANT=portable \
+  node common/tests/browser/roundtrip.mjs /absolute/path/to/web \
+  build/experiments/quartic-keccak-fri/cases /absolute/path/to/memory
+```
+
+This selection leaves the default fixture panel and ordinary benchmark family
+policies unchanged. The manual harness checks all current full controls,
+three repeated proof/verification calls, exact native/browser proof bytes in
+both directions, and returned verifier query values against the independent
+word. Repeated verifier outputs must agree. These small structural parameters
+are not a security profile; the check establishes neither proximity/soundness,
+formal correspondence, complete STARK coverage nor EVM deployment. Use the
+matching prebuilt engine and record exact binaries, Wasm, browser, package,
+source and option identities. The timing boundaries above still apply;
+concurrent development runs are illustrative evidence only.
+
 Worker envelope and trap-reporting controls also run without Wasm or a browser:
 
 ```sh

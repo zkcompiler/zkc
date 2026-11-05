@@ -210,8 +210,8 @@ public:
   /// Resolve labelled application paths against actual query/service
   /// identities. Returns the canonical source-occurrence order of the supplied
   /// selectors.
-  std::optional<std::vector<unsigned>> proofGateOrder(const Declaration &,
-                                                      const ProofEntry &);
+  std::optional<std::vector<unsigned>>
+  proofGateOrder(const Declaration &, const ProofEntry &, llvm::ArrayRef<Type>);
   bool relationData(const Declaration &, const Type &, Span, unsigned = 0);
   bool fail(llvm::StringRef, const llvm::Twine &, Span, std::vector<Span> = {});
   bool accept(llvm::Error, std::optional<Span> fallback = {});

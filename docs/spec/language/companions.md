@@ -76,7 +76,16 @@ Every requested property contributes a request obligation. Neither requires an
 explicit clause label or membership in another security bundle. `requires`
 contributes a premise of its owner's obligations; `target` and `reduces` supply
 relation data interpreted by their registered request families. They do not
-silently become a claim of security on their own.
+silently become a claim of security on their own. A target's explicit `accept`
+expression is authored relation-to-decision data, awaiting typed interpretation.
+The native pending inventory does not certify that association.
+
+`security:` is a grouping production, not a label. Each contained request has
+its own explicit label or its position in the spec's request sequence. Group
+boundaries do not restart that sequence, introduce an obligation, or introduce
+a label namespace. Inline `security: expression` contributes one anonymous
+request. Duplicate explicit request labels refuse across the whole spec.
+
 Within an oracle definition, `requires` instead contributes to the generated
 admissibility predicate whose construction occurrences are mandatory, as above.
 

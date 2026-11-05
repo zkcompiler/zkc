@@ -1,5 +1,6 @@
 #include "BindingWitness.h"
 #include "ScopedWitness.h"
+#include "llvm/ADT/StringMap.h"
 #include <algorithm>
 #include <tuple>
 using namespace llvm;
@@ -47,6 +48,7 @@ class ValueCheck {
   std::map<SpanKey, BindingId> lexicalInputs;
   std::set<uint32_t> expectedReads, observedReads;
   std::set<uint32_t> expectedNotations, observedNotations;
+  std::set<uint32_t> expectedQueries, observedQueries;
   std::map<SpanKey, uint32_t> aliases;
   bool
   refuse(Span span,
@@ -65,7 +67,24 @@ class ValueCheck {
     if (!bounded(depth, expr.span))
       return {};
     if (expr.kind == Expression::Kind::Name) {
-      if (expr.binding && environment.count(*expr.binding))
+      if (!expr.binding)
+        return {};
+      if (wholeBody) {
+        if (expr.binding->index >= syntax.bindings.size()) {
+          refuse(expr.span);
+          return {};
+        }
+        const auto &binding = syntax.bindings[expr.binding->index];
+        if (binding.service || binding.scoped || binding.domain)
+          return {};
+        // Candidate spans may recover types, but must not decide whether an
+        // authored data binding contributes a source-read obligation.
+        if (!environment.count(*expr.binding)) {
+          refuse(expr.span, "authored data binding has no candidate value");
+          return {};
+        }
+      }
+      if (environment.count(*expr.binding))
         return Origin{expr.binding->index, {}};
       return {};
     }
@@ -239,6 +258,8 @@ class ValueCheck {
     const auto &expr = syntax.expressions.at(id);
     if (!bounded(depth, expr.span))
       return false;
+    if (expr.kind == Expression::Kind::OracleQuery)
+      expectedQueries.insert(id);
     if (source.notationFamilies && source.notationFamilies->count(id))
       expectedNotations.insert(id);
     if (place(id, depth)) {
@@ -291,7 +312,7 @@ class ValueCheck {
     for (unsigned i = 0; i < body.inputs; ++i)
       if (origins[i])
         trees[i].emplace(std::vector<unsigned>{}, *origins[i]);
-    std::set<const Operation *> checkedCalls;
+    std::set<const Operation *> checkedCalls, checkedQueries;
     uint32_t invocationEnd = 0;
     for (const auto &op : body.operations) {
       // Authenticated source spans are postorder coordinates: child calls
@@ -573,6 +594,63 @@ class ValueCheck {
       if (wholeBody && !place(id, depth) && !transparent &&
           (!op || key(op->span) != key(expr.span)))
         return refuse(expr.span, "expression producer occurrence differs");
+      if (expr.kind == Expression::Kind::OracleQuery) {
+        if (!op || op->binding || key(op->span) != key(expr.span) ||
+            op->results.size() != 1 ||
+            op->results.front().index != actual.index ||
+            expr.children.size() != 2)
+          return refuse(expr.span, "authored query producer differs");
+        auto handle = value(expr.children.front());
+        auto position = value(expr.children.back());
+        if (!handle || !position)
+          return refuse(expr.span, "authored query operand is missing");
+        if (const auto *sourceQuery =
+                std::get_if<OracleSourceQuery>(&op->action)) {
+          if (body.mode != Body::Mode::Oracle || !owner.oracleDefinition ||
+              sourceQuery->source >= owner.oracleDefinition->sourceCount ||
+              sourceQuery->position.index != position->index)
+            return refuse(expr.span, "source query operands differ");
+          // Constructor input identity follows the authored handle through
+          // typed identity aliases, independently of the candidate source slot.
+          auto root = *handle;
+          unsigned steps = 0;
+          while (root.index >= body.inputs) {
+            if (!types.charge(1, expr.span))
+              return false;
+            if (++steps > body.operations.size() ||
+                root.index >= producers.size())
+              return refuse(expr.span, "invalid source query alias chain");
+            const auto *producer = producers[root.index];
+            const auto *alias =
+                producer ? std::get_if<Projection>(&producer->action) : nullptr;
+            if (!alias || !alias->path.empty() ||
+                producer->results.size() != 1 ||
+                producer->results.front().index != root.index ||
+                alias->input.index >= body.values.size())
+              return refuse(expr.span, "source query alias differs");
+            const auto &inputType = body.values[alias->input.index].type;
+            const auto &resultType = body.values[root.index].type;
+            if (!types.chargeType(inputType, expr.span) ||
+                !types.chargeType(resultType, expr.span))
+              return false;
+            if (inputType != resultType)
+              return refuse(expr.span, "source query alias differs");
+            root = alias->input;
+          }
+          if (root.index != sourceQuery->source)
+            return refuse(expr.span, "source query selects a different input");
+        } else {
+          const auto *selectedQuery = std::get_if<OracleQuery>(&op->action);
+          if (body.mode != Body::Mode::Protocol || !selectedQuery ||
+              selectedQuery->handle.index != handle->index ||
+              selectedQuery->position.index != position->index)
+            return refuse(expr.span, "query operands differ from source");
+        }
+        if (!observedQueries.insert(id).second ||
+            !checkedQueries.insert(op).second)
+          return refuse(expr.span, "duplicate authored query occurrence");
+        continue;
+      }
       if (!op || key(op->span) != key(expr.span))
         continue;
       if (op->binding) {
@@ -685,6 +763,10 @@ class ValueCheck {
       }
     }
     for (const auto &op : body.operations) {
+      if ((std::holds_alternative<OracleQuery>(op.action) ||
+           std::holds_alternative<OracleSourceQuery>(op.action)) &&
+          !checkedQueries.count(&op))
+        return refuse(op.span, "query has no authored occurrence");
       if (op.binding && !checkedCalls.count(&op) &&
           !(wholeBody &&
             (op.binding->scopedSource || op.binding->intrinsicSource)))
@@ -787,9 +869,41 @@ public:
     for (const auto &[name, result] : syntax.bodies.front().results)
       if (!collect(result, 1))
         return false;
-    return body(checked, std::move(inputs), 1) &&
-           ((observedReads == expectedReads &&
-             observedNotations == expectedNotations) ||
+    if (!body(checked, std::move(inputs), 1))
+      return false;
+    if (!checked.stopped) {
+      const auto &written = syntax.bodies.front();
+      if (!types.charge(owner.outputs.size() + written.results.size() + 1,
+                        written.span))
+        return false;
+      llvm::StringMap<unsigned> outputs;
+      if (query)
+        outputs.try_emplace("result", 0);
+      else
+        for (unsigned i = 0; i < owner.outputs.size(); ++i) {
+          if (!types.charge(owner.outputs[i].name.size() + 1, written.span))
+            return false;
+          outputs.try_emplace(owner.outputs[i].name, i);
+        }
+      if (checked.results.size() != outputs.size() ||
+          written.results.size() != outputs.size())
+        return refuse(written.span, "authored return coverage differs");
+      std::set<unsigned> seen;
+      for (const auto &[name, expression] : written.results) {
+        if (!types.charge(name.size() + 1, written.span))
+          return false;
+        auto output = name.empty() && outputs.size() == 1 ? outputs.begin()
+                                                          : outputs.find(name);
+        auto value = checked.expressionValues.find(expression);
+        if (output == outputs.end() || !seen.insert(output->second).second ||
+            value == checked.expressionValues.end() ||
+            checked.results[output->second].index != value->second.index)
+          return refuse(written.span, "return differs from its authored value");
+      }
+    }
+    return ((observedReads == expectedReads &&
+             observedNotations == expectedNotations &&
+             observedQueries == expectedQueries) ||
             refuse(owner.span, "authored value occurrence coverage differs"));
   }
   bool run(const ScopedBinding &binding) {
@@ -816,7 +930,8 @@ public:
     return collect(source.expression, 1) &&
            body(*computation.body, std::move(inputs), 1) &&
            ((observedReads == expectedReads &&
-             observedNotations == expectedNotations) ||
+             observedNotations == expectedNotations &&
+             observedQueries == expectedQueries) ||
             refuse(binding.span));
   }
 };

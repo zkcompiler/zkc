@@ -9,6 +9,7 @@ from .io import require
 class OracleProfile(Enum):
     CLEAR = 'clear-table'
     OCTIC_KECCAK = 'fri-keccak256-koala-bear-octic'
+    QUARTIC_KECCAK_BLOCKS = 'fri-keccak256-koala-bear-quartic-atomic-blocks'
     KOALA_POSEIDON = 'fri-poseidon2-16-koala-bear-quartic'
     BABY_POSEIDON = 'fri-poseidon2-16-baby-bear-quartic'
     GOLDILOCKS_POSEIDON = 'fri-poseidon2-8-goldilocks-quadratic'
@@ -18,15 +19,17 @@ class OracleProfile(Enum):
 SCHEMES = {
     OracleProfile.CLEAR: '',
     OracleProfile.OCTIC_KECCAK: 'rows.merkle-keccak256.koala-bear.ext8-binomial3/0',
+    OracleProfile.QUARTIC_KECCAK_BLOCKS: 'rows.merkle-keccak256.koala-bear.ext4-binomial3/0',
     OracleProfile.KOALA_POSEIDON: 'rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0',
     OracleProfile.BABY_POSEIDON: 'rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0',
     OracleProfile.GOLDILOCKS_POSEIDON: 'rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0',
     OracleProfile.KOALA_POSEIDON_BLOCKS: 'rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0',
 }
 # Commitment order and authentication granularity. Other profiles authenticate
-# per query in unrestricted order; the atomic-block profile is the deployment of
+# per query in unrestricted order; the Poseidon atomic-block profile deploys
 # the maintained STARK scale controls (common/tests/protocol/test_stark_library.py).
 AUTHENTICATION = {
+    OracleProfile.QUARTIC_KECCAK_BLOCKS: ('after-final-draw', 'atomic-blocks'),
     OracleProfile.KOALA_POSEIDON_BLOCKS: ('after-final-draw', 'atomic-blocks'),
 }
 

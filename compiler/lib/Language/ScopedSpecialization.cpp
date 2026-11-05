@@ -470,6 +470,20 @@ class SpecializationCheck {
               auto statics = arguments(action.arguments, subst, op.span);
               if (!statics)
                 return false;
+              if constexpr (std::is_same_v<T, ProtocolApplication>) {
+                if (op.binding && op.binding->target.module) {
+                  auto module =
+                      type(*op.binding->target.module, subst, op.span);
+                  if (!module)
+                    return false;
+                  auto selected =
+                      types.dispatch(*module, target, *statics, op.span);
+                  if (!selected)
+                    return false;
+                  target = selected->declaration;
+                  *statics = std::move(selected->arguments);
+                }
+              }
               if constexpr (std::is_same_v<T, HelperCall> ||
                             std::is_same_v<T, OracleInstantiation>) {
                 if (bool(action.module) != bool(value.module))

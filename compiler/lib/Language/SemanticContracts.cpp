@@ -220,7 +220,7 @@ bool Semantics::checkProofEntry(const Declaration &entry,
   if (!entry.proof())
     return true;
   const auto &value = *entry.proof();
-  auto gates = proofGateOrder(protocol, value);
+  auto gates = proofGateOrder(protocol, value, entry.staticArguments);
   if (!gates)
     return false;
   for (unsigned i = 0; i < gates->size(); ++i)

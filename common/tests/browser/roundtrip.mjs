@@ -61,7 +61,7 @@ try {
       options: await optionalJSON('options.json', {}),
       authority: authority == null ? [] : Array.from(new TextEncoder().encode(JSON.stringify(authority))),
       setups: await materialBindings('setups.json', 'slot'), inputs: await materialBindings('inputs.json', 'name'),
-      variant, fullControls: ['schnorr', 'fri-1024', 'quartic-keccak'].includes(name) };
+      variant, fullControls: ['schnorr', 'fri-1024', 'quartic-keccak', 'quartic-keccak-fri'].includes(name) };
     await writeFile(resolve(dir, 'native-before.proof'), new Uint8Array(input.proof));
     const result = await page.evaluate(async input => {
       const { ProofClient } = await import('./client.mjs');
@@ -148,6 +148,21 @@ try {
       assert.equal(control.fatal, false);
     }
     assert.equal(result.verified.report?.accepted, true, JSON.stringify(result.verified));
+    if (name === 'quartic-keccak-fri') {
+      const outputs = JSON.parse(new TextDecoder().decode(new Uint8Array(result.verified.outputs)));
+      assert.equal(outputs.format, 'zkc.entry-outputs/0');
+      assert.equal(outputs.values.accepted, true);
+      const positions = outputs.values.positionsV;
+      const word = JSON.parse(new TextDecoder().decode(new Uint8Array(input.witness))).word;
+      assert.equal(positions.length, 8);
+      assert.ok(positions.every(p => typeof p === 'string' && /^(0|[1-9][0-9]*)$/.test(p) && Number(p) < 32));
+      assert.deepEqual(outputs.values.valuesV, positions.map(p => word[Number(p)]));
+      for (const trial of result.trials) {
+        const produced = JSON.parse(new TextDecoder().decode(new Uint8Array(trial.proved.outputs)));
+        assert.equal(produced.format, 'zkc.entry-outputs/0');
+        assert.deepEqual(produced.values.positionsP, positions);
+      }
+    }
     for (const t of result.trials) {
       assert.equal(t.proved.report?.success, true, JSON.stringify(t.proved));
       assert.equal(t.checked.report?.accepted, true, JSON.stringify(t.checked));
@@ -185,14 +200,20 @@ try {
         assert.equal(result.controls[control].outputs, undefined);
       }
       assert.equal(result.controls.limited.report?.success, false, JSON.stringify(result.controls.limited));
+      assert.equal(result.controls.limited.report.accepted, null);
+      assert.deepEqual(result.controls.limited.proof, []);
+      assert.equal(result.controls.limited.outputs, undefined);
     }
     assert.match(result.controls.disposed.error, /web-client-disposed/);
     assert.match(result.controls.wrong_pin.error, /package/);
     await writeFile(resolve(dir, 'browser.proof'), new Uint8Array(result.trials[0].proved.proof));
     const after = native();
     await writeFile(resolve(dir, 'native-after.proof'), await readFile(resolve(dir, 'native.proof')));
-    assert.equal(JSON.parse(after.browser_cross_verify).accepted, true);
-    if (['fri-1024', 'quartic-keccak'].includes(name)) {
+    const crossVerified = JSON.parse(after.browser_cross_verify);
+    assert.equal(crossVerified.success, true);
+    assert.equal(crossVerified.accepted, true);
+    if (['fri-1024', 'quartic-keccak', 'quartic-keccak-fri'].includes(name)) {
+      assert.deepEqual(await bytes('native-after.proof'), input.proof);
       for (const trial of result.trials) assert.deepEqual(trial.proved.proof, input.proof);
     }
     results.cases.push({ name, pin, native_before: before, native_after: after, browser: result });
