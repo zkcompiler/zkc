@@ -59,6 +59,9 @@ class ValueCheck {
   struct ValueIndex {
     std::vector<const Operation *> producers;
     std::vector<ValueId> identities;
+    // Unlike general SSA identity, recipe identity also preserves availability
+    // on every immediate edge. Invalidity survives endpoint restoration.
+    std::vector<std::optional<ValueId>> recipeIdentities;
     Origins origins;
     std::map<uint32_t, std::set<uint64_t>> generations;
     std::vector<const Construct *> aggregates;
@@ -438,22 +441,14 @@ class ValueCheck {
         refuse(capture.span, "recipe value is unavailable");
         return {};
       }
-      auto identity = index.identities[value.index];
-      if (identity.index != value.index) {
-        const auto &before = body.values[identity.index];
-        const auto &after = body.values[value.index];
-        if (!types.charge(before.components.size() + after.components.size() +
-                              1,
-                          capture.span))
-          return {};
-        // Typed aliases cannot restore components discarded by a restriction.
-        if (before.components != after.components ||
-            before.oracleHolder != after.oracleHolder) {
-          refuse(capture.span,
-                 "recipe identity changes participant availability");
-          return {};
-        }
-        value = identity;
+      auto identity = index.recipeIdentities[value.index];
+      if (!identity) {
+        refuse(capture.span,
+               "recipe identity changes participant availability");
+        return {};
+      }
+      if (identity->index != value.index) {
+        value = *identity;
         continue;
       }
       const auto *producer = index.producers[value.index];
@@ -980,7 +975,7 @@ class ValueCheck {
             std::optional<uint32_t> callback = {}, bool controlRegion = false) {
     const auto &expressionValues = body.expressionValues;
     if (!bounded(depth, {}) ||
-        !types.charge(6 * body.values.size() + 2 * body.operations.size() +
+        !types.charge(7 * body.values.size() + 2 * body.operations.size() +
                           expressionValues.size(),
                       {}))
       return false;
@@ -1000,11 +995,14 @@ class ValueCheck {
           origins[slot] = Origin{binding.index, {}};
     index.producers.resize(body.values.size());
     index.identities.resize(body.values.size());
+    index.recipeIdentities.resize(body.values.size());
     index.aggregates.resize(body.values.size());
     auto &producers = index.producers;
     std::vector<OriginTree> trees(body.values.size());
-    for (unsigned i = 0; i < body.values.size(); ++i)
+    for (unsigned i = 0; i < body.values.size(); ++i) {
       index.identities[i] = ValueId{i};
+      index.recipeIdentities[i] = ValueId{i};
+    }
     for (unsigned i = 0; i < body.inputs; ++i)
       if (origins[i]) {
         if (!chargeOrigin(origins[i], {}))
@@ -1174,6 +1172,36 @@ class ValueCheck {
             return refuse(op.span, "identity value edge is not available");
           index.identities[result.index] =
               index.identities[projection->input.index];
+          const auto &before = body.values[projection->input.index];
+          const auto &after = body.values[result.index];
+          const auto *beforePlacement =
+              before.placement
+                  ? std::get_if<DataPlacement>(&before.placement->value)
+                  : nullptr;
+          const auto *afterPlacement =
+              after.placement
+                  ? std::get_if<DataPlacement>(&after.placement->value)
+                  : nullptr;
+          if (!types.charge(
+                  before.components.size() + after.components.size() +
+                      (beforePlacement ? beforePlacement->roles.size() : 0) +
+                      (afterPlacement ? afterPlacement->roles.size() : 0) + 1,
+                  op.span))
+            return false;
+          // Validate once in producer order, then propagate the validated root
+          // (or invalidity) without rescanning chains for each recipe capture.
+          // Recipes retain ordinary data; reject other placement kinds without
+          // walking an unrelated logical placement tree.
+          const bool samePlacement =
+              (!before.placement && !after.placement) ||
+              (beforePlacement && afterPlacement &&
+               beforePlacement->roles == before.components &&
+               beforePlacement->roles == afterPlacement->roles);
+          index.recipeIdentities[result.index] =
+              before.components == after.components && !before.oracleHolder &&
+                      !after.oracleHolder && samePlacement
+                  ? index.recipeIdentities[projection->input.index]
+                  : std::nullopt;
         }
       }
       if (const auto *control = std::get_if<LocalControl>(&op.action)) {
