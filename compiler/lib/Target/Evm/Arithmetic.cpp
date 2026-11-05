@@ -1,4 +1,5 @@
 #include "Arithmetic.h"
+#include "Polynomial.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Support/Refusal.h"
@@ -159,7 +160,8 @@ Expected<std::string> Arithmetic::helper(Operation *op) {
             FieldEqualOp, FieldFromIndexOp, FieldEmbedOp, FieldInverseOp>(op) &&
        !isa<VectorConstantOp, VectorEmptyOp, VectorLengthOp, VectorAppendOp,
             VectorSplitOp, VectorSumOp, VectorAllocOp, VectorGetOp, VectorSetOp,
-            VectorEqualOp>(op)))
+            VectorEqualOp, PolyDomainRootOp, PolyDomainPointOp,
+            PolyFromCoefficientsOp, PolyEvaluateOp>(op)))
     return zkc::error(
         "evm.arithmetic",
         "requires typed field or coefficient collection operation");
@@ -170,7 +172,9 @@ Expected<std::string> Arithmetic::helper(Operation *op) {
                     VectorAppendOp, VectorSplitOp, VectorSumOp, VectorAllocOp,
                     VectorGetOp, VectorSetOp, VectorEqualOp>(op);
   auto scalar = dyn_cast<algebra::FieldType>(
-      vector ? (*layout)->collection->element : attr.getValue());
+      vector || isa<PolyFromCoefficientsOp, PolyEvaluateOp>(op)
+          ? (*layout)->collection->element
+          : attr.getValue());
   auto field = storage->layouts.field(scalar);
   if (!field)
     return field.takeError();
@@ -180,6 +184,11 @@ Expected<std::string> Arithmetic::helper(Operation *op) {
   std::string stride = std::to_string(f.coefficientBytes());
   std::string code = op->getName().stripDialect().str();
   std::string identity = p + "_" + d + "_" + beta;
+  // Coset conventions and nominal internal polynomial types are part of the
+  // helper identity even when their scalar arithmetic representation agrees.
+  if (isa<PolyDomainRootOp, PolyDomainPointOp, PolyFromCoefficientsOp,
+          PolyEvaluateOp>(op))
+    identity += "_" + toHex(scalar.getDomain(), true);
   if (auto array = dyn_cast<data::FieldArrayType>(attr.getValue()))
     identity += "_array_" + std::to_string(array.getLength());
   auto literal = op->getAttrOfType<algebra::FieldLiteralAttr>("value");
@@ -198,6 +207,14 @@ Expected<std::string> Arithmetic::helper(Operation *op) {
   std::string name = "evm_math_" + code + "_" + identity;
   if (storage->definitions.count(name))
     return name;
+  if (isa<PolyDomainRootOp, PolyDomainPointOp, PolyFromCoefficientsOp,
+          PolyEvaluateOp>(op)) {
+    auto body = polynomialHelper(op, f, storage->limits, name);
+    if (!body)
+      return body.takeError();
+    storage->definitions.emplace(name, std::move(*body));
+    return name;
+  }
   std::string body;
   raw_string_ostream out(body);
   auto begin = [&](StringRef inputs, StringRef results) {

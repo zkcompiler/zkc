@@ -82,6 +82,40 @@ EVM state. Events are preserved across later transaction reverts, allowing
 stopped-prefix comparison. A failed Keccak opcode has no completed hash event;
 a reached failed SHA-256 call has a failing trace event.
 
+Physical ModExp (`0x05`), EIP-2537 G1ADD (`0x0b`) and G1MSM (`0x0c`)
+calls are captured separately in `precompile_trace`. Every entry has `kind`
+(`modexp`, `bls12_g1add`, `bls12_g1msm`), the full `address`, exact hex `input`
+and `output`, `status` (`return`, `revert`, `halt`), the engine's instruction
+`reason`, `precompile_called` and `hash_event_frontier`. The frontier counts
+hash events already entered in `trace` at call entry; array order is call-entry
+order, including nested calls. The existing hash array and its byte semantics
+remain unchanged. Each member of `calls` and the first call's top-level result
+use the same physical fields. `deployment_precompile_trace` holds constructor
+observations separately, including on failed deployment.
+
+Input is copied at entry before shared memory can be reused, and output comes
+from the actual call outcome, including bytes omitted by a short or zero-length
+caller output window. A halted call keeps its actual output and reason. An
+inactive BLS address with no account returns empty output with reason `Stop`
+and `precompile_called=false`; untouched caller memory is not return data.
+Reaching an address alone does not establish that a precompile ran. Records
+survive later reverts, and unreached calls produce no record. These hooks
+observe engine execution without executing calls or overriding outcomes.
+
+The physical array has its own existing-size ceiling of 16,384 events and
+32 MiB total raw input **plus output** bytes per transaction. Both directions
+are checked before copying or hex encoding. It resets between calls along with
+the hash trace; it does not consume the existing hash budget. Overflow refuses
+the request with `precompile-trace-capacity` and a nonzero process exit instead
+of returning a truncated result. Engine gas, account, fork and resource rules
+remain unchanged. Focused Rust tests exercise exact physical bytes, passive
+execution and gas agreement, nested callback lifetimes, failures and bounds:
+
+```sh
+CARGO_TARGET_DIR=build/typed-evm/runner-target \
+ cargo test --locked --manifest-path common/tests/evm/Cargo.toml -j 2
+```
+
 ## ABI and execution oracles
 
 `abi.py` encodes standard `verify(bytes[],bytes,bytes)` calls. The strict decoder
@@ -365,3 +399,57 @@ The maximum-count helper does not test compiled output compaction or lifetime.
 Refusal precedence, internal preflight atomicity and an honest passing b=64
 compiled proof remain outside these added controls. No native
 b=64 witness search is attempted.
+
+## Authenticated rows, polynomials and FRI closure
+
+Build the compiler, `evm_fixture` native driver and runner separately through
+the normal development workflow.
+
+```sh
+python3 common/tests/evm/authentication_controls.py \
+ --compiler /path/to/zkc-compile --native-driver /path/to/evm_fixture \
+ --solc /path/to/pinned/solc --runner /path/to/zkc-evm-test-runner \
+ --output build/evm-research/authentication-controls
+```
+
+Use `--suite authentication`, `--suite polynomial` or `--suite require` to
+select affected checks. The harness reuses `Subjects`, the native proof driver,
+canonical ABI helpers and complete-trace oracle. Each case deploys once and calls
+twice, retaining compiler products, native requests, expected hashes and receipts.
+
+Raw row controls cover installed base/quartic/octic Keccak commitments, width
+and height one, both orientations, non-power-of-two height with zero-digest
+padding, wrong roots/rows/siblings, short and extra rows/paths, shape/product/
+coordinate precedence, canonical decode failures, and a tiny opening of a
+`2^16`-row shape within the native default table allowance. Independent integer
+Keccak derives every preimage; repeated authentication executes again.
+Polynomial controls cover empty, zero, trailing-zero and extension coefficients,
+installed roots, Horner evaluation, dynamic index selection and domain failures.
+Backend `require` controls distinguish its source stop from Boolean false and
+check that a later malformed message is not reached after the stop. Malformed
+ODS controls prevent vector operations from forging normalized polynomials.
+
+`fri_keccak.zkc` and `fri_keccak_block.zkc` use the ordinary shared FRI library,
+Direct quartic challenges and the quartic Keccak transcript at the explicit
+structural tuple `(LogSize, TerminalLog, Rounds, Queries) = (5,0,3,8)`. Neither
+fixture is a production security profile. `fri_closure.py --queries 2` selects a
+separately labelled diagnostic, preserving the default eight-query subject.
+The default physical realization uses individual natural leaves and atomic
+blocks; grouping, order, authentication and scalar/block sampling are explicit.
+
+`fri_reference.py` independently replays supported descriptors, complete proof
+frames, actual origin coordinates, transcript requests, row authentication,
+folds and terminal equality. It refuses unrecognized profiles. It reads no target
+trace or native outcome to derive an expectation; `--check-native` compares its
+already derived result afterward. `--expectation FILE --fork osaka` emits a
+proof-pinned complete primitive trace for `fri_closure.py --expected FILE`.
+An invocation SHA-256 and every construction/authentication Keccak must match
+in count, order and bytes; a Merkle-only prefix cannot pass.
+
+The original eight-query scalar native subject uses 122 transcript transitions,
+above the unchanged EVM ceiling of 64. Its independent budget-64 replay records
+the exact `resource/8` frontier. Actual EVM source lowering also exposes solc
+stack pressure in wide helper signatures; native or reference success alone is
+not successful deployed FRI. Smaller diagnostics, target resource stops and
+primitive tests establish their stated boundaries only. Full STARK deployment,
+fixed-strength feasibility and formal/security correspondence remain separate.

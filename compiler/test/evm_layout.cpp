@@ -1,4 +1,5 @@
 #include "../lib/Target/Evm/Arithmetic.h"
+#include "../lib/Target/Evm/Authentication.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Verifier.h"
@@ -9,6 +10,7 @@
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Evm/Evm.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Target/Evm/Layout.h"
@@ -322,6 +324,168 @@ int main() {
         require(text.find("65536") == std::string::npos &&
                     text.find("inverse_loop") == std::string::npos,
                 "experimental allocator or obsolete inverse escaped");
+      });
+  for (StringRef domain : {"koala-bear", "koala-bear.ext4-binomial3",
+                           "koala-bear.ext8-binomial3"}) {
+    cases.run(
+        "internal polynomial layout and exact physical contracts: " + domain,
+        [&] {
+          auto polynomial = poly::UnivariateType::get(&context, domain);
+          auto *layout = take(layouts.get(polynomial));
+          auto *f = take(layouts.field(field(domain)));
+          auto lane = f->degree == 1 ? i256 : i64;
+          require(layout->kind == evm::ValueLayout::Kind::Univariate &&
+                      layout->lanes == ArrayRef<Type>{i64, i64} &&
+                      layout->collection->strideBytes == f->coefficientBytes(),
+                  "polynomial lost normalized coefficient storage");
+          auto error = evm::verifyWireType(layouts, polynomial);
+          require(bool(error), "internal polynomial acquired wire ingress");
+          consumeError(std::move(error));
+          // A vector constructor must not grant a normalized polynomial type.
+          for (auto mnemonic : {"vector.append", "vector.alloc", "vector.empty",
+                                "vector.sum", "vector.length", "vector.get"}) {
+            StringRef code(mnemonic);
+            SmallVector<Type> inputs, outputs;
+            if (code == "vector.append") {
+              inputs = {i64, i64, lane};
+              outputs = {i64, i64};
+            } else if (code == "vector.alloc") {
+              inputs = {i64};
+              outputs = {i64};
+            } else if (code == "vector.empty") {
+              outputs = {i64, i64};
+            } else if (code == "vector.get") {
+              inputs = {i64, i64, i64};
+              outputs = {lane};
+            } else {
+              inputs = {i64, i64};
+              outputs = {code == "vector.sum" ? lane : i64};
+            }
+            auto malformed = operation(code, polynomial, inputs, outputs);
+            require(failed(verify(malformed.second)),
+                    "vector acquired a normalized polynomial contract");
+          }
+          if (f->degree == 1) {
+            auto zero = algebra::FieldLiteralAttr::get(
+                &context, field(domain),
+                builder.getIntegerAttr(
+                    IntegerType::get(&context, 31, IntegerType::Unsigned), 0));
+            auto one = algebra::FieldLiteralAttr::get(
+                &context, field(domain),
+                builder.getIntegerAttr(
+                    IntegerType::get(&context, 31, IntegerType::Unsigned), 1));
+            for (auto values : {builder.getArrayAttr({zero}),
+                                builder.getArrayAttr({one, zero})}) {
+              auto malformed =
+                  operation("vector.constant", polynomial, {}, {i64, i64},
+                            {builder.getNamedAttr("values", values)});
+              require(failed(verify(malformed.second)),
+                      "unnormalized vector literals acquired polynomial type");
+            }
+          }
+          for (auto mnemonic :
+               {"poly.domain_root", "poly.domain_point",
+                "poly.from_coefficients", "poly.univariate_evaluate"}) {
+            StringRef code(mnemonic);
+            bool from = code == "poly.from_coefficients",
+                 evaluate = code == "poly.univariate_evaluate";
+            SmallVector<Type> inputs = from ? SmallVector<Type>{i64, i64}
+                                       : evaluate
+                                           ? SmallVector<Type>{i64, i64, lane}
+                                       : code == "poly.domain_point"
+                                           ? SmallVector<Type>{lane, i64, i64}
+                                           : SmallVector<Type>{i64};
+            SmallVector<Type> outputs =
+                from ? SmallVector<Type>{i64, i64} : SmallVector<Type>{lane};
+            Type valueType =
+                from || evaluate ? Type(polynomial) : Type(field(domain));
+            auto good = operation(code, valueType, inputs, outputs);
+            require(succeeded(verify(good.second)),
+                    "precise polynomial operation refused");
+            evm::detail::Arithmetic arithmetic(layouts, {});
+            take(arithmetic.helper(good.second));
+            auto extra = operation(
+                code, valueType, inputs, outputs,
+                {builder.getNamedAttr("parameters", builder.getArrayAttr({}))});
+            require(failed(verify(extra.second)),
+                    "polynomial accepted arbitrary parameters");
+            auto missing = operation(code, {}, inputs, outputs);
+            require(failed(verify(missing.second)),
+                    "polynomial accepted missing logical type");
+            auto wrong =
+                operation(code, data::FieldVectorType::get(&context, domain),
+                          inputs, outputs);
+            require(failed(verify(wrong.second)),
+                    "vector acquired internal polynomial operation");
+            inputs[0] = inputs[0] == i256 ? i64 : i256;
+            auto wrongLane = operation(code, valueType, inputs, outputs);
+            require(failed(verify(wrongLane.second)),
+                    "polynomial accepted wrong physical lane");
+          }
+        });
+    cases.run(
+        "Keccak row exact installed scheme and physical shape: " + domain, [&] {
+          auto scheme = ("rows.merkle-keccak256." + domain + "/0").str();
+          auto root =
+              commitment::VectorObjectType::get(&context, scheme, "commitment");
+          SmallVector<Type> inputs(9, i64);
+          auto good =
+              operation("oracle.check", root, inputs, {builder.getI1Type()});
+          require(succeeded(verify(good.second)),
+                  "Keccak row operation refused");
+          evm::detail::Authentication authentication(layouts, {});
+          take(authentication.helper(good.second));
+          auto missing =
+              operation("oracle.check", {}, inputs, {builder.getI1Type()});
+          require(failed(verify(missing.second)),
+                  "authentication accepted missing root identity");
+          auto path =
+              commitment::VectorObjectType::get(&context, scheme, "proof");
+          auto wrongKind =
+              operation("oracle.check", path, inputs, {builder.getI1Type()});
+          require(failed(verify(wrongKind.second)),
+                  "path acquired root authority");
+          auto wrongResult = operation("oracle.check", root, inputs, {i64});
+          require(failed(verify(wrongResult.second)),
+                  "authentication accepted non-bool result");
+          auto extra = operation(
+              "oracle.check", root, inputs, {builder.getI1Type()},
+              {builder.getNamedAttr("parameters", builder.getArrayAttr({}))});
+          require(failed(verify(extra.second)),
+                  "authentication accepted stray invocation parameters");
+          inputs[4] = i256;
+          auto wrongLane =
+              operation("oracle.check", root, inputs, {builder.getI1Type()});
+          require(failed(verify(wrongLane.second)),
+                  "authentication accepted non-index position");
+        });
+  }
+  cases.run("bound require has exact Boolean lanes and no attributes", [&] {
+    auto good = operation("control.require", {}, {builder.getI1Type()}, {});
+    require(succeeded(verify(good.second)), "bound require refused");
+    auto wrong = operation("control.require", {}, {i64}, {});
+    require(failed(verify(wrong.second)), "bound require accepted non-Boolean");
+    auto site = operation(
+        "control.require", {}, {builder.getI1Type()}, {},
+        {builder.getNamedAttr("site", builder.getStringAttr("guard"))});
+    require(failed(verify(site.second)), "backend require acquired guard site");
+  });
+  cases.run("Poseidon rows do not acquire Keccak authentication", [&] {
+    auto root = commitment::VectorObjectType::get(
+        &context, "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+        "commitment");
+    auto wrong = operation("oracle.check", root, SmallVector<Type>(9, i64),
+                           {builder.getI1Type()});
+    require(failed(verify(wrong.second)),
+            "Poseidon scheme silently substituted");
+  });
+  cases.run(
+      "root operation refuses fields without an installed coset convention",
+      [&] {
+        auto wrong = operation("poly.domain_root", field("ristretto255.scalar"),
+                               {i64}, {i256});
+        require(failed(verify(wrong.second)),
+                "arbitrary field acquired guessed two-adic root");
       });
   return cases.result();
 }

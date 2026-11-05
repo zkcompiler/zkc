@@ -1,0 +1,15 @@
+module backend_require;
+fn checked(value: index, go: bool) -> index {
+  let () = kernel("control.require", go);
+  return value;
+}
+protocol Check roles(P,V)(a: index @P, b: index @P, go: bool @V)
+    -> (accepted: bool @V) {
+  let first = send P -> V(a);
+  let result @V = checked(first, go);
+  let later = send P -> V(b);
+  return (accepted = result == later);
+}
+proof Proof = Check {
+  prover P; verifier V; public { go }; accept accepted; construction authored;
+}

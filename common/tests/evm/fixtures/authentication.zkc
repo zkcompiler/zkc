@@ -1,0 +1,30 @@
+module authentication;
+domain F = field("koala-bear.ext4-binomial3");
+domain C = commitment("rows.merkle-keccak256.koala-bear.ext4-binomial3/0");
+type Vector<E: Field> = builtin("vector", E);
+type Root = builtin("commitment", C);
+type Path = builtin("proof", C);
+fn check(root: Root, width: index, height: index, position: index,
+         row: Vector<F>, path: Path) -> bool = primitive("oracle.check");
+fn authenticate(root: Root, width: index, height: index, position: index,
+                row: Vector<F>, path: Path, guarded: bool) -> bool {
+  let first = check(root, width, height, position, row, path);
+  require !guarded || first;
+  // Identical physical authentication is deliberately repeated and observable.
+  let second = check(root, width, height, position, row, path);
+  return first && second;
+}
+protocol Check roles(P,V)(root: Root @P, row: Vector<F> @P, path: Path @P,
+    width: index @V, height: index @V, position: index @V, guarded: bool @V)
+    -> (accepted: bool @V) {
+  let received = send P -> V((root, row, path));
+  let valid @V = authenticate(received.0, width, height, position,
+                              received.1, received.2, guarded);
+  return (accepted = valid);
+}
+proof Proof = Check {
+  prover P; verifier V;
+  public { width, height, position, guarded };
+  accept accepted;
+  construction authored;
+}
