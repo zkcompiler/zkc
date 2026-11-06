@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Semantics.ReturnedPostcondition
 public import Zkc.Source.Structured.RegisteredWord
 public import Zkc.Source.Structured.PublishedWordsFrame
 
@@ -155,6 +156,18 @@ theorem processPublicationFrame [MonadAttach m] [LawfulMonadAttach m]
       (process.runM (actionM oracles network choose) before) := by
   exact (Zkc.MonadicPostcondition.conjunction (processRegistry oracles network choose process before)
     (process_frame oracles network choose process before)).weaken fun _ both ↦ ⟨both.1, both.2⟩
+
+/-- Pair a component's return law with publication preservation on that same execution. -/
+theorem withPublicationFrame [MonadAttach m] [LawfulMonadAttach m]
+    {before : OracleProtocol.State model snapshot domains math (State model Aux)}
+    {process : PIR.Process (OracleProtocol.Interface model) A}
+    {post : A → OracleProtocol.State model snapshot domains math (State model Aux) → Prop}
+    (law : PIR.Process.OnReturn (actionM oracles network choose) before process post) :
+    PIR.Process.OnReturn (actionM oracles network choose) before process
+      (fun value after ↦ post value after ∧ PublicationFrame before.oracle after.oracle) :=
+  (Zkc.MonadicPostcondition.conjunction law
+    (processPublicationFrame oracles network choose process before)).weaken
+    fun _ both value returned ↦ ⟨both.1 value returned, both.2⟩
 
 theorem RegisteredWord.transport {before after : Runtime model snapshot domains math Aux}
     {row : Ty} {size : Nat} {source : OracleAnchor} {word : Fin size → model.Value row}

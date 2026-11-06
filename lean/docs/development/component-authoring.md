@@ -396,20 +396,21 @@ geometry. `CommitIngress.installed` follows the linked coset admission
 helper, assembles the receiver's shift, initializes both handle sequences,
 and derives the loop inputs from the protocol arguments. `CommitLoop.installed`
 follows all three iterations of the original repeat, including its private
-state masks. `CommitBody.registered` establishes that all six associations
-still hold in the final store of any returning invocation, even when the
-provider updates its state during the terminal exchange. Each later send may
-publish a different word. `CommitReadback.fromCommit` derives the
-associations needed by the installed checker from those actual handles.
-Given the later call's one coefficient, positions, and preserved registry,
-a successful return satisfies the ArkLib path check with the eight cells
-in order. The distribution of the draws and the probability of accepting
+state masks. `CommitReturn.installed` follows the terminal exchange under
+arbitrary participant replies. On success the received coefficient vector
+has length one, the first handle is the head of the actual layer sequence,
+and the ordered layer and fold sequences identify all six registered tables.
+`CommitReadback.fromCommit` supplies these exact outputs to the installed
+checker under a later publication-preserving frame. For any eight positions,
+a returning checker gives the eight original cells in order and charges
+96 reads. Each later base publication may select a different word. The distribution of the draws and the probability of accepting
 a far first word are separate security obligations.
 
 For a publication followed by a virtual construction, `Region.cutFirst`
 selects a reached operation on the continuation spine. A bind still executes
 its nested body, and an earlier stop skips the operation. The checked prefix
-returns the live SSA values. `OperationCut.resume` puts its reply and those
+returns the live SSA values and proves where every inherited operand occurs
+in that tuple. `OperationCut.resume` puts its reply and those
 values back into the original continuation, with the same actions and stops.
 
 In the retained FRI round, the delivery continuation carries the actual parent

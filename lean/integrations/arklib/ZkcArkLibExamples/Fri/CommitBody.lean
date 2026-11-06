@@ -83,21 +83,4 @@ theorem invokeReceiver (context : ProtocolContext) (receiver : context.roles 1 =
     (arguments model shift service) _ (congrArg (fun inputs : Values (FriBinding.Value model) protocol0Signature.inputs ↦
       protocol0Body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) inputs.get) masked)
 
-/-- Every returning invocation retains all six table associations in its
-own store, even if receiving the terminal vector changed provider state. -/
-theorem registered (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
-    (shift : Octic) (nz : shift ≠ 0) (service : Nat) (before : State Aux) (role : before.oracle.self = 1) :
-    PIR.Process.OnReturn (CommitLoop.handler network choose) before (invokeProtocol (verifierTable model)
-      protocol0Signature context 1 (arguments model shift service))
-      (fun _ after ↦ ∃ rounds : Rounds 5 3, rounds.Installed after.oracle shift ∧ after.oracle.self = 1) := by
-  rw [invokeReceiver context receiver shift service]
-  apply PIR.Process.OnReturn.bind (middle := fun _ after ↦ ∃ rounds : Rounds 5 3,
-    rounds.Installed after.oracle shift ∧ after.oracle.self = 1)
-  · apply afterRounds network choose context receiver separate shift nz service before role
-    intro live after rounds _ _ _ installed self
-    exact (PublishedWords.processPublicationFrame checkedUnit.oracles network choose _ after).weaken
-      (fun rec frame _ _ ↦ ⟨rounds, rounds.transport frame shift installed, frame.registry.1.trans self⟩)
-  · intro _ after kept
-    exact Zkc.MonadicPostcondition.pure _ _ (fun _ _ ↦ kept)
-
 end ZkcSecurity.ArkLib.Fri.CommitBody

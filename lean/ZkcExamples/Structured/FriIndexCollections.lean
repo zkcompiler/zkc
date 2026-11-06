@@ -2,6 +2,8 @@ module
 
 public import ZkcExamples.Structured.FriApplications
 public import Zkc.Source.Structured.OracleReferenceLaws
+public import Zkc.Source.Structured.OracleQueryDerivation
+public import Zkc.Source.Structured.ReferenceLibrary
 
 @[expose] public section
 
@@ -78,5 +80,22 @@ theorem append (model : DomainModel) (self : Nat) (xs : List Nat) (i : Nat)
   rw [OracleProtocol.owned_present, (appendLaw model).invokeOn (helper := helper23Helper) unit.definitions unit.linked
     (by exact_body helper23Definition) (.cons xs (.cons i .nil)) ⟨all, capacity, coordinate⟩]
   rfl
+
+open OracleProtocol (concrete)
+
+/-- The installed coefficient-vector length helper includes index exhaustion. -/
+theorem coefficientLength (model : DomainModel) (cs : List (model.Field FriSource.extension)) :
+    OracleProtocol.owned model 1 1 (helpers model) helper0Helper
+      (.cons (concrete model (.vector FriSource.extension) cs) .nil) =
+      (if cs.length < indexLimit then .done (.cons (concrete model .index cs.length) .nil) else .halt .exhausted) := by
+  let law : ReferenceLaw model [.vector FriSource.extension] [.index] := ReferenceLibrary.marked model "s0" (ReferenceLibrary.execute model (.vectorLength FriSource.extension) (.cons .here .nil))
+  change OracleProtocol.owned model 1 1 (helpers model) helper0Helper
+    (ProtocolValue.embedComponents (Values.cons (Value := model.Value) (ty := .vector FriSource.extension) cs .nil).present) = _
+  rw [OracleProtocol.owned_present, law.invokeOn (helper := helper0Helper) unit.definitions unit.linked
+    (by exact_body helper0Definition) (.cons cs .nil) trivial]
+  change (primitiveOutcome (I := OracleProtocol.Interface model)
+    (if cs.length < indexLimit then .returned (Values.cons (Value := model.Value) (ty := .index) cs.length .nil)
+      else .stopped .exhausted)).bind _ = _
+  split <;> rfl
 
 end ZkcExamples.Structured.FriIndexCollections

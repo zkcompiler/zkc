@@ -58,6 +58,17 @@ theorem ReturnsSatisfying.letOp {op : dialect.Op} {args : Operands Γ (dialect.a
       (Environment.prepend_values_get inputs actual).symm ▸ tail
     exact Zkc.MonadicPostcondition.map (replay current kept) _ (fun _ post ↦ post)
 
+/-- A source operation that stops precludes any successful return from
+the region and leaves the state invariant intact. -/
+theorem ReturnsSatisfying.letHalt {op : dialect.Op} {args : Operands Γ (dialect.arguments op)}
+    {bodies : Regions dialect (dialect.regions op)} {next : Region dialect (dialect.results op ++ Γ) outputs}
+    {inputs : Values meaning.Value Γ} {post : Values meaning.Value outputs → Prop} {why : PIR.Stop}
+    (operation : meaning.operation op (Operands.eval inputs.get args) (bodies.denote meaning) = .halt why) :
+    ReturnsSatisfying handler invariant meaning (.letOp op args bodies next) inputs.get post := by
+  intro state valid
+  rw [Region.denote, operation]
+  exact Zkc.MonadicPostcondition.pure _ _ ⟨valid, by intro _ eq; cases eq⟩
+
 theorem ReturnsProjection.letOp {op : dialect.Op} {args : Operands Γ (dialect.arguments op)}
     {bodies : Regions dialect (dialect.regions op)} {next : Region dialect (dialect.results op ++ Γ) outputs}
     {inputs : Values meaning.Value Γ} {project : Values meaning.Value outputs → A}
@@ -82,7 +93,7 @@ open Lean Meta Elab Tactic in
 /-- Select an operation by its syntax before applying a handler law. Trying
 all handler equations by definitional equality can unfold an entire installed
 table, even on an unrelated mark. The kernel still checks the local law. -/
-private meta def projectStep (head : Ident) (inner : Option Ident) : TacticM Unit := withMainContext do
+private meta def projectStep (head : Ident) (inner : Option Ident) (halt := false) : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let type := (← instantiateMVars (← goal.getType)).cleanupAnnotations
   let projected := type.isAppOf ``ReturnsProjection
@@ -97,12 +108,13 @@ private meta def projectStep (head : Ident) (inner : Option Ident) : TacticM Uni
   if let some nested := inner then
     let target ← realizeGlobalConstNoOverloadWithInfo nested
     unless (← whnf op.getAppArgs[0]!).isAppOf target do throwError "different nested operation"
-  let rule := if projected then ``ReturnsProjection.letOp else ``ReturnsSatisfying.letOp
+  let rule := if halt then ``ReturnsSatisfying.letHalt else if projected then ``ReturnsProjection.letOp else ``ReturnsSatisfying.letOp
   let goals ← goal.apply (← mkConstWithFreshMVarLevels rule)
     {newGoals := .nonDependentOnly}
   replaceMainGoal goals
 
 elab "project_step " head:ident "[" nested:ident "]" : tactic => projectStep head (some nested)
 elab "project_step " head:ident : tactic => projectStep head none
+elab "project_halt " head:ident : tactic => projectStep head none true
 
 end Zkc.Source.Region

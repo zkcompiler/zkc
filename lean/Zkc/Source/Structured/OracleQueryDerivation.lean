@@ -67,6 +67,26 @@ theorem sendConcrete {ty : Ty} {peer : Nat} (atOwner : context.roles owner = sel
   simp [exchange, Participant.exchange, atOwner, concrete, ProtocolValue.materializeWith_ofConcrete,
     actions, PIR.Process.interpret, PIR.Process.bind]
 
+/-- The receiving role gets the peer's concrete message, independently
+of its local operand. The selected handler controls every reply and stop. -/
+theorem receiveConcrete {ty : Ty} {sender : Nat} (other : context.roles sender ≠ self)
+    (active : context.roles owner = self) (value : Component (ProtocolValue model.toCarriers) ty) :
+    ((algebra model self ordinary helpers).meaning table context self).operation (.exchange ty sender owner site)
+      (.cons value .nil) .nil =
+      .call (.ordinary (.receive ty (qualifyProtocolSite context.applicationPrefix site) (context.roles sender)))
+        (fun reply ↦ .done (.cons (concrete model ty reply) .nil)) := by
+  change (exchange model context self sender owner site value).bind _ = _
+  simp [exchange, Participant.exchange, other, active, concrete, actions, PIR.Process.interpret, PIR.Process.bind]
+
+theorem restrictActive {ty : Ty} (active : context.roles owner = self) (value : Component (ProtocolValue model.toCarriers) ty) :
+    ((algebra model self ordinary helpers).meaning table context self).operation (.restrict ty [owner])
+      (.cons value .nil) .nil = .done (.cons value .nil) := by
+  change PIR.Process.done (I := Interface model)
+    (Values.cons (Value := Component (ProtocolValue model.toCarriers)) (ty := ty)
+      (Participant.restrict ([context.roles owner].contains self) value) .nil) = _
+  congr 2
+  simp [Participant.restrict, active]
+
 /-- In a two-owner assembly the second component belongs to this participant.
 The first owner's value may be absent or deferred. -/
 theorem assembleSecond {first second : Nat} {ty : Ty}
@@ -80,20 +100,31 @@ theorem assembleSecond {first second : Nat} {ty : Ty}
   congr 2
   simp [assembleComponent, active, other]
 
+theorem compareIndex (a b : Nat) :
+    ((algebra model self ordinary helpers).meaning table context self).operation (.calculate .indexEqual rfl)
+      (.cons (concrete model .index a) (.cons (concrete model .index b) .nil)) .nil =
+      .done (.cons (concrete model .boolean (decide (a = b))) .nil) := by
+  change ProtocolCalculation.strict model (demand model) self ordinary .indexEqual
+    (ProtocolValue.embedComponents (.cons (some a) (.cons (some b) .nil))) rfl = _
+  erw [ProtocolCalculation.strict_embed model (demand model) self ordinary .indexEqual
+    (.cons (some a) (.cons (some b) .nil)) rfl]
+  rfl
+
 theorem equalIndex (i : Nat) :
     ((algebra model self ordinary helpers).meaning table context self).OperationLaw
       (fun op ↦ .call op .done) (.calculate .indexEqual rfl)
       (.cons (concrete model .index i) (.cons (concrete model .index i) .nil)) .nil
       (.done (.cons (concrete model .boolean true) .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change ProtocolCalculation.strict model (demand model) self ordinary .indexEqual
-    (ProtocolValue.embedComponents (.cons (some i) (.cons (some i) .nil))) rfl = _
-  erw [ProtocolCalculation.strict_embed model (demand model) self ordinary .indexEqual
-    (.cons (some i) (.cons (some i) .nil)) rfl]
-  change PIR.Process.done (I := Interface model)
-    (Values.cons (concrete model .boolean (decide (i = i))) .nil) = _
-  simp only [decide_true]
-  rfl
+  simpa only [decide_true] using compareIndex (context := context) (self := self)
+    (ordinary := ordinary) (helpers := helpers) (table := table) model i i
+
+theorem guardFalse (active : context.roles owner = self) :
+    ((algebra model self ordinary helpers).meaning table context self).operation (.guard owner site)
+      (.cons (concrete model .boolean false) .nil) .nil = .halt .reject := by
+  change ((Participant.guard (services := services) (Value := model.Value) self (context.roles owner)
+    ((concrete model .boolean false).bind ProtocolValue.toConcrete)).interpret (actions model)).bind _ = _
+  simp [active, concrete, Participant.guard, PIR.Process.interpret, PIR.Process.bind]
 
 /-- A helper owned by another participant consumes no local operands.
 Its returned ABI is absent even when an input holds deferred oracle data. -/

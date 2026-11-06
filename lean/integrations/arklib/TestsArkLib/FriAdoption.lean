@@ -3,7 +3,6 @@ import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
 import ZkcArkLibExamples.Fri.CommitReadback
-import ZkcArkLibExamples.Fri.CommitBody
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -386,6 +385,7 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcArkLibExamples.Fri.BinaryDomain, `ZkcArkLibExamples.Fri.CommitCaptures, `ZkcArkLibExamples.Fri.CommitDelivery,
    `Zkc.Source.Structured.RegisteredLifetime, `ZkcArkLibExamples.Fri.CommitIteration,
    `ZkcArkLibExamples.Fri.CommitLoop, `ZkcArkLibExamples.Fri.CommitReadback,
+   `ZkcExamples.Structured.FriCommitTerminal, `ZkcExamples.Structured.FriCommitReply, `ZkcArkLibExamples.Fri.CommitReturn,
    `ZkcArkLibExamples.Fri.CommitPublication,
    `ZkcArkLibExamples.Fri.CommitChallenge]
   "FRI-PUBLICATION-BEFORE-CHALLENGE-PASS" (exactModules := true))

@@ -91,6 +91,28 @@ theorem sequenceAppendReturned {self maximum : Nat} {roles : Nat → Nat} {owner
   apply PIR.Process.ReturnsUnder.action
   exact sequenceAppendAction role active
 
+/-- A successful selection returns the anchor at that index. A stale
+cursor, an oversized sequence or a hidden anchor may still refuse. -/
+theorem sequenceAtReturned {self maximum index : Nat} {roles : Nat → Nat} {owners : List Nat}
+    {kind : OracleKind} {anchors : List OracleAnchor} {anchor : OracleAnchor}
+    (role : original.self = self) (active : self ∈ owners.map roles) (selected : anchors[index]? = some anchor) :
+    Keeps oracles ordinary base publish original
+      (.call (.oracle ⟨.sequenceAt kind maximum owners, location, self, roles,
+        .cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) anchors))
+          (.cons (some (ProtocolValue.ofConcrete .index index)) .nil)⟩) .done)
+      (.cons (some (ProtocolValue.ofConcrete (.oracle kind) anchor)) .nil) := by
+  apply PIR.Process.ReturnsUnder.action
+  intro state same
+  rw [OraclePublication.actionM_local _ _ _ _ _ _ rfl]
+  apply Zkc.MonadicPostcondition.pure
+  simp only [OracleProtocol.handler]
+  split
+  · exact ⟨same, by intro _ eq; cases eq⟩
+  · simp [OracleExecution.operation, same, role, active, ProtocolValue.toConcrete_ofConcrete, selected,
+      OracleExecution.refusal, OracleExecution.returned]
+    split <;> first | split <;> simp_all | simp_all
+    exact fun _ eq ↦ (PIR.Outcome.returned.inj eq).symm
+
 theorem rowsAt {self : Nat} {roles : Nat → Nat} {row : Ty} {fixed : Option Nat} {anchor : OracleAnchor}
     {table : OracleStoredTable model snapshot domains math row} (role : original.self = self)
     (lookup : OracleStore.find original.entries row anchor = some table)

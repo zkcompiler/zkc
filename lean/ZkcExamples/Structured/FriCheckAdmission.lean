@@ -52,20 +52,6 @@ private theorem associationStep :
     unit.definitions unit.linked (by exact_body helper29Definition) _ rfl]
   rfl
 
-private theorem coefficientLength (cs : List (model.Field extension)) (short : cs.length < indexLimit) :
-    OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper0Helper
-      (.cons (concrete model (.vector extension) cs) .nil) = .done (.cons (concrete model .index cs.length) .nil) := by
-  let law : ReferenceLaw model [.vector extension] [.index] := ReferenceLibrary.marked model "s0" (ReferenceLibrary.execute model (.vectorLength extension) (.cons .here .nil))
-  change OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper0Helper
-    (ProtocolValue.embedComponents (Values.cons (Value := model.Value) (ty := .vector extension) cs .nil).present) = _
-  rw [OracleProtocol.owned_present, law.invokeOn (helper := helper0Helper) unit.definitions unit.linked
-    (by exact_body helper0Definition) (.cons cs .nil) trivial]
-  change (primitiveOutcome (I := OracleProtocol.Interface model)
-    (if cs.length < indexLimit then .returned (Values.cons (Value := model.Value) (ty := .index) cs.length .nil)
-      else .stopped .exhausted)).bind _ = _
-  rw [ite_eq_left short]
-  rfl
-
 private theorem subtractOne (context : ProtocolContext) :
     ((verifierAlgebra model).meaning (verifierTable model) context 1).OperationLaw
       (fun op ↦ .call op .done) (.calculate .indexWrappingSubtract rfl)
@@ -139,7 +125,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
   have coeff : OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper0Helper
       (.cons (concrete model (.vector extension) cs) .nil) = .done (.cons (concrete model .index 1) .nil) := by
     rw [receiver]
-    simpa only [one] using coefficientLength cs short
+    simpa only [one] using (FriIndexCollections.coefficientLength model cs).trans (ite_eq_left short)
   have disabled : OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper29Helper
       (.cons (concrete model .boolean false) (.cons (concrete model (.vector extension) [])
         (.cons (concrete model .index 8) .nil))) = .done (.cons (concrete model .boolean true) .nil) := by

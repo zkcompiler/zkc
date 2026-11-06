@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLibExamples.Fri.CommitLoop
+public import ZkcArkLibExamples.Fri.CommitReturn
 public import ZkcArkLibExamples.Fri.VerifierCheck
 
 @[expose] public section
@@ -171,38 +171,41 @@ private theorem coefficients {n r : Nat} (rounds : Rounds n r) (cs : List Octic)
   | empty => rfl
   | fold _ _ _ _ _ ih => exact ih
 
-/-- The loop itself supplies the word, beta, both handle sequences and
-every stored association. A later Check need supply only its own call
-inputs and participant frame. The terminal message and positions can be
-chosen after the publications, including adaptively. -/
+/-- A registered sequence and the terminal coefficient suffice at any later
+checker frame. The positions can be chosen after publication and may repeat. -/
+theorem checked {source view : OracleAnchor} {word : Fin 32 → Octic} {beta shift : Octic}
+    (tail : Rounds 4 2) (cs : List Octic) (one : cs.length = 1) (positions : Fin 8 → Fin 32)
+    (nonzero : shift ≠ 0) (child : ProtocolContext) (receiver : child.roles 1 = 1) (separate : 1 ≠ child.roles 0)
+    (after : CommitLoop.State Aux) (role : after.oracle.self = 1)
+    (live : (Rounds.fold source view word beta tail).Installed after.oracle shift) :
+    Checked network choose source view word beta shift tail cs positions child after := by
+  obtain ⟨pub⟩ := publication tail cs live (by decide) (by decide)
+  have len := lengths tail
+  have correct := VerifierCheck.installed network choose child receiver separate
+    ⟨source, source :: tail.sources, view :: tail.views⟩ (by simp [len.1]) (by simp [len.2]) shift nonzero
+    positions word beta (tail.transcript cs) (by rw [coefficients]; exact one) after role pub
+  simpa only [Checked, coefficients] using correct
+
+/-- A successful Commit fixes the checker inputs in its own output. Only the
+future checker frame and sampled positions are supplied by its caller. -/
 theorem fromCommit [MonadAttach M] [LawfulMonadAttach M]
     (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
-    (env : Environment (FriBinding.Value model) FriCommitRound.roundSite.context) (shift : Octic) (nonzero : shift ≠ 0)
-    (service : Nat) (inputs : Operands.eval env FriCommitRound.roundSite.operands = .cons (OracleProtocol.concrete model .index 3)
-      ((CommitLoop.packed 5 shift [] []).append (CommitLoop.captures service)))
+    (shift : Octic) (nonzero : shift ≠ 0) (service : Nat)
     (before : CommitLoop.State Aux) (role : before.oracle.self = 1) :
-    Std.Do.Internal.Ensures (fun result ↦ ∀ values, result.outcome = .returned values →
-      ∃ source view word beta, ∃ tail : Rounds 4 2,
-        values = CommitLoop.packed 2 (tail.endingShift (shift ^ 2)) (source :: tail.sources) (view :: tail.views) ∧
-        ∀ (context' : ProtocolContext), context'.roles 1 = 1 → 1 ≠ context'.roles 0 →
-        ∀ (after : CommitLoop.State Aux), PublishedWords.PublicationFrame result.state.oracle after.oracle →
-        ∀ cs : List Octic, cs.length = 1 → ∀ positions : Fin 8 → Fin 32,
-        Checked network choose source view word beta shift tail cs positions context' after)
-      ((FriCommitRound.roundSite.iterations ((FriSource.verifierAlgebra model).meaning (FriSource.verifierTable model) context 1)
-        env).runM (CommitLoop.handler network choose) before) := by
-  apply (CommitLoop.installed network choose context receiver separate env shift nonzero service inputs before role).weaken
-  intro result law values returned
-  obtain ⟨rounds, live, who, packed⟩ := law values returned
-  cases rounds with
-  | fold source view word beta tail =>
-    refine ⟨source, view, word, beta, tail, packed, ?_⟩
-    intro child receiver' separate' after frame cs one positions
-    obtain ⟨pub⟩ := publication tail cs ((Rounds.fold source view word beta tail).transport frame shift live)
-      (by decide) (by decide)
-    have len := lengths tail
-    have correct := VerifierCheck.installed network choose child receiver' separate'
-      ⟨source, source :: tail.sources, view :: tail.views⟩ (by simp [len.1]) (by simp [len.2]) shift nonzero
-      positions word beta (tail.transcript cs) (by rw [coefficients]; exact one) after (frame.registry.1.trans who) pub
-    simpa only [Checked, coefficients] using correct
+    PIR.Process.OnReturn (CommitLoop.handler network choose) before
+      (invokeProtocol (FriSource.verifierTable model) FriSourceBodies.protocol0Signature context 1
+        (FriCommitAdmission.arguments model shift service))
+      (fun out current ↦ ∃ source view word beta, ∃ tail : Rounds 4 2, ∃ cs : List Octic,
+        cs.length = 1 ∧ out = FriCommitTerminal.output model source (source :: tail.sources) (view :: tail.views) shift cs ∧
+        ∀ (child : ProtocolContext), child.roles 1 = 1 → 1 ≠ child.roles 0 →
+        ∀ (after : CommitLoop.State Aux), PublishedWords.PublicationFrame current.oracle after.oracle →
+        ∀ positions : Fin 8 → Fin 32, Checked network choose source view word beta shift tail cs positions child after) := by
+  apply (CommitReturn.installed network choose context receiver separate shift nonzero service before role).weaken
+  intro record law out returned
+  obtain ⟨source, view, word, beta, tail, cs, one, output, live, who⟩ := law out returned
+  refine ⟨source, view, word, beta, tail, cs, one, output, ?_⟩
+  intro child receiver' separate' after frame positions
+  exact checked network choose tail cs one positions nonzero child receiver' separate' after (frame.registry.1.trans who)
+    ((Rounds.fold source view word beta tail).transport frame shift live)
 
 end ZkcSecurity.ArkLib.Fri.CommitReadback
