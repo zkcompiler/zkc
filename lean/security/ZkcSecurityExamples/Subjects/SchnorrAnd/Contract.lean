@@ -93,7 +93,10 @@ theorem formula_process (firstBase firstPoint secondBase secondPoint : G) (witne
         (.cons secondPoint .nil)))) witnesses) =
       .done (.cons (decide (firstPoint = witnesses.1 • firstBase) &&
         decide (secondPoint = witnesses.2 • secondBase)) .nil) := by
-  rfl
+  rw [FormulaBinding.process_eq_body]
+  change PIR.Process.bind
+    (Evaluation.invokeCallback (if decide (firstPoint = witnesses.1 • firstBase) then _ else _) _) _ = _
+  cases h : decide (firstPoint = witnesses.1 • firstBase) <;> rfl
 
 theorem holds_iff (firstBase firstPoint secondBase secondPoint : G) (witnesses : F × F) :
     holds (.cons firstBase (.cons firstPoint (.cons secondBase (.cons secondPoint .nil)))) witnesses ↔
