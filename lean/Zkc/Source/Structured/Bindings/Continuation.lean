@@ -58,6 +58,38 @@ theorem RepeatSite.denote_region {I : PIR.Signature} (site : RepeatSite) (meanin
     site.region.denote meaning env = (site.iterations meaning env).bind
       (fun results ↦ site.next.denote meaning (env.prepend results)) := rfl
 
+/-- A bounded source callback runs with both the input and output role
+projections, including on loops carrying private and public state together. -/
+def RepeatSite.maskedIteration {V : Ty → Type} {I : PIR.Signature} (site : RepeatSite)
+    (algebra : ProtocolAlgebra V I) (table : ProtocolTable V I) (context : ProtocolContext) (self : Nat)
+    (captures : Values (Component V) site.spec.captures)
+    (state : Values (Component V) site.spec.state) (index : Nat) :=
+  let mask := maskValues self (context.mapScopes site.spec.stateScopes)
+  (algebra.iteration context site.site index
+    (site.body.denote (algebra.meaning table context self)
+      (Values.cons (some (algebra.index index)) ((mask state).append captures)).get)).bind
+    fun results ↦ .done (mask results)
+
+theorem RepeatSite.maskedIterations {V : Ty → Type} {I : PIR.Signature} (site : RepeatSite)
+    (algebra : ProtocolAlgebra V I) (table : ProtocolTable V I) (context : ProtocolContext) (self : Nat)
+    (env : Environment (Component V) site.context) (countValue : Component V .index)
+    (state : Values (Component V) site.spec.state) (captures : Values (Component V) site.spec.captures)
+    (selected : Operands.eval env site.operands = .cons countValue (state.append captures))
+    (active : (site.spec.roles.map context.roles).contains self = true)
+    {count : Nat} (decoded : countValue.bind algebra.count = some count) (bound : count ≤ site.spec.maximum) :
+    site.iterations (algebra.meaning table context self) env =
+      Finite.fold (site.maskedIteration algebra table context self captures) (List.range count)
+        (maskValues self (context.mapScopes site.spec.stateScopes) state) := by
+  unfold RepeatSite.iterations
+  erw [selected]
+  change algebra.repeatProcess site.spec context self site.site countValue
+    (Values.split site.spec.state (state.append captures)).1 (Values.split site.spec.state (state.append captures)).2
+    (fun args ↦ site.body.denote (algebra.meaning table context self) args.get) = _
+  rw [Values.split_append]
+  simp only [ProtocolAlgebra.repeatProcess, active, decoded, bound, ite_true,
+    Finite.execute, Finite.Domain.admit, Finite.admitThen]
+  rfl
+
 /-- Present a reached bounded repeat as its exact ordered fold. A fully
 visible state needs no projection; callbacks still execute in the algebra's
 real iteration frame, and their stops skip every remaining item. -/
@@ -73,13 +105,11 @@ theorem RepeatSite.visibleIterations {V : Ty → Type} {I : PIR.Signature} (site
       Finite.fold (fun current index ↦ algebra.iteration context site.site index
         (site.body.denote (algebra.meaning table context self)
           (Values.cons (some (algebra.index index)) (current.append captures)).get)) (List.range count) state := by
-  unfold RepeatSite.iterations
-  erw [selected]
-  change algebra.repeatProcess site.spec context self site.site countValue
-    (Values.split site.spec.state (state.append captures)).1 (Values.split site.spec.state (state.append captures)).2
-    (fun args ↦ site.body.denote (algebra.meaning table context self) args.get) = _
-  rw [Values.split_append]
-  simp only [ProtocolAlgebra.repeatProcess, active, decoded, bound, ite_true, visible,
-    Finite.execute, Finite.Domain.admit, Finite.admitThen, PIR.Process.bind_done]
+  rw [site.maskedIterations algebra table context self env countValue state captures selected active decoded bound]
+  rw [visible]
+  congr 1
+  funext current index
+  simp only [maskedIteration, visible, PIR.Process.bind_done]
+
 
 end Zkc.Source.Structured.Bindings

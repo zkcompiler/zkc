@@ -1,7 +1,7 @@
 module
 
 public import ZkcArkLibExamples.Fri.VirtualWord
-public import Zkc.Source.Structured.RegisteredWord
+public import Zkc.Source.Structured.RegisteredLifetime
 public import ZkcArkLib.Fri.SourcePublication
 
 @[expose] public section
@@ -99,6 +99,23 @@ def Registered.extend {Aux : Type} {m : Nat}
   allowed := view.allowed
   fresh := by simpa [OracleStore.hasAnchor, List.any_append] using And.intro fresh view.fresh
   entries := by dsimp only; rw [view.entries, List.append_assoc]
+
+/-- The virtual closure keeps its own snapshot of the parent. All that
+later source execution has to provide is the common publication frame. -/
+theorem Registered.transport {Aux : Type} {m : Nat}
+    {before after : PublishedWords.Runtime model checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux}
+    {source anchor : OracleAnchor} {word : Fin (2 ^ (m + 1)) → Octic} {beta shift : Octic}
+    (view : Registered before source anchor word beta shift)
+    (frame : PublishedWords.PublicationFrame before after) :
+    Nonempty (Registered after source anchor word beta shift) := by
+  obtain ⟨who, extra, entries, fresh⟩ := frame.registry
+  have present : OracleStore.hasAnchor before.entries anchor = true := by
+    simp [view.entries, OracleStore.hasAnchor, List.any_append, table]
+  have extended := view.extend extra (fresh anchor present) frame.words after.queries
+  have same : {before with entries := extra ++ before.entries, provider := after.provider, queries := after.queries} = after := by
+    cases before; cases after
+    simp_all
+  exact ⟨same ▸ extended⟩
 
 /-- An actual receiver query of the registered virtual handle obtains the
 ArkLib fold. The frame supplies the invocation for all three reads. -/

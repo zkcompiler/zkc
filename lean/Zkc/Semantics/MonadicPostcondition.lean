@@ -58,4 +58,13 @@ theorem iff_forall_canReturn [MonadAttach m] [LawfulMonadAttach m]
   · intro law
     exact Ensures.canReturn.weaken law
 
+/-- Exact support lets independently established postconditions meet on
+the same complete result, including its stopped outcome and auxiliary state. -/
+theorem conjunction [MonadAttach m] [LawfulMonadAttach m]
+    {first second : A → Prop} {computation : m A}
+    (left : Ensures first computation) (right : Ensures second computation) :
+    Ensures (fun value ↦ first value ∧ second value) computation :=
+  iff_forall_canReturn.mpr fun value reached ↦
+    ⟨iff_forall_canReturn.mp left value reached, iff_forall_canReturn.mp right value reached⟩
+
 end Zkc.MonadicPostcondition

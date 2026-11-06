@@ -1,5 +1,5 @@
 import Zkc.Source.Structured.PublishedWordsFrame
-import Zkc.Source.Structured.RegisteredWord
+import Zkc.Source.Structured.RegisteredLifetime
 import Tests.OracleProviderFrame
 import Tests.PublishedWords
 
@@ -25,6 +25,24 @@ example {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMathEnvi
     ¬ Nonempty (RegisteredWord (row := .index) entries participant source changedCell state) := by
   rintro ⟨alternative⟩
   have last := congrFun (live.unique alternative) (2 : Fin 3)
+  contradiction
+
+-- A later chooser or an early refusal cannot rebind the same handle to
+-- another word that agrees with every read except the last one.
+example {m : Type → Type} [Monad m] [LawfulMonad m] [MonadAttach m] [LawfulMonadAttach m]
+    {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMathEnvironment} {A E : Type}
+    (oracles : List (CheckedOracle snapshot domains math))
+    (network : Table model → PIR.MonadHandler m (participantInterfaceOn model.toCarriers) Unit E)
+    (choose : Chooser m model Unit E) (process : PIR.Process (OracleProtocol.Interface model) A)
+    (state : OracleProtocol.State model snapshot domains math (State model Unit)) (anchor : OracleAnchor)
+    (live : RegisteredWord (row := .index) state.oracle.entries state.oracle.self anchor originalCell state.oracle.provider) :
+    Std.Do.Internal.Ensures (fun record ↦ ¬ Nonempty (RegisteredWord (row := .index)
+      record.state.oracle.entries record.state.oracle.self anchor changedCell record.state.oracle.provider))
+      (process.runM (actionM oracles network choose) state) := by
+  apply (processPublicationFrame oracles network choose process state).weaken
+  rintro record frame ⟨different⟩
+  obtain ⟨original⟩ := live.transport frame
+  have last := congrFun (original.unique different) (2 : Fin 3)
   contradiction
 
 -- Even a preserved provider table cannot authorize a new logical entry
