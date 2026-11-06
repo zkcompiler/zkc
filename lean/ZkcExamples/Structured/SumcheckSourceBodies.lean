@@ -15,11 +15,7 @@ abbrev inputShapeHelper : Helper :=
 def inputShapeBody : Region dialect inputShapeHelper.inputs inputShapeHelper.outputs :=
   .letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil <|
   .letOp .indexPowerOfTwo (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
-  .letOp (.indexConstant 2) .nil .nil <|
-  .letOp .indexLess (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.booleanConstant false) .nil .nil <|
-  .letOp .booleanEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .letOp (.branch [.index] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) .nil)) (.cons (.letOp (.indexConstant 2) .nil .nil (.letOp .indexLess (.cons .here (.cons (.there .here) .nil)) .nil (.letOp (.booleanConstant false) .nil .nil (.letOp .booleanEqual (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
   .ret (.cons .here .nil)
 
 abbrev sumAddHelper : Helper :=
@@ -105,13 +101,13 @@ def tableBody : Region dialect tableHelper.inputs tableHelper.outputs :=
   .ret (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))
 
 abbrev pendingHelper : Helper :=
-  ⟨"zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", .local, [(.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩
+  ⟨"zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", .local, [(.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩
 
 def pendingBody : Region dialect pendingHelper.inputs pendingHelper.outputs :=
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.exec (.vectorEmpty "bls12-381.fr")) .nil .nil <|
   .letOp (.mark "s1_create_0") .nil .nil <|
-  .letOp (.createUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495") .nil .nil <|
+  .letOp (.createUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6") .nil .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
 abbrev widthHelper : Helper :=
@@ -139,11 +135,7 @@ def tableShapeFormulaBody : Region dialect tableShapeFormulaHelper.inputs tableS
   .letOp (.invoke (⟨ "zkl_d1a35db6ce1dd3faf44d81ee2d033b68f50349356a0525683219ffff3d77f275", .math, [(.vector "bls12-381.fr"), .index, .index], [.index] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.indexConstant 1) .nil .nil <|
   .letOp .indexEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp (.invoke (⟨ "zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", .math, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr")] ⟩ : Helper)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil <|
-  .letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil <|
-  .letOp (.invoke (⟨ "zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94", .math, [(.vector "bls12-381.fr"), .index, .index], [.index] ⟩ : Helper)) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil))) .nil <|
-  .letOp .indexPowerOfTwo (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .letOp (.branch [(.vector "bls12-381.fr"), .index, .index] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)))) (.cons (.letOp (.invoke (⟨ "zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", .math, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr")] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil (.letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil (.letOp (.invoke (⟨ "zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94", .math, [(.vector "bls12-381.fr"), .index, .index], [.index] ⟩ : Helper)) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))) .nil (.letOp .indexPowerOfTwo (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
   .ret (.cons .here .nil)
 
 abbrev pendingFormulaHelper : Helper :=
@@ -165,11 +157,11 @@ def emptyBody : Region dialect emptyHelper.inputs emptyHelper.outputs :=
   .ret (.cons .here .nil)
 
 abbrev openClaimHelper : Helper :=
-  ⟨"zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", .local, [(.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩
+  ⟨"zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", .local, [(.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩
 
 def openClaimBody : Region dialect openClaimHelper.inputs openClaimHelper.outputs :=
   .letOp (.mark "s0_unpack_0") .nil .nil <|
-  .letOp (.consumeUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495") (.cons .here .nil) .nil <|
+  .letOp (.consumeUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6") (.cons .here .nil) .nil <|
   .ret (.cons (.there .here) (.cons (.there (.there .here)) .nil))
 
 abbrev halvesHelper : Helper :=
@@ -216,11 +208,11 @@ def appendBody : Region dialect appendHelper.inputs appendHelper.outputs :=
   .ret (.cons .here .nil)
 
 abbrev atPrefixHelper : Helper :=
-  ⟨"zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩
+  ⟨"zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩
 
 def atPrefixBody : Region dialect atPrefixHelper.inputs atPrefixHelper.outputs :=
   .letOp (.mark "s0_create_0") .nil .nil <|
-  .letOp (.createUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495") .nil .nil <|
+  .letOp (.createUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6") .nil .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
 abbrev interpolateRealizationHelper : Helper :=
@@ -268,7 +260,7 @@ def stepBody : Region dialect stepHelper.inputs stepHelper.outputs :=
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
 abbrev foldStepHelper : Helper :=
-  ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", .local, [(.vector "bls12-381.fr"), .index, .index, (.field "bls12-381.fr"), (.vector "bls12-381.fr")], [(.vector "bls12-381.fr"), .index, .index]⟩
+  ⟨"finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_body", .local, [(.vector "bls12-381.fr"), .index, .index, (.field "bls12-381.fr"), (.vector "bls12-381.fr")], [(.vector "bls12-381.fr"), .index, .index]⟩
 
 def foldStepBody : Region dialect foldStepHelper.inputs foldStepHelper.outputs :=
   .letOp (.mark "body") .nil .nil <|
@@ -286,11 +278,11 @@ abbrev foldHelper : Helper :=
   ⟨"_finite_admission_3", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr"), .index, .index]⟩
 
 def foldBody : Region dialect foldHelper.inputs foldHelper.outputs :=
-  .letOp (.fold ⟨⟨ "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain", [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")], (.letNode (.elements (.vector "bls12-381.fr") .here) (.ret .here)) ⟩, [(.vector "bls12-381.fr"), .index, .index], [], "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
+  .letOp (.fold ⟨⟨ "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_domain", [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")], (.letNode (.elements (.vector "bls12-381.fr") .here) (.ret .here)) ⟩, [(.vector "bls12-381.fr"), .index, .index], [], "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
 abbrev foldWrapperHelper : Helper :=
-  ⟨"zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", .local, [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr")], [(.vector "bls12-381.fr"), .index, .index]⟩
+  ⟨"zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402", .local, [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr")], [(.vector "bls12-381.fr"), .index, .index]⟩
 
 def foldWrapperBody : Region dialect foldWrapperHelper.inputs foldWrapperHelper.outputs :=
   .letOp (.mark "s0") .nil .nil <|
@@ -302,7 +294,7 @@ abbrev prefixHelper : Helper :=
 
 def prefixBody : Region dialect prefixHelper.inputs prefixHelper.outputs :=
   .letOp (.mark "s0") .nil .nil <|
-  .letOp (.invoke (⟨ "zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", .local, [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr")], [(.vector "bls12-381.fr"), .index, .index] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
+  .letOp (.invoke (⟨ "zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402", .local, [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr")], [(.vector "bls12-381.fr"), .index, .index] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
 abbrev checkTableHelper : Helper :=
@@ -326,11 +318,11 @@ def checkTableBody : Region dialect checkTableHelper.inputs checkTableHelper.out
   .ret (.cons .here .nil)
 
 abbrev checkHelper : Helper :=
-  ⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean]⟩
+  ⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean]⟩
 
 def checkBody : Region dialect checkHelper.inputs checkHelper.outputs :=
   .letOp (.mark "s0_unpack_0") .nil .nil <|
-  .letOp (.consumeUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495") (.cons (.there .here) .nil) .nil <|
+  .letOp (.consumeUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6") (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s3") .nil .nil <|
   .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
   .letOp (.mark "s4") .nil .nil <|
@@ -344,8 +336,8 @@ def checkBody : Region dialect checkHelper.inputs checkHelper.outputs :=
 def reduceSignature : ProtocolSignature where
   name := "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5"
   roles := ["role00000000", "role00000001"]
-  inputs := [(.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")]
-  outputs := [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]
+  inputs := [(.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")]
+  outputs := [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]
   inputScopes := [[0], [0], [0], [1], [1], [1], [0, 1], [1]]
   outputScopes := [[0], [0], [0], [0], [1], [1], [1]]
 
@@ -371,11 +363,11 @@ def reduceBody : Region protocolDialect reduceSignature.inputs reduceSignature.o
   .letOp (.mark "s10") .nil .nil <|
   .letOp (.localCall (⟨ "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [(.vector "bls12-381.fr")] ⟩ : Helper) rfl 0 "s10") .nil .nil <|
   .letOp (.mark "s12") .nil .nil <|
-  .letOp (.localCall (⟨ "zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", .local, [(.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper) rfl 1 "s12") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) .nil))) .nil <|
+  .letOp (.localCall (⟨ "zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", .local, [(.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper) rfl 1 "s12") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) .nil))) .nil <|
   .letOp (.mark "s18") .nil .nil <|
   .letOp (.repeat (⟨ [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.service "random.bls12-381.fr/0")], [0, 1], [[0], [0], [0], [0], [1], [1]], 2⟩ : RepeatSpec) "s18") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there .here)) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) .nil)))))))) (.cons (.letOp (.mark "s19") .nil .nil (.letOp (.localCall (⟨ "zkl_532a609cf36a935835501ca51308940142121e647ca360843a880bf231f04aa6", .local, [(.vector "bls12-381.fr"), .index, .index], [(.field "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper) rfl 0 "s19") (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil))) .nil (.letOp (.mark "label_726f756e64_0") .nil .nil (.letOp (.exchange (.field "bls12-381.fr") 0 1 "label_726f756e64_0") (.cons .here .nil) .nil (.letOp (.mark "") .nil .nil (.letOp (.restrict (.field "bls12-381.fr") [1]) (.cons .here .nil) .nil (.letOp (.mark "label_726f756e64_1") .nil .nil (.letOp (.exchange (.field "bls12-381.fr") 0 1 "label_726f756e64_1") (.cons (.there (.there (.there .here))) .nil) .nil (.letOp (.mark "") .nil .nil (.letOp (.restrict (.field "bls12-381.fr") [1]) (.cons .here .nil) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.fieldAdd "bls12-381.fr") rfl) (.cons (.there (.there .here)) (.cons .here .nil)) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.fieldEqual "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.cons .here .nil)) .nil (.letOp (.mark "s27") .nil .nil (.letOp (.guard 1 "s27") (.cons .here .nil) .nil (.letOp (.mark "label_6368616c6c656e6765") .nil .nil (.letOp (.draw 1 "bls12-381.fr" "label_6368616c6c656e6765") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))) .nil) .nil (.letOp (.mark "label_64656c6976657279_0") .nil .nil (.letOp (.exchange (.field "bls12-381.fr") 1 0 "label_64656c6976657279_0") (.cons .here .nil) .nil (.letOp (.mark "") .nil .nil (.letOp (.restrict (.field "bls12-381.fr") [0]) (.cons .here .nil) .nil (.letOp (.mark "s32") .nil .nil (.letOp (.localCall (⟨ "zkl_3ae183e4974ba027dee61c318edb42bcf3a64a69d220d82168474d3a3169ff4d", .local, [(.vector "bls12-381.fr"), .index, .index, (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), .index, .index] ⟩ : Helper) rfl 0 "s32") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) (.cons .here .nil)))) .nil (.letOp (.mark "s34") .nil .nil (.letOp (.localCall (⟨ "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr")] ⟩ : Helper) rfl 0 "s34") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))) (.cons (.there (.there (.there .here))) .nil)) .nil (.letOp (.mark "s36") .nil .nil (.letOp (.localCall (⟨ "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr")] ⟩ : Helper) rfl 1 "s36") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.fieldConstant "bls12-381.fr" 1) rfl) .nil .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.fieldSubtract "bls12-381.fr") rfl) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil)) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.fieldMultiply "bls12-381.fr") rfl) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) .nil)) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.fieldMultiply "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) .nil)) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.fieldAdd "bls12-381.fr") rfl) (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil))))))))))))))))))))))))))))))))))))))))))))) .nil) <|
   .letOp (.mark "s48") .nil .nil <|
-  .letOp (.localCall (⟨ "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper) rfl 1 "s48") (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)) .nil <|
+  .letOp (.localCall (⟨ "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper) rfl 1 "s48") (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)) .nil <|
   .ret (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))))))
 
 def runSignature : ProtocolSignature where
@@ -392,11 +384,11 @@ def runBody : Region protocolDialect runSignature.inputs runSignature.outputs :=
   .letOp (.mark "s1") .nil .nil <|
   .letOp (.localCall (⟨ "zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr"), .index, .index] ⟩ : Helper) rfl 0 "s1") (.cons (.there .here) (.cons (.there (.there (.there .here))) (.cons .here .nil))) .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.localCall (⟨ "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", .local, [(.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper) rfl 1 "s3") (.cons (.there (.there (.there (.there (.there .here))))) .nil) .nil <|
+  .letOp (.localCall (⟨ "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", .local, [(.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper) rfl 1 "s3") (.cons (.there (.there (.there (.there (.there .here))))) .nil) .nil <|
   .letOp (.mark "label_726564756365") .nil .nil <|
-  .letOp (.protocolApply (⟨ "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5", ["role00000000", "role00000001"], [(.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [[0], [0], [0], [1], [1], [1], [0, 1], [1]], [[0], [0], [0], [0], [1], [1], [1]] ⟩ : ProtocolSignature) [0, 1] "label_726564756365") (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)))))))) .nil <|
+  .letOp (.protocolApply (⟨ "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5", ["role00000000", "role00000001"], [(.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [[0], [0], [0], [1], [1], [1], [0, 1], [1]], [[0], [0], [0], [0], [1], [1], [1]] ⟩ : ProtocolSignature) [0, 1] "label_726564756365") (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)))))))) .nil <|
   .letOp (.mark "s9") .nil .nil <|
-  .letOp (.localCall (⟨ "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean] ⟩ : Helper) rfl 1 "s9") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
+  .letOp (.localCall (⟨ "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.resourceUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean] ⟩ : Helper) rfl 1 "s9") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
   .ret (.cons .here .nil)
 
 end ZkcExamples.Structured.SumcheckSourceBodies

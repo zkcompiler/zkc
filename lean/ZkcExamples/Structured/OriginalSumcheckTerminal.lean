@@ -1,6 +1,8 @@
 module
 
 public import Zkc.Protocols.Sumcheck.Source.Checks
+public import Zkc.Source.Structured.ComponentClosure
+public import Zkc.Source.Structured.SumReference
 public import ZkcExamples.Structured.OriginalSumcheckRoots
 
 @[expose] public section
@@ -22,7 +24,9 @@ abbrev collectBindings : MultilinearCollectBodies.Bindings :=
     "_mathematical_admission_1"⟩
 
 abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
-  ⟨"_finite_admission_3", "_mathematical_admission_2"⟩
+  ⟨"_finite_admission_3", "_mathematical_admission_2", ⟨"zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402",
+    "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_domain",
+    "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_body"⟩⟩
 
 theorem first_bodies : MapFirstContracts.Bodies payload.definitions collectBindings := by
   bind_structured_bodies
@@ -57,7 +61,9 @@ abbrev collectBindings : MultilinearCollectBodies.Bindings :=
     "_mathematical_admission_1"⟩
 
 abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
-  ⟨"_finite_admission_3", "_mathematical_admission_2"⟩
+  ⟨"_finite_admission_3", "_mathematical_admission_2", ⟨"zkl_742995c5dba6615877ef9df6684411ce6d37b702a1b704411cf4a90c38cfad37",
+    "finite_zkl_742995c5dba6615877ef9df6684411ce6d37b702a1b704411cf4a90c38cfad37_s0_domain",
+    "finite_zkl_742995c5dba6615877ef9df6684411ce6d37b702a1b704411cf4a90c38cfad37_s0_body"⟩⟩
 
 theorem first_bodies : MapFirstContracts.Bodies payload.definitions collectBindings := by
   bind_structured_bodies
@@ -88,9 +94,7 @@ end ZkcExamples.Structured.OriginalSumcheckInstances
 namespace ZkcExamples.Structured.OriginalSumcheckRoots.Two
 open Zkc.Source Zkc.Source.Structured
 
-def bothBody : Region dialect [.boolean, .boolean] [.boolean] :=
-  .letOp .booleanAnd (.cons .here (.cons (.there .here) .nil)) .nil <|
-  .ret (.cons .here .nil)
+abbrev bothBody := Generated.Bindings.TwoSumsInputs.helper25Body
 
 theorem both_body : BodyIn payload.definitions bothHelper bothBody :=
   by bind_structured_bodies
@@ -103,14 +107,19 @@ theorem both_present (left right : Bool) :
     combine (OriginalSumcheckLibrary.helpers (F := F) (G := G) payload)
       (.cons (some left) .nil) (.cons (some right) .nil) =
       .done (.cons (some (left && right)) .nil) := by
-  change Participant.owned 0 0
-    (invoke (OriginalSumcheckLibrary.helpers (F := F) (G := G) payload).closed bothHelper)
-    (.cons (some left) (.cons (some right) .nil)) = _
-  simp only [Participant.owned, ↓reduceIte]
-  change (invoke (OriginalSumcheckLibrary.helpers (F := F) (G := G) payload).closed bothHelper
-    (.cons left (.cons right .nil))).bind _ = _
-  rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
-    Zkc.Source.Structured.closed_invoke_plain, both_body.invoke payload.linked]
-  rfl
+  let args : Values (assignment F G) bothHelper.inputs := .cons left (.cons right .nil)
+  change invoke (OriginalSumcheckLibrary.helpers (F := F) (G := G) payload).toOn.components
+    bothHelper args.present = _
+  rw [OriginalSumcheckLibrary.helpers_on]
+  refine (Evaluation.component_invoke_closed (ringModel F G)
+    (interface := OriginalSumcheckLibrary.signature (F := F) (G := G))
+    payload.definitions bothHelper args).trans ?_
+  have calculation := (ReferenceLibrary.Sum.both (ringModel F G)).invoke
+    (helper := bothHelper) payload.definitions payload.linked both_body args trivial
+  refine (congrArg (fun process : PIR.Process closedInterface
+    (Values (assignment F G) bothHelper.outputs) =>
+      (process.interpret (closedLift (I := OriginalSumcheckLibrary.signature (F := F) (G := G)))).bind
+        (fun values => .done values.present)) calculation).trans ?_
+  cases left <;> rfl
 
 end ZkcExamples.Structured.OriginalSumcheckRoots.Two

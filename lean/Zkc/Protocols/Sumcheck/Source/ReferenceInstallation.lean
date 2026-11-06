@@ -121,7 +121,7 @@ open Zkc.Protocols.Sumcheck.Multilinear (endpoints)
 abbrev signature := SumcheckRoundNormalForms.proverSignature
 abbrev pattern := SumcheckRoundNormalForms.proverPattern
 noncomputable abbrev form := SumcheckRoundNormalForms.proverForm
-abbrev bindings := MultilinearSourceBindings.sumcheck
+variable {foldNames : MultilinearBodies.FoldNames}
 
 def results : LawResults model signature.laws where
   result entry := match entry with
@@ -141,7 +141,7 @@ set_option backward.isDefEq.respectTransparency false in
 /-- The three installed mathematical laws account for every local helper used
 by the actual honest producer. Captures and columns remain in its full output. -/
 theorem laws (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions bindings) (index : Nat) (xs : List (model.Field field)) (n w : Nat)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames)) (index : Nat) (xs : List (model.Field field)) (n w : Nat)
     (point : List (model.Field field)) (service : Option Nat)
     (bound : xs.length < indexLimit) (small : n < 64) (width : 0 < w)
     (shape : xs.length = 2 ^ n * w) (positive : 0 < n) :
@@ -230,7 +230,7 @@ theorem presentation (definitions : List CheckedDefinition)
   kernel_rfl
 
 theorem body_reference (definitions : List CheckedDefinition)
-    (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions bindings)
+    (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (ctx : ProtocolContext) (distinct : RosterDistinct ctx 0 2)
     (index : Nat) (xs : List (model.Field field)) (n w : Nat)

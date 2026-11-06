@@ -12,7 +12,9 @@ namespace ZkcExamples.Structured.MapPrefixBodies
 open Zkc.Source Zkc.Source.Structured
 
 abbrev bindings : MultilinearPrefixBodies.Bindings :=
-  ⟨"_finite_admission_5", "_mathematical_admission_0"⟩
+  ⟨"_finite_admission_5", "_mathematical_admission_0", ⟨"zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c",
+    "finite_zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c_s0_domain",
+    "finite_zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c_s0_body"⟩⟩
 
 abbrev mapHelper := MapFirstBodies.mapHelper
 abbrev mapBody := MapFirstBodies.mapBody
@@ -72,7 +74,7 @@ abbrev rowsBody := MapFirstBodies.rowsBody
 abbrev prefixHelper : Helper := ⟨"zkl_96cd7ea616c46001ac0fa39e06ab5b8042d6d50ce126ce52a57cd4f1fd0ed9be", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
 def prefixBody : Region dialect [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
-  MultilinearBodies.prefixBody "bls12-381.fr" (MultilinearSourceBindings.common)
+  MultilinearPrefixBodies.prefixBody bindings.symbols
 
 abbrev stepHelper : Helper := ⟨"zkl_195a79478f48dffc2a6917273d8317df0fabae786920a46fa2ac6b2737144299", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
@@ -88,20 +90,20 @@ abbrev halvesBody := MapFirstBodies.halvesBody
 abbrev interpolateHelper := MapFirstBodies.interpolateHelper
 abbrev interpolateBody := MapFirstBodies.interpolateBody
 
-abbrev foldWrapperHelper := MultilinearPrefixBodies.foldWrapperHelper
+abbrev foldWrapperHelper := MultilinearPrefixBodies.foldWrapperHelper bindings.symbols
 
 abbrev foldWrapperBody := MultilinearPrefixBodies.foldWrapperBody bindings.fold
 
-abbrev foldStepHelper : Helper := ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
+abbrev foldStepHelper := MultilinearPrefixBodies.foldStepHelper bindings.symbols
 
 def foldStepBody : Region dialect [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .vector "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
   MultilinearBodies.foldStepBody "bls12-381.fr" (MultilinearSourceBindings.common)
 
 abbrev foldHelper := MultilinearPrefixBodies.foldHelper bindings.fold
 
-abbrev foldSpec := MultilinearPrefixBodies.foldSpec
+abbrev foldSpec := MultilinearPrefixBodies.foldSpec bindings.symbols
 
-abbrev foldBody := MultilinearPrefixBodies.foldBody
+abbrev foldBody := MultilinearPrefixBodies.foldBody bindings.symbols
 
 abbrev valuesHelper := MapFirstBodies.valuesHelper
 abbrev valuesBody := MapFirstBodies.valuesBody

@@ -33,6 +33,21 @@ theorem actual_pair (xs ys : List (model.Field field)) (a b : model.Field field)
         (.cons xs (.cons ys (.cons a (.cons b .nil))))) :=
   Sum.pair_eq model (source .twoSums).payload.linked (outerSumBodies model) _ (pairBody model) xs ys a b
 
+/-- A false first comparison returns before the second finite-domain check, including
+when the second vector would exhaust its own fold. -/
+theorem actual_pair_left_false (xs ys : List (model.Field field)) (a b : model.Field field)
+    (small : xs.length < indexLimit) (wrong : a ≠ xs.sum) :
+    invoke (Multilinear.closed model (definitions := (source .twoSums).payload.definitions))
+      TwoSumsInputs.helper4Helper (.cons xs (.cons ys (.cons a (.cons b .nil)))) =
+      .done (.cons false .nil) := by
+  rw [actual_pair]
+  simp [Sum.pairRelation, small, wrong, primitiveOutcome]
+
+/-- Swapping the two same-ABI restriction wrappers cannot establish a body association. -/
+example : (foldNames .small).wrapper ≠ (foldNames .twoSums).wrapper ∧
+    (foldNames .small).step ≠ (foldNames .twoSums).step ∧
+    (foldNames .small).domain ≠ (foldNames .twoSums).domain := by decide +kernel
+
 theorem actual_pending (xs point : List (model.Field field)) (n w : Nat) (scalar : model.Field field) :
     invoke (Multilinear.closed model (definitions := (source selection).payload.definitions))
       SmallSumcheckInputs.helper14Helper (.cons xs (.cons n (.cons w (.cons point (.cons scalar .nil))))) =

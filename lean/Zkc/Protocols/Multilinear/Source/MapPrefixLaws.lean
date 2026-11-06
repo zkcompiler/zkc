@@ -23,11 +23,11 @@ def prefixInputs (xs : List F) (dimension columns : Nat) (point : List F) :
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The actual finite domain admits the point before any callback. -/
-theorem domain_admit (point : List F) :
-    foldSpec.domain.admit (.cons point (.nil : Values (assignment F G) [])) =
+theorem domain_admit {symbols : MultilinearBodies.FoldNames} (point : List F) :
+    (MultilinearPrefixBodies.foldSpec symbols).domain.admit (.cons point (.nil : Values (assignment F G) [])) =
       if point.length < indexLimit then .returned (point.map fun r => .cons r .nil)
       else .stopped .exhausted := by
-  simp [foldSpec, DomainSpec.admit_elements, Collection.values, Values.get]
+  simp [MultilinearPrefixBodies.foldSpec, DomainSpec.admit_elements, Collection.values, Values.get]
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem triple_eta {Value : Ty → Type} {a b c : Ty} (value : Values Value [a,b,c]) :
@@ -52,9 +52,9 @@ theorem foldStep_body (table : Meanings F G) (xs : List F) (dimension columns : 
   simp only [triple_eta, PIR.Process.bind_done]
   rfl
 
-theorem prefix_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
-    prefixBody.denote (meaning F G table) (prefixInputs xs dimension columns point).get =
-      invoke table foldWrapperHelper (prefixInputs xs dimension columns point) := by
+theorem prefix_body {symbols : MultilinearBodies.FoldNames} (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
+    (MultilinearPrefixBodies.prefixBody symbols).denote (meaning F G table) (prefixInputs xs dimension columns point).get =
+      invoke table (MultilinearPrefixBodies.foldWrapperHelper symbols) (prefixInputs xs dimension columns point) := by
   dsimp only [prefixInputs, vector]
   rw [MapSourceExpansions.prefix_prefix]
   simp only [triple_eta, PIR.Process.bind_done]
@@ -66,14 +66,14 @@ theorem foldWrapper_body (table : Meanings F G) {computation : String} (xs : Lis
   rw [MapSourceExpansions.prefix_foldWrapper]
   simp only [triple_eta, PIR.Process.bind_done]
 
-theorem fold_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
-    foldBody.denote (meaning F G table)
+theorem fold_body {symbols : MultilinearBodies.FoldNames} (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
+    (MultilinearPrefixBodies.foldBody symbols).denote (meaning F G table)
       (Values.cons point (.cons xs (.cons dimension (.cons columns .nil)))).get =
-      Evaluation.denoteFold table foldSpec
+      Evaluation.denoteFold table (MultilinearPrefixBodies.foldSpec symbols)
         (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
-  simp only [foldBody, MultilinearPrefixBodies.foldBody, MultilinearBodies.foldBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
+  simp only [MultilinearPrefixBodies.foldBody, MultilinearBodies.foldBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Environment.push, Environment.push]
-  trans (Evaluation.denoteFold table foldSpec
+  trans (Evaluation.denoteFold table (MultilinearPrefixBodies.foldSpec symbols)
     (.cons point (.cons xs (.cons dimension (.cons columns .nil))))).bind .done
   · congr 1
     funext result
@@ -198,16 +198,16 @@ theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat
   simp only [eta, PIR.Process.bind_done]
 
 /-- Actual finite domain and callback ABI, including the full captured point. -/
-def FoldStepLaw (table : Meanings F G) : Prop :=
+def FoldStepLaw (table : Meanings F G) (symbols : MultilinearBodies.FoldNames) : Prop :=
   ∀ (xs : List F) (dimension columns : Nat) (r : F) (point : List F),
-    invoke table foldStepHelper (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil))))) =
+    invoke table (MultilinearPrefixBodies.foldStepHelper symbols) (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil))))) =
       invoke table firstHelper (firstInputs xs dimension columns r)
 
 /-- Reusable complete finite-body equation, not merely a fold over an ideal helper. -/
-theorem finite_prefix_generic_body (table : Meanings F G) (first : FirstLaw table)
-    (step : FoldStepLaw table) (xs : List F) (dimension columns : Nat) (point : List F)
+theorem finite_prefix_generic_body {symbols : MultilinearBodies.FoldNames} (table : Meanings F G) (first : FirstLaw table)
+    (step : FoldStepLaw table symbols) (xs : List F) (dimension columns : Nat) (point : List F)
     (shape : HasShape xs dimension columns) (vectorBound : xs.length < indexLimit) :
-    foldBody.denote (meaning F G table)
+    (MultilinearPrefixBodies.foldBody symbols).denote (meaning F G table)
       (Values.cons point (.cons xs (.cons dimension (.cons columns .nil)))).get =
       if point.length < indexLimit then
         if point.length ≤ dimension then
@@ -215,12 +215,12 @@ theorem finite_prefix_generic_body (table : Meanings F G) (first : FirstLaw tabl
         else .halt .reject
       else .halt .exhausted := by
   rw [fold_body]
-  change Evaluation.denoteFold table foldSpec
+  change Evaluation.denoteFold table (MultilinearPrefixBodies.foldSpec symbols)
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
   rw [Evaluation.denoteFold_pack, domain_admit]
   split
   · simp only [Finite.admitThen, Finite.fold_map]
-    have transition : (fun state r => Evaluation.foldTransition table foldSpec (.cons point .nil) .nil state (.cons r .nil)) =
+    have transition : (fun state r => Evaluation.foldTransition table (MultilinearPrefixBodies.foldSpec symbols) (.cons point .nil) .nil state (.cons r .nil)) =
         fun (state : Values (assignment F G) [vector, .index, .index]) r =>
           invoke table firstHelper (state.append (.cons r .nil)) := by
       funext state r

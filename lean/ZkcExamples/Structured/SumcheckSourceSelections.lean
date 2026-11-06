@@ -54,20 +54,38 @@ noncomputable def multilinearInstallation : {bindings : MultilinearBodies.Bindin
       SumcheckPendingBodies.custodySlot SmallSumcheckInputs.helper33Helper.name} := by
   infer_reference_installation
 
+noncomputable def twoMultilinearInstallation : {bindings : MultilinearBodies.Bindings //
+    Multilinear.Admission.Bodies TwoSumsInputs.program.payload.definitions field bindings
+      SumcheckPendingBodies.custodySlot TwoSumsInputs.helper37Helper.name} := by
+  infer_reference_installation
+
 noncomputable abbrev bindings := multilinearInstallation.val
 abbrev checker := SmallSumcheckInputs.helper33Helper.name
 
+noncomputable def foldNames (selection : Selection) : MultilinearBodies.FoldNames :=
+  let chosen := match selection with
+    | .small => multilinearInstallation.val
+    | .twoSums => twoMultilinearInstallation.val
+  ⟨chosen.foldWrapper, chosen.foldDomain, chosen.foldStep⟩
+
+noncomputable abbrev sourceBindings (selection : Selection) :=
+  MultilinearSourceBindings.sumcheckFor (foldNames selection)
+
 /-- Exact body checks are shared proofs, with each instance's checking charged. -/
 theorem roundBodies (selection : Selection) :
-    SumcheckReferenceInstallation.Bodies (source selection).payload.definitions bindings := by
+    SumcheckReferenceInstallation.Bodies (source selection).payload.definitions (sourceBindings selection) := by
   constructor
-  · cases selection <;> select_reference_bodies
+  · cases selection
+    · exact multilinearInstallation.property.toBodies
+    · exact twoMultilinearInstallation.property.toBodies
   · cases selection <;> bind_structured_bodies
 
 theorem admissionBodies (selection : Selection) :
-    Multilinear.Admission.Bodies (source selection).payload.definitions field bindings SumcheckPendingBodies.custodySlot checker := by
-  refine ⟨(roundBodies selection).toBodies, ?_, ?_, ?_, ?_, ?_⟩
-  all_goals cases selection <;> bind_structured_bodies
+    Multilinear.Admission.Bodies (source selection).payload.definitions field (sourceBindings selection)
+      SumcheckPendingBodies.custodySlot checker := by
+  cases selection
+  · exact multilinearInstallation.property
+  · exact twoMultilinearInstallation.property
 
 theorem sumBodies (model : DomainModel) (selection : Selection) :
     Sum.Bodies model (source selection).payload.definitions field sumBindings := by

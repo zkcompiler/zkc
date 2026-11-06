@@ -15,10 +15,10 @@ open Zkc.Polynomial.Multilinear (restrictPrefixValues)
 structure Bodies (definitions : List CheckedDefinition)
     (bindings : MultilinearPrefixBodies.Bindings := MapPrefixBodies.bindings) : Prop where
   step : BodyIn definitions stepHelper stepBody
-  foldStep : BodyIn definitions foldStepHelper foldStepBody
-  fold : BodyIn definitions (MultilinearPrefixBodies.foldHelper bindings.fold) foldBody
-  foldWrapper : BodyIn definitions foldWrapperHelper (MultilinearPrefixBodies.foldWrapperBody bindings.fold)
-  prefixBody : BodyIn definitions prefixHelper MapPrefixBodies.prefixBody
+  foldStep : BodyIn definitions (MultilinearPrefixBodies.foldStepHelper bindings.symbols) foldStepBody
+  fold : BodyIn definitions (MultilinearPrefixBodies.foldHelper bindings.fold) (MultilinearPrefixBodies.foldBody bindings.symbols)
+  foldWrapper : BodyIn definitions (MultilinearPrefixBodies.foldWrapperHelper bindings.symbols) (MultilinearPrefixBodies.foldWrapperBody bindings.fold)
+  prefixBody : BodyIn definitions prefixHelper (MultilinearPrefixBodies.prefixBody bindings.symbols)
   values : BodyIn definitions valuesHelper valuesBody
   valuesRealization : BodyIn definitions (MultilinearPrefixBodies.valuesRealizationHelper bindings.values) valuesRealizationBody
 
@@ -58,7 +58,7 @@ theorem step_equation (xs : List F) (dimension columns : Nat) (r : F) :
   (bodies.step.invoke linked (firstInputs xs dimension columns r)).trans
     (step_body _ xs dimension columns r)
 
-theorem foldStep_equation : FoldStepLaw (closedMeanings (F := F) (G := G) definitions) := by
+theorem foldStep_equation : FoldStepLaw (closedMeanings (F := F) (G := G) definitions) bindings.symbols := by
   intro xs dimension columns r point
   exact (bodies.foldStep.invoke linked
     (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil)))))).trans
@@ -68,7 +68,7 @@ theorem foldStep_equation : FoldStepLaw (closedMeanings (F := F) (G := G) defini
 /-- All source wrappers reduce to the actual finite body in this same table. -/
 theorem prefix_finite_body (xs : List F) (dimension columns : Nat) (point : List F) :
     invoke (closedMeanings (F := F) (G := G) definitions) prefixHelper (prefixInputs xs dimension columns point) =
-      foldBody.denote (meaning F G (closedMeanings (F := F) (G := G) definitions))
+      (MultilinearPrefixBodies.foldBody bindings.symbols).denote (meaning F G (closedMeanings (F := F) (G := G) definitions))
         (Values.cons point (.cons xs (.cons dimension (.cons columns .nil)))).get := by
   rw [bodies.prefixBody.invoke linked, prefix_body, bodies.foldWrapper.invoke linked,
     foldWrapper_body, bodies.fold.invoke linked]
@@ -92,7 +92,7 @@ theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F
     invoke (closedMeanings (F := F) (G := G) definitions) prefixHelper (prefixInputs xs dimension columns point) =
       .halt .exhausted := by
   rw [prefix_finite_body linked bodies, fold_body]
-  change Evaluation.denoteFold (closedMeanings (F := F) (G := G) definitions) foldSpec
+  change Evaluation.denoteFold (closedMeanings (F := F) (G := G) definitions) (MultilinearPrefixBodies.foldSpec bindings.symbols)
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
   rw [Evaluation.denoteFold_pack, domain_admit, ite_eq_right invalid]
   rfl

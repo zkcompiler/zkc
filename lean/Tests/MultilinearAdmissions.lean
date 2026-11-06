@@ -13,7 +13,7 @@ abbrev slot := ZkcExamples.Structured.SumcheckPendingBodies.custodySlot
 abbrev checker := "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc"
 
 theorem bodies (selected : RetainedSource) :
-    Admission.Bodies (source selected).payload.definitions "bls12-381.fr" bindings slot checker := by
+    Admission.Bodies (source selected).payload.definitions "bls12-381.fr" (bindings selected) slot checker := by
   refine ⟨Tests.MultilinearReferences.bodies selected, ?_, ?_, ?_, ?_, ?_⟩
   all_goals cases selected <;> bind_structured_bodies
 
@@ -22,7 +22,7 @@ variable (model : DomainModel) (selected : RetainedSource)
 theorem actual_constructor (xs : List (model.Field "bls12-381.fr")) (n w : Nat)
     (lengthBound : xs.length < indexLimit) (nBound : n < indexLimit) (wBound : w < indexLimit) :
     invoke (closed model (definitions := (source selected).payload.definitions))
-      (Admission.tableHelper "bls12-381.fr" bindings) (tableValues model "bls12-381.fr" xs n w) =
+      (Admission.tableHelper "bls12-381.fr" (bindings selected)) (tableValues model "bls12-381.fr" xs n w) =
       primitiveOutcome (Admission.tableOutcome model "bls12-381.fr" xs n w) :=
   Admission.table_eq model (source selected).payload.linked (bodies selected)
     xs n w lengthBound nBound wBound
@@ -54,7 +54,7 @@ example (_xs _point : List (model.Field "bls12-381.fr"))
     (_claim : model.Field "bls12-381.fr") : True := by
   fail_if_success
     have : invoke (closed model (definitions := (source selected).payload.definitions))
-        (Admission.checkTableHelper "bls12-381.fr" bindings)
+        (Admission.checkTableHelper "bls12-381.fr" (bindings selected))
         (Admission.checkInputs model "bls12-381.fr" _xs _point _claim) =
         primitiveOutcome (Admission.checkTableOutcome model "bls12-381.fr" _xs _point _claim) := by
       apply Admission.checkTable_eq model (source selected).payload.linked (bodies selected)

@@ -35,7 +35,7 @@ theorem producerCallback_selected (selected : RetainedSource) :
   cases selected <;> kernel_rfl
 
 theorem bodies (selected : RetainedSource) :
-    SumcheckReferenceInstallation.Bodies (source selected).payload.definitions bindings := by
+    SumcheckReferenceInstallation.Bodies (source selected).payload.definitions (bindings selected) := by
   refine ⟨Tests.MultilinearReferences.bodies selected, ?_⟩
   cases selected <;> bind_structured_bodies
 
@@ -78,7 +78,7 @@ example (_xs : List (model.Field "bls12-381.fr")) (_n _w : Nat)
   fail_if_success
     have : invoke (ReferenceLibrary.Multilinear.closed model
         (definitions := (source selected).payload.definitions))
-        (ReferenceLibrary.Multilinear.firstHelper "bls12-381.fr" bindings)
+        (ReferenceLibrary.Multilinear.firstHelper "bls12-381.fr" (bindings selected))
         (.cons _xs (.cons _n (.cons _w (.cons _r .nil)))) =
         primitiveOutcome (ReferenceLibrary.Multilinear.firstOutcome model "bls12-381.fr"
           (.cons _xs (.cons _n (.cons _w (.cons _r .nil))))) := by
@@ -89,8 +89,8 @@ example (_xs : List (model.Field "bls12-381.fr")) (_n _w : Nat)
 example : True := by
   fail_if_success
     have : BodyIn (source .small).payload.definitions
-        (ReferenceLibrary.Multilinear.firstHelper "bls12-381.fr" bindings)
-        (MultilinearBodies.firstBody "bls12-381.fr" {bindings with collection := "changed_collection"}) := by
+        (ReferenceLibrary.Multilinear.firstHelper "bls12-381.fr" (bindings selected))
+        (MultilinearBodies.firstBody "bls12-381.fr" { bindings selected with collection := "changed_collection"}) := by
       bind_structured_bodies
   trivial
 
@@ -98,7 +98,7 @@ example : True := by
 example : True := by
   fail_if_success
     have : BodyIn (source .small).payload.definitions
-        (ReferenceLibrary.Multilinear.firstHelper "bls12-381.fr" bindings)
+        (ReferenceLibrary.Multilinear.firstHelper "bls12-381.fr" (bindings selected))
         (.ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))) := by
       bind_structured_bodies
   trivial

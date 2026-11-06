@@ -51,7 +51,9 @@ abbrev collectBindings : MultilinearCollectBodies.Bindings :=
     firstCollection.body, HelperBodies.interpolateRealizationHelper.name⟩
 
 abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
-  ⟨HelperBodies.prefixRestrictionHelper.name, HelperBodies.tableValuesHelper.name⟩
+  ⟨HelperBodies.prefixRestrictionHelper.name, HelperBodies.tableValuesHelper.name, ⟨"zkl_f76cda8e28f45b05fc9c2123a0520855404c183a59c052d86cc45895f4878f8b",
+    "finite_zkl_f76cda8e28f45b05fc9c2123a0520855404c183a59c052d86cc45895f4878f8b_s0_domain",
+    "finite_zkl_f76cda8e28f45b05fc9c2123a0520855404c183a59c052d86cc45895f4878f8b_s0_body"⟩⟩
 
 abbrev lineBindings : MultilinearCollectBodies.Bindings :=
   ⟨HelperBodies.lineInterpolationMapHelper.name, lineCollection.domain.name,

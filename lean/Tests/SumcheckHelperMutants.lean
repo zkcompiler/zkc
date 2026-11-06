@@ -41,7 +41,7 @@ def checkTableIgnoreClaimBody : Region dialect [.vector "bls12-381.fr", .vector 
 
 def checkAcceptMalformedBody : Region dialect checkHelper.inputs checkHelper.outputs :=
   .letOp (.mark "s0_unpack_0") .nil .nil <|
-  .letOp (.consumeUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495") (.cons (.there .here) .nil) .nil <|
+  .letOp (.consumeUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6") (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s3") .nil .nil <|
   .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
   .letOp (.mark "s4") .nil .nil <|
@@ -58,7 +58,7 @@ def checkTableIgnoreClaimDefinition := checkedBody checkTableHelper checkTableIg
 
 def checkPermutedBody : Region dialect checkHelper.inputs checkHelper.outputs :=
   .letOp (.mark "s0_unpack_0") .nil .nil <|
-  .letOp (.consumeUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495") (.cons (.there .here) .nil) .nil <|
+  .letOp (.consumeUnit "zkl_resource_e879b580f7fdcf4d6debf9c9777de579b7015ecbc447abeffa5e14af217ae4e6") (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s3") .nil .nil <|
   .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
   .letOp (.mark "s4") .nil .nil <|

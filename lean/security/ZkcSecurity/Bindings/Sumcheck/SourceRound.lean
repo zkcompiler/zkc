@@ -23,6 +23,7 @@ open SumcheckReferenceInstallation
 open Zkc.Polynomial.Multilinear
 open OracleComp OracleSpec
 
+variable {foldNames : MultilinearBodies.FoldNames}
 variable (model : DomainModel) [fieldLaw : Fact (IsField (model.Field field))]
 local instance : Field (model.Field field) := fieldLaw.out.toField
 
@@ -149,7 +150,7 @@ theorem honest_reference {H O : Type} {n : Nat}
 is separate and does not supply a per-instance whole-source equation here. -/
 def source_adversarial {Frame : Type} {n : Nat}
     (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx 1 2)
     (index handle : Nat)
@@ -178,7 +179,7 @@ def source_adversarial {Frame : Type} {n : Nat}
 
 theorem source_honest {H O : Type} {n : Nat}
     (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (index : Nat) (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx 1 2) (handle : Nat) (point : List (model.Field field))
     (table : Table (model.Field field) (n+1)) (scalar : model.Field field)
@@ -209,7 +210,7 @@ sampling law is quantified at each reached history and for any unequal degree
 one polynomials; source lookup and honest delivery do not supply it. -/
 def source_sampled {Frame : Type} {n : Nat}
     (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx 1 2)
     (index handle : Nat)
@@ -275,7 +276,7 @@ theorem source_honest_represented {I : PIR.Signature} {Context H O : Type} {Stat
     {program : Program I Context State (Message.endpoints (model.Field field))}
     (layout : TableComponent.Layout program) {n : Nat} (original : State (n+1))
     (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (index : Nat) (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx 1 2)
     (handle : Nat) (point : List (model.Field field))

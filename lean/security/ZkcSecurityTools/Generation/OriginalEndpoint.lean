@@ -12,15 +12,18 @@ namespace ZkcSecurity.Generation.OriginalEndpoint
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
 mutual
-  /-- Conservative syntax analysis, including nested bounded loops. This is
+  /-- Conservative field-challenge count, including nested bounded loops. This is
   metadata only: it supplies neither a probability price nor a cost proof. -/
   def maximumCharges : List Zkc.Construction.Instruction → Nat
     | [] => 0
     | instruction :: rest => instructionCharges instruction + maximumCharges rest
   def instructionCharges : Zkc.Construction.Instruction → Nat
-    | ⟨.loop _ maximum, _, _, [⟨regionInputs, body, _⟩]⟩ => maximum * maximumCharges body
-    | ⟨.challenge _ _ _, _, _, body⟩ => 1 + maximumCharges body
-    | ⟨_, _, _, body⟩ => maximumCharges body
+    | ⟨.loop _ maximum, _, _, regions⟩ => maximum * regionCharges regions
+    | ⟨.challenge _ _ _, _, _, regions⟩ => 1 + regionCharges regions
+    | ⟨_, _, _, regions⟩ => regionCharges regions
+  def regionCharges : List InstructionRegion → Nat
+    | [] => 0
+    | ⟨_, body, _⟩ :: rest => maximumCharges body + regionCharges rest
 end
 
 /-- A proposed scalar bound and its conversion theorem. Names are printer

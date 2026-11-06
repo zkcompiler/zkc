@@ -63,7 +63,10 @@ abbrev collectBindings : MultilinearCollectBodies.Bindings :=
     firstCollection.body, GkrSourceBodies.helper42Helper.name⟩
 
 abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
-  ⟨GkrSourceBodies.helper48Helper.name, GkrSourceBodies.helper41Helper.name⟩
+  ⟨GkrSourceBodies.helper48Helper.name, GkrSourceBodies.helper41Helper.name,
+    ⟨GkrSourceBodies.helper49Helper.name,
+      ((fold? GkrSourceBodies.helper48Body).get (by decide +kernel)).domain.name,
+      GkrSourceBodies.helper47Helper.name⟩⟩
 
 abbrev lineBindings : MultilinearCollectBodies.Bindings :=
   ⟨GkrSourceBodies.helper103Helper.name, lineCollection.domain.name,

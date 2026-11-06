@@ -144,7 +144,7 @@ def powerStepWrapperBody : Region dialect powerStepWrapperHelper.inputs powerSte
   .ret (.cons .here (.cons (.there .here) .nil))
 
 abbrev powerFoldCallbackHelper : Helper :=
-  ⟨"finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_body", .local, [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr"), (.field "bls12-381.fr")]⟩
+  ⟨"finite_zkl_ab1606681303f98565b6712556333e7dae847022aa12fe8b12138aeca5af88a1_s0_body", .local, [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr"), (.field "bls12-381.fr")]⟩
 
 def powerFoldCallbackBody : Region dialect powerFoldCallbackHelper.inputs powerFoldCallbackHelper.outputs :=
   .letOp (.mark "body") .nil .nil <|
@@ -170,11 +170,11 @@ abbrev powerFoldHelper : Helper :=
   ⟨"_finite_admission_28", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr"), (.field "bls12-381.fr")]⟩
 
 def powerFoldBody : Region dialect powerFoldHelper.inputs powerFoldHelper.outputs :=
-  .letOp (.fold ⟨⟨ "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain", [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")], (.letNode (.elements (.vector "bls12-381.fr") .here) (.ret .here)) ⟩, [(.field "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr")], "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
+  .letOp (.fold ⟨⟨ "finite_zkl_ab1606681303f98565b6712556333e7dae847022aa12fe8b12138aeca5af88a1_s0_domain", [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")], (.letNode (.elements (.vector "bls12-381.fr") .here) (.ret .here)) ⟩, [(.field "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr")], "finite_zkl_ab1606681303f98565b6712556333e7dae847022aa12fe8b12138aeca5af88a1_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) .nil))
 
 abbrev powerFoldWrapperHelper : Helper :=
-  ⟨"zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d", .local, [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr")], [(.field "bls12-381.fr"), (.field "bls12-381.fr")]⟩
+  ⟨"zkl_ab1606681303f98565b6712556333e7dae847022aa12fe8b12138aeca5af88a1", .local, [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr")], [(.field "bls12-381.fr"), (.field "bls12-381.fr")]⟩
 
 def powerFoldWrapperBody : Region dialect powerFoldWrapperHelper.inputs powerFoldWrapperHelper.outputs :=
   .letOp (.mark "s0") .nil .nil <|
@@ -188,7 +188,7 @@ def evaluateCoefficientsBody : Region dialect evaluateCoefficientsHelper.inputs 
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.invoke (⟨ "_mathematical_admission_26", .local, [], [(.field "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper)) .nil .nil <|
   .letOp (.mark "s2") .nil .nil <|
-  .letOp (.invoke (⟨ "zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d", .local, [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr")], [(.field "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there .here))) (.cons (.there (.there .here)) .nil)))) .nil <|
+  .letOp (.invoke (⟨ "zkl_ab1606681303f98565b6712556333e7dae847022aa12fe8b12138aeca5af88a1", .local, [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr")], [(.field "bls12-381.fr"), (.field "bls12-381.fr")] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there .here))) (.cons (.there (.there .here)) .nil)))) .nil <|
   .ret (.cons .here .nil)
 
 abbrev powerOfTwoHelper : Helper :=

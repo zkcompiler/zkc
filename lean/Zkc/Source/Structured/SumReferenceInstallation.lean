@@ -98,7 +98,7 @@ theorem pair_eq (name : String)
   apply ReferenceLaw.invoke (model := model)
     (helper := ⟨name, .math, [.vector field, .vector field, .field field, .field field], [.boolean]⟩)
     (pairRelation model field b) definitions linked associated
-  exact ⟨total_eq model linked bodies xs, total_eq model linked bodies ys⟩
+  exact ⟨total_eq model linked bodies xs, fun _ _ => total_eq model linked bodies ys⟩
 
 omit bodies in
 set_option backward.isDefEq.respectTransparency false in
