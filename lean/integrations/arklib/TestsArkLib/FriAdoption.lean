@@ -1,7 +1,7 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.HolderPadding
-import ZkcExamples.Structured.FriBinding
+import ZkcExamples.Structured.FriBindingExecution
 import ZkcArkLibExamples.Fri.PublishedSampling
 import ZkcArkLibExamples.Fri.ClearCertificate
 import ZkcTools.DeclarationAudit
@@ -185,8 +185,14 @@ run_cmd ZkcTools.DeclarationAudit.checkCurrent "FRI-ADOPTION-CONTROLS-PASS"
 run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Source.Structured.OracleQueryDerivation, `ZkcExamples.Structured.FriIndexCollections,
    `ZkcExamples.Structured.FriScalarLoop, `ZkcExamples.Structured.FriBoundedPositions,
-   `ZkcExamples.Structured.FriBinding, `ZkcExamples.Structured.FriApplications, `ZkcArkLibExamples.Fri.RetainedQueries, `ZkcArkLibExamples.Fri.RetainedSampling,
+   `ZkcExamples.Structured.FriBinding, `ZkcExamples.Structured.FriApplications,
+   `ZkcArkLibExamples.Fri.RetainedQueries, `ZkcArkLibExamples.Fri.RetainedSampling,
    `ZkcArkLibExamples.Fri.PublishedSampling] "FRI-INSTALLED-SCALAR-SAMPLING-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Semantics.HandlerReturn, `Zkc.Source.Structured.OracleForwarding,
+   `Zkc.Source.Structured.OracleLocalAction, `Zkc.Source.Structured.ReceiverForwarding,
+   `ZkcExamples.Structured.FriBindingExecution] "FRI-RECEIVER-FORWARDING-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check
   [`ZkcArkLibExamples.Fri.RetainedDomain,
