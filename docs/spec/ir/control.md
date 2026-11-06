@@ -246,6 +246,14 @@ retained dormant arms. An unrelated, uncalled definition cannot switch another
 definition's admission policy. Branch-free generic iteration retains its
 [joint count check](iteration.md); source-certified and named Entry admission
 still derive and discharge the required common-input inventory independently.
+Finite expressions can agree across private helper names. The reader resolves each
+domain, step and predicate at its use and compares the closed definitions through
+typed MLIR operation equivalence. It preserves ordered SSA uses, result positions,
+capture types, regions, and non-executable properties. A changed domain, captured
+operand or callback body can introduce a selector requirement. This analysis
+consumes the caller's cumulative work. Its transient classes have no role in
+source identity, statement binding or proof reuse.
+
 Call-closure discovery and subsequent derivations share one cumulative work
 allowance; discovery is not unmetered preparation for that derivation.
 

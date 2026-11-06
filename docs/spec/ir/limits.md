@@ -32,6 +32,8 @@ both run, keep the readers in agreement.
 | Pointwise map formulas and correspondence | Shared helper expansion budget; expanded formula within the Ring view limits of 65,536 nodes and depth 1,024; 1,000,000 matcher steps |
 | Mathematical preparation helper copying | 100,000 operations and 1,000,000 operand/result slots, cumulative across realization stages |
 | Optional finite recognition | Separate cumulative allowances of 100,000 structural, equation and extent/bound-evidence steps |
+| Common construction preparation | 3,000,000 charged work units per preparation |
+| Native codec formation | 2,000,000 charged work units per codec reader |
 | Static finite-reference closure | 1,000,000 actual operation/reference visits and 64 reference levels; includes scoped outcome/control syntax |
 | Standalone finite formation facts | 65,536 shared extraction/derivation steps; nested queries do not reset the allowance |
 | SSA fact extraction | At most 256 nested interpretation frames, including domain traversal, helper and actual/formal environments; exhaustion returns Capacity |

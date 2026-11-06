@@ -978,4 +978,3 @@ LogicalResult summarize(Operation *op, Summary &result) {
   return DependencyAnalysis().computation(op, result);
 }
 } // namespace zkc::finite
-

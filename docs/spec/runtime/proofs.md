@@ -14,6 +14,12 @@ decoding measurement refuses closed before allocating or accepting a receive.
 Invalid bytes complete the receive with Decode; capacity and trusted adapter
 failures remain Host failures and cannot establish acceptance or rejection.
 
+The native verifier admits a complete proof under one 8,000,000-unit work
+allowance, including dormant regions. Repeated references may reuse a checked
+function under the installed unrestricted contracts. When a caller supplies a
+support predicate, each use rechecks that predicate, including codec and wire
+uses. The admission allowance and the invocation's execution budget are separate.
+
 Native implements these contracts in `zkc-cpu`. `zkc` retains native
 deployment admission, independent setup/public-input/binding authority, transport
 and acceptance selection, immutable prepared computation identity, attempts and
