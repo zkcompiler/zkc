@@ -51,6 +51,9 @@ def virtualConstruction : Region.OperationCut fieldDelivery.next :=
 set_option maxRecDepth 6000 in
 checked_cut_prefix prepareView := virtualConstruction
 
+set_option maxRecDepth 6000 in
+checked_cut_suffix finishRound := virtualConstruction
+
 /-- Factor the actual installed iteration before challenge delivery and
 again before virtual construction. Each continuation takes exactly the SSA
 values returned by the preceding source region, for every handler and stop. -/

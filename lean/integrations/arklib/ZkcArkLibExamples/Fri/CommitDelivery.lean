@@ -86,11 +86,11 @@ theorem registered (context : ProtocolContext) (marks : List (String × String))
     (role : before.oracle.self = 1)
     (parent : PublishedWords.RegisteredWord (row := .field FriSource.extension)
       before.oracle.entries before.oracle.self source word before.oracle.provider) :
-    Std.Do.Internal.Ensures (RegisteredConstruction n source word beta shift)
+    Std.Do.Internal.Ensures (RegisteredConstruction network choose context layers folds n source word beta shift)
       ((throughView context marks step (roundState n shift layers folds service) source beta).runM
         (PublishedWords.actionM checkedUnit.oracles network choose) before) := by
   apply OraclePublication.markedOutcomes checkedUnit.oracles (PublishedWords.liftM network)
-    PublishedWords.readM (PublishedWords.publishM choose) marks _ (RegisteredAt n source word beta shift)
+    PublishedWords.readM (PublishedWords.publishM choose) marks _ (RegisteredAt network choose context layers folds n source word beta shift)
     (fun _ _ eq ↦ by cases eq) before.oracle _ before rfl
   intro current same
   rw [PIR.Process.runM]
@@ -105,5 +105,84 @@ theorem registered (context : ProtocolContext) (marks : List (String × String))
     have checked := CommitCaptures.registeredAfterDelivery network choose context receiver separate
       step n bound shift beta nonzero layers folds service source word after (self.trans (same ▸ role)) live
     exact Zkc.MonadicPostcondition.map checked _ (fun _ post ↦ post)
+
+/-- On return, both collections extend in the source's order and both
+registered tables are available to the following round. -/
+def RoundReturned (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic)
+    (shift beta : Octic) (layers folds : List OracleAnchor)
+    (record : PIR.Execution
+      (OracleProtocol.State model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux))
+      (OracleProtocol.Event E) (Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state)) : Prop :=
+  ∀ values, record.outcome = .returned values →
+    ∃ view, values = CommitCaptures.nextState n shift layers folds source view ∧ record.state.oracle.self = 1 ∧
+      Nonempty (VirtualStore.Registered record.state.oracle source view word beta shift) ∧
+      Nonempty (PublishedWords.RegisteredWord (row := .field FriSource.extension) record.state.oracle.entries
+        record.state.oracle.self source word record.state.oracle.provider)
+
+private abbrev IterationState := Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state
+private abbrev Runtime (Aux : Type) := OracleProtocol.State model checkedUnit.snapshot checkedUnit.domains
+  checkedUnit.math (PublishedWords.State model Aux)
+
+set_option maxRecDepth 6000 in
+private theorem resumed (context : ProtocolContext) (n : Nat) (shift : Octic) (layers folds : List OracleAnchor)
+    (source view : OracleAnchor) (live : Values (FriBinding.Value model) virtualConstruction.context)
+    (returns : CommitCaptures.ReturnsNextState network choose context n shift layers folds source live)
+    (current : Runtime Aux) (role : current.oracle.self = 1) :
+    let reply : Values (FriBinding.Value model) (protocolDialect.results virtualConstruction.op) :=
+      .cons (OracleProtocol.concrete model (.oracle VirtualReads.kind) view) .nil
+    let meaning := (verifierAlgebra model).meaning (verifierTable model) context 1
+    Std.Do.Internal.Ensures (fun record ↦ record.state.oracle = current.oracle ∧
+      ∀ values, record.outcome = .returned values → values = CommitCaptures.nextState n shift layers folds source view)
+      ((virtualConstruction.next.denote meaning (Environment.prepend live.get reply)).runM
+        (PublishedWords.actionM checkedUnit.oracles network choose) current) := by
+  intro reply meaning
+  rw [FriCommitRound.finishRound_exact]
+  let check (env : Environment (FriBinding.Value model)
+      (protocolDialect.results virtualConstruction.op ++ virtualConstruction.context)) :=
+    Std.Do.Internal.Ensures (fun record ↦ record.state.oracle = current.oracle ∧
+      ∀ values, record.outcome = .returned values → values = CommitCaptures.nextState n shift layers folds source view)
+      ((FriCommitRound.finishRound.denote meaning env).runM
+        (PublishedWords.actionM checkedUnit.oracles network choose) current)
+  exact (congrArg check (Environment.prepend_values_get live reply)).mpr
+    (returns view current.oracle role current rfl)
+
+set_option maxRecDepth 6000 in
+/-- Starting at the source continuation of the sampled challenge, run to the
+actual callback return. Invalid deliveries and appends keep their stops.
+The two handle collections and the next domain are read from that return. -/
+theorem sampledReturn (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (separate : 1 ≠ context.roles 0) (step n : Nat) (bound : n+1 ≤ 5) (shift beta : Octic) (nonzero : shift ≠ 0)
+    (layers folds : List OracleAnchor) (service : Nat) (source : OracleAnchor) (word : Fin (2^(n+1)) → Octic)
+    (sampled : PIR.Process (OracleProtocol.Interface model) (Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state))
+    (reached : AtMarkedCall (FriCommitRound.delivery context beta) (fun next ↦ next () =
+      FriCommitRound.deliveredSuffix context step (roundState n shift layers folds service) source beta) sampled)
+    (before : OracleProtocol.State model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux))
+    (role : before.oracle.self = 1)
+    (parent : PublishedWords.RegisteredWord (row := .field FriSource.extension)
+      before.oracle.entries before.oracle.self source word before.oracle.provider) :
+    Std.Do.Internal.Ensures (RoundReturned n source word shift beta layers folds)
+      (sampled.runM (PublishedWords.actionM checkedUnit.oracles network choose) before) := by
+  obtain ⟨marks, path⟩ := fromSample context step _ source beta sampled reached
+  rw [path, PIR.runM_bind]
+  apply (registered network choose context marks receiver separate step n bound shift beta nonzero
+    layers folds service source word before role parent).bind
+  rintro ⟨out, current, events⟩ known
+  cases out with
+  | stopped why => exact Zkc.MonadicPostcondition.pure _ _ (by intro _ eq; cases eq)
+  | returned pair =>
+    rcases pair with ⟨live, reply⟩
+    obtain ⟨view, replyEq, registeredView, registeredWord, self, returns⟩ := known (live, reply) rfl
+    dsimp only at replyEq
+    subst reply
+    have next := resumed network choose context n shift layers folds source view live returns current self
+    simp only [PIR.Execution.followM]
+    refine Zkc.MonadicPostcondition.map next
+      (fun r : PIR.Execution (Runtime Aux) (OracleProtocol.Event E) IterationState ↦
+        {r with events := events ++ r.events}) ?_
+    rintro ⟨result, after, trace⟩ ⟨kept, output⟩ values success
+    refine ⟨view, output values success, ?_⟩
+    change after.oracle.self = 1 ∧ Nonempty (VirtualStore.Registered after.oracle source view word beta shift) ∧ _
+    rw [kept]
+    exact ⟨self, registeredView, registeredWord⟩
 
 end ZkcSecurity.ArkLib.Fri.CommitDelivery

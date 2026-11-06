@@ -411,7 +411,15 @@ respective linked helper tables. `CommitDelivery.iterationToView` selects the
 delivery segment from the original iteration after the send, append and draw.
 `RegisteredWord.throughOrdinary` allows the network to update its auxiliary
 state while retaining the publication. `CommitDelivery.registered` uses this
-law across the actual delivery and its source marks.
+law across the actual delivery and its source marks. Starting from the
+post-draw continuation, `CommitDelivery.sampledReturn` proves the whole
+returned iteration state. A returned append places the new virtual handle
+after the earlier folds. The returned size is halved, the offset is
+squared, and the generator is the root for that smaller domain. The
+parent and its view remain registered at the return. Capacity, visibility
+and cursor failures still stop the source. This result requires the
+parent's publication at delivery; the enclosing sequence must obtain that
+witness from its own send.
 
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and

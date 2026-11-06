@@ -31,7 +31,7 @@ elab "checked_callback " name:ident " := " body:ident " at " index:num continuat
 
 open Zkc.Source Zkc.Source.Structured ZkcTools.StructuredSource.Presentation
 
-/-- Render the linear prefix once. Its complete source equality remains
+/-- Render the selected region once. Its complete source equality remains
 kernel checked, while downstream proofs can reduce the literal typed tree. -/
 def elaboratePrefix {inputs outputs : List Ty} (command name expression : String)
     (body : Region protocolDialect inputs outputs) : CommandElabM Unit := do
@@ -55,5 +55,13 @@ elab "checked_cut_prefix " name:ident " := " cut:ident : command => do
   let expression := quote (cut.getId.toString ++ ".before")
   let body ← `((Region.OperationCut.before $cut))
   elabCommand (← `(command| run_cmd elaboratePrefix "checked_cut_prefix" $n $expression $body))
+
+/-- Keep the exact continuation after a selected operation, including the
+source's own return tuple and control flow. -/
+elab "checked_cut_suffix " name:ident " := " cut:ident : command => do
+  let n := quote name.getId.toString
+  let expression := quote (cut.getId.toString ++ ".next")
+  let body ← `((Region.OperationCut.next $cut))
+  elabCommand (← `(command| run_cmd elaboratePrefix "checked_cut_suffix" $n $expression $body))
 
 end ZkcTools.StructuredSource.Bindings

@@ -43,7 +43,7 @@ theorem registered (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n + 1)) �
     ∀ reply, result.outcome = .returned reply →
       reply = .cons (OracleProtocol.concrete model (.oracle kind) site.anchor) .nil ∧
       Nonempty (VirtualStore.Registered result.state source site.anchor word beta shift) ∧
-      Nonempty (PublishedWords.RegisteredWord (row := .field extension) result.state.entries result.state.self source word result.state.provider) := by
+      Nonempty (PublishedWords.RegisteredWord (row := .field extension) result.state.entries result.state.self source word result.state.provider) ∧ result.state.self = 1 := by
   have visible : OracleStore.visible before.self (roles 0) ([1].map roles) = true := by
     simp [OracleStore.visible, self, receiver]
   dsimp only
@@ -55,7 +55,7 @@ theorem registered (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n + 1)) �
   have extended := OracleExecution.operation_extension model checkedUnit.oracles (OracleProcess.refusingBase (E := E))
     site 1 roles (.virtual oracle0Signature 0 [1]) (ProtocolValue.embedComponents (foldCaptures n source beta shift).present) before
   rw [installed] at extended ⊢
-  refine ⟨replyEq, ?_, ⟨parent.afterExtension extended (.refl _)⟩⟩
+  refine ⟨replyEq, ?_, ⟨parent.afterExtension extended (.refl _)⟩, self⟩
   exact ⟨{
     older := before.entries
     newer := []
@@ -98,7 +98,7 @@ theorem sourceRegisters {M : Type → Type} [Monad M] [LawfulMonad M]
       reply = .cons (OracleProtocol.concrete model (.oracle kind) anchor) .nil ∧
       Nonempty (VirtualStore.Registered record.state.oracle source anchor word beta shift) ∧
       Nonempty (PublishedWords.RegisteredWord (row := .field extension) record.state.oracle.entries
-        record.state.oracle.self source word record.state.oracle.provider))
+        record.state.oracle.self source word record.state.oracle.provider) ∧ record.state.oracle.self = 1)
       (PublishedWords.actionM checkedUnit.oracles network choose (request context n source beta shift) before) := by
   dsimp only
   unfold PublishedWords.actionM

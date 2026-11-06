@@ -78,6 +78,36 @@ variable {M : Type → Type} [Monad M] [LawfulMonad M] {Aux E : Type}
   (network : PublishedWords.Table model → PIR.MonadHandler M (participantInterfaceOn model.toCarriers) Aux E)
   (choose : PublishedWords.Chooser M model Aux E)
 
+/-- The exact loop-carried values returned to the next Commit iteration. -/
+noncomputable def nextState (n : Nat) (shift : Octic) (layers folds : List OracleAnchor)
+    (parent view : OracleAnchor) : Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state :=
+  .cons none (.cons none (.cons (concrete model FriBinding.layersSort.type (layers ++ [parent]))
+    (.cons (concrete model FriBinding.layersSort.type (folds ++ [view])) (.cons (concrete model .index (2 ^ n))
+      (.cons (concrete model (.field extension) (shift ^ 2)) (.cons (concrete model (.field extension)
+        (RetainedDomain.root n)) .nil))))))
+
+open FriCommitRound (virtualConstruction)
+
+set_option maxRecDepth 6000 in
+def ReturnsNextState (context : ProtocolContext) (n : Nat) (shift : Octic) (layers folds : List OracleAnchor)
+    (source : OracleAnchor) (live : Values (FriBinding.Value model) virtualConstruction.context) : Prop :=
+  ∀ (view : OracleAnchor) (original : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math
+    (PublishedWords.State model Aux)), original.self = 1 →
+    let reply : Values (FriBinding.Value model) (protocolDialect.results virtualConstruction.op) :=
+      .cons (concrete model (.oracle VirtualReads.kind) view) .nil
+    Region.ReturnsProjection (PublishedWords.actionM checkedUnit.oracles network choose)
+      (fun state ↦ state.oracle = original) ((verifierAlgebra model).meaning (verifierTable model) context 1)
+      FriCommitRound.finishRound (reply.append live).get id (nextState n shift layers folds source view)
+
+private theorem squareField (x : Octic) :
+    ProtocolCalculation.strict model (OracleProtocol.demand model) 1 RetainedFold.helpers (.fieldMultiply extension)
+      (.cons (concrete model (.field extension) x) (.cons (concrete model (.field extension) x) .nil)) rfl =
+      .done (.cons (concrete model (.field extension) (x ^ 2)) .nil) := by
+  erw [ProtocolCalculation.strict_embed model (OracleProtocol.demand model) 1 RetainedFold.helpers
+    (.fieldMultiply extension) (.cons (some x) (.cons (some x) .nil)) rfl]
+  exact congrArg (fun y : Octic ↦ PIR.Process.done (I := OracleProtocol.Interface model)
+    (Values.cons (concrete model (.field extension) y) .nil)) (pow_two x).symm
+
 set_option maxRecDepth 6000 in
 set_option maxHeartbeats 2400000 in
 theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
@@ -86,11 +116,12 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
     (original : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux))
     (role : original.self = 1)
     (live : PublishedWords.RegisteredWord (row := .field extension) original.entries original.self source word original.provider) :
-    Region.ReturnsProjection (PublishedWords.actionM checkedUnit.oracles network choose)
+    Region.ReturnsSatisfying (PublishedWords.actionM checkedUnit.oracles network choose)
       (fun state ↦ state.oracle = original) ((verifierAlgebra model).meaning (verifierTable model) context 1)
       FriCommitRound.prepareView (FriCommitRound.deliveredValues step (roundState n shift layers folds service) source beta).get
-      (fun liveValues ↦ FriCommitRound.virtualConstruction.arguments.eval liveValues.get)
-      (ProtocolValue.embedComponents (CommitVirtual.foldCaptures n source beta shift).present) := by
+      (fun atView ↦ virtualConstruction.arguments.eval atView.get =
+        ProtocolValue.embedComponents (CommitVirtual.foldCaptures n source beta shift).present ∧
+        ReturnsNextState network choose context n shift layers folds source atView) := by
   have valid : OracleStore.validRows (.table (.field extension) none) live.registry.rows = true := by
     have fits : live.stored.rows < indexLimit := of_decide_eq_true (Bool.and_eq_true_iff.mp live.shape).1
     simp [OracleStore.validRows, OracleKind.rows, live.registryRows, ← live.rows, fits]
@@ -139,9 +170,31 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
        apply PIR.Process.ReturnsUnder.ofEquation
        exact BinaryDomain.installed n bound shift nonzero
        apply PIR.Process.ReturnsUnder.done)
-  apply Region.ReturnsProjection.ret
+  apply Region.ReturnsSatisfying.ret
+  constructor
+  · rfl
+  · intro view registry role
+    dsimp only
+    repeat' first
+      | (project_step ProtocolOp.mark
+         apply PIR.Process.ReturnsUnder.call
+         exact ReceiverForwarding.mark checkedUnit.oracles (PublishedWords.liftM network) PublishedWords.readM
+           (PublishedWords.publishM choose) registry _ _
+         apply PIR.Process.ReturnsUnder.done)
+      | (project_step ProtocolOp.oracle [OracleOp.sequenceAppend]
+         apply ReceiverForwarding.sequenceAppendReturned role
+         simp [receiver])
+      | (project_step ProtocolOp.localCall
+         apply Region.returnsOfLaw
+         apply OracleProtocol.localCallInactive model _ _ separate.symm)
+      | (project_step ProtocolOp.calculate [Op.fieldMultiply]
+         apply PIR.Process.ReturnsUnder.ofEquation
+         first | exact squareField shift | exact squareField (RetainedDomain.root (n+1))
+         apply PIR.Process.ReturnsUnder.done)
+    unfold nextState
+    rw [← RetainedDomain.square n (by omega)]
+    apply Region.ReturnsProjection.ret
 
-open FriCommitRound (virtualConstruction)
 private abbrev meaning (context : ProtocolContext) := (verifierAlgebra model).meaning (verifierTable model) context 1
 
 set_option maxRecDepth 6000 in
@@ -158,16 +211,19 @@ abbrev ConstructionRecord (Aux E : Type) := PIR.Execution
   (OracleProtocol.Event E) ReachedView
 
 set_option maxRecDepth 6000 in
-def RegisteredAt (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic) (beta shift : Octic)
+def RegisteredAt (context : ProtocolContext) (layers folds : List OracleAnchor) (n : Nat)
+    (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic) (beta shift : Octic)
     (outcome : PIR.Outcome ReachedView)
     (store : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux)) : Prop :=
   ∀ out, outcome = .returned out →
     ∃ anchor, out.2 = .cons (concrete model (.oracle VirtualReads.kind) anchor) .nil ∧
       Nonempty (VirtualStore.Registered store source anchor word beta shift) ∧
-      Nonempty (PublishedWords.RegisteredWord (row := .field extension) store.entries store.self source word store.provider)
+      Nonempty (PublishedWords.RegisteredWord (row := .field extension) store.entries store.self source word store.provider) ∧
+      store.self = 1 ∧ ReturnsNextState network choose context n shift layers folds source out.1
 
-def RegisteredConstruction (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic) (beta shift : Octic)
-    (record : ConstructionRecord Aux E) := RegisteredAt n source word beta shift record.outcome record.state.oracle
+def RegisteredConstruction (context : ProtocolContext) (layers folds : List OracleAnchor) (n : Nat)
+    (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic) (beta shift : Octic)
+    (record : ConstructionRecord Aux E) := RegisteredAt network choose context layers folds n source word beta shift record.outcome record.state.oracle
 
 set_option maxRecDepth 6000 in
 /-- On the actual continuation of challenge delivery a returned construction
@@ -182,7 +238,7 @@ theorem registeredAfterDelivery (context : ProtocolContext) (receiver : context.
     (role : before.oracle.self = 1)
     (parent : PublishedWords.RegisteredWord (row := .field extension) before.oracle.entries before.oracle.self source word before.oracle.provider) :
     let inputs := FriCommitRound.deliveredValues step (roundState n shift layers folds service) source beta
-    Std.Do.Internal.Ensures (RegisteredConstruction n source word beta shift)
+    Std.Do.Internal.Ensures (RegisteredConstruction network choose context layers folds n source word beta shift)
       ((virtualConstruction.reached ((verifierAlgebra model).meaning (verifierTable model) context 1) inputs.get).runM (PublishedWords.actionM checkedUnit.oracles network choose) before) := by
   dsimp only
   let actions := PublishedWords.actionM checkedUnit.oracles network choose
@@ -195,12 +251,12 @@ theorem registeredAfterDelivery (context : ProtocolContext) (receiver : context.
   | stopped why => exact Zkc.MonadicPostcondition.pure _ _ (by intro _ eq; cases eq)
   | returned live =>
     change Values (FriBinding.Value model) virtualConstruction.context at live
-    have operands := projects live rfl
+    obtain ⟨operands, advances⟩ := projects live rfl
     have registers := CommitVirtual.sourceRegisters network choose context receiver n source word beta shift current
       (same ▸ role) (same ▸ parent)
     simp only [PIR.Execution.followM]
-    refine Zkc.MonadicPostcondition.map (pre := RegisteredConstruction n source word beta shift)
-      (post := RegisteredConstruction n source word beta shift) ?_
+    refine Zkc.MonadicPostcondition.map (pre := RegisteredConstruction network choose context layers folds n source word beta shift)
+      (post := RegisteredConstruction network choose context layers folds n source word beta shift) ?_
       (fun r : ConstructionRecord Aux E ↦ {r with events := events ++ r.events}) (fun _ post ↦ post)
     have selected := (operationAt context live).trans (congrArg
       (fun args : Values (FriBinding.Value model) oracle0Signature.inputs.dropLast ↦
@@ -209,7 +265,7 @@ theorem registeredAfterDelivery (context : ProtocolContext) (receiver : context.
       operands)
     refine (congrArg (fun act : PIR.Process (OracleProtocol.Interface model)
         (Values (FriBinding.Value model) (protocolDialect.results virtualConstruction.op)) ↦
-        Std.Do.Internal.Ensures (RegisteredConstruction n source word beta shift)
+        Std.Do.Internal.Ensures (RegisteredConstruction network choose context layers folds n source word beta shift)
           ((act.bind fun reply ↦ .done (live, reply)).runM actions current)) selected).mpr ?_
     change Std.Do.Internal.Ensures _ (actions (CommitVirtual.request context n source beta shift) current >>= _)
     apply registers.bind
@@ -222,6 +278,6 @@ theorem registeredAfterDelivery (context : ProtocolContext) (receiver : context.
       apply Zkc.MonadicPostcondition.pure
       intro pair equal
       obtain rfl := PIR.Outcome.returned.inj equal
-      exact ⟨_, facts⟩
+      exact ⟨_, facts.1, facts.2.1, facts.2.2.1, facts.2.2.2, advances⟩
 
 end ZkcSecurity.ArkLib.Fri.CommitCaptures
