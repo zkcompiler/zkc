@@ -56,7 +56,7 @@ def returned (point : List F) (claim : F) :
     Values (Component (assignment F G))
       (Zkc.Protocols.Gkr.Source.HelperBodies.roundsProtocolSignature "").outputs :=
   .cons none (.cons none (.cons none (.cons none (.cons none
-    (.cons (some 0) (.cons (some point) (.cons (some claim) .nil)))))))
+    (.cons (some (0 : Nat)) (.cons (some point) (.cons (some claim) .nil)))))))
 
 def returnedState {n : Nat} (s : State F n) := returned (G := G) s.point s.claim
 

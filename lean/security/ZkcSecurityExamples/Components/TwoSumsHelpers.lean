@@ -78,6 +78,6 @@ theorem both_equation (left right : Bool) :
       (.cons left (.cons right .nil)) = .done (.cons (left && right) .nil) :=
   (public_sums.entryFinal.association.invoke
     TwoSumsInputs.unit.linked (.cons left (.cons right .nil))).trans
-    (by rfl)
+    (by cases left <;> rfl)
 
 end ZkcSecurity.Examples.Components.TwoSums

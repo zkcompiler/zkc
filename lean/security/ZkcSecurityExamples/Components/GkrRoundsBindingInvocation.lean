@@ -107,9 +107,7 @@ theorem zero (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     (claim : Option F) (service : Option Nat) :
     protocol0Role1Process (F := F) (G := G) ctx a m l r token point claim (some 0) service =
       match token, point, claim with
-      | some _, some point, some claim =>
-        .done (.cons none (.cons none (.cons none (.cons none (.cons none
-          (.cons (some 0) (.cons (some point) (.cons (some claim) .nil))))))))
+      | some _, some point, some claim => .done (returned (G := G) point claim)
       | _, _, _ => .halt .incomplete := by
   rw [source_process ctx distinct]
   exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.zero

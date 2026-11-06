@@ -76,8 +76,7 @@ theorem evaluate_pair (a b rho : F) : invoke (table (G := G)) evaluateHelper
 
 /-- The actual root's LayerClaim constructor. Its association with the
 emitted prefix is checked by the whole-prefix equation in GkrCallerPrefix. -/
-def layerClaimHelper : Helper :=
-  (⟨"zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper)
+abbrev layerClaimHelper := ZkcExamples.Structured.GkrSourceBodies.helper11Helper
 
 theorem layer_claim (point : List F) (claim : F) :
     invoke (table (G := G)) layerClaimHelper (.cons point (.cons claim .nil)) =

@@ -141,14 +141,12 @@ theorem zero (linked : DeclarationsLinked [] definitions)
     (claim : Option F) (service : Option Nat) :
     process (F := F) (G := G) definitions maximum ctx a m l r token point claim (some 0) service =
       match token, point, claim with
-      | some _, some point, some claim =>
-        .done (.cons none (.cons none (.cons none (.cons none (.cons none
-          (.cons (some 0) (.cons (some point) (.cons (some claim) .nil))))))))
+      | some _, some point, some claim => .done (returned (G := G) point claim)
       | _, _, _ => .halt .incomplete := by
   unfold process
   rw [RoundsBoundaryInstallation.owned_rounds_open linked bodies]
   cases token <;> cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get]
   rw [repeat_zero (repeatSpec maximum) ctx (ctx.roles 1) _ _ _ (inside ctx), mask_entry ctx distinct]
-  simp only [Values.get, RoundsBoundaryInstallation.owned_rounds_close linked bodies, PIR.Process.bind]
+  simp only [Values.get, RoundsBoundaryInstallation.owned_rounds_close linked bodies, PIR.Process.bind, returned]
 
 end ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation

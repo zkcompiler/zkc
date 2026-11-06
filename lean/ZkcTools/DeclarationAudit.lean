@@ -260,6 +260,10 @@ private def dependencyPolicyJson : String := r##"
       "proof-tools"
     ],
     [
+      "ZkcTools.ConstructionBindings.MathRegion",
+      "proof-tools"
+    ],
+    [
       "ZkcTools.ConstructionBindings.Alignment",
       "proof-tools"
     ],

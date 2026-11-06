@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Structured.Generated.Mathematics.TwoSums
 public import ZkcSecurity.Bindings.Sumcheck.Table.TableComponentFold
 public import Zkc.Source.RegionDerivation
+public import ZkcExamples.Structured.SumcheckSourceSelections
 
 @[expose] public section
 
@@ -56,15 +57,29 @@ theorem target_equation (left right : List F) (leftClaim rightClaim : F)
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       .done (.cons (decide (left.sum = leftClaim ∧ right.sum = rightClaim)) .nil) := by
   erw [public_sums.association.invoke TwoSumsInputs.unit.linked]
-  simp only [public_sums.body, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Values.get, Regions.denote]
-  erw [target_total left leftBound]
-  simp only [PIR.Process.bind, Environment.prepend, Environment.push]
-  erw [target_total right rightBound]
-  simp only [PIR.Process.bind, Environment.prepend, Environment.push]
-  change (PIR.Process.done (I := closedInterface)
-    (Values.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum))
-      .nil : Values (assignment F G) [.boolean])) = _
-  simp only [← Bool.decide_and, eq_comm]
+  let model := ringModel F G
+  let args : Values (assignment F G) public_sums.helper.inputs :=
+    .cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))
+  let bindings := SumcheckSourceSelections.outerSumBindings
+  let law := ReferenceLibrary.Sum.pairRelation model "bls12-381.fr" bindings
+  refine (Evaluation.denote_meaning_eq_meaningOn SiteObservations.closed
+    (targetMeanings (G := G)) public_sums.body args.get).trans ?_
+  refine (law.valid (targetMeanings (G := G)) args ?_).trans ?_
+  · constructor
+    · change invoke (targetMeanings (G := G)) public_sums.callee.helper (.cons left .nil) = _
+      rw [target_total left leftBound]
+      simp [args, ReferenceLibrary.Sum.totalOutcome, leftBound, primitiveOutcome]
+    · intro _ _
+      change invoke (targetMeanings (G := G)) public_sums.callee.helper (.cons right .nil) = _
+      rw [target_total right rightBound]
+      simp [args, ReferenceLibrary.Sum.totalOutcome, rightBound, primitiveOutcome]
+  · change primitiveOutcome (I := closedInterface) (A := Values (assignment F G) [.boolean]) (if left.length < indexLimit then
+      if leftClaim = left.sum then
+        if right.length < indexLimit then .returned (.cons (decide (rightClaim = right.sum)) .nil)
+        else .stopped .exhausted
+      else .returned (.cons false .nil)
+    else .stopped .exhausted) = _
+    by_cases eqLeft : leftClaim = left.sum <;>
+      simp [leftBound, rightBound, eqLeft, eq_comm, primitiveOutcome]
 
 end ZkcSecurity.Examples.Components.TwoSums
