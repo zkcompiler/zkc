@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.PublishedWordsLaws
+public import Zkc.Source.Structured.OracleInvariant
 public import Zkc.Source.Structured.OracleReadback
 public import Zkc.Source.Structured.OracleReadEffects
 
@@ -42,6 +43,22 @@ def RegisteredWord.extend (live : RegisteredWord entries participant source word
   {live with
     lookup := (OracleStore.findSkipNewer newer entries row source fresh).trans live.lookup
     found := frame.lookup row source live.stored live.found}
+
+/-- The source interpreter already proves that each logical step leaves the
+registry alone or inserts one fresh table. This suffices to transport an old
+word without asking a protocol author for a disjointness proof. -/
+def RegisteredWord.afterExtension (live : RegisteredWord entries participant source word state)
+    {later : OracleEntries model snapshot domains math} (extension : OracleStore.Extension participant entries later)
+    {after : State model Aux} (frame : Preserves state.words after.words) :
+    RegisteredWord later participant source word after := by
+  refine {live with found := frame.lookup row source live.stored live.found, lookup := ?_}
+  rcases extension with rfl | ⟨ty, table, rfl, fresh, _⟩
+  · exact live.lookup
+  · have different : table.anchor ≠ source := by
+      intro same
+      have absent := OracleStore.findSkipNewer entries [] row source (same ▸ fresh)
+      simp [live.lookup, OracleStore.find] at absent
+    simpa [OracleStore.find, different] using live.lookup
 
 /-- A returned publication fixes all coordinates at this anchor. Equal row
 sorts and lengths at some other anchor do not imply this equality. -/

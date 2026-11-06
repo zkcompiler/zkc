@@ -2,6 +2,7 @@ import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
+import ZkcArkLibExamples.Fri.CommitVirtual
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -37,6 +38,27 @@ example : DrawSites.fromBody (.letOp (.exchange .index 1 0 "forwarded") [] [] .n
     (.letOp (.query 1 (.sampleIndex contract) "fresh") [] [] .nil (.ret []))) = none := rfl
 
 example : DrawSites.fromBody (.bind [] (.stop .reject) (.ret [])) = none := rfl
+end
+
+-- A wrong source cursor cannot register a virtual view, even when the
+-- captured word, challenge and geometry have the required types.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+open ZkcSecurity.Domains.KoalaBear (Octic)
+variable {Aux E : Type} {M : Type → Type} [Monad M] [LawfulMonad M]
+
+example (network : PublishedWords.Table model → PIR.MonadHandler M (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : PublishedWords.Chooser M model Aux E) (context : ProtocolContext) (n : Nat)
+    (source : OracleAnchor) (beta shift : Octic) (before : VerifierPath.State Aux)
+    (wrong : CommitVirtual.constructionSite.definition ≠ before.frame.definition) :
+    PublishedWords.actionM FriSource.checkedUnit.oracles network choose (CommitVirtual.request context n source beta shift) before =
+      pure ⟨.stopped .refused, before, []⟩ := by
+  unfold PublishedWords.actionM
+  rw [OraclePublication.actionM_local _ _ _ _ _ _ rfl]
+  have different : (CommitVirtual.constructionSite.definition != before.frame.definition) = true :=
+    bne_iff_ne.mpr wrong
+  simp only [CommitVirtual.request, OracleProtocol.handler, different, Bool.true_or, ↓reduceIte]
 end
 
 -- Both random services run against the same published-word table in the
@@ -329,7 +351,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcArkLibExamples.Fri.VerifierTerminalGuard, `ZkcArkLibExamples.Fri.VerifierPath,
    `Zkc.Source.Structured.MarkedReturn, `ZkcExamples.Structured.FriPeeledQuery, `ZkcArkLibExamples.Fri.VerifierQuery,
    `ZkcArkLibExamples.Fri.VerifierQueries, `Zkc.Source.RegionReturnProjection, `Zkc.Source.Structured.ReceiverMetadata,
-   `ZkcExamples.Structured.FriCheckAdmission, `ZkcArkLibExamples.Fri.VerifierCheck]
+   `ZkcExamples.Structured.FriCheckAdmission, `ZkcArkLibExamples.Fri.VerifierCheck,
+   `Zkc.Source.Structured.OracleVirtualInstallation, `ZkcArkLibExamples.Fri.CommitVirtual]
   "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check

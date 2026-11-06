@@ -382,7 +382,10 @@ participant's visible logical registry entry to the provider's entire finite
 word at the same dynamic anchor. A successful FRI send establishes the
 connection for the word actually selected by the chooser.
 `RegisteredWord.extend` transports it when later publications preserve
-old provider entries and add fresh logical entries. An in-range source
+old provider entries and add fresh logical entries. For a single interpreter step,
+`RegisteredWord.afterExtension` uses its existing registry-extension
+theorem. The reached FRI virtual construction uses it to keep the original
+base handle readable after installing the new view. An in-range source
 query then returns the original cell and charges one read, subject to the
 original cursor check. This law applies to any nominal row type and finite
 length. The FRI companion separately identifies the virtual parent in its
