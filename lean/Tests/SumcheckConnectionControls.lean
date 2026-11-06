@@ -93,7 +93,7 @@ example : True := by
 
 /-- The loop yields the claim it started the iteration with. -/
 def staleClaimYielded : Participant := (changeAt actual 2 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s18" 2 [30, 11, 29] })
+        { loop with regions := loop.regions.map fun region => { region with yielded := [30, 11, 29] } })
 
 example : checkExport original staleClaimYielded = .ok () := by decide +kernel
 example : True := by
@@ -105,7 +105,7 @@ example : True := by
 
 /-- The loop admits three rounds where the source repeat admits two. -/
 def loopBoundChanged : Participant := (changeAt actual 2 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s18" 3 [30, 35, 29] })
+        { loop with operation := .loop "apply_18_label_726564756365_s18" 3 })
 
 example : checkExport original loopBoundChanged = .ok () := by decide +kernel
 example : True := by
@@ -116,7 +116,7 @@ example : True := by
   exact True.intro
 
 /-- The loop names the repeat site without its application path. -/
-def loopSiteUnqualified : Participant := (changeAt actual 2 fun loop => { loop with operation := .loop "s18" 2 [30, 35, 29] })
+def loopSiteUnqualified : Participant := (changeAt actual 2 fun loop => { loop with operation := .loop "s18" 2 })
 
 example : checkExport original loopSiteUnqualified = .ok () := by decide +kernel
 -- The loop's display label does not enter its Domain meaning. The actual
