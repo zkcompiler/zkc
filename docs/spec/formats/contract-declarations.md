@@ -639,29 +639,22 @@ those forms or variable signature families requires an explicitly specified
 profile extension. General declaration formation remains independent of this
 narrower consumer family.
 
-The initial owner-fixed profile is `structured-source-primitives`. It requires
-unselected implementations, lists constructors `index`, `bool`, `field`,
-`vector`, `resource_unit`, and validators `None`, `Natural`. Its exact operation order is:
+The owner-fixed profile `structured-source-primitives` requires unselected
+implementations. Its type constructors are `index`, `bool`, `field`, `vector`,
+`resource_unit`, `indices` and `polynomial`. Its ordered operations and full
+signatures are the profile entries in the [catalog declarations](../../../common/catalog/declarations.json).
 
-```text
-index.constant, index.add, index.sub, index.mul, index.div, index.mod,
-index.equal, index.less, vector.empty, vector.length, vector.sum,
-vector.split, vector.append, vector.equal, field.equal, field.embed,
-resource_unit.create, resource_unit.pass, resource_unit.consume
-```
+Index, Boolean and indices operations have no static roots. Field, vector and
+polynomial operations have one Domain root of sort Field. Both embed operations
+project its associated BaseField. The projection consumes no additional caller
+argument. Each entry preserves the requirements of the corresponding operation.
+The three resource-unit operations have one Domain root of sort Slot. Their Slot
+identities designate nominal custody. Formal interpretation is checked separately.
 
-The eight index operations have no static roots. Every field/vector operation
-has exactly one Domain root of sort Field. `field.embed` additionally projects
-the associated `BaseField`; that projection is not another caller argument and
-its declared `ExtensionField` requirement remains mandatory. `vector.equal`
-retains its declared `CommRing` requirement. The three resource-unit operations
-have one exact Domain root of sort Slot; Slot identities are nominal custody
-identities, not installed algebraic domains. Their native export enrollment
-does not establish an independent formal interpretation.
-`index.constant` uses the exact
-`Natural` validator with bounds `[1,1]`; the others use `None` with `[0,0]`.
-There is no enrollment by operation prefix, authoring stage, contribution
-installation, MLIR interface or inherited TableGen class.
+The profile admits three parameter validators. `index.constant` takes one
+`Natural` and `field.constant` takes one `FieldLiteral` scoped to field term zero.
+The remaining entries take no parameters. Enrollment requires an explicit entry
+regardless of operation prefix, authoring stage or contribution installation.
 
 Native consumers query `consumerProfile(name)` and
 `consumerProfileOperation(profileName, operationName)` from

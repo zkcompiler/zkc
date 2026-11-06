@@ -219,11 +219,23 @@ fn owner_fixed_primitive_profile_preserves_exact_roots() {
     assert_eq!(profile.implementation, ConsumerImplementation::Unselected);
     assert_eq!(
         profile.type_constructors,
-        ["index", "bool", "field", "vector", "resource_unit"]
+        [
+            "index",
+            "bool",
+            "field",
+            "vector",
+            "resource_unit",
+            "indices",
+            "polynomial",
+        ]
     );
     assert_eq!(
         profile.parameter_validators,
-        [ParameterValidator::None, ParameterValidator::Natural]
+        [
+            ParameterValidator::None,
+            ParameterValidator::Natural,
+            ParameterValidator::FieldLiteral,
+        ]
     );
     let expected = [
         ("index.constant", false),
@@ -245,6 +257,46 @@ fn owner_fixed_primitive_profile_preserves_exact_roots() {
         ("resource_unit.create", false),
         ("resource_unit.pass", false),
         ("resource_unit.consume", false),
+        ("bool.and", false),
+        ("bool.not", false),
+        ("bool.or", false),
+        ("field.constant", true),
+        ("field.inverse", true),
+        ("field.mul", true),
+        ("indices.append", false),
+        ("indices.at", false),
+        ("indices.empty", false),
+        ("indices.length", false),
+        ("poly.coefficients", true),
+        ("poly.coset_interpolate", true),
+        ("poly.domain_point", true),
+        ("poly.domain_root", true),
+        ("poly.even_odd_fold", true),
+        ("poly.from_coefficients", true),
+        ("poly.univariate_evaluate", true),
+        ("vector.concat", true),
+        ("vector.fill", true),
+        ("vector.get", true),
+        ("field.add", true),
+        ("field.sub", true),
+        ("poly.domain_points", true),
+        ("poly.coset_evaluate_batch", true),
+        ("poly.coset_evaluate_at", true),
+        ("poly.coset_extend", true),
+        ("poly.opening_quotient_sum", true),
+        ("vector.add", true),
+        ("vector.sub", true),
+        ("vector.mul", true),
+        ("vector.scale", true),
+        ("vector.inverse", true),
+        ("vector.geometric", true),
+        ("vector.slice", true),
+        ("vector.transpose", true),
+        ("vector.embed", true),
+        ("vector.rotate", true),
+        ("vector.bit_reverse_rows", true),
+        ("vector.prefix_sum", true),
+        ("vector.prefix_product", true),
     ];
     assert_eq!(profile.operations.len(), expected.len());
     for (entry, (name, field)) in profile.operations.iter().zip(expected) {
@@ -266,9 +318,9 @@ fn owner_fixed_primitive_profile_preserves_exact_roots() {
     }
     assert!(zkc_catalog::consumer_profile("missing").is_none());
     assert!(zkc_catalog::consumer_profile_operation("missing", "index.add").is_none());
-    assert!(zkc_catalog::consumer_profile_operation(profile.name, "field.add").is_none());
+    assert!(zkc_catalog::consumer_profile_operation(profile.name, "field.neg").is_none());
     assert!(zkc_catalog::consumer_profile_operation(profile.name, "numerical.map").is_none());
-    assert!(zkc_catalog::operation("field.add").is_some());
+    assert!(zkc_catalog::operation("field.neg").is_some());
 }
 
 #[test]
