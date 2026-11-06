@@ -807,4 +807,19 @@ def runBody : Region protocolDialect runSignature.inputs runSignature.outputs :=
   .letOp (.protocolApply (⟨ "zkl_5be81258fbd44da038012fc7680dce446a9d3c1f187a820b4a63d44cd345c871", ["role00000000", "role00000001"], [(.vector "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), .index, .index, (.service "random.koala-bear.ext8-binomial3/0")], [.boolean, .indices, .indices, (.vector "koala-bear.ext8-binomial3")], [[0], [0], [1], [0, 1], [0, 1], [1]], [[1], [0], [1], [1]] ⟩ : ProtocolSignature) [0, 1] "s0") (.cons .here (.cons (.there .here) (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil)))))) .nil <|
   .ret (.cons .here .nil)
 
+def oracle0Signature : OracleSignature :=
+  ⟨"zkl_31951b707ccfb62c7ac7e26ab2036ae9b332cef26f2c1a9300411ee5fea235f4", [(.oracle (.table (.field "koala-bear.ext8-binomial3") none)), (.field "koala-bear.ext8-binomial3"), .index, .index, (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), .index], (.table (.field "koala-bear.ext8-binomial3") none), "zkl_49518c8ca28853d5308e4676cd87321c967360523046281374cc9e81874fbdd3", [("rows", 3)], [("rows", 32)]⟩
+
+def oracle0Body : Region protocolDialect oracle0Signature.inputs [oracle0Signature.kind.answer] :=
+  .letOp (.calculate (.invoke (⟨ "s3h6672698h706169725f6c6f77", .math, [.index, .index], [.index] ⟩ : Helper)) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there .here)) .nil)) .nil <|
+  .letOp (.calculate (.indexConstant 1) rfl) .nil .nil <|
+  .letOp (.calculate .indexLogicalShiftRight rfl) (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .letOp (.calculate .indexWrappingAdd rfl) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
+  .letOp (.oracle (.query (.table (.field "koala-bear.ext8-binomial3") none) none) ⟨⟨16, [] ⟩, 16, [7, 1, 4] ⟩) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there .here))) .nil)) .nil <|
+  .letOp (.oracle (.query (.table (.field "koala-bear.ext8-binomial3") none) none) ⟨⟨16, [] ⟩, 16, [7, 1, 5] ⟩) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there .here) .nil)) .nil <|
+  .letOp (.calculate (.invoke (⟨ "zkl_7687774cc1014f46884b89c91fc63d3def7566efa921884515ed50af7c46dfca", .math, [(.field "koala-bear.ext8-binomial3"), .index], [(.field "koala-bear.ext8-binomial3")] ⟩ : Helper)) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)) .nil <|
+  .letOp (.calculate (.fieldMultiply "koala-bear.ext8-binomial3") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.cons .here .nil)) .nil <|
+  .letOp (.calculate (.invoke (⟨ "zkl_1d5c68c5e36ee11e4cbcec8bd6616e4424fe384afe270d5217a19883323f5700", .math, [(.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3"), (.field "koala-bear.ext8-binomial3")], [(.field "koala-bear.ext8-binomial3")] ⟩ : Helper)) rfl) (.cons (.there (.there (.there .here))) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.cons .here .nil))))) .nil <|
+  .ret (.cons .here .nil)
+
 end ZkcExamples.Structured.FriSourceBodies

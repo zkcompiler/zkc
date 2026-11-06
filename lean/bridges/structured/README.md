@@ -340,9 +340,9 @@ python3 lean/bridges/structured/bodies.py \
 ```
 
 It admits the snapshot with the checker in a scratch module, materializes each
-checked helper, protocol and (with `--closed`) projected root body, and prints
+checked helper, protocol, virtual oracle and (with `--closed`) projected root body, and prints
 them as `<|` chains. `--name DECLARATION=local` replaces the default
-`helperN`/`protocolN` name of that retained declaration; `--check` compares the
+`helperN`, `protocolN` or `oracleN` name of that retained declaration; `--check` compares the
 printed module with the existing file instead of writing it.
 The printed module is ordinary source, not an admission certificate: a wrong
 or stale body fails the generated phase equations. The subject driver

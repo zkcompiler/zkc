@@ -2,7 +2,7 @@
 """Print literal typed bodies of an admitted structured unit as a Lean module.
 
 The script evaluates the independent checker in a scratch Lean module and uses
-Lean-owned syntax printers for its typed helper bodies, protocol bodies and
+Lean-owned syntax printers for its typed helper, protocol and logical oracle bodies and
 (for the closed profile) projected root. It rewrites the printed terms as `<|`
 chains in the style of the authored body modules. The output is ordinary source: `structured_views` or
 `structured_closed_views` must still admit the snapshot from it, so a printing
@@ -17,7 +17,7 @@ the data module:
     [--closed] [--name DECLARATION=localName ...] --output PATH [--check]
 
 DECLARATION is a retained declaration name as the snapshot spells it; local
-names default to helperN and protocolN. `--check` compares the printed module
+names default to helperN, protocolN and oracleN. `--check` compares the printed module
 with the existing output file and fails when they differ, without writing it.
 """
 
@@ -61,11 +61,17 @@ def showRoles (roles : List String) : String := listText (roles.map quoted)
   IO.println s!"ENTRY\t{{program.payload.entry.name}}"
   for protocol in program.payload.protocols do
     IO.println s!"PROTOCOL\t{{protocol.name}}\t{{showRoles protocol.roles}}\t{{showTys protocol.inputs}}\t{{showTys protocol.outputs}}\t{{protocol.inputScopes}}\t{{protocol.outputScopes}}"
+  if let some unit := program.payload.oracleUnit then
+    for oracle in unit.oracles do
+      IO.println s!"ORACLE\t{{oracle.declaration.name}}\t{{oracleSignatureText oracle.declaration.signature}}"
   if {views} then
     for (definition, index) in program.payload.definitions.zipIdx do
       IO.println s!"def Printed.helper{{index}} : Region dialect {{showTys definition.inputs}} {{showTys definition.outputs}} :=\n{{helperRegionText definition.body}}"
     for (protocol, index) in program.payload.protocols.zipIdx do
       IO.println s!"def Printed.protocol{{index}} : Region protocolDialect {{showTys protocol.inputs}} {{showTys protocol.outputs}} :=\n{{regionText protocol.body}}"
+    if let some unit := program.payload.oracleUnit then
+      for (oracle, index) in unit.oracles.zipIdx do
+        IO.println s!"def Printed.oracle{{index}} : Region protocolDialect {{showTys oracle.declaration.inputs}} {{showTys [oracle.declaration.kind.answer]}} :=\n{{regionText oracle.body}}"
     if {closed} then
       let closedProgram ← match checkClosed {data}.snapshot with
         | .ok program => pure program
@@ -231,15 +237,19 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
         output = evaluate("Inventory", printer_inventory)
         helpers = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("HELPER\t")]
         protocols = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("PROTOCOL\t")]
+        oracles = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("ORACLE\t")]
+        declarations = [*helpers, *protocols, *oracles]
         if inventory is not None:
-            for symbol, *_ in [*helpers, *protocols]:
+            for symbol, *_ in declarations:
                 inventory.definition(symbol)
-        require(set(names) <= {symbol for symbol, *_ in [*helpers, *protocols]},
+        require(set(names) <= {symbol for symbol, *_ in declarations},
                 "body presentation names select an absent definition")
         selected_names = [names.get(symbol, f"helper{index}").strip("«»")
                           for index, (symbol, *_) in enumerate(helpers)] + [
                           names.get(symbol, f"protocol{index}").strip("«»")
-                          for index, (symbol, *_) in enumerate(protocols)]
+                          for index, (symbol, *_) in enumerate(protocols)] + [
+                          names.get(symbol, f"oracle{index}").strip("«»")
+                          for index, (symbol, *_) in enumerate(oracles)]
         require(len(selected_names) == len(set(selected_names)), "duplicate body presentation name")
         require(all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name) for name in selected_names),
                 "invalid body presentation name")
@@ -259,6 +269,11 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
                      f"  inputScopes := {input_scopes}\n  outputScopes := {output_scopes}\n\n"
                      f"def {local}Body : Region protocolDialect {local}Signature.inputs {local}Signature.outputs :=\n"
                      f"{printed(output, f'protocol{index}')}\n")
+    for index, (name, signature) in enumerate(oracles):
+        local = names.get(name, f"oracle{index}").strip("«»")
+        parts.append(f"def {local}Signature : OracleSignature :=\n  {signature}\n\n"
+                     f"def {local}Body : Region protocolDialect {local}Signature.inputs "
+                     f"[{local}Signature.kind.answer] :=\n{printed(output, f'oracle{index}')}\n")
     if closed:
         entry_name = next(line.split("\t")[1] for line in output.splitlines() if line.startswith("ENTRY\t"))
         entry = next(protocol for protocol in protocols if protocol[0] == entry_name)

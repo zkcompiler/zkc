@@ -163,9 +163,7 @@ def answer (model : DomainModel)
               inputShape.symm ▸ captures.append (.cons request.position .nil)
             let result := (checked.denote model args.present).run
               (fun (child : OracleRead) current ↦
-                let expanded : OracleRead := {child with
-                  location := {child.location with invocation := request.location.invocation}
-                  expansion := request.expansion ++ [(request.anchor, request.location)]}
+                let expanded := request.expand child
                 answer model base self older expanded current) state
             let outcome := match result.outcome with
               | .stopped reason => .stopped reason

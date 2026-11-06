@@ -58,9 +58,7 @@ def answer (model : DomainModel) (self : Nat) :
               inputShape.symm ▸ captures.append (.cons request.position .nil)
             let body := present
               (fun (child : OracleRead) current ↦
-                let expanded : OracleRead := {child with
-                  location := {child.location with invocation := request.location.invocation}
-                  expansion := request.expansion ++ [(request.anchor, request.location)]}
+                let expanded := request.expand child
                 answer model self older expanded current) (checked.denote model args.present) state
             mapResult (fun result ↦
               let outcome := match result.outcome with
