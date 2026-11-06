@@ -21,7 +21,7 @@ abbrev Answer (key : History) := Typed.ByLast Domain.Raw key
 def sizedWord {F : Type} (n : Nat) (cells : List F) : Option (Fin n → F) :=
   if size : cells.length = n then some (fun i ↦ cells[i.val]'(size.symm ▸ i.isLt)) else none
 
-private theorem sizedWord_ofFn {F : Type} {n : Nat} (word : Fin n → F) :
+theorem sizedWord_ofFn {F : Type} {n : Nat} (word : Fin n → F) :
     sizedWord n (List.ofFn word) = some word := by
   simp [sizedWord, List.length_ofFn, List.getElem_ofFn]
 

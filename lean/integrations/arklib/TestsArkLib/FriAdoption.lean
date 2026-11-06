@@ -1,6 +1,7 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLib.Fri.HolderPadding
+import ZkcArkLib.Fri.ObservedQueries
 import ZkcTools.DeclarationAudit
 
 /-! Focused controls for the mathematical FRI adapters. The two-round example is a mathematical
@@ -13,6 +14,18 @@ namespace TestsArkLib.FriAdoption
 open ZkcSecurity.ArkLib.Fri
 open Zkc.Source.Structured
 open Domain OracleComp ReedSolomon.HiddenDerivative
+
+-- A scalar or Boolean terminal payload does not encode a coefficient vector,
+-- even at the expected terminal origin.
+example (sites : ObservedLayers.Sites) : ObservedLayers.decode sites 2 0 3
+    [.message sites.terminal (.boolean true)] = none := by
+  simp [ObservedLayers.decode, Zkc.Construction.Domain.Payload.value]
+
+-- The entry root remembers the exact earlier word and challenge values in order.
+example (sites : ObservedLayers.Sites) (prior : ObservedFold.History)
+    (layers : Layers ZkcSecurity.Domains.KoalaBear.Octic 5 3) :
+    ObservedLayers.atRoot sites 5 3 (prior ++ ObservedLayers.observations sites 0 layers) =
+      some layers := ObservedLayers.atRoot_observations sites prior layers
 
 -- The actual word expression chooses an antipodal pair, not the original row.
 example : bitAnd 31 (wrappingSubtract (logicalShiftRight 32 1) 1) = 15 := by decide
