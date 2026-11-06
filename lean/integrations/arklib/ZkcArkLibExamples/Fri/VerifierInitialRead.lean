@@ -76,14 +76,15 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
     let handler := PublishedWords.actionM oracles ordinary choose
     let op := initialRequest (model := model) context source xs[ordinal.val]
     ∃ marks next, process = OracleProtocol.withMarks marks (.call op next) ∧
+      FriCheckPositions.rejectsMismatch (context := context) (source := source) (position := xs[ordinal.val]) cap ordinal.val next ∧
       process.runM handler state =
         ((OracleProtocol.withMarks marks (.done ())).runM handler state >>= fun record ↦
           record.followM fun () current ↦
             (response context source xs[ordinal.val] (word ⟨_, inside⟩) current).followM
               fun reply ↦ (next reply).runM handler) := by
   dsimp only
-  obtain ⟨marks, op, next, rfl, equation⟩ := FriCheckPositions.firstRead context receiver xs admitted ordinal source cap
-  refine ⟨marks, next, equation, ?_⟩
+  obtain ⟨marks, next, equation, guard⟩ := FriCheckPositions.firstRead context receiver xs admitted ordinal source cap
+  refine ⟨marks, next, equation, guard, ?_⟩
   rw [equation]
   apply OraclePublication.runMarked
   intro current same
@@ -94,5 +95,46 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
   simp only [PublishedWords.actionM, Fin.val_mk] at reply
   rw [PIR.Process.runM, reply, pure_bind]
   rfl
+
+/-- A wrong value claimed at this ordinal prevents every successful return
+of the entire installed callback. Refusal at a source cursor is distinguished
+from rejection at the equality guard. Other monadic failures may have no record. -/
+theorem rejectsClaim (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (xs : List Nat) (admitted : FriBoundedPositions.Admitted xs) (ordinal : Fin xs.length)
+    (source : OracleAnchor) (cap : FriCheckPositions.Captures model)
+    (state : State model snapshot domains math Aux) (role : state.oracle.self = 1)
+    {n : Nat} (word : Fin (2 ^ n) → model.Field extension)
+    (live : StoredWord.Base state.oracle.entries state.oracle.self source word state.oracle.provider)
+    (inside : xs[ordinal.val] < 2 ^ n) (first : List (model.Field extension))
+    (enabled : cap.associate = OracleProtocol.concrete model .boolean true)
+    (vector : cap.first = OracleProtocol.concrete model (.vector extension) first)
+    (size : first.length < indexLimit) (supplied : ordinal.val < first.length)
+    (mismatch : word ⟨xs[ordinal.val], inside⟩ ≠ first[ordinal.val]) :
+    Std.Do.Internal.Ensures (fun record ↦ record.outcome = .stopped .reject ∨ record.outcome = .stopped .refused)
+      ((iteration context cap xs ordinal.val source).runM (PublishedWords.actionM oracles ordinary choose) state) := by
+  obtain ⟨marks, next, eqn, guard⟩ := FriCheckPositions.firstRead context receiver xs admitted ordinal source cap
+  rw [eqn]
+  refine OraclePublication.markedOutcomes oracles (PublishedWords.liftM ordinary) PublishedWords.readM
+    (PublishedWords.publishM choose) marks _ (fun out ↦ out = .stopped .reject ∨ out = .stopped .refused)
+    (Or.inr rfl) state.oracle ?_ state rfl
+  intro current same
+  have active : current.oracle.self = 1 := by rw [same, role]
+  have currentLive : StoredWord.Base current.oracle.entries current.oracle.self source word current.oracle.provider := by
+    rw [same]; exact live
+  have reply := read oracles ordinary choose context receiver current active source word currentLive ⟨_, inside⟩
+  simp only [PublishedWords.actionM, Fin.val_mk] at reply
+  rw [PIR.Process.runM, reply, pure_bind]
+  unfold response
+  split
+  · obtain ⟨finalMarks, stopped⟩ := guard first (word ⟨_, inside⟩) enabled vector size supplied mismatch
+    simp only [PIR.Execution.followM, stopped]
+    apply Zkc.MonadicPostcondition.map
+    · refine OraclePublication.markedOutcomes oracles (PublishedWords.liftM ordinary) PublishedWords.readM
+        (PublishedWords.publishM choose) finalMarks (.halt .reject)
+        (fun out ↦ out = .stopped .reject ∨ out = .stopped .refused) (Or.inr rfl) _ ?_ _ rfl
+      intro s _
+      exact Zkc.MonadicPostcondition.pure _ _ (Or.inl rfl)
+    · exact fun _ valid ↦ valid
+  · exact Zkc.MonadicPostcondition.pure _ _ (Or.inr rfl)
 
 end ZkcSecurity.ArkLib.Fri.VerifierInitialRead

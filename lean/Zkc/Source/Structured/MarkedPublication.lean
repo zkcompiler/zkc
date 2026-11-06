@@ -48,4 +48,28 @@ theorem runMarked (marks : List (String × String))
   | stopped why => rfl
   | returned reply => cases reply; simp only [PIR.Execution.followM, law current kept.1]
 
+/-- Lift an outcome predicate through the checked marks of an original
+execution. A mark can refuse, and every successful mark preserves the store. -/
+theorem markedOutcomes (marks : List (String × String))
+    (process : PIR.Process (OracleProtocol.Interface model) A)
+    (property : PIR.Outcome A → Prop) (refusal : property (.stopped .refused))
+    (original : OracleRuntimeState model snapshot domains math S)
+    (tail : ∀ current, current.oracle = original → Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+      (process.runM (actionM model oracles ordinary base publish) current))
+    (state : OracleProtocol.State model snapshot domains math S) (same : state.oracle = original) :
+    Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+      ((withMarks marks process).runM (actionM model oracles ordinary base publish) state) := by
+  induction marks generalizing state with
+  | nil => exact tail state same
+  | cons mark marks ih =>
+    rcases mark with ⟨source, observed⟩
+    rw [withMarks, PIR.Process.runM, actionM_local _ _ _ _ _ _ rfl, pure_bind]
+    simp only [OracleProtocol.handler]
+    split
+    · exact MonadicPostcondition.pure _ _ refusal
+    · rename_i frame _
+      simp only [PIR.Execution.followM]
+      apply MonadicPostcondition.map (ih {state with frame := frame} same)
+      exact fun _ valid ↦ valid
+
 end Zkc.Source.Structured.OraclePublication

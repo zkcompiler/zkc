@@ -23,32 +23,46 @@ theorem withMarks_bind (marks : List (String × String)) (process : PIR.Process 
     rcases mark with ⟨source, observed⟩
     exact congrArg (PIR.Process.call (I := Interface model) (.mark source observed)) (funext fun _ ↦ ih)
 
-/-- An exact factorization of the free process. An interpreter may stop at
-any preceding mark, and every later effect stays in the original tail. -/
-def AfterMarks (wanted : (Interface model).Op → Prop) (process : PIR.Process (Interface model) A) : Prop :=
-  ∃ marks op next, wanted op ∧ process = withMarks marks (.call op next)
+/-- Preserve the particular reply continuation as well as the reached
+operation. The suffix is the original process at every possible reply. -/
+def AtMarkedCall (op : (Interface model).Op)
+    (after : ((Interface model).Reply op → PIR.Process (Interface model) A) → Prop)
+    (process : PIR.Process (Interface model) A) : Prop :=
+  ∃ marks next, process = withMarks marks (.call op next) ∧ after next
 
-variable {wanted : (Interface model).Op → Prop}
+variable {op : (Interface model).Op}
+  {after : ((Interface model).Reply op → PIR.Process (Interface model) A) → Prop}
 
-theorem AfterMarks.found {op : (Interface model).Op} (selected : wanted op) {next} :
-    AfterMarks wanted (.call op next : PIR.Process (Interface model) A) :=
-  ⟨[], op, next, selected, rfl⟩
+theorem AtMarkedCall.found {next} (tail : after next) : AtMarkedCall op after (.call op next) :=
+  ⟨[], next, rfl, tail⟩
 
-theorem AfterMarks.mark {source observed : String}
+private theorem prependMark {source observed : String}
     {next : (Interface model).Reply (.mark source observed) → PIR.Process (Interface model) A}
-    (tail : AfterMarks wanted (next ())) : AfterMarks wanted (.call (.mark source observed) next) := by
-  obtain ⟨marks, op, k, selected, shape⟩ := tail
-  refine ⟨(source, observed) :: marks, op, k, selected, ?_⟩
+    {marks : List (String × String)} {rest : PIR.Process (Interface model) A}
+    (tail : next () = withMarks marks rest) :
+    .call (.mark source observed) next = withMarks ((source, observed) :: marks) rest := by
   apply congrArg (PIR.Process.call (I := Interface model) (.mark source observed))
   funext reply
   cases reply
-  exact shape
+  exact tail
 
-theorem AfterMarks.bind {process : PIR.Process (Interface model) A}
-    (before : AfterMarks wanted process) (suffix : A → PIR.Process (Interface model) B) :
-    AfterMarks wanted (process.bind suffix) := by
-  obtain ⟨marks, op, next, selected, rfl⟩ := before
-  refine ⟨marks, op, fun reply ↦ (next reply).bind suffix, selected, ?_⟩
-  exact withMarks_bind marks _ _
+theorem AtMarkedCall.mark {source observed : String}
+    {next : (Interface model).Reply (.mark source observed) → PIR.Process (Interface model) A}
+    (tail : AtMarkedCall op after (next ())) : AtMarkedCall op after (.call (.mark source observed) next) := by
+  obtain ⟨marks, k, shape, selected⟩ := tail
+  exact ⟨(source, observed) :: marks, k, prependMark shape, selected⟩
+
+/-- An explicit source stop may still be preceded by cursor-validating marks. -/
+def StopsAfterMarks (why : PIR.Stop) (process : PIR.Process (Interface model) A) : Prop :=
+  ∃ marks, process = withMarks marks (.halt why)
+
+theorem StopsAfterMarks.now (why : PIR.Stop) : StopsAfterMarks (model := model) (A := A) why (.halt why) :=
+  ⟨[], rfl⟩
+
+theorem StopsAfterMarks.mark {why : PIR.Stop} {source observed : String}
+    {next : (Interface model).Reply (.mark source observed) → PIR.Process (Interface model) A}
+    (tail : StopsAfterMarks why (next ())) : StopsAfterMarks why (.call (.mark source observed) next) := by
+  obtain ⟨marks, shape⟩ := tail
+  exact ⟨(source, observed) :: marks, prependMark shape⟩
 
 end Zkc.Source.Structured.OracleProtocol

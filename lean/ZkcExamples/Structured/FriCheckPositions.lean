@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.FriQueryCall
+public import ZkcExamples.Structured.FriValueAssociation
 public import Zkc.Source.Structured.OracleReadEffects
 public import Zkc.Source.Structured.MarkedPrefix
 public meta import ZkcTools.StructuredSource.Bindings.CheckedCallback
@@ -71,25 +72,59 @@ private theorem lookup (xs : List Nat) (admitted : FriBoundedPositions.Admitted 
     primitiveOutcome, PIR.Process.bind]
   rfl
 
+/-- An associated checker compares by ordinal even when sampled positions
+repeat. A wrong value stops before any later query or append. -/
+def rejectsMismatch (cap : Captures model) (i : Nat)
+    {context : ProtocolContext} {source : OracleAnchor} {position : Nat}
+    (next : (OracleProtocol.Interface model).Reply (initialRequest context source position) →
+      PIR.Process (OracleProtocol.Interface model) (Values (Value model) querySite.spec.state)) : Prop :=
+  ∀ (first : List (model.Field extension)) (value : model.Field extension),
+    cap.associate = concrete model .boolean true → cap.first = concrete model (.vector extension) first →
+    first.length < indexLimit → ∀ inside : i < first.length, value ≠ first[i] →
+      OracleProtocol.StopsAfterMarks .reject (next (.cons (concrete model (.field extension) value) .nil))
+
 /-- All other captured values may be arbitrary. Only the initial handle and
 the checked position vector determine the first table request. -/
 theorem firstRead (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (xs : List Nat) (admitted : FriBoundedPositions.Admitted xs)
     (ordinal : Fin xs.length) (source : OracleAnchor)
     (cap : Captures model) :
-    OracleProtocol.AfterMarks (· = initialRequest context source xs[ordinal.val])
+    OracleProtocol.AtMarkedCall (initialRequest context source xs[ordinal.val])
+      (rejectsMismatch (context := context) (source := source) (position := xs[ordinal.val]) cap ordinal.val)
       (iteration context cap xs ordinal.val source) := by
   unfold iteration
-  apply OracleProtocol.AfterMarks.mark
+  apply OracleProtocol.AtMarkedCall.mark
+  simp only [PIR.Process.bind]
+  rw [Region.denote]
+  conv =>
+    enter [3, 1]
+    change OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper30Helper
+      (.cons (concrete model .indices xs) (.cons (concrete model .index ordinal.val) .nil))
+    rw [receiver, lookup xs admitted ordinal]
+  apply OracleProtocol.AtMarkedCall.mark
+  apply OracleProtocol.AtMarkedCall.found
+  intro first value enabled vector size inside mismatch
+  apply OracleProtocol.StopsAfterMarks.mark
   simp only [PIR.Process.bind]
   rw [Region.denote]
   conv =>
     enter [2, 1]
-    change OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper30Helper
-      (.cons (concrete model .indices xs) (.cons (concrete model .index ordinal.val) .nil))
-    rw [receiver, lookup xs admitted ordinal]
-  apply OracleProtocol.AfterMarks.mark
-  apply OracleProtocol.AfterMarks.found
-  rfl
+    change OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper31Helper
+      (.cons cap.associate (.cons cap.first (.cons (concrete model .index ordinal.val)
+        (.cons (concrete model (.field extension) value) .nil))))
+    rw [receiver, enabled, vector, FriValueAssociation.installed true first ordinal.val value (fun _ ↦ ⟨size, inside⟩)]
+    simp only [List.getElem?_eq_getElem inside, Option.any_some, mismatch, decide_false, ↓reduceIte]
+  apply OracleProtocol.StopsAfterMarks.mark
+  simp only [PIR.Process.bind]
+  rw [Region.denote]
+  conv =>
+    enter [2, 1]
+    change ((Participant.guard (services := services) (Value := model.Value) 1 (context.roles 1)
+      ((concrete model .boolean false).bind ProtocolValue.toConcrete)).interpret
+        (OracleProtocol.actions model)).bind _
+    rw [receiver]
+    simp [OracleProtocol.concrete, ProtocolValue.toConcrete_ofConcrete, Participant.guard,
+      PIR.Process.interpret, PIR.Process.bind]
+  exact OracleProtocol.StopsAfterMarks.now .reject
 
 end ZkcExamples.Structured.FriCheckPositions

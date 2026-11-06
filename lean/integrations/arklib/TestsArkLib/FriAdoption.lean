@@ -222,5 +222,6 @@ run_cmd (ZkcTools.DeclarationAudit.check
 
 run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Source.Structured.MarkedPrefix, `Zkc.Source.Structured.MarkedPublication,
-   `ZkcExamples.Structured.FriCheckPositions, `ZkcArkLibExamples.Fri.VerifierInitialRead]
+   `ZkcExamples.Structured.FriValueAssociation, `ZkcExamples.Structured.FriCheckPositions,
+   `ZkcArkLibExamples.Fri.VerifierInitialRead]
   "FRI-BOUND-INITIAL-WORD-PASS" (exactModules := true))
