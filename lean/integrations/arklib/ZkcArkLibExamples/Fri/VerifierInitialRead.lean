@@ -100,8 +100,8 @@ theorem rejectsClaim (context : ProtocolContext) (receiver : context.roles 1 = 1
   obtain ⟨marks, next, eqn, guard⟩ := FriCheckPositions.firstRead context receiver xs admitted ordinal source cap
   rw [eqn]
   refine OraclePublication.markedOutcomes oracles (PublishedWords.liftM ordinary) PublishedWords.readM
-    (PublishedWords.publishM choose) marks _ (fun out ↦ out = .stopped .reject ∨ out = .stopped .refused)
-    (Or.inr rfl) state.oracle ?_ state rfl
+    (PublishedWords.publishM choose) marks _ (fun out _ ↦ out = .stopped .reject ∨ out = .stopped .refused)
+    (fun _ ↦ Or.inr rfl) state.oracle ?_ state rfl
   intro current same
   have active : current.oracle.self = 1 := by rw [same, role]
   have currentLive : StoredWord.Base current.oracle.entries current.oracle.self source word current.oracle.provider := by
@@ -116,7 +116,7 @@ theorem rejectsClaim (context : ProtocolContext) (receiver : context.roles 1 = 1
     apply Zkc.MonadicPostcondition.map
     · refine OraclePublication.markedOutcomes oracles (PublishedWords.liftM ordinary) PublishedWords.readM
         (PublishedWords.publishM choose) finalMarks (.halt .reject)
-        (fun out ↦ out = .stopped .reject ∨ out = .stopped .refused) (Or.inr rfl) _ ?_ _ rfl
+        (fun out _ ↦ out = .stopped .reject ∨ out = .stopped .refused) (fun _ ↦ Or.inr rfl) _ ?_ _ rfl
       intro s _
       exact Zkc.MonadicPostcondition.pure _ _ (Or.inl rfl)
     · exact fun _ valid ↦ valid

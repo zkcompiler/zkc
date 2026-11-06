@@ -53,6 +53,44 @@ def iteration (context : ProtocolContext) (step : Nat) (state : State model)
           (.cons (concrete model layersSort.type folds) .nil))))))
   roundBody.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) args.get
 
+def packed (carried : State model) : Values (Value model) roundSite.spec.state :=
+  .cons (concrete model (.field extension) carried.expected) (.cons (concrete model .index carried.position)
+    (.cons (concrete model .index carried.rows) (.cons (concrete model (.field extension) carried.shift) .nil)))
+
+def captures (model : DomainModel) (layers folds : List OracleAnchor) : Values (Value model) roundSite.spec.captures :=
+  .cons (concrete model layersSort.type layers) (.cons (concrete model layersSort.type folds) .nil)
+
+def framed (context : ProtocolContext) (layers folds : List OracleAnchor)
+    (current : Values (Value model) roundSite.spec.state) (index : Nat) :=
+  OracleProtocol.enter model (.iteration roundSite.site index)
+    (roundBody.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
+      (Values.cons (concrete model .index index) (current.append (captures model layers folds))).get)
+
+theorem framed_packed (context : ProtocolContext) (step : Nat) (carried : State model) (layers folds : List OracleAnchor) :
+    framed context layers folds (packed carried) step =
+      OracleProtocol.enter model (.iteration roundSite.site step) (iteration context step carried layers folds) := rfl
+
+/-- The source count determines the exact sequence of entered iterations. The
+original operand tuple binds both handle sequences and every carried field. -/
+theorem ordered (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (env : Environment (Value model) roundSite.context) (count : Nat) (bound : count ≤ roundSite.spec.maximum)
+    (carried : State model) (layers folds : List OracleAnchor)
+    (selected : Operands.eval env roundSite.operands =
+      .cons (concrete model .index count) ((packed carried).append (captures model layers folds))) :
+    roundSite.iterations ((verifierAlgebra model).meaning (verifierTable model) context 1) env =
+      Finite.fold (framed context layers folds) (List.range count) (packed carried) := by
+  apply roundSite.visibleIterations (verifierAlgebra model) (verifierTable model) context 1 env
+    (concrete model .index count) (packed carried) (captures model layers folds) selected
+  · change ([0, 1].map context.roles).contains 1 = true
+    simp [receiver]
+  · intro out
+    match out with
+    | .cons a (.cons b (.cons c (.cons d .nil))) =>
+      change maskValues 1 ([[1], [1], [1], [1]].map (List.map context.roles)) _ = _
+      simp [maskValues, receiver, Participant.restrict]
+  · exact ProtocolValue.toConcrete_ofConcrete (carriers := model.toCarriers) .index count
+  · exact bound
+
 /-- Only registered oracle operations contribute rows. The typed process
 equation below checks the selection, each operand, and the continuation. -/
 def sites := roundBody.erase.operations.filterMap fun op ↦ match op with

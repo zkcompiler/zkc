@@ -45,13 +45,13 @@ private theorem selectionOutcomes (context : ProtocolContext) (receiver : contex
     (registered : Selection original handles index rows)
     {tail : OracleAnchor → Process model → Prop} {process : Process model}
     (head : selectsRows context handles index rows seqSite shapeSite tail process)
-    (property : PIR.Outcome (Values (FriBinding.Value model) roundSite.spec.state) → Prop)
-    (refusal : property (.stopped .refused))
+    (property : PIR.Outcome (Values (FriBinding.Value model) roundSite.spec.state) → Runtime model snapshot domains math Aux → Prop)
+    (refusal : ∀ store, property (.stopped .refused) store)
     (rest : ∀ p, tail (handles.get ⟨index, registered.inside⟩) p → ∀ current : State model snapshot domains math Aux,
-      current.oracle = original → Std.Do.Internal.Ensures (fun record ↦ property record.outcome)
+      current.oracle = original → Std.Do.Internal.Ensures (fun record ↦ property record.outcome record.state.oracle)
         (p.runM (PublishedWords.actionM oracles network choose) current))
     (state : State model snapshot domains math Aux) (same : state.oracle = original) :
-    Std.Do.Internal.Ensures (fun record ↦ property record.outcome)
+    Std.Do.Internal.Ensures (fun record ↦ property record.outcome record.state.oracle)
       (process.runM (PublishedWords.actionM oracles network choose) state) := by
   let anchor := handles.get ⟨index, registered.inside⟩
   apply OraclePublication.markedReplyOutcomes oracles (PublishedWords.liftM network) PublishedWords.readM
@@ -90,15 +90,16 @@ private theorem layerOutcomes (context : ProtocolContext) (receiver : context.ro
     {n : Nat} (word : Fin (2 ^ n) → model.Field extension) (inside : carried.position < 2 ^ n)
     (live : StoredWord.Base state.oracle.entries state.oracle.self
       (layers.get ⟨wrappingAdd step 1, registered.inside⟩) word state.oracle.provider)
-    (property : PIR.Outcome (Values (FriBinding.Value model) roundSite.spec.state) → Prop)
-    (refusal : property (.stopped .refused))
-    (reject : word ⟨carried.position, inside⟩ ≠ carried.expected → property (.stopped .reject))
+    (property : PIR.Outcome (Values (FriBinding.Value model) roundSite.spec.state) → Runtime model snapshot domains math Aux → Prop)
+    (refusal : ∀ store, property (.stopped .refused) store)
+    (reject : word ⟨carried.position, inside⟩ ≠ carried.expected → property (.stopped .reject)
+      {state.oracle with queries := state.oracle.queries + 1})
     (rest : word ⟨carried.position, inside⟩ = carried.expected → ∀ p, checksFold context step carried folds p →
       ∀ current : State model snapshot domains math Aux,
       current.oracle = {state.oracle with queries := state.oracle.queries + 1} →
-      Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+      Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
         (p.runM (PublishedWords.actionM oracles network choose) current)) :
-    Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+    Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
       ((iteration context step carried layers folds).runM (PublishedWords.actionM oracles network choose) state) := by
   let anchor := layers.get ⟨wrappingAdd step 1, registered.inside⟩
   let index : Fin (2 ^ n) := ⟨carried.position, inside⟩
@@ -128,8 +129,8 @@ private theorem layerOutcomes (context : ProtocolContext) (receiver : context.ro
       rw [equation]
       apply OraclePublication.markedOutcomes oracles (PublishedWords.liftM network) PublishedWords.readM
         (PublishedWords.publishM choose) marks (.halt .reject) property refusal _ _ current kept
-      intro s _
-      exact Zkc.MonadicPostcondition.pure _ _ (reject equal)
+      intro s same
+      exact Zkc.MonadicPostcondition.pure _ _ (same ▸ reject equal)
 
 /-- A well-formed later word may contain a false cell. If it disagrees with
 the carried value, every completed record rejects or refuses at a cursor.
@@ -145,7 +146,7 @@ theorem rejectsMismatch (context : ProtocolContext) (receiver : context.roles 1 
     Std.Do.Internal.Ensures (fun result ↦ result.outcome = .stopped .reject ∨ result.outcome = .stopped .refused)
       ((iteration context step carried layers folds).runM (PublishedWords.actionM oracles network choose) state) := by
   exact layerOutcomes oracles network choose context receiver step carried layers folds state role registered
-    word inside live (fun out ↦ out = .stopped .reject ∨ out = .stopped .refused) (Or.inr rfl)
+    word inside live (fun out _ ↦ out = .stopped .reject ∨ out = .stopped .refused) (fun _ ↦ Or.inr rfl)
     (fun _ ↦ Or.inl rfl) (fun equal ↦ False.elim (mismatch equal))
 
 section Octic
@@ -164,7 +165,8 @@ private theorem lowCoordinate {m : Nat} (size : m + 1 ≤ 63) (carried : FriChec
 /-- On matching input the only successful result of the actual iteration
 contains the ArkLib fold of that same layer. Both the base and virtual
 selection come from the admitted index, and the virtual registry captures
-the same word as the direct read. An invalid frame still refuses. -/
+the same word as the direct read. A return preserves the registry and provider
+and charges one direct read plus three for the virtual fold. An invalid frame can refuse. -/
 theorem matchesFold {Aux E : Type}
     (network : PublishedWords.Table K → PIR.MonadHandler M (participantInterfaceOn (K).toCarriers) Aux E)
     (choose : PublishedWords.Chooser M K Aux E)
@@ -186,23 +188,26 @@ theorem matchesFold {Aux E : Type}
     (matchValue : word ⟨carried.position, inside⟩ = carried.expected) :
     let coordinate : Fin (2 ^ m) := ⟨carried.position % 2 ^ m, Nat.mod_lt _ (by positivity)⟩
     let folded := ProximityGap.foldWord domain word 1 beta coordinate
-    Std.Do.Internal.Ensures (fun record ↦ record.outcome = .returned (advanced carried folded) ∨
+    Std.Do.Internal.Ensures (fun record ↦
+      (record.outcome = .returned (advanced carried folded) ∧
+        record.state.oracle = {state.oracle with queries := state.oracle.queries + 4}) ∨
       record.outcome = .stopped .refused)
       ((iteration context step carried layers folds).runM (PublishedWords.actionM checkedUnit.oracles network choose)
         state) := by
   dsimp only
   let coordinate : Fin (2 ^ m) := ⟨carried.position % 2 ^ m, Nat.mod_lt _ (by positivity)⟩
   let folded := ProximityGap.foldWord domain word 1 beta coordinate
-  let property := fun (out : PIR.Outcome (Values (FriBinding.Value K) roundSite.spec.state)) ↦
-    out = .returned (advanced carried folded) ∨ out = .stopped .refused
+  let property := fun (out : PIR.Outcome (Values (FriBinding.Value K) roundSite.spec.state)) store ↦
+    (out = .returned (advanced carried folded) ∧
+      store = {state.oracle with queries := state.oracle.queries + 4}) ∨ out = .stopped .refused
   let afterLayer := {state.oracle with queries := state.oracle.queries + 1}
   let source := layers.get ⟨wrappingAdd step 1, layer.inside⟩
   let anchor := folds.get ⟨wrappingAdd step 1, fold.inside⟩
   refine layerOutcomes checkedUnit.oracles network choose context receiver step carried layers folds state role
-    layer word inside live property (Or.inr rfl) (fun h ↦ False.elim (h matchValue)) ?_
+    layer word inside live property (fun _ ↦ Or.inr rfl) (fun h ↦ False.elim (h matchValue)) ?_
   intro _ p head
   apply selectionOutcomes checkedUnit.oracles network choose context receiver afterLayer role folds (wrappingAdd step 1)
-    (nextRows carried) (site 3) (site 4) fold head property (Or.inr rfl) _
+    (nextRows carried) (site 3) (site 4) fold head property (fun _ ↦ Or.inr rfl) _
   intro q atQuery
   let trace := fun (current : State K checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux) ↦
     let parent := Phases.publishedRequest extension anchor coordinate.val
@@ -212,7 +217,7 @@ theorem matchesFold {Aux E : Type}
      .logical (.query (parent.expand (VirtualReads.rightRequest source (highIndex coordinate).val)))]
   refine OraclePublication.markedReplyOutcomes checkedUnit.oracles (PublishedWords.liftM network) PublishedWords.readM
     (PublishedWords.publishM choose) atQuery (site 5) (.cons (concrete K (.field extension) folded) .nil)
-    afterLayer {afterLayer with queries := afterLayer.queries + 3} trace ?_ property (Or.inr rfl) ?_
+    afterLayer {afterLayer with queries := afterLayer.queries + 3} trace ?_ property (fun _ ↦ Or.inr rfl) ?_
   · intro current kept
     have view : VirtualStore.Registered current.oracle source anchor word beta carried.shift := by
       rw [kept]; exact registered
@@ -226,9 +231,9 @@ theorem matchesFold {Aux E : Type}
     obtain ⟨marks, equation⟩ := finished folded
     rw [equation]
     apply OraclePublication.markedOutcomes checkedUnit.oracles (PublishedWords.liftM network) PublishedWords.readM
-      (PublishedWords.publishM choose) marks (.done (advanced carried folded)) property (Or.inr rfl) _ _ current kept
-    intro s _
-    exact Zkc.MonadicPostcondition.pure _ _ (Or.inl rfl)
+      (PublishedWords.publishM choose) marks (.done (advanced carried folded)) property (fun _ ↦ Or.inr rfl) _ _ current kept
+    intro s finalStore
+    exact Zkc.MonadicPostcondition.pure _ _ (Or.inl ⟨rfl, finalStore⟩)
 
 end Octic
 end ZkcSecurity.ArkLib.Fri.VerifierRound

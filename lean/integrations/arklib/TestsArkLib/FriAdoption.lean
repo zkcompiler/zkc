@@ -1,9 +1,8 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
-import ZkcArkLibExamples.Fri.VerifierRound
+import ZkcArkLibExamples.Fri.VerifierPath
 import ZkcArkLibExamples.Fri.CommitChallenge
 import ZkcArkLibExamples.Fri.VerifierInitialRead
-import ZkcArkLibExamples.Fri.VerifierTerminalGuard
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
 import ZkcExamples.Structured.FriBindingExecution
@@ -73,6 +72,29 @@ example : coefficientsPort.index ≠ rememberedPort.index := by decide +kernel
 -- Cutting through the outer callback as though its nested body executed
 -- exactly once would erase the trip count and change early-stop behavior.
 example : FriCheckRound.roundOccurrence.onSpine = false := by kernel_rfl
+end
+
+-- On an invalid mathematical path the actual loop can reject or encounter a
+-- cursor refusal. A returned vector, even the expected vector, is excluded.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+example {Aux : Type} (before after : VerifierPath.Store Aux)
+    (vector : Values (FriBinding.Value model) FriCheckRound.roundSite.outputs) :
+    ¬ VerifierPath.outcome false vector before (.returned vector) after := by
+  simp [VerifierPath.outcome]
+
+-- A matching path cannot return with one read missing from the ledger.
+example {Aux : Type} (before : VerifierPath.Store Aux)
+    (vector : Values (FriBinding.Value model) FriCheckRound.roundSite.outputs) :
+    ¬ VerifierPath.outcome true vector (VerifierPath.charged before 8) (.returned vector)
+      (VerifierPath.charged before 7) := by
+  rintro (⟨_, wrong⟩ | stopped)
+  swap
+  · cases stopped
+  have count := congrArg (fun s : VerifierPath.Store Aux ↦ s.queries) wrong
+  simp only [VerifierPath.charged] at count
+  omega
 end
 
 -- A scalar or Boolean terminal payload does not encode a coefficient vector,
@@ -274,7 +296,7 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcArkLibExamples.Fri.VirtualWord, `ZkcArkLibExamples.Fri.StoredWord,
    `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal,
    `Zkc.Source.Structured.Bindings.Continuation, `Zkc.Source.Structured.Bindings.RepeatPrefix,
-   `ZkcArkLibExamples.Fri.VerifierTerminalGuard]
+   `ZkcArkLibExamples.Fri.VerifierTerminalGuard, `ZkcArkLibExamples.Fri.VerifierPath]
   "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check

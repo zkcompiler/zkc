@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Bindings.Selection
+public import Zkc.Source.Structured.ProtocolAlgebra
 
 @[expose] public section
 
@@ -56,5 +57,29 @@ theorem RepeatSite.denote_region {I : PIR.Signature} (site : RepeatSite) (meanin
     (env : Environment meaning.Value site.context) :
     site.region.denote meaning env = (site.iterations meaning env).bind
       (fun results ↦ site.next.denote meaning (env.prepend results)) := rfl
+
+/-- Present a reached bounded repeat as its exact ordered fold. A fully
+visible state needs no projection; callbacks still execute in the algebra's
+real iteration frame, and their stops skip every remaining item. -/
+theorem RepeatSite.visibleIterations {V : Ty → Type} {I : PIR.Signature} (site : RepeatSite)
+    (algebra : ProtocolAlgebra V I) (table : ProtocolTable V I) (context : ProtocolContext) (self : Nat)
+    (env : Environment (Component V) site.context) (countValue : Component V .index)
+    (state : Values (Component V) site.spec.state) (captures : Values (Component V) site.spec.captures)
+    (selected : Operands.eval env site.operands = .cons countValue (state.append captures))
+    (active : (site.spec.roles.map context.roles).contains self = true)
+    (visible : ∀ out : Values (Component V) site.spec.state, maskValues self (context.mapScopes site.spec.stateScopes) out = out)
+    {count : Nat} (decoded : countValue.bind algebra.count = some count) (bound : count ≤ site.spec.maximum) :
+    site.iterations (algebra.meaning table context self) env =
+      Finite.fold (fun current index ↦ algebra.iteration context site.site index
+        (site.body.denote (algebra.meaning table context self)
+          (Values.cons (some (algebra.index index)) (current.append captures)).get)) (List.range count) state := by
+  unfold RepeatSite.iterations
+  erw [selected]
+  change algebra.repeatProcess site.spec context self site.site countValue
+    (Values.split site.spec.state (state.append captures)).1 (Values.split site.spec.state (state.append captures)).2
+    (fun args ↦ site.body.denote (algebra.meaning table context self) args.get) = _
+  rw [Values.split_append]
+  simp only [ProtocolAlgebra.repeatProcess, active, decoded, bound, ite_true, visible,
+    Finite.execute, Finite.Domain.admit, Finite.admitThen, PIR.Process.bind_done]
 
 end Zkc.Source.Structured.Bindings

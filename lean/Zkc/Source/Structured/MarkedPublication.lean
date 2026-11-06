@@ -49,16 +49,17 @@ theorem runMarked (marks : List (String × String))
   | stopped why => rfl
   | returned reply => cases reply; simp only [PIR.Execution.followM, law current kept.1]
 
-/-- Lift an outcome predicate through the checked marks of an original
+/-- Lift an outcome and logical store predicate through the checked marks of an original
 execution. A mark can refuse, and every successful mark preserves the store. -/
 theorem markedOutcomes (marks : List (String × String))
     (process : PIR.Process (OracleProtocol.Interface model) A)
-    (property : PIR.Outcome A → Prop) (refusal : property (.stopped .refused))
+    (property : PIR.Outcome A → OracleRuntimeState model snapshot domains math S → Prop)
+    (refusal : ∀ store, property (.stopped .refused) store)
     (original : OracleRuntimeState model snapshot domains math S)
-    (tail : ∀ current, current.oracle = original → Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+    (tail : ∀ current, current.oracle = original → Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
       (process.runM (actionM model oracles ordinary base publish) current))
     (state : OracleProtocol.State model snapshot domains math S) (same : state.oracle = original) :
-    Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+    Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
       ((withMarks marks process).runM (actionM model oracles ordinary base publish) state) := by
   induction marks generalizing state with
   | nil => exact tail state same
@@ -67,11 +68,46 @@ theorem markedOutcomes (marks : List (String × String))
     rw [withMarks, PIR.Process.runM, actionM_local _ _ _ _ _ _ rfl, pure_bind]
     simp only [OracleProtocol.handler]
     split
-    · exact MonadicPostcondition.pure _ _ refusal
+    · exact MonadicPostcondition.pure _ _ (refusal _)
     · rename_i frame _
       simp only [PIR.Execution.followM]
       apply MonadicPostcondition.map (ih {state with frame := frame} same)
       exact fun _ valid ↦ valid
+
+/-- Run one original iteration frame around a state-sensitive callback
+postcondition. Entry or exit may refuse. A stopped body skips the exit,
+and a successful exit preserves the store produced by the body. -/
+theorem iterationOutcomes (site : String) (index : Nat)
+    (process : PIR.Process (OracleProtocol.Interface model) A)
+    (property : PIR.Outcome A → OracleRuntimeState model snapshot domains math S → Prop)
+    (refusal : ∀ store, property (.stopped .refused) store)
+    (state : OracleProtocol.State model snapshot domains math S)
+    (body : ∀ current, current.oracle = state.oracle →
+      Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
+        (process.runM (actionM model oracles ordinary base publish) current)) :
+    Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
+      ((OracleProtocol.enter model (.iteration site index) process).runM
+        (actionM model oracles ordinary base publish) state) := by
+  simp only [OracleProtocol.enter, PIR.Process.bind, PIR.Process.runM,
+    actionM_local oracles ordinary base publish (.iteration site index) _ rfl, OracleProtocol.handler, pure_bind]
+  split
+  · exact MonadicPostcondition.pure _ _ (refusal _)
+  · simp only [PIR.Execution.followM]
+    apply MonadicPostcondition.map _ _ (fun _ valid ↦ valid)
+    rw [PIR.runM_bind]
+    refine Std.Do.Internal.Ensures.bind (P := fun r ↦ property r.outcome r.state.oracle) ?head ?_
+    case head => exact body _ rfl
+    rintro ⟨out, current, events⟩ valid
+    cases out with
+    | stopped why => exact MonadicPostcondition.pure _ _ valid
+    | returned value =>
+      simp only [PIR.Execution.followM]
+      simp only [PIR.Process.runM, actionM_local oracles ordinary base publish .leave _ rfl, OracleProtocol.handler, pure_bind]
+      split
+      · simp only [PIR.Execution.followM, pure_bind]
+        exact MonadicPostcondition.pure _ _ (refusal _)
+      · simp only [PIR.Execution.followM, pure_bind]
+        exact MonadicPostcondition.pure _ _ valid
 
 /-- Compose a deterministic cell or metadata reply with the actual marked
 continuation. A stale source frame refuses before the continuation. The
@@ -85,12 +121,13 @@ theorem markedReplyOutcomes {op : (OracleProtocol.Interface model).Op}
     (trace : OracleProtocol.State model snapshot domains math S → List (OracleProtocol.Event E))
     (action : ∀ current, current.oracle = original → actionM model oracles ordinary base publish op current =
       pure (cursorReply site current reply post (trace current)))
-    (property : PIR.Outcome A → Prop) (refusal : property (.stopped .refused))
+    (property : PIR.Outcome A → OracleRuntimeState model snapshot domains math S → Prop)
+    (refusal : ∀ store, property (.stopped .refused) store)
     (tail : ∀ next, after next → ∀ current, current.oracle = post →
-      Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+      Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
         ((next reply).runM (actionM model oracles ordinary base publish) current))
     (state : OracleProtocol.State model snapshot domains math S) (same : state.oracle = original) :
-    Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+    Std.Do.Internal.Ensures (fun result ↦ property result.outcome result.state.oracle)
       (process.runM (actionM model oracles ordinary base publish) state) := by
   obtain ⟨marks, next, eqn, valid⟩ := head
   rw [eqn]
@@ -102,6 +139,6 @@ theorem markedReplyOutcomes {op : (OracleProtocol.Interface model).Op}
   · simp only [PIR.Execution.followM]
     apply MonadicPostcondition.map (tail next valid _ rfl)
     exact fun _ ok ↦ ok
-  · exact MonadicPostcondition.pure _ _ refusal
+  · exact MonadicPostcondition.pure _ _ (refusal _)
 
 end Zkc.Source.Structured.OraclePublication
