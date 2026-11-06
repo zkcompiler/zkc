@@ -320,10 +320,21 @@ void generatedOccurrences(Cases &cases) {
     list(dropped, "generated").erase(list(dropped, "generated").begin());
     inventoryRefuses(dropped, "is not exactly one instance");
     refused(checkSourceCorrespondenceExport(value, zkc::printJson(dropped)));
+    // Retaining only valid occurrences is insufficient when a site is omitted.
+    auto missing = pristine;
+    auto &sites = list(missing, "occurrences");
+    sites.erase(sites.begin());
+    inventoryRefuses(missing, "occurrences do not cover every snapshot site");
     // An occurrence of a site the snapshot does not have.
     auto invented = pristine;
     (*list(invented, "occurrences")[0].getAsObject())["site"] = "s9999";
-    inventoryRefuses(invented, "occurrence names no snapshot site");
+    inventoryRefuses(invented,
+                     "occurrence does not match the next snapshot site");
+    auto reordered = pristine;
+    auto &order = list(reordered, "occurrences");
+    std::swap(order[0], order[1]);
+    inventoryRefuses(reordered,
+                     "occurrence does not match the next snapshot site");
   });
 }
 } // namespace

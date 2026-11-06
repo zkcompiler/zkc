@@ -52,7 +52,8 @@ def sourceVerifier (firstBase firstPoint secondBase secondPoint : G) (handle : N
 
 /-- The actual source Process has this finite normal form for every reply. -/
 theorem source_equation (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
-    sourceVerifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.equality ChaumPedersenProof.wiring firstBase firstPoint secondBase secondPoint handle := by kernel_rfl
+    sourceVerifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.equality ChaumPedersenProof.wiring firstBase firstPoint secondBase secondPoint handle :=
+  ChaumPedersenProof.verifier_correspondence firstBase firstPoint secondBase secondPoint handle
 
 def sourceDecision (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) : PIR.Process (Actions F G) Bool :=
   (sourceVerifier firstBase firstPoint secondBase secondPoint handle).bind fun decision => .done (decision.getD false)

@@ -47,6 +47,7 @@
 #include "llvm/Support/SHA256.h"
 #include <map>
 #include <set>
+#include <utility>
 using namespace llvm;
 using namespace mlir;
 namespace zkc {
@@ -2302,16 +2303,14 @@ class ParticipantExporter {
       if (!payloads)
         return payloads.takeError();
       Block &arm = region.front();
-      auto outerReferences = references;
-      auto outerCoordinates = coordinates;
+      auto outerReferences = std::exchange(references, decltype(references){});
+      auto outerCoordinates = std::exchange(coordinates, {});
       unsigned outerNext = next;
       auto restore = llvm::scope_exit([&] {
         references = std::move(outerReferences);
         coordinates = std::move(outerCoordinates);
         next = outerNext;
       });
-      references.clear();
-      coordinates.clear();
       next = 0;
       for (BlockArgument argument : arm.getArguments())
         references[argument] = next++;
@@ -2328,11 +2327,11 @@ class ParticipantExporter {
       json::Array returned;
       for (unsigned index : *yielded)
         returned.push_back(index);
-      regions.push_back(json::Array{
-          std::move(*arguments), std::move(nested),
-          json::Array{"data.yield", std::move(returned)},
-          cast<StringAttr>(alternatives[i]).getValue().str(),
-          std::move(*payloadTypes)});
+      regions.push_back(
+          json::Array{std::move(*arguments), std::move(nested),
+                      json::Array{"data.yield", std::move(returned)},
+                      cast<StringAttr>(alternatives[i]).getValue().str(),
+                      std::move(*payloadTypes)});
     }
     return regions;
   }
