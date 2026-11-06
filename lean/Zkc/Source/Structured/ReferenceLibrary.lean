@@ -130,6 +130,21 @@ theorem eval_resultOperands {inputs outputs : List Ty}
       (resultOperands _ inputs)) = _
     rw [ih]
 
+/-- Forward an installed primitive's complete ordered result. Operand
+selection stays part of the checked body and its failure skips the return. -/
+def execute {inputs : List Ty} (primitive : Primitive) (arguments : Operands inputs primitive.arguments) :
+    ReferenceLaw model inputs primitive.results where
+  body := .letOp (.exec primitive) arguments .nil (.ret (resultOperands primitive.results inputs))
+  Requires _ _ := True
+  reference args := primitive.evaluateOn model.toFieldModel (Operands.eval args.get arguments)
+  valid table args _ := by
+    simp only [Region.denote, Evaluation.meaningOn, Evaluation.operationOn, Regions.denote]
+    cases primitive.evaluateOn model.toFieldModel (Operands.eval args.get arguments) with
+    | stopped reason => rfl
+    | returned values =>
+      apply congrArg PIR.Process.done
+      exact eval_resultOperands model args.get values
+
 /-- A caller which forwards the complete result ABI preserves every outcome.
 This is the ordinary call law with a proved ordered result projection. -/
 def forward {inputs : List Ty} (helper : Helper)

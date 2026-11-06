@@ -92,19 +92,29 @@ def multiply {F : Type} [CommRing F] : List F → List F → List F
   | [], _ => []
   | a :: as, b => add (b.map (a * ·)) (0 :: multiply as b)
 
+/-- One basis polynomial in ascending coefficients. Inversion can stop
+before the coefficient arithmetic, at the same position in the traversal. -/
+def interpolationTerm {F : Type} [CommRing F] [Inhabited F]
+    (invert : F → Result F) (xs values : List F) (i : Nat) : Result (List F) := do
+  let xi := xs[i]!
+  let others := (xs.zipIdx).filter (fun pair ↦ pair.2 != i) |>.map Prod.fst
+  let denominator := (others.map (xi - ·)).foldl (· * ·) 1
+  let inv ← invert denominator
+  let basis := others.foldl (fun acc x ↦ multiply acc [-x, 1]) [1]
+  return basis.map (fun a ↦ a * (values[i]! * inv))
+
+/-- Sum the coefficient rows in increasing index order. -/
+def interpolateAt {F : Type} [CommRing F] [Inhabited F] (invert : F → Result F)
+    (xs values : List F) : Result (List F) := do
+  let terms ← (List.range values.length).mapM (interpolationTerm invert xs values)
+  return terms.foldl add []
+
 /-- Direct Lagrange coefficients; an absent inverse is a refusal, and a
 duplicate abscissa cannot silently become a truncated interpolant. -/
 def interpolate (model : FieldModel) (d : String) (values : List (model.Field d))
     (shift : model.Field d) : Result (List (model.Field d)) := do
   let xs ← points model d shift values.length
-  let terms ← (List.range values.length).mapM fun i ↦ do
-    let xi := xs[i]!
-    let others := (xs.zipIdx).filter (fun pair ↦ pair.2 != i) |>.map Prod.fst
-    let denominator := (others.map (xi - ·)).foldl (· * ·) 1
-    let inv ← inverse model d denominator
-    let basis := others.foldl (fun acc x ↦ multiply acc [-x, 1]) [1]
-    return basis.map (fun a ↦ a * (values[i]! * inv))
-  return terms.foldl add []
+  interpolateAt (inverse model d) xs values
 
 def batchShape {F : Type} (values : List F) (width height : Nat) : Result Unit := do
   size (width * height)

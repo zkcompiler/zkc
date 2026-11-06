@@ -20,38 +20,45 @@ namespace ZkcSecurity.ArkLib.Fri.SourcePublication
 open OracleComp
 open Zkc Zkc.Source Zkc.Source.Structured
 
-/-- The source provider's fixed table supplies every successful local read, at the actual
-occurrence and expansion path. Its exact unchanged poststate retains the publication invariant. -/
-theorem readback {model : DomainModel} {d : String} {n : ℕ} {Aux E : Type}
-    (anchor : OracleAnchor) (stored : PublishedWords.Word model (.field d))
-    (word : Fin (2 ^ n) → model.Field d)
+/-- Availability and exact return value for a word installed by the source
+provider. The query may originate directly or inside a virtual expansion. -/
+theorem read_fixed_word {model : DomainModel} {d : String} {n : Nat} {Aux E : Type}
+    (anchor : OracleAnchor) (word : Fin (2 ^ n) → model.Field d)
+    (stored : PublishedWords.Word model (.field d))
     (answer : stored.kind.answer = .field d)
     (shape : OracleStore.validRows stored.kind stored.rows = true)
     (rows : stored.rows = 2 ^ n) (cells : stored.cells = List.ofFn word)
-    (supported : 2 ^ n < indexLimit) :
-    Phases.PublishedReadback model d n (PublishedWords.readM (m := ProbComp) (E := E))
-      anchor word (fun state : PublishedWords.State model Aux ↦
-        PublishedWords.find state.words (.field d) anchor = some stored) := by
-  constructor
-  intro position location expansion state found result member value returned
-  have requested : OracleStore.validRows
-      (Phases.publishedRequest d anchor position.val location expansion).kind stored.rows = true := by
-    simp [Phases.publishedRequest, OracleStore.validRows, OracleKind.rows, rows, supported]
-  have selected : stored.cells[position.val]? = some (word position) := by
-    simp [cells, position.isLt]
-  have length : stored.cells.length = stored.rows := by
-    rw [cells]
-    exact (List.length_ofFn (f := word)).trans rows.symm
-  have exactRead := PublishedWords.read_compatible_cell (E := E)
-    (Phases.publishedRequest d anchor position.val location expansion) state stored (word position)
-    found answer shape requested length
-    (by simpa only [Phases.publishedRequest, rows] using position.isLt)
-    selected
-  have result_eq : result = ⟨.returned (word position), state, []⟩ := by
-    simpa only [PublishedWords.readM, exactRead, mem_support_pure_iff] using member
-  rw [result_eq] at returned ⊢
-  cases returned
-  exact ⟨rfl, found⟩
+    (position : Fin (2 ^ n)) (location : OracleLocation)
+    (expansion : List (OracleAnchor × OracleLocation))
+    (state : PublishedWords.State model Aux)
+    (found : PublishedWords.find state.words (.field d) anchor = some stored) :
+    PublishedWords.read (E := E) (Phases.publishedRequest d anchor position.val location expansion) state =
+      ⟨.returned (word position), state, []⟩ := by
+  have within := position.isLt
+  have limit : stored.rows < indexLimit := (Bool.and_eq_true_iff.mp shape).1 |> of_decide_eq_true
+  exact PublishedWords.read_compatible_cell (Phases.publishedRequest d anchor position.val location expansion)
+    state stored (word position) found answer shape
+    (by simp [Phases.publishedRequest, OracleStore.validRows, OracleKind.rows, limit])
+    (by rw [cells, rows]; exact List.length_ofFn)
+    (show position.val < stored.rows from rows.symm ▸ within) (by
+      change stored.cells[position.val]? = _
+      rw [cells, List.getElem?_ofFn, dite_eq_left within]
+      rfl)
+
+theorem readback {model : DomainModel} {d : String} {n : Nat} {Aux E : Type}
+    (anchor : OracleAnchor) (word : Fin (2 ^ n) → model.Field d)
+    (stored : PublishedWords.Word model (.field d))
+    (answer : stored.kind.answer = .field d)
+    (shape : OracleStore.validRows stored.kind stored.rows = true)
+    (rows : stored.rows = 2 ^ n) (cells : stored.cells = List.ofFn word) :
+    Phases.PublishedReadback model d n (PublishedWords.readM (E := E)) anchor word
+      (fun state : PublishedWords.State model Aux ↦
+        PublishedWords.find state.words (.field d) anchor = some stored) where
+  read position location expansion state found result member value returned := by
+    have same := eq_of_mem_support_pure _ member
+    rw [same, read_fixed_word anchor word stored answer shape rows cells position location expansion
+      state found] at returned ⊢
+    exact ⟨(PIR.Outcome.returned.inj returned).symm, found⟩
 
 /-- The same publication invariant survives every independently proved table frame step. -/
 theorem live_of_frame {model : DomainModel} {Aux : Type} {d : String}
