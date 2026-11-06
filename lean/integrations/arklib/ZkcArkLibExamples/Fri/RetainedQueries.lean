@@ -63,19 +63,15 @@ theorem installed (model : DomainModel) (service : Nat) :
       (marks model ["", "", "s2", "", "", "s5", "s6", "s8", "", loop.site]).bind fun _ ↦
         ((scalarQueries 5 8 0).interpret (operations model service)).bind
           fun ys ↦ .done (packed model (List.ofFn ys)) := by
-  refine ((verifierAlgebra model).invokeBody unit.protocolsLinked protocol1Definition protocol1_member
-    context 1 _).trans ?_
-  let args : Values (Component (verifierValue model)) protocol1Signature.inputs :=
-    .cons (OracleProtocol.concrete model .index 8)
-      (.cons (OracleProtocol.concrete model (.service contract) service) .nil)
-  let maskResult (p : PIR.Process (OracleProtocol.Interface model)
-      (Values (Component (verifierValue model)) protocol1Signature.outputs)) :=
-    p.bind fun results ↦ .done (maskValues 1 (context.mapScopes protocol1Signature.outputScopes) results)
-  refine (congrArg maskResult ((NormalForm.normalizeActions_process
-    ((verifierAlgebra model).meaning (verifierTable model) context 1) protocol1Body args.get).trans
-    (source_body model service))).trans ?_
-  dsimp only [maskResult]
-  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
-  rfl
+  refine ((verifierAlgebra model).invokePresented unit.protocolsLinked protocol1Definition protocol1_member
+    context 1 (.cons (OracleProtocol.concrete model .index 8)
+      (.cons (OracleProtocol.concrete model (.service contract) service) .nil)) _ (source_body model service)).trans ?_
+  have mask : (fun out : Values (Component (verifierValue model)) protocol1Definition.outputs ↦
+      PIR.Process.done (I := OracleProtocol.Interface model)
+        (maskValues 1 (context.mapScopes protocol1Definition.outputScopes) out)) = PIR.Process.done := by
+    funext out
+    cases out with | cons value rest => cases rest; rfl
+  rw [mask]
+  exact PIR.Process.bind_done _
 
 end ZkcSecurity.ArkLib.Fri.RetainedQueries

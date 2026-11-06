@@ -70,6 +70,37 @@ theorem ProtocolAlgebra.invokeBody (algebra : ProtocolAlgebra V I)
   | mark _ => cases operands; rfl
   | assemble | calculate | localCall | oracle | query | draw | exchange | guard | statement => rfl
 
+/-- Present an installed invocation at one reached environment. The source
+owns both role masks and the normalization of its selected definition. -/
+theorem ProtocolAlgebra.invokePresented (algebra : ProtocolAlgebra V I)
+    {inventory : List Helper} {definitions : List CheckedProtocol}
+    (linked : ProtocolDeclarationsLinked inventory [] definitions)
+    (definition : CheckedProtocol) (member : definition ∈ definitions)
+    (context : ProtocolContext) (self : Nat) (args : Values (Component V) definition.inputs)
+    (presented : PIR.Process I (Values (Component V) definition.outputs))
+    (body : definition.body.denote (algebra.meaning (definitions.foldl algebra.extend []) context self)
+      (maskValues self (context.mapScopes definition.inputScopes) args).get = presented) :
+    invokeProtocol (definitions.foldl algebra.extend []) definition.signature context self args =
+      presented.bind fun out ↦ .done (maskValues self (context.mapScopes definition.outputScopes) out) := by
+  rw [algebra.invokeBody linked definition member]
+  unfold ProtocolAlgebra.denote
+  exact congrArg (fun p : PIR.Process I (Values (Component V) definition.outputs) ↦
+    p.bind fun out ↦ .done (maskValues self (context.mapScopes definition.outputScopes) out))
+    ((NormalForm.normalizeActions_process _ _ _).trans body)
+
+/-- An active call selects the linked table at the site and role map written
+in the caller. This equation composes with a body law at that environment. -/
+theorem ProtocolAlgebra.applyActive (algebra : ProtocolAlgebra V I) (table : ProtocolTable V I)
+    (signature : ProtocolSignature) (context : ProtocolContext) (self : Nat)
+    (site : String) (roles : List Nat) (args : Values (Component V) signature.inputs)
+    (active : (context.enter site roles).contains signature self = true) :
+    (algebra.meaning table context self).OperationLaw (fun op ↦ .call op .done)
+      (.protocolApply signature roles site) args .nil
+      (algebra.application context signature site
+        (invokeProtocol table signature (context.enter site roles) self args)) := by
+  apply RegionMeaning.OperationLaw.identity
+  simp only [ProtocolAlgebra.meaning, ProtocolAlgebra.operation, active, ↓reduceIte]
+
 namespace ProtocolLaw
 attribute [local implicit_reducible] CheckedProtocol.signature ProtocolOp.results
 variable {algebra : ProtocolAlgebra V I} {definition : CheckedProtocol}
@@ -123,12 +154,9 @@ theorem invokeMember (law : ProtocolLaw algebra definition.signature)
     invokeProtocol (definitions.foldl algebra.extend []) definition.signature context self args =
       (law.reference (definitions.foldl algebra.extend []) context self args).bind (fun out =>
         .done (maskValues self (context.mapScopes definition.outputScopes) out)) := by
-  rw [algebra.invokeBody linked definition member]
-  unfold ProtocolAlgebra.denote
-  rw [NormalForm.normalizeActions_process, definition.body_eq_of_raw law.body associated]
-  exact congrArg (fun p : PIR.Process I (Values (Component V) definition.outputs) =>
-    p.bind (fun out => .done (maskValues self (context.mapScopes definition.outputScopes) out)))
-    (law.derives _ _ _ _ requires).sound_identity
+  apply algebra.invokePresented linked definition member
+  rw [definition.body_eq_of_raw law.body associated]
+  exact (law.derives _ _ _ _ requires).sound_identity
 
 theorem applyMember (law : ProtocolLaw algebra definition.signature)
     {inventory : List Helper} {definitions : List CheckedProtocol}
