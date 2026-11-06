@@ -17,7 +17,6 @@ open OracleProtocol (concrete)
 attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results ProtocolOp.regions
   OracleOp.arguments OracleOp.results protocol2Signature
 
-def context := lowDegreeContext.enter "s4" [0, 1]
 abbrev initialSort := OracleLogicalSort.singleton (.table (.field extension) none)
 abbrev layersSort := OracleLogicalSort.sequence (.table (.field extension) none) 3
 abbrev Value (model : DomainModel) := Component (verifierValue model)
@@ -36,9 +35,6 @@ def inputs (model : DomainModel) (state : Committed model) (xs : FriScalarLoop.P
   .cons none (.cons state.initial (.cons none (.cons state.layers (.cons none (.cons state.folds
     (.cons state.shift (.cons state.size (.cons state.coefficients (.cons state.rounds
       (.cons (concrete model .indices (xs.map Fin.val)) .nil))))))))))
-
-/-- One component at any application prefix of this two-role installation. -/
-def frame (parent : Option String) : ProtocolContext := {context with applicationPrefix := parent}
 
 /-- Only logical field correspondence is specified. The retained declaration
 supplies every flattened index, type, placement and holder/receiver split. -/
@@ -64,48 +60,51 @@ private theorem admitted (xs : FriScalarLoop.Positions) (count : xs.length = 8) 
     rintro n j _ rfl
     exact j.isLt.trans (by decide : 32 < indexLimit)
 
-theorem lengthStep (model : DomainModel) (parent : Option String) {site : String} (xs : FriScalarLoop.Positions) (count : xs.length = 8) :
-    ((verifierAlgebra model).meaning (verifierTable model) (frame parent) 1).OperationLaw
+theorem lengthStep (model : DomainModel) (context : ProtocolContext) (receiver : context.roles 1 = 1) {site : String} (xs : FriScalarLoop.Positions) (count : xs.length = 8) :
+    ((verifierAlgebra model).meaning (verifierTable model) context 1).OperationLaw
       (fun op ↦ .call op .done) (.localCall helper24Helper rfl 1 site)
       (.cons (concrete model .indices (xs.map Fin.val)) .nil) .nil (.done (.cons (concrete model .index 8) .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper24Helper
+  change OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper24Helper
     (ProtocolValue.embedComponents (Values.cons (Value := model.Value) (ty := .indices) (xs.map Fin.val) .nil).present) = _
-  rw [OracleProtocol.owned_present, (FriBoundedPositions.lengthLaw model).invokeOn
+  rw [receiver, OracleProtocol.owned_present, (FriBoundedPositions.lengthLaw model).invokeOn
     (helper := helper24Helper) unit.definitions unit.linked (by exact_body helper24Definition)
     (.cons (xs.map Fin.val) .nil) (admitted xs count)]
   change PIR.Process.done (I := OracleProtocol.Interface model)
     (Values.cons (concrete model .index (xs.map Fin.val).length) .nil) = _
   rw [List.length_map, count]
 
-theorem boundsStep (model : DomainModel) (parent : Option String) {site : String} (xs : FriScalarLoop.Positions) (count : xs.length = 8) :
-    ((verifierAlgebra model).meaning (verifierTable model) (frame parent) 1).OperationLaw
+theorem boundsStep (model : DomainModel) (context : ProtocolContext) (receiver : context.roles 1 = 1) {site : String} (xs : FriScalarLoop.Positions) (count : xs.length = 8) :
+    ((verifierAlgebra model).meaning (verifierTable model) context 1).OperationLaw
       (fun op ↦ .call op .done) (.localCall helper25Helper rfl 1 site)
       (.cons (concrete model .indices (xs.map Fin.val)) (.cons (concrete model .index 32) .nil)) .nil
       (.done (.cons (concrete model .boolean true) .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper25Helper
+  change OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper25Helper
     (ProtocolValue.embedComponents (Values.cons (Value := model.Value) (ty := .indices) (xs.map Fin.val)
       (.cons (ty := .index) 32 .nil)).present) = _
-  rw [OracleProtocol.owned_present, FriBoundedPositions.installed (xs.map Fin.val) 32 (admitted xs count)
+  rw [receiver, OracleProtocol.owned_present, FriBoundedPositions.installed (xs.map Fin.val) 32 (admitted xs count)
     (by decide) (by intro x h; obtain ⟨j, _, rfl⟩ := List.mem_map.mp h; exact j.isLt)]
   rfl
 
 set_option maxHeartbeats 2000000 in
 /-- The process and its equation are synthesized together from the admitted
 body, with only the mathematical guards supplied at their reached operands. -/
-def presentation (model : DomainModel) (parent : Option String) (state : Committed model)
+def presentation (model : DomainModel) (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (separate : 1 ≠ context.roles 0) (state : Committed model)
     (xs : FriScalarLoop.Positions) (count : xs.length = 8) :
-    { process // protocol2Body.denote ((verifierAlgebra model).meaning (verifierTable model) (frame parent) 1)
+    { process // protocol2Body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
         (inputs model state xs).get = process } := by
   refine ⟨?process, ?certificate⟩
   case certificate =>
     apply Region.Derivation.sound_identity
     derive_region using
       (first
-       | apply lengthStep model parent xs count
-       | apply boundsStep model parent xs count
+       | apply lengthStep model context receiver xs count
+       | apply boundsStep model context receiver xs count
        | exact OracleProtocol.equalIndex model 8
+       | apply OracleProtocol.localCallInactive model _ _ (Ne.symm separate)
+       | apply OracleProtocol.guardInactive model (Ne.symm separate)
        | apply OracleProtocol.guardTrue model
        | apply RegionMeaning.OperationLaw.identity; rfl)
 

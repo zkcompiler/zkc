@@ -42,12 +42,12 @@ theorem componentsAt {location : OracleLocation} {roles : Nat → Nat} {sort : O
 /-- Solve the returned SSA tuple by following each reached reply. Missing
 action laws and incorrect result associations leave unsolved obligations. -/
 macro "derive_receiver_returns " os:term:max ord:term:max base:term:max pub:term:max
-    original:term:max role:term:max : tactic => `(tactic|
+    original:term:max role:term:max " using " placement:tacticSeq : tactic => `(tactic|
   (repeat' (apply PIR.Process.ReturnsUnder.call
             first
             | exact Zkc.Source.Structured.ReceiverForwarding.mark $os $ord $base $pub $original _ _
-            | with_unfolding_all apply Zkc.Source.Structured.ReceiverForwarding.inputAt (oracles := $os) (ordinary := $ord) (base := $base) (publish := $pub) $role <;> (apply of_decide_eq_true; rfl)
-            | with_unfolding_all apply Zkc.Source.Structured.ReceiverForwarding.componentsAt (oracles := $os) (ordinary := $ord) (base := $base) (publish := $pub) $role <;> (apply of_decide_eq_true; rfl))
+            | with_unfolding_all apply Zkc.Source.Structured.ReceiverForwarding.inputAt (oracles := $os) (ordinary := $ord) (base := $base) (publish := $pub) $role <;> ($placement)
+            | with_unfolding_all apply Zkc.Source.Structured.ReceiverForwarding.componentsAt (oracles := $os) (ordinary := $ord) (base := $base) (publish := $pub) $role <;> ($placement))
    apply PIR.Process.ReturnsUnder.done))
 
 end Zkc.Source.Structured.ReceiverForwarding

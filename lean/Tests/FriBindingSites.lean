@@ -1,3 +1,5 @@
+import Mathlib.Tactic.FinCases
+import Zkc.Source.Structured.ContractCalls
 import Tests.FriBindingSitesView
 import Tests.FriBindingAssociation
 
@@ -9,18 +11,19 @@ open FriSource FriSourceBodies FriSourceViews
 
 abbrev doubleProgram := FriBindingSitesView.program
 
-def calls (definition : CheckedProtocol) : List (String × ProtocolSignature × List Nat) :=
-  definition.body.erase.operations.filterMap fun op ↦ match op with
-    | .protocolApply signature roles site => some (site, signature, roles)
-    | _ => none
+/-- The root has two calls. Keep their typed occurrence witnesses and SSA
+operands, rather than identifying an occurrence by the spelling of its label. -/
+def outer (i : Fin 2) : CallOccurrence doubleProgram.payload.entry.body :=
+  (callInventory doubleProgram.payload.entry.body)[i.val]'(by
+    have arity : (callInventory doubleProgram.payload.entry.body).length = 2 := by kernel_rfl
+    simpa only [arity] using i.isLt)
 
-abbrev leftSite := "label_6c656674"
-abbrev rightSite := "label_7269676874"
+def binding := (selectCall protocol5Body protocol2Signature).get (by decide +kernel)
 
-theorem rootCalls : calls doubleProgram.payload.entry =
-    [(leftSite, protocol5Signature, [0, 1]), (rightSite, protocol5Signature, [0, 1])] := by kernel_rfl
+theorem rootCalls (i : Fin 2) : (outer i).callSite.signature = protocol5Signature := by
+  fin_cases i <;> kernel_rfl
 
-theorem nested : ("s4", protocol2Signature, [0, 1]) ∈ calls protocol5Definition := by decide +kernel
+theorem selectedBinder : binding.callSite.signature = protocol2Signature := by kernel_rfl
 
 theorem helperClosure : doubleProgram.payload.definitions = unit.definitions := by kernel_rfl
 
@@ -43,9 +46,15 @@ theorem sameBinder (model : DomainModel) :
     (ProtocolClosure.prefix_agrees (verifierAlgebra model).denote unit.protocolsLinked
       shared (suffix ++ [runDefinition]) rfl protocol2Signature member)
 
-def binderContext (site : String) := (({} : ProtocolContext).enter site [0, 1]).enter "s4" [0, 1]
+def binderContext (i : Fin 2) : ProtocolContext :=
+  let parent := (outer i).callSite
+  (({} : ProtocolContext).enter parent.site parent.roles).enter binding.callSite.site binding.callSite.roles
 
-example : (binderContext leftSite).applicationPrefix ≠ (binderContext rightSite).applicationPrefix := by decide
+example : (binderContext 0).applicationPrefix ≠ (binderContext 1).applicationPrefix := by decide +kernel
+
+private theorem placement (i : Fin 2) :
+    (binderContext i).roles 1 = 1 ∧ 1 ≠ (binderContext i).roles 0 := by
+  fin_cases i <;> decide +kernel
 
 variable {model : DomainModel} {snapshot : Snapshot} {domains : List DomainSpec}
   {math : OracleMathEnvironment} {S E : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
@@ -55,7 +64,7 @@ variable {model : DomainModel} {snapshot : Snapshot} {domains : List DomainSpec}
   (publish : PIR.MonadHandler m (OraclePublication.Interface model) S E)
   (original : OracleRuntimeState model snapshot domains math S) (role : original.self = 1)
 
-def CorrespondsAt (site : String) : Prop :=
+def CorrespondsAt (site : Fin 2) : Prop :=
   ∀ (handles : FriBindingExecution.Handles) (rest : FriBinding.Committed model)
     (xs : FriScalarLoop.Positions), xs.length = 8 →
     ReceiverForwarding.Keeps oracles ordinary base publish original
@@ -65,19 +74,19 @@ def CorrespondsAt (site : String) : Prop :=
 include role in
 /-- Independent inputs may be used at either of the two actual sites. Only
 their context changes. Both applications use the same mathematical proof. -/
-theorem bothSites : CorrespondsAt oracles ordinary base publish original leftSite ∧
-    CorrespondsAt oracles ordinary base publish original rightSite := by
-  have siteLaw (site : String) : CorrespondsAt oracles ordinary base publish original site := by
+theorem bothSites : CorrespondsAt oracles ordinary base publish original 0 ∧
+    CorrespondsAt oracles ordinary base publish original 1 := by
+  have siteLaw (site : Fin 2) : CorrespondsAt oracles ordinary base publish original site := by
     intro handles rest xs count
     rw [sameBinder]
     exact FriBindingExecution.installed oracles ordinary base publish original role
-      (binderContext site).applicationPrefix handles rest xs count
-  exact ⟨siteLaw leftSite, siteLaw rightSite⟩
+      (binderContext site) (placement site).1 (placement site).2 handles rest xs count
+  exact ⟨siteLaw 0, siteLaw 1⟩
 
 include role in
 /-- The same-sort swap is impossible as a returned value of either reached
 binder. This uses its actual installed process under any publication handler. -/
-theorem excludesSwapped (site : String) (atSite : site = leftSite ∨ site = rightSite)
+theorem excludesSwapped (site : Fin 2)
     (handles : FriBindingExecution.Handles) (rest : FriBinding.Committed model)
     (xs : FriScalarLoop.Positions) (count : xs.length = 8) (distinct : handles.layers ≠ handles.folds)
     (state : OracleProtocol.State model snapshot domains math S) (valid : state.oracle = original) :
@@ -89,7 +98,7 @@ theorem excludesSwapped (site : String) (atSite : site = leftSite ∨ site = rig
         (OraclePublication.actionM model oracles ordinary base publish) state) := by
   have sites := bothSites oracles ordinary base publish original role
   have atBinder : CorrespondsAt oracles ordinary base publish original site := by
-    rcases atSite with rfl | rfl
+    fin_cases site
     · exact sites.1
     · exact sites.2
   exact (atBinder handles rest xs count).excludes

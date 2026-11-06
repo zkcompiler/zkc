@@ -16,6 +16,15 @@ def directPositions (anchor : OracleAnchor) (events : List (OracleProtocol.Event
       if request.anchor == anchor && request.expansion.isEmpty then some request.position else none
     | _ => none
 
+/-- Distinct constant codewords give the two calls identical table shapes
+and different cell values, including at shared sampled coordinates. -/
+def chooseConstants : PublishedWords.Chooser Id model History String :=
+  fun req words h ↦ match req with
+    | ⟨.table (.field d) _, _, rows, _, _, _, _⟩ =>
+      let value : model.Field d := if words.length < 3 then 0 else 1
+      ⟨.returned (List.replicate rows value), {h with actions := h.actions ++ ["publish"]}, []⟩
+    | _ => ⟨.stopped .refused, h, ["unexpected word sort"]⟩
+
 def controls : IO Unit := do
   let .ok subject := Tests.FriBindingSitesView.imported.oracleSubject
     | throw (IO.userError "two-call oracle subject")
@@ -24,8 +33,10 @@ def controls : IO Unit := do
     let .ok start := subject.start model 1 (same ▸ arguments) [] (⟨[], {}⟩ : PublishedWords.State model History)
       | throw (IO.userError "two-call root ingress")
     let secondPositions := [0, 0, 31, 24, 6, 6, 2, 29]
-    let result := PublishedWords.sourceRunM (m := Id) start (ordinaryWith (positions ++ secondPositions) 0 false)
-      (chooser false)
+    let network : PublishedWords.Table model →
+        PIR.MonadHandler Id (participantInterfaceOn model.toCarriers) History String :=
+      fun words ↦ ordinaryWith (positions ++ secondPositions) (if words.length ≤ 3 then 0 else 1) false words
+    let result := PublishedWords.sourceRunM (m := Id) start network chooseConstants
     let .returned outputs := result.outcome | throw (IO.userError "two-call root stopped")
     let read := fun index ↦ do
       let ref ← Var.decode subject.imported.program.payload.entry.outputs .boolean index
@@ -34,6 +45,12 @@ def controls : IO Unit := do
     let anchors := words.map fun word ↦ word.2.anchor
     let [left, right] := (words.filter (·.2.rows == 32)).reverse
       | throw (IO.userError "expected one initial word per call site")
+    let some first := PublishedWords.find words (.field extension) left.2.anchor
+      | throw (IO.userError "first initial word")
+    let some second := PublishedWords.find words (.field extension) right.2.anchor
+      | throw (IO.userError "second initial word")
+    unless first.cells == List.replicate 32 0 && second.cells == List.replicate 32 1 do
+      throw (IO.userError "per-site constant words")
     let firstReads := directPositions left.2.anchor result.events
     let secondReads := directPositions right.2.anchor result.events
     unless firstReads == positions && secondReads == secondPositions do

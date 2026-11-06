@@ -51,6 +51,24 @@ theorem maskValues_commute {Value : Ty → Type} {types : List Ty}
     unfold Participant.restrict
     split <;> split <;> rfl
 
+/-- A caller may rename the participants. The local mask depends only on
+membership in each scope, including when several roles share a field. -/
+theorem maskValues_mapScopes {Value : Ty → Type} {types : List Ty}
+    (context : ProtocolContext) (self localRole : Nat) (scopes : List (List Nat))
+    (values : Values (Component Value) types)
+    (agrees : ∀ scope ∈ scopes, (scope.map context.roles).contains self = scope.contains localRole) :
+    maskValues self (context.mapScopes scopes) values = maskValues localRole scopes values := by
+  induction values generalizing scopes with
+  | nil => rfl
+  | cons value tail ih =>
+    cases scopes with
+    | nil => exact congrArg (Values.cons (Participant.restrict false value)) (ih [] (by simp))
+    | cons scope rest =>
+      change Values.cons (Participant.restrict ((scope.map context.roles).contains self) value)
+        (maskValues self (context.mapScopes rest) tail) =
+          .cons (Participant.restrict (scope.contains localRole) value) (maskValues localRole rest tail)
+      rw [agrees scope List.mem_cons_self, ih rest (fun s h ↦ agrees s (List.mem_cons_of_mem _ h))]
+
 theorem maskValues_enter {Value : Ty → Type} {types : List Ty}
     (self : Nat) (context : ProtocolContext) (site : String) (roles : List Nat)
     (scopes : List (List Nat)) (values : Values (Component Value) types) :

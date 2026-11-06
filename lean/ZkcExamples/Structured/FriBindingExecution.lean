@@ -41,17 +41,32 @@ include role in
 /-- One theorem for every qualified call of the admitted binding component.
 The generic derivation obtains mark locations, receiver operations and SSA
 results from the selected body. The named field plan fixes the correspondence. -/
-theorem installed (parent : Option String) (handles : Handles) (rest : Committed model)
+theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (separate : 1 ≠ context.roles 0) (handles : Handles) (rest : Committed model)
     (xs : FriScalarLoop.Positions) (count : xs.length = 8) :
     ReceiverForwarding.Keeps oracles ordinary base publish original
-      (invokeProtocol (verifierTable model) protocol2Signature (frame parent) 1
+      (invokeProtocol (verifierTable model) protocol2Signature context 1
         (inputs model (handles.attach rest) xs))
       (output (handles.attach rest) xs) := by
+  have placement (ss : List (List Nat)) (used : ∀ s ∈ ss, s = [0] ∨ s = [1] ∨ s = [0, 1]) :
+      ∀ s ∈ ss, (s.map context.roles).contains 1 = s.contains 1 := by
+    intro s member
+    rcases used s member with rfl | rfl | rfl <;> simp [receiver, separate]
+  have inputMask := maskValues_mapScopes context 1 1 protocol2Signature.inputScopes
+    (inputs model (handles.attach rest) xs) (placement _ (by decide +kernel))
+  have outputMask := maskValues_mapScopes context 1 1 protocol2Signature.outputScopes
+    (output (handles.attach rest) xs) (placement _ (by decide +kernel))
   refine PIR.Process.ReturnsUnder.ofEquation
     ((verifierAlgebra model).invokePresented unit.protocolsLinked protocol2Definition protocol2_member
-      (frame parent) 1 _ _ (presentation model parent (handles.attach rest) xs count).property) ?_
+      context 1 (inputs model (handles.attach rest) xs) _ (by
+        exact (congrArg (fun args : Values (Value model) protocol2Signature.inputs ↦
+          protocol2Body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) args.get)
+            inputMask).trans (presentation model context receiver separate (handles.attach rest) xs count).property)) ?_
   apply PIR.Process.ReturnsUnder.bind (a := output (handles.attach rest) xs)
-  · derive_receiver_returns oracles ordinary base publish original role
-  · exact PIR.Process.ReturnsUnder.done _
+  · derive_receiver_returns oracles ordinary base publish original role using
+      first | exact separate | simp [receiver]
+  · exact (congrArg (fun out : Values (Value model) protocol2Signature.outputs ↦
+      ReceiverForwarding.Keeps oracles ordinary base publish original (.done out) (output (handles.attach rest) xs))
+        outputMask).mpr (PIR.Process.ReturnsUnder.done _)
 
 end ZkcExamples.Structured.FriBindingExecution

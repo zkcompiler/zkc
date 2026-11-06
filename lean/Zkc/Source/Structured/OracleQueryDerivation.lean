@@ -82,6 +82,28 @@ theorem equalIndex (i : Nat) :
   simp only [decide_true]
   rfl
 
+/-- A helper owned by another participant consumes no local operands.
+Its returned ABI is absent even when an input holds deferred oracle data. -/
+theorem localCallInactive (helper : Helper) (localKind : helper.kind = .local)
+    (other : context.roles owner ≠ self)
+    (args : Values (Component (ProtocolValue model.toCarriers)) helper.inputs) :
+    ((algebra model self ordinary helpers).meaning table context self).OperationLaw
+      (fun op ↦ .call op .done) (.localCall helper localKind owner site) args .nil
+      (.done (Values.absent _ helper.outputs)) := by
+  apply RegionMeaning.OperationLaw.identity
+  change owned model self (context.roles owner) ordinary helper args = _
+  simp [owned, other]
+  rfl
+
+theorem guardInactive (other : context.roles owner ≠ self)
+    (condition : Component (ProtocolValue model.toCarriers) .boolean) :
+    ((algebra model self ordinary helpers).meaning table context self).OperationLaw
+      (fun op ↦ .call op .done) (.guard owner site) (.cons condition .nil) .nil (.done .nil) := by
+  apply RegionMeaning.OperationLaw.identity
+  change ((Participant.guard (services := services) (Value := model.Value) self (context.roles owner)
+    (condition.bind ProtocolValue.toConcrete)).interpret (actions model)).bind _ = _
+  simp [Participant.guard, other, PIR.Process.interpret, PIR.Process.bind]
+
 theorem guardTrue (owner : Nat) :
     ((algebra model self ordinary helpers).meaning table context self).OperationLaw
       (fun op ↦ .call op .done) (.guard owner site) (.cons (concrete model .boolean true) .nil) .nil
