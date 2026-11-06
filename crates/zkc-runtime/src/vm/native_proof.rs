@@ -123,8 +123,22 @@ fn expanded_site(prefix: Option<&str>, site: &str) -> Result<String> {
     Ok(site)
 }
 
-/// Read only the already checked origin tree. Generated oracle events keep
-/// their expanded event site, but their control frames are still authored.
+fn generated_origin_protocol(protocol: &str) -> Result<bool> {
+    let Some(digest) = protocol.strip_prefix("zkc.oracle.") else {
+        return Ok(false);
+    };
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(refuse("native-proof-origin"));
+    }
+    Ok(true)
+}
+
+/// Read only the already checked origin tree. Authored frames expand application
+/// prefixes; generated oracle frames retain their already expanded actual sites.
 fn control_frames(origin: &serde_json::Value, work: &mut ProofWork) -> Result<Vec<ControlFrame>> {
     let mut prefix = None;
     let mut frames = Vec::new();
@@ -141,7 +155,14 @@ fn control_frames(origin: &serde_json::Value, work: &mut ProofWork) -> Result<Ve
             1 + field(1)?.len() + field(2)?.len() + prefix.as_ref().map_or(0, String::len) + 40,
         )?;
         let protocol = field(1)?.to_owned();
-        let site = expanded_site(prefix.as_deref(), field(2)?)?;
+        let site = expanded_site(
+            if generated_origin_protocol(&protocol)? {
+                None
+            } else {
+                prefix.as_deref()
+            },
+            field(2)?,
+        )?;
         match field(0)? {
             "apply" => prefix = Some(site),
             "repeat" => {
@@ -192,18 +213,14 @@ pub fn native_origin_site(origin: &str, kind: &str) -> Result<String> {
         .map_err(|_| refuse("native-proof-origin"))?;
     let origin =
         zkc_format::logical::decode_tree(&bytes).map_err(|_| refuse("native-proof-origin"))?;
-    // Generated realization events keep authored control frames for
+    // Generated realization events keep their full control lineage for
     // occurrence identity, while their checked common site is already expanded.
-    if let Some(digest) = origin[4][1]
-        .as_str()
-        .and_then(|protocol| protocol.strip_prefix("zkc.oracle."))
-    {
-        if kind != "message"
-            || digest.len() != 64
-            || !digest
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        {
+    if generated_origin_protocol(
+        origin[4][1]
+            .as_str()
+            .ok_or_else(|| refuse("native-proof-origin"))?,
+    )? {
+        if kind != "message" {
             return Err(refuse("native-proof-origin"));
         }
         return origin[4][2]
