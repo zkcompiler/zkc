@@ -3,7 +3,7 @@ import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierRound
 import ZkcArkLibExamples.Fri.CommitChallenge
 import ZkcArkLibExamples.Fri.VerifierInitialRead
-import ZkcArkLibExamples.Fri.VerifierTerminal
+import ZkcArkLibExamples.Fri.VerifierTerminalGuard
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
 import ZkcExamples.Structured.FriBindingExecution
@@ -48,6 +48,31 @@ example (state : CommitPublication.State model snapshot domains math Aux) :
     servicesAt oracles ordinary fieldAudit indexAudit choose 0 (FriCommitRound.drawRequest enteredCommit 1) state =
       pure ⟨.stopped .refused, state, []⟩ :=
   CommitChallenge.wrongService oracles ordinary enteredCommit 0 fieldAudit indexAudit choose 1 (by decide) state
+end
+
+-- On the same reached loop state, changing the sole coefficient from zero
+-- to one flips the verifier's actual terminal guard. Even if its cursor
+-- stops, no execution of the second suffix can return the remembered vector.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+open ZkcSecurity.Domains.KoalaBear (Octic)
+open VerifierTerminalGuard
+example (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (env : Environment (FriBinding.Value model) Γ) (c : Octic)
+    (selected : env coefficientsPort = OracleProtocol.concrete model (.vector FriSource.extension) [c]) :
+    FriCheckRound.roundSite.next.denote (terminalMeaning context) (env.prepend (finalValues 0 0 4 1)) =
+      OracleProtocol.withMarks (FriCheckRound.roundSite.continuationMarks context)
+        (if c = 0 then .done (.cons (env rememberedPort) .nil) else .halt .reject) := by
+  simpa [terminal, evaluate] using
+    (VerifierTerminalGuard.installed context receiver env [c] selected 1 one_ne_zero (k := 2) (by decide)
+      ⟨0, by decide⟩ (show 1 < indexLimit by decide) 0)
+
+example : coefficientsPort.index ≠ rememberedPort.index := by decide +kernel
+
+-- Cutting through the outer callback as though its nested body executed
+-- exactly once would erase the trip count and change early-stop behavior.
+example : FriCheckRound.roundOccurrence.onSpine = false := by kernel_rfl
 end
 
 -- A scalar or Boolean terminal payload does not encode a coefficient vector,
@@ -247,7 +272,9 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `Zkc.Source.Structured.OracleReadback, `ZkcExamples.Structured.FriPower,
    `ZkcExamples.Structured.FriVirtualBody, `ZkcArkLibExamples.Fri.VirtualReads,
    `ZkcArkLibExamples.Fri.VirtualWord, `ZkcArkLibExamples.Fri.StoredWord,
-   `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal]
+   `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal,
+   `Zkc.Source.Structured.Bindings.Continuation, `Zkc.Source.Structured.Bindings.RepeatPrefix,
+   `ZkcArkLibExamples.Fri.VerifierTerminalGuard]
   "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check

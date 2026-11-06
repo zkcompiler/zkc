@@ -15,7 +15,26 @@ open Zkc.Source.Structured.Bindings
 open OracleProtocol (concrete AtMarkedCall StopsAfterMarks)
 attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results ProtocolOp.regions
 
-checked_callback round := protocol3Body at 1
+checked_callback round := protocol3Body at 1 with_continuation
+
+/-- Inside one query iteration the inner repeat is a sequential cut. In the
+full Check declaration the same repeat is nested in an outer callback. -/
+def insideQuery : RepeatAt roundSite FriCheckPositions.queryBody :=
+  selectedRepeat (ordinal := 0) (by kernel_rfl)
+
+theorem innerOnSpine : insideQuery.onSpine = true := by kernel_rfl
+
+theorem queryBody_eq (model : DomainModel) (context : ProtocolContext)
+    (env : Environment (Value model) (.index :: (FriCheckPositions.querySite.spec.state ++
+      FriCheckPositions.querySite.spec.captures))) :
+    let meaning := (verifierAlgebra model).meaning (verifierTable model) context 1
+    FriCheckPositions.queryBody.denote meaning env =
+      ((insideQuery.beforeRepeat innerOnSpine).denote meaning env).bind fun live ↦
+        (roundSite.iterations meaning live.get).bind fun result ↦ roundSite.next.denote meaning (Environment.prepend live.get result) := by
+  dsimp only
+  refine (insideQuery.denote_prefix ((verifierAlgebra model).meaning (verifierTable model) context 1)
+    innerOnSpine env).trans ?_
+  rfl
 
 structure State (model : DomainModel) where
   expected : model.Field extension

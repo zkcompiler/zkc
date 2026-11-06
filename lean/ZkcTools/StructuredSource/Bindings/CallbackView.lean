@@ -14,26 +14,32 @@ open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Bindings
 open ZkcTools.StructuredSource.Presentation
 
 /-- Keep the small typed header reducible without reevaluating admission at
-every role equation. The entire suffix is projected, never serialized. The
-complete descriptor equality below checks this header and the shared body. -/
-def repeatSiteText (selected : RepeatSite) (name : String) : String :=
+every role equation. The suffix can also be materialized for a client proving its computation.
+The complete descriptor equality checks the body and suffix in both cases. -/
+def repeatSiteText (selected : RepeatSite) (name : String) (withContinuation : Bool) : String :=
   let source := name ++ "Selection.repeatSite"
   let suffix := "Eq.mp (show Region protocolDialect (" ++ source ++ ".spec.state ++ " ++
     source ++ ".context) " ++ source ++ ".outputs = Region protocolDialect " ++
     typesText (selected.spec.state ++ selected.context) ++ " " ++ typesText selected.outputs ++
     " from by kernel_rfl) " ++ source ++ ".next"
-  "⟨" ++ ", ".intercalate [typesText selected.context, typesText selected.outputs,
+  let context := if withContinuation then name ++ "Context" else typesText selected.context
+  "⟨" ++ ", ".intercalate [context, typesText selected.outputs,
     repeatText selected.spec, quoted selected.site, operandsText selected.operands,
-    name ++ "Body", paren suffix] ++ "⟩"
+    name ++ "Body", if withContinuation then name ++ "Next" else paren suffix] ++ "⟩"
 
-def callbackDeclarations (name source : String) (ordinal : Nat) (callback : RepeatSite) : List String :=
+def callbackDeclarations (name source : String) (ordinal : Nat) (callback : RepeatSite) (withContinuation := false) : List String :=
   let locator := toString ordinal ++ " " ++ source
+  let continuation := if withContinuation then
+    ["abbrev " ++ name ++ "Context : List Ty := " ++ typesText callback.context ++ "\n\n",
+     "def " ++ name ++ "Next : Region protocolDialect (" ++ typesText callback.spec.state ++
+      " ++ " ++ name ++ "Context) " ++ typesText callback.outputs ++ " :=\n  " ++ regionText callback.next ++ "\n\n"]
+    else []
   ["def " ++ name ++ "Selection : RepeatOccurrence " ++ source ++
      " :=\n  checkedRepeat " ++ locator ++ " (by kernel_rfl)\n\n",
    "def " ++ name ++ "Body : Region protocolDialect " ++
      typesText (.index :: (callback.spec.state ++ callback.spec.captures)) ++ " " ++
-     typesText callback.spec.state ++ " :=\n  " ++ regionText callback.body ++ "\n\n",
-   "abbrev " ++ name ++ "Site : RepeatSite :=\n  " ++ repeatSiteText callback name ++ "\n\n",
+     typesText callback.spec.state ++ " :=\n  " ++ regionText callback.body ++ "\n\n"] ++ continuation ++
+  ["abbrev " ++ name ++ "Site : RepeatSite :=\n  " ++ repeatSiteText callback name withContinuation ++ "\n\n",
    "theorem " ++ name ++ "_body : " ++ name ++ "Site.body = " ++ name ++ "Body := rfl\n\n",
    "theorem " ++ name ++ "_selected : (selectRepeat " ++ locator ++
      ").map (·.repeatSite) = some " ++

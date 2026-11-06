@@ -4,6 +4,8 @@ public import ZkcExamples.Structured.FriQueryCall
 public import ZkcExamples.Structured.FriValueAssociation
 public import Zkc.Source.Structured.OracleReadEffects
 public import Zkc.Source.Structured.MarkedPrefix
+public import Zkc.Source.Structured.Bindings.Continuation
+public import Zkc.Source.Structured.Bindings.RepeatPrefix
 public meta import ZkcTools.StructuredSource.Bindings.CheckedCallback
 public meta import ZkcExamples.Structured.FriSourceBodies
 
@@ -21,7 +23,7 @@ attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results Pro
 
 open Zkc.Source.Structured.Bindings
 
-checked_callback query := protocol3Body at 0
+checked_callback query := protocol3Body at 0 with_continuation
 
 variable {model : DomainModel}
 
@@ -55,6 +57,64 @@ def iteration (context : ProtocolContext) (cap : Captures model) (xs : List Nat)
       (.cons cap.layers (.cons cap.folds (.cons cap.shift (.cons cap.size (.cons cap.coefficients
         (.cons (concrete model .indices xs) (.cons cap.associate (.cons cap.first (.cons cap.remaining .nil)))))))))))
   queryBody.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) inputs.get
+
+/-- The installed outer loop must complete before the receiver can return
+true. The returned vector is precisely its last loop state. -/
+theorem returnAfterQueries (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (env : Environment (Value model) querySite.context) :
+    let meaning := (verifierAlgebra model).meaning (verifierTable model) context 1
+    querySite.region.denote meaning env = (querySite.iterations meaning env).bind fun out ↦
+      OracleProtocol.withMarks (querySite.continuationMarks context)
+        (.done (.cons (concrete model .boolean true) (.cons (out.get .here) .nil))) := by
+  dsimp only
+  rw [querySite.denote_region]
+  congr 1
+  funext out
+  match out with
+  | .cons values .nil =>
+    have restrictStep : ((verifierAlgebra model).meaning (verifierTable model) context 1).OperationLaw
+        (fun op ↦ .call op .done) (.restrict .boolean [1])
+        (.cons (concrete model .boolean true) .nil) .nil (.done (.cons (concrete model .boolean true) .nil)) := by
+      apply RegionMeaning.OperationLaw.identity
+      change PIR.Process.done (I := OracleProtocol.Interface model)
+        (Values.cons (Value := Value model) (ty := .boolean) (Participant.restrict (([1].map context.roles).contains 1) (concrete model .boolean true)) .nil) = _
+      rw [show ([1].map context.roles).contains 1 = true by simp [receiver]]
+      rfl
+    derive_process using (exact restrictStep)
+
+/-- The outer query repeat is on the continuation spine of the installed
+Check declaration. An earlier guard or missing operand can still stop it. -/
+theorem queryOnSpine : queryOccurrence.onSpine = true := by kernel_rfl
+
+def program (context : ProtocolContext) (env : Environment (Value model) protocol3Signature.inputs) :
+    PIR.Process (OracleProtocol.Interface model) (Values (Value model) protocol3Signature.outputs) :=
+  let meaning := (verifierAlgebra model).meaning (verifierTable model) context 1
+  ((queryOccurrence.beforeRepeat queryOnSpine).denote meaning env).bind fun live ↦
+    (querySite.iterations meaning live.get).bind fun out ↦
+      OracleProtocol.withMarks (querySite.continuationMarks context)
+        (.done (.cons (concrete model .boolean true) (.cons (out.get .here) .nil)))
+
+theorem body (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (env : Environment (Value model) protocol3Signature.inputs) :
+    protocol3Body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) env =
+      program context env := by
+  refine (queryOccurrence.denote_prefix ((verifierAlgebra model).meaning (verifierTable model) context 1)
+    queryOnSpine env).trans ?_
+  unfold program
+  congr 1
+  funext live
+  exact returnAfterQueries context receiver live.get
+
+/-- Source execution of Check, including all input/return masks, its complete
+admission prefix, and every iteration. Acceptance is reachable only after
+the outer repeat returns its actual accumulated vector. -/
+theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (args : Values (Value model) protocol3Signature.inputs) :
+    invokeProtocol (verifierTable model) protocol3Signature context 1 args =
+      (program context (maskValues 1 (context.mapScopes protocol3Signature.inputScopes) args).get).bind fun out ↦
+        .done (maskValues 1 (context.mapScopes protocol3Signature.outputScopes) out) :=
+  (verifierAlgebra model).invokePresented unit.protocolsLinked protocol3Definition protocol3_member
+    context 1 args _ (body context receiver _)
 
 private theorem lookup (xs : List Nat) (admitted : FriBoundedPositions.Admitted xs)
     (ordinal : Fin xs.length) :
