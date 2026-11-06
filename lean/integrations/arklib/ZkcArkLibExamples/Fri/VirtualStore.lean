@@ -61,4 +61,55 @@ theorem foldedCell {Aux E : Type} {m : Nat} (size : m + 1 ≤ 63)
     holder receivers FriVirtualBody.installed rfl _ rfl allowed shape index.isLt (state, count)
     (ProximityGap.foldWord domain word 1 beta index) _ _ body
 
+/-- The registered fold refers to this earlier publication. Preserve the
+older entries captured when it was created even if newer tables now exist. -/
+structure Registered {Aux : Type} {m : Nat}
+    (runtime : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math
+      (PublishedWords.State model Aux))
+    (source anchor : OracleAnchor) (word : Fin (2 ^ (m + 1)) → Octic) (beta shift : Octic) where
+  older : Entries
+  newer : Entries
+  holder : Nat
+  receivers : List Nat
+  live : StoredWord.Base (d := extension) older runtime.self source word runtime.provider
+  allowed : OracleStore.visible runtime.self holder receivers = true
+  fresh : OracleStore.hasAnchor newer anchor = false
+  entries : runtime.entries = newer ++ (⟨kind.answer, table anchor (2 ^ m) holder receivers
+    (VirtualReads.captures model source beta (2 ^ (m + 1)) (2 ^ m) shift (RetainedDomain.root (m + 1))
+      (shift⁻¹ : Octic) ((RetainedDomain.root (m + 1))⁻¹ : Octic) ((2 : Octic)⁻¹ : Octic))⟩ :: older)
+
+/-- An actual receiver query of the registered virtual handle obtains the
+ArkLib fold. The frame supplies the invocation for all three reads. -/
+theorem Registered.sourceQuery {M : Type → Type} [Monad M] [LawfulMonad M] {Aux E : Type} {m : Nat}
+    (network : PublishedWords.Table model →
+      PIR.MonadHandler M (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : PublishedWords.Chooser M model Aux E)
+    (size : m + 1 ≤ 63) (domain : Domain.SmoothCosetFftDomain (m + 1) Octic) (shift : Octic)
+    (geometry : ∀ i : Fin (2 ^ (m + 1)), domain i = point RetainedDomain.root shift (m + 1) i)
+    (word : Fin (2 ^ (m + 1)) → Octic) (beta : Octic) (index : Fin (2 ^ m))
+    (source anchor : OracleAnchor)
+    (state : OracleProtocol.State model checkedUnit.snapshot checkedUnit.domains checkedUnit.math
+      (PublishedWords.State model Aux))
+    (view : Registered state.oracle source anchor word beta shift)
+    (self owner : Nat) (atSelf : self = state.oracle.self) (roles : Nat → Nat) (site : OracleLocation)
+    (active : roles owner = state.oracle.self) :
+    let parent := Phases.publishedRequest extension anchor index.val {site with invocation := state.frame.invocation} []
+    PublishedWords.actionM checkedUnit.oracles network choose
+        (OracleProtocol.tableQuery model (.field extension) none anchor index.val self owner roles site) state =
+      pure (OraclePublication.cursorReply site state (.cons (some (ProtocolValue.ofConcrete (.field extension)
+          (ProximityGap.foldWord domain word 1 beta index))) .nil)
+        {state.oracle with queries := state.oracle.queries + 3}
+        [.logical (.query parent),
+         .logical (.query (parent.expand (VirtualReads.leftRequest source (lowIndex index).val))),
+         .logical (.query (parent.expand (VirtualReads.rightRequest source (highIndex index).val)))]) := by
+  subst self
+  dsimp only
+  apply OraclePublication.cursorCell checkedUnit.oracles (PublishedWords.liftM network) PublishedWords.read
+    (PublishedWords.publishM choose) (.field extension) none anchor index.val owner roles site state
+    active _ (state.oracle.provider, state.oracle.queries + 3)
+    [.query _, .query _, .query _]
+  rw [view.entries]
+  exact foldedCell size domain shift geometry word beta index view.older view.newer source anchor view.holder
+    state.oracle.self view.receivers state.oracle.provider view.live view.allowed view.fresh _ [] state.oracle.queries
+
 end ZkcSecurity.ArkLib.Fri.VirtualStore

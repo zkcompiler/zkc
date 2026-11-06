@@ -52,17 +52,30 @@ theorem AtMarkedCall.mark {source observed : String}
   obtain ⟨marks, k, shape, selected⟩ := tail
   exact ⟨(source, observed) :: marks, k, prependMark shape, selected⟩
 
+/-- Only real source marks precede this continuation. Each mark can still
+refuse when the interpreter validates the current cursor. -/
+def AfterMarks (tail process : PIR.Process (Interface model) A) : Prop :=
+  ∃ marks, process = withMarks marks tail
+
+theorem AfterMarks.here (tail : PIR.Process (Interface model) A) : AfterMarks tail tail :=
+  ⟨[], rfl⟩
+
+theorem AfterMarks.mark {tail : PIR.Process (Interface model) A} {source observed : String}
+    {next : (Interface model).Reply (.mark source observed) → PIR.Process (Interface model) A}
+    (rest : AfterMarks tail (next ())) : AfterMarks tail (.call (.mark source observed) next) := by
+  obtain ⟨marks, shape⟩ := rest
+  exact ⟨(source, observed) :: marks, prependMark shape⟩
+
 /-- An explicit source stop may still be preceded by cursor-validating marks. -/
-def StopsAfterMarks (why : PIR.Stop) (process : PIR.Process (Interface model) A) : Prop :=
-  ∃ marks, process = withMarks marks (.halt why)
+abbrev StopsAfterMarks (why : PIR.Stop) (process : PIR.Process (Interface model) A) : Prop :=
+  AfterMarks (.halt why) process
 
 theorem StopsAfterMarks.now (why : PIR.Stop) : StopsAfterMarks (model := model) (A := A) why (.halt why) :=
-  ⟨[], rfl⟩
+  AfterMarks.here _
 
 theorem StopsAfterMarks.mark {why : PIR.Stop} {source observed : String}
     {next : (Interface model).Reply (.mark source observed) → PIR.Process (Interface model) A}
-    (tail : StopsAfterMarks why (next ())) : StopsAfterMarks why (.call (.mark source observed) next) := by
-  obtain ⟨marks, shape⟩ := tail
-  exact ⟨(source, observed) :: marks, prependMark shape⟩
+    (tail : StopsAfterMarks why (next ())) : StopsAfterMarks why (.call (.mark source observed) next) :=
+  AfterMarks.mark tail
 
 end Zkc.Source.Structured.OracleProtocol

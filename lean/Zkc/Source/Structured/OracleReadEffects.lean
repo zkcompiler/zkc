@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.DerivationLaws
-public import Zkc.Source.Structured.OracleLocalAction
+public import Zkc.Source.Structured.OracleMetadata
 public import Zkc.Semantics.CallRestriction
 
 @[expose] public section
@@ -207,5 +207,37 @@ theorem returnsCell {m : Type → Type} [Monad m] [LawfulMonad m]
   simp [OracleProtocol.handler, atDef, atRow]
   rw [meaning]
   rfl
+
+/-- Replay a deterministic registry read at every cursor. A source-coordinate
+mismatch returns the handler's exact refusal and performs zero reads. -/
+theorem cursorCell {m : Type → Type} [Monad m] [LawfulMonad m]
+    (oracles : List (CheckedOracle snapshot domains math))
+    (ordinary : PIR.MonadHandler m (participantInterfaceOn model.toCarriers) S E)
+    (base : PIR.Handler (oracleReadInterface model.toCarriers) S E)
+    (publish : PIR.MonadHandler m (Interface model) S E)
+    (row : Ty) (fixed : Option Nat) (source : OracleAnchor) (position owner : Nat)
+    (roles : Nat → Nat) (site : OracleLocation) (state : OracleProtocol.State model snapshot domains math S)
+    (active : roles owner = state.oracle.self) (value : model.Value row) (final : S × Nat)
+    (trace : List (OracleEvent E))
+    (read : OracleStore.answer model base state.oracle.self state.oracle.entries
+      ⟨.table row fixed, source, position, {site with invocation := state.frame.invocation}, []⟩
+      (state.oracle.provider, state.oracle.queries) = ⟨.returned value, final, trace⟩) :
+    actionM model oracles ordinary (fun child s ↦ pure (base child s)) publish
+        (OracleProtocol.tableQuery model row fixed source position state.oracle.self owner roles site) state =
+      pure (cursorReply site state (.cons (some (ProtocolValue.ofConcrete row value)) .nil)
+        {state.oracle with provider := final.1, queries := final.2} (trace.map OracleProtocol.Event.logical)) := by
+  unfold cursorReply
+  split
+  · rename_i aligned
+    exact returnsCell oracles ordinary base publish row fixed source position owner roles site state
+      aligned.1 aligned.2 active value final trace read
+  · rename_i mismatch
+    refine (queryWithPureReads oracles ordinary base publish (.table row fixed) owner site
+      state.oracle.self roles _ state).trans ?_
+    simp only [OracleProtocol.handler]
+    split
+    · rfl
+    · rename_i aligned
+      exact False.elim (mismatch (by simpa using aligned))
 
 end Zkc.Source.Structured.OraclePublication

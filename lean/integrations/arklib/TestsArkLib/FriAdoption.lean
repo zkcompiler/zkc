@@ -1,5 +1,6 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
+import ZkcArkLibExamples.Fri.VerifierRound
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VerifierTerminal
 import ZkcArkLibExamples.Fri.VirtualStore
@@ -221,7 +222,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
   "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check
-  [`Zkc.Source.Structured.MarkedPrefix, `Zkc.Source.Structured.MarkedPublication,
+  [`Zkc.Source.Structured.OracleMetadata, `Zkc.Source.Structured.MarkedPrefix, `Zkc.Source.Structured.MarkedPublication,
    `ZkcExamples.Structured.FriValueAssociation, `ZkcExamples.Structured.FriCheckPositions,
-   `ZkcArkLibExamples.Fri.VerifierInitialRead]
-  "FRI-BOUND-INITIAL-WORD-PASS" (exactModules := true))
+   `Zkc.Source.Structured.ProtocolEmbeddingCheck, `ZkcExamples.Structured.FriPairIndex,
+   `ZkcExamples.Structured.FriCheckRound, `ZkcArkLibExamples.Fri.VerifierInitialRead, `ZkcArkLibExamples.Fri.VerifierRound]
+  "FRI-VERIFIER-CELLS-AND-ROUNDS-PASS" (exactModules := true))

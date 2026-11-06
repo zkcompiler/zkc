@@ -66,17 +66,17 @@ theorem Base.sourceQuery {m : Type → Type} [Monad m] [LawfulMonad m]
     (live : Base state.oracle.entries state.oracle.self source word state.oracle.provider)
     (index : Fin (2 ^ n)) (self owner : Nat) (roles : Nat → Nat) (site : OracleLocation)
     (atSelf : self = state.oracle.self)
-    (atDef : site.definition = state.frame.definition) (atRow : site.row = state.frame.row)
     (active : roles owner = state.oracle.self) :
     PublishedWords.actionM oracles network choose
         (OracleProtocol.tableQuery model (.field d) none source index.val self owner roles site) state =
-      pure ⟨.returned (.cons (some (ProtocolValue.ofConcrete (.field d) (word index))) .nil),
-        {state with oracle.queries := state.oracle.queries + 1},
+      pure (OraclePublication.cursorReply site state
+        (.cons (some (ProtocolValue.ofConcrete (.field d) (word index))) .nil)
+        {state.oracle with queries := state.oracle.queries + 1}
         [.logical (.query (Phases.publishedRequest d source index.val
-          {site with invocation := state.frame.invocation} []))]⟩ := by
+          {site with invocation := state.frame.invocation} []))]) := by
   subst self
-  exact OraclePublication.returnsCell oracles (PublishedWords.liftM network) PublishedWords.read
-    (PublishedWords.publishM choose) (.field d) none source index.val owner roles site state atDef atRow
+  exact OraclePublication.cursorCell oracles (PublishedWords.liftM network) PublishedWords.read
+    (PublishedWords.publishM choose) (.field d) none source index.val owner roles site state
     active (word index) _ _ (live.cell index _ [] state.oracle.queries)
 
 end ZkcSecurity.ArkLib.Fri.StoredWord

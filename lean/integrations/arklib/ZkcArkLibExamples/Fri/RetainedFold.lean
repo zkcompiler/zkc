@@ -4,7 +4,7 @@ public import ZkcArkLibExamples.Fri.RetainedDomain
 public import ZkcArkLib.Fri.SourceCalculations
 public import ZkcExamples.Structured.FriApplications
 public import Zkc.Source.Structured.ReferenceLaws
-public import Zkc.Source.Structured.WordDerivation
+public import ZkcExamples.Structured.FriPairIndex
 
 @[expose] public section
 
@@ -17,22 +17,6 @@ open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open FriSourceBodies FriSourceViews
 open ZkcSecurity.Domains.KoalaBearModel (model)
 open ZkcSecurity.Domains.KoalaBear (Octic)
-
-theorem pairResult (model : DomainModel)
-    (table : Evaluation.MeaningsOn model.toCarriers closedInterface) (position rows : Nat) :
-    helper14Body.denote (Evaluation.meaningOn model SiteObservations.closed table)
-      (Values.cons (Value := model.Value) (ty := .index) position (.cons rows .nil)).get =
-      .done (.cons (bitAnd position (wrappingSubtract (logicalShiftRight rows 1) 1)) .nil) := by
-  derive_word_process
-
-def pairLaw (model : DomainModel) : ReferenceLaw model helper14Helper.inputs helper14Helper.outputs where
-  body := helper14Body
-  Requires _ _ := True
-  reference
-    | .cons position (.cons rows .nil) => .returned (.cons
-        (bitAnd position (wrappingSubtract (logicalShiftRight rows 1) 1)) .nil)
-  valid table
-    | .cons position (.cons rows .nil), _ => pairResult model table position rows
 
 def foldLaw (model : DomainModel) : ReferenceLaw model helper15Helper.inputs helper15Helper.outputs where
   body := helper15Body
@@ -52,7 +36,7 @@ theorem pair_index {I : PIR.Signature} {m : Nat} (small : m + 1 ≤ 63)
     invoke (helpers (I := I)).closed helper14Helper (.cons position.val (.cons (2 ^ (m + 1)) .nil)) =
       .done (.cons (position.val % 2 ^ m) .nil) := by
   have bounded : 2 ^ (m + 1) < wordModulus := Nat.pow_lt_pow_right (by decide) (by omega)
-  have call := (pairLaw model).invokeOn (I := I) unit.definitions unit.linked
+  have call := (FriPairIndex.law model).invokeOn (I := I) unit.definitions unit.linked
     (helper := helper14Helper) (by exact_body helper14Definition)
     (.cons position.val (.cons (2 ^ (m + 1)) .nil)) trivial
   exact call.trans (congrArg (fun i ↦ PIR.Process.done (I := I)

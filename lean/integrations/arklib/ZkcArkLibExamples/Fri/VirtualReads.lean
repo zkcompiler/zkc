@@ -63,7 +63,7 @@ abbrev components (domain : DomainModel) := (math.tables domain (readInterface d
 theorem pairCall (position sourceRows : Nat) :
     invoke (components model) helper14Helper (Values.cons position (Values.cons sourceRows Values.nil)).present =
       .done (Values.cons (Value := model.Value) (ty := .index) (low position sourceRows) .nil).present :=
-  math.invokeReturned (I := readInterface model) (helper := helper14Helper) (RetainedFold.pairLaw model)
+  math.invokeReturned (I := readInterface model) (helper := helper14Helper) (FriPairIndex.law model)
     (by rw [FriVirtualBody.mathDefinitions]; exact_body helper14Definition)
     (.cons position (.cons sourceRows .nil)) trivial (.cons (low position sourceRows) .nil) rfl
 

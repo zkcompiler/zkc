@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.MarkedPrefix
+public import Zkc.Source.Structured.OracleMetadata
 public import Zkc.Source.Structured.ReceiverForwarding
 
 @[expose] public section
@@ -71,5 +72,36 @@ theorem markedOutcomes (marks : List (String × String))
       simp only [PIR.Execution.followM]
       apply MonadicPostcondition.map (ih {state with frame := frame} same)
       exact fun _ valid ↦ valid
+
+/-- Compose a deterministic cell or metadata reply with the actual marked
+continuation. A stale source frame refuses before the continuation. The
+reply may change the store and emit events, as a virtual read does. -/
+theorem markedReplyOutcomes {op : (OracleProtocol.Interface model).Op}
+    {after : ((OracleProtocol.Interface model).Reply op → PIR.Process (OracleProtocol.Interface model) A) → Prop}
+    {process : PIR.Process (OracleProtocol.Interface model) A}
+    (head : OracleProtocol.AtMarkedCall op after process) (site : OracleLocation)
+    (reply : (OracleProtocol.Interface model).Reply op)
+    (original post : OracleRuntimeState model snapshot domains math S)
+    (trace : OracleProtocol.State model snapshot domains math S → List (OracleProtocol.Event E))
+    (action : ∀ current, current.oracle = original → actionM model oracles ordinary base publish op current =
+      pure (cursorReply site current reply post (trace current)))
+    (property : PIR.Outcome A → Prop) (refusal : property (.stopped .refused))
+    (tail : ∀ next, after next → ∀ current, current.oracle = post →
+      Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+        ((next reply).runM (actionM model oracles ordinary base publish) current))
+    (state : OracleProtocol.State model snapshot domains math S) (same : state.oracle = original) :
+    Std.Do.Internal.Ensures (fun result ↦ property result.outcome)
+      (process.runM (actionM model oracles ordinary base publish) state) := by
+  obtain ⟨marks, next, eqn, valid⟩ := head
+  rw [eqn]
+  apply markedOutcomes oracles ordinary base publish marks _ property refusal original _ state same
+  intro current kept
+  rw [PIR.Process.runM, action current kept, pure_bind]
+  unfold cursorReply
+  split
+  · simp only [PIR.Execution.followM]
+    apply MonadicPostcondition.map (tail next valid _ rfl)
+    exact fun _ ok ↦ ok
+  · exact MonadicPostcondition.pure _ _ refusal
 
 end Zkc.Source.Structured.OraclePublication

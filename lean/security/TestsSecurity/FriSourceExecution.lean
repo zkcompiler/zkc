@@ -112,7 +112,23 @@ def controls : IO Unit := do
   inspectCase "query count" (run (queries := 7)) (.stopped .reject) [8, 16, 32] sequence 0
   inspectCase "out-of-range position" (run (invalidQuery := true)) (.stopped .refused)
     [8, 16, 32] (sequence ++ ["index"]) 0
-  IO.println "FRI: both roles, zero and degree-seven words, three folds, eight draws, seven mutations"
+  -- The middle publication has the right row count and the wrong value.
+  -- Only the initial cell, its virtual fold and this middle cell may be read.
+  let disagree : PublishedWords.Chooser Id model History String := fun req words h ↦
+    match req with
+    | ⟨.table (.field d) _, _, rows, _, _, _, _⟩ =>
+      let value : model.Field d := if words.length = 1 then 1 else 0
+      ⟨.returned (List.replicate rows value), {h with actions := h.actions ++ ["publish"]}, []⟩
+    | _ => ⟨.stopped .refused, h, ["unexpected word sort"]⟩
+  let wrongLayer := verifier (model := model) (m := Id) 1 3 8 0 {} (ordinary 0 false) disagree
+  inspectCase "middle cell differs from previous fold" wrongLayer (.stopped .reject) [8, 16, 32] allActions 5
+  let some middle := wrongLayer.state.oracle.provider.words[1]? | throw (IO.userError "middle word")
+  let lastRead := wrongLayer.events.findSomeRev? fun event ↦ match event with
+    | .logical (.query q) => some q
+    | _ => none
+  unless lastRead.any (fun q ↦ q.anchor == middle.2.anchor && q.expansion.isEmpty && q.position == 15) do
+    throw (IO.userError "mismatch stopped at the wrong read")
+  IO.println "FRI: both roles, zero and degree-seven words, three folds, eight draws, eight mutations"
 
 #eval controls
 

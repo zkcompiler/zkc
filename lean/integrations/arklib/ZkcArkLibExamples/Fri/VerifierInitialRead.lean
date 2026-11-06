@@ -25,12 +25,10 @@ def response (context : ProtocolContext) (source : OracleAnchor) (position : Nat
     PIR.Execution (State model snapshot domains math Aux)
       (OracleProtocol.Event E) ((OracleProtocol.Interface model).Reply
       (initialRequest context source position)) :=
-  if initialSite.definition = state.frame.definition ∧ initialSite.row = state.frame.row then
-    ⟨.returned (.cons (OracleProtocol.concrete model (.field extension) value) .nil),
-      {state with oracle.queries := state.oracle.queries + 1},
-      [.logical (.query (Phases.publishedRequest extension source position
-        {initialSite with invocation := state.frame.invocation} []))]⟩
-  else ⟨.stopped .refused, state, []⟩
+  OraclePublication.cursorReply initialSite state (.cons (OracleProtocol.concrete model (.field extension) value) .nil)
+    {state.oracle with queries := state.oracle.queries + 1}
+    [.logical (.query (Phases.publishedRequest extension source position
+      {initialSite with invocation := state.frame.invocation} []))]
 
 variable {m : Type → Type} [Monad m] [LawfulMonad m]
   (oracles : List (CheckedOracle snapshot domains math))
@@ -45,21 +43,8 @@ private theorem read (context : ProtocolContext) (receiver : context.roles 1 = 1
     (index : Fin (2 ^ n)) :
     PublishedWords.actionM oracles ordinary choose (initialRequest context source index.val) state =
       pure (response context source index.val (word index) state) := by
-  unfold response
-  split
-  · rename_i cursor
-    exact live.sourceQuery oracles ordinary choose state index 1 1 context.roles initialSite
-      role.symm cursor.1 cursor.2 (receiver.trans role.symm)
-  · rename_i mismatch
-    refine (OraclePublication.queryWithPureReads oracles (PublishedWords.liftM ordinary) PublishedWords.read
-      (PublishedWords.publishM choose) (.table (.field extension) none) 1 initialSite 1 context.roles
-      (.cons (OracleProtocol.concrete model (.oracle (.table (.field extension) none)) source)
-        (.cons (OracleProtocol.concrete model .index index.val) .nil)) state).trans ?_
-    simp only [OracleProtocol.handler]
-    split
-    · rfl
-    · rename_i valid
-      exact False.elim (mismatch (by simpa using valid))
+  exact live.sourceQuery oracles ordinary choose state index 1 1 context.roles initialSite
+    role.symm (receiver.trans role.symm)
 
 /-- The mark prefix and the remaining callback are extracted from the admitted
 tree. For any lawful prover/sampler, even partial ones, the first read can be
@@ -124,7 +109,7 @@ theorem rejectsClaim (context : ProtocolContext) (receiver : context.roles 1 = 1
   have reply := read oracles ordinary choose context receiver current active source word currentLive ⟨_, inside⟩
   simp only [PublishedWords.actionM, Fin.val_mk] at reply
   rw [PIR.Process.runM, reply, pure_bind]
-  unfold response
+  unfold response OraclePublication.cursorReply
   split
   · obtain ⟨finalMarks, stopped⟩ := guard first (word ⟨_, inside⟩) enabled vector size supplied mismatch
     simp only [PIR.Execution.followM, stopped]
