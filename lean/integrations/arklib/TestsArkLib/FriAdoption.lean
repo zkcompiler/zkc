@@ -1,7 +1,7 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierRound
-import ZkcArkLibExamples.Fri.CommitPublication
+import ZkcArkLibExamples.Fri.CommitChallenge
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VerifierTerminal
 import ZkcArkLibExamples.Fri.VirtualStore
@@ -23,6 +23,32 @@ namespace TestsArkLib.FriAdoption
 open ZkcSecurity.ArkLib.Fri
 open Zkc.Source.Structured
 open Domain OracleComp ReedSolomon.HiddenDerivative
+
+-- Both random services run against the same published-word table in the
+-- installed Commit caller. A different service handle fails at that site.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+variable {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMathEnvironment} {Aux E : Type}
+  [SampleableType (model.Field FriSource.extension)]
+  (oracles : List (CheckedOracle snapshot domains math)) (ordinary : PublishedSampling.Network model Aux E)
+  (fieldAudit : PublishedWords.Table model → model.Field FriSource.extension → List E)
+  (indexAudit : PublishedWords.Table model → Fin 32 → List E)
+  (choose : PublishedWords.Chooser ProbComp model Aux E)
+
+private abbrev enteredCommit := FriSourceCalls.commitment.childContext FriSource.lowDegreeContext
+private noncomputable abbrev servicesAt (service : Nat) :=
+  CommitChallenge.handler oracles ordinary enteredCommit service fieldAudit indexAudit choose
+
+noncomputable example (service : Nat) :
+    RetainedSampling.Fresh (servicesAt oracles ordinary fieldAudit indexAudit choose service) service :=
+  CommitChallenge.freshPositions oracles ordinary enteredCommit service fieldAudit indexAudit choose
+
+example (state : CommitPublication.State model snapshot domains math Aux) :
+    servicesAt oracles ordinary fieldAudit indexAudit choose 0 (FriCommitRound.drawRequest enteredCommit 1) state =
+      pure ⟨.stopped .refused, state, []⟩ :=
+  CommitChallenge.wrongService oracles ordinary enteredCommit 0 fieldAudit indexAudit choose 1 (by decide) state
+end
 
 -- A scalar or Boolean terminal payload does not encode a coefficient vector,
 -- even at the expected terminal origin.
@@ -232,7 +258,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
   "FRI-VERIFIER-CELLS-AND-ROUNDS-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check
-  [`ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitPublication]
+  [`ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitPublication,
+   `ZkcArkLibExamples.Fri.CommitChallenge]
   "FRI-PUBLICATION-BEFORE-CHALLENGE-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check

@@ -1,5 +1,6 @@
 module
 
+public import ZkcArkLibExamples.Fri.StoredWord
 public import ZkcExamples.Structured.FriCommitRound
 public import Zkc.Source.Structured.PublishedWordsLaws
 
@@ -121,6 +122,74 @@ theorem installedWord (context : ProtocolContext) (rows : Nat) (state : State mo
       rw [pub] at fixed
       intro same
       exact ⟨(PIR.Outcome.returned.inj same).symm, cells, chosen, fixed⟩
+
+/-- Every accepted receiver publication supplies the live base-word fact
+used by the query proofs. The polynomial or proximity of that word is left
+open: its finite coordinates are derived from the actual chooser reply. -/
+theorem returnedBase (context : ProtocolContext) (receiver : context.roles 1 = 1) (n : Nat)
+    (state : State model snapshot domains math Aux) (self : state.oracle.self = 1)
+    (attempt : PIR.Execution Aux E (List (model.Field extension)))
+    (reply : (OracleProtocol.Interface model).Reply (sendRequest context (2 ^ n))) :
+    let site := location state
+    let req := request context (2 ^ n) site
+    let result := OraclePublication.complete state (candidate context (2 ^ n) state)
+      (PublishedWords.finish req state.oracle.provider attempt)
+    result.outcome = .returned reply →
+      ∃ word : Fin (2 ^ n) → model.Field extension,
+        attempt.outcome = .returned (List.ofFn word) ∧
+        Nonempty (StoredWord.Base result.state.oracle.entries result.state.oracle.self site.anchor word
+          result.state.oracle.provider) := by
+  let site := location state
+  let req : OraclePublication.Request model := request context (2 ^ n) site
+  dsimp only
+  rcases attempt with ⟨outcome, post, trace⟩
+  cases outcome with
+  | stopped why => intro impossible; cases impossible
+  | returned cells =>
+    let proposed : PIR.Execution Aux E (List (model.Field extension)) := ⟨.returned cells, post, trace⟩
+    by_cases admitted : PublishedWords.hasAnchor state.oracle.provider.words site.anchor = false ∧
+        PublishedWords.valid req cells = true
+    · have installed := PublishedWords.finish_returned req state.oracle.provider cells post trace admitted.1 admitted.2
+      have shape : OracleStore.validRows kind (2 ^ n) = true ∧ cells.length = 2 ^ n := by
+        simpa [PublishedWords.valid, req, request] using admitted.2
+      let word (i : Fin (2 ^ n)) := cells[i.val]'(shape.2.symm ▸ i.isLt)
+      have canonical : List.ofFn word = cells := by
+        apply List.ext_getElem (List.length_ofFn.trans shape.2.symm)
+        intro i below within
+        simp [word]
+      intro _
+      refine ⟨word, congrArg PIR.Outcome.returned canonical.symm, ?_⟩
+      let Live (pub : PIR.Execution (PublishedWords.State model Aux) E Unit) : Prop :=
+        let result := OraclePublication.complete state (candidate context (2 ^ n) state) pub
+        Nonempty (StoredWord.Base result.state.oracle.entries result.state.oracle.self site.anchor word
+          result.state.oracle.provider)
+      change Live (PublishedWords.finish req state.oracle.provider proposed)
+      apply (congrArg Live installed).mpr
+      refine ⟨{ registry := ⟨site.anchor, 2 ^ n, context.roles 0, [context.roles 1], .base none⟩
+                lookup := ?_, data := none, base := rfl, visible := ?_, registryRows := rfl,
+                stored := PublishedWords.word req cells, found := ?_, answer := rfl,
+                shape := shape.1, rows := rfl, cells := canonical.symm }⟩
+      · simp [OraclePublication.complete, candidate, site, OracleStore.find]
+      · simp [OraclePublication.complete, candidate, OracleStore.visible, self, receiver]
+      · exact PublishedWords.find_word req cells _
+    · have invalid : (PublishedWords.hasAnchor state.oracle.provider.words site.anchor ||
+          !PublishedWords.valid req cells) = true := by
+        cases fresh : PublishedWords.hasAnchor state.oracle.provider.words site.anchor <;>
+          cases valid : PublishedWords.valid req cells <;> simp_all
+      have refused : (PublishedWords.finish req state.oracle.provider proposed).outcome = .stopped .refused := by
+        dsimp only [proposed, PublishedWords.finish]
+        change (if PublishedWords.hasAnchor state.oracle.provider.words site.anchor || !PublishedWords.valid req cells
+          then _ else _ : PIR.Execution (PublishedWords.State model Aux) E Unit).outcome = .stopped .refused
+        rw [ite_eq_left invalid]
+      intro impossible
+      change (OraclePublication.complete state (candidate (E := E) context (2 ^ n) state)
+        (PublishedWords.finish req state.oracle.provider proposed)).outcome = .returned reply at impossible
+      cases publication : PublishedWords.finish req state.oracle.provider proposed with
+      | mk outcome after events =>
+        rw [publication] at refused impossible
+        cases outcome with
+        | stopped reason => cases impossible
+        | returned token => cases refused
 
 /-- The first reached action in the source iteration runs the chooser on
 its original table. Only a returned publication resumes the original append,
