@@ -23,6 +23,22 @@ open ZkcSecurity.ArkLib.Fri
 open Zkc.Source.Structured
 open Domain OracleComp ReedSolomon.HiddenDerivative
 
+section
+open Zkc.Source ZkcExamples.Structured.FriScalarLoop
+
+-- Source labels may change. Draw and delivery still have to occur in order,
+-- and empty or repeated marks remain observations of the original process.
+example : (DrawSites.fromBody (.letOp (.mark "") [] [] .nil
+    (.letOp (.mark "") [] [] .nil (.letOp (.query 1 (.sampleIndex contract) "fresh") [] [] .nil
+    (.letOp (.exchange .index 1 0 "forwarded") [] [] .nil (.ret [])))))).map
+    (fun sites ↦ (sites.beforeDraw, sites.draw, sites.delivery)) = some (["", ""], "fresh", "forwarded") := rfl
+
+example : DrawSites.fromBody (.letOp (.exchange .index 1 0 "forwarded") [] [] .nil
+    (.letOp (.query 1 (.sampleIndex contract) "fresh") [] [] .nil (.ret []))) = none := rfl
+
+example : DrawSites.fromBody (.bind [] (.stop .reject) (.ret [])) = none := rfl
+end
+
 -- Both random services run against the same published-word table in the
 -- installed Commit caller. A different service handle fails at that site.
 section
@@ -276,7 +292,8 @@ run_cmd (ZkcTools.DeclarationAudit.checkBoundary
 run_cmd ZkcTools.DeclarationAudit.checkCurrent "FRI-ADOPTION-CONTROLS-PASS"
 
 run_cmd (ZkcTools.DeclarationAudit.check
-  [`Zkc.Source.Structured.OracleQueryDerivation, `ZkcExamples.Structured.FriIndexCollections,
+  [`Zkc.Source.Structured.Bindings.MarkedSpine, `Zkc.Source.Structured.OracleQueryDerivation,
+   `ZkcExamples.Structured.FriIndexCollections,
    `ZkcExamples.Structured.FriScalarLoop, `ZkcExamples.Structured.FriBoundedPositions,
    `ZkcExamples.Structured.FriBinding, `ZkcExamples.Structured.FriApplications,
    `ZkcArkLibExamples.Fri.RetainedQueries, `ZkcArkLibExamples.Fri.RetainedSampling,

@@ -2,6 +2,8 @@ module
 
 public import ZkcExamples.Structured.FriBindingExecution
 public import Zkc.Source.TypedABI
+public import Zkc.Source.Structured.Bindings.MarkedSpine
+public import Zkc.Source.Structured.MarkedPrefix
 
 @[expose] public section
 
@@ -16,23 +18,37 @@ open FriSource FriBinding
 variable {model : DomainModel}
 abbrev Process (model : DomainModel) := PIR.Process (OracleProtocol.Interface model)
 
+/-- Source marks are grouped by the next phase interaction. Pure helper
+calls may occur between marks, and their laws are checked by the caller's
+whole-body equation. A nested callback requires its own schedule. -/
+def schedule (body : RawRegion Ty ProtocolOp) : Option (Bindings.MarkedSpine ProtocolOp) :=
+  Bindings.markedSpine (fun op ↦ match op with
+    | .oracle .. | .protocolApply .. => some op
+    | _ => none) body
+
 structure Caller where
   context : ProtocolContext
+  schedule : Bindings.MarkedSpine ProtocolOp
 
-def Caller.mark (caller : Caller) (model : DomainModel) (site : String) : Process model Unit :=
-  .call (.mark site (qualifyProtocolSite caller.context.applicationPrefix site)) .done
+def Caller.marks (caller : Caller) (model : DomainModel) (labels : List String) : Process model Unit :=
+  OracleProtocol.withMarks (labels.map fun label ↦
+    (label, qualifyProtocolSite caller.context.applicationPrefix label)) (.done ())
 
 structure TransferSite where
-  mark : String
+  marks : List String
   location : OracleLocation
 
-/-- Select adjacent mark and registry operations in the caller's own
-straight-line continuation. A callback cannot supply a caller's site. -/
-def transferSites (select : OracleOp → Bool) : RawRegion Ty ProtocolOp → List TransferSite
-  | .letOp (.mark mark) _ _ .nil (.letOp (.oracle op location) _ _ .nil next) =>
-    if select op then ⟨mark, location⟩ :: transferSites select next else transferSites select next
-  | .letOp _ _ _ _ next => transferSites select next
-  | _ => []
+def Caller.transferSites (caller : Caller) (select : OracleOp → Bool) : List TransferSite :=
+  caller.schedule.events.filterMap fun (labels, op) ↦ match op with
+    | .oracle operation location => if select operation then some ⟨labels, location⟩ else none
+    | _ => none
+
+def Caller.callMarks (caller : Caller) (selected : CallSite) : Option (List String) := do
+  let [labels] := caller.schedule.events.filterMap (fun (marks, op) ↦ match op with
+    | .protocolApply signature roles site =>
+      if signature == selected.signature && roles == selected.roles && site == selected.site then some marks else none
+    | _ => none) | none
+  return labels
 
 def inputsOnly : OracleOp → Bool
   | .input .. => true
@@ -56,8 +72,9 @@ def twoTransferGroups : List TransferSite → Option (Transfers × Transfers)
   | _ => none
 
 def Caller.call (caller : Caller) (selected : CallSite)
-    (args : Values (Value model) selected.signature.inputs) : Process model (Values (Value model) selected.signature.outputs) := do
-  caller.mark model selected.site
+    (args : Values (Value model) selected.signature.inputs)
+    (found : (caller.callMarks selected).isSome := by decide +kernel) : Process model (Values (Value model) selected.signature.outputs) := do
+  caller.marks model ((caller.callMarks selected).get found)
   (verifierAlgebra model).application caller.context selected.signature selected.site
     (invokeProtocol (verifierTable model) selected.signature (selected.childContext caller.context) 1 args)
 
@@ -85,14 +102,14 @@ abbrev fields {V : Ty → Type} {types : List Ty} {A : Type}
 
 def Caller.input (caller : Caller) (site : TransferSite) (sort : OracleLogicalSort) (pair : Pair model sort) :
     Process model (Value model sort.type) := do
-  caller.mark model site.mark
+  caller.marks model site.marks
   let out ← PIR.Process.call (.oracle ⟨.input sort 0 [1] [("rows", 32)], site.location, 1,
     caller.context.roles, pair⟩) .done
   return out.get .here
 
 def Caller.project (caller : Caller) (site : TransferSite) (sort : OracleLogicalSort) (handle : Value model sort.type) :
     Process model (Pair model sort) := do
-  caller.mark model site.mark
+  caller.marks model site.marks
   PIR.Process.call (.oracle ⟨.components sort 0 [1], site.location, 1,
     caller.context.roles, .cons handle .nil⟩) .done
 

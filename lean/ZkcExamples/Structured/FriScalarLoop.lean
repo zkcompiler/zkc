@@ -1,13 +1,16 @@
 module
 
 public import ZkcExamples.Structured.FriIndexCollections
-public import Zkc.Source.Structured.Bindings.Selection
+public import Zkc.Source.Structured.Bindings.MarkedSpine
+public import Zkc.Source.Structured.Bindings.RepeatPrefix
+public meta import ZkcTools.StructuredSource.Bindings.CheckedCallback
+public meta import ZkcExamples.Structured.FriSourceBodies
 public import Zkc.Source.Structured.OracleQueryDerivation
 public import Zkc.Source.Structured.OracleLoopPresentation
 
 @[expose] public section
 
-/-! The scalar verifier's actual counted loop. The state consists of positions
+/-! The scalar verifier's admitted draw loop. The state consists of positions
 below 32. Each raw reply is checked before delivery, and the installed append
 helper receives that same position. -/
 set_option autoImplicit false
@@ -21,7 +24,31 @@ abbrev contract := "random.koala-bear.ext8-binomial3/0"
 def context := FriSourceCalls.scalarQueries.childContext lowDegreeContext
 def site (name : String) := qualifyProtocolSite context.applicationPrefix name
 
-def loop := (Bindings.checkedRepeat 0 protocol1Body (by decide +kernel)).repeatSite
+open Bindings
+
+checked_callback scalar := protocol1Body at 0
+theorem scalarOnSpine : scalarOccurrence.onSpine = true := by kernel_rfl
+checked_repeat_prefix scalarIngress := scalarOccurrence using scalarOnSpine
+
+def ingressMarks : List String :=
+  ((markedSpine (Event := Unit) (fun _ ↦ none) scalarIngress.erase).get (by decide +kernel)).trailing
+
+structure DrawSites where
+  beforeDraw : List String
+  draw : String
+  beforeDelivery : List String
+  delivery : String
+  afterDelivery : List String
+
+def DrawSites.fromBody (body : RawRegion Ty ProtocolOp) : Option DrawSites := do
+  let scan ← markedSpine (fun op ↦ match op with
+    | .query 1 (.sampleIndex name) label => if name = contract then some (Sum.inl label) else none
+    | .exchange .index 1 0 label => some (Sum.inr label)
+    | _ => none) body
+  let [(drawMarks, .inl draw), (deliveryMarks, .inr delivery)] := scan.events | none
+  return ⟨drawMarks, draw, deliveryMarks, delivery, scan.trailing⟩
+
+def drawSites := (DrawSites.fromBody scalarBody.erase).get (by decide +kernel)
 
 abbrev Positions := List (Fin 32)
 
@@ -30,13 +57,13 @@ def marks (model : DomainModel) : List String → PIR.Process (OracleProtocol.In
   | name :: names => .call (.mark name (site name)) fun _ ↦ marks model names
 
 def draw (model : DomainModel) (service : Nat) : PIR.Process (OracleProtocol.Interface model) (Fin 32) :=
-  (marks model ["", "s13"]).bind fun _ ↦
-    OracleProtocol.finiteIndex model (site "s13") contract service 32
+  (marks model drawSites.beforeDraw).bind fun _ ↦
+    OracleProtocol.finiteIndex model (site drawSites.draw) contract service 32
 
 def deliver (model : DomainModel) (i : Fin 32) : PIR.Process (OracleProtocol.Interface model) Unit := do
-  marks model ["s15_0"]
-  PIR.Process.call (.ordinary (.send (ty := .index) (site "s15_0") 0 i.val)) fun _ ↦ .done ()
-  marks model ["", "", "s19", "s21", ""]
+  marks model drawSites.beforeDelivery
+  PIR.Process.call (.ordinary (.send (ty := .index) (site drawSites.delivery) 0 i.val)) fun _ ↦ .done ()
+  marks model drawSites.afterDelivery
 
 def step (model : DomainModel) (service : Nat) (xs : Positions) :
     PIR.Process (OracleProtocol.Interface model) Positions := do
@@ -48,10 +75,10 @@ def packed (model : DomainModel) (xs : Positions) :
     Values (Component (ProtocolValue model.toCarriers)) [.indices] :=
   .cons (concrete model .indices (xs.map Fin.val)) .nil
 
-private theorem appendStep (model : DomainModel) (xs : Positions) (short : xs.length < 8)
+private theorem appendStep (model : DomainModel) {location : String} (xs : Positions) (short : xs.length < 8)
     (i : Fin 32) :
     ((verifierAlgebra model).meaning (verifierTable model) context 1).OperationLaw
-      (fun op ↦ .call op .done) (.localCall helper23Helper rfl 1 "s21")
+      (fun op ↦ .call op .done) (.localCall helper23Helper rfl 1 location)
       (.cons (concrete model .indices (xs.map Fin.val)) (.cons (concrete model .index i.val) .nil)) .nil
       (.done (packed model (xs ++ [i]))) := by
   apply RegionMeaning.OperationLaw.identity
@@ -71,7 +98,7 @@ set_option maxHeartbeats 1200000 in
 refuse any mark, delivery or query, including after earlier successful draws. -/
 theorem callback (model : DomainModel) (xs : Positions) (index service : Nat)
     (short : xs.length < 8) :
-    loop.body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
+    scalarSite.body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
       (Values.cons (concrete model .index index) (.cons (concrete model .indices (xs.map Fin.val))
         (.cons (concrete model (.service contract) service) .nil))).get =
       (step model service xs).bind fun ys ↦ .done (packed model ys) := by
@@ -81,7 +108,7 @@ theorem callback (model : DomainModel) (xs : Positions) (index service : Nat)
        | exact OracleProtocol.scalarQuery model (context := context) (owner := 1) (by decide) service 32
        | apply OracleProtocol.sendConcrete model (context := context) (owner := 1) (by decide)
        | apply appendStep model xs short)
-  · simp only [step, draw, deliver, marks, bind, pure, PIR.Process.bind_assoc, PIR.Process.bind]
+  · simp only [step, draw, deliver, bind, pure, PIR.Process.bind_assoc, PIR.Process.bind]
     rfl
 
 theorem stepLength (model : DomainModel) (xs : Positions) (service : Nat) :
@@ -98,18 +125,18 @@ theorem stepLength (model : DomainModel) (xs : Positions) (service : Nat) :
   simp
 
 def positions (model : DomainModel) (service : Nat) : PIR.Process (OracleProtocol.Interface model) Positions :=
-  Finite.fold (fun xs index ↦ (OracleProtocol.iterationObservations model).within loop.site index
+  Finite.fold (fun xs index ↦ (OracleProtocol.iterationObservations model).within scalarSite.site index
     (step model service xs)) (List.range' 0 8) []
 
 /-- Apply the shared counted invariant to the callback selected in the admitted body. -/
 theorem eightDraws (model : DomainModel) (service : Nat) :
-    (verifierAlgebra model).repeatProcess loop.spec context 1 loop.site (concrete model .index 8)
+    (verifierAlgebra model).repeatProcess scalarSite.spec context 1 scalarSite.site (concrete model .index 8)
       (packed model []) (.cons (concrete model (.service contract) service) .nil)
-      (fun args ↦ loop.body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) args.get) =
+      (fun args ↦ scalarSite.body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) args.get) =
       (positions model service).bind fun ys ↦ .done (packed model ys) := by
-  apply ProtocolLoopPresentation.present (verifierAlgebra model) loop.spec context 1 loop.site
+  apply ProtocolLoopPresentation.present (verifierAlgebra model) scalarSite.spec context 1 scalarSite.site
     (OracleProtocol.iterationObservations model)
-    (OracleProtocol.iteration_eq model 1 _ _ context loop.site)
+    (OracleProtocol.iteration_eq model 1 _ _ context scalarSite.site)
     (by decide) (.cons (concrete model (.service contract) service) .nil) _
     (fun _ xs ↦ packed model xs) (fun index xs ↦ xs.length = index)
     (fun _ _ ↦ rfl) (fun xs _ ↦ step model service xs) 8
@@ -125,16 +152,16 @@ theorem eightDraws (model : DomainModel) (service : Nat) :
 
 private theorem repeatStep (model : DomainModel) (service : Nat) :
     ((verifierAlgebra model).meaning (verifierTable model) context 1).OperationLaw
-      (fun op ↦ .call op .done) (.repeat loop.spec loop.site)
+      (fun op ↦ .call op .done) (.repeat scalarSite.spec scalarSite.site)
       (.cons (concrete model .index 8) (.cons (concrete model .indices [])
         (.cons (concrete model (.service contract) service) .nil)))
-      (.cons (fun args ↦ loop.body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
+      (.cons (fun args ↦ scalarSite.body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
         args.get) .nil) ((positions model service).bind fun ys ↦ .done (packed model ys)) := by
   apply RegionMeaning.OperationLaw.identity
   exact eightDraws model service
 
 def program (model : DomainModel) (service : Nat) : PIR.Process (OracleProtocol.Interface model) Positions :=
-  (marks model ["", "", "s2", "", "", "s5", "s6", "s8", "", loop.site]).bind fun _ ↦ positions model service
+  (marks model ingressMarks).bind fun _ ↦ positions model service
 
 set_option maxHeartbeats 1200000 in
 /-- The full scalar component, including the two count guards and empty calls. -/
@@ -149,7 +176,7 @@ theorem body (model : DomainModel) (service : Nat) :
        | apply OracleProtocol.guardTrue model
        | apply RegionMeaning.OperationLaw.identity; exact FriIndexCollections.empty model 1)
       summarizing (exact repeatStep model service)
-  · simp only [program, marks, PIR.Process.bind]
+  · simp only [program]
     rfl
 
 #print axioms body

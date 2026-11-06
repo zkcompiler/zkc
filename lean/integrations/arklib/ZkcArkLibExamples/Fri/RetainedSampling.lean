@@ -18,7 +18,7 @@ structure Fresh (handler : PIR.MonadHandler ProbComp (OracleProtocol.Interface m
     (service : Nat) where
   afterDraw : Fin 32 → S → ProbComp (PIR.Execution S E Unit)
   sample : ∀ state,
-    (OracleProtocol.finiteIndex model (site "s13") contract service 32).runM handler state = (do
+    (OracleProtocol.finiteIndex model (site drawSites.draw) contract service 32).runM handler state = (do
       let x ← $ᵗ (Fin 32)
       repack (fun _ ↦ x) <$> afterDraw x state)
 
@@ -36,7 +36,7 @@ theorem fold_le (handler : PIR.MonadHandler ProbComp (OracleProtocol.Interface m
     (service : Nat) (fresh : Fresh handler service) (items : List Nat) (prior : Positions)
     (state : S) (event : Positions → Prop) :
     Pr{let r ← (Finite.fold (fun xs i ↦ (OracleProtocol.iterationObservations model).within
-      loop.site i (step model service xs)) items prior).runM handler state}[returned event r] ≤
+      scalarSite.site i (step model service xs)) items prior).runM handler state}[returned event r] ≤
       Pr{let ys ← productPositions 5 items.length}[event (prior ++ List.ofFn ys)] := by
   induction items generalizing prior state with
   | nil =>

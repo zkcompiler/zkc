@@ -19,17 +19,17 @@ attribute [local implicit_reducible] samplingOperations SamplingOperation.Reply
 def operations (model : DomainModel) (service : Nat) :
     PIR.OperationInterpretation (samplingOperations 5) (OracleProtocol.Interface model)
   | .scalar index =>
-      ((OracleProtocol.iterationObservations model).enter loop.site index).bind
+      ((OracleProtocol.iterationObservations model).enter scalarSite.site index).bind
         fun _ ↦ draw model service
   | .revealScalar index x =>
-      (deliver model x).bind fun _ ↦ (OracleProtocol.iterationObservations model).leave loop.site index
+      (deliver model x).bind fun _ ↦ (OracleProtocol.iterationObservations model).leave scalarSite.site index
   | .block _ | .revealBlock .. => .halt .refused
 
 theorem positions_eq (model : DomainModel) (service : Nat) :
     positions model service = ((scalarQueries 5 8 0).interpret (operations model service)).bind
       fun ys ↦ .done (List.ofFn ys) := by
   have next (xs : Positions) (i : Nat) :
-      (OracleProtocol.iterationObservations model).within loop.site i (step model service xs) =
+      (OracleProtocol.iterationObservations model).within scalarSite.site i (step model service xs) =
         ((operations model service) (.scalar i)).bind fun x ↦
           ((operations model service) (.revealScalar i x)).bind fun _ ↦ .done (List.append (α := Fin 32) xs [x]) := by
     rw [IterationObservations.within_eq]
@@ -44,7 +44,7 @@ theorem source_body (model : DomainModel) (service : Nat) :
       ((FriSource.verifierAlgebra model).meaning (FriSource.verifierTable model) context 1)
       (Values.cons (OracleProtocol.concrete model .index 8)
         (.cons (OracleProtocol.concrete model (.service contract) service) .nil)).get =
-      (marks model ["", "", "s2", "", "", "s5", "s6", "s8", "", loop.site]).bind fun _ ↦
+      (marks model ingressMarks).bind fun _ ↦
         ((scalarQueries 5 8 0).interpret (operations model service)).bind
           fun ys ↦ .done (packed model (List.ofFn ys)) := by
   rw [body, program, positions_eq]
@@ -60,7 +60,7 @@ theorem installed (model : DomainModel) (service : Nat) :
     invokeProtocol (verifierTable model) protocol1Signature context 1
       (.cons (OracleProtocol.concrete model .index 8)
         (.cons (OracleProtocol.concrete model (.service contract) service) .nil)) =
-      (marks model ["", "", "s2", "", "", "s5", "s6", "s8", "", loop.site]).bind fun _ ↦
+      (marks model ingressMarks).bind fun _ ↦
         ((scalarQueries 5 8 0).interpret (operations model service)).bind
           fun ys ↦ .done (packed model (List.ofFn ys)) := by
   refine ((verifierAlgebra model).invokePresented unit.protocolsLinked protocol1Definition protocol1_member

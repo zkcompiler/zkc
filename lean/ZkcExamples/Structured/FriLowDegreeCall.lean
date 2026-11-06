@@ -13,10 +13,11 @@ open Zkc.Source Zkc.Source.Structured
 open FriSource FriSourceViews FriSourceBodies FriBinding FriPhaseCalls
 open OracleProtocol (concrete)
 
-def caller : Caller := ⟨lowDegreeContext⟩
+def caller : Caller :=
+  ⟨lowDegreeContext, (schedule protocol5Body.erase).get (by decide +kernel)⟩
 
-def inputSites := (twoTransferGroups (transferSites inputsOnly protocol5Body.erase)).get (by decide +kernel)
-def projectionSites := (twoTransferGroups (transferSites projectionsOnly protocol5Body.erase)).get (by decide +kernel)
+def inputSites := (twoTransferGroups (caller.transferSites inputsOnly)).get (by decide +kernel)
+def projectionSites := (twoTransferGroups (caller.transferSites projectionsOnly)).get (by decide +kernel)
 
 def query (model : DomainModel) (sampled : Value model .indices)
     (bound : Values (Value model) protocol2Signature.outputs) :
@@ -26,8 +27,7 @@ def query (model : DomainModel) (sampled : Value model .indices)
     let projected ← caller.projections projectionSites.2 handles
     let result ← caller.call FriSourceCalls.query (prependPairs projected (.cons shift (.cons size
       (.cons coeffs (.cons indices (.cons rounds (.cons queries .nil)))))))
-    caller.mark model ""
-    caller.mark model ""
+    caller.marks model caller.schedule.trailing
     return .cons (result.get .here) (.cons none (.cons sampled (.cons (result.get (.there .here)) .nil)))
 
 def afterCommit (model : DomainModel) (count service : Nat)
@@ -66,7 +66,7 @@ theorem body (model : DomainModel) (shift : model.Field extension) (rounds queri
        | apply (verifierAlgebra model).applyActive (verifierTable model) protocol4Signature lowDegreeContext
            1 FriSourceCalls.query.site FriSourceCalls.query.roles _ (by decide +kernel))
   · simp only [program, query, afterCommit, Caller.inputs, Caller.projections, Caller.input, Caller.project,
-      Caller.mark, Caller.call, bind, pure, PIR.Process.bind]
+      Caller.marks, Caller.call, bind, pure, PIR.Process.bind]
     rfl
 
 theorem installed (model : DomainModel) (shift : model.Field extension) (rounds queries service : Nat) :

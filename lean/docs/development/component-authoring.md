@@ -331,7 +331,10 @@ query count. The shared derivation follows the original source operations
 and marks. `FriBindingExecution.installed` applies in every caller frame
 that maps the receiver to the participant and the holder to a different
 participant. The two-site control combines this law with executions of both
-sites and a same-sort handle swap.
+sites and a same-sort handle swap. At the enclosing FRI calls and the scalar
+draw, the checked straight-line body also supplies the marks between actions,
+the query and delivery locations, and any marks after the last action. The
+whole-body equation checks the order. A callback has its own mark schedule.
 
 For a loop nested in another callback, select it inside that callback.
 `checked_repeat_prefix firstFoldBody := insideQuery using innerOnSpine`

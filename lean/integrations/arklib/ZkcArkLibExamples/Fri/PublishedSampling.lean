@@ -24,7 +24,7 @@ noncomputable def withScalar (network : Network model Aux E) (service : Nat)
     (audit : PublishedWords.Table model → Fin 32 → List E) : Network model Aux E :=
   fun words op state ↦ match op with
   | .query location (.sampleIndex name) (.cons handle (.cons bound .nil)) =>
-      if location = site "s13" ∧ name = contract ∧ handle = service ∧ bound = 32 then do
+      if location = site drawSites.draw ∧ name = contract ∧ handle = service ∧ bound = 32 then do
         let i ← $ᵗ (Fin 32)
         pure ⟨.returned i.val, state, audit words i⟩
       else pure ⟨.stopped .refused, state, []⟩
@@ -35,11 +35,11 @@ noncomputable def withScalar (network : Network model Aux E) (service : Nat)
 
 theorem configured (network : Network model Aux E) (service : Nat)
     (audit : PublishedWords.Table model → Fin 32 → List E) (words : PublishedWords.Table model) (state : Aux) :
-    withScalar network service audit words (.query (site "s13") (.sampleIndex contract)
+    withScalar network service audit words (.query (site drawSites.draw) (.sampleIndex contract)
       (.cons service (.cons 32 .nil))) state = (do
       let i ← $ᵗ (Fin 32)
       pure ⟨.returned i.val, state, audit words i⟩) := by
-  change (if site "s13" = site "s13" ∧ contract = contract ∧ service = service ∧ (32 : Nat) = 32 then _
+  change (if site drawSites.draw = site drawSites.draw ∧ contract = contract ∧ service = service ∧ (32 : Nat) = 32 then _
     else _) = _
   simp only [and_self, ↓reduceIte]
 
