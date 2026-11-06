@@ -407,7 +407,11 @@ this execution. The source supplies the operation, the capture order and the
 caller environment. The companion supplies the retained coset, the semantics
 of the linked arithmetic helpers, and the earlier publication witness.
 The protocol and the virtual oracle use the same power law with their
-respective linked helper tables.
+respective linked helper tables. `CommitDelivery.iterationToView` selects the
+delivery segment from the original iteration after the send, append and draw.
+`RegisteredWord.throughOrdinary` allows the network to update its auxiliary
+state while retaining the publication. `CommitDelivery.registered` uses this
+law across the actual delivery and its source marks.
 
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and

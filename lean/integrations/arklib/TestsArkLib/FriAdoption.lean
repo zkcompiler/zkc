@@ -2,7 +2,7 @@ import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
-import ZkcArkLibExamples.Fri.CommitCaptures
+import ZkcArkLibExamples.Fri.CommitDelivery
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -380,7 +380,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
 
 run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Source.RegionSelection, `ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitGeometry,
-   `ZkcArkLibExamples.Fri.BinaryDomain, `ZkcArkLibExamples.Fri.CommitCaptures, `ZkcArkLibExamples.Fri.CommitPublication,
+   `ZkcArkLibExamples.Fri.BinaryDomain, `ZkcArkLibExamples.Fri.CommitCaptures, `ZkcArkLibExamples.Fri.CommitDelivery,
+   `ZkcArkLibExamples.Fri.CommitPublication,
    `ZkcArkLibExamples.Fri.CommitChallenge]
   "FRI-PUBLICATION-BEFORE-CHALLENGE-PASS" (exactModules := true))
 

@@ -150,19 +150,24 @@ private theorem operationAt (context : ProtocolContext) (values : Values (FriBin
       .call (.oracle ⟨.virtual oracle0Signature 0 [1], CommitVirtual.constructionSite, 1, context.roles,
         virtualConstruction.arguments.eval values.get⟩) .done := by kernel_rfl
 
+abbrev ReachedView := Values (FriBinding.Value model) virtualConstruction.context ×
+  Values (FriBinding.Value model) (protocolDialect.results virtualConstruction.op)
+
 abbrev ConstructionRecord (Aux E : Type) := PIR.Execution
   (OracleProtocol.State model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux))
-  (OracleProtocol.Event E) (Values (FriBinding.Value model) virtualConstruction.context ×
-    Values (FriBinding.Value model) (protocolDialect.results virtualConstruction.op))
+  (OracleProtocol.Event E) ReachedView
 
 set_option maxRecDepth 6000 in
-def RegisteredConstruction (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic) (beta shift : Octic)
-    (record : ConstructionRecord Aux E) : Prop :=
-  ∀ out, record.outcome = .returned out →
+def RegisteredAt (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic) (beta shift : Octic)
+    (outcome : PIR.Outcome ReachedView)
+    (store : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux)) : Prop :=
+  ∀ out, outcome = .returned out →
     ∃ anchor, out.2 = .cons (concrete model (.oracle VirtualReads.kind) anchor) .nil ∧
-      Nonempty (VirtualStore.Registered record.state.oracle source anchor word beta shift) ∧
-      Nonempty (PublishedWords.RegisteredWord (row := .field extension) record.state.oracle.entries
-        record.state.oracle.self source word record.state.oracle.provider)
+      Nonempty (VirtualStore.Registered store source anchor word beta shift) ∧
+      Nonempty (PublishedWords.RegisteredWord (row := .field extension) store.entries store.self source word store.provider)
+
+def RegisteredConstruction (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic) (beta shift : Octic)
+    (record : ConstructionRecord Aux E) := RegisteredAt n source word beta shift record.outcome record.state.oracle
 
 set_option maxRecDepth 6000 in
 /-- On the actual continuation of challenge delivery a returned construction

@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Semantics.MonadicPostcondition
 public import Zkc.Source.Structured.PublishedWordsLaws
 public import Zkc.Source.Structured.OracleInvariant
 public import Zkc.Source.Structured.OracleReadback
@@ -59,6 +60,28 @@ def RegisteredWord.afterExtension (live : RegisteredWord entries participant sou
       have absent := OracleStore.findSkipNewer entries [] row source (same ▸ fresh)
       simp [live.lookup, OracleStore.find] at absent
     simpa [OracleStore.find, different] using live.lookup
+
+/-- Network activity can change auxiliary state and emit events, including
+on refusal. Every recorded result keeps the participant and the association
+between this anchor, its registry and all the word's cells. -/
+theorem RegisteredWord.throughOrdinary {m : Type → Type} [Monad m] [LawfulMonad m]
+    (oracles : List (CheckedOracle snapshot domains math))
+    (network : Table model → PIR.MonadHandler m (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : Chooser m model Aux E) (op : (participantInterfaceOn model.toCarriers).Op)
+    (before : OracleProtocol.State model snapshot domains math (State model Aux))
+    (live : RegisteredWord (row := row) before.oracle.entries before.oracle.self source word before.oracle.provider) :
+    Std.Do.Internal.Ensures (fun record ↦ record.state.oracle.self = before.oracle.self ∧
+        Nonempty (RegisteredWord (row := row) record.state.oracle.entries record.state.oracle.self
+          source word record.state.oracle.provider))
+      (actionM oracles network choose (.ordinary op) before) := by
+  rw [actionM_ordinary]
+  apply Std.Do.Internal.Ensures.bind (P := fun _ ↦ True)
+  · apply Zkc.MonadicPostcondition.of_refinement (do
+      let result ← network before.oracle.provider.words op before.oracle.provider.auxiliary
+      pure ⟨result, trivial⟩)
+    simp
+  · intro result _
+    exact Zkc.MonadicPostcondition.pure _ _ ⟨rfl, ⟨live.afterExtension (.inl rfl) (.refl _)⟩⟩
 
 /-- A returned publication fixes all coordinates at this anchor. Equal row
 sorts and lengths at some other anchor do not imply this equality. -/
