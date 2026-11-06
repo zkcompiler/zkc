@@ -27,7 +27,7 @@ from bridges.common import policy as native_policy  # noqa: E402
 from bridges.common.lean_render import Refused  # noqa: E402
 from bridges.common.replacement import ReplacementError, replace_exactly_once  # noqa: E402
 from bridges.construction import render as participant  # noqa: E402
-from bridges.executable import render as executable  # noqa: E402
+from bridges.executable import events, render as executable  # noqa: E402
 from bridges.pipeline import glue  # noqa: E402
 import intent  # noqa: E402
 from intent_association_tests import scalar_fixture  # noqa: E402
@@ -519,6 +519,31 @@ class OriginSteps(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "origin identifier"):
             origin_structure(["zkc.native-origin-template/0", "main", [["branch", "main", "choose", ""]], [],
                                      ["message", "main", "site", "site", "P", "V"]])
+
+
+class DescriptorEvents(unittest.TestCase):
+    def test_origin_and_codec_must_select_the_same_transmission(self):
+        encoded = lean_render.encode_tree(["zkc.native-origin-template/0", "main", [],
+            [], ["message", "main", "word", "word", "P", "V"]]).hex()
+        source = "1" * 64
+        codec = [encoded, "vector:test", "zkc.native-data/0"]
+        descriptor = ["zkc.native-proof-descriptor/0", native(), "zkc.native-origin/0",
+                      [["message", encoded]], [], [codec], [], [], ""]
+        bundle = ["zkc.native-proof/0", source, descriptor, None, None, None, None, None, None]
+        self.assertIn('.message "vector:test" "zkc.native-data/0"',
+                      events.render(bundle, "sha256:" + source, "Control"))
+        with self.assertRaisesRegex(Refused, "source"):
+            events.render(bundle, "sha256:" + "2" * 64, "Control")
+        for mutate, reason in (
+            (lambda d: d[3].append(d[3][0]), "repeated event"),
+            (lambda d: d[5].clear(), "missing transmitted message"),
+            (lambda d: d[5].append(d[5][0]), "duplicate message codec"),
+            (lambda d: d[3][0].__setitem__(0, "query"), "expected field draw"),
+        ):
+            other = deepcopy(bundle)
+            mutate(other[2])
+            with self.subTest(reason=reason), self.assertRaisesRegex(Refused, reason):
+                events.render(other, "sha256:" + source, "Control")
 
 
 if __name__ == "__main__":

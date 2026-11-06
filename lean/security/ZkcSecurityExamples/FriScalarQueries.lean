@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.ConnectionRootRoutes
+public import ZkcExamples.Structured.FriClearDescriptor
 public import ZkcExamples.Structured.FriSourceData
 public import ZkcSecurity.Bindings.Transcript.QueryTreeSource.Placement
 public import ZkcSecurity.Bindings.Transcript.QueryTreeSource.Composition.Cache
@@ -18,12 +19,9 @@ open OracleComp OracleSpec
 
 abbrev snapshot := ZkcExamples.Structured.FriSourceData.snapshot
 
-def policy : Policy :=
-  ⟨snapshot.entry, "role00000000", "role00000001", 0,
-    "merlin3.koala-bear.ext8-binomial3.rejection31le/0", [4], [1, 2, 3],
-    [("apply_13_apply_2_s0_s0_s54", "apply_13_apply_2_s0_s0_s56_0"),
-     ("apply_31_apply_2_s0_label_71756572696573_s13",
-      "apply_31_apply_2_s0_label_71756572696573_s15_0")], "zkc.framed/0", ""⟩
+abbrev policy := ZkcExamples.Structured.FriClearDescriptor.policy
+
+theorem descriptor_original : ZkcExamples.Structured.FriClearDescriptor.original = snapshot.source := rfl
 
 def context : Context :=
   (Context.ofPolicy policy [policy.producer, policy.validator] "random.koala-bear.ext8-binomial3/0"

@@ -1,7 +1,7 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLib.Fri.HolderPadding
-import ZkcArkLib.Fri.TranscriptTrace
+import ZkcArkLib.Fri.ClearCertificate
 import ZkcTools.DeclarationAudit
 
 /-! Focused controls for the mathematical FRI adapters. The two-round example is a mathematical

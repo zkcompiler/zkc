@@ -52,7 +52,7 @@ FIELDS = {
     "entries": {"proof": STRING, "interactive": STRING, "instantiation": STRING},
     "profiles": {"structured": BOOLEAN, "construction": BOOLEAN, "executable": BOOLEAN, "scalar": BOOLEAN},
     "generated": {"data": STRING, "bodies": STRING, "views": STRING, "participant": STRING, "pair": STRING, "glue": STRING,
-                  "program": STRING, "facts": STRING, "interactive_data": STRING,
+                  "program": STRING, "facts": STRING, "descriptor_events": STRING, "interactive_data": STRING,
                   "interactive_bodies": STRING, "interactive_views": STRING,
                   "interactive_export": STRING, "interactive_source": STRING,
                   "original_source": STRING, "original_export": STRING, "artifacts": STRING, "claims": STRING, "lowering": STRING},
@@ -204,11 +204,14 @@ def load(path):
                 f"{path}: generated.{key} must be a repository path")
         require(subject.generated(key).is_relative_to(ROOT),
                 f"{path}: generated.{key} must resolve inside the repository")
-    for key in ("glue", "data", "participant", "pair", "program", "facts", "bodies", "views", "interactive_data",
+    for key in ("glue", "data", "participant", "pair", "program", "facts", "bodies", "views", "descriptor_events", "interactive_data",
                 "interactive_bodies", "interactive_views", "artifacts", "claims", "lowering"):
         module = subject.module_name(key)
         require(module is None or __import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: generated.{key} is not a Lean module path")
+    if subject.generated("descriptor_events"):
+        require(subject.profile("structured") and subject.get("entries", "proof"),
+                f"{path}: descriptor events require an interactive source and a proof entry")
     if subject.generated("views"):
         require(subject.get("construction", "admission") == "external" and
                 subject.get("construction", "views") == subject.module_name("views"),

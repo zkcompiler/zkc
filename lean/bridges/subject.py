@@ -56,7 +56,7 @@ from bridges.common.lean_render import (  # noqa: E402
     regenerate, require, strip_header)
 from bridges.common import policy as native_policy  # noqa: E402
 from bridges.construction import pair, render as constructed  # noqa: E402
-from bridges.executable import render as executable  # noqa: E402
+from bridges.executable import events, render as executable  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
 from bridges.pipeline.source_claims import canonical  # noqa: E402
 from bridges.structured import bodies as printer, snapshot as structured, source_views  # noqa: E402
@@ -1008,6 +1008,7 @@ class Driver(Runner):
         if not subject.profile("construction"):
             self.source_views(subject, record)
         run = None
+        artifacts = None
         if subject.profile("construction"):
             artifacts, entry = self.proof(subject, record)
             if subject.profile("executable"):
@@ -1015,6 +1016,18 @@ class Driver(Runner):
                 if self.args.runtime:
                     run = (artifacts, self.runtime(subject, artifacts, entry, facts, record))
             self.claims(subject, artifacts, entry, record, interactive)
+        observations = subject.module_name("descriptor_events")
+        if observations:
+            if artifacts is None:
+                flags = pipeline_compile.options(subject, subject.get("entries", "proof"))
+                result = self.run([self.args.compiler, "language-bundle", *flags],
+                                  name=f"{subject.name}:descriptor-events")
+                deployment = json.loads(result.stdout)
+            else:
+                deployment = artifacts["deployment"]
+            text = events.render(deployment, interactive["snapshot"][2], observations)
+            self.generated(subject, "descriptor_events", text, record)
+            self.build(observations)
         if subject.profile("scalar"):
             record["scalar"] = dict(contract=subject.get("scalar", "contract"),
                                     properties=sorted(subject.get("scalar", "properties", {})))
