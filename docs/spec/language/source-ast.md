@@ -794,8 +794,9 @@ function or oracle definition row of the snapshot is the symbol of exactly one
 `instances` or `generated` entry; every realize, finite, collect and map row has
 its `computation` row association; binding rows are identified by their
 contract and arguments. A row of another producer is a new `purpose`, never an
-exemption. Every occurrence names a snapshot definition and one of its sites,
-and every origin names a snapshot definition. The export check is canonical
+exemption. Occurrence rows cover every nonempty site in canonical order, including
+virtual oracle bodies. An empty written-node list does not waive site coverage.
+Every origin names a snapshot definition. The export check is canonical
 equality, so any edit refuses.
 
 Occurrences, `generated` entries and their `origins` are exact-artifact

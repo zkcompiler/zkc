@@ -1461,6 +1461,14 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
             unless found.isAppOf ``Option.some do return false
             return (← whnf (← mkAppM ``Op.total #[op])).isConstOf ``Bool.true : MetaM Bool)
           unless body.isAppOf ``Region.ret || single do
+            -- A real helper instruction with a different key is a retained-call
+            -- mismatch. Do not diagnose it as an unsupported inlined calculation.
+            let startsWithHelper ← withLocalDeclD `model (mkConst ``DomainModel) fun model => do
+              let block ← viewHead (mkApp target model)
+              if block.isAppOf ``Domain.View.sequence then
+                return (← viewHead block.getAppArgs[1]!).isAppOf ``Domain.View.helper
+              return false
+            if startsWithHelper then break
             let pending ← inlineMath goal args source target selected body before after
             for tail in pending do derive cache discovery tail
             return

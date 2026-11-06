@@ -163,7 +163,7 @@ theorem wrong_schema_rejected :
 theorem nonempty_receive_body_rejected :
     checkNativeItem program context
       (.step ⟨.receive "site" "site" "P" .boolean, [], [.data .boolean],
-        [⟨.indicesEmpty, [], [.indices], []⟩]⟩ 1) (messageScope 0) = none := by decide +kernel
+        [⟨[], [⟨.indicesEmpty, [], [.indices], []⟩], []⟩]⟩ 1) (messageScope 0) = none := by decide +kernel
 
 theorem wrong_origin_rejected :
     nativeResults program context (messageScope 0)
