@@ -1,0 +1,15 @@
+module example;
+use zkc::vector::{Vector};
+use fri::{Direct, ScalarLowDegree};
+domain E = field("koala-bear.ext8-binomial3");
+protocol Fri roles(P,V)(word: Vector<E> @P, shift: E @(P,V), round_count: index @(P,V),
+    query_count: index @(P,V), coins: Random<E> @V)
+    -> (left: bool @V, right: bool @V) {
+  #[site(left)]
+  let (left, _, _, _) = ScalarLowDegree<Direct<E>,5,0,3,8>(word, shift, shift,
+    round_count, query_count, coins);
+  #[site(right)]
+  let (right, _, _, _) = ScalarLowDegree<Direct<E>,5,0,3,8>(word, shift, shift,
+    round_count, query_count, coins);
+  return (left = left, right = right);
+}

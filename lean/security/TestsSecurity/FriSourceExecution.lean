@@ -15,7 +15,7 @@ structure History where
 
 def positions := [31, 4, 4, 11, 27, 0, 3, 15]
 
-def ordinary (coefficient : Nat) (invalidQuery : Bool) : PublishedWords.Table model →
+def ordinaryWith (draws : List Nat) (coefficient : Nat) (invalidQuery : Bool) : PublishedWords.Table model →
     PIR.MonadHandler Id (participantInterfaceOn model.toCarriers) History String :=
   fun _ op h ↦
     match op with
@@ -25,9 +25,11 @@ def ordinary (coefficient : Nat) (invalidQuery : Bool) : PublishedWords.Table mo
     | .query _ (.draw d) _ => ⟨.returned (2 : model.Field d),
         {h with actions := h.actions ++ ["fold"]}, []⟩
     | .query _ (.sampleIndex _) (.cons _ (.cons bound .nil)) =>
-        ⟨.returned (if invalidQuery then bound else positions[h.samples]?.getD bound),
+        ⟨.returned (if invalidQuery then bound else draws[h.samples]?.getD bound),
           ⟨h.actions ++ ["index"], h.samples + 1⟩, []⟩
     | _ => ⟨.stopped .refused, h, ["unknown operation"]⟩
+
+abbrev ordinary := ordinaryWith positions
 
 /-- The honest words for X⁷ on the unit coset under three challenges of 2
 are X⁷, 2X³ and 4X. The last polynomial is the constant 8. -/

@@ -759,3 +759,26 @@ def test_fri_binding_refuses_malformed_positions(toolchain, journal, directory,
     assert stop['role'] == 'role00000000' and stop['kind'] == 'Explicit("reject")'
     assert stop_guard(stop, sites) == (guard, [])
     assert not proof.exists()
+
+
+def test_two_call_binding_source_matches_the_lean_subject(toolchain, journal, directory):
+    from harness import load
+    from project import project_inputs
+
+    # Import the structured renderer with the same package root as the subject pipeline.
+    load("fri_snapshot_reader", "lean/bridges/structured/snapshot.py")
+    from bridges.structured.binding_sites import render
+
+    fixtures = ROOT / "lean/bridges/structured/fixtures"
+    modules, assets = project_inputs(EXAMPLE.with_name("zkc.toml"))
+    modules["example"] = fixtures / "fri-binding-sites.zkc"
+    flags = ["--source-format=zkc", "--subject=example::Fri",
+             *(f"--module={name}={path}" for name, path in sorted(modules.items())),
+             *(f"--asset={name}={kind}={path}" for name, (kind, path) in sorted(assets.items()))]
+    interface = journal.json([toolchain.compiler, "language-interface", *flags])
+    source = directory / "double-fri.mlir"
+    source.write_text(journal.run([toolchain.compiler, "language-emit", *flags]))
+    double = journal.json([toolchain.compiler, "protocol-structured", source,
+                           f"--symbol={interface['protocol']}"])
+    single = json.loads((fixtures / "fri-source.json").read_text())
+    assert render(single, double) == (ROOT / "lean/Tests/FriBindingSitesData.lean").read_text()
