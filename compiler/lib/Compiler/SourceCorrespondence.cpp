@@ -195,11 +195,12 @@ Expected<SnapshotSites> snapshotSites(const json::Value &snapshot) {
       if (!row || row->size() < 2 || !(*row)[1].getAsString())
         return error("source.correspondence.export", "snapshot row differs");
       auto definition = *(*row)[1].getAsString();
-      result.definitions.insert(definition);
       const auto *body = row->back().getAsArray();
-      if (body && !body->empty() && (*body)[0] == json::Value("block"))
+      if (body && !body->empty() && (*body)[0] == json::Value("block")) {
+        result.definitions.insert(definition);
         if (auto e = blockSites(row->back(), definition, result, 0))
           return std::move(e);
+      }
     }
   }
   return result;

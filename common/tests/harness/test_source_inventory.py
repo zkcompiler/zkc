@@ -179,6 +179,15 @@ def test_unrelated_binding_never_changes_authored_selection():
     assert inventory.single_target("entry", "protocol_apply").symbol == "callee"
 
 
+def test_catalog_binding_cannot_own_a_generated_instruction():
+    document, args = fixture()
+    document["snapshot"][6].append(["binding", "only-a-binding", "contract", [], []])
+    document["generated"][0]["origins"][0]["definition"] = "only-a-binding"
+    args["original_text"] = json.dumps(document["snapshot"])
+    with pytest.raises(Refused, match="origin outside snapshot bodies"):
+        Inventory(document, **args)
+
+
 def test_target_selection_refuses_ambiguity_instead_of_taking_first():
     document, args = fixture()
     block = document["snapshot"][7][0][9]
