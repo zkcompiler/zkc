@@ -1,7 +1,8 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
-import ZkcArkLib.Fri.HolderPadding
-import ZkcArkLib.Fri.ClearCertificate
+import ZkcArkLibExamples.Fri.HolderPadding
+import ZkcArkLibExamples.Fri.PublishedSampling
+import ZkcArkLibExamples.Fri.ClearCertificate
 import ZkcTools.DeclarationAudit
 
 /-! Focused controls for the mathematical FRI adapters. The two-round example is a mathematical
@@ -179,3 +180,22 @@ run_cmd (ZkcTools.DeclarationAudit.checkBoundary
   [`ArkLib] [] "FRI-JOHNSON-UPSTREAM-BOUNDARY-PASS")
 
 run_cmd ZkcTools.DeclarationAudit.checkCurrent "FRI-ADOPTION-CONTROLS-PASS"
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Source.Structured.OracleQueryDerivation, `ZkcExamples.Structured.FriIndexCollections,
+   `ZkcExamples.Structured.FriScalarLoop, `ZkcArkLibExamples.Fri.RetainedQueries, `ZkcArkLibExamples.Fri.RetainedSampling,
+   `ZkcArkLibExamples.Fri.PublishedSampling] "FRI-INSTALLED-SCALAR-SAMPLING-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcArkLibExamples.Fri.RetainedDomain,
+   `ZkcArkLibExamples.Fri.RetainedFold,
+   `ZkcArkLibExamples.Fri.HolderFold,
+   `ZkcArkLibExamples.Fri.HolderInterpolation,
+   `ZkcArkLibExamples.Fri.HolderPadding,
+   `ZkcArkLibExamples.Fri.ObservedFold,
+   `ZkcArkLibExamples.Fri.ObservedLayers,
+   `ZkcArkLibExamples.Fri.ObservedQueries,
+   `ZkcArkLibExamples.Fri.TranscriptCharge,
+   `ZkcArkLibExamples.Fri.TranscriptTrace,
+   `ZkcArkLibExamples.Fri.ClearSites,
+   `ZkcArkLibExamples.Fri.ClearCertificate] "FRI-RETAINED-CERTIFICATE-BOUNDARIES-PASS" (exactModules := true))

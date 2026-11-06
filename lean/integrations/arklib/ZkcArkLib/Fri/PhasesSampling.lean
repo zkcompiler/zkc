@@ -1,6 +1,7 @@
 module
 
 public import ZkcArkLib.Fri.PhasesCausal
+public import Zkc.Source.Finite
 public import ZkcSecurity.Mathematics.Oracle.Coupling
 
 /-!
@@ -229,5 +230,35 @@ theorem queries_domination_of_local_coupling {n : ℕ} {S T E G O : Type}
   unfold returned
   rw [← related.outcome]
   exact id
+
+section
+open Zkc.Source
+attribute [local implicit_reducible] samplingOperations SamplingOperation.Reply
+
+/-- A log accumulated by any implementation of scalar draw and delivery
+contains exactly the finite product returned by the mathematical sampler. -/
+theorem collectScalarQueries {I : PIR.Signature} {n : Nat}
+    (operations : PIR.OperationInterpretation (samplingOperations n) I)
+    (count ordinal : Nat) (prior : List (Fin (2 ^ n))) :
+    Finite.fold (fun xs i ↦ (operations (.scalar i)).bind fun x ↦
+      (operations (.revealScalar i x)).bind fun _ ↦ .done (xs ++ [x]))
+      (List.range' ordinal count) prior =
+      ((scalarQueries n count ordinal).interpret operations).bind
+        fun ys ↦ .done (prior ++ List.ofFn ys) := by
+  induction count generalizing ordinal prior with
+  | zero => simp [Finite.fold, scalarQueries, PIR.Process.interpret, PIR.Process.bind]
+  | succ count ih =>
+    simp only [List.range'_succ, Finite.fold, scalarQueries, PIR.Process.interpret,
+      PIR.Process.interpret_bind, PIR.Process.bind_assoc, PIR.Process.bind]
+    congr 1
+    funext x
+    congr 1
+    funext _
+    refine (ih (ordinal + 1) (List.append (α := Fin (2 ^ n)) prior [x])).trans ?_
+    congr 1
+    funext tail
+    simp [List.ofFn_succ, List.append_assoc]
+
+end
 
 end ZkcSecurity.ArkLib.Fri.Phases

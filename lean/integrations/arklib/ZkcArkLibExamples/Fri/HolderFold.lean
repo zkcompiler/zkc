@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.RetainedFold
+public import ZkcArkLibExamples.Fri.RetainedFold
 public import ZkcArkLib.Fri.Completeness
 public import Zkc.Source.Structured.NumericalFold
 

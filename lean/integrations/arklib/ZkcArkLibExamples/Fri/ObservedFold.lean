@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.RetainedDomain
+public import ZkcArkLibExamples.Fri.RetainedDomain
 public import ZkcSecurity.Bindings.Transcript.ObservedPayload
 
 @[expose] public section

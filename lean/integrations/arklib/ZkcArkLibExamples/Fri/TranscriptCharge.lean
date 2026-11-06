@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.ObservedQueries
+public import ZkcArkLibExamples.Fri.ObservedQueries
 
 @[expose] public section
 

@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.ClearSites
+public import ZkcArkLibExamples.Fri.ClearSites
 
 @[expose] public section
 

@@ -9,6 +9,23 @@ namespace Zkc.Source.Structured.PublishedWords
 
 variable {model : DomainModel} {Aux E A : Type}
 
+/-- A participant action preserves the word table on every outcome. -/
+theorem actionM_ordinary {m : Type → Type} [Monad m] [LawfulMonad m]
+    {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMathEnvironment}
+    (oracles : List (CheckedOracle snapshot domains math))
+    (ordinary : PublishedWords.Table model →
+      PIR.MonadHandler m (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : PublishedWords.Chooser m model Aux E)
+    (op : (participantInterfaceOn model.toCarriers).Op)
+    (state : OracleProtocol.State model snapshot domains math (PublishedWords.State model Aux)) :
+    PublishedWords.actionM oracles ordinary choose (.ordinary op) state = (do
+      let result ← ordinary state.oracle.provider.words op state.oracle.provider.auxiliary
+      pure ⟨result.outcome, {state with oracle.provider := ⟨state.oracle.provider.words, result.state⟩},
+        result.events.map OracleProtocol.Event.ordinary⟩) := by
+  unfold PublishedWords.actionM OraclePublication.actionM
+  rw [OracleProcess.actionM_ordinary]
+  simp [PublishedWords.liftM, OraclePublication.afterM, OraclePublication.request?]
+
 /-- Every successful publication prepends one record. Both the order of the old
 publications and the answers at their anchors survive every subsequent source action. -/
 structure Preserves (before after : Table model) : Prop where

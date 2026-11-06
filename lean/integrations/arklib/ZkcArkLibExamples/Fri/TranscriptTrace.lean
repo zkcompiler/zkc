@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.TranscriptCharge
+public import ZkcArkLibExamples.Fri.TranscriptCharge
 
 @[expose] public section
 

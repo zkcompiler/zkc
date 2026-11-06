@@ -1,7 +1,7 @@
 module
 
-public import ZkcArkLib.Fri.ObservedLayers
-public import ZkcArkLib.Fri.RetainedDomain
+public import ZkcArkLibExamples.Fri.ObservedLayers
+public import ZkcArkLibExamples.Fri.RetainedDomain
 public import ZkcSecurityExamples.FriScalarQueries
 
 @[expose] public section

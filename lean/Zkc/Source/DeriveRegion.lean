@@ -42,6 +42,13 @@ match the rule fills the callback and operation goals and returns source
 derivations to visit recursively. Other operations use pointwise callbacks. -/
 meta abbrev CallbackRule := MVarId → MVarId → TacticM (Option (List MVarId))
 
+/-- A single request can return an SSA tuple determined by its typed reply.
+The continuation then needs to handle only tuples the operation can return. -/
+private meta def returnsPacked (response : Expr) : MetaM Bool := do
+  let .forallE name type _ info ← whnf (← inferType response) | return false
+  withLocalDecl name info type fun reply => do
+    return (← whnf (mkApp response reply)).isAppOf ``PIR.Process.done
+
 /-- Traverse each structural subtree once. Local targets select the rule;
 pending mathematical obligations are retained when reusing the subtree proof. -/
 private meta partial def derive (goal : MVarId) (solver : Syntax) (strict : Bool)
@@ -101,10 +108,19 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) (strict : Bool
         | none => do
           pure (← derive callbacks solver strict callbackRule, ← localLaw operation solver strict)
       let operationType ← instantiateMVars (← operation.getType)
-      let step ← whnf operationType.getAppArgs.back!
-      let rule := if step.isAppOf ``PIR.Process.done then ``Region.Derivation.letOpReturn
-        else if step.isAppOf ``PIR.Process.halt then ``Region.Derivation.letOpStop
-        else ``Region.Derivation.letOp
+      let presented := operationType.getAppArgs.back!
+      let view ← if presented.isAppOf ``PIR.Process.bind then
+        returnsPacked presented.getAppArgs.back! else pure false
+      let rule ← if view then
+        pure ``Region.Derivation.letOpView
+      else do
+        let step ← whnf presented
+        if step.isAppOf ``PIR.Process.done then pure ``Region.Derivation.letOpReturn
+        else if step.isAppOf ``PIR.Process.halt then pure ``Region.Derivation.letOpStop
+        else if step.isAppOf ``PIR.Process.call then
+          pure (if ← returnsPacked step.getAppArgs.back! then ``Region.Derivation.letOpReply
+            else ``Region.Derivation.letOp)
+        else pure ``Region.Derivation.letOp
       let newGoals ← applyRule goal rule
       let newCallbacks :: newOperation :: rest := newGoals
         | throwError "derive_region: unexpected selected operation rule shape"
@@ -160,6 +176,26 @@ meta def run (solver : Syntax) (strict := false)
   goal.assign (← instantiateMVars proof)
   replaceMainGoal pending
 
+/-- Try a client-selected law on the original callbacks. When it does not
+apply, restore the proof state and use recursive derivation. The local law
+must discharge all its premises, including agreement at the reached inputs. -/
+meta def summarizeCallbacks (solver : Syntax) : CallbackRule := fun callbacks operation =>
+  callbacks.withContext do
+    let type ← instantiateMVars (← callbacks.getType)
+    let bodies ← whnf type.getAppArgs[type.getAppArgs.size - 2]!
+    unless bodies.isAppOf ``Regions.cons do return none
+    let saved ← saveState
+    try
+      let [] ← applyRule callbacks ``Regions.Derivation.identity
+        | throwError "could not retain the source callbacks"
+      let [] ← evalTacticAt solver operation
+        | throwError "incomplete callback summary"
+      return some []
+    catch error =>
+      rethrowResourceFailure error
+      saved.restore
+      return none
+
 end DeriveRegion
 
 /-- Recursively derive the actual typed region, applying the supplied tactic
@@ -181,5 +217,13 @@ macro_rules
       (refine Zkc.Source.Region.Derivation.sound_identity ?_
        derive_region using
          (first | ($laws) | (apply Zkc.Source.RegionMeaning.OperationLaw.identity; rfl))))
+
+/-- A loop or higher-order operation may select a local summary proved for
+its retained callback. All other operations follow normal structural derivation. -/
+elab "derive_process" " using " "(" laws:tacticSeq ")" " summarizing " "(" summaries:tacticSeq ")" : tactic =>
+  Term.withoutErrToSorry <| withoutRecover do
+    evalTactic (← `(tactic| apply Zkc.Source.Region.Derivation.sound_identity))
+    DeriveRegion.run (← `(tactic| first | ($laws) | (apply Zkc.Source.RegionMeaning.OperationLaw.identity; rfl)))
+      false (DeriveRegion.summarizeCallbacks summaries)
 
 end Zkc.Source

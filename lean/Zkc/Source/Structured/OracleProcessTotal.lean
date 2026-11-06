@@ -103,6 +103,21 @@ def actionM (model : DomainModel) (oracles : List (CheckedOracle snapshot domain
   fun operation state ↦ executeM (externalHandlerM ordinary base)
     (action model oracles operation state) state
 
+/-- The lower handler's ordinary branch makes one call and returns its complete record. -/
+theorem actionM_ordinary
+    (oracles : List (CheckedOracle snapshot domains math))
+    (ordinary : PIR.MonadHandler m (participantInterfaceOn model.toCarriers) S E)
+    (base : PIR.MonadHandler m (oracleReadInterface model.toCarriers) S E)
+    (op : (participantInterfaceOn model.toCarriers).Op)
+    (state : OracleProtocol.State model snapshot domains math S) :
+    OracleProcess.actionM model oracles ordinary base (.ordinary op) state = (do
+      let result ← ordinary op state.oracle.provider
+      pure ⟨result.outcome, {state with oracle.provider := result.state},
+        result.events.map OracleProtocol.Event.ordinary⟩) := by
+  simp [OracleProcess.actionM, OracleProcess.action, OracleProcess.executeM,
+    OracleProcess.mapResult, PIR.Process.bind, PIR.Process.runM, OracleProcess.handlerM,
+    OracleProcess.externalHandlerM, OracleProcess.envelope, PIR.Execution.followM]
+
 /-- Expose the original source signature for generic state-relational handler reasoning. -/
 theorem runM_actions (model : DomainModel)
     (oracles : List (CheckedOracle snapshot domains math))

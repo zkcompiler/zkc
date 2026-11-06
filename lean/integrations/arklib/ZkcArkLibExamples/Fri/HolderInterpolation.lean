@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.HolderFold
+public import ZkcArkLibExamples.Fri.HolderFold
 public import Zkc.Source.Structured.NumericalInterpolation
 public import Zkc.Source.Structured.ReferenceLibrary
 

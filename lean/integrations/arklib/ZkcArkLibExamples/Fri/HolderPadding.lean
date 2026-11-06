@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.HolderInterpolation
+public import ZkcArkLibExamples.Fri.HolderInterpolation
 public import Zkc.Source.Structured.OracleReferenceLaws
 
 @[expose] public section

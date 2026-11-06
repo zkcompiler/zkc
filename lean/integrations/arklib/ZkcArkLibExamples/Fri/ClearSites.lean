@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.TranscriptTrace
+public import ZkcArkLibExamples.Fri.TranscriptTrace
 
 @[expose] public section
 

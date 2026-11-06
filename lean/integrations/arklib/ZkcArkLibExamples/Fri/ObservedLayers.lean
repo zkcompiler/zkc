@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.ObservedFold
+public import ZkcArkLibExamples.Fri.ObservedFold
 
 @[expose] public section
 

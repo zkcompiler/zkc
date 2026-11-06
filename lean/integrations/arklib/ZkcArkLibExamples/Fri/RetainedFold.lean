@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Fri.RetainedDomain
+public import ZkcArkLibExamples.Fri.RetainedDomain
 public import ZkcArkLib.Fri.SourceCalculations
 public import ZkcExamples.Structured.FriApplications
 public import Zkc.Source.Structured.ReferenceLaws
