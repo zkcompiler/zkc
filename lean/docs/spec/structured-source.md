@@ -288,6 +288,16 @@ adapter law. Structural `check` alone does not supply registered meaning or a
 security theorem. Formula helpers and captured assets retain their own meaning
 owners. A caller must supply its actual family registry and any protocol theorem.
 
+At the security ABI, each input clause reads its ordered selectors from the
+subject's actual boundary and assignments. The first missing selected operand
+makes that clause false even when later options are unknown. Selectors may
+repeat a coordinate. Options outside the clause stay arbitrary. For a formula,
+the input law interprets its selected body in the unit's complete linked
+definition table. For an opaque relation, it applies the installed predicate to
+the same typed argument row, preserving the model's carrier. For example, the
+GKR circuit-shape clause can use its public shape law with an absent producer
+service handle because the clause reads only the seven circuit arguments.
+
 A statement retains its relation, exact entry operands, role selectors,
 Boolean acceptance-result index and optional target name. A named target must
 resolve to the containing protocol's retained target clause and agree with that
