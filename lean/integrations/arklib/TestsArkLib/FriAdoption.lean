@@ -1,5 +1,6 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
+import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VerifierTerminal
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -218,3 +219,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcArkLibExamples.Fri.VirtualWord, `ZkcArkLibExamples.Fri.StoredWord,
    `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal]
   "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Source.Structured.MarkedPrefix, `Zkc.Source.Structured.MarkedPublication,
+   `ZkcExamples.Structured.FriCheckPositions, `ZkcArkLibExamples.Fri.VerifierInitialRead]
+  "FRI-BOUND-INITIAL-WORD-PASS" (exactModules := true))

@@ -61,6 +61,21 @@ def lengthLaw (model : DomainModel) : ReferenceLaw model helper24Helper.inputs h
   valid _
     | .cons xs .nil, admitted => by derive_process using (exact lengthStep xs admitted)
 
+/-- The verifier's lookup uses the same checked index primitive as the
+binding scan. An in-range occurrence returns the selected list element. -/
+def lookupLaw (model : DomainModel) : ReferenceLaw model helper30Helper.inputs helper30Helper.outputs where
+  body := helper30Body
+  Requires _ | .cons xs (.cons i .nil) => Admitted xs ∧ i < xs.length
+  reference
+    | .cons xs (.cons i .nil) =>
+      match xs[i]? with
+      | some position => .returned (.cons position .nil)
+      | none => .stopped .refused
+  valid _
+    | .cons xs (.cons i .nil), ⟨admitted, inside⟩ => by
+      simp only [List.getElem?_eq_getElem inside]
+      derive_process using (exact atStep xs admitted i inside)
+
 def lessLaw (model : DomainModel) : ReferenceLaw model helper19Helper.inputs helper19Helper.outputs where
   body := helper19Body
   Requires _ | .cons a (.cons b .nil) => a < indexLimit ∧ b < indexLimit
