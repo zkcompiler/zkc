@@ -20,11 +20,6 @@ of every application, by the equations at the end of this module. -/
 set_option autoImplicit false
 namespace Zkc.Source.Structured
 
-/-- The closed fold of a definition list over a model. -/
-abbrev closedMeaningsOn (model : DomainModel) (definitions : List CheckedDefinition) :
-    MeaningsOn model.toCarriers :=
-  definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []
-
 variable {snapshot : Snapshot} {imported : Imported snapshot}
 variable {application : RelationApplication} {relation : RelationBinding snapshot application}
 

@@ -868,6 +868,7 @@ import Tests.ReferenceComposition
 import Tests.ReferenceDiscovery
 import Tests.ReferenceDiscoveryDependencies
 import Tests.ReferenceLawInstallation
+import Tests.ReferenceOccurrences
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionDerivation

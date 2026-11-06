@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Source.DerivationLaws
 public import Zkc.Source.Structured.DomainLinking
 public import Zkc.Source.Structured.Association
 public import Zkc.Semantics.ReturnView
@@ -81,6 +82,20 @@ theorem invoke (law : ReferenceLaw model helper.inputs helper.outputs)
   rw [Evaluation.definitions_invoke_body_view_asOn model SiteObservations.closed
     definitions linked definition member helper signature law.body same arguments]
   exact law.valid _ _ premises
+
+/-- Select a body reference at a reached invocation during region derivation.
+The caller supplies the operands. Its suffix receives the reference's ordered
+result or skips execution on a stop. The premise is specific to this call. -/
+theorem invokeStep (law : ReferenceLaw model helper.inputs helper.outputs)
+    {definitions : List CheckedDefinition} (linked : DeclarationsLinked [] definitions)
+    (arguments : Values model.Value helper.inputs)
+    (associated : BodyIn definitions helper law.body)
+    (premises : law.Requires (closedMeaningsOn model definitions) arguments) :
+    (meaningOn model (closedMeaningsOn model definitions)).OperationLaw
+      (fun op => .call op .done) (.invoke helper) arguments .nil
+      (primitiveOutcome (law.reference arguments)) := by
+  apply RegionMeaning.OperationLaw.identity
+  exact law.invoke definitions linked associated arguments premises
 
 /-- The same closed mathematics is installed into the actual silent helper
 fold in any effect interface. Query, delivery and occurrence effects remain in

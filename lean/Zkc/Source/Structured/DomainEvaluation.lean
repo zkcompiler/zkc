@@ -269,6 +269,11 @@ end Evaluation
 /-- Closed helper tables over carriers. -/
 abbrev MeaningsOn (carriers : Carriers) := Evaluation.MeaningsOn carriers closedInterface
 
+/-- The closed fold of a definition list over a model. -/
+abbrev closedMeaningsOn (model : DomainModel) (definitions : List CheckedDefinition) :
+    MeaningsOn model.toCarriers :=
+  definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []
+
 /-- The closed meaning over a domain model. -/
 abbrev meaningOn (model : DomainModel) := Evaluation.meaningOn model SiteObservations.closed
 

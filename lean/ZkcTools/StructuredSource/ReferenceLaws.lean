@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Source.DeriveRegion
 public import Zkc.Source.Structured.Import
 public import Zkc.Construction.ReferenceBinding
 public import Zkc.Source.Structured.BodyBindings
@@ -81,6 +82,50 @@ elab "apply_helper_reference " law:term " using " program:term : tactic =>
           remaining := remaining ++ (← getGoals)
     setGoals (remaining ++ pending)
 
+/-- Solve a reached invocation using the first installed body that matches the
+actual helper. A match commits to its mathematical premise. A missing body is
+an installation error, distinct from an unsolved premise. -/
+elab "reference_occurrence" "[" laws:term,* "]" " using " linked:term : tactic =>
+  withMainContext do
+  let goal ← getMainGoal
+  let target ← instantiateMVars (← goal.getType)
+  unless target.isAppOf ``Zkc.Source.RegionMeaning.OperationLaw do
+    throwError "expected a source operation law"
+  let fields := target.getAppArgs
+  let op ← whnf fields[fields.size - 4]!
+  unless op.isAppOf ``Zkc.Source.Structured.Op.invoke do
+    evalTactic (← `(tactic| apply Zkc.Source.RegionMeaning.OperationLaw.identity; rfl))
+    return
+  let helper := op.getAppArgs.back!
+  let arguments := fields[fields.size - 3]!
+  let linkage ← Term.elabTerm linked none
+  let saved ← saveState
+  for law in laws.getElems do
+    saved.restore
+    let reference ← Term.elabTerm law none
+    let type ← whnf (← inferType reference)
+    unless type.isAppOfArity ``Zkc.Source.Structured.ReferenceLaw 3 do
+      throwError "expected a typed reference law, got {type}"
+    try
+      let rule ← mkAppOptM ``Zkc.Source.Structured.ReferenceLaw.invokeStep
+        #[some type.getAppArgs[0]!, some helper, some reference, none, some linkage, some arguments]
+      let [association, premise] ← goal.apply rule { newGoals := .all }
+        | throwError "unexpected reference rule shape"
+      discard <| evalTacticAt (← `(tactic| first | assumption | bind_structured_bodies)) association
+      replaceMainGoal (← evalTacticAt (← `(tactic| first | exact True.intro | assumption | skip)) premise)
+      return
+    catch error =>
+      Zkc.Source.DeriveRegion.rethrowResourceFailure error
+  saved.restore
+  throwError "no installed reference law matches the reached helper {helper} at arguments {arguments}"
+
+/-- Derive a closed body's complete outcome. Every reached helper invocation
+requires a selected exact law. Non-call operations retain their meaning. -/
+elab "derive_reference_process" "[" laws:term,* "]" " using " linked:term : tactic =>
+  Term.withoutErrToSorry <| withoutRecover do
+    evalTactic (← `(tactic| apply Zkc.Source.Region.Derivation.sound_identity))
+    Zkc.Source.DeriveRegion.run (← `(tactic| reference_occurrence [$laws,*] using $linked)) true
+
 /-- Bounded search is a convenience over the same checked application rule.
 A missing dependency or mathematical premise stays an ordinary goal. Search
 failure restores its metavariables before trying another installed law. -/
@@ -102,7 +147,7 @@ partial def applyLibrary (laws : Array (TSyntax `term)) (program : TSyntax `term
           remaining := remaining ++ (← applyLibrary laws program (fuel - 1) obligation)
       return remaining
     catch error =>
-      if error.isRuntime || error.isInterrupt then throw error
+      Zkc.Source.DeriveRegion.rethrowResourceFailure error
   saved.restore
   return [goal]
 
