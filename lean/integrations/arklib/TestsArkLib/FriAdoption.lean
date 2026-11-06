@@ -1,6 +1,7 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierRound
+import ZkcArkLibExamples.Fri.CommitPublication
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VerifierTerminal
 import ZkcArkLibExamples.Fri.VirtualStore
@@ -227,3 +228,7 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `Zkc.Source.Structured.ProtocolEmbeddingCheck, `ZkcExamples.Structured.FriPairIndex,
    `ZkcExamples.Structured.FriCheckRound, `ZkcArkLibExamples.Fri.VerifierInitialRead, `ZkcArkLibExamples.Fri.VerifierRound]
   "FRI-VERIFIER-CELLS-AND-ROUNDS-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitPublication]
+  "FRI-PUBLICATION-BEFORE-CHALLENGE-PASS" (exactModules := true))

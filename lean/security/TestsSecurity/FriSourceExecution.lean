@@ -112,6 +112,15 @@ def controls : IO Unit := do
   inspectCase "query count" (run (queries := 7)) (.stopped .reject) [8, 16, 32] sequence 0
   inspectCase "out-of-range position" (run (invalidQuery := true)) (.stopped .refused)
     [8, 16, 32] (sequence ++ ["index"]) 0
+  -- An adaptive chooser aborts its second publication after observing the
+  -- first challenge. The prior word survives and no second challenge runs.
+  let abortSecond : PublishedWords.Chooser Id model History String := fun req words h ↦
+    if words.length == 1 && h.actions == ["publish", "fold"] then
+      ⟨.stopped .refused, {h with actions := h.actions ++ ["abort"]}, []⟩
+    else chooser false false req words h
+  inspectCase "adaptive abort before the second draw"
+    (verifier (model := model) (m := Id) 1 3 8 0 {} (ordinary 0 false) abortSecond)
+    (.stopped .refused) [32] ["publish", "fold", "abort"] 0
   -- The middle publication has the right row count and the wrong value.
   -- Only the initial cell, its virtual fold and this middle cell may be read.
   let disagree : PublishedWords.Chooser Id model History String := fun req words h ↦
@@ -128,7 +137,7 @@ def controls : IO Unit := do
     | _ => none
   unless lastRead.any (fun q ↦ q.anchor == middle.2.anchor && q.expansion.isEmpty && q.position == 15) do
     throw (IO.userError "mismatch stopped at the wrong read")
-  IO.println "FRI: both roles, zero and degree-seven words, three folds, eight draws, eight mutations"
+  IO.println "FRI: both roles, zero and degree-seven words, three folds, eight draws, nine mutations"
 
 #eval controls
 
