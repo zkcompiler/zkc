@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Protocol/OraclePorts.h"
+#include "../../NativeTypeWork.h"
 #include "OracleAnalysis.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -12,6 +13,7 @@ LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(), "mathematical-formation", reason);
 }
 LogicalResult charge(Operation *op, unsigned &remaining) {
+  zkc::detail::NativeTypeWorkScope::charge();
   if (!remaining)
     return diagnostics::emit(op->emitOpError(), "mathematical-analysis-limit",
                              "oracle interface budget exhausted");
@@ -105,8 +107,10 @@ LogicalResult components(Value anchor, Components &result, Operation *use,
         if (failed(charge(use, remaining)))
           return failure();
         if (singleton(branch.getOutputRoles()[index], holder) &&
-            is_contained(arm.data, stripViews(value, use, remaining)) &&
-            (first || is_contained(common, unsigned(index))))
+            (zkc::detail::NativeTypeWorkScope::charge(arm.data.size()),
+             is_contained(arm.data, stripViews(value, use, remaining))) &&
+            (first || (zkc::detail::NativeTypeWorkScope::charge(common.size()),
+                       is_contained(common, unsigned(index)))))
           paired.push_back(index);
       }
       common = std::move(paired);
@@ -134,6 +138,7 @@ LogicalResult components(Value anchor, Components &result, Operation *use,
       failed(components(returned[index], result, use, symbols, remaining,
                         depth + 1)))
     return failure();
+  zkc::detail::NativeTypeWorkScope::charge(result.data.size());
   llvm::DenseSet<Value> sourceData(result.data.begin(), result.data.end());
   SmallVector<Value> data;
   for (unsigned dataIndex = 0; dataIndex < returned.size(); ++dataIndex) {
@@ -147,6 +152,7 @@ LogicalResult components(Value anchor, Components &result, Operation *use,
                                  result.receivers, use, remaining))
     return refuse(use, "oracle result lacks its paired holder data");
   auto mapped = [&](Attribute role) -> Attribute {
+    zkc::detail::NativeTypeWorkScope::charge(callee.getRoles().size());
     auto found = llvm::find(callee.getRoles(), role);
     return found == callee.getRoles().end()
                ? Attribute()
@@ -155,6 +161,7 @@ LogicalResult components(Value anchor, Components &result, Operation *use,
   auto holder = dyn_cast_or_null<StringAttr>(mapped(result.holder));
   SmallVector<Attribute> receivers;
   for (Attribute receiver : result.receivers) {
+    zkc::detail::NativeTypeWorkScope::charge(2);
     auto role = mapped(receiver);
     if (!role)
       return refuse(use, "oracle result has an unknown formal receiver");
@@ -172,6 +179,7 @@ LogicalResult paired(Value data, Value anchor, StringAttr holder,
   Components actual;
   if (failed(components(anchor, actual, use, symbols, remaining)))
     return failure();
+  zkc::detail::NativeTypeWorkScope::charge(actual.data.size());
   if (!llvm::is_contained(actual.data, stripViews(data, use, remaining)) ||
       holder != actual.holder ||
       !sameRoles(receivers, actual.receivers, use, remaining))
@@ -184,17 +192,20 @@ static LogicalResult
 collectOracleEntryPorts(protocol_ir::MathematicalOp program,
                         unsigned &remaining,
                         SmallVectorImpl<OraclePortPair> *pairs = nullptr) {
+  zkc::detail::NativeTypeWorkScope::charge(8);
   if (!program || failed(program->getName().verifyInvariants(program)) ||
       !llvm::hasSingleElement(program.getBody()) ||
       program.getBody().front().empty())
     return failure();
   auto &body = program.getBody().front();
+  zkc::detail::NativeTypeWorkScope::charge(body.getNumArguments());
   if (body.getArgumentTypes() != program.getFunctionType().getInputs() ||
       body.getNumArguments() != program.getInputRoles().size())
     return refuse(program, "oracle entry requires a formed protocol signature");
   llvm::DenseSet<unsigned> dataPorts;
   llvm::DenseSet<Operation *> bindings;
   for (BlockArgument argument : body.getArguments()) {
+    zkc::detail::NativeTypeWorkScope::charge();
     if (!protocol_ir::getOracleFamilyKind(argument.getType()))
       continue;
     if (failed(charge(program, remaining)))
@@ -237,6 +248,8 @@ collectOracleEntryPorts(protocol_ir::MathematicalOp program,
       return refuse(input, "oracle input requires distinct paired entry leaves "
                            "with exact roles");
     if (pairs)
+      zkc::detail::NativeTypeWorkScope::charge(5);
+    if (pairs)
       pairs->push_back({data.getArgNumber(), argument.getArgNumber(),
                         argument.getType(), input.getHolderAttr(),
                         input.getReceivers()});
@@ -274,16 +287,19 @@ collectOracleResultPorts(protocol_ir::MathematicalOp program,
   if (!isa<protocol_ir::MathematicalReturnOp>(program.getBody().front().back()))
     return refuse(program, "oracle results require the protocol return tuple");
   auto returned = program.getBody().front().back().getOperands();
+  zkc::detail::NativeTypeWorkScope::charge(8 + returned.size());
   if (returned.getTypes() != program.getFunctionType().getResults() ||
       returned.size() != program.getOutputRoles().size())
     return refuse(program, "oracle result tuple differs from its interface");
   llvm::DenseSet<unsigned> dataPorts;
   for (auto [index, value] : llvm::enumerate(returned)) {
+    zkc::detail::NativeTypeWorkScope::charge();
     if (!protocol_ir::getOracleFamilyKind(value.getType()))
       continue;
     Components actual;
     if (failed(components(value, actual, program, symbols, remaining)))
       return failure();
+    zkc::detail::NativeTypeWorkScope::charge(actual.data.size());
     llvm::DenseSet<Value> possibleData(actual.data.begin(), actual.data.end());
     bool pairedData = false;
     for (auto [dataIndex, data] : llvm::enumerate(returned)) {
@@ -293,6 +309,8 @@ collectOracleResultPorts(protocol_ir::MathematicalOp program,
           possibleData.contains(stripViews(data, program, remaining)) &&
           singleton(program.getOutputRoles()[dataIndex], actual.holder)) {
         dataPorts.insert(dataIndex);
+        if (pairs)
+          zkc::detail::NativeTypeWorkScope::charge(5);
         if (pairs)
           pairs->push_back({unsigned(dataIndex), unsigned(index),
                             value.getType(), actual.holder, actual.receivers});
@@ -317,12 +335,14 @@ LogicalResult verifyOracleApplicationPorts(protocol_ir::ApplyOp application,
   if (failed(collectOracleEntryPorts(callee, remaining, &inputs)))
     return failure();
   auto mapped = [&](Attribute role) {
+    zkc::detail::NativeTypeWorkScope::charge(callee.getRoles().size());
     size_t index =
         llvm::find(callee.getRoles(), role) - callee.getRoles().begin();
     return index < callee.getRoles().size() ? application.getRoles()[index]
                                             : Attribute();
   };
   for (const auto &input : inputs) {
+    zkc::detail::NativeTypeWorkScope::charge(1 + input.receivers.size());
     auto holder = dyn_cast_or_null<StringAttr>(mapped(input.holder));
     SmallVector<Attribute> receivers;
     for (auto receiver : input.receivers) {

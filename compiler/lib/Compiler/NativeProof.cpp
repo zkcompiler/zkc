@@ -4,6 +4,7 @@
 #include "ConstructionBinding.h"
 #include "IRFingerprint.h"
 #include "NativeCodec.h"
+#include "NativeConstructionPreparation.h"
 #include "NativeProofOrigins.h"
 #include "NativeProofVerification.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -39,7 +40,6 @@
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -47,6 +47,7 @@
 #include "llvm/Support/SHA256.h"
 #include <map>
 #include <set>
+#include <type_traits>
 #include <utility>
 using namespace llvm;
 using namespace mlir;
@@ -117,24 +118,23 @@ bool oracleOperation(Operation &op) {
              pir::OracleSequenceAtOp, pir::OracleSequenceLengthOp>(op);
 }
 bool admittedOperation(Operation &op, bool beforePreparation) {
-  // Stage admission has checked every Math arm. A total data selection cannot
-  // contain protocol events. Keep it intact in both event readers; checked
-  // projection and computation realization own its selected value semantics.
-  return (!op.getNumRegions() || isa<data::BranchOp>(op)) &&
-         (isa<pir::QueryOp, pir::ExchangeOp, pir::StatementOp, pir::GuardOp,
-              pir::LocalCallOp, pir::MathematicalReturnOp, pir::FinishIfOp,
-              pir::RestrictRolesOp, pir::AssembleRolesOp>(op) ||
-          // Verified pure helpers contain no protocol events. The ordinary
-          // preparation pass expands both kinds of static call under its
-          // bounds.
-          (beforePreparation &&
-           (isa<pir::ApplyOp, func::CallOp>(op) || oracleOperation(op))) ||
-          (!beforePreparation && isa<pir::ConstructionStartOp>(op)) ||
-          mathematical::isTotal(&op));
+  // Formed total mathematics includes closed selected regions. Their complete
+  // bodies were admitted as mathematics and cannot contain Protocol events.
+  return mathematical::isTotal(&op) ||
+         (!op.getNumRegions() &&
+          (isa<pir::QueryOp, pir::ExchangeOp, pir::StatementOp, pir::GuardOp,
+               pir::LocalCallOp, pir::MathematicalReturnOp, pir::FinishIfOp,
+               pir::RestrictRolesOp, pir::AssembleRolesOp>(op) ||
+           // Preparation expands verified pure and Protocol applications.
+           (beforePreparation &&
+            (isa<pir::ApplyOp, func::CallOp>(op) || oracleOperation(op))) ||
+           (!beforePreparation && isa<pir::ConstructionStartOp>(op))));
 }
+
 using Origin = detail::NativeSourceOrigin;
-// Borrowed services pass through isolated repeat captures without acquiring a
-// new authority. Return the argument in its original mathematical definition.
+// Borrowed services pass through isolated repeat and branch captures without
+// acquiring a new authority. Return the argument in its original mathematical
+// definition.
 BlockArgument sourcePort(Value value) {
   while (value) {
     if (auto restriction = value.getDefiningOp<pir::RestrictRolesOp>()) {
@@ -144,6 +144,10 @@ BlockArgument sourcePort(Value value) {
     auto argument = dyn_cast<BlockArgument>(value);
     if (!argument)
       return {};
+    if (isSelectedControl(argument.getOwner()->getParentOp())) {
+      value = selectedCapture(argument);
+      continue;
+    }
     auto repeat = dyn_cast<pir::RepeatOp>(argument.getOwner()->getParentOp());
     if (!repeat)
       return argument;
@@ -162,7 +166,7 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
     starts.insert(invocation.site);
   unsigned remaining = 100000;
   auto collect = [&](auto &&self, pir::MathematicalOp function, Block &body,
-                     ArrayRef<std::array<std::string, 3>> steps,
+                     ArrayRef<protocol::NativeOriginStep> steps,
                      StringRef expanded,
                      const StringMap<std::string> &roles) -> Error {
     if (steps.size() > 64)
@@ -173,7 +177,8 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
       if (!remaining--)
         return error("native-proof-origin-limit");
       auto repeat = dyn_cast<pir::RepeatOp>(op);
-      if (!admittedOperation(op, true) && !repeat &&
+      auto branch = dyn_cast<pir::BranchOp>(op);
+      if (!admittedOperation(op, true) && !repeat && !branch &&
           !isa<pir::ProtocolYieldOp>(op))
         return error("native-proof-operation", op.getName().getStringRef());
       auto site = op.getAttrOfType<StringAttr>("site");
@@ -186,7 +191,8 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
         if (starts.contains(id)) {
           Origin origin{function.getSymName().str(),
                         site.str(),
-                        {"start", function.getSymName().str(), site.str()},
+                        protocol::NativeStartOrigin{function.getSymName().str(),
+                                                    site.str()},
                         {steps.begin(), steps.end()}};
           if (out.size() >= maxActions || !out.try_emplace(id, origin).second)
             return error("native-proof-origin");
@@ -194,10 +200,10 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
         auto callee = symbols.lookup<pir::MathematicalOp>(apply.getCallee());
         if (!callee || !hasSingleElement(callee.getBody()))
           return error("native-proof-source");
-        std::vector<std::array<std::string, 3>> childSteps(steps.begin(),
+        std::vector<protocol::NativeOriginStep> childSteps(steps.begin(),
                                                            steps.end());
-        childSteps.push_back(
-            {"apply", function.getSymName().str(), site.str()});
+        childSteps.push_back({protocol::NativeOriginStep::Kind::Apply,
+                              function.getSymName().str(), site.str()});
         StringMap<std::string> childRoles;
         for (auto [source, target] : zip(callee.getRoles(), apply.getRoles()))
           childRoles[cast<StringAttr>(source).getValue()] =
@@ -207,7 +213,7 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
           return e;
         continue;
       }
-      if (repeat || isa<pir::QueryOp, pir::ExchangeOp>(op) ||
+      if (repeat || branch || isa<pir::QueryOp, pir::ExchangeOp>(op) ||
           oracleOperation(op)) {
         Origin origin{function.getSymName().str(),
                       site.str(),
@@ -218,24 +224,21 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
           if (!port || port.getOwner() != &function.getBody().front())
             return error("native-proof-service-alias");
           auto service = cast<pir::ServiceReferenceType>(port.getType());
-          origin.event = {"query",
-                          origin.protocol,
-                          origin.site,
-                          "input_" + std::to_string(port.getArgNumber()),
-                          service.getContract().str(),
-                          query.getMethod().str(),
-                          roles.lookup(query.getOwner())};
+          origin.event = protocol::NativeQueryOrigin{
+              origin.protocol,         origin.site,
+              port.getArgNumber(),     service.getContract().str(),
+              query.getMethod().str(), roles.lookup(query.getOwner())};
         } else if (auto message = dyn_cast<pir::ExchangeOp>(op)) {
-          origin.event = {"message",
-                          origin.protocol,
-                          origin.site,
-                          origin.site,
-                          roles.lookup(message.getSender()),
-                          roles.lookup(message.getReceiver())};
+          origin.event = protocol::NativeMessageOrigin{
+              origin.protocol, origin.site, origin.site,
+              roles.lookup(message.getSender()),
+              roles.lookup(message.getReceiver())};
         } else if (oracleOperation(op)) {
-          origin.event = {"oracle", origin.protocol, origin.site};
+          origin.event = detail::NativeOracleOrigin{};
+        } else if (branch) {
+          origin.event = detail::NativeBranchOrigin{};
         } else {
-          origin.event = {"repeat", origin.protocol, origin.site};
+          origin.event = detail::NativeRepeatOrigin{};
         }
         if (out.size() >= maxActions)
           return error("native-proof-origin-limit");
@@ -243,10 +246,25 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
           return error("native-proof-origin");
         if (repeat) {
           auto child = origin.steps;
-          child.push_back({"repeat", origin.protocol, origin.site});
+          child.push_back({protocol::NativeOriginStep::Kind::Repeat,
+                           origin.protocol, origin.site});
           if (auto e = self(self, function, repeat.getBody().front(), child,
                             expanded, roles))
             return e;
+        } else if (branch) {
+          // Formation fixes the arm order and labels. Inventory every arm once;
+          // branch alternatives are static origin components, not coordinates.
+          for (auto [index, arm] : enumerate(branch.getArms())) {
+            auto child = origin.steps;
+            child.push_back({protocol::NativeOriginStep::Kind::Branch,
+                             origin.protocol, origin.site,
+                             cast<StringAttr>(branch.getAlternatives()[index])
+                                 .getValue()
+                                 .str()});
+            if (auto e =
+                    self(self, function, arm.front(), child, expanded, roles))
+              return e;
+          }
         }
       }
     }
@@ -269,10 +287,8 @@ struct Admitted {
 };
 enum class DrawSelection { Explicit, Service };
 Expected<Admitted>
-admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
-      const StringMap<Origin> &sourceOrigins,
-      DrawSelection selection = DrawSelection::Explicit,
-      const protocol::ConstructionPlan *construction = nullptr) {
+admitInterface(pir::MathematicalOp source, const NativeProofPolicy &policy,
+               const protocol::ConstructionPlan *construction) {
   if (!source)
     return error("native-proof-entry");
   auto signature = source.getFunctionType();
@@ -352,37 +368,99 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         !owns(cast<ArrayAttr>(source.getInputRoles()[service]),
               policy.validator))
       return error("native-proof-verifier-service");
+  return admitted;
+}
+Expected<Admitted>
+admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
+      const StringMap<Origin> &sourceOrigins,
+      DrawSelection selection = DrawSelection::Explicit,
+      const protocol::ConstructionPlan *construction = nullptr) {
+  auto interface = admitInterface(source, policy, construction);
+  if (!interface)
+    return interface.takeError();
+  auto admitted = std::move(*interface);
+  StringRef challengeField = protocol::nativeChallengeField(policy.suite);
+  struct ControlFrame {
+    protocol::NativeOriginStep::Kind kind;
+    std::string site, alternative;
+  };
+  SmallVector<ControlFrame> frames;
+  uint64_t originWork = 100000;
+  auto chargeOrigin = [&](uint64_t amount) {
+    if (amount > originWork) {
+      originWork = 0;
+      return false;
+    }
+    originWork -= amount;
+    return true;
+  };
   llvm::StringSet<> consumedOrigins;
-  auto consume = [&](StringRef site,
-                     StringRef kind) -> Expected<const Origin *> {
+  auto consume = [&](StringRef site, auto event) -> Expected<const Origin *> {
+    using SourceEvent = std::decay_t<decltype(event)>;
     auto found = sourceOrigins.find(site);
-    if (found == sourceOrigins.end() || found->second.event.empty() ||
-        found->second.event.front() != kind ||
+    if (found == sourceOrigins.end() ||
+        !std::holds_alternative<SourceEvent>(found->second.event) ||
         !consumedOrigins.insert(site).second)
       return error("native-proof-origin");
-    return &found->second;
+    // Compare the typed provenance with the actual enclosing control stack.
+    // Application frames expand names; branch labels never add coordinates.
+    const auto &origin = found->second;
+    std::string prefix;
+    unsigned frame = 0;
+    auto expand = [&](StringRef name, StringRef protocol) {
+      return prefix.empty() || protocol.starts_with("zkc.oracle.")
+                 ? name.str()
+                 : mathematical::expandedApplicationSite(prefix, name);
+    };
+    for (const auto &step : origin.steps) {
+      if (!chargeOrigin(1 + prefix.size() + step.site.size() +
+                        step.protocol.size() + step.alternative.size()))
+        return error("native-proof-origin-limit");
+      if (step.kind == protocol::NativeOriginStep::Kind::Apply) {
+        prefix = expand(step.site, step.protocol);
+        if (prefix.size() > 4096)
+          return error("native-proof-origin-limit");
+        continue;
+      }
+      if (frame >= frames.size() || frames[frame].kind != step.kind ||
+          frames[frame].site != expand(step.site, step.protocol) ||
+          frames[frame].alternative != step.alternative)
+        return error("native-proof-origin");
+      ++frame;
+    }
+    if (!chargeOrigin(1 + prefix.size() + origin.site.size()) ||
+        frame != frames.size() || expand(origin.site, origin.protocol) != site)
+      return error(originWork ? "native-proof-origin"
+                              : "native-proof-origin-limit");
+    return &origin;
   };
   auto append = [&](Operation *op, bool query, Type payload,
                     json::Array &sequence, std::optional<uint64_t> bound = {},
                     std::optional<uint64_t> count = {},
                     bool reconstructed = false) -> Error {
     auto site = op->getAttrOfType<StringAttr>("site").str();
-    auto found = consume(site, query ? "query" : "message");
+    auto found = query ? consume(site, protocol::NativeQueryOrigin{})
+                       : consume(site, protocol::NativeMessageOrigin{});
     if (!found)
       return found.takeError();
     const auto &origin = **found;
     if (query) {
       auto action = cast<pir::QueryOp>(op);
-      if (origin.event.size() != 7 || origin.event[6] != action.getOwner())
+      if (std::get<protocol::NativeQueryOrigin>(origin.event).owner !=
+          action.getOwner())
         return error("native-proof-origin");
     } else {
       auto action = cast<pir::ExchangeOp>(op);
-      if (origin.event.size() != 6 || origin.event[4] != action.getSender() ||
-          origin.event[5] != action.getReceiver())
+      const auto &message =
+          std::get<protocol::NativeMessageOrigin>(origin.event);
+      if (message.sender != action.getSender() ||
+          message.receiver != action.getReceiver())
         return error("native-proof-origin");
     }
-    auto encoded = protocol::encodeNativeOriginTemplate(
-        policy.entry, origin.steps, origin.event);
+    auto typed = detail::exportNativeSourceOrigin(policy.entry, origin);
+    if (!typed)
+      return typed.takeError();
+    auto encoded = protocol::encodeNativeOriginTemplate(*typed);
     if (!encoded)
       return encoded.takeError();
     auto type = wire(payload);
@@ -391,7 +469,10 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
     admitted.events.push_back(
         {site, *encoded, payload, query,
          static_cast<unsigned>(count_if(
-             origin.steps, [](const auto &s) { return s[0] == "repeat"; })),
+             origin.steps,
+             [](const auto &s) {
+               return s.kind == protocol::NativeOriginStep::Kind::Repeat;
+             })),
          bound, std::nullopt});
     auto &event = admitted.events.back();
     event.count = count;
@@ -444,12 +525,18 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
         if (pending)
           return error("native-proof-loop-prefix");
-        auto found = consume(repeat.getSite(), "repeat");
+        auto found = consume(repeat.getSite(), detail::NativeRepeatOrigin{});
         if (!found)
           return found.takeError();
         json::Array children;
-        if (auto e = self(self, repeat.getBody().front(), children, depth + 1))
-          return e;
+        frames.push_back({protocol::NativeOriginStep::Kind::Repeat,
+                          repeat.getSite().str(),
+                          {}});
+        auto failure =
+            self(self, repeat.getBody().front(), children, depth + 1);
+        frames.pop_back();
+        if (failure)
+          return failure;
         // Both roles must execute every loop containing transcript events. Pure
         // local loops may remain owner-local and have an empty event subtree.
         if (!children.empty() && repeat.getRoles().size() != 2)
@@ -458,17 +545,43 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
           sequence.push_back(std::move(child));
         continue;
       }
+      if (auto branch = dyn_cast<pir::BranchOp>(op)) {
+        if (pending)
+          return error("native-proof-branch-prefix");
+        auto found = consume(branch.getSite(), detail::NativeBranchOrigin{});
+        if (!found)
+          return found.takeError();
+        bool observed = false;
+        for (auto [index, arm] : enumerate(branch.getArms())) {
+          frames.push_back(
+              {protocol::NativeOriginStep::Kind::Branch, branch.getSite().str(),
+               cast<StringAttr>(branch.getAlternatives()[index]).str()});
+          json::Array children;
+          auto failure = self(self, arm.front(), children, depth + 1);
+          frames.pop_back();
+          if (failure)
+            return failure;
+          observed |= !children.empty();
+          for (auto &child : children)
+            sequence.push_back(std::move(child));
+        }
+        if (observed && branch.getRoles().size() != 2)
+          return error("native-proof-branch-participants");
+        continue;
+      }
       if (!admittedOperation(op, false) && !isa<pir::ProtocolYieldOp>(op))
         return error("native-proof-operation", op.getName().getStringRef());
       if (auto start = dyn_cast<pir::ConstructionStartOp>(op)) {
         if (pending)
           return error("native-proof-prefix");
-        auto found = consume(start.getSite(), "start");
+        auto found = consume(start.getSite(), protocol::NativeStartOrigin{});
         if (!found)
           return found.takeError();
         const auto &origin = **found;
-        auto encoded = protocol::encodeNativeOriginTemplate(
-            policy.entry, origin.steps, origin.event);
+        auto typed = detail::exportNativeSourceOrigin(policy.entry, origin);
+        if (!typed)
+          return typed.takeError();
+        auto encoded = protocol::encodeNativeOriginTemplate(*typed);
         if (!encoded)
           return encoded.takeError();
         SmallVector<Type> inputs(start.getOperandTypes());
@@ -485,7 +598,10 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
              {},
              false,
              static_cast<unsigned>(count_if(
-                 origin.steps, [](const auto &s) { return s[0] == "repeat"; })),
+                 origin.steps,
+                 [](const auto &s) {
+                   return s.kind == protocol::NativeOriginStep::Kind::Repeat;
+                 })),
              std::nullopt,
              std::move(inputs)});
         sequence.push_back(json::Array{"start", *encoded, std::move(types)});
@@ -538,7 +654,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
           // Placement keeps this service and its results owner-local. Request
           // reconstruction cannot use an unselected query as a seed, so private
           // entropy cannot become a producer-visible request.
-          auto origin = consume(query.getSite(), "query");
+          auto origin = consume(query.getSite(), protocol::NativeQueryOrigin{});
           if (!origin)
             return origin.takeError();
           continue;
@@ -604,7 +720,30 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
               message.getReceiver() != policy.producer)
             return error("native-proof-reverse-message");
           if (pending) {
-            if (message.getInput() != pending.getResult(0) ||
+            // Application expansion preserves role-local components through
+            // explicit restrictions/assemblies. Read only the validator's
+            // actual component; a computed value never aliases the draw.
+            Value payload = message.getInput();
+            while (payload) {
+              if (!chargeOrigin(1))
+                return error("native-proof-origin-limit");
+              if (auto restriction =
+                      payload.getDefiningOp<pir::RestrictRolesOp>()) {
+                if (!chargeOrigin(restriction.getRoles().size()))
+                  return error("native-proof-origin-limit");
+                if (!owns(restriction.getRoles(), policy.validator))
+                  break;
+                payload = restriction.getInput();
+              } else if (auto assembly =
+                             payload.getDefiningOp<pir::AssembleRolesOp>()) {
+                if (!chargeOrigin(assembly.getRoles().size()))
+                  return error("native-proof-origin-limit");
+                payload = assembly.getComponent(policy.validator);
+              } else {
+                break;
+              }
+            }
+            if (payload != pending.getResult(0) ||
                 (selection == DrawSelection::Explicit &&
                  message.getSite() != policy.draws[draw].second))
               return error("native-proof-reverse-message");
@@ -627,7 +766,9 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       }
     }
     if (pending)
-      return error("native-proof-draw-selection");
+      return error(isa<pir::BranchOp>(body.getParentOp())
+                       ? "native-proof-branch-prefix"
+                       : "native-proof-draw-selection");
     return Error::success();
   };
   if (auto e = block(block, source.getBody().front(), admitted.sequence, 0))
@@ -648,6 +789,14 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       !(construction && construction->codec)) {
     if (!policy.suite.empty() || admitted.events.size() != 1 ||
         admitted.events.front().query || admitted.events.front().depth)
+      return error("native-proof-format");
+    auto origin =
+        protocol::decodeNativeOriginTemplate(admitted.events.front().origin);
+    if (!origin)
+      return origin.takeError();
+    if (any_of(origin->path, [](const auto &step) {
+          return step.kind == protocol::NativeOriginStep::Kind::Branch;
+        }))
       return error("native-proof-format");
     auto type =
         protocol::encodeBoundType(admitted.events.front().payload, false);
@@ -968,7 +1117,6 @@ class Emitter {
   pir::ProtocolModuleOp module;
   const NativeProofPolicy &policy;
   const protocol::ConstructionPlan *plan;
-  const mathematical::RealizedProtocol *realization;
   StringMap<const protocol::ConstructionRule *> rules;
   std::map<std::string, protocol::ConstructionRule> startRules;
   SmallVector<Attribute> invokedHelpers;
@@ -1142,9 +1290,8 @@ class Emitter {
 public:
   Emitter(pir::ProtocolModuleOp module, const NativeProofPolicy &policy,
           const protocol::ConstructionPlan *plan,
-          ArrayRef<protocol::ConstructionInvocation> invocations,
-          const mathematical::RealizedProtocol *realization = nullptr)
-      : module(module), policy(policy), plan(plan), realization(realization),
+          ArrayRef<protocol::ConstructionInvocation> invocations)
+      : module(module), policy(policy), plan(plan),
         builder(module.getContext()), symbols(module) {
     if (plan)
       for (const auto &rule : plan->rules)
@@ -1167,15 +1314,13 @@ public:
         occupied.insert(site.getValue());
     });
   }
-  Error run(const Admitted &admitted, json::Array &exportedPlan) {
-    auto requestSource = OwningOpRef<pir::ProtocolModuleOp>(
-        cast<pir::ProtocolModuleOp>(module->clone()));
-    auto requests = detail::planNativeRequests(*requestSource, policy,
-                                               admitted.events, realization);
-    if (!requests)
-      return requests.takeError();
+  Error run(const Admitted &admitted, json::Array &exportedPlan,
+            const detail::NativeRequestPlan &requests,
+            const detail::NativeConstructionPreparation &joint) {
+    if (!joint.complete())
+      return error("native-construction-preparation-replica");
     auto emittedRequests =
-        detail::emitNativeRequests(*requests, module, [&] { return fresh(); });
+        detail::emitNativeRequests(requests, module, [&] { return fresh(); });
     if (!emittedRequests)
       return emittedRequests.takeError();
     auto replace = [&](Value from, Value to) {
@@ -1485,8 +1630,111 @@ public:
         call(event, anchor, payloadGroup);
         payloadGroup.clear();
       };
-      auto thread = [&](auto &&self, Block &block) -> Error {
+      uint64_t threadWork = 1000000;
+      auto chargeThread = [&](uint64_t amount) {
+        if (amount > threadWork)
+          return false;
+        threadWork -= amount;
+        return true;
+      };
+      auto thread = [&](auto &&self, Block &block, unsigned depth) -> Error {
+        if (depth > 64)
+          return error("native-proof-construction-limit");
         for (auto &op : make_early_inc_range(block)) {
+          if (!chargeThread(1))
+            return error("native-proof-construction-limit");
+          if (auto branch = dyn_cast<pir::ParticipantBranchOp>(op)) {
+            if (!payloadGroup.empty())
+              return error("native-proof-construction-message-group");
+            bool observed = false, exhausted = false;
+            branch.walk([&](Operation *nested) {
+              if (!chargeThread(1)) {
+                exhausted = true;
+                return WalkResult::interrupt();
+              }
+              observed |= isa<pir::FinishIfOp>(nested);
+              if (auto site = nested->getAttrOfType<StringAttr>("site"))
+                observed |= events.count(site.str()) != 0;
+              return WalkResult::advance();
+            });
+            if (exhausted)
+              return error("native-proof-construction-limit");
+            if (!observed)
+              continue;
+            if (!chargeThread(branch.getNumOperands() + branch.getNumResults() +
+                              state.size() + coordinates.size()))
+              return error("native-proof-construction-limit");
+            SmallVector<Value> operands(branch.getInputs());
+            SmallVector<unsigned> coordinateSlots;
+            SmallVector<Value> addedCoordinates;
+            for (Value coordinate : coordinates) {
+              if (!chargeThread(operands.size()))
+                return error("native-proof-construction-limit");
+              // The selector is not a capture and cannot supply a coordinate.
+              auto captures = ArrayRef<Value>(operands).drop_front();
+              auto found = llvm::find(captures, coordinate);
+              if (found != captures.end())
+                coordinateSlots.push_back(1 + (found - captures.begin()));
+              else {
+                if (!chargeThread(addedCoordinates.size()))
+                  return error("native-proof-construction-limit");
+                auto added = llvm::find(addedCoordinates, coordinate);
+                coordinateSlots.push_back(branch.getNumOperands() +
+                                          stateTypes.size() +
+                                          (added - addedCoordinates.begin()));
+                if (added == addedCoordinates.end())
+                  addedCoordinates.push_back(coordinate);
+              }
+            }
+            append_range(operands, state);
+            append_range(operands, addedCoordinates);
+            SmallVector<Type> results(branch.getResultTypes());
+            append_range(results, stateTypes);
+            builder.setInsertionPoint(branch);
+            OperationState description(
+                branch.getLoc(), pir::ParticipantBranchOp::getOperationName());
+            description.addOperands(operands);
+            description.addTypes(results);
+            description.addAttributes(branch->getAttrs());
+            for (unsigned i = 0; i < branch.getNumRegions(); ++i)
+              description.addRegion();
+            auto replacement =
+                cast<pir::ParticipantBranchOp>(builder.create(description));
+            SmallVector<Value> outerCoordinates(coordinates);
+            for (auto [index, arm] : enumerate(branch.getArms())) {
+              auto payload = selectedPayloadTypes(branch, index);
+              if (!payload)
+                return payload.takeError();
+              if (!chargeThread(arm.front().getNumArguments() +
+                                stateTypes.size() + addedCoordinates.size() +
+                                coordinates.size()))
+                return error("native-proof-construction-limit");
+              replacement->getRegion(index).takeBody(arm);
+              auto &child = replacement->getRegion(index).front();
+              state.clear();
+              for (Type type : stateTypes)
+                state.push_back(child.addArgument(type, branch.getLoc()));
+              for (Value coordinate : addedCoordinates)
+                child.addArgument(coordinate.getType(), branch.getLoc());
+              coordinates.clear();
+              for (unsigned slot : coordinateSlots)
+                coordinates.push_back(
+                    child.getArgument(payload->size() + slot - 1));
+              if (auto e = self(self, child, depth + 1))
+                return e;
+              if (!payloadGroup.empty())
+                return error("native-proof-construction-message-group");
+            }
+            coordinates = std::move(outerCoordinates);
+            for (auto [oldValue, newValue] :
+                 zip(branch.getResults(), replacement.getResults()))
+              replace(oldValue, newValue);
+            state.assign(
+                replacement.getResults().take_back(stateTypes.size()).begin(),
+                replacement.getResults().take_back(stateTypes.size()).end());
+            branch.erase();
+            continue;
+          }
           if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op)) {
             bool observed = false;
             loop.walk([&](Operation *nested) {
@@ -1544,7 +1792,7 @@ public:
             for (unsigned slot : coordinateSlots)
               coordinates.push_back(child.getArgument(slot));
             coordinates.push_back(child.getArgument(0));
-            if (auto e = self(self, child))
+            if (auto e = self(self, child, depth + 1))
               return e;
             coordinates = std::move(outer);
             for (auto [oldValue, newValue] :
@@ -1655,7 +1903,7 @@ public:
         }
         return Error::success();
       };
-      if (auto e = thread(thread, body))
+      if (auto e = thread(thread, body, 0))
         return e;
       if (reached.size() != admitted.events.size() ||
           !all_of(zip(reached, admitted.events), [](auto pair) {
@@ -1684,6 +1932,21 @@ public:
           if (!nested)
             return nested.takeError();
           edited.set("body", *nested);
+          action = edited.getDictionary(module.getContext());
+        }
+        if (auto arms = action.getAs<ArrayAttr>("arms")) {
+          NamedAttrList edited(action);
+          SmallVector<Attribute> rewrittenArms;
+          for (Attribute item : arms) {
+            auto arm = cast<DictionaryAttr>(item);
+            auto nested = self(self, arm.getAs<ArrayAttr>("body"));
+            if (!nested)
+              return nested.takeError();
+            NamedAttrList updated(arm);
+            updated.set("body", *nested);
+            rewrittenArms.push_back(updated.getDictionary(module.getContext()));
+          }
+          edited.set("arms", builder.getArrayAttr(rewrittenArms));
           action = edited.getDictionary(module.getContext());
         }
         bool reconstructed =
@@ -1727,8 +1990,89 @@ public:
 };
 } // namespace
 namespace {
+// Charge the immutable original copy before allocating it. Admission and
+// checked realization have their own existing budgets; the new joint phase
+// shares this remaining allowance through source analysis and both discharges.
+bool reserveConstructionSource(Operation *op, uint64_t &remaining,
+                               unsigned depth = 0) {
+  auto charge = [&](uint64_t work) {
+    if (work > remaining)
+      return false;
+    remaining -= work;
+    return true;
+  };
+  if (depth > 64 || !charge(1) || !charge(op->getNumOperands()) ||
+      !charge(op->getNumResults()) || !charge(op->getNumRegions()) ||
+      !charge(op->getAttrs().size()))
+    return false;
+  unsigned nestedDepth =
+      depth +
+      !isa<ModuleOp, func::FuncOp, pir::ProtocolModuleOp, pir::MathematicalOp>(
+          op);
+  for (Region &region : op->getRegions())
+    for (Block &block : region) {
+      if (!charge(1) || !charge(block.getNumArguments()))
+        return false;
+      for (Operation &child : block)
+        if (!reserveConstructionSource(&child, remaining, nestedDepth))
+          return false;
+    }
+  return true;
+}
+// A grouped message is one directional exchange in the original admitted
+// source. Check this fixed structural fact before logical-only preparation:
+// an invalid group must not be reported as an unresolved request closure.
+// Full event, payload, adjacency and coverage checking remains in
+// admitConstruction on the independently prepared subject.
+Error checkConstructionMessageDirections(pir::MathematicalOp entry,
+                                         const protocol::ConstructionPlan &plan,
+                                         uint64_t &remaining) {
+  StringMap<pir::ExchangeOp> exchanges;
+  bool exhausted = false;
+  entry.walk([&](Operation *op) {
+    if (remaining < 1 + op->getAttrs().size()) {
+      exhausted = true;
+      return WalkResult::interrupt();
+    }
+    remaining -= 1 + op->getAttrs().size();
+    auto exchange = dyn_cast<pir::ExchangeOp>(op);
+    auto site = op->getAttrOfType<StringAttr>("site");
+    if (exchange && site) {
+      if (remaining < site.getValue().size()) {
+        exhausted = true;
+        return WalkResult::interrupt();
+      }
+      remaining -= site.getValue().size();
+      exchanges[site.getValue()] = exchange;
+    }
+    return WalkResult::advance();
+  });
+  if (exhausted)
+    return error("native-construction-preparation-capacity");
+  for (const auto &rule : plan.rules) {
+    pir::ExchangeOp previous;
+    for (const auto &site : rule.sites) {
+      if (remaining < 1 + site.size())
+        return error("native-construction-preparation-capacity");
+      remaining -= 1 + site.size();
+      auto current = exchanges.lookup(site);
+      if (previous && current &&
+          (previous.getSender() != current.getSender() ||
+           previous.getReceiver() != current.getReceiver()))
+        return error("native-proof-construction-message-group");
+      previous = current;
+    }
+  }
+  return Error::success();
+}
 struct PreparedProof {
+  // Destruction order keeps both original owners alive until after the borrow.
+  // Realization owns its independent copies; it never mutates this subject.
+  OwningOpRef<ModuleOp> original;
+  std::shared_ptr<const protocol::SourceExecutionClosure> originalExecution;
   OwningOpRef<ModuleOp> module;
+  std::shared_ptr<const protocol::SourceExecutionClosure> realizedExecution;
+  detail::NativeConstructionPreparation joint;
   StringMap<Origin> origins;
   std::optional<protocol::ConstructionPlan> construction;
   SmallVector<protocol::ConstructionInvocation> invocations;
@@ -1740,6 +2084,11 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
              const protocol::OracleRealizationPolicy &oracleSelection) {
   if (!source || failed(zkc::admitStage(source)))
     return error("native-proof-source");
+  uint64_t preparationAllowance = 1000000;
+  if (!reserveConstructionSource(source, preparationAllowance))
+    return error("native-construction-preparation-capacity");
+  auto originalOwner = OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone()));
+  source = *originalOwner;
   auto original = unit(source);
   if (!original || original.getProfile() != pir::Profile::Protocol)
     return error("native-proof-source");
@@ -1749,16 +2098,6 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
       SymbolTable::lookupSymbolIn(original, policy.entry));
   if (!entry)
     return error("native-proof-entry");
-  SmallVector<Operation *> selected{entry};
-  if (!policy.construction.empty()) {
-    auto *record = SymbolTable::lookupSymbolIn(original, policy.construction);
-    if (!isa_and_nonnull<pir::ConstructionOp>(record))
-      return error("native-proof-construction-selection");
-    selected.push_back(record);
-  }
-  if (auto e = requireUnconditionalProtocolControl(
-          selected, "native-proof-control-profile"))
-    return std::move(e);
   std::optional<protocol::ConstructionPlan> construction;
   SmallVector<protocol::ConstructionInvocation> invocations;
   SymbolTableCollection constructionSymbols;
@@ -1866,6 +2205,28 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   });
   if (logicalPort)
     return error("native-proof-oracle-interface");
+  // Policy/interface refusals precede selected dependency analysis. The same
+  // checks run again on the independently prepared subject in admit().
+  auto interface =
+      admitInterface(entry, policy, construction ? &*construction : nullptr);
+  if (!interface)
+    return interface.takeError();
+  auto execution = protocol::readSourceExecutionClosure(original);
+  if (!execution)
+    return execution.takeError();
+  auto originalExecution =
+      std::make_shared<const protocol::SourceExecutionClosure>(
+          std::move(*execution));
+  if (construction)
+    if (auto e = checkConstructionMessageDirections(entry, *construction,
+                                                    preparationAllowance))
+      return std::move(e);
+  auto joint = detail::prepareNativeConstruction(
+      source, entry, *originalExecution, policy,
+      construction ? &*construction : nullptr, invocations,
+      preparationAllowance);
+  if (!joint)
+    return joint.takeError();
   auto preparation = mathematical::PreparedProtocol::prepare(
       source, mathematicalSelection, nullptr, starts);
   if (!preparation ||
@@ -1882,12 +2243,31 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
       detail::realizedNativeOrigins(*owner, policy.entry, *occurrenceMap);
   if (!actualOrigins)
     return actualOrigins.takeError();
-  auto candidate = owner->candidateSnapshot();
+  auto candidate = std::move(actualOrigins->candidate);
   if (!candidate || !unit(*candidate))
     return error("native-proof-preparation");
-  return PreparedProof{std::move(candidate), std::move(*actualOrigins),
-                       std::move(construction), std::move(invocations),
-                       std::move(owner)};
+  std::shared_ptr<const protocol::SourceExecutionClosure> realizedExecution;
+  if (joint->needsRealization()) {
+    auto actualExecution =
+        protocol::readSourceExecutionClosure(unit(*candidate));
+    if (!actualExecution)
+      return actualExecution.takeError();
+    realizedExecution =
+        std::make_shared<const protocol::SourceExecutionClosure>(
+            std::move(*actualExecution));
+    auto actualEntry =
+        SymbolTable(unit(*candidate)).lookup<pir::MathematicalOp>(policy.entry);
+    if (auto e = joint->resolveRealization(
+            *candidate, actualEntry, *realizedExecution, policy,
+            construction ? &*construction : nullptr, invocations))
+      return std::move(e);
+  }
+  return PreparedProof{
+      std::move(originalOwner), std::move(originalExecution),
+      std::move(candidate),     std::move(realizedExecution),
+      std::move(*joint),        std::move(actualOrigins->origins),
+      std::move(construction),  std::move(invocations),
+      std::move(owner)};
 }
 } // namespace
 Expected<NativeProofPolicy> selectNativeProofDraws(
@@ -1924,6 +2304,8 @@ Expected<NativeProofPolicy> selectNativeProofDraws(
       unit(*projected), policy, admitted->events, prepared->realization.get());
   if (!requests)
     return requests.takeError();
+  if (auto e = prepared->joint.dischargeRequests(*requests))
+    return std::move(e);
   if (auto e = checkNativeProofPolicy(policy))
     return std::move(e);
   return policy;
@@ -1942,8 +2324,10 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
       prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!preparedSource)
     return preparedSource.takeError();
-  auto candidate = std::move(preparedSource->module);
-  auto prepared = unit(*candidate);
+  // Binding analysis borrows this immutable prepared source through the final
+  // candidate check. Keep its owner distinct from the mutable projection.
+  auto &sourceSnapshot = preparedSource->module;
+  auto prepared = unit(*sourceSnapshot);
   SymbolTable preparedSymbols(prepared);
   auto program = preparedSymbols.lookup<pir::MathematicalOp>(policy.entry);
   auto admitted = admit(
@@ -1958,18 +2342,28 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
   SmallVector<Type> bindingInputs(program.getFunctionType().getInputs());
   // Consume the same checked edge used by ordinary execution. Projection
   // checks an independent copy while the source/realization owner stays alive.
-  candidate = preparedSource->realization->project(false);
+  auto candidate = preparedSource->realization->project(false);
   if (!candidate)
     return error("native-proof-projection");
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
   auto *plan =
       preparedSource->construction ? &*preparedSource->construction : nullptr;
+  // This projection came from the same immutable checked realization of the
+  // original used by joint preparation. actualOrigins/admit checked its event
+  // associations. The actual request planner now closes every reverse-value,
+  // branch and recurrence obligation before Emitter can mutate the candidate.
+  auto requests =
+      detail::planNativeRequests(unit(*projected), policy, admitted->events,
+                                 preparedSource->realization.get());
+  if (!requests)
+    return requests.takeError();
+  if (auto e = preparedSource->joint.dischargeRequests(*requests))
+    return std::move(e);
   json::Array exportedPlan;
   if (!policy.suite.empty() || plan)
     if (auto e =
-            Emitter(unit(*candidate), policy, plan, preparedSource->invocations,
-                    preparedSource->realization.get())
-                .run(*admitted, exportedPlan))
+            Emitter(unit(*candidate), policy, plan, preparedSource->invocations)
+                .run(*admitted, exportedPlan, *requests, preparedSource->joint))
       return std::move(e);
   if (failed(zkc::admitStage(*candidate)))
     return error("native-proof-construction");
@@ -2012,8 +2406,8 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
       preparedSource->realization->normalizedSelection().str()});
   if (bindingView) {
     auto view = detail::analyzeConstructionBinding(
-        supplied ? supplied : *candidate, bindingInputs, policy, bindingProfile,
-        admitted->events, plan);
+        supplied ? supplied : *candidate, program, bindingInputs, policy,
+        bindingProfile, admitted->events, plan);
     if (!view)
       return view.takeError();
     (*view->getAsObject())["descriptor"] = descriptor;
@@ -2177,9 +2571,79 @@ class ParticipantExporter {
   const protocol::SourceExecutionClosure &execution;
   const StringMap<Origin> &sourceOrigins;
   llvm::DenseMap<Value, unsigned> references;
-  SmallVector<unsigned> coordinates;
+  struct CoordinateAlias {
+    Value value;
+    unsigned slot;
+  };
+  using Coordinate = SmallVector<CoordinateAlias>;
+  SmallVector<Coordinate> coordinates;
   std::string entryName;
   unsigned next = 0, work = 0, exported = 0;
+  size_t encodedBytes = 0, frameWork = 0;
+
+  // Only lexical state is restored. Every arm and expanded helper consumes the
+  // same operation, instruction, frame-work and byte allowances.
+  struct Frame {
+    ParticipantExporter &owner;
+    llvm::DenseMap<Value, unsigned> references;
+    SmallVector<Coordinate> coordinates;
+    unsigned next;
+    bool restoreNext;
+    Frame(ParticipantExporter &owner, bool restoreNext = true)
+        : owner(owner), references(owner.references),
+          coordinates(owner.coordinates), next(owner.next),
+          restoreNext(restoreNext) {}
+    ~Frame() {
+      owner.references = std::move(references);
+      owner.coordinates = std::move(coordinates);
+      if (restoreNext)
+        owner.next = next;
+    }
+  };
+  struct Ending {
+    StringRef operation;
+    SmallVector<unsigned> values;
+    SmallVector<Value> forwarded = {};
+  };
+  Error chargeFrame(size_t amount) {
+    if (amount > 100000 - frameWork)
+      return error("constructed-participant-limit");
+    frameWork += amount;
+    return Error::success();
+  }
+  size_t coordinateSize() const {
+    size_t size = coordinates.size();
+    for (const auto &coordinate : coordinates)
+      size += coordinate.size();
+    return size;
+  }
+  // A slot alone is never evidence of forwarding. Only the actual SSA
+  // operand can transfer lineage to a new formal, including duplicate captures.
+  Error forwardCoordinate(Value actual, Value formal, unsigned slot,
+                          SmallVectorImpl<Coordinate> &target) {
+    for (auto [i, coordinate] : enumerate(coordinates)) {
+      if (auto e = chargeFrame(1 + coordinate.size() + target[i].size()))
+        return e;
+      if (any_of(coordinate, [&](const CoordinateAlias &alias) {
+            return alias.value == actual;
+          }))
+        target[i].push_back({formal, slot});
+    }
+    return Error::success();
+  }
+  Error chargeBytes(const json::Array &value) {
+    size_t amount = printJson(json::Value(json::Array(value))).size();
+    if (amount > 1024 * 1024 - encodedBytes)
+      return error("constructed-participant-limit");
+    encodedBytes += amount;
+    return Error::success();
+  }
+  static json::Array indices(ArrayRef<unsigned> values) {
+    json::Array result;
+    for (unsigned value : values)
+      result.push_back(value);
+    return result;
+  }
 
   Expected<unsigned> reference(Value value) {
     auto found = references.find(value);
@@ -2213,6 +2677,11 @@ class ParticipantExporter {
   Expected<json::Array> attributes(Operation &op) {
     json::Array result;
     for (NamedAttribute attribute : op.getAttrs()) {
+      // The admitted CFG reader already consumed these successor segments.
+      // step.inputs and step.regions carry the checked logical association.
+      if (isa<exec::MatchOp>(op) &&
+          attribute.getName() == "successor_operand_segments")
+        continue;
       if (attribute.getName() == "parameters" && isa<exec::ApplyOp>(op)) {
         auto declaration = symbols.lookup<runtime::BindingOp>(
             cast<exec::ApplyOp>(op).getBinding());
@@ -2239,6 +2708,8 @@ class ParticipantExporter {
     return result;
   }
   Expected<SmallVector<unsigned>> terminal(ValueRange values) {
+    if (auto e = chargeFrame(values.size()))
+      return std::move(e);
     SmallVector<unsigned> returned;
     for (Value value : values) {
       auto index = reference(value);
@@ -2250,8 +2721,10 @@ class ParticipantExporter {
   }
   Error emit(Operation &op, ValueRange inputs, TypeRange outputs,
              json::Array &out, json::Array regions) {
-    if (++exported > 2048)
+    if (++exported > 2048 || inputs.size() > 512 || outputs.size() > 512)
       return error("constructed-participant-limit");
+    if (auto e = chargeFrame(inputs.size() + outputs.size()))
+      return e;
     auto declaration = binding(op);
     if (!declaration)
       return declaration.takeError();
@@ -2269,122 +2742,304 @@ class ParticipantExporter {
                             std::move(*declaration),
                             std::move(*arguments),
                             std::move(*types),
-                            std::move(regions)};
+                            json::Array{}};
     if (op.getName().getStringRef() == "protocol.service_query") {
       auto site = op.getAttrOfType<StringAttr>("site");
       auto found =
           site ? sourceOrigins.find(site.getValue()) : sourceOrigins.end();
-      if (found == sourceOrigins.end() || found->second.event.empty() ||
-          found->second.event.front() != "query")
+      if (found == sourceOrigins.end() ||
+          !std::holds_alternative<protocol::NativeQueryOrigin>(
+              found->second.event))
         return error("constructed-participant-service-origin");
-      auto origin = protocol::encodeNativeOriginTemplate(
-          entryName, found->second.steps, found->second.event);
+      auto typed = detail::exportNativeSourceOrigin(entryName, found->second);
+      if (!typed)
+        return typed.takeError();
+      auto origin = protocol::encodeNativeOriginTemplate(*typed);
       if (!origin)
         return origin.takeError();
+      if (size_t(count_if(typed->path, [](const auto &step) {
+            return step.kind == protocol::NativeOriginStep::Kind::Repeat;
+          })) != coordinates.size())
+        return error("constructed-participant-service-origin");
       json::Array indices;
-      for (unsigned coordinate : coordinates)
-        indices.push_back(coordinate);
+      for (const auto &coordinate : coordinates) {
+        if (coordinate.empty())
+          return error("constructed-participant-service-origin");
+        indices.push_back(coordinate.front().slot);
+      }
       instruction.push_back(json::Array{*origin, std::move(indices)});
     }
+    // Child instructions were already charged. Charge this row with an empty
+    // region list, then attach the separately charged region headers.
+    if (auto e = chargeBytes(instruction))
+      return e;
+    instruction[5] = std::move(regions);
     out.push_back(std::move(instruction));
     return Error::success();
   }
 
-  // Selected Math regions are closed frames: only payloads and explicit
-  // captures enter an arm. Keep every arm and its exact terminal, independently
-  // of the selector's runtime value.
-  Expected<json::Array> selectedMath(Operation &op, unsigned depth) {
-    if (failed(verifySelectedControl(&op)))
+  // A selected region is closed: only payloads and explicit capture rows are
+  // visible. Rebase enclosing induction coordinates through those exact rows,
+  // never through equal types or an outer frame's numeric positions.
+  Error enterArm(ValueRange arguments, ValueRange captures, unsigned payloads) {
+    if (arguments.size() > 512)
+      return error("constructed-participant-limit");
+    if (arguments.size() != payloads + captures.size())
       return error("constructed-participant-branch");
+    if (auto e = chargeFrame(references.size() + arguments.size() +
+                             coordinates.size()))
+      return e;
+    SmallVector<Coordinate> localCoordinates(coordinates.size());
+    for (auto [i, capture] : enumerate(captures)) {
+      auto index = reference(capture);
+      if (!index)
+        return index.takeError();
+      unsigned slot = payloads + i;
+      if (auto e = forwardCoordinate(capture, arguments[slot], slot,
+                                     localCoordinates))
+        return e;
+    }
+    references.clear();
+    next = 0;
+    for (Value argument : arguments)
+      references[argument] = next++;
+    coordinates = std::move(localCoordinates);
+    return Error::success();
+  }
+  Expected<json::Array> armRecord(TypeRange arguments, json::Array instructions,
+                                  Ending ending, StringRef alternative,
+                                  TypeRange payloads) {
+    auto types = exportLogicalTypesData(arguments);
+    if (!types)
+      return types.takeError();
+    auto payloadTypes = exportLogicalTypesData(payloads);
+    if (!payloadTypes)
+      return payloadTypes.takeError();
+    json::Array result{
+        std::move(*types), json::Array{},
+        json::Array{ending.operation.str(), indices(ending.values)},
+        alternative.str(), std::move(*payloadTypes)};
+    if (auto e = chargeBytes(result))
+      return std::move(e);
+    result[1] = std::move(instructions);
+    return result;
+  }
+
+  Expected<json::Array> selected(Operation &op, unsigned depth) {
     auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+    if (alternatives && alternatives.size() > selectedRegionArmLimit)
+      return error("constructed-participant-limit");
+    if (!op.getNumOperands() || op.getNumSuccessors() || !alternatives ||
+        alternatives.empty() || alternatives.size() != op.getNumRegions() ||
+        failed(verifySelectedControl(&op)))
+      return error("constructed-participant-branch");
     json::Array regions;
     for (auto [i, region] : enumerate(op.getRegions())) {
+      if (!hasSingleElement(region))
+        return error("constructed-participant-branch");
+      auto alternative = dyn_cast<StringAttr>(alternatives[i]);
       auto payloads = selectedPayloadTypes(&op, i);
       if (!payloads)
         return payloads.takeError();
       Block &arm = region.front();
-      auto outerReferences = std::exchange(references, decltype(references){});
-      auto outerCoordinates = std::exchange(coordinates, {});
-      unsigned outerNext = next;
-      auto restore = llvm::scope_exit([&] {
-        references = std::move(outerReferences);
-        coordinates = std::move(outerCoordinates);
-        next = outerNext;
-      });
-      next = 0;
-      for (BlockArgument argument : arm.getArguments())
-        references[argument] = next++;
+      SmallVector<Type> expected(*payloads);
+      append_range(expected, op.getOperands().drop_front().getTypes());
+      if (!alternative || arm.getArgumentTypes() != TypeRange(expected) ||
+          arm.empty() || arm.back().getOperandTypes() != op.getResultTypes())
+        return error("constructed-participant-branch");
+      if (auto e = chargeFrame(references.size() + coordinateSize()))
+        return std::move(e);
+      Frame frame(*this);
+      if (auto e = enterArm(arm.getArguments(), op.getOperands().drop_front(),
+                            payloads->size()))
+        return std::move(e);
       json::Array nested;
-      auto yielded = body(arm, "data.yield", depth + 1, nested);
+      StringRef terminator =
+          isa<data::BranchOp>(op) ? "data.yield" : "protocol.yield";
+      auto yielded = body(arm, terminator, depth + 1, nested);
       if (!yielded)
         return yielded.takeError();
-      auto arguments = exportLogicalTypesData(arm.getArgumentTypes());
-      if (!arguments)
-        return arguments.takeError();
-      auto payloadTypes = exportLogicalTypesData(*payloads);
-      if (!payloadTypes)
-        return payloadTypes.takeError();
-      json::Array returned;
-      for (unsigned index : *yielded)
-        returned.push_back(index);
-      regions.push_back(
-          json::Array{std::move(*arguments), std::move(nested),
-                      json::Array{"data.yield", std::move(returned)},
-                      cast<StringAttr>(alternatives[i]).getValue().str(),
-                      std::move(*payloadTypes)});
+      auto record = armRecord(arm.getArgumentTypes(), std::move(nested),
+                              {terminator, std::move(*yielded)},
+                              alternative.getValue(), *payloads);
+      if (!record)
+        return record.takeError();
+      regions.push_back(std::move(*record));
     }
     return regions;
   }
 
-  Expected<SmallVector<unsigned>> helper(FlatSymbolRefAttr callee,
-                                         ValueRange inputs, unsigned depth,
-                                         json::Array &out,
-                                         Operation *invocation) {
+  Expected<json::Array>
+  selectedHelper(const protocol::SourceExecutionStep &step, unsigned depth) {
+    auto &op = *step.operation;
+    if (step.regions.size() > selectedRegionArmLimit)
+      return error("constructed-participant-limit");
+    if (step.inputs.empty() || step.regions.empty())
+      return error("constructed-participant-branch");
+    auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+    bool boolean = isa<exec::TestOp>(op);
+    auto variant = dyn_cast<data::VariantType>(step.inputs.front().getType());
+    if (boolean ? step.regions.size() != 2 ||
+                      !step.inputs.front().getType().isSignlessInteger(1)
+                : !variant || !alternatives ||
+                      alternatives.size() != step.regions.size() ||
+                      variant.getAlternatives().size() != step.regions.size())
+      return error("constructed-participant-branch");
+    json::Array regions;
+    for (auto [i, regionFunction] : enumerate(step.regions)) {
+      auto function = regionFunction;
+      StringRef label = i ? "else" : "then";
+      SmallVector<Type> payloads;
+      if (!boolean) {
+        auto alternative = variant.getAlternatives()[i];
+        label = alternative.getLabel().getValue();
+        if (cast<StringAttr>(alternatives[i]).getValue() != label)
+          return error("constructed-participant-branch");
+        append_range(payloads, alternative.getPayload());
+      }
+      auto outcome = function.getFunctionType().getNumResults() == 1
+                         ? dyn_cast<exec::OutcomeType>(
+                               function.getFunctionType().getResult(0))
+                         : exec::OutcomeType();
+      SmallVector<Type> expected(payloads);
+      append_range(expected, ValueRange(step.inputs).drop_front().getTypes());
+      if (!function->hasAttr("runtime.region") || !outcome ||
+          TypeRange(outcome.getPayload()) !=
+              ValueRange(step.outputs).getTypes() ||
+          TypeRange(function.getFunctionType().getInputs().drop_front()) !=
+              TypeRange(expected))
+        return error("constructed-participant-branch");
+      if (auto e = chargeFrame(references.size() + coordinateSize()))
+        return std::move(e);
+      Frame frame(*this);
+      auto arguments = function.getArguments().drop_front();
+      if (auto e = enterArm(arguments, ValueRange(step.inputs).drop_front(),
+                            payloads.size()))
+        return std::move(e);
+      json::Array nested;
+      auto ending = helperBody(function, depth + 1, nested);
+      if (!ending)
+        return ending.takeError();
+      auto record =
+          armRecord(ValueRange(arguments).getTypes(), std::move(nested),
+                    std::move(*ending), label, payloads);
+      if (!record)
+        return record.takeError();
+      regions.push_back(std::move(*record));
+    }
+    return regions;
+  }
+
+  Error helper(FlatSymbolRefAttr callee, ValueRange inputs, ValueRange outputs,
+               unsigned depth, json::Array &out, Operation *invocation) {
     if (depth > 64)
       return error("constructed-participant-limit");
     auto function = symbols.lookup<func::FuncOp>(callee.getValue());
     auto signature = protocol::scopedDataSignature(function);
-    if (!signature || signature.getNumInputs() != inputs.size())
+    if (!signature || signature.getNumInputs() != inputs.size() ||
+        TypeRange(signature.getResults()) != outputs.getTypes())
       return error("constructed-participant-helper");
+    if (inputs.size() > 512 || signature.getNumResults() > 512)
+      return error("constructed-participant-limit");
     if (sourceSymbols.lookup(callee.getValue())) {
       if (auto e = emit(*invocation, inputs, signature.getResults(), out, {}))
-        return std::move(e);
-      SmallVector<unsigned> values;
-      for (unsigned i = 0; i < signature.getNumResults(); ++i)
-        values.push_back(next++);
-      return values;
+        return e;
+      for (Value result : outputs)
+        references[result] = next++;
+      return Error::success();
     }
-    auto found = execution.bodies.find(callee.getValue().str());
+    if (auto e = chargeFrame(references.size() + coordinateSize() +
+                             inputs.size() + outputs.size()))
+      return e;
+    SmallVector<unsigned> values;
+    SmallVector<Coordinate> returnedCoordinates(coordinates.size());
+    {
+      Frame frame(*this, false);
+      // Inline expansion retains actual slots. Only SSA operand/formal and
+      // returned-value/result forwarding can add aliases to those slots.
+      auto actuals = terminal(inputs);
+      if (!actuals)
+        return actuals.takeError();
+      references.clear();
+      for (auto [formal, actual, slot] :
+           zip(function.getArguments().drop_front(), inputs, *actuals)) {
+        references[formal] = slot;
+        if (auto e = forwardCoordinate(actual, formal, slot, coordinates))
+          return e;
+      }
+      auto ending = helperBody(function, depth, out);
+      if (!ending)
+        return ending.takeError();
+      // A stopped helper has no normal values. A nonempty ABI would require a
+      // separate call-region carrier; do not manufacture references for it.
+      if (ending->operation == "exec.reject" && signature.getNumResults())
+        return error("constructed-participant-return");
+      if (ending->values.size() != outputs.size() ||
+          ending->forwarded.size() != outputs.size())
+        return error("constructed-participant-helper");
+      values = std::move(ending->values);
+      for (auto [actual, result, slot] :
+           zip(ending->forwarded, outputs, values))
+        if (auto e =
+                forwardCoordinate(actual, result, slot, returnedCoordinates))
+          return e;
+    }
+    for (auto [result, slot] : zip(outputs, values))
+      references[result] = slot;
+    for (auto [coordinate, returned] : zip(coordinates, returnedCoordinates)) {
+      if (auto e = chargeFrame(returned.size()))
+        return e;
+      append_range(coordinate, returned);
+    }
+    return Error::success();
+  }
+
+  Expected<Ending> helperBody(func::FuncOp function, unsigned depth,
+                              json::Array &out) {
+    if (depth > 64)
+      return error("constructed-participant-limit");
+    auto found = execution.bodies.find(function.getSymName().str());
     if (found == execution.bodies.end())
       return error("constructed-participant-helper");
-    for (auto [formal, actual] :
-         zip(function.getArguments().drop_front(), inputs)) {
-      auto index = reference(actual);
-      if (!index)
-        return index.takeError();
-      references[formal] = *index;
-    }
     for (const auto &step : found->second) {
       if (++work > 4096)
         return error("constructed-participant-limit");
       auto &op = *step.operation;
-      if (isa<exec::ReturnOp>(op))
-        return terminal(step.inputs);
+      if (isa<exec::ReturnOp, exec::CompleteOp>(op)) {
+        auto values = terminal(step.inputs);
+        if (!values)
+          return values.takeError();
+        if (auto e = chargeFrame(step.inputs.size()))
+          return std::move(e);
+        return Ending{op.getName().getStringRef(), std::move(*values),
+                      SmallVector<Value>(step.inputs)};
+      }
+      if (isa<exec::RejectOp>(op)) {
+        if (auto e = emit(op, {}, {}, out, {}))
+          return std::move(e);
+        return Ending{"exec.reject", {}};
+      }
+      if (isa<exec::TestOp, exec::MatchOp>(op)) {
+        auto regions = selectedHelper(step, depth);
+        if (!regions)
+          return regions.takeError();
+        if (auto e = emit(op, step.inputs, ValueRange(step.outputs).getTypes(),
+                          out, std::move(*regions)))
+          return std::move(e);
+        for (Value result : step.outputs)
+          references[result] = next++;
+        continue;
+      }
       if (!step.regions.empty())
         return error("constructed-participant-control",
                      op.getName().getStringRef());
       if (auto call = dyn_cast<func::CallOp>(op)) {
-        auto values =
-            helper(call.getCalleeAttr(), step.inputs, depth + 1, out, &op);
-        if (!values)
-          return values.takeError();
-        if (values->size() != step.outputs.size())
-          return error("constructed-participant-helper");
-        for (auto [result, index] : zip(step.outputs, *values))
-          references[result] = index;
+        if (auto e = helper(call.getCalleeAttr(), step.inputs, step.outputs,
+                            depth + 1, out, &op))
+          return std::move(e);
         continue;
       }
-      if (!isa<exec::ApplyOp, exec::BooleanOp>(op))
+      if (!isa<exec::ApplyOp, exec::BooleanOp, exec::VariantOp>(op))
         return error("constructed-participant-operation",
                      op.getName().getStringRef());
       if (auto e = emit(op, step.inputs, ValueRange(step.outputs).getTypes(),
@@ -2420,14 +3075,9 @@ public:
         return terminal(op.getOperands());
       }
       if (auto call = dyn_cast<pir::LocalCallOp>(op)) {
-        auto returned =
-            helper(call.getCalleeAttr(), call.getInputs(), depth + 1, out, &op);
-        if (!returned)
-          return returned.takeError();
-        if (returned->size() != op.getNumResults())
-          return error("constructed-participant-helper");
-        for (auto [result, index] : zip(op.getResults(), *returned))
-          references[result] = index;
+        if (auto e = helper(call.getCalleeAttr(), call.getInputs(),
+                            op.getResults(), depth + 1, out, &op))
+          return std::move(e);
         continue;
       }
       if (name == "protocol.loop") {
@@ -2436,23 +3086,44 @@ public:
           return error("constructed-participant-control", name);
         Block &loop = op.getRegion(0).front();
         unsigned outer = next;
-        for (BlockArgument argument : loop.getArguments())
-          references[argument] = next++;
-        coordinates.push_back(outer);
+        auto carried = op.getAttrOfType<IntegerAttr>("carried");
+        if (!carried || carried.getInt() < 0 ||
+            uint64_t(carried.getInt()) >= loop.getNumArguments() ||
+            loop.getNumArguments() != op.getNumOperands())
+          return error("constructed-participant-control", name);
+        if (loop.getNumArguments() > 512)
+          return error("constructed-participant-limit");
+        if (auto e = chargeFrame(references.size() + coordinateSize() +
+                                 loop.getNumArguments() + 2))
+          return std::move(e);
         json::Array nested;
-        auto yielded = body(loop, "protocol.yield", depth + 1, nested);
-        coordinates.pop_back();
-        if (!yielded)
-          return yielded.takeError();
-        next = outer;
         json::Array yieldedList;
-        for (unsigned index : *yielded)
-          yieldedList.push_back(index);
+        {
+          Frame frame(*this);
+          for (BlockArgument argument : loop.getArguments())
+            references[argument] = next++;
+          // Invariant captures forward their actual operands each iteration.
+          // Initial carried values do not: the next yield can replace them.
+          unsigned captures = 1 + unsigned(carried.getInt());
+          for (unsigned i = captures; i < loop.getNumArguments(); ++i)
+            if (auto e =
+                    forwardCoordinate(op.getOperand(i), loop.getArgument(i),
+                                      outer + i, coordinates))
+              return std::move(e);
+          coordinates.push_back(Coordinate{{loop.getArgument(0), outer}});
+          auto yielded = body(loop, "protocol.yield", depth + 1, nested);
+          if (!yielded)
+            return yielded.takeError();
+          yieldedList = indices(*yielded);
+        }
         auto arguments = exportLogicalTypesData(loop.getArgumentTypes());
         if (!arguments)
           return arguments.takeError();
-        json::Array region{std::move(*arguments), std::move(nested),
+        json::Array region{std::move(*arguments), json::Array{},
                            std::move(yieldedList)};
+        if (auto e = chargeBytes(region))
+          return std::move(e);
+        region[1] = std::move(nested);
         if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
                           json::Array{std::move(region)}))
           return std::move(e);
@@ -2460,8 +3131,8 @@ public:
           references[result] = next++;
         continue;
       }
-      if (isa<data::BranchOp>(op)) {
-        auto regions = selectedMath(op, depth);
+      if (isa<pir::ParticipantBranchOp, data::BranchOp>(op)) {
+        auto regions = selected(op, depth);
         if (!regions)
           return regions.takeError();
         if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
@@ -2476,7 +3147,8 @@ public:
       if (!(name.starts_with("algebra.") || name.starts_with("arith.") ||
             name.starts_with("crypto.") || name.starts_with("data.") ||
             name == "protocol.receive" || name == "protocol.send" ||
-            name == "protocol.service_query" || name == "protocol.guard"))
+            name == "protocol.service_query" || name == "protocol.guard" ||
+            name == "protocol.finish_if"))
         return error("constructed-participant-operation", name);
       if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
                         json::Array{}))
@@ -2495,6 +3167,8 @@ public:
     auto type = participant.getFunctionType();
     if (entry.getNumArguments() > 512 || type.getNumResults() > 512)
       return error("constructed-participant-limit");
+    if (auto e = chargeFrame(entry.getNumArguments()))
+      return std::move(e);
     for (BlockArgument argument : entry.getArguments())
       references[argument] = next++;
     json::Array instructions;

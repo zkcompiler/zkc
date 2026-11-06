@@ -1,4 +1,5 @@
 #include "zkc/Analysis/CommonControl.h"
+#include "../Dialect/AdmissionPrivate.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -49,6 +50,9 @@ struct Recurrence {
   Components count;
   SmallVector<Components> initial, transition;
   bool atMostOne = false;
+  // Agreement of this invocation's count observation only. Never rewrite the
+  // opaque Local terms in the environment or grant them general congruence.
+  bool pairedCount = false;
 };
 struct Demand {
   Term left, right;
@@ -57,6 +61,9 @@ struct Demand {
 struct Derivation {
   pir::MathematicalOp entry;
   facts::Work &work;
+  const detail::OracleCountEquations *equations = nullptr;
+  bool fullRequirements = true;
+  llvm::DenseSet<Operation *> matchedCounts;
   SymbolTableCollection symbols;
   SmallVector<Node, 0> nodes{Node{}};
   llvm::DenseMap<size_t, SmallVector<Term>> interned;
@@ -66,8 +73,64 @@ struct Derivation {
   llvm::DenseSet<Operation *> active;
   unsigned roles;
   unsigned observationDepth = 0;
-  Derivation(pir::MathematicalOp entry, facts::Work &work)
-      : entry(entry), work(work), roles(entry.getRoles().size()) {}
+  Derivation(pir::MathematicalOp entry, facts::Work &work,
+             const detail::OracleCountEquations *equations = nullptr,
+             bool fullRequirements = true)
+      : entry(entry), work(work), equations(equations),
+        fullRequirements(fullRequirements), roles(entry.getRoles().size()) {}
+
+  Expected<bool> pairedCount(pir::RepeatOp repeat) {
+    if (!equations)
+      return false;
+    const detail::OracleRepeatCount *matched = nullptr;
+    for (const auto &law : equations->getObservations()) {
+      if (!charge())
+        return failure();
+      if (law.repeat != repeat)
+        continue;
+      if (matched)
+        return failure();
+      matched = &law;
+    }
+    if (!matched)
+      return false;
+    const auto &law = *matched;
+    auto assembly = law.assembly;
+    auto actualEntry = law.actualEntry;
+    if (!charge(1 + law.counts.size() + law.ancestry.size()) ||
+        repeat->getParentOfType<ModuleOp>() != law.candidate ||
+        repeat->getParentOfType<pir::MathematicalOp>() != law.actualEntry ||
+        repeat.getMaximum() != law.maximum || !law.capacity ||
+        repeat.getInputs()[0] != assembly.getOutput() ||
+        assembly.getRoles().size() != law.counts.size() ||
+        law.counts.size() != repeat.getRoles().size() ||
+        !llvm::equal(assembly.getInputs(), law.counts))
+      return failure();
+    // The reader's complete association includes the actual arm, nested loop
+    // and store-carry ancestry. A printed site or an equal-typed clone cannot
+    // match it. Each traversal creates a fresh recurrence invocation below,
+    // including repeated calls with different role/argument substitutions.
+    Operation *child = repeat;
+    for (const auto &[parent, arm] : law.ancestry) {
+      if (!charge() || child->getParentOp() != parent ||
+          child->getParentRegion()->getRegionNumber() != arm)
+        return failure();
+      child = parent;
+    }
+    if (child->getParentOp() != actualEntry.getOperation())
+      return failure();
+    for (auto [role, count] : zip(assembly.getRoles(), law.counts)) {
+      auto result = dyn_cast<OpResult>(count);
+      auto call = result ? dyn_cast<pir::LocalCallOp>(result.getOwner())
+                         : pir::LocalCallOp();
+      if (!charge() || !call || result.getResultNumber() != 0 ||
+          call.getRoleAttr() != role || !charge(repeat.getRoles().size()) ||
+          !is_contained(repeat.getRoles(), role))
+        return failure();
+    }
+    matchedCounts.insert(repeat);
+    return true;
+  }
 
   Error failure() {
     return error(work.exhausted() ? "common-control-capacity"
@@ -385,7 +448,7 @@ struct Derivation {
         enqueue(loop.initial[a.coordinate]);
         if (a.kind == Node::Exit || !loop.atMostOne)
           enqueue(loop.transition[a.coordinate]);
-        if (a.kind == Node::Exit)
+        if (a.kind == Node::Exit && !loop.pairedCount)
           pending.emplace_back(loop.count[a.role], loop.count[b.role]);
         continue;
       }
@@ -515,12 +578,21 @@ struct Derivation {
         auto selected = roster(repeat.getRoles(), mapping);
         if (!selected)
           return selected.takeError();
-        if (auto e = common(op, repeat.getInputs()[0], *selected, environment))
-          return std::move(e);
+        auto paired = pairedCount(repeat);
+        if (!paired)
+          return paired.takeError();
+        // Only ordinary selected closures impose all repeat-count demands.
+        // An equation-only traversal still validates each actual paired count,
+        // but leaves unrelated generic repeats under their joint runtime rule.
+        if (fullRequirements && !*paired)
+          if (auto e =
+                  common(op, repeat.getInputs()[0], *selected, environment))
+            return std::move(e);
         if (!charge(1 + uint64_t(roles) * (repeat.getCarried() + 1)))
           return failure();
         unsigned invocation = recurrences.size();
         Recurrence recurrence;
+        recurrence.pairedCount = *paired;
         recurrence.count = components(environment, repeat.getInputs()[0]);
         recurrence.atMostOne = repeat.getMaximum() <= 1;
         bool smallCount = true;
@@ -716,6 +788,13 @@ struct Derivation {
     }
     if (work.exhausted())
       return failure();
+    if (equations)
+      for (const auto &law : equations->getObservations()) {
+        if (!charge())
+          return failure();
+        if (law.actualEntry == entry && !matchedCounts.contains(law.repeat))
+          return failure();
+      }
     return std::move(requirements);
   }
 };
@@ -726,6 +805,17 @@ deriveCommonControlRequirements(pir::MathematicalOp entry, facts::Work &work) {
     return error(work.exhausted() ? "common-control-capacity"
                                   : "common-control-provenance");
   Derivation derivation{entry, work};
+  return derivation.run();
+}
+Expected<SmallVector<CommonControlRequirement>>
+detail::deriveCommonControlRequirements(pir::MathematicalOp entry,
+                                        facts::Work &work,
+                                        const OracleCountEquations &equations,
+                                        bool fullRequirements) {
+  if (!entry || !work.charge())
+    return error(work.exhausted() ? "common-control-capacity"
+                                  : "common-control-provenance");
+  Derivation derivation{entry, work, &equations, fullRequirements};
   return derivation.run();
 }
 } // namespace zkc

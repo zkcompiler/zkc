@@ -218,9 +218,11 @@ int main() {
           "gated construction acquired ideal sampling or public preparation");
   }
   auto origin = encodeNativeOriginTemplate(
-      "entry", {},
-      {"query", "source", "positions", "input_0",
-       "random.koala-bear.ext4-binomial3/0", "indices", "V"});
+      {"entry",
+       {},
+       NativeQueryOrigin{"source", "positions", 0,
+                         "random.koala-bear.ext4-binomial3/0", "indices",
+                         "V"}});
   check(bool(origin), "block origin formation");
   if (origin) {
     for (StringRef operation : {"transcript.native.indexed.indices",
@@ -262,9 +264,11 @@ int main() {
       refusal(checkParameters(operation, invalid),
               "interactive-kernel-parameters");
       auto scalar = encodeNativeOriginTemplate(
-          "entry", {},
-          {"query", "source", "positions", "input_0",
-           "random.koala-bear.ext4-binomial3/0", "index", "V"});
+          {"entry",
+           {},
+           NativeQueryOrigin{"source", "positions", 0,
+                             "random.koala-bear.ext4-binomial3/0", "index",
+                             "V"}});
       if (scalar) {
         invalid = parameters;
         invalid[0] = *scalar;

@@ -1,4 +1,5 @@
 #include "OracleQueryWindow.h"
+#include "OracleEmissionAccounting.h"
 #include "OracleVerificationContext.h"
 #include "RealizationEmission.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -16,30 +17,38 @@ using Types = SmallVector<Type>;
 using Control = exec::ScopedExecutionBuilder;
 constexpr uint64_t operationAllowance = 4096;
 struct Emitter {
+  OracleNativeWork &common;
   protocol_ir::ProtocolModuleOp unit;
   const OracleQueryController &controller;
   const Demand &demand;
   const OracleQueryExchange &exchange;
   const OracleQueryResponse &response;
   OracleQueryWindow result;
+  OracleEmissionListener emission;
   OpBuilder builder;
-  mathematical::RealizationEmitter bindings;
+  OracleBindingEmitter bindings;
   Type index, boolean;
   unsigned next = 0;
   uint64_t generatedSlots = 0;
   Emitter(protocol_ir::ProtocolModuleOp unit,
           const OracleQueryController &controller, const Demand &demand,
           const OracleQueryExchange &exchange,
-          const OracleQueryResponse &response, uint64_t capacity)
-      : unit(unit), controller(controller), demand(demand), exchange(exchange),
-        response(response), builder(unit.getContext()),
-        bindings(unit, "_oracle_window_binding_"),
+          const OracleQueryResponse &response, uint64_t capacity,
+          OracleNativeWork &common)
+      : common(common), unit(unit), controller(controller), demand(demand),
+        exchange(exchange), response(response), emission(common),
+        builder(unit.getContext(), &emission),
+        bindings(unit, "_oracle_window_binding_", common),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()) {
     result.capacity = capacity;
   }
-  Error plan(const OracleVerificationContext &context,
+  Error plan(const OracleVerificationContext *context,
              OracleVirtualFunctionWork &work) {
+    if (!common.charge(64 + controller.kinds.size() + controller.state.size() +
+                       controller.stores.size() +
+                       controller.continuations.size() + exchange.arms.size()))
+      return error("oracle-common-limit");
     if (!result.capacity || result.capacity >= 1048576)
       return error("oracle-window-capacity");
     auto refuse = [] { return error("oracle-window-layout"); };
@@ -88,7 +97,8 @@ struct Emitter {
     auto signature = [&](func::FuncOp helper) -> FunctionType {
       if (!helper || helper->getParentOp() != unit || !helper.isPrivate() ||
           helper->hasAttr("runtime.region") ||
-          !context.getClosure().bodies.count(helper.getSymName().str()))
+          (context &&
+           !context->getClosure().bodies.count(helper.getSymName().str())))
         return {};
       return scopedDataSignature(helper);
     };
@@ -137,7 +147,7 @@ struct Emitter {
     for (Type reference : {initial.getInput(0), discoveryInitial.getInput(0)}) {
       bool found = false;
       for (auto kind : controller.kinds) {
-        auto expected = oracleReferenceType(kind);
+        auto expected = oracleReferenceTypeWithWork(kind, common);
         if (!expected) {
           consumeError(expected.takeError());
           return refuse();
@@ -152,7 +162,8 @@ struct Emitter {
           arm.kind >= controller.kinds.size())
         return refuse();
       const auto &item = controller.constructors[arm.receiverSlot];
-      auto reference = oracleReferenceType(controller.kinds[arm.kind]);
+      auto reference =
+          oracleReferenceTypeWithWork(controller.kinds[arm.kind], common);
       if (!reference) {
         consumeError(reference.takeError());
         return refuse();
@@ -163,7 +174,9 @@ struct Emitter {
           *reference != arm.reference)
         return refuse();
     }
-    if (auto e = checkOracleQueryResponse(context, exchange, response)) {
+    if (auto e = context
+                     ? checkOracleQueryResponse(*context, exchange, response)
+                     : Error::success()) {
       consumeError(std::move(e));
       return refuse();
     }
@@ -178,8 +191,8 @@ struct Emitter {
     uint64_t slots = generatedSlots + result.capacity * 8;
     if (operationAllowance > work.operations || slots > work.slots)
       return error("oracle-window-limit");
-    work.operations -= operationAllowance;
-    work.slots -= slots;
+    if (!work.reserveCapacity(operationAllowance, slots))
+      return error("oracle-window-limit");
     return Error::success();
   }
   Types collectedTypes() {
@@ -195,12 +208,14 @@ struct Emitter {
   func::FuncOp function(StringRef label, TypeRange inputs, TypeRange outputs,
                         bool region,
                         llvm::function_ref<void(Control &, ValueRange)> emit) {
+    reserveOracleEmission(common, 8 + inputs.size() + outputs.size());
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&unit.getBody().front());
     std::string name;
     do {
-      name = "_oracle_window_" + label.str() + "_" + std::to_string(next++);
-    } while (SymbolTable::lookupSymbolIn(unit, name));
+      name = "_oracle_window_" + label.str() + "_" +
+             std::to_string(oracleEmissionOrdinal(common, next));
+    } while (lookupOracleEmissionSymbol(unit, name, common));
     Types formals{runtime::ScopeType::get(unit.getContext())};
     append_range(formals, inputs);
     auto helper = func::FuncOp::create(
@@ -216,6 +231,7 @@ struct Emitter {
       helper->setAttr("runtime.origin",
                       builder.getArrayAttr({builder.getStringAttr(name),
                                             builder.getArrayAttr({})}));
+    reserveOracleEmission(common, 1 + helper.getNumArguments());
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
     emit(control, helper.getArguments().drop_front());
@@ -510,83 +526,117 @@ Expected<OracleQueryWindow> emitOracleQueryWindow(
     const OracleQueryDemand &demand, const OracleQueryExchange &exchange,
     const OracleQueryResponse &response, uint64_t capacity,
     OracleVirtualFunctionWork &work) {
-  auto context = OracleVerificationContext::read(candidate);
-  if (!context) {
-    consumeError(context.takeError());
-    return error("oracle-window-source");
-  }
-  Emitter emitter(context->getUnit(), controller, demand, exchange, response,
-                  capacity);
-  auto savedWork = work;
-  SmallPtrSet<Operation *, 32> original;
-  for (auto &op : context->getUnit().getBody().front())
-    original.insert(&op);
-  bool published = false;
-  auto rollback = llvm::scope_exit([&] {
-    if (published)
-      return;
-    SmallVector<Operation *> additions;
-    for (auto &op : emitter.unit.getBody().front())
-      if (!original.contains(&op))
-        additions.push_back(&op);
-    for (auto *op : additions)
-      op->dropAllReferences();
-    for (auto *op : reverse(additions))
-      op->erase();
-    work = savedWork;
-  });
-  if (auto e = emitter.plan(*context, work))
-    return std::move(e);
-  emitter.collect();
-  emitter.replay();
-  emitter.finish();
-  // Validate the conservative reservation against the actual additions before
-  // publication. Subtract bounded costs instead of overflowing running sums.
-  uint64_t operationsRemaining = operationAllowance;
-  uint64_t slotsRemaining = emitter.generatedSlots;
-  bool withinReservation = true;
-  for (auto &addition : emitter.unit.getBody().front()) {
-    if (original.contains(&addition))
-      continue;
-    addition.walk([&](Operation *op) {
-      if (!withinReservation)
-        return;
-      auto charge = [&](uint64_t cost) {
-        if (cost > slotsRemaining)
-          withinReservation = false;
-        else
-          slotsRemaining -= cost;
-      };
-      if (!operationsRemaining) {
-        withinReservation = false;
-        return;
-      }
-      --operationsRemaining;
-      charge(op->getNumOperands());
-      charge(op->getNumResults());
-      for (auto &region : op->getRegions())
-        for (auto &block : region) {
-          if (!operationsRemaining) {
-            withinReservation = false;
-            return;
-          }
-          --operationsRemaining;
-          charge(block.getNumArguments());
+  return oracleExpectedWithWork(
+      work.getWork(), [&]() -> Expected<OracleQueryWindow> {
+        if (!candidate ||
+            !hasSingleElement(candidate.getBody()->getOperations()) ||
+            !isa<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front()))
+          return error("oracle-window-source");
+        std::optional<OracleVerificationContext> context;
+        if (!work.ownsScratch(candidate)) {
+          auto checked =
+              OracleVerificationContext::read(candidate, work.getWork());
+          if (!checked)
+            return checked.takeError();
+          context.emplace(std::move(*checked));
         }
-    });
-  }
-  if (!withinReservation)
-    return error("oracle-window-limit");
-  // Reacquire after mutation. The checker reads actual IR independently.
-  auto actual = OracleVerificationContext::read(candidate);
-  if (!actual) {
-    consumeError(actual.takeError());
-    return error("oracle-window-body");
-  }
-  if (auto e = checkOracleQueryWindow(*actual, controller, demand, exchange,
-                                      response, emitter.result))
-    return std::move(e);
-  published = true;
-  return std::move(emitter.result);
+        auto unit =
+            cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
+        auto session = startOracleEmissionSession(work.getWork(), unit);
+        Emitter emitter(unit, controller, demand, exchange, response, capacity,
+                        work.getWork());
+        auto savedWork = work;
+        if (!work.getWork().chargeProduct(
+                3, emitter.unit.getBody().front().getOperations().size()))
+          return error("oracle-common-limit");
+        SmallPtrSet<Operation *, 32> original;
+        for (auto &op : emitter.unit.getBody().front())
+          original.insert(&op);
+        bool published = false;
+        auto rollback = llvm::scope_exit([&] {
+          if (published)
+            return;
+          SmallVector<Operation *> additions;
+          for (auto &op : emitter.unit.getBody().front())
+            if (!original.contains(&op))
+              additions.push_back(&op);
+          // End the maintained live inventory before erasing observed roots.
+          // This failed generation scope cannot issue further lookups.
+          if (work.getWork().emission)
+            work.getWork().emission->finish();
+          for (auto *op : additions)
+            op->dropAllReferences();
+          for (auto *op : reverse(additions))
+            op->erase();
+          // IR rollback must not refund work already performed.
+          work.operations = savedWork.operations;
+          work.slots = savedWork.slots;
+        });
+        if (auto e = emitter.plan(context ? &*context : nullptr, work))
+          return std::move(e);
+        emitter.collect();
+        emitter.replay();
+        emitter.finish();
+        // Validate the conservative reservation against the actual additions
+        // before publication. Subtract bounded costs instead of overflowing
+        // running sums.
+        uint64_t operationsRemaining = operationAllowance;
+        uint64_t slotsRemaining = emitter.generatedSlots;
+        bool withinReservation = true;
+        for (auto &addition : emitter.unit.getBody().front()) {
+          if (original.contains(&addition))
+            continue;
+          addition.walk([&](Operation *op) {
+            if (!withinReservation)
+              return;
+            if (!work.getWork().operation(op->getNumOperands() +
+                                          op->getNumResults() +
+                                          op->getNumRegions())) {
+              withinReservation = false;
+              return;
+            }
+            auto charge = [&](uint64_t cost) {
+              if (cost > slotsRemaining)
+                withinReservation = false;
+              else
+                slotsRemaining -= cost;
+            };
+            if (!operationsRemaining) {
+              withinReservation = false;
+              return;
+            }
+            --operationsRemaining;
+            charge(op->getNumOperands());
+            charge(op->getNumResults());
+            for (auto &region : op->getRegions())
+              for (auto &block : region) {
+                if (!operationsRemaining) {
+                  withinReservation = false;
+                  return;
+                }
+                --operationsRemaining;
+                charge(block.getNumArguments());
+              }
+          });
+        }
+        if (!withinReservation)
+          return error("oracle-window-limit");
+        // Reacquire after mutation. The checker reads actual IR independently.
+        // Private composite scratch is read exactly once by the final pair
+        // checker. Raw primitive subjects still complete their own reader.
+        if (!work.ownsScratch(candidate)) {
+          auto actual =
+              OracleVerificationContext::read(candidate, work.getWork());
+          if (!actual)
+            return actual.takeError();
+          if (auto e =
+                  checkOracleQueryWindow(*actual, controller, demand, exchange,
+                                         response, emitter.result))
+            return std::move(e);
+        }
+        published = true;
+        commitOracleEmissionSession(session);
+        return std::move(emitter.result);
+      });
 }
 } // namespace zkc::protocol

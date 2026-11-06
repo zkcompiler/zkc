@@ -499,9 +499,11 @@ int main() {
             });
   cases.run("native block invocations have typed composite parameters", [&] {
     auto origin = take(protocol::encodeNativeOriginTemplate(
-        "entry", {},
-        {"query", "source", "block", "input_0",
-         "random.koala-bear.ext4-binomial3/0", "indices", "V"}));
+        {"entry",
+         {},
+         protocol::NativeQueryOrigin{"source", "block", 0,
+                                     "random.koala-bear.ext4-binomial3/0",
+                                     "indices", "V"}}));
     for (StringRef suite :
          {"hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
           "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"}) {

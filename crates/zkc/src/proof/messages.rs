@@ -46,7 +46,7 @@ impl<'a> MessageLayout<'a> {
         let mut observed_messages = 0;
         let mut wire_origins = Vec::new();
         let mut witness_types = Vec::new();
-        let mut pending_delivery = None;
+        let mut pending_delivery: Option<(&str, Vec<Json>)> = None;
         let mut used_gates = std::collections::BTreeSet::new();
         let mut source_sites = std::collections::BTreeSet::new();
         for row in event_rows {
@@ -137,13 +137,29 @@ impl<'a> MessageLayout<'a> {
             let expanded_site = zkc_runtime::vm::native_origin_site(origin, origin_kind)
                 .map_err(|e| e.to_string())?;
             source_sites.insert(expanded_site.clone());
+            let path = record[2].as_array().ok_or("native-proof-origin-map")?;
+            // Applications expand lexical sites without creating a control
+            // boundary. Keep their ancestry up to the last control step; an
+            // application wholly within a frame may draw and return before
+            // its caller delivers the challenge in that same frame.
+            let end = path
+                .iter()
+                .rposition(|step| step[0] != "apply")
+                .map_or(0, |index| index + 1);
+            let control = &path[..end];
+            if pending_delivery
+                .as_ref()
+                .is_some_and(|(_, frame)| frame != control)
+            {
+                return Err("native-proof-state-chain".into());
+            }
             if policy.format == super::ProofFormat::RawBytes
                 && policy.construction.is_empty()
                 && record[2]
                     .as_array()
                     .ok_or("native-proof-origin-map")?
                     .iter()
-                    .any(|s| s[0] == "repeat")
+                    .any(|s| s[0] == "repeat" || s[0] == "branch")
             {
                 return Err("native-proof-format".into());
             }
@@ -176,7 +192,7 @@ impl<'a> MessageLayout<'a> {
                 {
                     return Err("native-proof-gates".into());
                 }
-                pending_delivery = Some(selected.1);
+                pending_delivery = Some((selected.1, control.to_vec()));
                 queries += 1;
                 let field = record[4][4]
                     .as_str()
@@ -240,7 +256,8 @@ impl<'a> MessageLayout<'a> {
                 } else if record[4][4].as_str() == Some(validator)
                     && record[4][5].as_str() == Some(producer)
                 {
-                    if pending_delivery.take() != Some(expanded_site.as_str()) {
+                    if pending_delivery.take().map(|(site, _)| site) != Some(expanded_site.as_str())
+                    {
                         return Err("native-proof-event-map".into());
                     }
                 } else {
@@ -559,6 +576,63 @@ mod tests {
         check(&value).unwrap();
         value[7][0][1] = json!("gate.draw");
         assert!(check(&value).is_err());
+    }
+    fn set_event_path(value: &mut Json, index: usize, path: Json) {
+        let old = value[3][index][1].as_str().unwrap().to_owned();
+        let kind = if index == 1 { "query" } else { "message" };
+        let mut origin = logical::decode_tree(
+            &logical::native_origin_template(std::slice::from_ref(&old), kind).unwrap(),
+        )
+        .unwrap();
+        origin[2] = path;
+        let new: String = logical::encode_tree(&origin)
+            .unwrap()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        value[3][index][1] = json!(new);
+        for row in value[5].as_array_mut().unwrap() {
+            if row[0] == old {
+                row[0] = json!(new);
+            }
+        }
+        if index == 1 && !value[7].as_array().unwrap().is_empty() {
+            value[7][0][0] = json!(new);
+        }
+    }
+    #[test]
+    fn challenge_delivery_stays_in_its_exact_selected_control_frame() {
+        let path = json!([
+            ["repeat", "Round", "rounds"],
+            ["branch", "Round", "choose", "then"]
+        ]);
+        let mut value = descriptor(Some(0));
+        set_event_path(&mut value, 1, path.clone());
+        set_event_path(&mut value, 2, path.clone());
+        check(&value).unwrap();
+        for wrong in [
+            json!([]),
+            json!([["repeat", "Round", "rounds"]]),
+            json!([
+                ["repeat", "Round", "rounds"],
+                ["branch", "Round", "choose", "else"]
+            ]),
+            json!([
+                ["repeat", "Round", "other"],
+                ["branch", "Round", "choose", "then"]
+            ]),
+        ] {
+            let mut mutated = value.clone();
+            set_event_path(&mut mutated, 2, wrong);
+            assert!(check(&mutated).is_err());
+        }
+    }
+    #[test]
+    fn nested_application_is_not_a_new_challenge_control_frame() {
+        let mut value = descriptor(None);
+        set_event_path(&mut value, 1, json!([["apply", "Root", "nested"]]));
+        value[1][8] = json!([["apply_6_nested_draw", "delivery"]]);
+        check(&value).unwrap();
     }
     #[test]
     fn policy_and_descriptor_reject_old_shapes_and_unknown_fields() {

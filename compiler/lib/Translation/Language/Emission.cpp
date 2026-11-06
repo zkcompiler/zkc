@@ -1,3 +1,4 @@
+#include "ConstructionSites.h"
 #include "DataPreconditions.h"
 #include "EmissionBudget.h"
 #include "Finite.h"
@@ -2023,25 +2024,28 @@ class Emitter {
       return true;
     const auto &plan = *definition.construction;
     const auto &target = project.declarations()[definition.target->index];
+    detail::ConstructionSites sourceSites(project, limits, remaining,
+                                          definition);
+    auto &constructionLayouts = sourceSites.observer();
+    if (auto error = sourceSites.collect()) {
+      failure = std::move(error);
+      return false;
+    }
     SmallVector<mlir::Attribute> applications;
     for (const auto &application : plan.applications) {
       const auto &child =
           project.declarations()[application.construction.index];
       if (!construction(child))
         return false;
-      std::string site;
-      for (const auto &part : application.path) {
-        auto label = nativeSiteName(part, 0);
-        site = site.empty()
-                   ? label
-                   : mathematical::expandedApplicationSite(site, label);
-      }
+      auto site = take(sourceSites.application(application));
+      if (!site)
+        return false;
       applications.push_back(builder.getDictionaryAttr(
-          {text("site", site),
+          {text("site", *site),
            attr("construction",
                 mlir::FlatSymbolRefAttr::get(&context, child.symbol))}));
     }
-    auto stateLayout = take(layouts.get(*plan.state));
+    auto stateLayout = take(constructionLayouts.get(*plan.state));
     if (!stateLayout)
       return false;
     auto state = types(**stateLayout);
@@ -2055,7 +2059,7 @@ class Emitter {
     };
     std::vector<unsigned> offsets{0};
     for (const auto &port : target.inputs) {
-      auto layout = take(layouts.get(port.type));
+      auto layout = take(constructionLayouts.get(port.type));
       if (!layout)
         return false;
       offsets.push_back(offsets.back() + (*layout)->leaves.size());
@@ -2072,7 +2076,7 @@ class Emitter {
           for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
             inputs.push_back(i);
       } else {
-        auto layout = take(layouts.get(*rule.payload));
+        auto layout = take(constructionLayouts.get(*rule.payload));
         if (!layout)
           return false;
         auto native = types(**layout);
@@ -2080,7 +2084,7 @@ class Emitter {
           return false;
         payload = *native;
         if (rule.chunks) {
-          auto wire = take(layouts.get(*rule.chunks));
+          auto wire = take(constructionLayouts.get(*rule.chunks));
           if (!wire)
             return false;
           auto values = types(**wire);
@@ -2088,24 +2092,10 @@ class Emitter {
             return false;
           chunks = *values;
         }
-        auto qualified = [&](std::string site) {
-          std::string prefix;
-          for (auto &part : ArrayRef(rule.path).drop_back()) {
-            auto label = nativeSiteName(part, 0);
-            prefix = prefix.empty()
-                         ? label
-                         : mathematical::expandedApplicationSite(prefix, label);
-          }
-          return prefix.empty()
-                     ? site
-                     : mathematical::expandedApplicationSite(prefix, site);
-        };
-        auto label = nativeSiteName(rule.path.back(), 0);
-        if (kind == "query")
-          sites.push_back(qualified(label));
-        else
-          for (unsigned i = 0; i < payload.size(); ++i)
-            sites.push_back(qualified(label + "_" + std::to_string(i)));
+        auto selected = take(sourceSites.rule(rule, payload.size()));
+        if (!selected)
+          return false;
+        sites = std::move(*selected);
       }
       rules.push_back(builder.getDictionaryAttr(
           {text("kind", kind),
@@ -2136,7 +2126,7 @@ class Emitter {
         attr("applications", builder.getArrayAttr(applications))};
     if (plan.codec) {
       const auto &codec = *plan.codec;
-      auto layout = take(layouts.get(codec.record));
+      auto layout = take(constructionLayouts.get(codec.record));
       if (!layout)
         return false;
       auto recordTypes = types(**layout);

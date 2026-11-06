@@ -182,6 +182,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   // logical clauses remain owned alongside the checked edge through
   // publication.
   auto prepared = result->realization->candidateSnapshot();
+  if (!prepared)
+    return diagnostics.failure(error("oracle-common-limit"));
   if (options.observations)
     options.observations->phase("realized", *prepared);
   result->module = result->realization->project(
@@ -216,8 +218,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
                           options.cpuTarget)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
-  auto bundle =
-      detail::buildRunBundle(*prepared, *result->module, options.entry);
+  auto bundle = detail::buildRunBundle(*result->realization, *result->module,
+                                       options.entry);
   if (!bundle)
     return diagnostics.failure(bundle.takeError());
   if (diagnostics.hasErrors())
@@ -257,8 +259,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       for (StringRef entry : entries) {
         if (hashes.get(entry))
           continue;
-        auto companion =
-            detail::buildRunBundle(*prepared, *result->module, entry);
+        auto companion = detail::buildRunBundle(*result->realization,
+                                                *result->module, entry);
         if (!companion)
           return diagnostics.failure(companion.takeError());
         hashes[entry.str()] = digest(*companion);

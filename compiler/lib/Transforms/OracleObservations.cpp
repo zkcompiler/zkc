@@ -1,3 +1,5 @@
+#include "OracleAccounting.h"
+#include "OracleNativeCommon.h"
 #include "OracleSchedule.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Interactions.h"
@@ -178,42 +180,66 @@ analyzeOracleObservations(ModuleOp prepared, StringRef entry,
                                                         (*view)->getBody(), 64);
 }
 Error checkOracleFinalDrawSchedule(ModuleOp prepared) {
-  auto module = admitted(prepared);
-  if (!module)
-    return module.takeError();
-  uint64_t remaining = 100000;
-  facts::Work work(remaining);
-  InteractionAnalysis interactions(prepared);
-  MathematicalFactAnalysis mathematics(prepared);
-  for (auto program : module->getBody().front().getOps<pir::MathematicalOp>()) {
-    // Virtual declarations cannot draw. Their nested queries inherit the outer
-    // observation; uncalled virtual declarations create no reached event.
-    llvm::DenseSet<StringAttr> observers;
-    auto view = structure(interactions, program, work);
-    if (!view)
-      return view.takeError();
-    for (const auto &action : (*view)->getActions()) {
-      if (!work.charge())
-        return error("oracle-observation-limit");
-      auto *op = action.getOperation();
-      if (isa<pir::ApplyOp>(op))
-        return error("oracle-observation-preparation");
-      if (auto query = dyn_cast<pir::OracleQueryOp>(op))
-        observers.insert(query.getOwnerAttr());
+  OracleNativeWork common;
+  auto preflight = OracleNativeSourcePreflight::read(prepared, common);
+  if (!preflight)
+    return preflight.takeError();
+  return checkOracleFinalDrawScheduleWithWork(prepared, common, *preflight);
+}
+Error checkOracleFinalDrawScheduleWithWork(
+    ModuleOp prepared, OracleNativeWork &common,
+    const OracleNativeSourcePreflight &preflight) {
+  return oracleVerificationWithWork(common, [&]() -> Error {
+    if (auto e = checkOracleNativePreflight(prepared, common, &preflight))
+      return e;
+    if (failed(preflight.admit()))
+      return error(common.exhausted ? "oracle-common-limit"
+                                    : "oracle-observation-source");
+    auto module = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
+    if (!module)
+      return error("oracle-observation-source");
+    uint64_t remaining = 100000;
+    facts::Work work([&](uint64_t amount) {
+      if (!common.charge(amount) || amount > remaining)
+        return false;
+      remaining -= amount;
+      return true;
+    });
+    InteractionAnalysis interactions(prepared);
+    MathematicalFactAnalysis mathematics(prepared);
+    for (auto program :
+         module.getBody().front().getOps<pir::MathematicalOp>()) {
+      // Virtual declarations cannot draw. Their nested queries inherit the
+      // outer observation; uncalled virtual declarations create no reached
+      // event.
+      llvm::DenseSet<StringAttr> observers;
+      auto view = structure(interactions, program, work);
+      if (!view)
+        return view.takeError();
+      for (const auto &action : (*view)->getActions()) {
+        if (!work.charge())
+          return error("oracle-observation-limit");
+        auto *op = action.getOperation();
+        if (isa<pir::ApplyOp>(op))
+          return error("oracle-observation-preparation");
+        if (auto query = dyn_cast<pir::OracleQueryOp>(op))
+          observers.insert(query.getOwnerAttr());
+      }
+      // Declaration order makes refusal precedence independent of hash order.
+      for (Attribute role : program.getRoles()) {
+        auto observer = cast<StringAttr>(role);
+        if (!observers.contains(observer))
+          continue;
+        auto summary =
+            Analysis{observer.getValue(), work, mathematics}.sequence(
+                **view, (*view)->getBody(), 64);
+        if (!summary)
+          return summary.takeError();
+        if (summary->queryBeforeDraw())
+          return error("oracle-realization-query-order");
+      }
     }
-    // Declaration order makes refusal precedence independent of hash order.
-    for (Attribute role : program.getRoles()) {
-      auto observer = cast<StringAttr>(role);
-      if (!observers.contains(observer))
-        continue;
-      auto summary = Analysis{observer.getValue(), work, mathematics}.sequence(
-          **view, (*view)->getBody(), 64);
-      if (!summary)
-        return summary.takeError();
-      if (summary->queryBeforeDraw())
-        return error("oracle-realization-query-order");
-    }
-  }
-  return Error::success();
+    return Error::success();
+  });
 }
 } // namespace zkc::protocol

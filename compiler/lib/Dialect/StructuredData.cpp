@@ -1,4 +1,5 @@
 #include "zkc/Dialect/StructuredData.h"
+#include "NativeTypeWork.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Contracts/Bindings.h"
@@ -32,12 +33,18 @@ struct Budget {
   unsigned remaining = 200000;
   size_t bytes = 64 * 1024 * 1024;
   bool node(unsigned depth) {
+    // Debit each actual tree occurrence before any result allocation. Eight
+    // units reserve the visit and the small tagged row/argument containers;
+    // recursive native formation has its own scoped debit. Shared native DAG
+    // nodes are intentionally charged again when the codec expands them.
+    detail::NativeTypeWorkScope::charge(8);
     if (depth >= 64 || !remaining)
       return false;
     --remaining;
     return true;
   }
   bool text(StringRef text) {
+    detail::NativeTypeWorkScope::charge(2 * uint64_t(text.size()));
     if (!json::isUTF8(text) || text.size() > bytes)
       return false;
     bytes -= text.size();
@@ -46,6 +53,8 @@ struct Budget {
 };
 std::optional<uint64_t> natural(const json::Value &node) {
   auto text = node.getAsString();
+  if (text)
+    detail::NativeTypeWorkScope::charge(2 * uint64_t(text->size()));
   uint64_t value;
   if (!text || text->empty() || text->size() > 20 ||
       (text->size() > 1 && text->front() == '0') || !all_of(*text, isDigit) ||
@@ -112,6 +121,7 @@ Expected<Attribute> importTree(MLIRContext *context, const json::Value &value,
 
 struct TypeCodec {
   Budget budget;
+  bool inspectCanonical = false, canonical = true;
   Expected<json::Value> encode(Type type, unsigned depth = 0) {
     if (!type || !budget.node(depth))
       return refuse();
@@ -172,9 +182,11 @@ struct TypeCodec {
           encodeArguments(oracle.getArguments().getValue(), {}, depth + 1);
       if (!arguments)
         return arguments.takeError();
-      if (maximum)
+      if (maximum) {
+        detail::NativeTypeWorkScope::charge(40);
         return json::Array{"oracle_sequence", oracle.getIdentity().str(),
                            std::move(*arguments), std::to_string(*maximum)};
+      }
       return json::Array{"oracle", oracle.getIdentity().str(),
                          std::move(*arguments)};
     }
@@ -230,6 +242,7 @@ struct TypeCodec {
         if (!parameters.empty() &&
             parameters[i].kind != protocol::StaticKind::Nat)
           return refuse();
+        detail::NativeTypeWorkScope::charge(40);
         result.push_back(json::Array{
             "nat", std::to_string(number.getValue().getZExtValue())});
       } else if (auto domain = dyn_cast<StringAttr>(argument);
@@ -262,6 +275,10 @@ struct TypeCodec {
       auto type = protocol_ir::ServiceReferenceType::get(context, *contract);
       if (!type)
         return refuse();
+      if (inspectCanonical) {
+        detail::NativeTypeWorkScope::charge(1 + contract->size());
+        canonical &= type.getContract() == *contract;
+      }
       return type;
     }
     if (tag == "variant" && row->size() == 3) {
@@ -308,6 +325,11 @@ struct TypeCodec {
           ArrayRef<data::AlternativeAttr>(alternatives));
       if (!type)
         return refuse();
+      if (inspectCanonical) {
+        detail::NativeTypeWorkScope::charge(2 + alternatives.size());
+        canonical &= type.getIdentity().getTerm() == array &&
+                     equal(type.getAlternatives(), alternatives);
+      }
       return type;
     }
     bool oracle = tag == "oracle" || tag == "oracle_sequence";
@@ -375,6 +397,25 @@ struct TypeCodec {
       type = constructLogicalType(emit, context, {*head, attrs});
     if (!type)
       return refuse();
+    if (inspectCanonical) {
+      // Each child, natural spelling and closed row shape was checked during
+      // decode. Compare this node's exact catalog spelling without exporting
+      // another descriptor tree solely to compare it with the parsed input.
+      detail::NativeTypeWorkScope::charge(2 + head->size() + attrs.size());
+      if (oracle) {
+        auto kind = tag == "oracle_sequence"
+                        ? cast<protocol_ir::OracleSequenceType>(type).getKind()
+                        : cast<protocol_ir::OracleHandleType>(type).getKind();
+        canonical &=
+            kind.getIdentity() == *head && equal(kind.getArguments(), attrs);
+      } else {
+        auto interface = dyn_cast<CatalogTypeInterface>(type);
+        auto application =
+            interface ? interface.getCatalogApplication() : std::nullopt;
+        canonical &= application && application->constructor == *head &&
+                     equal(application->arguments, attrs);
+      }
+    }
     return type;
   }
 };
@@ -523,8 +564,10 @@ Expected<Type> importLogicalTypeData(MLIRContext *context,
   return TypeCodec{}.decode(context, value);
 }
 Expected<SmallVector<Type>> importLogicalTypesData(MLIRContext *context,
-                                                   const json::Array &values) {
+                                                   const json::Array &values,
+                                                   bool *canonical) {
   TypeCodec codec;
+  codec.inspectCanonical = canonical != nullptr;
   SmallVector<Type> types;
   for (const auto &value : values) {
     auto type = codec.decode(context, value);
@@ -532,6 +575,8 @@ Expected<SmallVector<Type>> importLogicalTypesData(MLIRContext *context,
       return type.takeError();
     types.push_back(*type);
   }
+  if (canonical)
+    *canonical = codec.canonical;
   return types;
 }
 Expected<json::Value> exportLogicalTypeInventory(TypeRange types) {

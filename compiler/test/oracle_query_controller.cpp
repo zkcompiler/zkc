@@ -844,11 +844,19 @@ module { "protocol.module"() ({
         auto refusal = checkOracleQueryController(*candidate, *original, plan,
                                                   "V", model.kinds.front(),
                                                   model.capacity, model);
+        // Before reaching the final 513-field frame, the independently
+        // derived metadata for the first 509 frames alone exceeds 1m work.
+        // Resource refusal must precede native allocation/diagnostics there.
+        uint64_t minimumMetadata = 0;
+        for (unsigned query = 0; query < 509; ++query)
+          minimumMetadata += 128 + 2 * (plan.entry.size() + model.role.size()) +
+                             8 * (4 + query);
+        require(minimumMetadata > 1000000, "wide metadata lower bound changed");
         require(bool(refusal) && namesIdentifier(toString(std::move(refusal)),
-                                                 "oracle-controller-body"),
-                "oversized derived continuation was not refused");
-        require(!diagnostics.empty(),
-                "controller refused before checking the derived native type");
+                                                 "oracle-common-limit"),
+                "oversized derived continuation escaped cumulative capacity");
+        require(diagnostics.empty(),
+                "capacity refusal reached malformed native type allocation");
       });
   cases.run(
       "controller generation refuses unsupported capacity and malformed inputs",

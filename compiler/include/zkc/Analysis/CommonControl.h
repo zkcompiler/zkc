@@ -35,6 +35,9 @@ struct CommonControlRequirement {
 /// Actual completed exchanges forward only the sender's immutable subject to
 /// their sender/receiver result components on normal paths. Distinct opaque
 /// Local/service occurrences never agree merely by their dependencies.
+/// The private paired Oracle reader can complete admission with observations
+/// scoped to its exact generated Repeat count and recurrence. This public
+/// derivation never imports those observations, including on inspection clones.
 /// Refusals: common-control-provenance and common-control-capacity.
 llvm::Expected<llvm::SmallVector<CommonControlRequirement>>
 deriveCommonControlRequirements(protocol_ir::MathematicalOp, facts::Work &);

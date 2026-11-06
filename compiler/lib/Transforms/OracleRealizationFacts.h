@@ -1,5 +1,6 @@
 #ifndef ZKC_TRANSFORMS_ORACLEREALIZATIONFACTS_H
 #define ZKC_TRANSFORMS_ORACLEREALIZATIONFACTS_H
+#include "zkc/Analysis/CommonControl.h"
 #include "llvm/ADT/SmallVector.h"
 #include <cstdint>
 #include <optional>
@@ -27,8 +28,13 @@ struct OracleEntryFacts {
   std::vector<OracleCommonQueryBlock> queryBlocks;
 };
 // Derived by the independent actual-body reader, never from a wire record.
-// Operation handles borrow the immutable candidate; mutation invalidates them.
+// Operation handles borrow the immutable original and candidate; mutation of
+// either subject invalidates them.
 struct OracleRealizationFacts {
+  // Undischarged input obligations. In particular, lowering a source selector
+  // or OracleSequenceAt never erases its original agreement requirement.
+  llvm::SmallVector<CommonControlRequirement> sourceRequirements;
+  llvm::SmallVector<CommonControlRequirement> candidateRequirements;
   llvm::SmallVector<mlir::Operation *> openingRequests;
   std::vector<OracleEntryFacts> entries;
 };

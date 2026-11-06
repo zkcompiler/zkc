@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 namespace zkc::protocol {
+struct OracleNativeWork;
+class OracleNativeSourcePreflight;
 struct OracleStorageField {
   std::string name;
   mlir::Type type;
@@ -51,6 +53,10 @@ using OracleStorageSelection = llvm::function_ref<llvm::Expected<std::string>(
 llvm::Expected<OracleAnchorStorage>
 planOracleAnchorStorage(mlir::ModuleOp prepared, llvm::StringRef entry,
                         OracleStorageSelection select);
+llvm::Expected<OracleAnchorStorage>
+planOracleAnchorStorageWithWork(mlir::ModuleOp, llvm::StringRef,
+                                OracleStorageSelection, OracleNativeWork &,
+                                const OracleNativeSourcePreflight &);
 // Compare the exact native associations while erasing static shape only.
 // Kind dispatch must not derive equality by encoding reference identities.
 inline bool sameOracleReferenceKind(protocol_ir::OracleKindAttr left,
@@ -65,6 +71,8 @@ inline bool sameOracleReferenceKind(protocol_ir::OracleKindAttr left,
 // immutable record. No ideal oracle type escapes into the ordinary carrier.
 llvm::Expected<mlir::Type>
 oracleReferenceType(protocol_ir::OracleKindAttr kind);
+llvm::Expected<mlir::Type>
+oracleReferenceTypeWithWork(protocol_ir::OracleKindAttr, OracleNativeWork &);
 // Producer-only helper construction in an owned candidate. The caller must
 // discard a partial candidate on failure. Appending is ordered scoped
 // execution; this helper neither checks oracle shapes nor authenticates data.
@@ -92,5 +100,11 @@ llvm::Error checkOracleAnchorLookup(mlir::ModuleOp candidate,
                                     mlir::func::FuncOp actual,
                                     const OracleAnchorStorage &,
                                     unsigned constructor, unsigned role);
+llvm::Expected<mlir::func::FuncOp>
+emitOracleAnchorAllocatorWithWork(mlir::ModuleOp, const OracleAnchorStorage &,
+                                  unsigned, unsigned, OracleNativeWork &);
+llvm::Expected<mlir::func::FuncOp>
+emitOracleAnchorLookupWithWork(mlir::ModuleOp, const OracleAnchorStorage &,
+                               unsigned, unsigned, OracleNativeWork &);
 } // namespace zkc::protocol
 #endif

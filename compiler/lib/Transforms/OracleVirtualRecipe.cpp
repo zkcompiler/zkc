@@ -24,9 +24,7 @@ struct Planner {
   bool charge(uint64_t slots) {
     if (!work.operations || slots > work.slots)
       return false;
-    --work.operations;
-    work.slots -= slots;
-    return true;
+    return work.reserve(1, slots);
   }
   Expected<IDs> operands(ValueRange inputs, const Environment &environment) {
     IDs mapped;
@@ -81,7 +79,11 @@ struct Planner {
     for (auto &region : op.getRegions()) {
       if (!region.hasOneBlock())
         return refuse();
+      if (!work.getWork().charge())
+        return error("oracle-common-limit");
       auto nested = std::make_shared<OracleVirtualBlock>();
+      if (!work.getWork().charge(environment.size()))
+        return error("oracle-common-limit");
       Environment local(environment);
       if (!charge(region.front().getNumArguments()))
         return error("oracle-virtual-function-limit");
@@ -107,28 +109,40 @@ struct Planner {
   // Attribute every nested definition to its outer instruction. Captures then
   // add dependencies on earlier outer instructions, while local region values
   // remain inside that one copied instruction.
-  void owners(const OracleVirtualInstruction &item, unsigned owner,
+  bool owners(const OracleVirtualInstruction &item, unsigned owner,
               llvm::DenseMap<unsigned, unsigned> &definitions) {
+    if (!work.getWork().charge(1 + item.outputs.size() + item.regions.size()))
+      return false;
     for (unsigned id : item.outputs)
       definitions[id] = owner;
     for (const auto &region : item.regions) {
+      if (!work.getWork().charge(region->arguments.size()))
+        return false;
       for (unsigned id : region->arguments)
         definitions[id] = owner;
       for (const auto &nested : region->instructions)
-        owners(nested, owner, definitions);
+        if (!owners(nested, owner, definitions))
+          return false;
     }
+    return true;
   }
-  void dependencies(const OracleVirtualInstruction &item, IDs &pending) {
+  bool dependencies(const OracleVirtualInstruction &item, IDs &pending) {
+    if (!work.getWork().charge(1 + item.inputs.size() + item.regions.size()))
+      return false;
     append_range(pending, item.inputs);
     for (const auto &region : item.regions)
       for (const auto &nested : region->instructions)
-        dependencies(nested, pending);
+        if (!dependencies(nested, pending))
+          return false;
+    return true;
   }
   Expected<OracleVirtualBody> slice(Value value, ArrayRef<unsigned> arguments,
                                     TypeRange types) {
     auto mapped = operands(ValueRange(value), values);
     if (!mapped)
       return mapped.takeError();
+    if (!work.getWork().charge(1 + 2 * arguments.size() + types.size()))
+      return error("oracle-common-limit");
     OracleVirtualBody body{{{arguments.begin(), arguments.end()},
                             {types.begin(), types.end()},
                             {}},
@@ -136,13 +150,13 @@ struct Planner {
                            value.getType()};
     llvm::DenseMap<unsigned, unsigned> definitions;
     for (auto [i, item] : enumerate(expanded.instructions))
-      owners(item, i, definitions);
+      if (!owners(item, i, definitions))
+        return error("oracle-common-limit");
     llvm::DenseSet<unsigned> formal(arguments.begin(), arguments.end()), needed;
     IDs pending{body.result};
     while (!pending.empty()) {
-      if (!work.slots)
+      if (!work.reserve(0, 1))
         return error("oracle-virtual-function-limit");
-      --work.slots;
       auto id = pending.back();
       pending.pop_back();
       if (formal.contains(id))
@@ -150,12 +164,20 @@ struct Planner {
       auto found = definitions.find(id);
       if (found == definitions.end())
         return refuse();
-      if (needed.insert(found->second).second)
-        dependencies(expanded.instructions[found->second], pending);
+      if (needed.insert(found->second).second &&
+          !dependencies(expanded.instructions[found->second], pending))
+        return error("oracle-common-limit");
     }
-    for (auto [i, item] : enumerate(expanded.instructions))
-      if (needed.contains(i))
+    for (auto [i, item] : enumerate(expanded.instructions)) {
+      if (!work.getWork().charge())
+        return error("oracle-common-limit");
+      if (needed.contains(i)) {
+        if (!work.getWork().charge(1 + item.inputs.size() +
+                                   item.outputs.size() + item.regions.size()))
+          return error("oracle-common-limit");
         body.block.instructions.push_back(item);
+      }
+    }
     return body;
   }
   Expected<OracleVirtualRecipe> run() {
@@ -186,11 +208,15 @@ struct Planner {
       auto position = slice(query.getPosition(), arguments, types);
       if (!position)
         return position.takeError();
+      if (!work.getWork().charge(1 + query.getSite().size()))
+        return error("oracle-common-limit");
       result.queries.push_back(
           {cast<BlockArgument>(query.getHandle()).getArgNumber(),
            query.getSite().str(), query.getHandle().getType().getKind(),
            std::move(*position)});
     }
+    if (!work.getWork().charge(answers.size() + answerTypes.size()))
+      return error("oracle-common-limit");
     append_range(arguments, answers);
     append_range(types, answerTypes);
     auto answer =

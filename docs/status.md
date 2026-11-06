@@ -27,6 +27,13 @@ check helper expansion, arm-local normalization, demand extraction and actual
 scoped recipe bodies. Native fixtures cover nested helpers, enum payloads,
 structural products and installed finite work. Program/CPU execution coverage is
 recorded by the [selected Math integration tests](../common/tests/protocol/test_selected_math.py).
+Native mathematical facts follow immutable selected-arm captures to their
+actual outer operands, retaining payload offsets and consumed dependency depth.
+Enclosing index bounds and captured constructor cardinalities remain available;
+selected payloads, results and equal types create no new premise. The
+[native transport controls](../compiler/test/mathematical_fact_transport.cpp) and
+[source transport controls](../compiler/test/language_index_fact_transport.cpp)
+cover this boundary and capacity exhaustion.
 Selected polynomial observations retain their existing admission restriction.
 Checked source-selected Math emission, actual native comparison and CPU
 execution are covered by the [selected source tests](../common/tests/protocol/test_selected_source.py).
@@ -65,21 +72,38 @@ Recursive schema/component mapping and actual
 SDK input admission are covered separately below.
 
 Oracle capacity, observation and storage inventories retain alternative arm
-coordinates. The existing oracle realization recipe refuses selected Protocol
-or participant control with `oracle-realization-control-profile`; native transcript construction,
-reverse requests and codecs likewise refuse their unsupported selected Protocol
-profiles before mutation. Total Data selections remain mathematical values:
-proof event readers preserve them and the existing checked projection and
-computation recipes preserve lazy execution. Reverse-request dependency
-reconstruction and formal export retain their separate support profiles.
-Checked source syntax, emission, structured-source and
-application-map carriers retain selected arms. Common-input derivation,
-publication and native SDK admission are integrated for the supported profile.
-The integrated Program and Rust runtime execute the selected native forms;
-independent formal interpretation remains separately owned. This boundary does
-not establish complete 4.1 control support through oracle/security realization.
-The [contract](spec/ir/control.md#selected-protocol-and-mathematical-regions)
-keeps the intended semantics separate from these limitations.
+coordinates. Native Oracle realization materializes selected common bodies and
+independently compares their actual operations and retained helpers. Total Data
+selections retain lazy native MLIR regions; emission remaps external operands,
+and the independent reader recursively compares actual SSA, captures, yields
+and dormant arms. All nested operations remain charged to the same allowance.
+Its private
+[paired count rule](spec/ir/control.md#paired-oracle-repeat-counts) preserves the
+original common-input requirements and checks the actual local count recipes;
+ordinary raw-module admission gains no opaque-result congruence. The checked
+realization owner retains both subjects through participant projection, request
+counts and CPU run-bundle checking. The
+[selected Oracle controls](../compiler/test/selected_oracle_common.cpp) and
+[count controls](../compiler/test/selected_oracle_counts.cpp) cover both
+policies, selected/loop nesting, exact helper mutations, detached subjects,
+owner lifetime and cumulative capacity.
+
+Native proof construction prepares actual transcript callbacks and codec layout
+jointly before materialization. Selected projection, reverse requests, codecs,
+transcript checking, native occurrence origins and construction delegation
+retain every arm and actual state successors. Rust executes reached branches,
+completion and stops; SDK message matching retains the exact branch/repeat
+frame. [Preparation controls](../compiler/test/construction_preparation.cpp),
+[native proof controls](../compiler/test/selected_proof.cpp) and
+[source-to-Host controls](../common/tests/protocol/test_selected_native_proofs.py)
+cover these boundaries. The Host matrix includes arm-local custom codecs and
+managed Keccak continuation, conditional completion, dormancy and rejection.
+Source repeat labels retain their exact construction call environment. Complete
+affected target adaptation and the independent Lean selected
+constructed-participant interpretation remain migration obligations. This support does not establish a security realization
+or whole-compiler correspondence. The
+[control contract](spec/ir/control.md#selected-protocol-and-mathematical-regions)
+retains the intended semantics.
 
 ## Current public interfaces
 

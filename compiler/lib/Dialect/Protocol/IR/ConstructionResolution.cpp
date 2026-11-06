@@ -1,5 +1,6 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Construction.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
@@ -25,7 +26,14 @@ bool within(ArrayRef<std::string> path, ArrayRef<std::string> parent) {
 }
 BlockArgument sourcePort(Value value) {
   while (auto argument = dyn_cast<BlockArgument>(value)) {
-    auto repeat = dyn_cast<pir::RepeatOp>(argument.getOwner()->getParentOp());
+    Operation *parent = argument.getOwner()->getParentOp();
+    if (isSelectedControl(parent)) {
+      // An arm payload is not an alias of a root service. Only the actual
+      // capture row forwards authority through this isolated region.
+      value = selectedCapture(argument);
+      continue;
+    }
+    auto repeat = dyn_cast<pir::RepeatOp>(parent);
     if (!repeat)
       return argument;
     if (!argument.getArgNumber())
@@ -112,6 +120,17 @@ class Resolver {
         if (auto e = inventory(function, repeat.getBody().front(), services,
                                roles, prefix, out, depth + 1))
           return e;
+      }
+      if (auto branch = dyn_cast<pir::BranchOp>(op)) {
+        // A construction selects static occurrences, including dormant arms.
+        // The branch is control provenance, not an application-name prefix.
+        for (Region &arm : branch.getArms()) {
+          if (!charge(1))
+            return fail("construction resolution work limit exceeded");
+          if (auto e = inventory(function, arm.front(), services, roles, prefix,
+                                 out, depth + 1))
+            return e;
+        }
       }
       if (!isa<pir::ApplyOp, pir::QueryOp, pir::ExchangeOp>(op))
         continue;

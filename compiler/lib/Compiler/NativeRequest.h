@@ -7,6 +7,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -24,6 +25,19 @@ struct NativeRequestStep {
   llvm::SmallVector<NativeRequestValue> inputs;
 };
 struct NativeRequestFrame;
+struct NativeRequestBranch {
+  protocol_ir::ParticipantBranchOp producer, validator;
+  NativeRequestFrame *parent = nullptr;
+  llvm::SmallVector<std::unique_ptr<NativeRequestFrame>> arms;
+  // Indices into validator inputs; zero is the selector, never a capture.
+  llvm::SmallVector<unsigned> captures;
+  llvm::SmallVector<NativeRequestValue> captured;
+  // Exact validator result indices; each arm yields one value per output.
+  llvm::SmallVector<unsigned> outputs;
+  llvm::SmallVector<llvm::SmallVector<NativeRequestValue>> yielded;
+  // Only completed all-arm judgments are cached. Positions are role-local.
+  llvm::DenseMap<std::pair<mlir::Value, mlir::Value>, bool> joins;
+};
 struct NativeRequestLoop {
   protocol_ir::ProtocolLoopOp producer, validator;
   NativeRequestFrame *parent = nullptr;
@@ -36,16 +50,21 @@ struct NativeRequestLoop {
 };
 struct NativeRequestFrame {
   mlir::Block *producer = nullptr, *validator = nullptr;
+  // Mutually exclusive immediate ancestry; the root has neither.
   NativeRequestLoop *loop = nullptr;
+  NativeRequestBranch *branch = nullptr;
+  unsigned arm = 0;
   llvm::DenseMap<mlir::Operation *, llvm::SmallVector<NativeRequestStep>>
       before;
   llvm::DenseMap<mlir::Operation *, mlir::Operation *> definitions;
   // Count obligations may discover replica state. Visit them in source order,
   // independent of operation allocation addresses and hash iteration order.
   llvm::MapVector<mlir::Operation *, std::unique_ptr<NativeRequestLoop>> loops;
+  llvm::MapVector<mlir::Operation *, std::unique_ptr<NativeRequestBranch>>
+      branches;
   llvm::DenseMap<mlir::Value, NativeRequestValue> relations;
   llvm::DenseMap<mlir::Operation *, NativeRequestValue> requests;
-  // Exact frontier at loop entry; later sends never justify earlier captures.
+  // Exact frontier at control entry; later sends never justify captures.
   llvm::DenseMap<mlir::Value, NativeRequestValue> entryRelations;
   bool finished = false;
 };
@@ -97,10 +116,13 @@ mlir::Value resolveNativeRequestValue(NativeRequestValue,
                                       const NativeRequestValues &replica);
 // Read actual inserted operations. This function never emits or normalizes a
 // candidate. Every planned step is consumed once at its actual source frontier.
+// The allowance covers nested actual regions, bindings and result-map growth;
+// nested selections use fresh arm environments and a maximum depth of 64.
+// The caller owns this cumulative allowance across all frontiers and regions.
 bool readNativeRequestSteps(const NativeRequestFrame &, mlir::Operation *anchor,
                             mlir::Operation *&cursor,
                             const NativeRequestValues &ordinary,
-                            NativeRequestValues &replica);
+                            NativeRequestValues &replica, uint64_t &allowance);
 bool readNativeRequestLoopInputs(const NativeRequestLoop &,
                                  protocol_ir::ProtocolLoopOp actual,
                                  unsigned stateSlots,
@@ -112,5 +134,33 @@ bool bindNativeRequestLoop(const NativeRequestLoop &,
 bool readNativeRequestYield(const NativeRequestLoop &, mlir::ValueRange actual,
                             const NativeRequestValues &ordinary,
                             const NativeRequestValues &replica);
+// Branch layout: selector, original captures, replica captures, caller-owned
+// extra captures; original results, replica outputs, caller-owned extra
+// outputs. The caller independently checks the extra state/coordinate/record
+// slots. Use fresh ordinary/replica environments for each arm. Bind outputs
+// only after every arm's actual operations and yield have been read
+// successfully.
+bool readNativeRequestBranchInputs(const NativeRequestBranch &,
+                                   protocol_ir::ParticipantBranchOp actual,
+                                   unsigned extraCaptures,
+                                   unsigned extraOutputs,
+                                   const NativeRequestValues &ordinary,
+                                   const NativeRequestValues &replica);
+bool bindNativeRequestBranchArm(const NativeRequestBranch &,
+                                protocol_ir::ParticipantBranchOp actual,
+                                unsigned arm, unsigned extraCaptures,
+                                unsigned extraOutputs,
+                                NativeRequestValues &ordinary,
+                                NativeRequestValues &replica);
+bool readNativeRequestBranchYield(const NativeRequestBranch &, unsigned arm,
+                                  mlir::ValueRange actual,
+                                  unsigned extraOutputs,
+                                  const NativeRequestValues &ordinary,
+                                  const NativeRequestValues &replica);
+bool bindNativeRequestBranchOutputs(const NativeRequestBranch &,
+                                    protocol_ir::ParticipantBranchOp actual,
+                                    unsigned extraOutputs,
+                                    NativeRequestValues &ordinary,
+                                    NativeRequestValues &replica);
 } // namespace zkc::detail
 #endif

@@ -56,6 +56,11 @@ int main() {
       auto type = take(importLogicalTypeData(&context, expected));
       require(equalNaturalJson(take(exportLogicalTypeData(type)), expected),
               "independently authored schema changed");
+      bool canonical = false;
+      auto checked = take(
+          importLogicalTypesData(&context, json::Array{expected}, &canonical));
+      require(canonical && checked == SmallVector<Type>{type},
+              "recursive canonical descriptor check changed the witness");
     }
   });
   for (

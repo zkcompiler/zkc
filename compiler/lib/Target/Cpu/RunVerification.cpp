@@ -1,4 +1,6 @@
 #include "../../Compiler/ArtifactJson.h"
+#include "../../Transforms/OracleNativeCommon.h"
+#include "../../Transforms/RealizedProtocol.h"
 #include "Run.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Admission.h"
@@ -322,11 +324,8 @@ public:
   bool exhausted() const { return !remaining; }
 };
 } // namespace
-Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
-                      StringRef entry) {
-  if (!prepared || failed(zkc::admitStage(prepared)) || !physical ||
-      failed(zkc::admitStage(physical)))
-    return error("run-correspondence-subject");
+static Error verifyRunSubject(ModuleOp prepared, ModuleOp physical,
+                              StringRef bytes, StringRef entry) {
   auto parsed = parseArtifactJson(bytes);
   if (!parsed)
     return parsed.takeError();
@@ -354,5 +353,23 @@ Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
     return error(check.exhausted() ? "run-correspondence-limit"
                                    : "run-correspondence");
   return Error::success();
+}
+Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
+                      StringRef entry) {
+  if (!prepared || failed(zkc::admitStage(prepared)) || !physical ||
+      failed(zkc::admitStage(physical)))
+    return error("run-correspondence-subject");
+  return verifyRunSubject(prepared, physical, bytes, entry);
+}
+Error verifyRunBundle(const mathematical::RealizedProtocol &owner,
+                      ModuleOp physical, StringRef bytes, StringRef entry) {
+  // No caller-supplied common subject can stand in for this exact owned one.
+  // Its original premises and complete checked association live with owner.
+  if (!owner.candidate || !physical || failed(zkc::admitStage(physical)))
+    return error("run-correspondence-subject");
+  protocol::OracleNativeWork work;
+  if (auto e = protocol::boundOracleNativeIR(owner.candidate.get(), &work))
+    return e;
+  return verifyRunSubject(owner.candidate.get(), physical, bytes, entry);
 }
 } // namespace zkc::detail

@@ -1,4 +1,6 @@
 #include "OracleAnchorStorage.h"
+#include "OracleAccounting.h"
+#include "OracleNativeCommon.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Interactions.h"
 #include "zkc/Contracts/Bindings.h"
@@ -40,9 +42,17 @@ struct Planner {
   SymbolTable &symbols;
   OracleStorageSelection select;
   OracleAnchorStorage result;
+  OracleNativeWork &common;
   unsigned remaining = 100000;
   Error role(OracleAnchorConstructor &constructor, StringRef owner,
              ArrayRef<OracleStorageField> payload) {
+    if (!common.charge(16 + owner.size() + constructor.path.size() +
+                       2 * constructor.repeatDepth + payload.size()) ||
+        !common.chargeProduct(2, result.entry.size()))
+      return error("oracle-common-limit");
+    for (const auto &shape : constructor.kind.getShapeDimensions())
+      if (!common.charge(8 + shape.name.size()))
+        return error("oracle-common-limit");
     OracleRoleStorage storage;
     storage.role = owner.str();
     auto *context = program.getContext();
@@ -64,6 +74,8 @@ struct Planner {
     SmallVector<Type> types;
     for (const auto &field : storage.fields)
       types.push_back(field.type);
+    if (!common.chargeProduct(12, constructor.path.size()))
+      return error("oracle-common-limit");
     auto record = product(context,
                           VariantIdentity::Tuple{
                               "zkc.oracle.storage/0", toHex(result.entry, true),
@@ -82,6 +94,9 @@ struct Planner {
   }
   Error anchor(Operation *op, std::vector<unsigned> path, uint64_t maximum,
                unsigned repeatDepth) {
+    if (!common.charge(1 + path.size() + op->getNumOperands() +
+                       op->getNumResults() + op->getAttrs().size()))
+      return error("oracle-common-limit");
     OracleAnchorConstructor constructor;
     constructor.path = std::move(path);
     constructor.repeatDepth = repeatDepth;
@@ -93,6 +108,8 @@ struct Planner {
     if (auto input = dyn_cast<pir::OracleInputOp>(op)) {
       Value anchor = input.getAnchor();
       while (auto view = anchor.getDefiningOp<pir::RestrictRolesOp>()) {
+        if (!common.charge())
+          return error("oracle-common-limit");
         if (!remaining)
           return error("oracle-storage-limit");
         --remaining;
@@ -133,8 +150,8 @@ struct Planner {
       for (auto [i, input] : enumerate(created.getInputs())) {
         Type type = input.getType();
         if (i < sources) {
-          auto reference =
-              oracleReferenceType(cast<pir::OracleHandleType>(type).getKind());
+          auto reference = oracleReferenceTypeWithWork(
+              cast<pir::OracleHandleType>(type).getKind(), common);
           if (!reference)
             return reference.takeError();
           type = *reference;
@@ -187,6 +204,9 @@ struct Planner {
     for (unsigned ordinal : sequence.getActions()) {
       const auto &action = view.getActions()[ordinal];
       auto *op = action.getOperation();
+      if (!common.charge(1 + action.getPath().size() +
+                         action.getRegions().size()))
+        return error("oracle-common-limit");
       if (!remaining)
         return error("oracle-storage-limit");
       --remaining;
@@ -218,6 +238,17 @@ struct Planner {
 };
 } // namespace
 Expected<Type> oracleReferenceType(pir::OracleKindAttr kind) {
+  OracleNativeWork work;
+  return oracleReferenceTypeWithWork(kind, work);
+}
+Expected<Type> oracleReferenceTypeWithWork(pir::OracleKindAttr kind,
+                                           OracleNativeWork &work) {
+  if (!work.charge(0))
+    return error("oracle-common-limit");
+  if (auto found = work.references.find(kind); found != work.references.end())
+    return found->second;
+  if (kind && !reserveOracleDescriptor(Attribute(kind), work))
+    return error("oracle-common-limit");
   if (!kind ||
       failed(pir::OracleKindAttr::verify(
           [&]() { return emitError(UnknownLoc::get(kind.getContext())); },
@@ -244,47 +275,76 @@ Expected<Type> oracleReferenceType(pir::OracleKindAttr kind) {
   if (dataSpelling.empty() || querySpelling.empty() || answerSpelling.empty())
     return error("oracle-storage-type-limit");
   auto index = IntegerType::get(kind.getContext(), 64, IntegerType::Unsigned);
-  return product(
+  auto result = product(
       kind.getContext(),
       VariantIdentity::Tuple{"zkc.oracle.reference/0", kind.getIdentity().str(),
                              std::move(dataSpelling), std::move(querySpelling),
                              std::move(answerSpelling)},
       {index, index});
+  if (!result)
+    return result.takeError();
+  work.references.try_emplace(kind, *result);
+  return *result;
 }
 Expected<OracleAnchorStorage>
 planOracleAnchorStorage(ModuleOp prepared, StringRef entry,
                         OracleStorageSelection select) {
-  if (!select || !prepared || failed(zkc::admitStage(prepared)) ||
-      !hasSingleElement(prepared.getBody()->getOperations()))
+  if (!prepared || !select)
     return error("oracle-storage-source");
-  auto module = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
-  if (!module || module.getProfile() != pir::Profile::Protocol)
-    return error("oracle-storage-source");
-  SymbolTable symbols(module);
-  auto program = symbols.lookup<pir::MathematicalOp>(entry);
-  if (!program)
-    return error("oracle-storage-entry");
-  Planner planner{program, symbols, select, {entry.str(), {}}};
-  uint64_t remaining = 1000000;
-  facts::Work work(remaining);
-  InteractionAnalysis interactions(prepared);
-  auto view = interactions.get(program, work);
-  if (!view) {
-    consumeError(view.takeError());
-    return error("oracle-storage-limit");
-  }
-  if (auto e = planner.block(**view, (*view)->getBody(), 1, 0, 64))
-    return std::move(e);
-  // Charge expanded native structure across every role, including repeated
-  // uniqued layouts. Canonical byte size belongs to reference/publication
-  // boundaries; it is not a premise for forming a persistent native store.
-  SmallVector<Type> stores;
-  for (const auto &constructor : planner.result.constructors)
-    for (const auto &role : constructor.roles)
-      stores.push_back(role.sequence);
-  if (failed(verifyLogicalTypes([&] { return emitError(program.getLoc()); },
-                                stores)))
-    return error("oracle-storage-limit");
-  return std::move(planner.result);
+  OracleNativeWork work;
+  auto preflight = OracleNativeSourcePreflight::read(prepared, work);
+  if (!preflight)
+    return preflight.takeError();
+  return planOracleAnchorStorageWithWork(prepared, entry, select, work,
+                                         *preflight);
+}
+Expected<OracleAnchorStorage> planOracleAnchorStorageWithWork(
+    ModuleOp prepared, StringRef entry, OracleStorageSelection select,
+    OracleNativeWork &common, const OracleNativeSourcePreflight &preflight) {
+  return oracleExpectedWithWork(common, [&]() -> Expected<OracleAnchorStorage> {
+    if (auto e = checkOracleNativePreflight(prepared, common, &preflight))
+      return std::move(e);
+    if (failed(preflight.admit()))
+      return error(common.exhausted ? "oracle-common-limit"
+                                    : "oracle-storage-source");
+    if (!select || !prepared ||
+        !hasSingleElement(prepared.getBody()->getOperations()))
+      return error("oracle-storage-source");
+    auto module = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
+    if (!module || module.getProfile() != pir::Profile::Protocol)
+      return error("oracle-storage-source");
+    auto &symbols = preflight.getSymbols().getSymbolTable(module);
+    auto program = symbols.lookup<pir::MathematicalOp>(entry);
+    if (!program)
+      return error("oracle-storage-entry");
+    Planner planner{program, symbols, select, {entry.str(), {}}, common};
+    uint64_t remaining = 1000000;
+    facts::Work work([&](uint64_t amount) {
+      if (!common.charge(amount) || amount > remaining)
+        return false;
+      remaining -= amount;
+      return true;
+    });
+    InteractionAnalysis interactions(prepared);
+    auto view = interactions.get(program, work);
+    if (!view) {
+      consumeError(view.takeError());
+      return error("oracle-storage-limit");
+    }
+    if (auto e = planner.block(**view, (*view)->getBody(), 1, 0, 64))
+      return std::move(e);
+    // Charge expanded native structure across every role, including repeated
+    // uniqued layouts. Canonical byte size belongs to reference/publication
+    // boundaries; it is not a premise for forming a persistent native store.
+    SmallVector<Type> stores;
+    for (const auto &constructor : planner.result.constructors)
+      for (const auto &role : constructor.roles) {
+        stores.push_back(role.sequence);
+      }
+    if (failed(verifyLogicalTypes([&] { return emitError(program.getLoc()); },
+                                  stores)))
+      return error("oracle-storage-limit");
+    return std::move(planner.result);
+  });
 }
 } // namespace zkc::protocol

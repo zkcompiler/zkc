@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Bindings.h"
+#include "NativeTypeWork.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Declarations.h"
@@ -646,7 +647,10 @@ inspectNativeBindingSignature(llvm::function_ref<InFlightDiagnostic()> emit,
                        "only in its represented ports");
     return failure();
   }
+  detail::NativeTypeWorkScope::charge(1 + op->getAttrDictionary().size());
   auto name = declaration.getSymNameAttr();
+  if (name)
+    detail::NativeTypeWorkScope::charge(name.size());
   if (!name || name.getValue().empty() || name.getValue().size() > 256 ||
       !(llvm::isAlpha(name.getValue().front()) ||
         name.getValue().front() == '_') ||
@@ -702,6 +706,7 @@ inspectNativeBindingSignature(llvm::function_ref<InFlightDiagnostic()> emit,
        {std::make_pair(actual.getInputs(), logical.getInputs()),
         std::make_pair(actual.getResults(), logical.getResults())})
     for (auto [port, schema] : zip(ports, schemas)) {
+      detail::NativeTypeWorkScope::charge();
       if (!port) {
         (void)check.refuse("binding-signature", "missing native value port");
         return failure();
@@ -744,6 +749,31 @@ FailureOr<NativeBinding>
 readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
                   std::optional<bool> requestedStage,
                   const protocol::ImplementationCatalog &catalog) {
+  // Only exact immutable declaration attributes and resulting types are
+  // retained. Recheck live ownership, profile and operation shape on every
+  // lookup; no mutable operation/symbol or stage admission enters the cache.
+  auto *work = detail::NativeTypeWorkScope::current();
+  auto binding = dyn_cast_or_null<runtime::BindingOp>(op);
+  auto owner =
+      binding
+          ? dyn_cast_or_null<protocol_ir::ProtocolModuleOp>(op->getParentOp())
+          : protocol_ir::ProtocolModuleOp{};
+  bool cacheable = work && binding && owner && owner.getProfileAttr() &&
+                   owner.getProfile() == protocol_ir::Profile::Protocol &&
+                   (!requestedStage || !*requestedStage) &&
+                   &catalog == &protocol::installedImplementations() &&
+                   !op->getNumOperands() && !op->getNumResults() &&
+                   !op->getNumRegions() && !op->getNumSuccessors() &&
+                   !op->hasAttr("physical_arguments");
+  DictionaryAttr attributes;
+  if (cacheable) {
+    detail::NativeTypeWorkScope::charge(1 + op->getAttrDictionary().size());
+    attributes = op->getAttrDictionary();
+    if (auto found = work->bindings.find(attributes);
+        found != work->bindings.end())
+      return NativeBinding{binding, found->second.logical, found->second.values,
+                           false};
+  }
   auto inspected = inspectNativeBindingSignature(emit, op, requestedStage);
   if (failed(inspected))
     return failure();
@@ -751,6 +781,9 @@ readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
   auto arguments = declaration.getArguments().getValue();
   auto actual = inspected->valueType;
   bool physical = inspected->physical;
+  detail::NativeTypeWorkScope::charge(1 + declaration.getContract().size() +
+                                      declaration.getImplementation().size() +
+                                      arguments.size());
   NativeBindingApplication application{declaration.getContract().str(),
                                        {arguments.begin(), arguments.end()},
                                        declaration.getImplementation().str(),
@@ -765,6 +798,12 @@ readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
         "actual complete layouts differ from the implementation");
     return failure();
   }
+  if (cacheable) {
+    detail::NativeTypeWorkScope::charge();
+    work->bindings.try_emplace(
+        attributes, detail::NativeTypeWork::BindingTypes{inspected->logicalType,
+                                                         inspected->valueType});
+  }
   return inspected;
 }
 
@@ -776,6 +815,8 @@ FunctionType resolveInstalledSignature(
   StringRef contract = application.contract,
             implementation = application.implementation;
   ArrayRef<Attribute> arguments = application.arguments;
+  detail::NativeTypeWorkScope::charge(1 + contract.size() +
+                                      implementation.size() + arguments.size());
   auto logical = resolveLogicalSignature(emit, context, contract, arguments);
   if (!logical)
     return {};
@@ -792,6 +833,7 @@ FunctionType resolveInstalledSignature(
          {std::make_pair(actual.getInputs(), logical.getInputs()),
           std::make_pair(actual.getResults(), logical.getResults())})
       for (auto [port, schema] : zip(ports, schemas)) {
+        detail::NativeTypeWorkScope::charge();
         if (!port || port.getContext() != context ||
             failed(verifyValueType(emit, port)) ||
             isa<runtime::RepresentedType>(port) != physical ||

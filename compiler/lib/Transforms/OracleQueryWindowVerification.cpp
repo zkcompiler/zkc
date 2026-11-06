@@ -1,4 +1,5 @@
 #include "NativeBindingApplication.h"
+#include "OracleAccounting.h"
 #include "OracleQueryWindow.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -22,7 +23,8 @@ bool layout(const OracleVerificationContext &context,
             const Controller &controller, const Demand &demand,
             const OracleQueryExchange &exchange,
             const OracleQueryResponse &response,
-            const OracleQueryWindow &actual) {
+            const OracleQueryWindow &actual,
+            const OracleCheckedResponse *checked) {
   auto unit = context.getUnit();
   auto *ctx = unit.getContext();
   Type index = IntegerType::get(ctx, 64, IntegerType::Unsigned);
@@ -104,6 +106,10 @@ bool layout(const OracleVerificationContext &context,
       !equal(finished.getInputs(), controller.state) ||
       finished.getNumResults() != 1)
     return false;
+  if (!context.charge(64 + controller.kinds.size() + controller.state.size() +
+                      controller.stores.size() +
+                      controller.continuations.size() + exchange.arms.size()))
+    return false;
   SmallVector<Type> references;
   for (auto [i, kind] : enumerate(controller.kinds)) {
     auto arena = dyn_cast_or_null<data::SequenceType>(controller.answers[i]);
@@ -111,7 +117,7 @@ bool layout(const OracleVerificationContext &context,
         !arena || arena.getElementType() != kind.getAnswerType() ||
         controller.state[Controller::HeaderSize + i] != arena)
       return false;
-    auto reference = oracleReferenceType(kind);
+    auto reference = oracleReferenceTypeWithWork(kind, context.getWork());
     if (!reference) {
       consumeError(reference.takeError());
       return false;
@@ -130,7 +136,8 @@ bool layout(const OracleVerificationContext &context,
         arm.kind >= controller.kinds.size())
       return false;
     const auto &item = controller.constructors[arm.receiverSlot];
-    auto reference = oracleReferenceType(controller.kinds[arm.kind]);
+    auto reference = oracleReferenceTypeWithWork(controller.kinds[arm.kind],
+                                                 context.getWork());
     if (!reference) {
       consumeError(reference.takeError());
       return false;
@@ -147,7 +154,10 @@ bool layout(const OracleVerificationContext &context,
     return false;
   // This establishes the request/answer/state checks and use of the actual
   // continuation coordinates, without granting authentication to replay.
-  if (auto e = checkOracleQueryResponse(context, exchange, response)) {
+  if (checked) {
+    if (!context.charge() || !checked->matches(context, exchange, response))
+      return false;
+  } else if (auto e = checkOracleQueryResponse(context, exchange, response)) {
     consumeError(std::move(e));
     return false;
   }
@@ -174,7 +184,7 @@ struct Reader {
         boolean(IntegerType::get(unit.getContext(), 1)),
         scope(runtime::ScopeType::get(unit.getContext())) {}
   bool expect(bool value) {
-    valid &= value;
+    valid &= context.charge() && value;
     return valid;
   }
   struct Cursor {
@@ -185,6 +195,10 @@ struct Reader {
       if (!reader.valid || !reader.expect(offset < steps.size()))
         return nullptr;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(
+              1 + step.inputs.size() + step.outputs.size() +
+              step.regions.size() + site.size())))
+        return nullptr;
       auto actual = step.operation->getAttrOfType<StringAttr>(
           operation == "func.call" ? "runtime.site" : "site");
       if (!reader.expect(step.operation->getName().getStringRef() ==
@@ -211,9 +225,10 @@ struct Reader {
       if (!reader.valid)
         return values;
       auto op = cast<exec::ApplyOp>(step->operation);
-      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-          op, op.getBindingAttr());
-      if (!reader.expect(matchesNativeBinding(
+      auto binding = reader.context.getSymbols()
+                         .lookupNearestSymbolFrom<runtime::BindingOp>(
+                             op, op.getBindingAttr());
+      if (!reader.expect(reader.context.matchesBinding(
               binding, {contract.str(), SmallVector<Attribute>(statics), {}})))
         return values;
       reader.expect(invocationParametersMatch(
@@ -244,9 +259,9 @@ struct Reader {
       auto values = result(step, types, inputs);
       if (reader.valid) {
         auto call = cast<func::CallOp>(step->operation);
-        reader.expect(
-            SymbolTable::lookupSymbolIn(reader.unit, call.getCallee()) ==
-            expected.getOperation());
+        reader.expect(reader.context.getSymbols()
+                          .getSymbolTable(reader.unit)
+                          .lookup(call.getCallee()) == expected.getOperation());
       }
       return values;
     }
@@ -294,6 +309,11 @@ struct Reader {
   };
   void body(func::FuncOp function, TypeRange inputs, TypeRange outputs,
             bool region, llvm::function_ref<void(Cursor &, ValueRange)> check) {
+    if (!valid)
+      return;
+    if (!expect(context.charge(1 + inputs.size() + outputs.size()) &&
+                function && context.reserveRead(function)))
+      return;
     if (!valid)
       return;
     Types formals{scope};
@@ -582,17 +602,37 @@ struct Reader {
   }
 };
 } // namespace
+static Error checkOracleQueryWindowImpl(
+    const OracleVerificationContext &context, const Controller &controller,
+    const Demand &demand, const OracleQueryExchange &exchange,
+    const OracleQueryResponse &response, const OracleQueryWindow &actual,
+    const OracleCheckedResponse *checked) {
+  return oracleVerificationWithWork(context.getWork(), [&]() -> Error {
+    if (!layout(context, controller, demand, exchange, response, actual,
+                checked))
+      return error("oracle-window-body");
+    Reader reader(context, controller, demand, exchange, response, actual);
+    reader.collect();
+    reader.replay();
+    reader.finish();
+    return reader.valid ? Error::success() : error("oracle-window-body");
+  });
+}
 Error checkOracleQueryWindow(const OracleVerificationContext &context,
                              const Controller &controller, const Demand &demand,
                              const OracleQueryExchange &exchange,
                              const OracleQueryResponse &response,
                              const OracleQueryWindow &actual) {
-  if (!layout(context, controller, demand, exchange, response, actual))
-    return error("oracle-window-body");
-  Reader reader(context, controller, demand, exchange, response, actual);
-  reader.collect();
-  reader.replay();
-  reader.finish();
-  return reader.valid ? Error::success() : error("oracle-window-body");
+  return checkOracleQueryWindowImpl(context, controller, demand, exchange,
+                                    response, actual, nullptr);
+}
+Error checkOracleQueryWindow(const OracleVerificationContext &context,
+                             const Controller &controller, const Demand &demand,
+                             const OracleQueryExchange &exchange,
+                             const OracleQueryResponse &response,
+                             const OracleQueryWindow &actual,
+                             const OracleCheckedResponse &checked) {
+  return checkOracleQueryWindowImpl(context, controller, demand, exchange,
+                                    response, actual, &checked);
 }
 } // namespace zkc::protocol

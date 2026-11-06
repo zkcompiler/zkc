@@ -1,4 +1,5 @@
 #include "Run.h"
+#include "../../Transforms/RealizedProtocol.h"
 #include "zkc/Contracts/Instances.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Program/Codec.h"
@@ -337,8 +338,9 @@ public:
   }
 };
 } // namespace
-Expected<std::string> buildRunBundle(ModuleOp prepared, ModuleOp module,
-                                     StringRef entry) {
+static Expected<std::string> encodeRunBundle(ModuleOp module, StringRef entry) {
+  if (!module)
+    return error("run-module");
   auto roots = module.getOps<protocol_ir::ProtocolModuleOp>();
   if (!llvm::hasSingleElement(roots))
     return error("run-module");
@@ -387,8 +389,27 @@ Expected<std::string> buildRunBundle(ModuleOp prepared, ModuleOp module,
                                        {"steps", std::move(*steps)}});
   if (bundle.size() > 16 * 1024 * 1024)
     return error("run-limit");
-  if (auto e = verifyRunBundle(prepared, module, bundle, entry))
-    return std::move(e);
   return bundle;
+}
+Expected<std::string> buildRunBundle(ModuleOp prepared, ModuleOp module,
+                                     StringRef entry) {
+  auto bundle = encodeRunBundle(module, entry);
+  if (!bundle)
+    return bundle.takeError();
+  if (auto e = verifyRunBundle(prepared, module, *bundle, entry))
+    return std::move(e);
+  return std::move(*bundle);
+}
+Expected<std::string>
+buildRunBundle(const mathematical::RealizedProtocol &owner, ModuleOp module,
+               StringRef entry) {
+  if (!owner.candidate)
+    return error("run-correspondence-subject");
+  auto bundle = encodeRunBundle(module, entry);
+  if (!bundle)
+    return bundle.takeError();
+  if (auto e = verifyRunBundle(owner, module, *bundle, entry))
+    return std::move(e);
+  return std::move(*bundle);
 }
 } // namespace zkc::detail

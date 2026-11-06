@@ -9,6 +9,8 @@ namespace mlir {
 class ModuleOp;
 }
 namespace zkc::protocol {
+struct OracleNativeWork;
+class OracleNativeSourcePreflight;
 /// Abstract observation language for selecting the oracle opening policy.
 /// Tracks whether a random-service query can follow an oracle query on one
 /// path, keeping normal continuation separate from termination. It says nothing
@@ -54,5 +56,8 @@ analyzeOracleObservations(mlir::ModuleOp prepared, llvm::StringRef entry,
 /// a designated public-coin service. One shared traversal budget covers all
 /// entries and observers. It authorizes no batching or deferred authentication.
 llvm::Error checkOracleFinalDrawSchedule(mlir::ModuleOp prepared);
+llvm::Error
+checkOracleFinalDrawScheduleWithWork(mlir::ModuleOp, OracleNativeWork &,
+                                     const OracleNativeSourcePreflight &);
 } // namespace zkc::protocol
 #endif

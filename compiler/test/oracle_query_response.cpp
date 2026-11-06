@@ -633,7 +633,12 @@ int main(int argc, char **argv) {
         auto frozenCandidate = print(*input.candidate);
         for (unsigned refusal = 0; refusal < 8; ++refusal) {
           auto model = input.exchange;
-          auto work = input.work;
+          // A distinct raw negative query pays its complete admission from a
+          // fresh allowance. This does not refresh the composed positive
+          // construction's sticky allowance, or any production work object.
+          OracleVirtualFunctionWork work;
+          work.operations = input.work.operations;
+          work.slots = input.work.slots;
           StringRef code = "oracle-response-layout";
           if (refusal == 0) {
             work.operations = 0;

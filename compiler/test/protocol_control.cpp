@@ -687,8 +687,12 @@ int main() {
         take(protocol::analyzeOracleObservations(*source, "main", "V"));
     require(!observation.queryBeforeDraw(),
             "alternatives invented a sequential oracle/draw path");
-    refuses(protocol::oracleRequirements(*source, "main", {}),
-            "oracle-realization-control-profile");
+    auto selection =
+        take(protocol::resolveOracleRealizationSelection(*source, {}));
+    auto requirements =
+        take(protocol::oracleRequirements(*source, "main", selection));
+    require(requirements.storage.constructors.size() == 2,
+            "native realization planning discarded a dormant constructor");
   });
   cases.run("oracle batching remains inside the actual selected arm", [&] {
     auto text =
@@ -903,28 +907,43 @@ int main() {
         }
       });
   cases.run(
-      "security stages refuse unsupported selected transcript profiles", [&] {
-        auto source = admitted(context, fixture("branch"));
+      "selected transcript construction retains actual branch events", [&] {
+        auto text =
+            replaceText(fixture("branch"), "     %seven = ",
+                        "     %delivered = protocol.exchange %random "
+                        "{site=\"challenge\",sender=\"V\",receiver=\"P\"} : "
+                        "!algebra.field<\"bls12-381.fr\">\n     %seven = ");
+        text = replaceText(text, "   \"protocol.return\"(%result) : (ui64)->()",
+                           "   %accepted = arith.constant true\n   "
+                           "\"protocol.return\"(%accepted) : (i1)->()");
+        text = replaceText(text,
+                           "function_type=(i1,ui64,!protocol.service_ref<"
+                           "\"random.bls12-381.fr/0\">,i1)->ui64",
+                           "function_type=(i1,ui64,!protocol.service_ref<"
+                           "\"random.bls12-381.fr/0\">,i1)->i1");
+        auto source = admitted(context, text);
         NativeProofPolicy policy;
         policy.entry = "main";
         policy.producer = "P";
         policy.validator = "V";
         policy.suite = "merlin3.bls12-381.fr64be/0";
         policy.services = {2};
+        policy.publicInputs = {0, 3};
         policy.draws = {{"alternative_draw", "challenge"}};
-        refuses(constructNativeProof(*source, policy),
-                "native-proof-control-profile");
+        auto built = take(constructNativeProof(*source, policy));
+        if (auto e = checkNativeProof(*source, *built.module, policy))
+          throw std::runtime_error(toString(std::move(e)));
+        unsigned branches = 0;
+        built.module->walk([&](pir::ParticipantBranchOp branch) {
+          ++branches;
+          require(branch.getArms().size() == 2, "construction dropped an arm");
+        });
+        require(branches == 2, "each participant must retain its branch");
         auto target = projected(*source);
-        refuses(zkc::detail::planNativeRequests(unit(*target), policy, {}),
-                "native-request-control-profile");
-        protocol::ConstructionPlan plan{};
-        refuses(
-            zkc::detail::constructNativeCodec(*target, policy, plan, {}, {}),
-            "native-codec-control-profile");
+        take(zkc::detail::planNativeRequests(unit(*target), policy, {}));
       });
-  // Selected control outside the selected entry's static closure does not
-  // gate the entry. Reached total Math is value computation, not a
-  // conditional protocol interaction.
+  // Selected control outside the entry does not gate its static closure;
+  // supported reached mathematical selection is constructed and checked too.
   {
     auto schnorr = [] {
       auto buffer =
@@ -995,31 +1014,17 @@ int main() {
         take(protocol::oracleRequirements(*source, "main", {}));
       });
     }
-    cases.run("total selected helpers preserve proof construction", [&] {
-      auto source = admitted(context, reached);
-      auto built = take(constructNativeProof(*source, policy));
-      if (auto e = checkNativeProof(*source, *built.module, policy))
-        throw std::runtime_error(toString(std::move(e)));
-      take(protocol::oracleRequirements(*source, "main", {}));
-      data::BranchOp selected;
-      built.module->walk([&](data::BranchOp branch) {
-        if (!selected && branch->getParentOfType<pir::ParticipantOp>())
-          selected = branch;
-      });
-      require(bool(selected), "construction lost the actual selected Math");
-      auto &arm = selected.getArms().front().front();
-      auto yield = cast<data::YieldOp>(arm.getTerminator());
-      require(arm.getNumArguments() == 2 && yield.getNumOperands() == 1,
-              "unexpected selected helper fixture");
-      yield->setOperand(0, arm.getArgument(1));
-      require(succeeded(admitStage(*built.module)),
-              "mutated Math should remain well formed");
-      auto refused = checkNativeProof(*source, *built.module, policy);
-      require(bool(refused), "changed selected Math passed correspondence");
-      require(namesIdentifier(toString(std::move(refused)),
-                              "native-proof-correspondence"),
-              "changed selected Math failed outside correspondence");
-    });
+    cases.run("an entry that calls a selected helper constructs and checks",
+              [&] {
+                auto source = admitted(context, reached);
+                auto built = take(constructNativeProof(*source, policy));
+                if (auto e = checkNativeProof(*source, *built.module, policy))
+                  throw std::runtime_error(toString(std::move(e)));
+                // The ordinary selected Math helper is retained and
+                // independently compared exactly, so Oracle planning needs no
+                // second interpreter.
+                take(protocol::oracleRequirements(*source, "main", {}));
+              });
     // Only Alice demands the selection, so projection places it at Alice
     // alone and the projected comparison reads it where Alice sends it.
     auto demanded = replaceText(

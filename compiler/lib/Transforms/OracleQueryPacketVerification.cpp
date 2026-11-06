@@ -1,4 +1,5 @@
 #include "NativeBindingApplication.h"
+#include "OracleAccounting.h"
 #include "OracleQueryPacket.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -72,6 +73,9 @@ bool layout(const OracleVerificationContext &context,
       !equal(authentication.getInputs(), authInputs) ||
       !equal(authentication.getResults(), Types{response.answer}))
     return false;
+  if (!context.charge(64 + model.arms.size() + model.state.size() +
+                      model.receiverStores.size() + model.holderStores.size()))
+    return false;
   std::set<unsigned> constructors, slots;
   std::set<std::string> alternatives;
   for (auto [ordinal, arm] : enumerate(model.arms)) {
@@ -126,6 +130,7 @@ bool layout(const OracleVerificationContext &context,
          packet.open != packet.authenticate;
 }
 struct Reader {
+  const OracleVerificationContext &context;
   const OracleQueryExchange &model;
   const OracleQueryResponse &response;
   const OracleQueryPacket &packet;
@@ -140,14 +145,14 @@ struct Reader {
          const OracleQueryExchange &model, const OracleQueryResponse &response,
          func::FuncOp openOne, ArrayRef<OracleMerkleFunctions> merkle,
          uint64_t capacity, const OracleQueryPacket &packet)
-      : model(model), response(response), packet(packet), openOne(openOne),
-        merkle(merkle), capacity(capacity), unit(context.getUnit()),
-        closure(context.getClosure()),
+      : context(context), model(model), response(response), packet(packet),
+        openOne(openOne), merkle(merkle), capacity(capacity),
+        unit(context.getUnit()), closure(context.getClosure()),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
         scope(runtime::ScopeType::get(unit.getContext())),
         boolean(IntegerType::get(unit.getContext(), 1)) {}
   bool expect(bool value) {
-    valid &= value;
+    valid &= context.charge() && value;
     return valid;
   }
   struct Cursor {
@@ -160,6 +165,10 @@ struct Reader {
       if (!reader.expect(offset < steps.size()))
         return nullptr;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(
+              1 + step.inputs.size() + step.outputs.size() +
+              step.regions.size() + site.size())))
+        return nullptr;
       auto actual = step.operation->getAttrOfType<StringAttr>(
           operation == "func.call" ? "runtime.site" : "site");
       if (!reader.expect(step.operation->getName().getStringRef() ==
@@ -186,14 +195,15 @@ struct Reader {
       if (!reader.valid)
         return values;
       auto op = cast<exec::ApplyOp>(step->operation);
-      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-          op, op.getBindingAttr());
+      auto binding = reader.context.getSymbols()
+                         .lookupNearestSymbolFrom<runtime::BindingOp>(
+                             op, op.getBindingAttr());
       if (!reader.expect(binding && binding.getContract() == contract &&
                          binding.getImplementation().empty() &&
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      reader.expect(matchesNativeBinding(
+      reader.expect(reader.context.matchesBinding(
           binding, {contract.str(), SmallVector<Attribute>(statics), {}}));
       reader.expect(invocationParametersMatch(
           contract, binding.getArgumentsAttr(), op.getParametersAttr(),
@@ -211,8 +221,9 @@ struct Reader {
       auto values = result(step, outputs, inputs);
       if (reader.valid) {
         auto call = cast<func::CallOp>(step->operation);
-        callee = dyn_cast_or_null<func::FuncOp>(
-            SymbolTable::lookupSymbolIn(reader.unit, call.getCallee()));
+        callee = dyn_cast_or_null<func::FuncOp>(reader.context.getSymbols()
+                                                    .getSymbolTable(reader.unit)
+                                                    .lookup(call.getCallee()));
         reader.expect(bool(callee));
       }
       return values;
@@ -326,6 +337,11 @@ struct Reader {
   };
   void body(func::FuncOp function, TypeRange inputs, TypeRange outputs,
             bool region, llvm::function_ref<void(Cursor &, ValueRange)> check) {
+    if (!valid)
+      return;
+    if (!expect(context.charge(1 + inputs.size() + outputs.size()) &&
+                function && context.reserveRead(function)))
+      return;
     if (!valid)
       return;
     Types arguments{scope};
@@ -616,12 +632,14 @@ Error checkOracleQueryPacket(const OracleVerificationContext &context,
                              ArrayRef<OracleMerkleFunctions> merkle,
                              uint64_t capacity,
                              const OracleQueryPacket &actual) {
-  if (!layout(context, model, response, openOne, merkle, capacity, actual))
-    return error("oracle-packet-body");
-  Reader reader(context, model, response, openOne, merkle, capacity, actual);
-  reader.group();
-  reader.open();
-  reader.authenticate();
-  return reader.valid ? Error::success() : error("oracle-packet-body");
+  return oracleVerificationWithWork(context.getWork(), [&]() -> Error {
+    if (!layout(context, model, response, openOne, merkle, capacity, actual))
+      return error("oracle-packet-body");
+    Reader reader(context, model, response, openOne, merkle, capacity, actual);
+    reader.group();
+    reader.open();
+    reader.authenticate();
+    return reader.valid ? Error::success() : error("oracle-packet-body");
+  });
 }
 } // namespace zkc::protocol

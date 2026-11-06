@@ -107,6 +107,19 @@ rejects("CPU public-coin bridge grants no private graph implementation",
         root / "lib/Target/Cpu/NativeCompilation.cpp",
         lambda text: '#include "../../Compiler/PublicCoinGraph.h"\n' + text,
         "private component dependency")
+rejects("CPU cannot import private paired admission",
+        root / "lib/Target/Cpu/NativeCompilation.cpp",
+        lambda text: '#include "../../Dialect/AdmissionPrivate.h"\n' + text,
+        "private component dependency")
+for header in ("OraclePrivateComposite.h", "OracleCheckedReader.h"):
+    rejects(f"CPU cannot import private preparation ownership: {header}",
+            root / "lib/Target/Cpu/NativeCompilation.cpp",
+            lambda text, header=header: f'#include "../../Transforms/{header}"\n' + text,
+            "private component dependency")
+rejects("transforms cannot depend on CPU bundle declarations",
+        root / "lib/Transforms/RealizedProtocol.cpp",
+        lambda text: '#include "../Target/Cpu/Run.h"\n' + text,
+        "private component dependency")
 rejects("public extension headers cannot reexport raw builders",
         root / "include/zkc/Dialect/IR.h",
         lambda text: '#include "zkc/Dialect/detail/Builders.h"\n' + text,

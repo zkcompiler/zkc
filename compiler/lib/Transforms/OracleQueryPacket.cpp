@@ -1,4 +1,5 @@
 #include "OracleQueryPacket.h"
+#include "OracleEmissionAccounting.h"
 #include "RealizationEmission.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -16,6 +17,7 @@ using Values = SmallVector<Value>;
 using Types = SmallVector<Type>;
 using Control = exec::ScopedExecutionBuilder;
 struct Emitter {
+  OracleNativeWork &common;
   protocol_ir::ProtocolModuleOp unit;
   const OracleQueryExchange &model;
   const OracleQueryResponse &response;
@@ -23,19 +25,25 @@ struct Emitter {
   ArrayRef<OracleMerkleFunctions> merkle;
   uint64_t capacity;
   OracleQueryPacket result;
+  OracleEmissionListener emission;
   OpBuilder builder;
-  mathematical::RealizationEmitter bindings;
+  OracleBindingEmitter bindings;
   Type index, boolean;
   unsigned next = 0;
   Emitter(protocol_ir::ProtocolModuleOp unit, const OracleQueryExchange &model,
           const OracleQueryResponse &response, func::FuncOp openOne,
-          ArrayRef<OracleMerkleFunctions> merkle, uint64_t capacity)
-      : unit(unit), model(model), response(response), openOne(openOne),
-        merkle(merkle), capacity(capacity), builder(unit.getContext()),
-        bindings(unit, "_oracle_packet_binding_"),
+          ArrayRef<OracleMerkleFunctions> merkle, uint64_t capacity,
+          OracleNativeWork &common)
+      : common(common), unit(unit), model(model), response(response),
+        openOne(openOne), merkle(merkle), capacity(capacity), emission(common),
+        builder(unit.getContext(), &emission),
+        bindings(unit, "_oracle_packet_binding_", common),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()) {}
   Error plan(OracleVirtualFunctionWork &work) {
+    if (!common.charge(64 + model.arms.size() + model.state.size() +
+                       model.receiverStores.size() + model.holderStores.size()))
+      return error("oracle-common-limit");
     if (!capacity || capacity >= 1048576 || model.arms.empty() ||
         model.arms.size() > oracleExchangeConstructorLimit ||
         model.receiverStores.size() > 480 || model.holderStores.size() > 480)
@@ -153,19 +161,21 @@ struct Emitter {
     uint64_t slotsNeeded = operations * (width + 16) + capacity * (width + 24);
     if (operations > work.operations || slotsNeeded > work.slots)
       return error("oracle-packet-limit");
-    work.operations -= operations;
-    work.slots -= slotsNeeded;
+    if (!work.reserveCapacity(operations, slotsNeeded))
+      return error("oracle-packet-limit");
     return Error::success();
   }
   func::FuncOp function(StringRef label, TypeRange inputs, TypeRange outputs,
                         bool region,
                         llvm::function_ref<void(Control &, ValueRange)> emit) {
+    reserveOracleEmission(common, 8 + inputs.size() + outputs.size());
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&unit.getBody().front());
     std::string name;
     do {
-      name = "_oracle_packet_" + label.str() + "_" + std::to_string(next++);
-    } while (SymbolTable::lookupSymbolIn(unit, name));
+      name = "_oracle_packet_" + label.str() + "_" +
+             std::to_string(oracleEmissionOrdinal(common, next));
+    } while (lookupOracleEmissionSymbol(unit, name, common));
     Types formals{runtime::ScopeType::get(unit.getContext())};
     append_range(formals, inputs);
     auto helper = func::FuncOp::create(
@@ -181,6 +191,7 @@ struct Emitter {
       helper->setAttr("runtime.origin",
                       builder.getArrayAttr({builder.getStringAttr(name),
                                             builder.getArrayAttr({})}));
+    reserveOracleEmission(common, 1 + helper.getNumArguments());
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
     emit(control, helper.getArguments().drop_front());
@@ -240,6 +251,8 @@ struct Emitter {
                       .getAlternatives()[0]
                       .getPayload();
     return c.match(record, {}, fields, {"Record"}, site, [&](unsigned) {
+      if (common.emission)
+        return common.emission->identityRegion(builder, unit.getLoc(), fields);
       return function("unpack", fields, fields, true,
                       [&](Control &body, ValueRange a) { body.complete(a); });
     });
@@ -492,20 +505,27 @@ emitOracleQueryPacket(ModuleOp candidate, const OracleQueryExchange &model,
                       const OracleQueryResponse &response, func::FuncOp openOne,
                       ArrayRef<OracleMerkleFunctions> merkle, uint64_t capacity,
                       OracleVirtualFunctionWork &sharedWork) {
-  if (!candidate || !hasSingleElement(candidate.getBody()->getOperations()))
-    return error("oracle-packet-source");
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
-      failed(zkc::admitStage(candidate)))
-    return error("oracle-packet-source");
-  Emitter emitter(unit, model, response, openOne, merkle, capacity);
-  if (auto e = emitter.plan(sharedWork))
-    return std::move(e);
-  auto key = emitter.keyFunction();
-  emitter.emitGroup(key);
-  emitter.emitOpen();
-  emitter.emitAuthenticate();
-  return std::move(emitter.result);
+  return oracleExpectedWithWork(
+      sharedWork.getWork(), [&]() -> Expected<OracleQueryPacket> {
+        if (!candidate ||
+            !hasSingleElement(candidate.getBody()->getOperations()))
+          return error("oracle-packet-source");
+        auto unit = dyn_cast<protocol_ir::ProtocolModuleOp>(
+            candidate.getBody()->front());
+        if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
+            failed(sharedWork.checkSubject(candidate)))
+          return error("oracle-packet-source");
+        auto session = startOracleEmissionSession(sharedWork.getWork(), unit);
+        Emitter emitter(unit, model, response, openOne, merkle, capacity,
+                        sharedWork.getWork());
+        if (auto e = emitter.plan(sharedWork))
+          return std::move(e);
+        auto key = emitter.keyFunction();
+        emitter.emitGroup(key);
+        emitter.emitOpen();
+        emitter.emitAuthenticate();
+        commitOracleEmissionSession(session);
+        return std::move(emitter.result);
+      });
 }
 } // namespace zkc::protocol
