@@ -18,12 +18,12 @@ def outer (i : Fin 2) : CallOccurrence doubleProgram.payload.entry.body :=
     have arity : (callInventory doubleProgram.payload.entry.body).length = 2 := by kernel_rfl
     simpa only [arity] using i.isLt)
 
-def binding := (selectCall protocol5Body protocol2Signature).get (by decide +kernel)
+abbrev binding := FriSourceCalls.binding
 
 theorem rootCalls (i : Fin 2) : (outer i).callSite.signature = protocol5Signature := by
   fin_cases i <;> kernel_rfl
 
-theorem selectedBinder : binding.callSite.signature = protocol2Signature := by kernel_rfl
+theorem selectedBinder : binding.signature = protocol2Signature := by kernel_rfl
 
 theorem helperClosure : doubleProgram.payload.definitions = unit.definitions := by kernel_rfl
 
@@ -47,8 +47,7 @@ theorem sameBinder (model : DomainModel) :
       shared (suffix ++ [runDefinition]) rfl protocol2Signature member)
 
 def binderContext (i : Fin 2) : ProtocolContext :=
-  let parent := (outer i).callSite
-  (({} : ProtocolContext).enter parent.site parent.roles).enter binding.callSite.site binding.callSite.roles
+  binding.childContext ((outer i).callSite.childContext {})
 
 example : (binderContext 0).applicationPrefix ≠ (binderContext 1).applicationPrefix := by decide +kernel
 

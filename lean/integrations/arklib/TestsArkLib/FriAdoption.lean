@@ -7,6 +7,8 @@ import ZkcArkLibExamples.Fri.VerifierTerminal
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
 import ZkcExamples.Structured.FriBindingExecution
+import ZkcExamples.Structured.FriLowDegreeCall
+import ZkcExamples.Structured.FriQueryCall
 import ZkcArkLibExamples.Fri.PublishedSampling
 import ZkcArkLibExamples.Fri.ClearCertificate
 import ZkcTools.DeclarationAudit
@@ -232,3 +234,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
 run_cmd (ZkcTools.DeclarationAudit.check
   [`ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitPublication]
   "FRI-PUBLICATION-BEFORE-CHALLENGE-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcExamples.Structured.FriSourceCalls, `ZkcExamples.Structured.FriPhaseCalls,
+   `ZkcExamples.Structured.FriLowDegreeCall, `ZkcExamples.Structured.FriQueryCall]
+  "FRI-SOURCE-DERIVED-PHASE-CALLS-PASS" (exactModules := true))

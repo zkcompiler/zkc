@@ -20,6 +20,10 @@ structure CallSite where
   site : String
   operands : Operands context signature.inputs
 
+/-- A selected call enters the caller's actual site with its stored role map. -/
+def CallSite.childContext (call : CallSite) (parent : ProtocolContext) : ProtocolContext :=
+  parent.enter call.site call.roles
+
 /-- Existential packaging of the canonical typed occurrence witness. -/
 structure CallOccurrence {Γ out : List Ty} (body : Region protocolDialect Γ out) where
   callSite : CallSite

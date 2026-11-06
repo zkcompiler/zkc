@@ -18,7 +18,7 @@ open OracleProtocol (concrete)
 attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results ProtocolOp.regions ServiceOp.contract
 
 abbrev contract := "random.koala-bear.ext8-binomial3/0"
-def context := lowDegreeContext.enter "label_71756572696573" [0, 1]
+def context := FriSourceCalls.scalarQueries.childContext lowDegreeContext
 def site (name : String) := qualifyProtocolSite context.applicationPrefix name
 
 def loop := (Bindings.checkedRepeat 0 protocol1Body (by decide +kernel)).repeatSite

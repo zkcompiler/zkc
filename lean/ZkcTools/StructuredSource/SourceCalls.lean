@@ -153,7 +153,12 @@ def generate : CommandElab := fun stx => do
         safety := .safe
       })
         (forceExpose := true)
-      modifyEnv fun environment => addNoncomputable environment declarationName
+      if declarationName == fullName then
+        -- A closed header may be used by executable clients. Lean marks a
+        -- header noncomputable when its source data itself is noncomputable.
+        compileDecls #[declarationName] (logErrors := false)
+      else
+        modifyEnv fun environment => addNoncomputable environment declarationName
   let equation := mkIdent (name.getId.appendAfter "_selected")
   let signatureEq := mkIdent (name.getId.appendAfter "_signature")
   elabCommand (← `(command| theorem $equation : ($selected).callSite = $name := by rfl))

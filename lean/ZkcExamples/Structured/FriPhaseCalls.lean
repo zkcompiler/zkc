@@ -18,19 +18,48 @@ abbrev Process (model : DomainModel) := PIR.Process (OracleProtocol.Interface mo
 
 structure Caller where
   context : ProtocolContext
-  definition : Nat
 
 def Caller.mark (caller : Caller) (model : DomainModel) (site : String) : Process model Unit :=
   .call (.mark site (qualifyProtocolSite caller.context.applicationPrefix site)) .done
 
-def Caller.location (caller : Caller) (row : Nat) : OracleLocation :=
-  ⟨⟨caller.definition, []⟩, caller.definition, [7, 1, row]⟩
+structure TransferSite where
+  mark : String
+  location : OracleLocation
 
-def Caller.call (caller : Caller) (signature : ProtocolSignature) (site : String)
-    (args : Values (Value model) signature.inputs) : Process model (Values (Value model) signature.outputs) := do
-  caller.mark model site
-  (verifierAlgebra model).application caller.context signature site
-    (invokeProtocol (verifierTable model) signature (caller.context.enter site [0, 1]) 1 args)
+/-- Select adjacent mark and registry operations in the caller's own
+straight-line continuation. A callback cannot supply a caller's site. -/
+def transferSites (select : OracleOp → Bool) : RawRegion Ty ProtocolOp → List TransferSite
+  | .letOp (.mark mark) _ _ .nil (.letOp (.oracle op location) _ _ .nil next) =>
+    if select op then ⟨mark, location⟩ :: transferSites select next else transferSites select next
+  | .letOp _ _ _ _ next => transferSites select next
+  | _ => []
+
+def inputsOnly : OracleOp → Bool
+  | .input .. => true
+  | _ => false
+
+def projectionsOnly : OracleOp → Bool
+  | .components .. => true
+  | _ => false
+
+structure Transfers where
+  initial : TransferSite
+  layers : TransferSite
+  folds : TransferSite
+
+def oneTransferGroup : List TransferSite → Option Transfers
+  | [a, b, c] => some ⟨a, b, c⟩
+  | _ => none
+
+def twoTransferGroups : List TransferSite → Option (Transfers × Transfers)
+  | [a, b, c, d, e, f] => some (⟨a, b, c⟩, ⟨d, e, f⟩)
+  | _ => none
+
+def Caller.call (caller : Caller) (selected : CallSite)
+    (args : Values (Value model) selected.signature.inputs) : Process model (Values (Value model) selected.signature.outputs) := do
+  caller.mark model selected.site
+  (verifierAlgebra model).application caller.context selected.signature selected.site
+    (invokeProtocol (verifierTable model) selected.signature (selected.childContext caller.context) 1 args)
 
 abbrev Pair (model : DomainModel) (sort : OracleLogicalSort) :=
   Values (Value model) [sort.dataType, sort.type]
@@ -54,29 +83,29 @@ abbrev fields {V : Ty → Type} {types : List Ty} {A : Type}
     (args : Values V types) (body : TypedABI.Curried V A types) : A :=
   TypedABI.apply body (Environment.toValues args.get)
 
-def Caller.input (caller : Caller) (row : Nat) (sort : OracleLogicalSort) (pair : Pair model sort) :
+def Caller.input (caller : Caller) (site : TransferSite) (sort : OracleLogicalSort) (pair : Pair model sort) :
     Process model (Value model sort.type) := do
-  caller.mark model ""
-  let out ← PIR.Process.call (.oracle ⟨.input sort 0 [1] [("rows", 32)], caller.location row, 1,
+  caller.mark model site.mark
+  let out ← PIR.Process.call (.oracle ⟨.input sort 0 [1] [("rows", 32)], site.location, 1,
     caller.context.roles, pair⟩) .done
   return out.get .here
 
-def Caller.project (caller : Caller) (row : Nat) (sort : OracleLogicalSort) (handle : Value model sort.type) :
+def Caller.project (caller : Caller) (site : TransferSite) (sort : OracleLogicalSort) (handle : Value model sort.type) :
     Process model (Pair model sort) := do
-  caller.mark model ""
-  PIR.Process.call (.oracle ⟨.components sort 0 [1], caller.location row, 1,
+  caller.mark model site.mark
+  PIR.Process.call (.oracle ⟨.components sort 0 [1], site.location, 1,
     caller.context.roles, .cons handle .nil⟩) .done
 
-def Caller.inputs (caller : Caller) (row : Nat) (supplied : Pairs model) : Process model (Handles model) := do
-  let a ← caller.input row initialSort supplied.initial
-  let b ← caller.input (row + 1) layersSort supplied.layers
-  let c ← caller.input (row + 2) layersSort supplied.folds
+def Caller.inputs (caller : Caller) (sites : Transfers) (supplied : Pairs model) : Process model (Handles model) := do
+  let a ← caller.input sites.initial initialSort supplied.initial
+  let b ← caller.input sites.layers layersSort supplied.layers
+  let c ← caller.input sites.folds layersSort supplied.folds
   return ⟨a, b, c⟩
 
-def Caller.projections (caller : Caller) (row : Nat) (handles : Handles model) : Process model (Pairs model) := do
-  let a ← caller.project row initialSort handles.initial
-  let b ← caller.project (row + 1) layersSort handles.layers
-  let c ← caller.project (row + 2) layersSort handles.folds
+def Caller.projections (caller : Caller) (sites : Transfers) (handles : Handles model) : Process model (Pairs model) := do
+  let a ← caller.project sites.initial initialSort handles.initial
+  let b ← caller.project sites.layers layersSort handles.layers
+  let c ← caller.project sites.folds layersSort handles.folds
   return ⟨a, b, c⟩
 
 def prependPairs {ts : List Ty} (projected : Pairs model) (tail : Values (Value model) ts) :

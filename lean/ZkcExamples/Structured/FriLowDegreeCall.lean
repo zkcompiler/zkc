@@ -13,16 +13,18 @@ open Zkc.Source Zkc.Source.Structured
 open FriSource FriSourceViews FriSourceBodies FriBinding FriPhaseCalls
 open OracleProtocol (concrete)
 
-def caller : Caller := ⟨lowDegreeContext, 1⟩
-def scalarSite := "label_71756572696573"
+def caller : Caller := ⟨lowDegreeContext⟩
+
+def inputSites := (twoTransferGroups (transferSites inputsOnly protocol5Body.erase)).get (by decide +kernel)
+def projectionSites := (twoTransferGroups (transferSites projectionsOnly protocol5Body.erase)).get (by decide +kernel)
 
 def query (model : DomainModel) (sampled : Value model .indices)
     (bound : Values (Value model) protocol2Signature.outputs) :
     Process model (Values (Value model) protocol5Signature.outputs) :=
   fields bound fun initialData initial layerData layers foldData folds shift size coeffs indices rounds queries ↦ do
-    let handles ← caller.inputs 9 (pairs initialData initial layerData layers foldData folds)
-    let projected ← caller.projections 12 handles
-    let result ← caller.call protocol4Signature "s6" (prependPairs projected (.cons shift (.cons size
+    let handles ← caller.inputs inputSites.2 (pairs initialData initial layerData layers foldData folds)
+    let projected ← caller.projections projectionSites.2 handles
+    let result ← caller.call FriSourceCalls.query (prependPairs projected (.cons shift (.cons size
       (.cons coeffs (.cons indices (.cons rounds (.cons queries .nil)))))))
     caller.mark model ""
     caller.mark model ""
@@ -32,17 +34,17 @@ def afterCommit (model : DomainModel) (count service : Nat)
     (committed : Values (Value model) protocol0Signature.outputs) :
     Process model (Values (Value model) protocol5Signature.outputs) :=
   fields committed fun initialData initial layerData layers foldData folds shift size coeffs rounds ↦ do
-    let handles ← caller.inputs 1 (pairs initialData initial layerData layers foldData folds)
-    let sampled ← caller.call protocol1Signature scalarSite (.cons (concrete model .index count)
+    let handles ← caller.inputs inputSites.1 (pairs initialData initial layerData layers foldData folds)
+    let sampled ← caller.call FriSourceCalls.scalarQueries (.cons (concrete model .index count)
       (.cons (concrete model (.service FriScalarLoop.contract) service) .nil))
-    let projected ← caller.projections 5 handles
-    let bound ← caller.call protocol2Signature "s4" (prependPairs projected (.cons shift (.cons size
+    let projected ← caller.projections projectionSites.1 handles
+    let bound ← caller.call FriSourceCalls.binding (prependPairs projected (.cons shift (.cons size
       (.cons coeffs (.cons rounds (.cons (sampled.get .here) .nil))))))
     query model (sampled.get .here) bound
 
 def program (model : DomainModel) (shift : model.Field extension) (rounds queries service : Nat) :
     Process model (Values (Value model) protocol5Signature.outputs) := do
-  let committed ← caller.call protocol0Signature "s0" (.cons none (.cons none
+  let committed ← caller.call FriSourceCalls.commitment (.cons none (.cons none
     (.cons (concrete model (.field extension) shift) (.cons (concrete model .index rounds)
       (.cons (concrete model (.service FriScalarLoop.contract) service) .nil)))))
   afterCommit model queries service committed
@@ -56,13 +58,13 @@ theorem body (model : DomainModel) (shift : model.Field extension) (rounds queri
   · derive_process using
       (first
        | apply (verifierAlgebra model).applyActive (verifierTable model) protocol0Signature lowDegreeContext
-           1 "s0" [0, 1] _ (by decide)
+           1 FriSourceCalls.commitment.site FriSourceCalls.commitment.roles _ (by decide +kernel)
        | apply (verifierAlgebra model).applyActive (verifierTable model) protocol1Signature lowDegreeContext
-           1 scalarSite [0, 1] _ (by decide)
+           1 FriSourceCalls.scalarQueries.site FriSourceCalls.scalarQueries.roles _ (by decide +kernel)
        | apply (verifierAlgebra model).applyActive (verifierTable model) protocol2Signature lowDegreeContext
-           1 "s4" [0, 1] _ (by decide)
+           1 FriSourceCalls.binding.site FriSourceCalls.binding.roles _ (by decide +kernel)
        | apply (verifierAlgebra model).applyActive (verifierTable model) protocol4Signature lowDegreeContext
-           1 "s6" [0, 1] _ (by decide))
+           1 FriSourceCalls.query.site FriSourceCalls.query.roles _ (by decide +kernel))
   · simp only [program, query, afterCommit, Caller.inputs, Caller.projections, Caller.input, Caller.project,
       Caller.mark, Caller.call, bind, pure, PIR.Process.bind]
     rfl
@@ -82,8 +84,8 @@ theorem verifier {m : Type → Type} [Monad m] [LawfulMonad m] {Aux E : Type}
     (ordinary : PublishedWords.Table model → PIR.MonadHandler m (participantInterfaceOn model.toCarriers) Aux E)
     (choose : PublishedWords.Chooser m model Aux E) :
     FriSource.verifier shift rounds queries service auxiliary ordinary choose =
-      (PIR.Process.call (I := OracleProtocol.Interface model) (.mark "s0" "s0") fun _ ↦
-        ((verifierAlgebra model).application {} protocol5Signature "s0"
+      (PIR.Process.call (I := OracleProtocol.Interface model) (.mark rootSite.site rootSite.site) fun _ ↦
+        ((verifierAlgebra model).application {} protocol5Signature rootSite.site
           ((program model shift rounds queries service).bind fun out ↦
             .done (maskValues 1 (lowDegreeContext.mapScopes protocol5Signature.outputScopes) out))).bind fun output ↦
           .done (maskValues 1 runSignature.outputScopes (.cons (output.get .here) .nil))).runM

@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.FriSource
+public import ZkcExamples.Structured.FriSourceCalls
 public import Zkc.Source.Structured.ProtocolDerivation
 public import Zkc.Source.DeriveRegion
 
@@ -30,15 +31,16 @@ def lowDegreeArguments (model : DomainModel) (shift : model.Field extension)
   ProtocolValue.embedComponents (.cons none (.cons (some shift) (.cons (some shift)
     (.cons (some rounds) (.cons (some queries) (.cons (some service) .nil))))))
 
-abbrev lowDegreeContext := ({} : ProtocolContext).enter "s0" [0, 1]
+abbrev rootSite := FriSourceCalls.lowDegree
+abbrev lowDegreeContext := rootSite.childContext {}
 
 def rootCall (model : DomainModel) (shift : model.Field extension) (rounds queries service : Nat) :
     PIR.Process (OracleProtocol.Interface model)
       (Values (Component (verifierValue model)) runSignature.outputs) :=
   let child := invokeProtocol (verifierTable model) protocol5Signature lowDegreeContext 1
     (lowDegreeArguments model shift rounds queries service)
-  .call (.mark "s0" "s0") fun _ ↦
-    ((verifierAlgebra model).application {} protocol5Signature "s0" child).bind fun out ↦
+  .call (.mark rootSite.site rootSite.site) fun _ ↦
+    ((verifierAlgebra model).application {} protocol5Signature rootSite.site child).bind fun out ↦
       .done (.cons (out.get .here) .nil)
 
 /-- Every reply and halt of the selected low-degree component passes through
@@ -48,7 +50,7 @@ theorem root_body (model : DomainModel) (shift : model.Field extension) (rounds 
       (ProtocolValue.embedComponents (inputs 1 [] shift rounds queries service)).get =
         rootCall model shift rounds queries service := by
   derive_process using
-    (exact (verifierAlgebra model).applyActive (verifierTable model) protocol5Signature {} 1 "s0" [0, 1]
+    (exact (verifierAlgebra model).applyActive (verifierTable model) protocol5Signature {} 1 rootSite.site rootSite.roles
       (lowDegreeArguments model shift rounds queries service) (by decide))
 
 theorem root_participant (model : DomainModel) (shift : model.Field extension) (rounds queries service : Nat) :

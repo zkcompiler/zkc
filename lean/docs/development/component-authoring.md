@@ -312,12 +312,26 @@ protocol_call inputCall from rootBody to inputSignature
 The selection requires the complete signature and a unique occurrence. `at
 [path...]` disambiguates multiple calls. It produces a materialized `CallSite`
 with a checked occurrence equation, so downstream proofs use `inputCall.site`
-and `inputCall.roles` without repeating source strings. Occurrences after a
+and `inputCall.roles` without repeating source strings. Use
+`inputCall.childContext parent` to enter it with the recorded role substitution.
+A closed executable header can also supply this context to computations.
+Occurrences after a
 stopped prefix are still lexical occurrences; this facility never claims that
 they execute. A same-typed operand swap changes the selected header.
 An ambiguous selection reports candidate paths, sites and role maps. Missing
 signatures and incorrect paths have distinct diagnostics. Paths must be closed
 values: `_` cannot silently choose the first candidate.
+
+For a receiver that forwards logical handles, specify which named input
+field supplies each named output field. `PortForwarding.compile` resolves
+those paths against the admitted declaration, including holder and receiver
+leaves, and builds the typed return tuple. In the FRI example,
+`FriBinding.origin` identifies the committed fields, sampled positions and
+query count. The shared derivation follows the original source operations
+and marks. `FriBindingExecution.installed` applies in every caller frame
+that maps the receiver to the participant and the holder to a different
+participant. The two-site control combines this law with executions of both
+sites and a same-sort handle swap.
 
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and

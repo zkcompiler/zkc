@@ -13,7 +13,10 @@ open Zkc.Source Zkc.Source.Structured
 open FriSource FriSourceBodies FriSourceViews FriBinding FriPhaseCalls
 open OracleProtocol (concrete)
 
-def caller : Caller := ⟨lowDegreeContext.enter "s6" [0, 1], 32⟩
+def caller : Caller := ⟨FriSourceCalls.query.childContext lowDegreeContext⟩
+
+def inputSites := (oneTransferGroup (transferSites inputsOnly protocol4Body.erase)).get (by decide +kernel)
+def projectionSites := (oneTransferGroup (transferSites projectionsOnly protocol4Body.erase)).get (by decide +kernel)
 
 def checkArgs (model : DomainModel) (projected : Pairs model) (state : Committed model)
     (xs : FriScalarLoop.Positions) : Values (Value model) protocol3Signature.inputs :=
@@ -23,11 +26,11 @@ def checkArgs (model : DomainModel) (projected : Pairs model) (state : Committed
 
 def program (model : DomainModel) (state : Committed model) (xs : FriScalarLoop.Positions) :
     Process model (Values (Value model) protocol4Signature.outputs) := do
-  let handles ← caller.inputs 0 (pairs none state.initial none state.layers none state.folds)
+  let handles ← caller.inputs inputSites (pairs none state.initial none state.layers none state.folds)
   caller.mark model "s0"
   caller.mark model ""
-  let projected ← caller.projections 5 handles
-  let checked ← caller.call protocol3Signature "s3" (checkArgs model projected state xs)
+  let projected ← caller.projections projectionSites handles
+  let checked ← caller.call FriSourceCalls.check (checkArgs model projected state xs)
   return .cons (checked.get .here) (.cons (checked.get (.there .here)) .nil)
 
 private theorem emptyStep (model : DomainModel) :
@@ -51,7 +54,7 @@ theorem body (model : DomainModel) (state : Committed model) (xs : FriScalarLoop
       (first
        | apply emptyStep model
        | apply (verifierAlgebra model).applyActive (verifierTable model) protocol3Signature
-           caller.context 1 "s3" [0, 1] _ (by decide))
+           caller.context 1 FriSourceCalls.check.site FriSourceCalls.check.roles _ (by decide +kernel))
   · simp only [program, Caller.inputs, Caller.projections, Caller.input, Caller.project, Caller.mark,
       Caller.call, bind, pure, PIR.Process.bind]
     rfl

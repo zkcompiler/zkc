@@ -41,6 +41,8 @@ def body : Region protocolDialect [.index, .index] [.index] :=
     (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))
 
 protocol_call selected from body to signature
+def selectedContext : ProtocolContext := selected.childContext {}
+#guard selectedContext.applicationPrefix == "actual"
 example : selected.site = "actual" := rfl
 example : selected.roles = [0] := rfl
 example : selected.operands.indices = [1, 0] := rfl
