@@ -24,6 +24,52 @@ structure ProtocolLaw (algebra : ProtocolAlgebra V I) (signature : ProtocolSigna
       body (maskValues self (context.mapScopes signature.inputScopes) args).get
       (reference captured context self args)
 
+/-- Inside an admitted body the full immutable table agrees with the captured
+prefix on every callee the body can actually name, including its callbacks.
+This applies to both the ordinary and the oracle-aware protocol algebra. -/
+theorem ProtocolAlgebra.invokeBody (algebra : ProtocolAlgebra V I)
+    {inventory : List Helper} {definitions : List CheckedProtocol}
+    (linked : ProtocolDeclarationsLinked inventory [] definitions)
+    (definition : CheckedProtocol) (member : definition ∈ definitions)
+    (context : ProtocolContext) (self : Nat) (args : Values (Component V) definition.inputs) :
+    invokeProtocol (definitions.foldl algebra.extend []) definition.signature context self args =
+      algebra.denote definition (definitions.foldl algebra.extend []) context self args := by
+  obtain ⟨before, after, split⟩ := List.mem_iff_append.mp member
+  rw [show invokeProtocol (definitions.foldl algebra.extend []) definition.signature =
+    algebra.denote definition (before.foldl algebra.extend []) from
+      ProtocolClosure.invoke_declaration algebra.denote linked before definition after split]
+  unfold ProtocolAlgebra.denote
+  apply congrArg (fun p : PIR.Process I (Values (Component V) definition.outputs) =>
+    p.bind (fun out => .done (maskValues self (context.mapScopes definition.outputScopes) out)))
+  let env : Environment (Component V) definition.inputs :=
+    (maskValues self (context.mapScopes definition.inputScopes) args).get
+  refine (NormalForm.normalizeActions_process (algebra.meaning (before.foldl algebra.extend []) context self)
+    definition.body env).trans (Eq.trans ?_ (NormalForm.normalizeActions_process
+      (algebra.meaning (definitions.foldl algebra.extend []) context self) definition.body env).symm)
+  apply congrFun
+  apply Region.denote_congr
+  intro op used
+  funext operands callbacks
+  cases op with
+  | protocolApply signature roles site =>
+    have usedRaw : signature ∈ definition.protocols := by
+      simpa only [CheckedProtocol.protocols, ← definition.exactBody] using
+        (List.mem_flatMap.mpr ⟨_, used, by simp [ProtocolOp.protocols]⟩ :
+          signature ∈ definition.body.erase.operations.flatMap ProtocolOp.protocols)
+    have inPrefix : signature ∈ before.map CheckedProtocol.signature := by
+      rw [split] at linked
+      have tail := (ProtocolDeclarationsLinked.append _ [] before (definition :: after)).mp linked |>.2
+      simpa using tail.2.2.1 signature usedRaw
+    have agrees : invokeProtocol (before.foldl algebra.extend []) signature =
+        invokeProtocol (definitions.foldl algebra.extend []) signature :=
+      ProtocolClosure.prefix_agrees algebra.denote linked before (definition :: after) split signature inPrefix
+    simp only [ProtocolAlgebra.operation, agrees]
+  | «repeat» spec site => cases operands; rfl
+  | restrict _ _ =>
+    cases operands with | cons value rest => cases rest; rfl
+  | mark _ => cases operands; rfl
+  | assemble | calculate | localCall | oracle | query | draw | exchange | guard | statement => rfl
+
 namespace ProtocolLaw
 attribute [local implicit_reducible] CheckedProtocol.signature ProtocolOp.results
 variable {algebra : ProtocolAlgebra V I} {definition : CheckedProtocol}
@@ -65,6 +111,42 @@ theorem applyStep (law : ProtocolLaw algebra definition.signature)
   simpa only [ProtocolAlgebra.meaning, ProtocolAlgebra.operation, active, ↓reduceIte] using
     congrArg (algebra.application context definition.signature site)
       (law.invoke linked placement associated (context.enter site roles) self args requires)
+
+/-- Select a law by exact admitted member and erased body. Every callee in
+its derivation may itself be selected by membership in this same unit. -/
+theorem invokeMember (law : ProtocolLaw algebra definition.signature)
+    {inventory : List Helper} {definitions : List CheckedProtocol}
+    (linked : ProtocolDeclarationsLinked inventory [] definitions)
+    (member : definition ∈ definitions) (associated : definition.raw = law.body.erase)
+    (context : ProtocolContext) (self : Nat) (args : Values (Component V) definition.inputs)
+    (requires : law.Requires (definitions.foldl algebra.extend []) context self args) :
+    invokeProtocol (definitions.foldl algebra.extend []) definition.signature context self args =
+      (law.reference (definitions.foldl algebra.extend []) context self args).bind (fun out =>
+        .done (maskValues self (context.mapScopes definition.outputScopes) out)) := by
+  rw [algebra.invokeBody linked definition member]
+  unfold ProtocolAlgebra.denote
+  rw [NormalForm.normalizeActions_process, definition.body_eq_of_raw law.body associated]
+  exact congrArg (fun p : PIR.Process I (Values (Component V) definition.outputs) =>
+    p.bind (fun out => .done (maskValues self (context.mapScopes definition.outputScopes) out)))
+    (law.derives _ _ _ _ requires).sound_identity
+
+theorem applyMember (law : ProtocolLaw algebra definition.signature)
+    {inventory : List Helper} {definitions : List CheckedProtocol}
+    (linked : ProtocolDeclarationsLinked inventory [] definitions)
+    (member : definition ∈ definitions) (associated : definition.raw = law.body.erase)
+    (context : ProtocolContext) (self : Nat) (site : String) (roles : List Nat)
+    (args : Values (Component V) definition.inputs)
+    (active : (context.enter site roles).contains definition.signature self = true)
+    (requires : law.Requires (definitions.foldl algebra.extend []) (context.enter site roles) self args) :
+    (algebra.meaning (definitions.foldl algebra.extend []) context self).OperationLaw
+      (fun op => .call op .done) (.protocolApply definition.signature roles site) args .nil
+      (algebra.application context definition.signature site
+        ((law.reference (definitions.foldl algebra.extend []) (context.enter site roles) self args).bind
+          fun out => .done (maskValues self ((context.enter site roles).mapScopes definition.outputScopes) out))) := by
+  apply RegionMeaning.OperationLaw.identity
+  simpa only [ProtocolAlgebra.meaning, ProtocolAlgebra.operation, active, ↓reduceIte] using
+    congrArg (algebra.application context definition.signature site)
+      (law.invokeMember linked member associated (context.enter site roles) self args requires)
 
 /-- An absent participant neither invokes the callee nor incurs its application effects. -/
 theorem inactive (algebra : ProtocolAlgebra V I) (table : ProtocolTable V I)
