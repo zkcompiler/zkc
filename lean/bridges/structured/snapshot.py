@@ -6,7 +6,6 @@ helper name as a mathematical specification.
 """
 
 from functools import partial
-import json
 import re
 from pathlib import Path
 import sys

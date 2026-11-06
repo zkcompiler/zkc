@@ -5,6 +5,9 @@ import ZkcSecurityExamples.Generated.TwoSums
 controls import those same checked declarations instead of copying their
 admission proofs into a second fixture. -/
 
+-- The generated subjects contain nested occurrence certificates.
+set_option maxRecDepth 4096
+
 namespace TestsSecurity.PairConstruction
 open ZkcSecurity.Examples.Generated
 

@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Construction.Participant
 public import Zkc.Source.Structured.DomainModels
 
@@ -66,3 +69,7 @@ theorem decoded_block_bounded (bound count : Nat) (positive : 0 < bound)
   simpa only [replyBound_of_positive positive] using (values i).isLt
 
 end Zkc.Construction.Request
+
+-- Store dependent decoder equations here, before separate readbacks unfold them.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Request.decode

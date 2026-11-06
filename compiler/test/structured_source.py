@@ -2,11 +2,17 @@
 import hashlib
 import json
 import re
+import sys
 from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
-from tools import records
+from project import project_inputs
+from scoped_sources import invocation, scoped_function
+from tools import compiler, records
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'common/catalog'))
+from generate import validate  # noqa: E402
 
 commands = Commands(records())
 fixtures = Path(__file__).parent / 'fixtures'
@@ -610,9 +616,6 @@ for label, origin in [
 
 # These controls exercise producer formation only. They do not invoke the
 # independent participant evaluator, whose admitted primitive subset is smaller.
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'common/catalog'))
-from generate import validate
 catalog = json.loads((Path(__file__).resolve().parents[2] / 'common/catalog/declarations.json').read_text())
 validate(catalog)
 members = next(p for p in catalog['consumerProfiles'] if p['name'] == 'structured-source-primitives')['operations']
@@ -719,7 +722,6 @@ for method in ('index', 'indices'):
 
 # Literal attributes carry an exact field and presentation. Export never
 # treats them as index parameters or reduces them modulo the characteristic.
-from scoped_sources import invocation, scoped_function
 
 
 def literal_source(identity, value, width):
@@ -765,8 +767,6 @@ with case('field-literal-parameter-nominal-and-characteristic-refusals'):
 # Preserve both complete FRI originals, including honest-prover code. Their
 # transitive multi-role Math folds are retained with their original dependencies;
 # choosing the inner subject must not prune the honest-prover definitions.
-from project import project_inputs
-from tools import compiler
 
 root = Path(__file__).resolve().parents[2]
 for variant, query_method in [('ScalarLowDegree', 'index'),

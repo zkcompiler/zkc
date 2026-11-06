@@ -16,9 +16,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "lean"))
-from bridges.common import lean_render
-from bridges.construction import pair
-from bridges.structured import snapshot
+from bridges.common import lean_render  # noqa: E402
+from bridges.construction import pair  # noqa: E402
+from bridges.structured import snapshot  # noqa: E402
 
 ROOTS = ("Scalar", "Block", "Local", "Repeated")
 SCALAR_OPERATION = "transcript.native.indexed.index"

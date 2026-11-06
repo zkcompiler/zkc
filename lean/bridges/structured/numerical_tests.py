@@ -6,7 +6,6 @@ or native execution as an oracle for the independently fixed equations.
 """
 
 import copy
-import json
 import unittest
 
 from snapshot import NUMERICAL_SOURCE_PRIMITIVES, primitive_binding, render, render_parameter, ty

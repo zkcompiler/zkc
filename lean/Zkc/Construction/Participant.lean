@@ -402,3 +402,5 @@ end Zkc.Construction
 -- private proof helpers, leaving its stored provider ambiguous to an audit.
 run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Calculation.total
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Request.valid
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Request.operation
