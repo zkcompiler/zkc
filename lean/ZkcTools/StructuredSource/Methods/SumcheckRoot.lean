@@ -50,7 +50,6 @@ structure Step where
   name : String
   parameters : List Binder
   arguments : String
-  process : String
   realized : String
   outputs : List Ty
   resultOrder : Nat
@@ -181,7 +180,7 @@ def assemble (program : Program) (callees : List CalleeKey) (inputs : List Ty) :
     let parameters ← selectParameters binders (← dependencies args)
     let arguments := valuesText (compsText (naming callees inputs) (binders.map (·.name)) args)
     let process := app "Participant.owned" ["1", toString owner, app "invoke" ["tables.closed", helperName], arguments]
-    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", process, realized := process, outputs := helper.outputs, resultOrder := inputs.length + number, owner := some owner, helper := some helper, operands := ← tupleCoordinates binders args }
+    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", realized := process, outputs := helper.outputs, resultOrder := inputs.length + number, owner := some owner, helper := some helper, operands := ← tupleCoordinates binders args }
     let tail ← assemble program callees inputs (⟨"out" ++ toString number, .tuple helper.outputs, inputs.length + number⟩ :: binders) next (number + 1)
     return { tail with steps := step :: tail.steps }
   | _, _, binders, .math helper args next, number => do
@@ -189,7 +188,7 @@ def assemble (program : Program) (callees : List CalleeKey) (inputs : List Ty) :
     let parameters ← selectParameters binders (← dependencies args)
     let arguments := valuesText (compsText (naming callees inputs) (binders.map (·.name)) args)
     let process := app "invoke" ["tables.components", helperName, arguments]
-    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", process, realized := process, outputs := helper.outputs, resultOrder := inputs.length + number, helper := some helper, operands := ← tupleCoordinates binders args }
+    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", realized := process, outputs := helper.outputs, resultOrder := inputs.length + number, helper := some helper, operands := ← tupleCoordinates binders args }
     let tail ← assemble program callees inputs (⟨"out" ++ toString number, .tuple helper.outputs, inputs.length + number⟩ :: binders) next (number + 1)
     return { tail with steps := step :: tail.steps }
   | _, _, binders, .apply callee signature roles site args next, number => do
@@ -199,46 +198,27 @@ def assemble (program : Program) (callees : List CalleeKey) (inputs : List Ty) :
     let parameters ← selectParameters binders deps
     let arguments := valuesText (argumentsText (naming callees inputs) (binders.map (·.name)) args)
     let context := app "ProtocolContext.enter" ["{}", quoted site, natsText roles]
-    let process := app "invokeProtocol" ["protocols", "sourceProtocol" ++ toString index ++ ".signature", context, "1", arguments]
     let realized := app "realizeCall" ["(G := G)", "payload", "maximum" ++ toString index, context,
       "sourceProtocol" ++ toString index ++ ".outputScopes", arguments]
-    let step : Step := { name := "step" ++ toString number, parameters, arguments := "protocols", process, realized, outputs := signature.outputs, resultOrder := inputs.length + number, context := some context, callee := some index }
+    let step : Step := { name := "step" ++ toString number, parameters, arguments := "protocols", realized, outputs := signature.outputs, resultOrder := inputs.length + number, context := some context, callee := some index }
     let tail ← assemble program callees inputs (⟨"out" ++ toString number, .tuple signature.outputs, inputs.length + number⟩ :: binders) next (number + 1)
     let declarations := "def callContext" ++ toString number ++ " : ProtocolContext := " ++ context ++ "\n" ++
       "theorem callContext" ++ toString number ++ "_roles : (callContext" ++ toString number ++ ").roles 0 ≠ (callContext" ++ toString number ++ ").roles 1 := by decide\n\n"
     return { tail with steps := step :: tail.steps, declarations := declarations ++ tail.declarations }
   | _, _, _, _, _ => throw "original-root-unsupported-form"
 
-def spine (assembly : Assembly) (realized : Bool) : String := Id.run do
+def spine (assembly : Assembly) (contractReturn : Bool) : String := Id.run do
   let mut tail := ".done " ++ assembly.returned
   for (step, index) in assembly.steps.zipIdx.reverse do
-    let expression := if realized && step.arguments == "protocols" then
+    let expression := if step.arguments == "protocols" then
       app (step.name ++ "Realized") ("(G := G)" :: step.parameters.map (·.name))
       else app step.name (step.arguments :: step.parameters.map (·.name))
-    if realized && index + 1 == assembly.steps.length && assembly.identityReturn then tail := expression
+    if contractReturn && index + 1 == assembly.steps.length && assembly.identityReturn then tail := expression
     else
       let name := "out" ++ toString index
       let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
       tail := expression ++ ".bind fun " ++ binder ++ " =>\n  " ++ tail
   return tail
-
-/-- Congruence follows the normalized spine without unfolding a library call.
-Explicit equality arguments also keep reducible generated aliases usable by
-clients whose proofs expose the assembly with `simp only`. -/
-def realizationProof (assembly : Assembly) : String := Id.run do
-  let mut text := "  simp only [process, realized, singleton_eta, PIR.Process.bind_done]\n"
-  let mut indent := "  "
-  for (step, index) in assembly.steps.zipIdx do
-    let proof := if step.callee.isSome then
-      "exact " ++ app (step.name ++ "_binding") ("(G := G)" :: step.parameters.map (·.name))
-      else "rfl"
-    if index + 1 == assembly.steps.length then
-      text := text ++ indent ++ proof ++ "\n"
-    else
-      text := text ++ indent ++ "apply congrArg₂ PIR.Process.bind\n" ++
-        indent ++ "· " ++ proof ++ "\n" ++ indent ++ "· funext out" ++ toString index ++ "\n"
-      indent := indent ++ "  "
-  return text
 
 /-- One generated module contains exact catalogue aliases, source-body equations,
 typed continuations, library realization choices and checked root assembly. -/
@@ -266,7 +246,7 @@ def source (program : Program) (output : Output) : Except String String := do
   let assembly ← assemble program keys root.inputs inputBinders form 0
   unless !assembly.steps.isEmpty && assembly.identityReturn do throw "original-root-return-layout"
   let mut text := "module\n\npublic import " ++ output.sourceModule ++ "\npublic import " ++ association.selected.familyModule ++
-    "\npublic import Zkc.Protocols.Sumcheck.Source.Calls\n\n@[expose] public section\n\n" ++
+    "\npublic import Zkc.Protocols.Sumcheck.Source.Calls\npublic import Zkc.Source.Structured.ProtocolDerivation\n\n@[expose] public section\n\n" ++
     "/-! Generated by checks/RunGenerators.lean bindings from admitted typed source.\n" ++
     "Catalogue positions are generated selectors, not human origins or mathematical laws.\n" ++
     "Every body association and process equation is checked by the kernel. -/\n" ++
@@ -319,11 +299,11 @@ def source (program : Program) (output : Output) : Except String String := do
   -- Each source closure captures its earlier declarations exactly once.
   for step in assembly.steps do
     let parameters ← parameterText step.parameters
-    text := text ++ "\nabbrev " ++ step.name ++ " (" ++ step.arguments ++ " : " ++
-      (if step.arguments == "tables" then "Evaluation.ComponentTables F G (signature (F := F) (G := G))"
-       else "ProtocolTable (assignment F G) (signature (F := F) (G := G))") ++ ") " ++ parameters ++ " : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) " ++ typesText step.outputs ++ ") :=\n  " ++ step.process ++ "\n"
-    if step.arguments == "protocols" then
-      text := text ++ "abbrev " ++ step.name ++ "Realized " ++ parameters ++ " : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) " ++ typesText step.outputs ++ ") :=\n  " ++ step.realized ++ "\n"
+    let name := if step.callee.isSome then step.name ++ "Realized" else step.name
+    let tables := if step.callee.isSome then "" else
+      " (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))"
+    text := text ++ "\nabbrev " ++ name ++ tables ++ " " ++ parameters ++
+      " : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) " ++ typesText step.outputs ++ ") :=\n  " ++ step.realized ++ "\n"
   text := text ++ assembly.declarations
   let callSteps := assembly.steps.filter (·.callee.isSome)
   let some firstCall := callSteps.head? | throw "original-root-no-call"
@@ -350,14 +330,6 @@ def source (program : Program) (output : Output) : Except String String := do
     let some terminal := calculations.getLast? | throw "original-root-terminal-calculation"
     text := text ++ "abbrev terminalHelper : Helper := " ++ terminal.name ++ "Helper\n" ++
       "abbrev terminalCalculation := " ++ terminal.name ++ " (F := F) (G := G)\n"
-  for step in callSteps do
-    let parameters ← parameterText step.parameters
-    let arguments := " ".intercalate (step.parameters.map (·.name))
-    text := text ++ "theorem " ++ step.name ++ "_binding " ++ parameters ++ " :\n" ++
-      "    " ++ step.name ++ " (protocolPrefix (F := F) (G := G)) " ++ arguments ++ " = " ++ step.name ++ "Realized (G := G) " ++ arguments ++ " := by\n" ++
-      "  unfold " ++ step.name ++ " protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn\n" ++
-      "  rw [invokeProtocol_cons_same]\n  unfold CheckedProtocol.denoteWithOn\n" ++
-      "  rw [sourceProtocol0_body]\n  rfl\n\n"
   text := text ++ "theorem library_call_binding (site : String) (custody : Option Nat) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :\n" ++
     "    invokeProtocol (protocolPrefix (F := F) (G := G)) reduceDefinition.signature (({} : ProtocolContext).enter site [0, 1]) 1\n" ++
     "      (.cons none (.cons none (.cons none (.cons custody (.cons point (.cons claim (.cons count (.cons service .nil)))))))) =\n" ++
@@ -368,23 +340,21 @@ def source (program : Program) (output : Output) : Except String String := do
   let inputParameters ← parameterText inputBinders
   let inputNames := " ".intercalate (inputBinders.map (·.name))
   let inputValues := valuesText (inputBinders.map (·.name))
-  text := text ++ "\ndef process (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))\n" ++
-    "    (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) " ++ inputParameters ++ " : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=\n  " ++ spine assembly false ++ "\n\n" ++
-    "theorem body_binding (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))\n" ++
-    "    (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) " ++ inputParameters ++ " :\n" ++
-    "    sourceBody.denote (participantMeaningWithOn (ringModel F G) (.silent _) actions tables.toOn 1 protocols {} Occurrence.iterations)\n" ++
-    "      (" ++ inputValues ++ " : Values (Component (assignment F G)) root.inputs).get = process tables protocols " ++ inputNames ++ " := by\n  derive_process\n\n" ++
-    "abbrev realized " ++ inputParameters ++ " :=\n  let tables := helpers (F := F) (G := G) payload\n  " ++ spine assembly true ++ "\n\n" ++
-    "theorem realization_binding " ++ inputParameters ++ " :\n" ++
-    "    process (helpers (F := F) (G := G) payload) protocolPrefix " ++ inputNames ++ " = realized (G := G) " ++ inputNames ++ " := by\n" ++
-    realizationProof assembly ++ "\n" ++
+  text := text ++ "\nabbrev realized " ++ inputParameters ++ " :=\n  let tables := helpers (F := F) (G := G) payload\n  " ++ spine assembly true ++ "\n\n" ++
+    "theorem body_binding " ++ inputParameters ++ " :\n" ++
+    "    sourceBody.denote (participantMeaningWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn 1 protocolPrefix {} Occurrence.iterations)\n" ++
+    "      (" ++ inputValues ++ " : Values (Component (assignment F G)) root.inputs).get = realized (G := G) " ++ inputNames ++ " := by\n" ++
+    "  let tables := helpers (F := F) (G := G) payload\n" ++
+    "  trans (" ++ spine assembly false ++ ")\n" ++
+    "  · derive_process using\n      (apply ProtocolLaw.ordinaryApply\n       · decide +kernel\n       · apply library_call_binding)\n" ++
+    "  · simp only [realized, tables, singleton_eta, PIR.Process.bind_done]\n\n" ++
     "theorem participant_binding " ++ inputParameters ++ " :\n" ++
     "    Occurrence.participant (ringModel F G) imported.program 1 (" ++ inputValues ++ ") = realized (G := G) " ++ inputNames ++ " := by\n" ++
     "  change invokeProtocol (Occurrence.table (ringModel F G) payload) root.signature {} 1 (" ++ inputValues ++ ") = _\n" ++
     "  rw [root_lookup (F := F) (G := G)]\n  unfold CheckedProtocol.denoteWithOn\n" ++
     "  change (root.body.denote (participantMeaningWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn 1 protocolPrefix {} Occurrence.iterations)\n" ++
     "    (" ++ inputValues ++ " : Values (Component (assignment F G)) root.inputs).get).bind _ = _\n" ++
-    "  rw [root_body, body_binding, realization_binding]\n" ++
+    "  rw [root_body, body_binding]\n" ++
     "  rw [ProtocolContext.mapScopes_root]\n" ++
     "  change (realized (G := G) " ++ inputNames ++ ").bind (fun (out : Values (Component (assignment F G)) [.boolean]) => .done (maskValues 1 (List.replicate 1 [1]) out)) = _\n" ++
     "  exact bind_mask_single_role _ 1\n\nend " ++ output.moduleName ++ "\n"
