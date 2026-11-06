@@ -36,6 +36,11 @@ proof entries use this rule on actual generated participants. Their scalar
 presentations connect the admitted source to the existing mathematical verifiers;
 the connection checks physical operations and results separately. This does not
 extend the independent program-byte lowering profile.
+The maintained full FRI and multi-round Sumcheck proof entries export and pass
+independent structured-source admission, including selected Math helpers. FRI
+selects the logical oracle execution contract; Sumcheck selects the ordinary
+one. Admission alone supplies neither a compiled FRI connection nor a security
+or terminal-discharge theorem for either entry.
 Common-input requirements remain obligations on entry admission; no public bit,
 availability set or native formation result supplies input agreement.
 [Native control fixtures](../compiler/test/protocol_control.cpp) exercise this

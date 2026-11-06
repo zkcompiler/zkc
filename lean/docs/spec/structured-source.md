@@ -1357,9 +1357,9 @@ The latter case still checks the exact suite, returned history and immutable
 caller captures. Layouts keep one logical designation per physical cell, so an
 alias-sensitive continuation may still be refused. Return selection supports
 any finite subset whose substitution passes the syntax equality; it does not
-prove algebraic equivalence of different continuations. Helper expansion handles
-a return projection or one total primitive with present operands or a
-statically absent operand; arbitrary helper inlining is not claimed. These are
+prove algebraic equivalence of different continuations. The simple helper rules cover a return projection or one total primitive with
+present or statically absent operands. A multi-step Math body uses the checked
+region alignment described below; arbitrary helper inlining is not claimed. These are
 proposer/derivation coverage limits, not restrictions added to the theorem's
 runtime quantifiers.
 
@@ -1558,6 +1558,13 @@ the admitted source and returns the complete declared tuple from the selected
 arm. Correspondence requires both arm equations; neither static admission nor
 a digest establishes the source connection. Helper, catalogue and occurrence
 inventories traverse all stored regions, including dormant ones.
+
+An oracle unit's checked Math environment admits a Boolean branch with exactly
+two pure, formed arms and a pure continuation. Calls in either arm must resolve
+to the associated Math environment; a dormant Local call or stop refuses this
+profile. The evaluator still selects only the reached arm. Output dependency
+analysis may conservatively include the selector and all explicit captures;
+admission does not prove exact query locality or cryptographic security.
 
 ### Canonical execution selection at property consumers
 
