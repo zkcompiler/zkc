@@ -1,5 +1,6 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
+import ZkcArkLib.Fri.HolderPadding
 import ZkcTools.DeclarationAudit
 
 /-! Focused controls for the mathematical FRI adapters. The two-round example is a mathematical
@@ -25,6 +26,26 @@ example : bitAnd (2 ^ 64 - 1)
 -- Exact current padding rejects the overlength mathematical case.
 example : ¬ (([1, 2, 3] : List ℚ) ++ List.replicate (2 - 3) 0).length = 2 := by decide
 example : bounded 1 ([1] : List ℚ) = true ∧ ([1] : List ℚ).length ≠ 2 ^ 1 := by decide
+
+section
+open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured.FriSourceBodies
+open ZkcSecurity.Domains.KoalaBear (Octic)
+
+-- The installed helper rejects the two-cell input at width one; truncation
+-- would turn this mutation into an apparently valid terminal message.
+example {I : PIR.Signature} (a b : Octic) :
+    invoke (RetainedFold.helpers (I := I)).closed helper21Helper (.cons [a, b] (.cons 1 .nil)) =
+      .halt .reject := by
+  refine (HolderPadding.installed [a, b] 1 (show 2 < indexLimit by decide) (by decide)).trans ?_
+  rfl
+
+-- Even the canonical empty list from interpolating zero produces one sent zero.
+example {I : PIR.Signature} :
+    invoke (RetainedFold.helpers (I := I)).closed helper21Helper (.cons [] (.cons 1 .nil)) =
+      .done (.cons [(0 : Octic)] .nil) := by
+  refine (HolderPadding.installed (I := I) [] 1 (by decide) (by decide)).trans ?_
+  rfl
+end
 
 -- Sampled equality does not identify unsampled positions.
 example : ∃ initial : Fin 2 → ℕ, initial 0 = 0 ∧ initial ≠ (fun _ ↦ 0) := by

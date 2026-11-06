@@ -10,6 +10,29 @@ The actual retained helper closure supplies both evaluations. The all-concrete o
 boundary is explicit; no law is claimed for arbitrary deferred table data. -/
 
 set_option autoImplicit false
+namespace Zkc.Source.Structured.OracleProtocol
+variable {model : DomainModel} {helper : Helper}
+variable (tables : Evaluation.ComponentTablesOn model.toCarriers (Interface model))
+
+/-- At the owning role, concrete operands invoke the exact ordinary helper in
+the oracle participant. Its stops and any effects survive this equation. -/
+theorem owned_present (self : Nat) (args : Values model.Value helper.inputs) :
+    owned model self self tables helper (ProtocolValue.embedComponents args.present) =
+      (invoke tables.closed helper args).bind (fun out ↦ .done (ProtocolValue.embedComponents out.present)) := by
+  unfold owned
+  simp only [ite_true, ProtocolEmbedding.sequence_embed, RoleFamily.sequence_present, Option.map_some,
+    ProtocolValue.materializeComponents_embedComponents, PIR.Process.bind, Participant.owned_present,
+    PIR.Process.bind_assoc]
+
+/-- A different role skips the call, even when its operands are incomplete
+or refer to deferred data. -/
+theorem owned_absent {self owner : Nat} (other : owner ≠ self)
+    (args : Values (Component (ProtocolValue model.toCarriers)) helper.inputs) :
+    owned model self owner tables helper args = .done (Values.absent _ helper.outputs) := by
+  simp [owned, other]
+
+end Zkc.Source.Structured.OracleProtocol
+
 namespace Zkc.Source.Structured.ReferenceLaw
 open ProtocolEmbedding
 
