@@ -196,7 +196,7 @@ theorem returnedBase (context : ProtocolContext) (receiver : context.roles 1 = 1
 /-- On the actual receiver action, every successful choice returns the
 dynamic anchor of the published word and installs the reusable provider
 witness for that very word. Stops require no witness. -/
-theorem sendRegisters (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
+private theorem alignedRegistration (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
     (n : Nat) (bounded : 2 ^ n ≤ 32) (state : State model snapshot domains math Aux)
     (role : state.oracle.self = 1) (atDef : (registrySite 0).definition = state.frame.definition)
     (atRow : (registrySite 0).row = state.frame.row)
@@ -204,7 +204,7 @@ theorem sendRegisters (context : ProtocolContext) (receiver : context.roles 1 = 
     let source := (location state).anchor
     Std.Do.Internal.Ensures (fun result ↦ ∀ reply, result.outcome = .returned reply →
       reply = .cons (OracleProtocol.concrete model (.oracle kind) source) .nil ∧
-      ∃ word : Fin (2 ^ n) → model.Field extension, Nonempty
+      result.state.oracle.self = 1 ∧ ∃ word : Fin (2 ^ n) → model.Field extension, Nonempty
         (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries
           result.state.oracle.self source word result.state.oracle.provider))
       (PublishedWords.actionM oracles network choose (sendRequest context (2 ^ n)) state) := by
@@ -220,7 +220,59 @@ theorem sendRegisters (context : ProtocolContext) (receiver : context.roles 1 = 
     intro reply returned
     have handle := (installedWord context _ state attempt reply returned).1
     obtain ⟨word, _, live⟩ := returnedBase context receiver n state role attempt reply returned
-    exact ⟨handle, word, live⟩
+    refine ⟨handle, ?_, word, live⟩
+    cases pub : PublishedWords.finish (request context (2 ^ n) (location state)) state.oracle.provider attempt with
+    | mk outcome after events => cases outcome <;> exact role
+
+
+private theorem refusedSend (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
+    (rows : Nat) (bounded : rows ≤ 32) (state : State model snapshot domains math Aux) (role : state.oracle.self = 1)
+    (invalid : ¬ ((registrySite 0).definition = state.frame.definition ∧ (registrySite 0).row = state.frame.row ∧
+      OracleStore.hasAnchor state.oracle.entries (location state).anchor = false)) :
+    (OracleProtocol.handler (E := E) model oracles OracleProcess.refusingOrdinary OracleProcess.refusingBase
+      (sendRequest context rows) state).outcome = .stopped .refused := by
+  simp only [sendRequest, OracleProtocol.handler]
+  split
+  · rfl
+  · rename_i aligned
+    have atSite : (registrySite 0).definition = state.frame.definition ∧ (registrySite 0).row = state.frame.row := by
+      simpa using aligned
+    have duplicate : OracleStore.hasAnchor state.oracle.entries (location state).anchor = true := by
+      simpa using (fun fresh ↦ invalid ⟨atSite.1, atSite.2, fresh⟩)
+    have shape : OracleStore.validRows kind rows = true := by
+      have small : rows < indexLimit := lt_of_le_of_lt bounded (by decide : 32 < indexLimit)
+      simp [OracleStore.validRows, OracleKind.rows, small]
+    have bounds : OracleStore.validBounds kind [("rows",32)] rows = true := by
+      simpa [OracleStore.validBounds, OracleKind.rows] using And.intro (by decide : 32 < indexLimit) bounded
+    simp only [location] at duplicate
+    simp [OracleExecution.operation, role, receiver, OracleStore.visible, ProtocolValue.toConcrete_ofConcrete,
+      shape, bounds, separate, OracleStore.insert, duplicate, OracleExecution.refusal]
+
+/-- A successful send itself supplies the live word and its actual handle.
+Cursor alignment and freshness are checked by the interpreter, including
+when a previous invocation already owns the proposed anchor. -/
+theorem sendRegisters (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
+    (n : Nat) (bounded : 2 ^ n ≤ 32) (state : State model snapshot domains math Aux) (role : state.oracle.self = 1) :
+    let source := (location state).anchor
+    Std.Do.Internal.Ensures (fun result ↦ ∀ reply, result.outcome = .returned reply →
+      reply = .cons (OracleProtocol.concrete model (.oracle kind) source) .nil ∧ result.state.oracle.self = 1 ∧
+      ∃ word : Fin (2 ^ n) → model.Field extension, Nonempty
+        (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries
+          result.state.oracle.self source word result.state.oracle.provider))
+      (PublishedWords.actionM oracles network choose (sendRequest context (2 ^ n)) state) := by
+  by_cases valid : (registrySite 0).definition = state.frame.definition ∧ (registrySite 0).row = state.frame.row ∧
+    OracleStore.hasAnchor state.oracle.entries (location state).anchor = false
+  · exact alignedRegistration oracles network choose context receiver separate n bounded state role valid.1 valid.2.1 valid.2.2
+  · have refuses := refusedSend (E := E) oracles context receiver separate (2 ^ n) bounded state role valid
+    have stopped := OraclePublication.send_stopped model oracles (PublishedWords.liftM network)
+      PublishedWords.readM (PublishedWords.publishM choose) kind 0 [1] [("rows",32)] (registrySite 0) 1 context.roles
+      (.cons none (.cons (OracleProtocol.concrete model .index (2 ^ n)) .nil)) state .refused refuses
+    dsimp only
+    unfold PublishedWords.actionM
+    erw [stopped]
+    apply Zkc.MonadicPostcondition.pure
+    intro reply returned
+    cases refuses.symm.trans returned
 
 /-- The first reached action in the source iteration runs the chooser on
 its original table. Only a returned publication resumes the original append,

@@ -286,6 +286,33 @@ theorem afterM_none (publish : PIR.MonadHandler m (Interface model) S E)
     afterM publish action before candidate = pure candidate := by
   simp [afterM, absent]
 
+/-- A source refusal before publication returns its original record. The
+chooser cannot observe a failed construction or change its state. -/
+theorem send_stopped (model : DomainModel) (oracles : List (CheckedOracle snapshot domains math))
+    (ordinary : PIR.MonadHandler m (participantInterfaceOn model.toCarriers) S E)
+    (base : PIR.MonadHandler m (oracleReadInterface model.toCarriers) S E)
+    (publish : PIR.MonadHandler m (Interface model) S E)
+    (kind : OracleKind) (holder : Nat) (receivers : List Nat) (bounds : List (String × Nat))
+    (site : OracleLocation) (self : Nat) (roles : Nat → Nat)
+    (args : Values (Component (ProtocolValue model.toCarriers)) (OracleOp.send kind holder receivers bounds).arguments)
+    (state : OracleProtocol.State model snapshot domains math S) (why : PIR.Stop) :
+    let action : OracleProtocolAction model.toCarriers :=
+      .oracle ⟨.send kind holder receivers bounds, site, self, roles, args⟩
+    let candidate := OracleProtocol.handler model oracles OracleProcess.refusingOrdinary
+      (OracleProcess.refusingBase (E := E)) action state
+    candidate.outcome = .stopped why → actionM model oracles ordinary base publish action state = pure candidate := by
+  intro action candidate stopped
+  unfold actionM
+  rw [send_actionM, pure_bind]
+  change afterM publish action state candidate = pure candidate
+  apply afterM_none
+  cases equation : candidate with
+  | mk outcome after events =>
+    rw [equation] at stopped
+    dsimp only at stopped
+    subst outcome
+    exact request?_stopped action state after why events
+
 /-- Exactly one provider call, with the complete result determining the committed record. -/
 theorem afterM_some (publish : PIR.MonadHandler m (Interface model) S E)
     (action : OracleProtocolAction model.toCarriers)

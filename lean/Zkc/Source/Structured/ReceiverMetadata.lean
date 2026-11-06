@@ -47,16 +47,19 @@ theorem sequenceLengthAt {self maximum : Nat} {roles : Nat → Nat} {kind : Orac
 /-- A returned active append has the original sequence followed by the
 supplied handle. Capacity, visibility and the source cursor can each stop
 the execution. All of these outcomes preserve the oracle state. -/
-theorem sequenceAppendReturned {self maximum : Nat} {roles : Nat → Nat} {owners : List Nat}
+theorem sequenceAppendAction {self maximum : Nat} {roles : Nat → Nat} {owners : List Nat}
     {kind : OracleKind} {anchors : List OracleAnchor} {anchor : OracleAnchor}
-    (role : original.self = self) (active : self ∈ owners.map roles) :
-    Keeps oracles ordinary base publish original
-      (.call (.oracle ⟨.sequenceAppend kind maximum owners, location, self, roles,
-        .cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) anchors))
-          (.cons (some (ProtocolValue.ofConcrete (.oracle kind) anchor)) .nil)⟩) .done)
-      (.cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) (anchors ++ [anchor]))) .nil) := by
-  apply PIR.Process.ReturnsUnder.action
-  intro state same
+    (role : original.self = self) (active : self ∈ owners.map roles)
+    (state : OracleProtocol.State model snapshot domains math S) (same : state.oracle = original) :
+    let op : OracleProtocolAction model.toCarriers := .oracle ⟨.sequenceAppend kind maximum owners, location,
+      self, roles, .cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) anchors))
+        (.cons (some (ProtocolValue.ofConcrete (.oracle kind) anchor)) .nil)⟩
+    let expected : (OracleProtocol.Interface model).Reply op :=
+      .cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) (anchors ++ [anchor]))) .nil
+    Std.Do.Internal.Ensures (fun record ↦ record.state.oracle = original ∧
+      ∀ value, record.outcome = .returned value → value = expected)
+      (OraclePublication.actionM model oracles ordinary base publish op state) := by
+  dsimp only
   rw [OraclePublication.actionM_local _ _ _ _ _ _ rfl]
   apply Zkc.MonadicPostcondition.pure
   simp only [OracleProtocol.handler]
@@ -66,6 +69,17 @@ theorem sequenceAppendReturned {self maximum : Nat} {roles : Nat → Nat} {owner
       OracleExecution.refusal, OracleExecution.returned]
     split <;> first | split <;> simp_all | simp_all
     exact fun _ eq ↦ (PIR.Outcome.returned.inj eq).symm
+
+theorem sequenceAppendReturned {self maximum : Nat} {roles : Nat → Nat} {owners : List Nat}
+    {kind : OracleKind} {anchors : List OracleAnchor} {anchor : OracleAnchor}
+    (role : original.self = self) (active : self ∈ owners.map roles) :
+    Keeps oracles ordinary base publish original
+      (.call (.oracle ⟨.sequenceAppend kind maximum owners, location, self, roles,
+        .cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) anchors))
+          (.cons (some (ProtocolValue.ofConcrete (.oracle kind) anchor)) .nil)⟩) .done)
+      (.cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) (anchors ++ [anchor]))) .nil) := by
+  apply PIR.Process.ReturnsUnder.action
+  exact sequenceAppendAction role active
 
 theorem rowsAt {self : Nat} {roles : Nat → Nat} {row : Ty} {fixed : Option Nat} {anchor : OracleAnchor}
     {table : OracleStoredTable model snapshot domains math row} (role : original.self = self)

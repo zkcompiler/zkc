@@ -108,16 +108,20 @@ theorem registered (context : ProtocolContext) (marks : List (String × String))
 
 /-- On return, both collections extend in the source's order and both
 registered tables are available to the following round. -/
+def RoundResult (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic)
+    (shift beta : Octic) (layers folds : List OracleAnchor)
+    (values : Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state)
+    (store : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux)) : Prop :=
+  ∃ view, values = CommitCaptures.nextState n shift layers folds source view ∧ store.self = 1 ∧
+    Nonempty (VirtualStore.Registered store source view word beta shift) ∧
+    Nonempty (PublishedWords.RegisteredWord (row := .field FriSource.extension) store.entries store.self source word store.provider)
+
 def RoundReturned (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n+1)) → Octic)
     (shift beta : Octic) (layers folds : List OracleAnchor)
     (record : PIR.Execution
       (OracleProtocol.State model checkedUnit.snapshot checkedUnit.domains checkedUnit.math (PublishedWords.State model Aux))
       (OracleProtocol.Event E) (Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state)) : Prop :=
-  ∀ values, record.outcome = .returned values →
-    ∃ view, values = CommitCaptures.nextState n shift layers folds source view ∧ record.state.oracle.self = 1 ∧
-      Nonempty (VirtualStore.Registered record.state.oracle source view word beta shift) ∧
-      Nonempty (PublishedWords.RegisteredWord (row := .field FriSource.extension) record.state.oracle.entries
-        record.state.oracle.self source word record.state.oracle.provider)
+  ∀ values, record.outcome = .returned values → RoundResult n source word shift beta layers folds values record.state.oracle
 
 private abbrev IterationState := Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state
 private abbrev Runtime (Aux : Type) := OracleProtocol.State model checkedUnit.snapshot checkedUnit.domains
