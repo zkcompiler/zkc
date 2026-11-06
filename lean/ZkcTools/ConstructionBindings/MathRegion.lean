@@ -73,7 +73,7 @@ partial def propose (definitions model locations extent source target : Expr) : 
     let yesSource := arm0[arm0.size - 2]!
     let noSource := arm1[arm1.size - 2]!
     let (references, read) ← selected locations operands
-    let physicalReferences ← mkAppM ``List.cons #[physical[1]!, physical[2]!]
+    let physicalReferences ← mkAppM ``List.cons #[physical[2]!, physical[3]!]
     unless ← isDefEq references physicalReferences do throwError "alignment-computation-operand-mismatch"
     let count ← mkAppM ``List.length #[captures]
     let armLocations ← mkAppM ``ConnectionMathRegion.arguments #[count]

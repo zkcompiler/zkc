@@ -362,12 +362,12 @@ inductive Alignment (routing : Original.Routing) :
         (ConnectionSubstitution.form next (ConnectionSubstitution.tupleHead (calculation.result arguments))) target) :
       Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.math definition.helper (components arguments) next) target
-  | inlineMissingCalculation {context : ProtocolContext} {definitions : List CheckedDefinition}
+  | inlineMissingStrict {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees}
       {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
       {frames : ScopedFrames scope} {layout : Layout scope}
-      (definition : CheckedDefinition) (calculation : ConnectionHelpers.CalculationBody definitions definition)
+      (definition : CheckedDefinition) (calculation : ConnectionHelpers.StrictBody definitions definition)
       (arguments : Values (Comp [] scope) definition.inputs)
       (missing : anyAbsent (lookup arguments calculation.inputs) = true)
       {next : Form [] callees (.tuple definition.outputs :: scope) out} {target : Block}
@@ -763,7 +763,7 @@ abbrev mathHelper := @Alignment.mathHelper
 abbrev inlineMath := @Alignment.inlineMath
 abbrev projectionHelper := @Alignment.projectionHelper
 abbrev inlineCalculation := @Alignment.inlineCalculation
-abbrev inlineMissingCalculation := @Alignment.inlineMissingCalculation
+abbrev inlineMissingStrict := @Alignment.inlineMissingStrict
 abbrev calculation := @Alignment.calculation
 abbrev receive := @Alignment.receive
 abbrev send := @Alignment.send
@@ -801,7 +801,7 @@ def Alignment.size {routing : Original.Routing} {context : ProtocolContext} {def
   | .inlineMath (tail := tail) .. => 1 + tail.size
   | .projectionHelper _ _ _ _ tail => 1 + tail.size
   | .inlineCalculation _ _ _ _ tail => 1 + tail.size
-  | .inlineMissingCalculation _ _ _ _ _ tail => 1 + tail.size
+  | .inlineMissingStrict _ _ _ _ _ tail => 1 + tail.size
   | .calculation _ _ _ _ _ _ _ tail => 1 + tail.size
   | .receive _ _ _ _ _ _ _ tail => 1 + tail.size
   | .send (tail := tail) .. => 1 + tail.size
@@ -1087,7 +1087,7 @@ private noncomputable def sound
       Occurrence.actions tables context runs processes next binders]
     exact ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning
       expectedFrames state stack captured binders reachedStack environment related retained
-  | @inlineMissingCalculation context definitions callees selection out role scopes outputs history scope frames layout
+  | @inlineMissingStrict context definitions callees selection out role scopes outputs history scope frames layout
       definition calculation arguments missing next target nextMatched tail ih =>
     have tableEquality := bindings ⟨calculation.before.length, by
       have length := congrArg List.length calculation.declarations

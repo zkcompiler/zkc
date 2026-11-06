@@ -1460,6 +1460,42 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
             (← `(($definitionsSyntax).get ⟨$(quote index), by decide +kernel⟩)) (mkConst ``CheckedDefinition)
           let beforeSyntax ← Term.exprToSyntax before
           let afterSyntax ← Term.exprToSyntax after
+          -- The source helper can run with optional inputs on another role.
+          -- For a strict step with a missing operand, read its actual return row
+          -- without proposing an instruction on that role's physical target.
+          if body.isAppOf ``Region.letOp then
+            let bp := body.getAppArgs
+            let op ← whnf bp[bp.size - 4]!
+            let returned ← whnf bp.back!
+            let total ← whnf (← mkAppM ``Op.total #[op])
+            if returned.isAppOf ``Region.ret && (op.isAppOf ``Op.branch || total.isConstOf ``Bool.true) then
+              let arguments := sourceParts[sourceParts.size - 2]!
+              let inputs := bp[bp.size - 3]!
+              let selectedInputs ← mkAppM ``NormalForm.lookup #[arguments, inputs]
+              let absent ← whnf (← mkAppM ``NormalForm.anyAbsent #[selectedInputs])
+              if absent.isConstOf ``Bool.true then
+                let opSyntax ← Term.exprToSyntax op
+                let inputsSyntax ← Term.exprToSyntax inputs
+                let regionsSyntax ← Term.exprToSyntax bp[bp.size - 2]!
+                let returnedSyntax ← Term.exprToSyntax returned.getAppArgs.back!
+                let strict ← if op.isAppOf ``Op.branch then
+                  `(ConnectionHelpers.StrictStep.branch _ _)
+                else `(ConnectionHelpers.StrictStep.total (by decide +kernel))
+                let certificate ← Term.elabTerm
+                  (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel, $opSyntax, $strict,
+                    $inputsSyntax, $regionsSyntax, $returnedSyntax, rfl⟩))
+                  (← mkAppM ``ConnectionHelpers.StrictBody #[args[2]!, selected])
+                Term.synthesizeSyntheticMVarsNoPostponing
+                let certificate ← instantiateMVars certificate
+                let missing ← mkAppM ``NormalForm.anyAbsent #[selectedInputs]
+                let rule ← finiteApplication ``ConnectionCertificate.Alignment.inlineMissingStrict
+                  ((args.extract 0 13).map some ++ #[some selected, some certificate, some arguments,
+                    some (← mkEqRefl missing), some sourceParts.back!, some target])
+                for pending in ← goal.apply rule do
+                  if (← whnf (← instantiateMVars (← pending.getType))).isAppOf ``ConnectionCertificate.Alignment then
+                    derive cache discovery pending
+                  else staticGoal pending
+                return
           let single ← (do
             unless body.isAppOf ``Region.letOp do return false
             let tail ← whnf body.getAppArgs.back!
@@ -1503,14 +1539,8 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
                 (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel,
                   $operationSyntax, by decide +kernel, $inputsSyntax, $outputsSyntax, rfl⟩)) certificateType
               let arguments := sourceParts[sourceParts.size - 2]!
-              let selected ← mkAppM ``NormalForm.lookup #[arguments, bodyParts[bodyParts.size - 3]!]
-              let absent ← whnf (← mkAppM ``NormalForm.anyAbsent #[selected])
-              if absent.isConstOf ``Bool.true then
-                pure (``ConnectionCertificate.Alignment.inlineMissingCalculation, certificate,
-                  arguments, #[← mkEqRefl (mkConst ``Bool.true)])
-              else
-                pure (``ConnectionCertificate.Alignment.inlineCalculation, certificate,
-                  ← presentTerms scope arguments, #[])
+              pure (``ConnectionCertificate.Alignment.inlineCalculation, certificate,
+                ← presentTerms scope arguments, #[])
           Term.synthesizeSyntheticMVarsNoPostponing
           let constructor ← finiteApplication rule
             ((args.extract 0 13).map some ++ #[some selected, some certificate,

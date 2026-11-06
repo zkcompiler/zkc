@@ -1559,6 +1559,16 @@ arm. Correspondence requires both arm equations; neither static admission nor
 a digest establishes the source connection. Helper, catalogue and occurrence
 inventories traverse all stored regions, including dormant ones.
 
+A participant can lack a helper operand that another participant has. For a
+one-step helper whose source is a strict total operation or a Boolean branch
+followed by a return, the connection checks the operands of that exact step.
+If any is absent, the step produces absent components for its result slots.
+The helper still evaluates its original return positions over those slots
+and its original arguments. Thus returning an available argument preserves
+it even when the step was skipped. The checked participant needs no physical
+instruction for that step. This rule requires a proof from the component
+interpreter and cannot erase an arbitrary call, event or stop.
+
 An oracle unit's checked Math environment admits a Boolean branch with exactly
 two pure, formed arms and a pure continuation. Calls in either arm must resolve
 to the associated Math environment; a dormant Local call or stop refuses this

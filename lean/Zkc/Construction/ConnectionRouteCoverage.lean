@@ -192,7 +192,7 @@ macro "retain_connection_frame" : tactic => `(tactic|
       Occurrence.actions tables context _ processes next binders]
     exact ih model tables bindings protocols processes calleesHold selectionMeaning captured binders
       reachedHistory environment related (by retain_connection_frame)
-  | @inlineMissingCalculation context definitions callees selection out role scopes outputs history scope frames layout
+  | @inlineMissingStrict context definitions callees selection out role scopes outputs history scope frames layout
       definition calculation arguments missing next target nextMatched tail ih =>
     have tableEquality := bindings ⟨calculation.before.length, by
       have length := congrArg List.length calculation.declarations
