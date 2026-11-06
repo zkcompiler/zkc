@@ -60,23 +60,23 @@ theorem body_equation (table : Meanings F G) (xs : List F) (x : F) (divisor : Na
           simp [meaning, Evaluation.meaning,
             outputs, reference,
             Values.get, SiteObservations.closed,
-            SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+            SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
             checkedIndices, lengthBound, addBound, divisorBound, nonzero, extended,
             show 1 < indexLimit by decide +kernel]
       · simp [meaning, Evaluation.meaning,
           reference,
           Values.get, SiteObservations.closed,
-          SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+          SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
           checkedIndices, lengthBound, addBound, divisorBound, show 1 < indexLimit by decide +kernel]
     · simp [meaning, Evaluation.meaning,
         reference,
         Values.get, SiteObservations.closed,
-        SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+        SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
         checkedIndices, lengthBound, addBound, show 1 < indexLimit by decide +kernel]
   · simp [meaning, Evaluation.meaning,
       reference,
       Values.get, SiteObservations.closed,
-      SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome, lengthBound]
+      SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, lengthBound]
 
 set_option smartUnfolding false in
 theorem helper_equation (xs : List F) (x : F) (divisor : Nat) :
@@ -129,7 +129,7 @@ theorem division_zero_sites {I : PIR.Signature} (sites : SiteObservations I)
   dsimp only [inputs]
   rw [PrimitiveExpansions.appendSummary_body_observed]
   have lengthBound : xs.length < indexLimit := by omega
-  simp only [PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+  simp only [PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
     checkedIndices, Values.get, lengthBound, bound,
     show 0 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,
     and_self, ite_true]

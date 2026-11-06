@@ -20,7 +20,10 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
 private def finite (goal : MVarId) : TacticM Unit := do
   setGoals [goal]
-  evalTactic (← `(tactic| first | rfl | decide +kernel))
+  -- Closed admission computations are kernel reductions. Asking the
+  -- elaborator's unifier to normalize a checked source program here repeats
+  -- its entire admission before the finite alignment has even started.
+  evalTactic (← `(tactic| first | kernel_rfl | decide +kernel))
 
 private def input (goal : MVarId) (capabilities : Expr) : TacticM Unit := goal.withContext do
   let expected ← instantiateMVars (← goal.getType)
@@ -38,7 +41,7 @@ private def input (goal : MVarId) (capabilities : Expr) : TacticM Unit := goal.w
   goal.setType (mkAppN expected.getAppFn #[signature, context, role, sorts])
   Alignment.tracePhase "root input indices normalized"
   let candidate ← mkAppM ``ConnectionRootInputs.locations #[signature, role, capabilities]
-  let result ← withTransparency .all <| whnf candidate
+  let result ← Syntax.head candidate
   unless result.isAppOf ``Except.ok do throwError "root-input-proposal-refused: {result}"
   let locations := result.getAppArgs.back!
   let types ← mkAppM ``ProtocolSignature.inputs #[signature]
@@ -98,9 +101,16 @@ private def deriveRoot (target correspondence services : Syntax)
         goal.apply (← mkConstWithFreshMVarLevels ``ConnectionRoot.RootCertificate.mk) { newGoals := .all }
       | throwError "root-certificate-shape"
     let libraryType ← libraryGoal.getType
+    Alignment.tracePhase "root library elaboration start"
     let library ← match selectedLibrary with
       | some selectionSyntax => Term.elabTerm selectionSyntax (some libraryType)
       | none => mkAppM ``ConnectionLibrary.Bundle.empty #[← mkAppM ``Program.payload #[args[0]!]]
+    -- A selected library can itself be a tactic term. Finish that finite
+    -- proposal before its key row becomes an input to source normalization.
+    Alignment.tracePhase "root library synthesis start"
+    Term.synthesizeSyntheticMVarsNoPostponing
+    Alignment.tracePhase "root library synthesis complete"
+    let library ← instantiateMVars library
     libraryGoal.assign library
     targetGoal.assign target
     correspondenceGoal.assign correspondence
@@ -110,12 +120,20 @@ private def deriveRoot (target correspondence services : Syntax)
       let type ← instantiateMVars (← next.getType)
       if type.isAppOf ``ConnectionInputs.InputLayout then input next capabilities
       else if type.isAppOf ``ConnectionInstallation.ReturnLayout then
-        setGoals [next]
-        evalTactic (← `(tactic| exact
-          (Zkc.Construction.ConnectionInstallation.ReturnLayout.build _ _ _ _).toOption.get (by decide +kernel)))
+        let cache ← Syntax.newCache
+        let fields ← type.getAppArgs.mapM fun field => do
+          Syntax.normalize cache field
+        let result ← Syntax.head (mkAppN
+          (mkConst ``ConnectionInstallation.ReturnLayout.build) fields)
+        unless result.isAppOf ``Except.ok do
+          throwError "root-output-proposal-refused: {result}"
+        next.assign result.getAppArgs.back!
       else if type.isAppOf ``NormalForm.RosterDistinct then
-        setGoals [next]
-        evalTactic (← `(tactic| exact Zkc.Source.Structured.NormalForm.RosterDistinct.root _ _))
+        -- These indices already occur in the goal. Inferring them again by
+        -- unification unfolds the checked payload merely to recover its
+        -- role count. The kernel checks the explicit specialization below.
+        let fields := type.getAppArgs
+        next.assign (mkApp2 (mkConst ``NormalForm.RosterDistinct.root) fields[1]! fields[2]!)
       else if type.isAppOf ``ConnectionCertificate.Certificate then
         setGoals [next]
         evalTactic (← `(tactic| derive_connection_alignment))

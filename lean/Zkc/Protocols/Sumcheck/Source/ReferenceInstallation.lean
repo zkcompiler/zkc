@@ -61,7 +61,8 @@ def reference (ctx : ProtocolContext) (service : Option Nat)
     match service with
     | none => .halt .incomplete
     | some handle =>
-      .call (.action (.query (SumcheckRoundNormalForms.challengeSite ctx) field (.cons handle .nil))) fun (r : model.Field field) =>
+      .call (.action (.query (SumcheckRoundNormalForms.challengeSite ctx) (.draw field)
+        (.cons handle .nil))) fun (r : model.Field field) =>
       .call (.action (.send (ty := .field field) (SumcheckRoundNormalForms.deliverySite ctx)
         (ctx.roles 0) r)) fun _ =>
       match point with

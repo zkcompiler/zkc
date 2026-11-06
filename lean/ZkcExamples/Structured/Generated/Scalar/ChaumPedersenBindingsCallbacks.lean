@@ -31,7 +31,7 @@ noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (O
   | none =>
     .halt .incomplete
   | some b7 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "s0") "bls12-381.fr" (.cons (b7) .nil)) fun (b8 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "s0") (.draw "bls12-381.fr") (.cons (b7) .nil)) fun (b8 : F) =>
     match b0 with
     | none =>
       .halt .incomplete
@@ -80,7 +80,7 @@ noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (O
   | none =>
     .halt .incomplete
   | some b9 =>
-    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") "bls12-381.fr" (.cons (b9) .nil)) fun (b10 : F) =>
+    .call (.query (qualifyProtocolSite (ctx).applicationPrefix "label_6368616c6c656e6765") (.draw "bls12-381.fr") (.cons (b9) .nil)) fun (b10 : F) =>
     .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_64656c6976657279_0") ((ctx).roles 0) (b10)) fun _ =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_726573706f6e7365_0") ((ctx).roles 0)) fun (b11 : F) =>
     (invoke ((helpers (F := F) (G := G) payload).toOn).components (⟨"zkl_4f9550b3befb5d34799290dfef3d1db12a4f36b45d06fdf2d0fba8ee6e8d4da9", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (b0) (.cons ((some (b11))) (.cons ((some (b7))) (.cons (b1) (.cons ((some (b10))) (.cons (b2) (.cons ((some (b8))) (.cons (b3) .nil))))))))).bind fun (b12 : (Values (Component (assignment F G)) [.boolean])) =>

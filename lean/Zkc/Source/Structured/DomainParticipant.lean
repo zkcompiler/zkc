@@ -4,6 +4,8 @@ public import Zkc.Source.Structured.DomainComponent
 public import Zkc.Source.Structured.OpenMeaning
 public import Zkc.Source.Structured.IterationObservations
 
+public import Zkc.Source.Structured.ServiceExecution
+
 @[expose] public section
 
 /-! Participant meanings over domain models.
@@ -128,6 +130,7 @@ def protocolOperationWithOn {I : PIR.Signature} (observations : SiteObservations
     (iterations : IterationObservations I := .silent) :
     PIR.Process I (Values (Component model.Value) op.results) :=
   match op, args with
+  | .oracle .., _ => .halt .refused
   | .repeat spec site, .cons count values =>
     let parts := Values.split spec.state values
     denoteRepeatOn spec context self count parts.1 parts.2 (callbacks.get .here) iterations site
@@ -146,9 +149,13 @@ def protocolOperationWithOn {I : PIR.Signature} (observations : SiteObservations
     .done (.cons (Participant.restrict ((roles.map context.roles).contains self) value) .nil)
   | .assemble _ roles, values =>
     .done (.cons (assembleComponent (fun role => context.roles role == self) none roles values) .nil)
+  | .query owner operation site, args =>
+    ((Participant.query (services := services) self (context.roles owner)
+      (qualifyProtocolSite context.applicationPrefix site) operation args).interpret serviceAction |>.interpret
+      actions).bind fun result => .done (.cons result .nil)
   | .draw owner field site, args =>
     ((Participant.query (services := services) self (context.roles owner)
-      (qualifyProtocolSite context.applicationPrefix site) field args).interpret
+      (qualifyProtocolSite context.applicationPrefix site) (.draw field) args).interpret
       actions).bind fun result => .done (.cons result .nil)
   | .statement .., _ => .done .nil
   | .mark site, .nil =>

@@ -178,9 +178,18 @@ mutual
           modify fun state => { state with view := { state.view with cuts :=             { receive := origin, type := ty, sender, receiver,               honestSource := if arm == .verifier then none else arguments.head?.map (·.address) } ::                 state.view.cuts } }
       | .restrict _ _ => node := { node with tag := "restrict-scope" }
       | .assemble _ roles => node := { node with tag := "assemble-roles", roleMap := roles }
-      | .draw _ _ _ =>
+      | .draw _ _ _ | .query _ (.draw _) _ =>
         outgoing := values.map fun value => { value with dependencies := [value.address] }
         node := { node with tag := "draw", results := outgoing.filter fun value =>           allowed arm selectedRole value.scopes }
+      | .query _ operation _ =>
+        outgoing := values.map fun value => { value with unknownDependencies := true }
+        node := { node with tag := match operation with
+          | .draw _ => "draw"
+          | .sampleIndex _ => "sample-index"
+          | .sampleIndices _ => "sample-indices" }
+      | .oracle _ _ =>
+        outgoing := values.map fun value => { value with unknownDependencies := true }
+        node := { node with tag := "oracle" }
       | .statement .. => node := { node with tag := "statement" }
       | .mark _ => node := { node with tag := "mark" }
       | .protocolApply signature roles _ =>

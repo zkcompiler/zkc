@@ -67,4 +67,15 @@ theorem query_frame {model : DomainModel} {scope : Scope} {binders : Binders mod
   exact ((related.retireHistory history).rename .there (fun _ => rfl)).append
     (.cons ⟨value, rfl, rfl⟩ (.cons rfl .nil))
 
+/-- Typed service replies share the same live result/history frame extension. -/
+theorem service_frame {model : DomainModel} {scope : Scope} {binders : Binders model scope}
+    {history : Domain.History model.toCarriers} {layout : Layout scope}
+    {environment : Domain.Environment model.toCarriers} (related : Holds model binders history layout environment)
+    (ty : Ty) (suite : String) (value : model.Value ty) (encoded : Domain.Value model.toCarriers)
+    (encoding : Domain.Value.encode ty value = some encoded) :
+    Holds model (.cons value binders) history (observedReceiveLayout layout ty suite)
+      (environment ++ [encoded, .transcript suite history]) := by
+  exact ((related.retireHistory history).rename .there (fun _ => rfl)).append
+    (.cons ⟨value, rfl, encoding⟩ (.cons rfl .nil))
+
 end Zkc.Construction.ConnectionRouteCoverage

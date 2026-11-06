@@ -12,7 +12,7 @@ codec (`policyCodec`) binds it as one typed public-value binding event
 (`Zkc.Construction.Event.publicBinding`): the application context and a row with
 one entry per published input, in policy order, labelled by its position and
 holding the input's typed public value (`publicValue`): scalars, vectors,
-counts, ordered sequences and nominal products. Aggregate components preserve
+counts, nominal polynomials, ordered sequences and nominal products. Aggregate components preserve
 their types recursively; product identity and constructor are retained. Schema admission excludes logical handles recursively. The row is injective on
 every statement at the admitted types, malformed values included (`policyRow_injective`), and every
 statement's history has one event, so the codec is injective and prefix-free and
@@ -40,6 +40,10 @@ mutual
     | .index, _, value => .count value
     | .field domain, _, value => .scalar (.field domain value)
     | .vector domain, _, values => .vector (values.map (.field domain))
+    | .polynomial domain, _, value =>
+      .product domain "polynomial"
+        (.cons (.scalar (.field domain value.zero))
+          (.cons (.vector (value.coefficients.map (.field domain))) .nil))
     | .group domain, _, value => .scalar (.group domain value)
     | .groups domain, _, values => .vector (values.map (.group domain))
     | .indices, _, values => .sequence (PublicValues.ofList (values.map .count))
@@ -67,6 +71,15 @@ mutual
     | .vector _, _, _, _, same => by
         simp only [publicValue, PublicValue.vector.injEq] at same
         exact (List.map_inj_right (fun _ _ equal => by cases equal; rfl)).mp same
+    | .polynomial _, _, ⟨zero, coefficients, canonical⟩, ⟨other, others, canonical'⟩, same => by
+        simp only [publicValue, PublicValue.product.injEq, PublicValues.cons.injEq,
+          PublicValue.scalar.injEq, Payload.field.injEq, PublicValue.vector.injEq,
+          true_and, and_true] at same
+        have coefficientsEqual :=
+          (List.map_inj_right (fun _ _ equal => by cases equal; rfl)).mp same.2
+        cases same.1
+        cases coefficientsEqual
+        rfl
     | .group _, _, _, _, same => by simpa [publicValue] using same
     | .groups _, _, _, _, same => by
         simp only [publicValue, PublicValue.vector.injEq] at same

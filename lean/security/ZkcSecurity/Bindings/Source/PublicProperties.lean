@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Bindings.Transcript.DomainSourceReading
+public import ZkcSecurity.Bindings.Transcript.ServiceProperties
 public import ZkcSecurity.ProgramLogic.Derivation
 public import ZkcSecurity.ProgramLogic.Transcript.CostComposition
 
@@ -24,9 +24,11 @@ inductive Event (carriers : Carriers) where
   | leave (frame : Occurrence.Frame)
   | message (site : String) (peer : Nat) (payload : Domain.Payload carriers)
   | challenge (site field : String) (handle : Nat)
+  | service (site contract : String) (request : Request) (handle : Nat)
 
 def Raw : Event carriers → Type
   | .challenge _ field _ => carriers.Field field
+  | .service _ _ request _ => Request.Raw carriers request
   | _ => Unit
 
 def recovered (ty : Ty) : Event carriers → Option (carriers.Value ty)
@@ -41,7 +43,14 @@ def interface : Interface (Occurrence.signature carriers) (Event carriers) (Doma
     match Domain.Payload.ofValue ty value with
     | none => .refuse
     | some payload => .send (.message site receiver payload) ()
-  | .action (.query site field (.cons handle .nil)) => .query (.challenge site field handle) some
+  | .action (.query site (.draw field) (.cons handle .nil)) =>
+      .query (.challenge site field handle) some
+  | .action (.query site (.sampleIndex contract) (.cons handle (.cons bound .nil))) =>
+      .query (.service site contract (.sampleIndex bound) handle)
+        (Request.decode (carriers := carriers) (.sampleIndex bound))
+  | .action (.query site (.sampleIndices contract) (.cons handle (.cons bound (.cons count .nil)))) =>
+      .query (.service site contract (.sampleIndices bound count) handle)
+        (Request.decode (carriers := carriers) (.sampleIndices bound count))
 
 variable [samples : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw event)]
 
@@ -52,6 +61,9 @@ def escape (price : ENNReal) : EscapeJudgment (Event carriers) Raw :=
   fun _ event bad => match event with
   | .challenge _ field _ => ∀ (origin : Origin) (request : origin.request = some (.draw field)),
       Pr{let raw ← $ᵗ (Domain.Raw (.challenge origin : Domain.Event carriers))}[bad (Original.fieldReply origin field request raw)] ≤ price
+  | .service _ _ request _ => ∀ (origin : Origin) (same : origin.request = some request),
+      Pr{let raw ← $ᵗ (Domain.Raw (.challenge origin : Domain.Event carriers))}[
+        bad (ServiceProperties.rawReply same raw)] ≤ price
   | _ => True
 
 variable (routing : Original.Routing) (mode : routing.mode = .validator) (price : ENNReal)
@@ -133,33 +145,85 @@ noncomputable def install {A : Type} (post : A → Prop)
                 { state with history := state.history ++ [.message origin payload] })
           | query absorbed _ _ _ => simp only [interface, payloadEq] at absorbed; cases absorbed
           | refuse absorbed => simp only [interface, payloadEq] at absorbed; cases absorbed
-      | query site field arguments =>
-        cases arguments with
-        | cons handle tail =>
-          cases tail
-          cases proof with
-          | receive absorbed _ => cases absorbed
-          | send absorbed _ => cases absorbed
-          | query absorbed bad bounded continuations =>
-            cases absorbed
-            change Derivation _ _ _ _ ((DomainSourceReading.query routing state site field handle).bind _)
-            simp only [DomainSourceReading.query, mode]
-            cases route : routing.draw state.frames site field handle with
-            | none => exact .halt .refused
-            | some origin =>
-              unfold DomainSourceReading.queryField
-              by_cases request : origin.request = some (.draw field)
-              · simp only [request, ↓reduceDIte, PIR.Process.bind]
-                refine .query rfl (fun raw => bad (Original.fieldReply origin field request raw))
-                  (bounded origin request) ?_
-                intro raw reply decoded outside
-                cases decoded
-                exact ih (Original.fieldReply origin field request raw) _
-                  (continuations _ _ rfl outside)
-                  { state with history := state.history ++ [.challenge origin] }
-              · simp only [request, ↓reduceDIte, PIR.Process.bind]
-                exact .halt .refused
-          | refuse absorbed => cases absorbed
+      | query site operation arguments =>
+        cases operation with
+        | draw field =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail
+            cases proof with
+            | receive absorbed _ => cases absorbed
+            | send absorbed _ => cases absorbed
+            | query absorbed bad bounded continuations =>
+              cases absorbed
+              change Derivation _ _ _ _ ((DomainSourceReading.query routing state site field handle).bind _)
+              simp only [DomainSourceReading.query, mode]
+              cases route : routing.draw state.frames site field handle with
+              | none => exact .halt .refused
+              | some origin =>
+                unfold DomainSourceReading.queryField
+                by_cases request : origin.request = some (.draw field)
+                · simp only [request, ↓reduceDIte, PIR.Process.bind]
+                  refine .query rfl (fun raw => bad (Original.fieldReply origin field request raw))
+                    (bounded origin request) ?_
+                  intro raw reply decoded outside
+                  cases decoded
+                  exact ih (Original.fieldReply origin field request raw) _
+                    (continuations _ _ rfl outside)
+                    { state with history := state.history ++ [.challenge origin] }
+                · simp only [request, ↓reduceDIte, PIR.Process.bind]
+                  exact .halt .refused
+            | refuse absorbed => cases absorbed
+        | sampleIndex contract =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail with
+            | cons bound tail =>
+              cases tail
+              cases proof with
+              | receive absorbed _ => cases absorbed
+              | send absorbed _ => cases absorbed
+              | query absorbed bad bounded continuations =>
+                cases absorbed
+                change Derivation _ _ _ _
+                  ((DomainSourceReading.service routing state site contract (.sampleIndex bound) handle).bind _)
+                simp only [DomainSourceReading.service, mode]
+                cases (if contract = routing.context.contract then
+                  routing.serviceRequest state.frames site (.sampleIndex bound) handle else none) with
+                | none => exact .halt .refused
+                | some origin =>
+                  apply ServiceProperties.derivation (A := A × Original.State carriers) state origin (.sampleIndex bound) price
+                    (fun _ result => post result.1) _ bad (fun same => bounded origin same)
+                  intro raw value decoded outside
+                  exact ih value _ (continuations raw value decoded outside)
+                    { state with history := state.history ++ [.challenge origin] }
+              | refuse absorbed => cases absorbed
+        | sampleIndices contract =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail with
+            | cons bound tail =>
+              cases tail with
+              | cons count tail =>
+                cases tail
+                cases proof with
+                | receive absorbed _ => cases absorbed
+                | send absorbed _ => cases absorbed
+                | query absorbed bad bounded continuations =>
+                  cases absorbed
+                  change Derivation _ _ _ _
+                    ((DomainSourceReading.service routing state site contract (.sampleIndices bound count) handle).bind _)
+                  simp only [DomainSourceReading.service, mode]
+                  cases (if contract = routing.context.contract then
+                    routing.serviceRequest state.frames site (.sampleIndices bound count) handle else none) with
+                  | none => exact .halt .refused
+                  | some origin =>
+                    apply ServiceProperties.derivation (A := A × Original.State carriers) state origin (.sampleIndices bound count) price
+                      (fun _ result => post result.1) _ bad (fun same => bounded origin same)
+                    intro raw value decoded outside
+                    exact ih value _ (continuations raw value decoded outside)
+                      { state with history := state.history ++ [.challenge origin] }
+                | refuse absorbed => cases absorbed
 
 omit samples in
 /-- Erasing static source boundaries never increases the charged query cost.
@@ -210,23 +274,63 @@ theorem install_cost {A : Type} (source : PIR.Process (Occurrence.signature carr
           | none => trivial
           | some origin =>
             exact ih () _ _ bounded { state with history := state.history ++ [.message origin payload] }
-      | query site field arguments =>
-        cases arguments with
-        | cons handle tail =>
-          cases tail
-          obtain ⟨remaining, le, bounded⟩ := bounded
-          change Typed.ChargedCostBound _ _ ((DomainSourceReading.query routing state site field handle).bind _) _ _
-          simp only [DomainSourceReading.query, mode]
-          cases route : routing.draw state.frames site field handle with
-          | none => trivial
-          | some origin =>
-            unfold DomainSourceReading.queryField
-            by_cases request : origin.request = some (.draw field)
-            · simp only [request, ↓reduceDIte, PIR.Process.bind]
-              exact ⟨remaining, le, fun raw => ih (Original.fieldReply origin field request raw) _ _
-                (bounded _) { state with history := state.history ++ [.challenge origin] }⟩
-            · simp only [request, ↓reduceDIte, PIR.Process.bind]
-              trivial
+      | query site operation arguments =>
+        cases operation with
+        | draw field =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail
+            obtain ⟨remaining, le, bounded⟩ := bounded
+            change Typed.ChargedCostBound _ _ ((DomainSourceReading.query routing state site field handle).bind _) _ _
+            simp only [DomainSourceReading.query, mode]
+            cases route : routing.draw state.frames site field handle with
+            | none => trivial
+            | some origin =>
+              unfold DomainSourceReading.queryField
+              by_cases request : origin.request = some (.draw field)
+              · simp only [request, ↓reduceDIte, PIR.Process.bind]
+                exact ⟨remaining, le, fun raw => ih (Original.fieldReply origin field request raw) _ _
+                  (bounded _) { state with history := state.history ++ [.challenge origin] }⟩
+              · simp only [request, ↓reduceDIte, PIR.Process.bind]
+                trivial
+        | sampleIndex contract =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail with
+            | cons bound tail =>
+              cases tail
+              obtain ⟨remaining, le, bounded⟩ := bounded
+              change Typed.ChargedCostBound _ _
+                ((DomainSourceReading.service routing state site contract (.sampleIndex bound) handle).bind _) _ _
+              simp only [DomainSourceReading.service, mode]
+              cases (if contract = routing.context.contract then
+                routing.serviceRequest state.frames site (.sampleIndex bound) handle else none) with
+              | none => trivial
+              | some origin =>
+                apply ServiceProperties.cost (A := A × Original.State carriers) state origin (.sampleIndex bound) price budget remaining le
+                intro _ value _
+                exact ih value _ _ (bounded value)
+                  { state with history := state.history ++ [.challenge origin] }
+        | sampleIndices contract =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail with
+            | cons bound tail =>
+              cases tail with
+              | cons count tail =>
+                cases tail
+                obtain ⟨remaining, le, bounded⟩ := bounded
+                change Typed.ChargedCostBound _ _
+                  ((DomainSourceReading.service routing state site contract (.sampleIndices bound count) handle).bind _) _ _
+                simp only [DomainSourceReading.service, mode]
+                cases (if contract = routing.context.contract then
+                  routing.serviceRequest state.frames site (.sampleIndices bound count) handle else none) with
+                | none => trivial
+                | some origin =>
+                  apply ServiceProperties.cost (A := A × Original.State carriers) state origin (.sampleIndices bound count) price budget remaining le
+                  intro _ value _
+                  exact ih value _ _ (bounded value)
+                    { state with history := state.history ++ [.challenge origin] }
 
 #print axioms install
 #print axioms install_cost

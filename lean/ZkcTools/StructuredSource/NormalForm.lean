@@ -29,6 +29,13 @@ def stopJson : PIR.Stop → Json
   | .reject => .str "reject" | .abort => .str "abort" | .exhausted => .str "exhausted"
   | .incomplete => .str "incomplete" | .refused => .str "refused"
 
+/-- Keep the method and its domain/contract distinct; numerical arguments remain
+in the ordered query operands. This is an inspection format, not evidence. -/
+def serviceOpJson : ServiceOp → Json
+  | .draw field => .arr #[.str "draw", .str field]
+  | .sampleIndex contract => .arr #[.str "index", .str contract]
+  | .sampleIndices contract => .arr #[.str "indices", .str contract]
+
 def opJson : Op → Json
   | .indexConstant value => .arr #[.str "indexConstant", nat value]
   | .indexEqual => .arr #[.str "indexEqual"]
@@ -107,7 +114,7 @@ def formJson {callees : List CalleeKey} {out : List Ty} : {Δ : Scope} → Form 
     .arr #[.str "send", wireType ty, .str site, nat peer, termJson value, formJson next]
   | _, .receive ty site peer next => .arr #[.str "receive", wireType ty, .str site, nat peer, formJson next]
   | _, .query site request args next =>
-    .arr #[.str "query", .str site, .str request, .arr (termsJson args).toArray, formJson next]
+    .arr #[.str "query", .str site, serviceOpJson request, .arr (termsJson args).toArray, formJson next]
   | _, .split subject absent present =>
     .arr #[.str "split", compJson subject, formJson absent, formJson present]
   | _, .guard equality left right next =>

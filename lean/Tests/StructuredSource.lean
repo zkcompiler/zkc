@@ -515,8 +515,8 @@ def run : IO Unit := do
     for resource in ["affine", "linear"] do
       test s!"declared-{resource}-sealed-{sealed}-without-custody"
         (refused (declaredTotal resource sealed) "component-declaration-type")
-      test s!"declared-shared-{resource}-sealed-{sealed}-without-custody"
-        (refused (sharedRecord resource sealed ["P", "V"]) "component-declaration-type")
+      test s!"declared-shared-{resource}-sealed-{sealed}-invalid-custody-holder"
+        (refused (sharedRecord resource sealed ["P", "V"]) "component-declaration-custody-holder")
   test "declared-resource-tag-refused" (refused (declaredTotal "consumable" true) "component-declaration")
   let failures ← failures.get
   unless failures.isEmpty do throw (IO.userError s!"structured failures: {failures.reverse}")

@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Construction.DomainProducer
-public import ZkcSecurity.Bindings.Transcript.LosslessPresentation
+public import ZkcSecurity.Bindings.Transcript.LosslessOperations
 
 public section
 
@@ -66,6 +66,7 @@ mutual
     | .boolean => false
     | .index => 0
     | .field _ => 0
+    | .polynomial _ => ⟨0, [], trivial⟩
     | .vector _ | .indices | .groups _ => []
     | .group _ => 0
     | .service _ | .resourceUnit _ => 0

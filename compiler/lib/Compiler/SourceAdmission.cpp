@@ -10,7 +10,9 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/Origins.h"
+#include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/SemanticFields.h"
@@ -122,6 +124,8 @@ class Admission {
       return nominal("field", "Field", field.getDomain());
     if (auto vector = dyn_cast<data::FieldVectorType>(type))
       return nominal("vector", "Field", vector.getDomain());
+    if (auto polynomial = dyn_cast<poly::UnivariateType>(type))
+      return nominal("polynomial", "Field", polynomial.getDomain());
     if (auto group = dyn_cast<algebra::GroupType>(type))
       return nominal("group", "Group", group.getDomain());
     if (auto vector = dyn_cast<data::GroupVectorType>(type))
@@ -284,15 +288,25 @@ class Admission {
                  ? Error::success()
                  : error("structured-source-operation");
     if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
-      auto result = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
-      auto service = op.getNumOperands() == 1
-                         ? dyn_cast<protocol_ir::ServiceReferenceType>(
-                               op.getOperand(0).getType())
-                         : protocol_ir::ServiceReferenceType();
-      return owner == "protocol" && query.getMethod() == "draw" && service &&
-                     result &&
-                     result.getDomain() ==
-                         randomServiceField(service.getContract())
+      auto service = dyn_cast<protocol_ir::ServiceReferenceType>(
+          query.getReference().getType());
+      auto method =
+          service ? serviceMethod(service.getContract(), query.getMethod())
+                  : std::nullopt;
+      if (owner != "protocol" || !method ||
+          !protocol_ir::matchesServiceSignature(
+              query.getInputs().getTypes(), query.getResultTypes(), *method))
+        return error("structured-source-service");
+      // Preserve the source rule: bounds/counts are positive constant u64s,
+      // not values selected by an earlier message or a sampled result.
+      if (query.getMethod() == "index" || query.getMethod() == "indices")
+        for (Value input : query.getInputs()) {
+          auto bound = input.getDefiningOp<data::IndexOp>();
+          if (!bound || !uniformIndexBound(bound.getValue()))
+            return error("structured-source-service");
+        }
+      return query.getMethod() == "draw" || query.getMethod() == "index" ||
+                     query.getMethod() == "indices"
                  ? Error::success()
                  : error("structured-source-service");
     }
@@ -769,32 +783,6 @@ public:
       return e;
     if (auto e = effectiveSites())
       return e;
-    llvm::DenseSet<Operation *> checked;
-    std::function<Error(Operation *)> scalarMath =
-        [&](Operation *function) -> Error {
-      if (!checked.insert(function).second)
-        return Error::success();
-      Error failure = Error::success();
-      function->getRegion(0).walk<WalkOrder::PreOrder>([&](Operation *op) {
-        if (failure)
-          return WalkResult::interrupt();
-        if (!allowance.charge()) {
-          failure = error("source-view-limit");
-          return WalkResult::interrupt();
-        }
-        if (isa<data::FiniteFoldOp, data::BoundedAtOp>(op))
-          failure = error("structured-source-multirole-math");
-        if (auto call = dyn_cast<func::CallOp>(op))
-          failure = scalarMath(symbols.lookup(call.getCallee()));
-        return failure ? WalkResult::interrupt() : WalkResult::advance();
-      });
-      return failure;
-    };
-    for (auto protocol :
-         unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
-      if (protocol.getRoles().size() > 1)
-        if (auto e = scalarMath(protocol))
-          return e;
     if (auto attr = unit->getAttr("source_declarations")) {
       if (auto e = language::checkComponentDeclarations(attr, allowance))
         return e;

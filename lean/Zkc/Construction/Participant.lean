@@ -5,6 +5,8 @@ meta import Lean.Meta.Eqns
 
 public import Zkc.Source.Structured.Operations
 public import Zkc.Source.Structured.ProtocolContext
+public import Zkc.Source.Structured.ServiceOperations
+public import Init.Data.Nat.Power2.Bitwise
 
 @[expose] public section
 
@@ -27,10 +29,10 @@ set_option autoImplicit false
 namespace Zkc.Construction
 open Zkc.Source
 
-/-- A typed request identity: the method, the operands fixed before sampling
-and the result sort. `draw` is the only method the construction model carries:
-it has no operands, and its result sort is the field its service contract
-names. -/
+/-- A request identity: the method, the operands fixed before sampling
+and the result sort. The strict typed operation decoder admits field draw,
+scalar index and block indices. Values in this record are evaluated unsigned
+constants; instruction operands separately retain the actual SSA references. -/
 structure Request where
   method : String
   operands : List Nat
@@ -41,6 +43,36 @@ namespace Request
 
 /-- A field draw with no data operands, used by local and replaced services. -/
 def draw (field : String) : Request := ⟨"draw", [], .field field⟩
+
+/-- Request operands are evaluated unsigned values, never SSA references. -/
+def sampleIndex (bound : Nat) : Request := ⟨"index", [bound], .index⟩
+
+def sampleIndices (bound count : Nat) : Request := ⟨"indices", [bound, count], .indices⟩
+
+/-- Positive source formation does not impose provider power-of-two/count caps. -/
+def valid : Request → Bool
+  | ⟨"draw", [], .field _⟩ => true
+  | ⟨"index", [bound], .index⟩ => 0 < bound && bound < Structured.indexLimit
+  | ⟨"indices", [bound, count], .indices⟩ =>
+      0 < bound && bound < Structured.indexLimit && 0 < count && count < Structured.indexLimit
+  | _ => false
+
+/-- Native transcript providers have a narrower supported domain than source
+and private services. This predicate is never used for source formation. -/
+def nativeSupported : Request → Bool
+  | ⟨"draw", [], .field _⟩ => true
+  | ⟨"index", [bound], .index⟩ => decide bound.isPowerOfTwo && bound ≤ 2 ^ 63
+  | ⟨"indices", [bound, count], .indices⟩ =>
+      decide bound.isPowerOfTwo && bound ≤ 2 ^ 63 && 0 < count && count ≤ 1048576
+  | _ => false
+
+/-- Exact nominal contract plus typed operation; no unchecked method fallback. -/
+def operation (contract : String) : Request → Option Structured.ServiceOp
+  | ⟨"draw", [], .field field⟩ =>
+      if contract = "random." ++ field ++ "/0" then some (.draw field) else none
+  | ⟨"index", [_], .index⟩ => some (.sampleIndex contract)
+  | ⟨"indices", [_, _], .indices⟩ => some (.sampleIndices contract)
+  | _ => none
 
 end Request
 
@@ -256,8 +288,12 @@ inductive Operation where
   | indicesAppend
   | observe (suite : String) (template : Template)
   | challenge (suite field : String) (template : Template)
+  /-- Typed requests retain value identity; the instruction operands separately
+  retain the corresponding SSA references after transcript and coordinates. -/
+  | indexChallenge (suite : String) (bound : Nat) (template : Template)
+  | blockChallenge (suite : String) (bound count : Nat) (template : Template)
   /-- An owner-local request. Coordinates are references to enclosing induction
-  values, not request operands or transcript state. Only field draw is admitted. -/
+  values, separate from the request's evaluated bound/count and service operands. -/
   | localService (port : ServicePort) (request : Request)
       (template : Template) (coordinates : List Nat)
   | calculate (calculation : Calculation)
@@ -399,3 +435,5 @@ end Zkc.Construction
 -- private proof helpers, leaving its stored provider ambiguous to an audit.
 run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Calculation.total
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Request.valid
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Request.operation

@@ -22,10 +22,10 @@ private def maximum : Nat := indexLimit - 1
 private def binding (name contract : String) (domain : Bool := false) : Binding :=
   ⟨name, contract, if domain then [scalarDomain] else [], "", none⟩
 private def exec (name binding : String) (args : List Nat) (out : List Ty)
-    (parameters : List String := []) : Instruction :=
+    (parameters : List PrimitiveParameter := []) : Instruction :=
   .instruction (.exec "exec.apply" binding parameters) args out [] name
 private def constant (n : Nat) : Instruction :=
-  exec "index_constant" "constant" [] [.index] [toString n]
+  exec "index_constant" "constant" [] [.index] [.natural (toString n)]
 private def labelBlock : Nat → String → Block → Block
   | 0, _, body => body
   | depth + 1, sitePrefix, .block instructions terminal => .block

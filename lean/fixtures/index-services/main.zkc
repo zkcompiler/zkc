@@ -1,0 +1,47 @@
+module index_services;
+use zkc::indices;
+domain E = field("koala-bear.ext4-binomial3");
+protocol Scalar roles(P,V)(coins: Random<E> @V) -> (accepted: bool @V) {
+  #[site(position)] let position = coins.index<8>();
+  #[site(delivery)] let received = send V -> P(position);
+  return (accepted = position == position);
+}
+protocol Block roles(P,V)(coins: Random<E> @V) -> (accepted: bool @V) {
+  #[site(positions)] let positions = coins.indices(8,3);
+  #[site(delivery)] let received = send V -> P(positions);
+  return (accepted = indices::length(positions) == index<3>());
+}
+protocol Local roles(P,V)(private_coins: Random<E> @P, spare: Random<E> @V,
+    coins: Random<E> @V) -> (accepted: bool @V) {
+  let private_position = private_coins.index<3>();
+  let private_block = private_coins.indices(3,2);
+  let spare_position = spare.index<3>();
+  #[site(position)] let position = coins.index<8>();
+  #[site(delivery)] let received = send V -> P(position);
+  return (accepted = position == position);
+}
+protocol Repeated roles(P,V)(coins: Random<E> @V) -> (accepted: bool @V) {
+  let mut accepted: bool @V = true;
+  for _ in 0..3 roles(P,V) max 3 {
+    #[site(position)] let position = coins.index<8>();
+    #[site(delivery)] let received = send V -> P(position);
+    accepted = accepted && (position == position);
+  }
+  return (accepted = accepted);
+}
+proof ScalarProof = Scalar {
+  prover P; verifier V; public {}; accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", coins);
+}
+proof BlockProof = Block {
+  prover P; verifier V; public {}; accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", coins);
+}
+proof LocalProof = Local {
+  prover P; verifier V; public {}; accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", coins);
+}
+proof RepeatedProof = Repeated {
+  prover P; verifier V; public {}; accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", coins);
+}

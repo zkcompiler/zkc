@@ -169,39 +169,41 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
             refine ⟨Original.Simulation.call _ (fun ignored => ?_)⟩
             have current := ih () (support ()) empty (suffix ++ [.message origin (.group name value)])
             simpa only [history, List.map_append, List.map_cons, List.map_nil, event, mapped] using Classical.choice current
-        | query site field arguments =>
-          change String at field
-          cases arguments with
-          | cons handle rest =>
-            cases rest
-            have publicRoute : ∃ origin, routing.draw frames site field handle = some origin ∧
-                origin.request = some (.draw field) := by
-              rcases covered with publicRoute | localRoute
-              · exact publicRoute.2
-              · obtain ⟨port, origin, route, _⟩ := localRoute
-                simp [Original.Routing.local, noLocal] at route
-            obtain ⟨origin, route, request⟩ := publicRoute
-            have mapped := draw_key empty route
-            rcases origin with ⟨entry, events, actualRequest⟩
-            change actualRequest = some (.draw field) at request
-            subst actualRequest
-            simp only [fold_call, Original.operations,
-              Original.query, mode, route, Original.queryField, ↓reduceDIte,
-              PIR.Process.bind, PIR.Process.interpret, Occurrence.erase, CommonAdapter.project,
-              SourceProcess.sourceView, SourceProcess.query, operations]
-            have entryKey := congrArg Origin.entry mapped
-            have eventKey := congrArg Origin.event mapped
-            dsimp only [key, Context.query, Origin.query] at entryKey eventKey
-            subst entry
-            simp only [key, eventKey, Context.query, Origin.query,
-              Domain.Raw, Request.draw, eq_mpr_eq_cast, cast_eq]
-            simp only [Request.draw] at eventKey
-            rw [eventKey]
-            refine ⟨Original.Simulation.call _ (fun reply => ?_)⟩
-            have current := ih reply (support reply) empty
-              (suffix ++ [.challenge ⟨routing.context.entry, events, some (.draw field)⟩])
-            simpa only [history, List.map_append, List.map_cons, List.map_nil, event, mapped,
-              key, eventKey, Context.query, Origin.query, Domain.Raw, Request.draw,
-              eq_mpr_eq_cast, eq_mp_eq_cast, cast_eq] using Classical.choice current
+        | query site operation arguments =>
+          cases operation with
+          | sampleIndex | sampleIndices => cases allowed
+          | draw field =>
+            cases arguments with
+            | cons handle rest =>
+              cases rest
+              have publicRoute : ∃ origin, routing.draw frames site field handle = some origin ∧
+                  origin.request = some (.draw field) := by
+                rcases covered with publicRoute | localRoute
+                · exact publicRoute.2
+                · obtain ⟨port, origin, route, _⟩ := localRoute
+                  simp [Original.Routing.local, noLocal] at route
+              obtain ⟨origin, route, request⟩ := publicRoute
+              have mapped := draw_key empty route
+              rcases origin with ⟨entry, events, actualRequest⟩
+              change actualRequest = some (.draw field) at request
+              subst actualRequest
+              simp only [fold_call, Original.operations,
+                Original.query, mode, route, Original.queryField, ↓reduceDIte,
+                PIR.Process.bind, PIR.Process.interpret, Occurrence.erase, CommonAdapter.project,
+                SourceProcess.sourceView, SourceProcess.query, operations]
+              have entryKey := congrArg Origin.entry mapped
+              have eventKey := congrArg Origin.event mapped
+              dsimp only [key, Context.query, Origin.query] at entryKey eventKey
+              subst entry
+              simp only [key, eventKey, Context.query, Origin.query,
+                Domain.Raw, Request.draw, eq_mpr_eq_cast, cast_eq]
+              simp only [Request.draw] at eventKey
+              rw [eventKey]
+              refine ⟨Original.Simulation.call _ (fun reply => ?_)⟩
+              have current := ih reply (support reply) empty
+                (suffix ++ [.challenge ⟨routing.context.entry, events, some (.draw field)⟩])
+              simpa only [history, List.map_append, List.map_cons, List.map_nil, event, mapped,
+                key, eventKey, Context.query, Origin.query, Domain.Raw, Request.draw,
+                eq_mpr_eq_cast, eq_mp_eq_cast, cast_eq] using Classical.choice current
 
 end Zkc.Construction.Uniform.ScalarObservation

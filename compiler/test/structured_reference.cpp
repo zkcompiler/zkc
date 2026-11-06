@@ -1194,32 +1194,6 @@ public:
     }
     if (auto failure = effectiveSites())
       return failure;
-    llvm::DenseSet<Operation *> checked;
-    std::function<Error(Operation *)> scalarMath =
-        [&](Operation *function) -> Error {
-      if (!checked.insert(function).second)
-        return Error::success();
-      SmallVector<Block *> pending{&function->getRegion(0).front()};
-      while (!pending.empty()) {
-        for (Operation &op : *pending.pop_back_val()) {
-          if (kind(op) == Kind::Fold || kind(op) == Kind::At)
-            return error("structured-reference-unsupported",
-                         "multi-role Math finite work");
-          if (kind(op) == Kind::Call)
-            if (auto failure = scalarMath(
-                    symbols.lookup(cast<func::CallOp>(op).getCallee())))
-              return failure;
-          for (Region &region : op.getRegions())
-            pending.push_back(&region.front());
-        }
-      }
-      return Error::success();
-    };
-    for (auto protocol :
-         unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
-      if (protocol.getRoles().size() > 1)
-        if (auto failure = scalarMath(protocol))
-          return failure;
     return Error::success();
   }
 };

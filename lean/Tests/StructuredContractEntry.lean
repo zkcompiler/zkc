@@ -23,7 +23,7 @@ private def checked : CheckedProtocol :=
     body.erase, body, body.elaborate_erase⟩
 private def payload : UnitPayload :=
   ⟨[], [checked], ⟨0, by decide⟩, by decide +kernel, by decide +kernel,
-    by rfl, by decide +kernel, by decide +kernel⟩
+    by rfl, by decide +kernel, by decide +kernel, none⟩
 private def left : Imported (snapshot "left") := ⟨⟨snapshot "left", payload⟩, by rfl⟩
 private def right : Imported (snapshot "right") := ⟨⟨snapshot "right", payload⟩, by rfl⟩
 private def leftOwner : ContractBinding left := ⟨⟨0, by decide⟩, ⟨0, by decide⟩, rfl⟩
@@ -69,7 +69,7 @@ private def ambiguousChecked : CheckedProtocol :=
   ⟨checked.signature, ambiguousBody.erase, ambiguousBody, ambiguousBody.elaborate_erase⟩
 private def ambiguousPayload : UnitPayload :=
   ⟨[], [ambiguousChecked], ⟨0, by decide⟩, by decide +kernel, by decide +kernel,
-    by rfl, by decide +kernel, by decide +kernel⟩
+    by rfl, by decide +kernel, by decide +kernel, none⟩
 private def ambiguous : Imported ambiguousSnapshot := ⟨⟨ambiguousSnapshot, ambiguousPayload⟩, by rfl⟩
 
 theorem ambiguous_no_entry : ¬ Nonempty (EntryContractBinding ambiguous) := by
@@ -135,7 +135,7 @@ private def checked : CheckedProtocol :=
     [[0, 1]], [[0, 1]]⟩, body.erase, body, body.elaborate_erase⟩
 private def payload : UnitPayload :=
   ⟨[formula], [checked], ⟨0, by decide⟩, by decide +kernel, by decide +kernel,
-    by rfl, by decide +kernel, by decide +kernel⟩
+    by rfl, by decide +kernel, by decide +kernel, none⟩
 private def left : Imported leftSnapshot := ⟨⟨leftSnapshot, payload⟩, by rfl⟩
 private def right : Imported rightSnapshot := ⟨⟨rightSnapshot, payload⟩, by rfl⟩
 private def leftOwner : ContractBinding left := ⟨⟨0, by decide⟩, ⟨0, by decide⟩, rfl⟩

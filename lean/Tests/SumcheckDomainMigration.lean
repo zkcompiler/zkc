@@ -7,6 +7,7 @@ import Mathlib.Algebra.Field.ZMod
 result is reduced through the checked source equality, preserving exact stops,
 message consumption, unread suffixes and query timing. -/
 set_option autoImplicit false
+set_option maxRecDepth 50000
 set_option backward.isDefEq.respectTransparency false
 namespace Tests.SumcheckDomainMigration
 open Zkc Zkc.Source Zkc.Source.Structured Zkc.Construction

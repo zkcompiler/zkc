@@ -54,7 +54,7 @@ inductive Routed (routing : Original.Routing) : Original.Frames → Original.Fra
       (key : Origin.withoutCoordinates origin = routing.context.query site (.draw field))
       (request : origin.request = some (.draw field))
       (tail : ∀ reply, Routed routing frames final (next reply)) :
-      Routed routing frames final (.call (.action (.query site field (.cons handle .nil))) next)
+      Routed routing frames final (.call (.action (.query site (.draw field) (.cons handle .nil))) next)
 
  noncomputable def Routed.bind {routing : Original.Routing} {frames middle final : Original.Frames}
     {source : PIR.Process (Occurrence.signature (uniformCarriers F G)) A}

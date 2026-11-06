@@ -28,7 +28,7 @@ variable [SampleableType F]
 /-- Installing the singleton actual route discharges membership internally. -/
 theorem withUniformQueries_queryKey (context : ProtocolContext) (handle : Nat) (s : S) :
     (participantActions F G (.query (queryKey context handle).1
-      (queryKey context handle).2.1 (.cons handle .nil))).runM
+      (.draw (queryKey context handle).2.1) (.cons handle .nil))).runM
         (withUniformQueries network [queryKey context handle] before after) s =
       freshQuery (before (queryKey context handle)) (after (queryKey context handle)) s := by
   exact withUniformQueries_query network [queryKey context handle] before after _ _ handle

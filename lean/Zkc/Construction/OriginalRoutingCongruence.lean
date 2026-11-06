@@ -24,9 +24,12 @@ private theorem message_keep (context : Context) (template : Template) (site : S
     cases request : context.request with
     | none => simp [request] at same
     | some request =>
-      simp only [request, Option.map_some, Option.some.injEq] at same
-      have tag := congrArg (fun origin : Origin => origin.event.head?) same
-      simp [Context.query, Context.message, Origin.query, Origin.message] at tag
+      simp only [request, Option.bind_eq_bind, Option.bind_some] at same
+      split at same
+      · simp only [Option.some.injEq] at same
+        have tag := congrArg (fun origin : Origin => origin.event.head?) same
+        simp [Context.query, Context.message, Origin.query, Origin.message] at tag
+      · cases same
   · cases same
 
 private theorem query_keep (context : Context) (template : Template) (site : String)
@@ -72,20 +75,63 @@ theorem draw_filter (routing : Routing) (frames : Frames) (site field : String) 
   · exact resolve_filter _ _ _ _ _ _ (fun template => query_keep _ template site (.draw field))
   · rfl
 
+/-- Filtering by action kind preserves resolution at every nominal request,
+including index and block services and all missing or ambiguous routes. -/
+theorem serviceRequest_filter (routing : Routing) (frames : Frames) (site : String)
+    (request : Request) (handle : Nat) :
+    { routing with draws := routing.draws.filter (·.querySite?.isSome) }.serviceRequest
+        frames site request handle = routing.serviceRequest frames site request handle := by
+  unfold Routing.serviceRequest
+  split
+  · have reorder : (routing.draws.filter (·.querySite?.isSome)).filter
+          (fun template => SourceOccurrences.requestAt routing.snapshot routing.context template ==
+            some request) =
+        (routing.draws.filter (fun template =>
+          SourceOccurrences.requestAt routing.snapshot routing.context template ==
+            some request)).filter
+            (·.querySite?.isSome) := by
+      simp only [List.filter_filter, Bool.and_comm]
+    rw [reorder]
+    exact resolve_filter _ _ _ _ _ _ (fun template => query_keep _ template site request)
+  · rfl
+
+/-- Equality of every route queried by original execution. Candidate tables
+need not be equal; generic request routes retain their nominal request, sort,
+capability, dynamic frames and refusal behavior. -/
+structure RouteEquivalence (first second : Routing) : Prop where
+  context : first.context = second.context
+  mode : first.mode = second.mode
+  messages : ∀ frames site sender receiver,
+    first.message frames site sender receiver = second.message frames site sender receiver
+  draws : first.mode = .validator → ∀ frames site field handle,
+    first.draw frames site field handle = second.draw frames site field handle
+  deliveries : ∀ frames site field sender,
+    first.delivery frames site field sender = second.delivery frames site field sender
+  locals : ∀ frames site field handle,
+    first.local frames site field handle = second.local frames site field handle
+  serviceRequests : first.mode = .validator → ∀ frames site request handle,
+    first.serviceRequest frames site request handle =
+      second.serviceRequest frames site request handle
+  localRequests : ∀ frames site request handle,
+    first.localRequest frames site request handle = second.localRequest frames site request handle
+  typedDeliveries : ∀ frames site ty sender,
+    first.typedDelivery frames site ty sender = second.typedDelivery frames site ty sender
+
 /-- Equal primitive routes imply equality of the full original fold, including
 all source outputs, occurrence stacks, observations, typed replies and stops. -/
 theorem fold_congr {carriers : Structured.Carriers} {A : Type} (first second : Routing)
-    (context : first.context = second.context) (mode : first.mode = second.mode)
-    (messages : ∀ frames site sender receiver,
-      first.message frames site sender receiver = second.message frames site sender receiver)
-    (draws : first.mode = .validator → ∀ frames site field handle,
-      first.draw frames site field handle = second.draw frames site field handle)
-    (deliveries : ∀ frames site field sender,
-      first.delivery frames site field sender = second.delivery frames site field sender)
-    (locals : ∀ frames site field handle,
-      first.local frames site field handle = second.local frames site field handle)
+    (same : RouteEquivalence first second)
     (source : PIR.Process (Structured.Occurrence.signature carriers) A) (state : State carriers) :
     fold first source state = fold second source state := by
+  have services : ∀ state site contract request handle,
+      @service carriers first state site contract request handle =
+        service second state site contract request handle := by
+    intro state site contract request handle
+    cases selected : first.mode with
+    | producer => simp only [service, selected, ← same.mode, same.localRequests]
+    | validator =>
+      simp only [service, selected, ← same.mode, same.context,
+        same.serviceRequests selected, same.localRequests]
   have operations : @operations carriers first = operations second := by
     funext operation state
     cases operation with
@@ -94,27 +140,34 @@ theorem fold_congr {carriers : Structured.Carriers} {A : Type} (first second : R
     | action action =>
       cases action with
       | receive ty site sender =>
-        simp only [Original.operations, context]
+        simp only [Original.operations, same.context]
         cases second.context.profile
-        · simp only [receivePlain, mode, context, messages, Context.role]
-          rw [context]
-        · simp only [receive, mode, context, messages, deliveries, Context.role]
-          rw [context]
+        · simp only [receivePlain, same.mode, same.context, same.messages, Context.role]
+          rw [same.context]
+        · simp only [receive, receiveRequest, same.mode, same.context, same.messages,
+            same.deliveries, same.typedDeliveries, Context.role]
+          rw [same.context]
       | @send ty site receiver value =>
-        simp only [Original.operations, context]
+        simp only [Original.operations, same.context]
         cases second.context.profile
-        · simp only [sendPlain, mode, context, messages, Context.role]
-          rw [context]
-        · simp only [send, mode, context, messages, Context.role]
-          rw [context]
-      | query site field args =>
-        cases args with
-        | cons handle rest =>
-          cases rest
+        · simp only [sendPlain, same.mode, same.context, same.messages, Context.role]
+          rw [same.context]
+        · simp only [send, same.mode, same.context, same.messages, Context.role]
+          rw [same.context]
+      | query site operation args =>
+        cases operation with
+        | draw field =>
+          rcases args with _ | ⟨handle, _ | _⟩
           change query first state site field handle = query second state site field handle
           cases selected : first.mode with
-          | producer => simp only [query, selected, ← mode, locals]
-          | validator => simp only [query, selected, ← mode, draws selected, locals]
+          | producer => simp only [query, selected, ← same.mode, same.locals]
+          | validator => simp only [query, selected, ← same.mode, same.draws selected, same.locals]
+        | sampleIndex contract =>
+          rcases args with _ | ⟨handle, _ | ⟨bound, _ | _⟩⟩
+          exact services state site contract (.sampleIndex bound) handle
+        | sampleIndices contract =>
+          rcases args with _ | ⟨handle, _ | ⟨bound, _ | ⟨count, _ | _⟩⟩⟩
+          exact services state site contract (.sampleIndices bound count) handle
   simp only [fold, operations]
 
 /-- Message and draw tables may share a source template list: removing entries
@@ -125,15 +178,17 @@ theorem fold_filter {carriers : Structured.Carriers} {A : Type} (routing : Routi
       messages := routing.messages.filter (fun template => template.messageSite?.isSome)
       draws := routing.draws.filter (fun template => template.querySite?.isSome) } source state =
       fold routing source state := by
-  refine fold_congr { routing with
-    messages := routing.messages.filter (fun template => template.messageSite?.isSome)
-    draws := routing.draws.filter (fun template => template.querySite?.isSome) }
-    routing rfl rfl ?_ ?_ ?_ ?_ source state
-  · exact message_filter routing
-  · intro _
-    exact draw_filter routing
-  · intros; rfl
-  · intros; rfl
+  apply fold_congr
+  exact {
+    context := rfl
+    mode := rfl
+    messages := message_filter routing
+    draws := fun _ => draw_filter routing
+    deliveries := by intros; rfl
+    locals := by intros; rfl
+    serviceRequests := fun _ => serviceRequest_filter routing
+    localRequests := by intros; rfl
+    typedDeliveries := by intros; rfl }
 
 end Zkc.Construction.Original
 

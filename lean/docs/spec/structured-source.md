@@ -41,10 +41,14 @@ kind, role assignment, footprint or program is admissible.
 `InvocationCoordinate`; calls and loop iterations retain their structural
 frames. Equal contents do not identify anchors. These are logical labels,
 without a native provider handle or an assertion that the occurrence was
-reached. The current semantic profile explicitly refuses oracle types,
-operations and declarations. Ordinary mathematical and participant admission refuse them. Transcript payloads, executable codecs and ordinary
-message projection exclude logical handles recursively, including inside
-products and sequences; service identity remains a separate predicate. Oracle execution interpretation and realization simulation remain separate work; decoding supplies neither.
+reached. The canonical `UnitPayload` path now retains a `CheckedOracleUnit` when the
+source uses this family. Every dormant Oracle body is checked from its actual
+source row; the complete Math environment is reconstructed in checked dependency
+order, with exact source association in both directions. Ordinary helpers and
+protocols continue through their existing complete checking and linking phases.
+Transcript payloads, executable codecs and ordinary message projection exclude
+logical handles recursively, including inside products and sequences; service
+identity remains separate. Full realization simulation is a later boundary.
 
 Bounded value tools refuse logical handle schemas before traversing aggregates,
 including empty values and absent optional ports. Open output and request helpers
@@ -59,7 +63,174 @@ to the declared handle prefix under the row's actual SSA environment. Position
 indices remain references into the original body; a proposal supplies no new
 position evaluator or helper semantics. This is an independent consistency check,
 not admission of logical oracle execution or a proof that any generated condition
-holds. The existing semantic profile continues to refuse oracle execution.
+holds. The execution path below uses the retained bodies instead of these footprints.
+
+## Logical Oracle execution profile
+
+`ProtocolAlgebra` parameterizes the existing protocol Region meaning by values
+and actions. Its ordinary instance is proved equal to the existing domain
+participant meaning for every operation, body and immutable closure table,
+including absent operands, arbitrary callbacks and empty result tuples.
+`OracleProtocol` instantiates that algebra with recursive `ProtocolValue`s and
+an effect sum over the unchanged participant services. Applications and repeats
+share their structural implementation with the ordinary instance. The reached
+source row, application stack and iteration index determine construction anchors.
+
+`ProtocolValue` retains a holder data view through products, sequences, Math
+projection and internal calls. Pure helper invocation does not sequence every
+optional operand. Shape and length observations use retained metadata; strict
+leaf calculations materialize only when they execute. Owned Local calls retain
+the existing strict input policy. Finite Math folds materialize their domain
+inputs, then retain state and captures when entering the actual checked helpers.
+A demand for concrete virtual data still produces `oracle-virtual-concrete-demand`
+at the reached protocol operation, with its exact original instruction row and
+invocation; no fabricated vector or answer fills that branch. Calls into a Math
+helper retain that outer protocol call row. Each source mark advances a checked
+lexical cursor, including unnamed instructions; application and repeat callbacks
+restore their caller cursor on successful exit.
+The carrier of polynomial rows is the existing `PolynomialValue`.
+
+`NormalForm.Actions` composes per-operation `RegionMeaning.OperationLaw`s,
+callback derivations and suffix derivations into the existing `PIR.Process`.
+It performs pure substitution and retains effects and stopping prefixes.
+`OracleNormalForm.operationLaw` covers all twelve logical action signatures;
+`normalize_run` preserves values, ordered logical audit events and stopped
+poststates for arbitrary handlers. `ProtocolAlgebra.denote` consumes this residual
+normalizer. The older symbolic `NormalForm.Form` remains an ordinary-value
+presentation and refuses Oracle nodes; it is not the Oracle execution path.
+Its existing normalization and soundness claims are retained.
+`NormalForm.ActionPresentation.normalizeActions_form` proves that successful
+ordinary symbolic forms and residual action forms denote the same process,
+under every original symbolic soundness premise.
+
+`Imported.oracleSubject` selects the exact admitted unit. `OracleSubject.start`
+derives literal root bindings from the checked source and constructs input base
+tables from ordinary inputs and explicit row counts, beginning with an empty
+store. It checks canonical input anchors, holder data length, family and bounds;
+it accepts no installed virtual body or arbitrary initial store. Root sequence
+inputs and bindings through a lexical region bind remain located profile refusals.
+`OracleStore.Reachable` records fresh immutable insertions and capture validity
+against their actual strict older prefix. The preservation theorem covers every
+logical operation, the complete effect handler and arbitrary Process execution,
+including stopped poststates. `OracleStart.run_reachable` discharges its initial
+premise using the source-derived construction.
+
+### Effectful provider interpretation
+
+`OracleProcess` exposes the current runtime's ordinary participant actions and base
+table reads to arbitrary lawful-monadic providers. It expands the same checked
+virtual bodies over the same immutable older table prefixes. Deterministic source
+control and store operations reuse the existing handler; handler-independence
+lemmas justify that reuse. `protocol_represents` and `source_represents` prove
+complete equality with the existing pure execution for every external handler,
+including stopped poststates, query counts, source cursors and ordered events.
+
+Each external reply carries its complete provider execution record. This internal
+representation retains state and events from failed calls, whose continuation an
+ordinary `Process.call` would skip. The wrapper is not a public transcript.
+`sourceRunM_envelope` identifies the monadic source API with generic `Process.runM`;
+outer totality proves that unwrapping cannot discard a source stop or use a fallback.
+A monad's own failure or missing probability mass remains an outer effect. The
+source API requires an `OracleStart` of the exact selected `OracleSubject`.
+The security-layer `OracleSource.source_sameDist` lifts local laws for the complete
+provider-result distributions through this same source API using VCVio. Ordered
+events, poststates and stopping outcomes are part of those laws. Equality of the
+returned field values alone is insufficient, and equal distributions do not imply
+equal hidden oracle-query costs. Authenticated table consistency, charge laws and
+cryptographic reductions are supplied by the chosen providers and protocol proof.
+`runM_actions` also exposes the same execution on the original source signature.
+`OracleSource.source_relTriple` then reuses VCVio's existing local-coupling theorem
+for different provider states and event representations. Its premises fix the same
+admitted subject and installed inputs, relate initial states, and couple each source
+action. It does not assume a coupling of whole source runs.
+
+Provider invariants use Lean's `Std.Do.Internal.Ensures`, a proof-carrying
+postcondition whose refinement erases through every continuation. `OracleProviderFrame`
+proves local preservation through the existing source presentation and `Process.runM`.
+The conclusion constrains every returned complete execution record, including source
+stops and their poststates; it does not require the outer monad to return a result.
+`Zkc.MonadicPostcondition` supplies erasure construction and continuation transport,
+not another execution or support semantics. With `LawfulMonadAttach`, the same predicate
+is equivalent to preservation on every `CanReturn` result. Probability consumers can
+therefore use their monad's existing support model.
+
+### Reusing mathematical companions
+
+The companion API remains `ReferenceLaw`: a checked body, an explicit mathematical
+reference computation, its `Requires` predicate and a proof of their complete
+return-or-stop equation. `BodyIn` fixes which declaration in the retained dependency
+table has that body. The installer cannot substitute a different helper because it
+has the same name, output or intended mathematics.
+
+`ReferenceLaw.invokeOracleConcrete` transports that same law into the selected
+unit's lazy helper table. Its premises are the actual dependency table's linkage,
+ordinary-Math fragment certificate, exact `BodyIn` association and the law's original
+mathematical preconditions. Its input boundary consists of concrete values; lazy
+oracle handles elsewhere in the enclosing protocol do not change those premises.
+The conclusion is a free-process equation, so later provider choices preserve all
+stops. No second Oracle-specific mathematical law is required.
+
+For repeats, `ProtocolLoopPresentation.present` reuses the existing counted-fold
+invariant theorem. A companion supplies its mathematical state representation,
+invariant, one body equation and invariant preservation. The library instance supplies
+the iteration wrapper; the source connection supplies role masks, actual count,
+maximum and initial-state association. `OracleProtocol.iteration_eq` identifies that
+wrapper with the existing enter/leave effects. A stopped body never acquires a leave
+event. These laws establish correspondence and can be reused by completeness and
+security proofs; a protocol's probability bound still needs its own mathematical
+argument and provider assumptions.
+
+### Common-coordinate selection
+
+`Imported.oracleSubject` additionally requires a `CommonCoordinate.UnitCertificate`
+for every stored protocol and role pair, including dormant definitions. The bounded
+proposer reads the actual typed Region, substitutes ordered application operands
+and role maps, and introduces separate lexical repeat-counter binders. It uses
+existing `NormalForm.Term` values, with no supplied helper-law interpretation or
+semantic equality callback. Availability continues to check presence and scopes;
+it no longer decides coordinate agreement. Raw per-role functions remain available
+outside this canonical subject profile and retain their exact original behavior.
+
+The supported coordinate slice contains index literals, the actual reached repeat
+counter, common ordinary index inputs, restriction, and the listed total index
+word calculations. Word arithmetic keeps its modulo-2^64 meaning. A no-overflow
+or sequence-range conclusion needs separate bounds. Calls substitute actual
+parameters into their checked bodies. Call results and carried repeat state are
+unknown in this profile; equality of their initial values is insufficient.
+Local results, received values, service replies and role assembly cannot supply
+multi-role coordinate provenance. Single-role selection retains its local meaning.
+The refusal diagnostic names the exact definition and structural instruction row.
+
+The certificate inventory requests full value observations of actual source input
+ports and names actual counter binders under their lexical application paths.
+It does not replace a value observation with an extent, tag, nominal type or host
+carrier. Runtime input agreement is an explicit premise, never a consequence of
+admission. Counter observations require the same reached structural application
+and repeat prefix. Both-reached agreement does not equate loop counts, prove
+progress, discard earlier work, or justify continuing after any stop.
+
+Source-prefix readback follows successful paths of the actual optional-value
+operation processes. It preserves argument order, call input masks and repeat
+captures, and reads the certified term back from the coordinate operand at that
+reached source operation. `RootPlan.reached_agreement` starts from actual root
+input components and a finite `Prefix` derivation for each role. Both derivations
+end at the same checked operation and dynamic application/iteration boundary list;
+they need not have equal external replies or loop counts. `rootFrame_process`
+connects the initial frame to the existing normalized Oracle function process.
+The common-observation premise is exactly `coordinateDemands` of the checked
+operand. `Selection.demanded_requirement` proves that the reported inventory
+does not discard any demanded typed binder. Unknown symbolic entries make no assertion about value
+presence. A missing runtime value remains missing. This coordinate result neither
+pairs independently ordered data/handle families nor equates holder data, virtual
+captures or provider answers. Those relations require separate source association
+and honest-delivery or authentication obligations; an adversarial security theorem
+must not assume an honest peer coordinate.
+
+The complete scalar/block FRI source and wrapper snapshots pass structural admission
+and canonical Oracle-subject selection, including their distributed declarations.
+These executable admission controls do not themselves install a kernel-checked FRI
+root constant or prove its security. Source-to-constructed simulation and commitment
+realization remain separate connections. Logical audit events are not a public transcript.
 
 ## Checked subject
 
@@ -265,10 +436,13 @@ running-time bounds, and their costs need not equal those of the native
 bit-vector analysis. Source-size limits alone do not bound transitive
 requirement expansion.
 
-Multi-role roots refuse Math folds and checked reads, including transitively
-through named calls. Singleton roots admit the full finite profile, and owned
-Local finite/control work is available in multi-role roots. This restriction
-bounds the partial Math fragment.
+Math folds and checked reads use the same admitted finite profile in single-role
+and multi-role roots, including retained named calls. A strict operation requires
+all its operands at the executing role; otherwise its results are absent.
+Named helpers retain dependency-precise forwarding. Finite execution preserves
+stops and optional results, including empty iteration and zero-result operations.
+The normalizer's partial-calculation rule preserves those complete outcomes;
+it does not infer totality from an unused result.
 
 Each protocol checks every requirement, owned operand, nonempty restriction
 subset and declared output scope. A retained application must supply every
@@ -437,7 +611,8 @@ semantics interprets identities in two layers. `Carriers` assigns a type to
 every field identity and every group identity and nothing else, so
 `Carriers.Value` interprets every sort without instance arguments. A
 `FieldModel` adds a commutative ring and decidable equality per field identity,
-an optional computable inverse and embeddings between field identities; a
+an optional computable inverse, embeddings between field identities, and optional
+ordered base-root and binary-basis data; a
 `DomainModel` adds an additive group and decidable equality per group identity
 and the scalar actions between field and group identities. No layer assumes a
 characteristic, a prime field or a particular identity. Which identities exist,
@@ -470,10 +645,10 @@ The uniform interpretation is the instance of this semantics: `uniformCarriers F
 G` reads every field identity as `F` and every group identity as `G`, and
 `ringModel F G` adds the instance structures, the module action of `F` on `G`
 for every pair and no inverse. `assignment F G` and `(uniformCarriers F G).Value`
-share one case analysis and are equal by reducible unfolding. The uniform
-definitions keep their own text, so existing statements and the proofs that
-unfold them are unchanged, and equations relate each to the generic definition at
-the uniform model: `Primitive.evaluate_eq_evaluateOn`,
+share one case analysis and are equal by reducible unfolding. Primitive
+evaluation is the exact ring-only specialization of `Primitive.evaluateOn`.
+Equations also relate the uniform structural definitions to their generic
+versions at the uniform model: `Primitive.evaluate_eq_evaluateOn`,
 `Evaluation.operation_eq_operationOn`,
 `Evaluation.componentOperation_eq_componentOperationOn`,
 `protocolOperationWith_eq_protocolOperationWithOn` for every effect interface,
@@ -484,12 +659,19 @@ uniform site-observation interface is its own inductive type; `observedToOn`
 translates it, and the observed views agree after that translation.
 
 `Evaluation.denote_inverse_free` transfers denotations between models that
-differ only in the inverse, for bodies that never invert; every body of the
-current vocabulary is such a body. A model built from a commutative ring has no
+differ only in the inverse, under the explicit premise that each stored
+operation has `Op.usesInverse = false`. Inverse, interpolation, folding and
+opening operations can violate that premise; there is no universal
+inverse-independence theorem. A model built from a commutative ring has no
 inverse, and a model built from a field supplies one, so theorems proved for a
 lawful model apply at the ring model for these bodies. The congruence behind it
 is `Region.denote_congr`. The executable tools evaluate at `scalarModel`, the
 uniform model over the BLS12-381 scalar field with its computable inverse.
+
+The [numerical source contract](numerical-source.md) defines nominal polynomial
+values, the fixed FRI and STARK numerical operations, exact field literals,
+optional capability laws and the distinction between logical u64 bounds and
+native allocation policy.
 
 `Evaluation.inline_invoke` replaces a helper invocation by
 `Region.bind (body.rename arguments.get) next` under an explicit equation
@@ -601,7 +783,12 @@ the referenced binding's contract, nominal arguments, full ordered data ports
 and parameters. Native scope/outcome plumbing belongs to the checked export
 boundary; the formal ports are data operands and successful payload results. Exec is Local-only,
 region-free and requires a nonempty unique source site. Index constant takes
-one canonical u64 decimal string; every other primitive takes no parameters.
+one typed `natural` parameter containing a canonical u64 decimal string. Field
+constant takes one typed `field_literal` parameter retaining its nominal field,
+encoding and digits; other primitives take no parameters. `PrimitiveParameter`
+retains these tags as data throughout lowering and constructor rendering. Kernel
+checks do not serialize literals or call the JSON parser again. Field range and
+binary-basis checks follow the [numerical source contract](numerical-source.md).
 No leading zero except `"0"`, sign, whitespace, non-ASCII digit, field reduction
 or wrapping is accepted. Values through `18446744073709551615` are admitted.
 
@@ -1301,11 +1488,20 @@ form one association between closed resource records and native custody types
 every custody type the unit stores belongs to one. Helper-local resources need
 not first appear at an external port. The slot spelling is the producer's digest
 of the closed type; the reader checks its association without recomputing it.
-Distributed records and variants retain their metadata but semantic admission
-refuses them (`component-declaration-distributed`, `component-declaration-variant`).
-Reading a telescope, placement tree or alternative does not supply its semantics.
-That a linear claim port has one holder is a separate rule of the claim
-association (`checkLinearHolders`), not of layout admission.
+The shared `PlacementShape` traversal also reconstructs distributed records.
+It checks ordered telescope substitution, the exact retained field formulas,
+oracle data-before-handle placement and one custody prefix per telescope role.
+Each resulting leaf is associated with its exact native type and scope; role
+rosters are compared as sets, while telescope arguments retain their order.
+Zero-length arrays retain their element's formation obligations, and ordinary
+records cannot hide logical fields, including fields without storage. Expansion
+has cumulative visit, depth and leaf limits; unused declarations are checked too.
+
+Variants still refuse semantic admission (`component-declaration-variant`).
+Layout admission does not authorize fragmented linear claims: the independent
+claim association (`checkLinearHolders`) requires one holder and refuses both
+distributed linear claims and nested claims with fragmented custody. No resource
+restriction is erased to admit a distributed source layout.
 
 Resource restriction and sealing are independent facts, as in the native
 format. A record's resource tag is exactly `ordinary`, `affine` or `linear`;
@@ -1362,3 +1558,40 @@ the admitted source and returns the complete declared tuple from the selected
 arm. Correspondence requires both arm equations; neither static admission nor
 a digest establishes the source connection. Helper, catalogue and occurrence
 inventories traverse all stored regions, including dormant ones.
+
+### Canonical execution selection at property consumers
+
+An imported unit containing an Oracle declaration or logical Oracle type selects its checked
+Oracle runtime, including dormant declarations and nested callback types. This is fixed by the
+retained snapshot. The ordinary `SourceConnection` ABI and ordinary compiled-property selector
+refuse such units; a certificate cannot reinterpret an Oracle action as the ordinary signature's
+refusal branch. Structural construction admission remains independent of this execution choice.
+
+`Imported.oracleSubject` and its source-derived `OracleStart` retain the selected unit and input
+store construction. Oracle property connections must consume that execution, with their own
+provider and data-association obligations. Ordinary field and typed index services retain their
+existing source and transcript meanings. No Oracle security claim follows from the ordinary
+selector or from structural export admission alone.
+
+### Reusing ordinary mathematics in logical-oracle execution
+
+`ProtocolEmbedding.program_embedding` relates the actual lazy participant to the
+ordinary participant for the checked ordinary fragment of the entire retained unit.
+It preserves all optional inputs, public requests, reply continuations and stops.
+Its interpretation erases only structural application/iteration/mark bookkeeping.
+`checkOrdinarySource` constructs the source-bound fragment witness; the source
+runtime guard and the retained-body check are both required. This result does not
+identify an arbitrary ordinary provider with the canonical Oracle store or cursor.
+
+A protocol containing logical oracles can still reuse ordinary Math companion laws.
+`ReferenceLaw.invokeOracleConcrete` combines exact `BodyIn` association, the original
+helper premises and the actual helper-table embedding for concrete operands. It
+requires the Math fragment only, not an ordinary enclosing protocol. Deferred
+table data requires its separate demand/representation law.
+
+`ProtocolLoopPresentation.present` lifts a companion's one-step equation and counted
+invariant through the existing finite executor for any `ProtocolAlgebra` value type.
+The state representation may depend on the reached index. Role masks, count bounds,
+entry/exit observations and every stopped prefix are preserved. The logical-oracle
+instance supplies its boundary law once in `OracleLoopPresentation`; protocol
+authors do not prove another loop executor or erase effects to use the theorem.

@@ -27,7 +27,8 @@ variable {carriers : Carriers}
       right (Original.fieldReply origin field request raw)] ≤ rightError)
 
 def source : PIR.Process (Occurrence.signature carriers) (carriers.Field field × Nat) :=
-  .call (.action (.query site field (.cons handle .nil))) fun reply => .done (reply, captured)
+  .call (.action (.query site (.draw field)
+    (.cons handle .nil))) fun reply => .done (reply, captured)
 
 def residual (result : carriers.Field field × Nat) : Prop :=
   result.2 = captured ∧ ¬ left result.1 ∧ ¬ right result.1

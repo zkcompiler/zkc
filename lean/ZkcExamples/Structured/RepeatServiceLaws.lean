@@ -48,9 +48,9 @@ def verifierStep (parent : Option String) (peer first second : Nat) (state : F) 
   let child := qualifyProtocolSite (some (site "s7"))
   .call (.mark (site "s7")) <| fun _ =>
   .call (.mark (child "s0")) <| fun _ =>
-  .call (.action (.query (child "s0") "bls12-381.fr" (.cons first .nil))) <| fun (a : F) =>
+  .call (.action (.query (child "s0") (.draw "bls12-381.fr") (.cons first .nil))) <| fun (a : F) =>
   .call (.mark (child "s2")) <| fun _ =>
-  .call (.action (.query (child "s2") "bls12-381.fr" (.cons second .nil))) <| fun (b : F) =>
+  .call (.action (.query (child "s2") (.draw "bls12-381.fr") (.cons second .nil))) <| fun (b : F) =>
   .call (.mark "") <| fun _ =>
   .call (.mark (child "s5_0")) <| fun _ =>
   .call (.action (.send (ty := .field "bls12-381.fr") (child "s5_0") peer (a + b))) <| fun _ =>
@@ -80,13 +80,15 @@ def verifierObserved (parent : Option String) (peer count first second : Nat) :
     PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs) :=
   let site := qualifyProtocolSite parent
   .call (.mark (site "s0")) <| fun _ =>
-  .call (.action (.query (site "s0") "bls12-381.fr" (.cons first .nil))) <| fun (before : F) =>
+  .call (.action (.query (site "s0") (.draw "bls12-381.fr")
+    (.cons first .nil))) <| fun (before : F) =>
   .call (.mark "") <| fun _ =>
   .call (.mark "") <| fun _ =>
   .call (.mark (site "s6")) <| fun _ =>
   (PIR.repeatN count (verifierStep parent peer first second) before).bind <| fun result =>
   .call (.mark (site "s16")) <| fun _ =>
-  .call (.action (.query (site "s16") "bls12-381.fr" (.cons first .nil))) <| fun (after : F) =>
+  .call (.action (.query (site "s16") (.draw "bls12-381.fr")
+    (.cons first .nil))) <| fun (after : F) =>
   .call (.mark "") <| fun _ =>
   .done (.cons none (.cons (some (result + after)) .nil))
 
@@ -183,7 +185,8 @@ theorem contextual_verifier (parent : Option String) (count : Nat) (bound : coun
   rw [run_body_view]
   change ((PIR.Process.call (I := observedInterface F G)
     (.mark (qualifyProtocolSite parent "s0")) (fun _ =>
-    .call (.action (.query (qualifyProtocolSite parent "s0") "bls12-381.fr" (.cons first .nil)))
+    .call (.action (.query (qualifyProtocolSite parent "s0") (.draw "bls12-381.fr")
+      (.cons first .nil)))
       (fun (before : F) =>
     .call (.mark (qualifyProtocolSite parent "")) (fun _ =>
     .call (.mark (qualifyProtocolSite parent "")) (fun _ =>
@@ -200,10 +203,12 @@ theorem contextual_verifier (parent : Option String) (count : Nat) (bound : coun
   congr 1
   funext ignored
   change (PIR.Process.call (I := observedInterface F G)
-    (.action (.query (qualifyProtocolSite parent "s0") "bls12-381.fr" (.cons first .nil))) _ :
+    (.action (.query (qualifyProtocolSite parent "s0") (.draw "bls12-381.fr")
+      (.cons first .nil))) _ :
     PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) =
       PIR.Process.call (I := observedInterface F G)
-        (.action (.query (qualifyProtocolSite parent "s0") "bls12-381.fr" (.cons first .nil))) _
+        (.action (.query (qualifyProtocolSite parent "s0") (.draw "bls12-381.fr")
+          (.cons first .nil))) _
   congr 1
   funext (before : F)
   erw [verifier_repeat parent false count bound first second before]
@@ -237,7 +242,8 @@ theorem permuted_verifier (parent : Option String) (count : Nat) (bound : count 
   rw [run_body_view]
   change ((PIR.Process.call (I := observedInterface F G)
     (.mark (qualifyProtocolSite parent "s0")) (fun _ =>
-    .call (.action (.query (qualifyProtocolSite parent "s0") "bls12-381.fr" (.cons first .nil)))
+    .call (.action (.query (qualifyProtocolSite parent "s0") (.draw "bls12-381.fr")
+      (.cons first .nil)))
       (fun (before : F) =>
     .call (.mark (qualifyProtocolSite parent "")) (fun _ =>
     .call (.mark (qualifyProtocolSite parent "")) (fun _ =>
@@ -254,10 +260,12 @@ theorem permuted_verifier (parent : Option String) (count : Nat) (bound : count 
   congr 1
   funext ignored
   change (PIR.Process.call (I := observedInterface F G)
-    (.action (.query (qualifyProtocolSite parent "s0") "bls12-381.fr" (.cons first .nil))) _ :
+    (.action (.query (qualifyProtocolSite parent "s0") (.draw "bls12-381.fr")
+      (.cons first .nil))) _ :
     PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) =
       PIR.Process.call (I := observedInterface F G)
-        (.action (.query (qualifyProtocolSite parent "s0") "bls12-381.fr" (.cons first .nil))) _
+        (.action (.query (qualifyProtocolSite parent "s0") (.draw "bls12-381.fr")
+          (.cons first .nil))) _
   congr 1
   funext (before : F)
   erw [verifier_repeat parent true count bound first second before]
@@ -304,12 +312,12 @@ theorem receiver_participant (count : Nat) (bound : count ≤ 3) (first second :
 def zeroVerifierObserved (first : Nat) :
     PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs) :=
   .call (.mark "s0") <| fun _ =>
-  .call (.action (.query "s0" "bls12-381.fr" (.cons first .nil))) <| fun (before : F) =>
+  .call (.action (.query "s0" (.draw "bls12-381.fr") (.cons first .nil))) <| fun (before : F) =>
   .call (.mark "") <| fun _ =>
   .call (.mark "") <| fun _ =>
   .call (.mark "s6") <| fun _ =>
   .call (.mark "s16") <| fun _ =>
-  .call (.action (.query "s16" "bls12-381.fr" (.cons first .nil))) <| fun (after : F) =>
+  .call (.action (.query "s16" (.draw "bls12-381.fr") (.cons first .nil))) <| fun (after : F) =>
   .call (.mark "") <| fun _ =>
   .done (.cons none (.cons (some (before + after)) .nil))
 
@@ -330,7 +338,7 @@ def verifierFailure (first : Option Nat) (reason : PIR.Stop) :
   match first with
   | none => .halt .incomplete
   | some first =>
-    .call (.action (.query "s0" "bls12-381.fr" (.cons first .nil))) <| fun (_ : F) =>
+    .call (.action (.query "s0" (.draw "bls12-381.fr") (.cons first .nil))) <| fun (_ : F) =>
     .call (.mark "") <| fun _ =>
     .call (.mark "") <| fun _ =>
     .call (.mark "s6") <| fun _ =>
@@ -382,7 +390,7 @@ theorem excess_count_verifier (count : Nat) (large : 3 < count) (first second : 
   | none => rfl
   | some first =>
     change ((PIR.Process.call (I := observedInterface F G) (.mark "s0") (fun _ =>
-      .call (.action (.query "s0" "bls12-381.fr" (.cons first .nil))) (fun (before : F) =>
+      .call (.action (.query "s0" (.draw "bls12-381.fr") (.cons first .nil))) (fun (before : F) =>
       .call (.mark "") (fun _ =>
       .call (.mark "") (fun _ =>
       .call (.mark "s6") (fun _ =>
@@ -397,10 +405,10 @@ theorem excess_count_verifier (count : Nat) (large : 3 < count) (first second : 
     congr 1
     funext ignored
     change (PIR.Process.call (I := observedInterface F G)
-      (.action (.query "s0" "bls12-381.fr" (.cons first .nil))) _ :
+      (.action (.query "s0" (.draw "bls12-381.fr") (.cons first .nil))) _ :
       PIR.Process (observedInterface F G) (Values (Component (assignment F G)) runSignature.outputs)) =
         PIR.Process.call (I := observedInterface F G)
-          (.action (.query "s0" "bls12-381.fr" (.cons first .nil))) _
+          (.action (.query "s0" (.draw "bls12-381.fr") (.cons first .nil))) _
     congr 1
     funext (before : F)
     erw [repeat_above_maximum repeatSpec {} 1 _ _ _ count rfl large]

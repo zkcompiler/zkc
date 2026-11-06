@@ -72,7 +72,7 @@ example : True := by
 example (template : Template) : Domain.queryOrigin context "" "koala-bear" template [] = none := by
   kernel_rfl
 example : Domain.interface (carriers := selectedModel.toCarriers) context
-    (.query "forged" "koala-bear" (.cons 0 .nil)) = .refuse := by kernel_rfl
+    (.query "forged" (.draw "koala-bear") (.cons 0 .nil)) = .refuse := by kernel_rfl
 end Batch
 
 namespace Table

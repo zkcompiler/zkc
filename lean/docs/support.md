@@ -31,6 +31,16 @@ fresh calls. Source/native operation correspondence and security of unrestricted
 public fixed Poseidon2 computation are not established by this ideal-service
 result.
 
+The [logical source profile](spec/structured-source.md#logical-oracle-execution-profile)
+retains checked virtual bodies and interprets the selected source root through the
+existing process semantics. Its ordinary-fragment embedding preserves all optional
+inputs, requests and stops. The monadic presentation retains provider state and
+ordered events on failure; VCVio replacement lifts local complete-record
+distribution laws through this execution. Equal distributions alone do not account
+for hidden provider-query cost. Typed scalar and block index services keep distinct
+request identities and transcript histories. These are source-model connections;
+realization and full-protocol security require their corresponding theorems.
+
 The [explicit-table model](spec/table-relations.md) proves complete Boolean
 laws for finite masked membership and exact indexed reads, including duplicate
 and empty cases. Exact body equations and `FormulaLaw` proofs connect the

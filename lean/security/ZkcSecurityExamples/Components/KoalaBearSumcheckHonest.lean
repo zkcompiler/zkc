@@ -36,7 +36,7 @@ def handler : PIR.Handler I HonestState Event
     match Domain.Payload.ofValue ty value with
     | none => ⟨.stopped .refused, state, []⟩
     | some packet => ⟨.returned (), state, [.message (context.message site 1 peer) packet]⟩
-  | .query site field _, (proof, coins) => by
+  | .query site (.draw field) _, (proof, coins) => by
     change String at field
     exact if same : field = octicIdentity then by
       subst field
@@ -45,6 +45,8 @@ def handler : PIR.Handler I HonestState Event
       | challenge :: rest => ⟨.returned challenge, (proof, rest),
           [.challenge (context.query site (.draw octicIdentity))]⟩
     else ⟨.stopped .refused, (proof, coins), []⟩
+  | .query _ (.sampleIndex _) _, state
+  | .query _ (.sampleIndices _) _, state => ⟨.stopped .refused, state, []⟩
 
 variable {Frame : Type}
 

@@ -15013,11 +15013,14 @@
         "bool",
         "field",
         "vector",
-        "resource_unit"
+        "resource_unit",
+        "indices",
+        "polynomial"
       ],
       "parameterValidators": [
         "None",
-        "Natural"
+        "Natural",
+        "FieldLiteral"
       ],
       "operations": [
         {
@@ -15737,6 +15740,1944 @@
             "outputs": []
           },
           "requirements": []
+        },
+        {
+          "operation": "bool.and",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              },
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "bool.not",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "bool.or",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              },
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "field.constant",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "fieldTerm": 0,
+            "maximum": 1,
+            "minimum": 1,
+            "validator": "FieldLiteral"
+          },
+          "signature": {
+            "inputs": [],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "field.inverse",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "field.mul",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "indices.append",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "indices"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "indices"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "indices.at",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "indices"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "indices.empty",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "indices"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "indices.length",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "indices"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "poly.coefficients",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "polynomial"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "CommRing"
+            }
+          ]
+        },
+        {
+          "operation": "poly.coset_interpolate",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "polynomial"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "poly.domain_point",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "poly.domain_root",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "poly.even_odd_fold",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            },
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "CharacteristicNotTwo"
+            }
+          ]
+        },
+        {
+          "operation": "poly.from_coefficients",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "polynomial"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "CommRing"
+            }
+          ]
+        },
+        {
+          "operation": "poly.univariate_evaluate",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "polynomial"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "CommRing"
+            }
+          ]
+        },
+        {
+          "operation": "vector.concat",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.fill",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.get",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "field.add",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "field.sub",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "poly.domain_points",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "poly.coset_evaluate_batch",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "poly.coset_evaluate_at",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "poly.coset_extend",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "poly.opening_quotient_sum",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [],
+                "constructor": "indices"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "TwoAdicField"
+            }
+          ]
+        },
+        {
+          "operation": "vector.add",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.sub",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.mul",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.scale",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.inverse",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.geometric",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.slice",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.transpose",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.embed",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "E",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            },
+            {
+              "kind": "project",
+              "member": "BaseField",
+              "parent": 0
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  1
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "ExtensionField"
+            }
+          ]
+        },
+        {
+          "operation": "vector.rotate",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.bit_reverse_rows",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.prefix_sum",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.prefix_product",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
         }
       ]
     }

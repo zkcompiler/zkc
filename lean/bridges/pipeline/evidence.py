@@ -79,6 +79,8 @@ def artifacts_module(subject, entry, glue_namespace, executable_namespace, artif
     source += f"""namespace {namespace}
 open Zkc.Source Zkc.Source.Structured ZkcSecurity.Endpoint
 
+-- Generated connection types traverse nested occurrence certificates.
+set_option maxRecDepth 4096
 set_option smartUnfolding false
 
 /-- The artifacts of the compiled `{entry_name}` Entry. -/

@@ -7,3 +7,4 @@ private def tableKind : OracleKind := .table (.field "scalar") none
 #guard zeroInput (.oracleSequence tableKind 8) == .error "sigma-completeness-oracle-type"
 #guard zeroInput (.groups "g") == .error "sigma-completeness-aggregate-type"
 #guard zeroInput .indices == .error "sigma-completeness-aggregate-type"
+#guard zeroInput (.polynomial "scalar") == .error "sigma-completeness-polynomial-type"

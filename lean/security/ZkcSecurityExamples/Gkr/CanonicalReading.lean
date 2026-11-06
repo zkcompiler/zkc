@@ -10,6 +10,8 @@ public import ZkcSecurity.Bindings.Source.RootPublic
 at arbitrary incoming histories, retaining every complete returned source row. -/
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false
+-- Elaborating the generated root traverses its nested occurrence certificates.
+set_option maxRecDepth 4096
 noncomputable section
 namespace ZkcSecurity.Realizations.Gkr.CanonicalReading
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Obligations

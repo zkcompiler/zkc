@@ -130,7 +130,7 @@ theorem evaluate_expansion (table : Meanings F G) (xs point : List F)
     Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
     SumcheckHelperLaws.prepend_three,
     Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, pointBound, ite_true, primitiveOutcome,
+    PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, pointBound, ite_true, primitiveOutcome,
     show 1 < indexLimit by decide +kernel, ← List.sum_eq_foldl]
   congr 1
   funext constructed
@@ -218,7 +218,7 @@ theorem evaluateWiring_expansion (table : Meanings F G) (xs gate left right : Li
     Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
     SumcheckHelperLaws.prepend_three,
     Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, checkedIndices, gateBound, leftBound, rightBound, pairBound,
+    PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, checkedIndices, gateBound, leftBound, rightBound, pairBound,
     sumBound, and_self, ite_true, primitiveOutcome, show 1 < indexLimit by decide +kernel,
     ← List.sum_eq_foldl]
   congr 1
@@ -589,7 +589,7 @@ theorem powerOfTwo_body (table : Meanings F G) (exponent : Nat) (small : exponen
   have exponentBound : exponent < indexLimit := Nat.lt_trans small (by decide +kernel)
   simp only [HelperBodies.powerOfTwoBody, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, primitiveOutcome, show 1 < indexLimit by decide +kernel,
+    PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, show 1 < indexLimit by decide +kernel,
     show 0 < indexLimit by decide +kernel, ite_true, Values.split]
   rw [denoteLoop_states (F := F) (G := G) [.index] [] _ exponent _ .nil
     (fun index => .cons (2 ^ index) .nil) ?start ?law]
@@ -699,7 +699,7 @@ theorem selectBlock_equation (linked : DeclarationsLinked [] definitions) (bodie
   rw [selectBlockBody_eq]
   simp only [Region.denote, meaning, Evaluation.meaning, Evaluation.operation, Operands.eval,
     Regions.denote, Values.get_cons, Environment.prepend, Environment.push,
-    SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
+    SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn,
     primitiveOutcome, show 0 < indexLimit by decide +kernel, ite_true, Values.split]
   rw [denoteLoop_states (F := F) (G := G) [.vector "bls12-381.fr", .index] [.index] _ bits _
     (.cons position .nil)
@@ -749,7 +749,7 @@ theorem selectBlock_equation (linked : DeclarationsLinked [] definitions) (bodie
     simp only [Evaluation.invokeCallback, Values.append]
     show Region.denote (meaning F G ((helpers (F := F) (G := G) definitions))) selectLoopBody _ = _
     rw [selectLoop_body]
-    simp only [Primitive.evaluate, primitiveOutcome, checkedIndices, PIR.Process.bind, Values.get,
+    simp only [Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, checkedIndices, PIR.Process.bind, Values.get,
       show 1 < indexLimit by decide +kernel, show 2 < indexLimit by decide +kernel, remaining,
       remainingBound, power, powerSmall, powerPositive, positionBound, quotientBound, blockLength, blockPositive, blockEven, half, and_self, ite_true, ite_false, next,
       true_and, and_true]

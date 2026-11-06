@@ -14,7 +14,9 @@ open ZkcSecurity.Families.Sumcheck
 /-- A stateful honest delivery script; all actions are retained as observations. -/
 def handler : PIR.Handler (participantInterface ℚ ℚ) (List ℚ) (participantInterface ℚ ℚ).Op
   | action@(.send ..), state => ⟨.returned (), state, [action]⟩
-  | action@(.query ..), state => ⟨.returned (0 : ℚ), state, [action]⟩
+  | action@(.query _ (.draw _) _), state => ⟨.returned (0 : ℚ), state, [action]⟩
+  | action@(.query _ (.sampleIndex _) _), state
+  | action@(.query _ (.sampleIndices _) _), state => ⟨.stopped .refused, state, [action]⟩
   | action@(.receive (.field _) _ _), state =>
     match state with
     | value :: rest => ⟨.returned value, rest, [action]⟩

@@ -71,7 +71,8 @@ def receive (ctx : ProtocolContext) : PIR.Process (participantInterface F G) (Op
   .done (some (a, b, c))
 
 abbrev query (ctx : ProtocolContext) (service : Nat) : (participantInterface F G).Op :=
-  .query (qualifyProtocolSite ctx.applicationPrefix "label_6368616c6c656e6765") field (.cons service .nil)
+  .query (qualifyProtocolSite ctx.applicationPrefix "label_6368616c6c656e6765") (.draw field)
+    (.cons service .nil)
 
 def delivery (ctx : ProtocolContext) (r : F) : PIR.Process (participantInterface F G) PUnit :=
   .call (.send (ty := scalar) (qualifyProtocolSite ctx.applicationPrefix "label_64656c6976657279_0")

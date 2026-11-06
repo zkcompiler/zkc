@@ -1,6 +1,8 @@
 module
+public import Zkc.Construction.OriginalEffects
 public import Zkc.Construction.Uniform.OccurrenceSourceProcess
 public import ZkcSecurity.Bindings.Transcript.NominalField
+public import ZkcSecurity.Bindings.Transcript.OccurrenceSampling
 public import ZkcSecurity.Bindings.Transcript.DomainReduction
 public import ZkcSecurity.ProgramLogic.Derivation
 @[expose] public section
@@ -138,17 +140,6 @@ open OracleComp OracleSpec
 
 variable [SampleableType F]
 
-noncomputable abbrev rawSampleable : (event : Domain.Event (uniformCarriers F G)) → SampleableType (Domain.Raw event)
-  | .message .. | .publicBinding _ => inferInstanceAs (SampleableType Unit)
-  | .challenge origin => by
-      rcases origin with ⟨entry, events, request⟩
-      cases request with
-      | none => exact inferInstanceAs (SampleableType Unit)
-      | some request =>
-          rcases request with ⟨method, parameters, sort⟩
-          cases sort
-          case field identity => exact inferInstanceAs (SampleableType F)
-          all_goals exact inferInstanceAs (SampleableType Unit)
 
 attribute [local instance] rawSampleable
 

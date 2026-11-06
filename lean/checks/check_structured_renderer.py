@@ -412,7 +412,7 @@ example : (RenderedPrimitives.snapshot.definitions[0]?.bind fun definition =>
       instructions[0]?.bind fun (.instruction descriptor _ _ _ _) => match descriptor with
         | .exec operation binding parameters => some (operation, binding, parameters)
         | _ => none
-    | _ => none) = some ("exec.apply", "max_index", ["18446744073709551615"]) := by
+    | _ => none) = some ("exec.apply", "max_index", [.natural "18446744073709551615"]) := by
   decide +kernel
 example : (Zkc.Source.Structured.check RenderedPrimitives.snapshot).isOk = true := by
   decide +kernel

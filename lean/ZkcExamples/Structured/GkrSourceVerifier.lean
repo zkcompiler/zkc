@@ -34,7 +34,7 @@ theorem terminal_plain (n : Nat) (custody : CustodyToken) (xs point : List F) (t
   simp [GkrSourceBodies.helper54Body, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
     Environment.prepend, Environment.push, SiteObservations.closed,
-    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
     GkrSourceLaws.evaluate_extension n xs point table decoded length small vectorBound]
 
 theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers selector width : Nat)

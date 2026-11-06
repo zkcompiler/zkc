@@ -2,6 +2,9 @@ module
 
 public import Zkc.Source.Structured.DomainParticipant
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 @[expose] public section
 
 /-! Participant normal forms as data.
@@ -354,3 +357,8 @@ attribute [local simp] entryAt.eq_def
 
 end NormalForm
 end Zkc.Source.Structured
+
+-- Realize shared equations here so every client imports the same stored proof.
+-- Independent lazy generation can attach different private helpers to one public name.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Source.Structured.Op.total

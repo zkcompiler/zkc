@@ -230,7 +230,7 @@ example : invoke ([markedDefinition].foldl (Evaluation.ComponentTablesOn.extend 
       ⟨[], []⟩).components markedDefinition.helper Values.nil.present =
     .call () (fun reply => if reply then .done (.cons (some true) .nil) else .halt .exhausted) := by
   have adequate := Evaluation.ComponentTablesOn.adequate_fold model choiceSites ⟨[], []⟩
-    (Evaluation.ComponentTablesOn.adequate_empty model) [markedDefinition] markedDefinition.helper .nil
+    Evaluation.ComponentTablesOn.adequate_empty [markedDefinition] markedDefinition.helper .nil
   refine adequate.trans ?_
   change (PIR.Process.call (I := choiceInterface) () fun reply => _) = _
   congr 1

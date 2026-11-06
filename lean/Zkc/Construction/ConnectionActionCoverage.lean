@@ -56,7 +56,7 @@ theorem publicQuery (handle : Nat) (selected : handle = routing.selectedHandle)
     (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
       (routing.context.query site (.draw field)) sites routing.draws = some template) :
     Original.ActionCovered routing frames
-      (.query site field (.cons handle .nil) : (participantInterfaceOn carriers).Op) := by
+      (.query site (.draw field) (.cons handle .nil) : (participantInterfaceOn carriers).Op) := by
   have found : routing.draw frames site field handle = some
       (Domain.atCoordinates (routing.context.query site (.draw field)) (frames.map (·.index))) := by
     simp only [Original.Routing.draw, selected, service, and_self, ↓reduceIte]
@@ -68,7 +68,7 @@ theorem localQuery (handle : Nat) (port : ServicePort)
     (binding : ConnectionStaticRoutes.Local routing sites site field handle port template)
     (same : frames.map (·.site) = sites) :
     Original.ActionCovered routing frames
-      (.query site field (.cons handle .nil) : (participantInterfaceOn carriers).Op) := by
+      (.query site (.draw field) (.cons handle .nil) : (participantInterfaceOn carriers).Op) := by
   refine Or.inr ⟨port, _, binding.source frames same, ?_⟩
   rw [OccurrenceResolution.atCoordinates_request]
   rfl

@@ -27,6 +27,11 @@ mutual
     | .index, json | .service _, json => wireNatural json
     | .field _, json | .group _, json => scalar json
     | .vector _, json | .groups _, json => do (← Format.array json 4096).mapM scalar
+    | .polynomial _, json => do
+      let coefficients ← (← Format.array json 4096).mapM scalar
+      let p := PolynomialValue.ofCoefficients 0 coefficients
+      if p.coefficients != coefficients then throw "structured-input-polynomial-canonical"
+      return p
     | .indices, json => do (← Format.array json 4096).mapM wireNatural
     | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
     | .resourceUnit _, _ => throw "structured-input-custody"
@@ -67,6 +72,9 @@ mutual
     | .field _, value | .group _, value => return scalarJson value
     | .vector _, values | .groups _, values =>
       return .arr ((show List Scalar from values).map scalarJson).toArray
+    | .polynomial _, value => do
+      if value.zero != 0 then throw "structured-input-polynomial-zero"
+      return .arr (value.coefficients.map scalarJson).toArray
     | .indices, values => return .arr (values.map (fun value => .str (toString value))).toArray
     | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
     | .resourceUnit _, _ => throw "structured-input-custody"

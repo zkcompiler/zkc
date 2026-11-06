@@ -67,6 +67,11 @@ def noForeignHandles (types : List Ty) : Analysis Unit := do
   if types.any Ty.isForeignHandle then
     throw "structured-availability-handle"
 
+/-- Protocol state/exit transport admits the exact logical family constructors only.
+Closed Math and owned helper checks continue to use their original restrictions. -/
+def protocolTransport (types : List Ty) : Analysis Unit :=
+  noForeignHandles (types.filter (fun type => !type.isOracleFamily))
+
 /-- Charge each membership search and copied prefix before constructing a union.
 Repeated operands preserve set semantics, without identifying unknown values. -/
 def union (left right : Footprint) : Analysis Footprint :=
@@ -320,7 +325,6 @@ def availableCalculation (summaries : List DependencySummary) (roles : Nat)
   match op with
   | .invoke helper =>
     let summary ← findSummary summaries helper
-    if roles > 1 && summary.partial then throw "structured-availability-partial-math"
     if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
     for footprint in summary.requirements do
       if ((← available roles arguments footprint).filter active.contains).isEmpty then
@@ -329,10 +333,6 @@ def availableCalculation (summaries : List DependencySummary) (roles : Nat)
       chargeReplay 1
       return (← available roles arguments footprint).filter active.contains
   | _ =>
-    match op with
-    | .fold _ | .boundedAt _ =>
-      if roles > 1 then throw "structured-availability-partial-math"
-    | _ => pure ()
     for helper in op.helpers do
       let summary ← findSummary summaries helper
       if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
@@ -350,7 +350,7 @@ def repeatInputs (roles : Nat) (spec : RepeatSpec) (arguments : List Footprint) 
   if arguments.length != 1 + spec.state.length + spec.captures.length ||
       spec.stateScopes.length != spec.state.length then
     throw "structured-availability-port-scopes"
-  noForeignHandles spec.state
+  protocolTransport spec.state
   let count :: remaining := arguments | throw "structured-availability-operand"
   if !(← subset spec.roles count) then throw "structured-repeat-count-scope"
   for (scope, supplied) in spec.stateScopes.zip (remaining.take spec.state.length) do
@@ -365,6 +365,58 @@ def repeatInputs (roles : Nat) (spec : RepeatSpec) (arguments : List Footprint) 
   chargeReplay (1 + spec.state.length + captures.length)
   return spec.roles :: (spec.stateScopes ++ captures)
 
+/-- Availability of the resolved logical action. These rules do not grant a Math/message
+codec to a handle. Coordinate agreement and holder-origin obligations are separate from
+availability. Canonical Oracle subject selection separately requires the source-bound
+common-coordinate certificate; raw per-role meanings remain available. -/
+def oracleOperation (roles : Nat) (op : OracleOp) (arguments : List Footprint)
+    (active : List Nat) : Analysis (List Footprint) := do
+  let requested := fun selected ↦ do
+    validScope roles selected
+    if !(← subset selected active) then throw "structured-repeat-role"
+    return selected
+  let requireAll := fun selected operands ↦ do
+    for supplied in operands do
+      if !(← subset selected supplied) then throw "oracle-availability-input"
+  match op, arguments with
+  | .send _ holder receivers _, data :: dimensions =>
+    let selected ← requested (holder :: receivers)
+    owned roles holder [data]
+    requireAll selected dimensions
+    return [selected]
+  | .input _ holder receivers _, [data, handles] =>
+    let selected ← requested (holder :: receivers)
+    owned roles holder [data]
+    requireAll receivers [handles]
+    return [selected]
+  | .virtual _ holder receivers, captures =>
+    let selected ← requested (holder :: receivers)
+    requireAll selected captures
+    return [selected]
+  | .query _ (some owner), operands =>
+    owned roles owner operands
+    return [[owner]]
+  | .query _ none, _ => throw "oracle-availability-inherited-owner"
+  | .contents _ holder, operands =>
+    owned roles holder operands
+    return [[holder]]
+  | .components _ holder receivers, [handle] =>
+    let selected ← requested (holder :: receivers)
+    requireAll selected [handle]
+    return [[holder], receivers]
+  | .shape .., [handle] | .forgetShape .., [handle] | .sequenceLength .., [handle] =>
+    return [handle.filter active.contains]
+  | .sequenceEmpty _ _ _, [] => return [active]
+  | .sequenceAppend _ _ selected, operands =>
+    let selected ← requested selected
+    requireAll selected operands
+    return [selected]
+  | .sequenceAt _ _ selected, operands =>
+    let selected ← requested selected
+    requireAll selected operands
+    return [selected]
+  | _, _ => throw "oracle-availability-signature"
+
 def operation (summaries : List DependencySummary) (roster : List String)
     (op : ProtocolOp) (arguments : List Footprint)
     (active : List Nat := List.range roster.length) : Analysis (List Footprint) := do
@@ -376,6 +428,7 @@ def operation (summaries : List DependencySummary) (roster : List String)
   | _ => chargeOperations 1
   match op with
   | .calculate op _ => availableCalculation summaries roles op arguments active
+  | .oracle op _ => oracleOperation roles op arguments active
   | .repeat .. =>
     -- The region traversal must inspect the callback before exporting scopes.
     throw "structured-protocol-region"
@@ -426,7 +479,7 @@ def operation (summaries : List DependencySummary) (roster : List String)
       if !(← subset [owner] supplied) then throw "structured-availability-assembly"
     chargeReplay (selected.length + 1)
     return [selected]
-  | .draw owner _ _ =>
+  | .draw owner _ _ | .query owner _ _ =>
     owned roles owner arguments
     chargeReplay 2
     return [[owner]]
@@ -478,7 +531,7 @@ def checkRoot (summaries : List DependencySummary) (root : CheckedProtocol) : An
     throw "structured-availability-port-scopes"
   for scope in root.inputScopes do validScope root.roles.length scope
   for scope in root.outputScopes do validScope root.roles.length scope
-  noForeignHandles root.outputs
+  protocolTransport root.outputs
   chargeReplay root.inputScopes.length
   let results ← protocolRegion summaries root.roles root.body (extendEnvironment #[] root.inputScopes)
   if results.length != root.outputScopes.length then throw "structured-availability-port-scopes"

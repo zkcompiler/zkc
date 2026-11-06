@@ -74,7 +74,7 @@ example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
     (.exec "exec.apply" "embed" []))).map (fun checked => checked.raw.operations) =
     .ok [.mark "embed_site", .fieldEmbed "extension" "base"] := rfl
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
-    (.exec "exec.apply" "embed" ["unexpected"]))).map (fun _ => ()) =
+    (.exec "exec.apply" "embed" [.natural "unexpected"]))).map (fun _ => ()) =
     .error "structured-primitive-parameters" := by decide
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
     (.exec "algebra.exec.field_equal" "embed" []))).map (fun _ => ()) =

@@ -89,15 +89,7 @@ theorem runK_operations (initial : History F G) (challenge : History F G → m F
           simp only [PIR.Process.interpret, operations, PIR.Process.bind, runK]
           have draw : Domain.drawRequest (Origin.withoutCoordinates origin) = Domain.drawRequest origin := by
             rcases origin with ⟨entry, sites, request⟩
-            cases request with
-            | none => rfl
-            | some request =>
-                rcases request with ⟨method, arguments, ty⟩
-                by_cases methodEq : method = "draw"
-                · subst method
-                  cases arguments <;> cases ty <;> rfl
-                · cases arguments <;> cases ty <;>
-                    simp [Domain.drawRequest, Origin.withoutCoordinates, methodEq]
+            cases request <;> rfl
           rw [draw]
           split
           · rw [query_eq]

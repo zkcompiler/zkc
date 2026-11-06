@@ -20,7 +20,8 @@ noncomputable def misdirected : Form [] [] verifierPattern.scope
     ChaumPedersenViews.program.payload.entry.outputs :=
   .receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 <|
   .receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 <|
-  .query "label_6368616c6c656e6765" "bls12-381.fr" (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil) <|
+  .query "label_6368616c6c656e6765" (.draw "bls12-381.fr")
+    (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil) <|
   .send (.field "bls12-381.fr") "label_726573706f6e7365_0" 0 (.var .here) <|
   .receive (.field "bls12-381.fr") "label_726573706f6e7365_0" 0 <|
   .done (.cons (.present (.calc .booleanAnd rfl (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there .here))))) (.cons (.var .here) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.var (.there .here)) .nil)) .here) .nil)) .here) .nil)) .here) (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.var .here) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there .here))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.var (.there .here)) .nil)) .here) .nil)) .here) .nil)) .here) .nil)) .here)) .nil)

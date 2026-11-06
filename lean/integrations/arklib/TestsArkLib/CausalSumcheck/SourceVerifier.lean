@@ -36,7 +36,8 @@ def network [Zero F] (context : ProtocolContext) (update : F → F → F) :
         pure ⟨.returned (), update r s, []⟩
       else pure ⟨.stopped .refused, s, []⟩
   | .send .., s => pure ⟨.stopped .refused, s, []⟩
-  | .query _ _ (.cons _ .nil), s => pure ⟨.returned (0 : F), s, []⟩
+  | .query _ (.draw _) _, s => pure ⟨.returned (0 : F), s, []⟩
+  | .query .., s => pure ⟨.stopped .refused, s, []⟩
 
 def handler [Zero F] [SampleableType F] (context : ProtocolContext) (handle : Nat)
     (update : F → F → F) :=
@@ -74,7 +75,7 @@ private theorem query_handler [Zero F] [SampleableType F]
     (context : ProtocolContext) (handle : Nat) (update : F → F → F) (s : F) :
     withUniformQueries (network context update) [queryKey context handle]
         (fun _ => noOp) (fun _ _ => noOp)
-        (.query (challengeSite context) "bls12-381.fr" (.cons handle .nil)) s =
+        (.query (challengeSite context) (.draw "bls12-381.fr") (.cons handle .nil)) s =
       freshQuery (F := F) noOp (fun _ => noOp) s := by
   have law := withUniformQueries_queryKey (network context update)
     (fun _ => noOp) (fun _ _ => noOp) context handle s
@@ -126,7 +127,7 @@ private theorem refused_query (context : ProtocolContext) (handle : Nat)
     (update : F → F → F) (s : F) :
     withUniformQueries (network context update) [queryKey context (handle+1)]
         (fun _ => noOp) (fun _ _ => noOp)
-        (.query (challengeSite context) "bls12-381.fr" (.cons handle .nil)) s =
+        (.query (challengeSite context) (.draw "bls12-381.fr") (.cons handle .nil)) s =
       pure ⟨.stopped .refused, s, []⟩ := by
   have law := withUniformQueries_unconfigured (network context update)
     [queryKey context (handle+1)] (fun _ => noOp) (fun _ _ => noOp)

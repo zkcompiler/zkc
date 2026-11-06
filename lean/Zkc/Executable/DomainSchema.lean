@@ -99,9 +99,14 @@ theorem step_schema (model : Structured.DomainModel) (program : Structured.Progr
   all_goals repeat' first
     | exact appendChecked _
     | exact bindChecked _
+    | exact Domain.Value.encode_sort (by assumption)
+    | unfold Domain.challengeRequest
+    | unfold Domain.localRequest
     | (apply yields_bind_all; intro final)
     | (change True; trivial)
     | (change ∃ values, _ = env ++ values ∧ _; exact ⟨_, rfl, by assumption⟩)
+    | (change ∃ values, _ = env ++ values ∧ _; refine ⟨_, rfl, ?_⟩
+       simp_all [Domain.sortsMatch, Domain.Value.sort])
     | (change ∃ values, env = env ++ values ∧ _; exact ⟨[], by simp, by simp_all [Domain.sortsMatch]⟩)
     | (split <;> try dsimp only)
     | (intro reply; try dsimp only)

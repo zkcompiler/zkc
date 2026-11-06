@@ -44,6 +44,18 @@ mutual
     | .cons type rest => type.isHandle || rest.hasHandle
 end
 
+mutual
+  /-- Polynomial values may be computed locally, but have no common-value wire codec. -/
+  def Ty.containsPolynomial : Ty → Bool
+    | .polynomial _ => true
+    | .sequence element => element.containsPolynomial
+    | .product _ _ fields => fields.containsPolynomial
+    | _ => false
+  def ProductFields.containsPolynomial : ProductFields → Bool
+    | .nil => false
+    | .cons type rest => type.containsPolynomial || rest.containsPolynomial
+end
+
 /-- A custody permission: a nominal resource unit of one exact slot. -/
 def Ty.isCustody : Ty → Bool
   | .resourceUnit _ => true
@@ -52,11 +64,17 @@ def Ty.isCustody : Ty → Bool
 /-- A logical handle other than a custody permission. -/
 def Ty.isForeignHandle (ty : Ty) : Bool := ty.isHandle && !ty.isCustody
 
+/-- Logical protocol families have structural transport, independently of closed Math
+values, services and affine custody. This predicate grants no wire codec. -/
+def Ty.isOracleFamily : Ty → Bool
+  | .oracle _ | .oracleSequence .. => true
+  | _ => false
+
 -- Materialize the admission equations in their defining module. Lazy generation
 -- in independent clients can produce different stored proofs for the same
 -- equation name; declaration provenance must have a single checked owner.
 section
-attribute [local simp] Ty.isService ProductFields.hasService Ty.isHandle ProductFields.hasHandle Ty.isCustody
+attribute [local simp] Ty.isService ProductFields.hasService Ty.isHandle ProductFields.hasHandle Ty.isCustody Ty.containsPolynomial ProductFields.containsPolynomial
 end
 
 /-- Native preparation identifiers have a stricter bound than helper symbols. -/
@@ -84,13 +102,24 @@ sort, and the environment admits that instance. -/
 mutual
   def Catalogue.checkType (exported environment : Catalogue) : Ty → Except String Unit
     | .boolean | .index | .indices => pure ()
-    | .oracle _ | .oracleSequence .. => throw "structured-oracle-profile"
+    | .oracle (.table row extent) => do
+      if row.isHandle then throw "structured-oracle-row"
+      if extent.any (· ≥ indexLimit) then throw "structured-oracle-shape"
+      exported.checkType environment row
+    | .oracleSequence (.table row extent) maximum => do
+      if row.isHandle then throw "structured-oracle-row"
+      if maximum ≥ indexLimit || extent.any (· ≥ indexLimit) then
+        throw "structured-oracle-shape"
+      exported.checkType environment row
     -- A slot is an exact nominal custody identity, independent of the catalogue.
     | .resourceUnit slot =>
       unless LogicalFormat.slotIdentityValid slot do throw "structured-slot-identity"
     | .field d => do
       discard <| exported.expect d .field
       if !environment.types.contains ("field", d) then throw "structured-type-unadmitted"
+    | .polynomial d => do
+      discard <| exported.expect d .field
+      if !environment.types.contains ("polynomial", d) then throw "structured-type-unadmitted"
     | .vector d => do
       discard <| exported.expect d .field
       if !environment.types.contains ("vector", d) then throw "structured-type-unadmitted"
@@ -246,7 +275,9 @@ def Definition.headerValid (definition : Definition) : Bool :=
   definition.preconditions.length ≤ 512 &&
   definition.preconditions.all (Bound.valid definition.inputs) &&
   (match definition with
-  | .oracle _ => false
+  | .oracle declaration =>
+    validString declaration.admissibility &&
+      declaration.shapeArguments.length ≤ 16 && declaration.shapeBounds.length ≤ 16
   | .function f =>
     (match f.kind, f.interface with
       | .protocol, some _ => f.visibility == .publicDef && validProtocolIdentifier f.name
@@ -373,6 +404,7 @@ def resolveCollect (snapshot : Snapshot) (domains : List DomainSpec)
 
 structure LowerState where
   sites : List String := []
+  oracleCursor : Nat := 0
 
 abbrev LowerM := StateT LowerState (Except String)
 
@@ -398,7 +430,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind == .math || kind == .protocol
   | .makeProduct .. | .getProduct .. => kind == .math || kind == .protocol
   | .boundedAt .. | .mathBranch => kind == .math
-  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .statement .. =>
+  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .sampleIndex .. | .sampleIndices .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
@@ -406,7 +438,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
 wire parsing. Data ports are checked by ordinary formation after selection;
 native scope/outcome plumbing belongs to the export correspondence boundary. -/
 def resolvePrimitive (snapshot : Snapshot) (operation name : String)
-    (parameters : List String) : Except String Op := do
+    (parameters : List PrimitiveParameter) : Except String Op := do
   if operation != "exec.apply" then throw "structured-primitive-operation"
   let binding ← requireSome (snapshot.bindings.find? (·.name == name)) "structured-unknown-binding"
   if !binding.valid then throw "structured-binding"
@@ -417,10 +449,29 @@ def resolvePrimitive (snapshot : Snapshot) (operation name : String)
     let some base := nominal.member "BaseField" | throw "structured-domain-member"
     snapshot.catalogue.requireEmbedding root base
     return .fieldEmbed root base
+  if binding.contract == "field.constant" then
+    let [parameter] := parameters | throw "structured-primitive-parameters"
+    match ← Format.fieldLiteral snapshot.catalogue root parameter with
+    | .natural value => return .fieldConstant root value
+    | .bits bits => return .exec (.binaryConstant root bits)
   if binding.contract == "index.constant" then
-    let [text] := parameters | throw "structured-primitive-parameters"
+    let [.natural text] := parameters | throw "structured-primitive-parameters"
     return .exec (.indexConstant (← Format.indexDecimal text))
   if !parameters.isEmpty then throw "structured-primitive-parameters"
+  match binding.contract with
+  | "field.add" => return .fieldAdd root
+  | "field.sub" => return .fieldSubtract root
+  | "field.mul" => return .fieldMultiply root
+  | "bool.and" => return .booleanAnd
+  | "bool.or" => return .booleanOr
+  | "bool.not" => return .exec .booleanNot
+  | _ => pure ()
+  if let some numerical := Numerical.ofContract binding.contract then
+    let base ← if binding.contract == "vector.embed" then do
+      let nominal ← snapshot.catalogue.expect root .field
+      requireSome (nominal.member "BaseField") "structured-domain-member"
+    else pure ""
+    return .exec (.numerical numerical root base)
   -- The custody transfers are effects, not pure primitives (`SiteObservations`).
   match binding.contract with
   | "resource_unit.create" => return .createUnit root
@@ -554,7 +605,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     if argumentTypes.length < 2 + results.length then throw "structured-loop-arguments"
     let captures := argumentTypes.drop (2 + results.length)
     return if descriptor == .loop then .loop results captures else .loopCondition results captures
-  | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .statement .. =>
+  | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .sampleIndex .. | .sampleIndices .. | .statement .. =>
     throw "structured-open-operation"
 
 inductive ExitKind where

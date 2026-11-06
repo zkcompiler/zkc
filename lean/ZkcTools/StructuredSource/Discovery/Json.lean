@@ -25,6 +25,9 @@ def valueJson (value : Value) : Json := Json.mkObj [
   ("unknown_dependencies", toJson value.unknownDependencies)]
 
 def primitiveJson : Primitive → Json
+  | .numerical op d base => toJson [op.contract, d, base]
+  | .binaryConstant d bits => toJson ["field.bits", d, toString bits]
+  | .booleanNot => toJson ["bool.not"]
   | .indexConstant n => toJson ["index.constant", toString n]
   | .vectorEmpty d => toJson ["vector.empty", d]
   | .vectorLength d => toJson ["vector.length", d]

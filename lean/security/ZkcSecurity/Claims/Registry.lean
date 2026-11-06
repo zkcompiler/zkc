@@ -509,6 +509,11 @@ def entries : List Entry := [
     "A derivation relates an actual Domain process to its typed transcript presentation \
     at the given history, retaining query keys, typed replies and decoding, and establishing \
     the specified postcondition on returned values."⟩,
+  ⟨"wellformed.domain-reading-unrestricted", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.DomainReduction.Reading,
+    "A derivation relates the actual Domain process to its typed transcript presentation \
+    at the given history, retaining query keys, typed replies and decoding, without a \
+    return-value postcondition. Independent history coherence is a separate obligation."⟩,
   ⟨"wellformed.domain-coherence", .wellFormedness,
     some `ZkcSecurity.FiatShamir.DomainReduction.CoherentTo,
     "Every actual Domain query uses the reached observation history and a supported draw \

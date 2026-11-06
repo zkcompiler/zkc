@@ -322,8 +322,8 @@
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifierLayer_process": {
       "package": "main",
       "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
-      "structural": "aec54da25fb8ad10",
-      "explicit": "14f2d939e08e4dad"
+      "structural": "39c18f15681a25d2",
+      "explicit": "a8f2dac4fcc2f0ff"
     },
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifier_participant": {
       "package": "main",
@@ -334,8 +334,8 @@
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Rounds.verifierRounds_invocation": {
       "package": "main",
       "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
-      "structural": "5f4e41484f5929d7",
-      "explicit": "623a57d68c144054"
+      "structural": "207eb76e193f1491",
+      "explicit": "5ff0d4560ab9d437"
     },
     "ZkcExamples.Structured.Generated.Scalar.ChaumPedersen.Root.verifier_process": {
       "package": "main",
@@ -382,8 +382,8 @@
     "ZkcExamples.Structured.Okamoto.honest_accepts": {
       "package": "main",
       "module": "ZkcExamples.Structured.Okamoto",
-      "structural": "d3d68a87fdf14cce",
-      "explicit": "fe31bd8ae082076b"
+      "structural": "d467364dcc9598eb",
+      "explicit": "7795e47eca934936"
     },
     "ZkcExamples.Structured.OkamotoNormalForms.exact_clause": {
       "package": "main",

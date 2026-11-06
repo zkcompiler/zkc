@@ -38,6 +38,29 @@ def record (state : State carriers) (origin : Origin) (payload : Domain.Payload 
   .call (.observe (.message origin payload)) fun _ =>
     .done ((), { state with history := state.history ++ [.message origin payload] })
 
+/-- Generic source challenge fold, using the same finite request decoder as
+constructed execution. Field draw is its exact specialization below. -/
+def queryRequest (state : State carriers) (origin : Origin) (request : Request) :
+    PIR.Process (effects carriers) (carriers.Value request.sort × State carriers) :=
+  (Domain.requestValue origin request (.query state.history origin)).bind fun value =>
+    .done (value, { state with history := state.history ++ [.challenge origin] })
+
+/-- Source-to-constructed delivery retains the query followed by the original
+message event and refuses a request/result-sort disagreement explicitly. -/
+def receiveRequest (routing : Routing) (state : State carriers) (ty : Structured.Ty)
+    (site : String) (sender : Nat) :
+    PIR.Process (effects carriers) (carriers.Value ty × State carriers) :=
+  match routing.typedDelivery state.frames site ty sender with
+  | none => .halt .refused
+  | some (request, query, message) =>
+    if same : request.sort = ty then
+      (queryRequest state query request).bind fun (value, final) =>
+        match Domain.Payload.ofValue ty (same ▸ value) with
+        | none => .halt .refused
+        | some payload =>
+          (record final message payload).bind fun (_, observed) => .done (same ▸ value, observed)
+    else .halt .refused
+
 def receive (routing : Routing) (state : State carriers) (ty : Structured.Ty)
     (site : String) (sender : Nat) :
     PIR.Process (effects carriers) (carriers.Value ty × State carriers) :=
@@ -51,6 +74,8 @@ def receive (routing : Routing) (state : State carriers) (ty : Structured.Ty)
         (queryField state draw field).bind fun (value, final) =>
           (record final message (.field field value)).bind fun (_, observed) =>
             .done (value, observed)
+    | .index => receiveRequest routing state .index site sender
+    | .indices => receiveRequest routing state .indices site sender
     | _ => .halt .refused
   | .validator =>
     match routing.message state.frames site sender routing.context.validator with
@@ -92,6 +117,19 @@ def query (routing : Routing) (state : State carriers) (site field : String) (ha
         .call (.localService port origin) fun reply =>
           .done ((by simpa only [Raw, request, Request.draw] using reply), state)
       else .halt .refused
+    | none => .halt .refused
+
+/-- All typed index-service operations share one route and reply decoder. -/
+def service (routing : Routing) (state : State carriers) (site : String)
+    (contract : String) (request : Request) (handle : Nat) :
+    PIR.Process (effects carriers) (carriers.Value request.sort × State carriers) :=
+  match routing.mode, (if contract = routing.context.contract then routing.serviceRequest state.frames site request handle else none) with
+  | .validator, some origin => queryRequest state origin request
+  | _, _ =>
+    match routing.localRequest state.frames site request handle with
+    | some (port, origin) =>
+      if port.contract != contract then .halt .refused else
+      (Domain.requestValue origin request (.localService port origin)).bind fun value => .done (value, state)
     | none => .halt .refused
 
 /-- Plain receives preserve construction state and perform only the real
@@ -137,7 +175,11 @@ def operations (routing : Routing) :
       match routing.context.profile with
       | .plain => sendPlain routing state ty site receiver value
       | .fiatShamir _ => send routing state ty site receiver value
-  | .action (.query site field (.cons handle .nil)), state => query routing state site field handle
+  | .action (.query site (.draw field) (.cons handle .nil)), state => query routing state site field handle
+  | .action (.query site (.sampleIndex contract) (.cons handle (.cons bound .nil))), state =>
+      service routing state site contract (.sampleIndex bound) handle
+  | .action (.query site (.sampleIndices contract) (.cons handle (.cons bound (.cons count .nil)))), state =>
+      service routing state site contract (.sampleIndices bound count) handle
 
 /-- The fold is generic in all typed replies, inputs, and reached stop reasons. -/
 def fold {A : Type} (routing : Routing)

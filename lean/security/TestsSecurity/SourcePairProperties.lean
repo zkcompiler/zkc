@@ -23,7 +23,7 @@ def drawP (field : String) : PIR.Process (Occurrence.signature carriers) (carrie
   .call (.action (.receive (.field field) "delivery" 1)) .done
 
 def drawV (field : String) : PIR.Process (Occurrence.signature carriers) (carriers.Field field) :=
-  .call (.action (.query "challenge" field (.cons 7 .nil))) fun reply =>
+  .call (.action (.query "challenge" (.draw field) (.cons 7 .nil))) fun reply =>
     .call (.action (.send (ty := .field field) "delivery" 0 reply)) fun _ => .done reply
 
 theorem paired_draw (field : String) : Pair scope Eq

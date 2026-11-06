@@ -22,7 +22,8 @@ variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
 abbrev outputQuery (ctx : ProtocolContext) (service : Nat) : (participantInterface F G).Op :=
-  .query (qualifyProtocolSite ctx.applicationPrefix (encodedLabel "output")) "bls12-381.fr" (.cons service .nil)
+  .query (qualifyProtocolSite ctx.applicationPrefix (encodedLabel "output")) (.draw "bls12-381.fr")
+    (.cons service .nil)
 abbrev outputDelivery (ctx : ProtocolContext) (rho : F) : (participantInterface F G).Op :=
   .send (ty := .field "bls12-381.fr")
     (qualifyProtocolSite ctx.applicationPrefix (encodedLabel "output_delivery" ++ "_0")) (ctx.roles 0) rho

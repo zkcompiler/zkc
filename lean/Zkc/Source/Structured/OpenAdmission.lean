@@ -1,6 +1,7 @@
 module
 
-public import Zkc.Source.Structured.RepeatAdmission
+public import Zkc.Source.Structured.ServiceAdmission
+public import Zkc.Source.Structured.OracleProtocolAdmission
 
 @[expose] public section
 
@@ -13,18 +14,54 @@ def Relation.valid (relation : Relation) : Bool :=
   relation.purposes.length == relation.inputs.length &&
   relation.purposes.all (fun purpose => ["parameter", "statement", "witness"].contains purpose)
 
+def resolveIndexService (snapshot : Snapshot) (function : Function)
+    (interface : ProtocolInterface) (inputScopes : List (List Nat))
+    (origins : List (Option Nat)) (descriptor : Descriptor) (owner contract : String)
+    (arguments results : List Ty) (operands : List Nat) : Except String (Nat × ServiceOp) := do
+  let owner ← resolveRole interface.roles owner
+  let operation ← match descriptor with
+    | .sampleIndex .. => pure (ServiceOp.sampleIndex contract)
+    | .sampleIndices .. => pure (ServiceOp.sampleIndices contract)
+    | _ => throw "structured-index-service-kind"
+  if arguments != operation.arguments || results != [operation.result] then
+    throw "structured-index-service-signature"
+  let some operand := operands.head? | throw "structured-index-service-signature"
+  let some (some input) := origins[operand]? | throw "structured-service-root"
+  if function.inputs[input]? != some (.service contract) then throw "structured-service-contract"
+  if inputScopes[input]? != some [owner] then throw "structured-service-owner"
+  let some service := snapshot.catalogue.services.find? (·.contract == contract) |
+    throw "structured-service-contract"
+  if !service.methods.contains operation.method then throw "structured-service-method"
+  snapshot.catalogue.require service.sampled .field
+    (if operation.method == "index" then "IndexRandomness" else "IndexBlockRandomness")
+  return (owner, operation)
+
 def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     (function : Function) (headers : List ProtocolSignature)
     (interface : ProtocolInterface) (inputScopes : List (List Nat))
     (context : List Ty) (origins : List (Option Nat)) (facts : Facts) (identities : List Nat)
     (descriptor : Descriptor) (operands : List Nat) (results : List Ty) (site : String) :
     LowerM ProtocolOp := do
-  if !validRefs operands || !validTypes results || results.any Ty.isForeignHandle then
+  if !validRefs operands || !validTypes results ||
+      (results.any Ty.isForeignHandle && !descriptor.protocolLogicalTransport) then
     throw "structured-protocol-signature"
   if !site.isEmpty && !validProtocolIdentifier site then throw "structured-site"
   let arguments ← typesAt context operands
   let role := resolveRole interface.roles
   match descriptor with
+  | .oracle descriptor =>
+    let op ← resolveOracleProtocolOp snapshot interface descriptor
+    let required := match op with
+      | .send .. | .query .. | .sequenceAppend .. | .sequenceAt .. => true
+      | _ => false
+    if !required && !site.isEmpty then throw "oracle-protocol-unexpected-site"
+    recordSite site required
+    if arguments != op.arguments || results != op.results then
+      throw "oracle-protocol-signature"
+    let cursor := (← get).oracleCursor
+    let location ← sourceOracleLocation snapshot function cursor descriptor
+    modify fun state ↦ {state with oracleCursor := cursor + 1}
+    return .oracle op location
   | .protocolRepeat carried maximum roles stateScopes =>
     recordSite site true
     return .repeat (← resolveRepeatSpec interface arguments results carried maximum roles stateScopes) site
@@ -57,6 +94,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     if sender == receiver then throw "structured-exchange-endpoints"
     let [type] := arguments | throw "structured-exchange-signature"
     if type.isHandle then throw "structured-service-use"
+    if type.containsPolynomial then throw "structured-polynomial-local"
     return .exchange type sender receiver site
   | .restrict selected =>
     if !site.isEmpty then throw "structured-pure-site"
@@ -68,10 +106,15 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     if !site.isEmpty then throw "structured-pure-site"
     recordSite site false
     let [type] := results | throw "structured-assemble-signature"
-    if type.isHandle then throw "structured-assemble-type"
+    if type.isHandle || type.containsPolynomial then throw "structured-assemble-type"
     let roles ← resolveScope interface.roles selected
     if arguments != roles.map (fun _ => type) then throw "structured-assemble-signature"
     return .assemble type roles
+  | .sampleIndex owner contract | .sampleIndices owner contract =>
+    recordSite site true
+    let (owner, operation) ← resolveIndexService snapshot function interface inputScopes origins
+      descriptor owner contract arguments results operands
+    return .query owner operation site
   | .draw owner field =>
     recordSite site true
     snapshot.catalogue.require field .field "Field"
@@ -90,7 +133,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     recordSite site false
     let some declaration := snapshot.relations.find? (·.name == relation) |
       throw "structured-unknown-relation"
-    if arguments != declaration.inputs || !results.isEmpty || arguments.any Ty.isHandle then
+    if arguments != declaration.inputs || !results.isEmpty || (arguments.any Ty.isHandle || arguments.any Ty.containsPolynomial) then
       throw "structured-statement-signature"
     if selectors.length != operands.length || function.outputs[acceptance]? != some .boolean then
       throw "structured-statement-acceptance"
@@ -191,6 +234,7 @@ def lowerProtocol (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (headers : List ProtocolSignature)
     (function : Function) (signature : ProtocolSignature) : Except String (RawRegion Ty ProtocolOp) := do
   let some interface := function.interface | throw "structured-protocol-interface"
+  checkServiceBlock (List.replicate function.inputs.length none) function.body
   (lowerProtocolBlock snapshot domains summaries function headers interface signature.inputScopes
     Limits.nesting .entryReturn function.inputs ((List.range function.inputs.length).map some) []
     (List.range interface.roles.length) function.body).run' {}
@@ -257,9 +301,7 @@ theorem lowerProtocolRegions_application_origin {child : ProtocolChild} {op : Pr
     dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
       MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
     repeat' first | contradiction | split at accepted
-  all_goals first
-    | (cases accepted; simp [RawRegions.operations] at occurs)
-    | skip
+  all_goals try (cases accepted; simp [RawRegions.operations] at occurs)
   obtain ⟨raw, middle, lowered, output⟩ := lowerM_bind_ok accepted
   cases Except.ok.inj output
   simp only [RawRegions.operations, List.append_nil] at occurs
@@ -303,7 +345,7 @@ theorem lowerProtocolInstructionsWith_application_origin {snapshot : Snapshot} {
       | split at accepted
       | (dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
           MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
-         first | contradiction | split at accepted)
+         try split at accepted)
     all_goals cases accepted; simp [RawRegion.operations] at occurs
   | cons instruction rest ih =>
     cases instruction with
@@ -460,7 +502,8 @@ theorem resolveProtocolOp_application {snapshot : Snapshot} {domains : List Doma
           function.inputs[input]? = some type ∧
           (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
           scopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
-  by_cases badSignature : (!validRefs operands || !validTypes results || results.any Ty.isForeignHandle) = true
+  by_cases badSignature : (!validRefs operands || !validTypes results ||
+      (results.any Ty.isForeignHandle && !descriptor.protocolLogicalTransport)) = true
   · simp [resolveProtocolOp, badSignature, StateT.run, bind, StateT.bind, pure,
       throw, throwThe, MonadExceptOf.throw, StateT.lift, Except.bind] at accepted
   by_cases badSite : (!sourceSite.isEmpty && !validProtocolIdentifier sourceSite) = true
@@ -475,7 +518,7 @@ theorem resolveProtocolOp_application {snapshot : Snapshot} {domains : List Doma
     | split at accepted
     | (dsimp only [StateT.bind, StateT.pure, StateT.lift, Except.bind,
         Except.pure, bind, pure, liftM, monadLift, MonadLift.monadLift] at accepted
-       first | contradiction | split at accepted)
+       try split at accepted)
   all_goals
     have same := congrArg Prod.fst (Except.ok.inj accepted)
     cases same
@@ -510,8 +553,7 @@ theorem resolveProtocolOp_application {snapshot : Snapshot} {domains : List Doma
               | contradiction
               | split at checked
               | (dsimp only [StateT.bind, StateT.pure, StateT.lift, Except.bind,
-                  Except.pure, bind, pure] at checked
-                 first | contradiction | split at checked)
+                  Except.pure, bind, pure] at checked)
             all_goals
               have same := congrArg Prod.fst (Except.ok.inj checked)
               cases same
@@ -574,6 +616,7 @@ theorem lowerProtocol_application {snapshot : Snapshot} {domains : List DomainSp
     cases bodyEq : function.body with
     | block instructions terminal =>
       simp only [lowerProtocol, interfaceEq, bodyEq] at accepted
+      have accepted := checkedServiceContinuation accepted
       obtain ⟨final, lowered⟩ := lowerM_run'_ok accepted
       obtain ⟨offset, context, facts, identities, before, after, descriptor, operands,
         results, regions, sourceSite, member, resolved⟩ :=
@@ -622,6 +665,7 @@ theorem lowerProtocol_application_source {snapshot : Snapshot} {domains : List D
   | none => simp [lowerProtocol, interfaceEq] at accepted
   | some interface =>
     simp only [lowerProtocol, interfaceEq] at accepted
+    have accepted := checkedServiceContinuation accepted
     obtain ⟨final, lowered⟩ := lowerM_run'_ok accepted
     let P := fun origins : List (Option Nat) =>
       ∀ input, some input ∈ origins → input < function.inputs.length
@@ -664,9 +708,7 @@ theorem lowerProtocolRegions_statementFree {child : ProtocolChild} {op : Protoco
     dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
       MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
     repeat' first | contradiction | split at accepted
-  all_goals first
-    | (cases accepted; simp_all)
-    | skip
+  all_goals try (cases accepted; simp_all)
   obtain ⟨raw, middle, lowered, output⟩ := lowerM_bind_ok accepted
   simpa only [List.flatMap_cons, List.flatMap_nil, List.append_nil, WireRegion.storedInstructions]
     using childrenFree lowered
@@ -744,6 +786,7 @@ theorem lowerProtocol_statementFree {snapshot : Snapshot} {domains : List Domain
   | some interface =>
     simp only [lowerProtocol, interfaceEq, StateT.run', Functor.map,
       Except.map] at accepted
+    have accepted := checkedServiceContinuation accepted
     split at accepted
     · contradiction
     · rename_i result lowered

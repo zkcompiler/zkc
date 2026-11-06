@@ -75,10 +75,10 @@ def run : IO Unit := do
   test "constant-needs-parameter" (refusal
     (resolvePrimitive (snapshot [constant]) "exec.apply" constant.name []) "structured-primitive-parameters")
   test "constant-needs-one-parameter" (refusal
-    (resolvePrimitive (snapshot [constant]) "exec.apply" constant.name ["0", "1"])
+    (resolvePrimitive (snapshot [constant]) "exec.apply" constant.name [.natural "0", .natural "1"])
     "structured-primitive-parameters")
   test "none-schema-refuses-natural" (refusal
-    (resolvePrimitive (snapshot [add]) "exec.apply" add.name ["1"]) "structured-primitive-parameters")
+    (resolvePrimitive (snapshot [add]) "exec.apply" add.name [.natural "1"]) "structured-primitive-parameters")
   let extension := "koala-bear.ext8-binomial3"
   let base := "koala-bear"
   let embed ← decoded (wire "field.embed" [strs ["domain", "Field", extension]]

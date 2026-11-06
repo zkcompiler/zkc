@@ -329,6 +329,12 @@ public:
       if (isTotal(op)) {
         if (isa<data::BranchOp>(op) && failed(helpers.verifySelected(op)))
           return failure();
+        // Strict operations need a common owner even for an empty result tuple.
+        BitVector required(count, true);
+        for (auto operand : op->getOperands())
+          required &= env.values.lookup(operand);
+        if (required.none())
+          return refuse(op, "operation has no available component");
         for (auto [index, output] : enumerate(op->getResults())) {
           BitVector available(count, true);
           auto inputs = operandDependencies(op, index);

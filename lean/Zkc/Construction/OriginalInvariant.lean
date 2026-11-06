@@ -13,6 +13,49 @@ namespace Zkc.Construction.Original
 open Zkc.Source
 variable {carriers : Structured.Carriers} {A : Type}
 
+private theorem yields_all {I : PIR.Signature} {B : Type} (process : PIR.Process I B) :
+    PIR.Yields (fun _ => True) process := by
+  induction process with
+  | done => trivial
+  | halt => trivial
+  | call _ _ ih => exact ih
+
+private theorem queryRequest_frames (state : State carriers) (origin : Origin) (request : Request) :
+    PIR.Yields (fun result => result.2.frames = state.frames) (queryRequest state origin request) := by
+  unfold queryRequest
+  exact (yields_all _).bind (fun _ _ => rfl)
+
+private theorem receiveRequest_frames (routing : Routing) (state : State carriers)
+    (ty : Structured.Ty) (site : String) (sender : Nat) :
+    PIR.Yields (fun result => result.2.frames = state.frames)
+      (receiveRequest routing state ty site sender) := by
+  unfold receiveRequest
+  split
+  · trivial
+  · split
+    · apply (queryRequest_frames state _ _).bind
+      rintro ⟨value, final⟩ frames
+      dsimp only
+      split
+      · trivial
+      · dsimp only [record, PIR.Process.bind, PIR.Yields]
+        intro _
+        exact frames
+    · trivial
+
+private theorem service_frames (routing : Routing) (state : State carriers)
+    (site contract : String) (request : Request) (handle : Nat) :
+    PIR.Yields (fun result => result.2.frames = state.frames)
+      (service routing state site contract request handle) := by
+  unfold service
+  split
+  · exact queryRequest_frames _ _ _
+  · split
+    · split
+      · trivial
+      · exact (yields_all _).bind (fun _ _ => rfl)
+    · trivial
+
 private theorem receive_frames (routing : Routing) (state : State carriers)
     (ty : Structured.Ty) (site : String) (sender : Nat) :
     PIR.Yields (fun result => result.2.frames = state.frames) (receive routing state ty site sender) := by
@@ -21,15 +64,18 @@ private theorem receive_frames (routing : Routing) (state : State carriers)
       dsimp only [receive]
       simp only [mode]
       cases ty <;> try trivial
-      dsimp only
-      split
-      · trivial
-      · unfold queryField
+      case field field =>
+        dsimp only
         split
-        · dsimp only [PIR.Process.bind, record, PIR.Yields]
-          intros
-          trivial
         · trivial
+        · unfold queryField
+          split
+          · dsimp only [PIR.Process.bind, record, PIR.Yields]
+            intros
+            trivial
+          · trivial
+      case index => exact receiveRequest_frames _ _ _ _ _
+      case indices => exact receiveRequest_frames _ _ _ _ _
   | validator =>
       dsimp only [receive]
       simp only [mode]
@@ -92,9 +138,20 @@ theorem action_frames (routing : Routing)
           split
           · intro value; rfl
           · trivial
-  | query site field args =>
-      cases args with
-      | cons handle tail => cases tail; exact query_frames _ _ _ _ _
+  | query site operation args =>
+      cases operation with
+      | draw field =>
+          cases args with
+          | cons handle tail => cases tail; exact query_frames _ _ _ _ _
+      | sampleIndex contract =>
+          cases args with
+          | cons handle tail => cases tail with
+            | cons bound rest => cases rest; exact service_frames routing state site contract (.sampleIndex bound) handle
+      | sampleIndices contract =>
+          cases args with
+          | cons handle tail => cases tail with
+            | cons bound tail => cases tail with
+              | cons count rest => cases rest; exact service_frames routing state site contract (.sampleIndices bound count) handle
 
 /-- A normalized source view with ordinary participant actions preserves frames
 on every successful reply path. No condition excludes stopped executions. -/

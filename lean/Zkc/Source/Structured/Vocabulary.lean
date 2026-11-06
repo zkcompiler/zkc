@@ -29,6 +29,7 @@ exact slot identity: it has no data payload, codec or algebraic meaning. -/
 mutual
   inductive Ty where
     | boolean | index | field (domain : String) | vector (domain : String)
+    | polynomial (domain : String)
     | group (domain : String) | groups (domain : String) | indices
     | service (contract : String)
     | oracle (kind : OracleKind)
@@ -151,9 +152,17 @@ inductive OracleDescriptor where
   | sequenceLength (kind : OracleKind) (maximum : Nat)
   deriving DecidableEq, Repr
 
+/-- Typed wire parameters remain data through admission. In particular, field
+literals are never serialized and reparsed on a kernel reduction path.
+Canonical digits and the nominal field are checked by the selected binding. -/
+inductive PrimitiveParameter where
+  | natural (decimal : String)
+  | fieldLiteral (domain encoding digits : String)
+  deriving DecidableEq, Repr
+
 inductive Descriptor where
   | oracle (value : OracleDescriptor)
-  | exec (operation binding : String) (parameters : List String)
+  | exec (operation binding : String) (parameters : List PrimitiveParameter)
   | indexConstant (decimal : String)
   | indexEqual
   | indexLess
@@ -190,6 +199,8 @@ inductive Descriptor where
   | restrict (roles : List String)
   | assemble (roles : List String)
   | exchange (sender receiver : String)
+  | sampleIndex (owner contract : String)
+  | sampleIndices (owner contract : String)
   | draw (owner field : String)
   | statement (relation : String) (selectors : List String) (acceptance : Nat) (target : Option String)
   deriving DecidableEq, Repr

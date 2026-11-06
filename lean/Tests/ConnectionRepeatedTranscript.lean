@@ -188,7 +188,7 @@ def sourceStep (site : String) (guard : Bool) : PIR.Process (I model)
     (Values (Component model.Value) stateTypes) :=
   if guard then
     .call (.action (.receive (.field field) (qualified site "m") 0)) fun first =>
-    .call (.action (.query (qualified site "q") field (.cons 73 .nil))) fun last =>
+    .call (.action (.query (qualified site "q") (.draw field) (.cons 73 .nil))) fun last =>
     .call (.action (.send (qualified site "d") 0 last)) fun _ =>
       .done (.cons (some first) (.cons (some last) .nil))
   else .halt .reject

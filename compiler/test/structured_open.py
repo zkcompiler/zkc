@@ -289,11 +289,13 @@ with case('closed-finite-regression-and-owned-local-finite-in-open-root'):
     export(multi)
     assert run(multi, [['3'], True], 'V') == returned([None])
     assert run(multi, [['3'], True])[1] == ['stopped', 'abort', 'body_stop']
-    unsupported = total.replace('roles=["P"]', 'roles=["P","V"]', 1)
-    export(unsupported, refusal='structured-source-multirole-math')
-    run(unsupported, [[], '1', '2'], refusal='structured-reference-unsupported')
+    shared = total.replace('roles=["P"]', 'roles=["P","V"]', 1)
+    export(shared)
+    assert run(shared, [[], '1', '2']) == returned(['1', '2'])
+    assert run(shared, [['3', '5', '7'], '1', '2']) == returned(['5', '7'])
+    assert run(shared, [None, None, None], 'V') == returned([None, None])
 
-with case('multi-role-math-finite-refusal-follows-retained-calls-and-dormant-roots'):
+with case('multi-role-math-finite-admission-follows-retained-calls-and-dormant-roots'):
     operation = '"data.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)'
     source = total.replace(operation, 'func.call @fold_helper(%xs,%a,%b) : (!V,!F,!F)->(!F,!F)')
     helper = f'''func.func private @fold_helper(%xs:!V,%a:!F,%b:!F) -> (!F,!F) {{
@@ -304,15 +306,17 @@ with case('multi-role-math-finite-refusal-follows-retained-calls-and-dormant-roo
     export(source)
     assert run(source, [['3', '5', '7'], '1', '2'], closed=True) == ['returned', ['5', '7']]
     source = source.replace('roles=["P"]', 'roles=["P","V"]', 1)
-    export(source, refusal='structured-source-multirole-math')
-    run(source, [[], '1', '2'], refusal='structured-reference-unsupported')
+    export(source)
+    assert run(source, [[], '1', '2']) == returned(['1', '2'])
+    assert run(source, [['3', '5', '7'], '1', '2']) == returned(['5', '7'])
+    assert run(source, [None, None, None], 'V') == returned([None, None])
     selected_root = '''"protocol.func"() ({
       %yes = arith.constant true
       "protocol.return"(%yes) : (i1)->()
     }) {sym_name="selected",origin=["selected",[]],function_type=()->i1,roles=["Reader"],input_roles=[],output_roles=[["Reader"]]} : ()->()'''
     source = source.replace('module { "protocol.module"() ({', 'module { "protocol.module"() ({\n' + selected_root)
-    export(source, symbol='selected', refusal='structured-source-multirole-math')
-    run(source, [], 'Reader', symbol='selected', refusal='structured-reference-unsupported')
+    export(source, symbol='selected')
+    assert run(source, [], 'Reader', symbol='selected') == returned([True])
 
 for items in [[], ['2'], ['2', '3', '5']]:
     for enabled in [False, True]:

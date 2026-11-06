@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.ComponentDeclarations
 public import Zkc.Source.Structured.Availability
 public import Zkc.Source.Structured.ApplicationMetadata
+public import Zkc.Source.Structured.OracleAdmission
 public import Zkc.Specification
 
 @[expose] public section
@@ -19,6 +20,7 @@ structure UnitPayload where
   available : checkUnitAvailability definitions protocols = .ok ()
   realizationClosed : PreparationClosed .realization definitions (preparationHelpers .realization definitions)
   mapClosed : PreparationClosed .map definitions (preparationHelpers .map definitions)
+  oracleUnit : Option CheckedOracleUnit := none
 
 theorem UnitPayload.rootsLinked (payload : UnitPayload) :
     ∀ root ∈ payload.protocols, ∀ helper ∈ root.helpers,
@@ -107,7 +109,8 @@ def checkUnitHeaders (snapshot : Snapshot) :
 
 def checkUnitHelpers (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) : Except String (List OrderedDefinition) := do
-  let definitions ← (snapshot.definitions.filter (·.kind != .protocol)).mapM
+  let definitions ← (snapshot.definitions.filter (fun definition ↦
+    definition.kind != .protocol && definition.kind != .oracle)).mapM
     (checkDefinition snapshot domains summaries)
   let ordered ← orderDefinitions definitions.length definitions []
   let definitions := ordered.map (·.definition)
@@ -128,9 +131,20 @@ def checkApplicationMetadata (snapshot : Snapshot) : Except String Unit := do
   let _ ← checkNativeApplicationBudgets snapshot
   checkEffectiveProtocolSites snapshot
 
+/-- Logical operations without a virtual declaration still use the same checked runtime
+unit. Dormant declarations and all stored nested callback types count as well. -/
+def Snapshot.requiresOracleRuntime (snapshot : Snapshot) : Bool :=
+  snapshot.definitions.any (fun definition ↦ definition.kind == .oracle) ||
+    snapshot.storedTypes.any (fun type ↦ match type with
+      | .oracle _ | .oracleSequence .. => true
+      | _ => false)
+
 def linkUnitPayload (snapshot : Snapshot) (ordered : List OrderedDefinition)
     (protocols : List CheckedProtocol) : Except String UnitPayload := do
   let definitions := ordered.map (·.definition)
+  let oracleUnit ← if snapshot.requiresOracleRuntime then
+    (checkOracleUnit snapshot ((definitions.filter (·.kind == .math)).map (·.name))).map some
+    else pure none
   let realizationHelpers := preparationHelpers .realization definitions
   let mapHelpers := preparationHelpers .map definitions
   if realizationClosed : PreparationClosed .realization definitions realizationHelpers then
@@ -143,7 +157,7 @@ def linkUnitPayload (snapshot : Snapshot) (ordered : List OrderedDefinition)
             match available : checkUnitAvailability definitions protocols with
             | .error code => throw code
             | .ok () => return ⟨definitions, protocols, ⟨entryIndex, entryPresent⟩,
-                linked, protocolsLinked, available, realizationClosed, mapClosed⟩
+                linked, protocolsLinked, available, realizationClosed, mapClosed, oracleUnit⟩
           else throw "structured-entry"
         else throw "structured-root-link"
       else throw "structured-helper-link"
@@ -203,12 +217,24 @@ theorem linkUnitPayload_fields {snapshot : Snapshot} {ordered : List OrderedDefi
     payload.definitions = ordered.map (·.definition) ∧ payload.protocols = protocols ∧
     payload.entry.name = snapshot.entry := by
   unfold linkUnitPayload at accepted
-  simp only [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at accepted
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at accepted
   repeat' first | contradiction | split at accepted
   all_goals
     cases accepted
     refine ⟨rfl, rfl, ?_⟩
     exact of_decide_eq_true (List.findIdx_getElem (p := fun p : CheckedProtocol => p.name == snapshot.entry))
+
+theorem linkUnitPayload_oracleSource {snapshot : Snapshot} {ordered : List OrderedDefinition}
+    {protocols : List CheckedProtocol} {payload : UnitPayload} {unit : CheckedOracleUnit}
+    (accepted : linkUnitPayload snapshot ordered protocols = .ok payload)
+    (selected : payload.oracleUnit = some unit) : unit.snapshot = snapshot := by
+  unfold linkUnitPayload at accepted
+  simp only [bind, Except.bind, Except.map, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at accepted
+  repeat' first | contradiction | split at accepted
+  all_goals cases accepted
+  all_goals first
+    | contradiction
+    | (cases selected; apply checkOracleUnit_some_source; assumption)
 
 /-- Successful admission exposes the actual phases, not assumed correspondence. -/
 theorem check_payload_stages {snapshot : Snapshot} {payload : UnitPayload}
@@ -346,6 +372,12 @@ theorem check_preparationRoots {snapshot : Snapshot} {program : Program}
     (accepted : check snapshot = .ok program) :
     PreparationRootsSelected snapshot.definitions program.payload.definitions :=
   check_payload_preparationRoots (check_ok_inversion accepted).2
+
+theorem Imported.oracleSource {snapshot : Snapshot} (imported : Imported snapshot)
+    {unit : CheckedOracleUnit} (selected : imported.program.payload.oracleUnit = some unit) :
+    unit.snapshot = snapshot := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, linked⟩ := check_payload_stages imported.admission
+  exact linkUnitPayload_oracleSource linked selected
 
 theorem Imported.preparationRoots {snapshot : Snapshot} (imported : Imported snapshot) :
     PreparationRootsSelected snapshot.definitions imported.program.payload.definitions :=
@@ -558,7 +590,7 @@ theorem Imported.protocolApplication_callee_statementFree {snapshot : Snapshot}
   intro instruction present
   have absent := topFree instruction present
   cases instruction with
-  | instruction descriptor _ _ _ _ => cases descriptor <;> first | rfl | exact absent
+  | instruction descriptor _ _ _ _ => cases descriptor <;> simp_all [Instruction.isStatement]
 
 theorem Imported.protocolSelection {snapshot : Snapshot} (imported : Imported snapshot) :
     imported.program.payload.entry.name = snapshot.entry := by

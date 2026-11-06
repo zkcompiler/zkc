@@ -20,11 +20,12 @@ noncomputable def postprocessedHandler : PIR.MonadHandler ProbComp Actual Bool S
   | .receive (.field _) site _, s =>
       pure ⟨.returned (if site = names.low then 0 else 1), s, [site]⟩
   | .receive _ _ _, s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
-  | .query _ _ _, s =>
+  | .query _ (.draw _) _, s =>
       if s then pure ⟨.returned (0 : F), s, ["query"]⟩
       else do
         let r ← ($ᵗ F)
         pure ⟨.returned (1-r), s, ["query"]⟩
+  | .query .., s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
   | .send .., s => pure ⟨.returned (), s, ["delivered"]⟩
 
 def afterQuery (_ : F) : Phase Bool String Unit := fun s =>
@@ -39,7 +40,6 @@ theorem postprocessed_local_law (s : Bool) (reachable : s = false) :
     Bool.false_eq_true, ite_eq_right, not_false_eq_true, freshQuery, noOp,
     result, PIR.Execution.followM, afterQuery, bind_assoc, pure_bind, List.nil_append,
     List.append_nil]
-  dsimp only [services] at *
   exact evalDist_bind_bijective_of_uniform ($ᵗ F) SampleableType.evalDist_uniformSample
     (fun r : F => 1-r)
     (show Function.Involutive (fun r : F => 1-r) from fun r => by ring).bijective

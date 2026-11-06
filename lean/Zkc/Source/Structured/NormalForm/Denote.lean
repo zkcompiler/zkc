@@ -196,8 +196,8 @@ def Form.denoteWithOn {A : Type}
       (actions (.receive ty (qualifyProtocolSite context.applicationPrefix site) (context.roles peer))).bind
         fun reply => next.denoteWithOn leaf (.cons reply binders)
   | _, .query site request args next, binders =>
-      (actions (.query (qualifyProtocolSite context.applicationPrefix site) request
-        (Terms.eval results args binders))).bind fun reply => next.denoteWithOn leaf (.cons reply binders)
+      ((serviceAction (.query (qualifyProtocolSite context.applicationPrefix site) request
+        (Terms.eval results args binders))).interpret actions).bind fun reply => next.denoteWithOn leaf (.cons reply binders)
   | _, .split subject absent present, binders =>
       match subject.eval results binders with
       | none => absent.denoteWithOn leaf binders
@@ -321,7 +321,7 @@ def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Val
   | .index, value => some value
   | .boolean, value => some (value == 1)
   | .field domain, value => some (fieldLiteral model.toFieldModel domain value)
-  | .vector _, _ => none
+  | .vector _, _ | .polynomial _, _ => none
   | .group _, _ => none
   | .service _, _ => none
   | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _

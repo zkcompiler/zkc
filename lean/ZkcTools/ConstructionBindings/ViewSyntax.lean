@@ -40,6 +40,14 @@ def action (instruction : Instruction) (bodies : List (String × String)) : Exce
       let args := [literal suite, literal field, literal template, toString state,
         toString coordinates, declared]
       .ok (app "View.challenge" ("context" :: args), app "Correspondence.challenge" args)
+  | .indexChallenge suite bound template, [state, boundReference, coordinates], [], [] =>
+      let args := [literal suite, toString bound, literal template, toString state,
+        toString boundReference, toString coordinates, declared]
+      .ok (app "View.indexChallenge" ("context" :: args), app "Correspondence.indexChallenge" args)
+  | .blockChallenge suite bound count template, [state, coordinates], [], [] =>
+      let args := [literal suite, toString bound, toString count, literal template, toString state,
+        toString coordinates, declared]
+      .ok (app "View.blockChallenge" ("context" :: args), app "Correspondence.blockChallenge" args)
   | .localService port request template coordinates, _, [], [] =>
       let args := [literal port, literal request, literal template, literal coordinates,
         references, declared]

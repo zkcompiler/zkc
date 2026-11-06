@@ -18,13 +18,13 @@ inductive Trace where
 def handler : PIR.Handler signature Unit Trace
   | .enter frame, state => ⟨.returned (), state, [.entered frame.site frame.index]⟩
   | .leave frame, state => ⟨.returned (), state, [.left frame.site frame.index]⟩
-  | .action (.query _ field _), state => ⟨.returned (7 : Nat), state, [.queried field]⟩
+  | .action (.query _ (.draw field) _), state => ⟨.returned (7 : Nat), state, [.queried field]⟩
   | .action _, state => ⟨.stopped .refused, state, []⟩
 
 def spec : RepeatSpec := ⟨[], [], [0], [], 2⟩
 
 def query (field : String) : PIR.Process signature Unit :=
-  .call (.action (.query "challenge" field (.cons 0 .nil))) fun _ => .done ()
+  .call (.action (.query "challenge" (.draw field) (.cons 0 .nil))) fun _ => .done ()
 
 def body : RegionFunction (Component carriers.Value) signature ([.index], []) :=
   fun _ => (query "base").bind fun _ => .done .nil

@@ -61,7 +61,7 @@ theorem first_body {bindings : MultilinearCollectBodies.Bindings}
       Nat.lt_of_le_of_lt (by simp only [List.length_take]; exact Nat.min_le_right _ _) lengthBound
     have mapped := map (xs.take (xs.length / 2)) (xs.drop (xs.length / 2)) r sameLength lowBound
     have subBound : dimension - 1 < indexLimit := Nat.lt_of_le_of_lt (Nat.sub_le _ _) dimensionBound
-    simp only [positive, splitShape, ite_true, PIR.Process.bind, Values.get, Primitive.evaluate, checkedIndices, dimensionBound,
+    simp only [positive, splitShape, ite_true, PIR.Process.bind, Values.get, Primitive.evaluate, Primitive.evaluateOn, checkedIndices, dimensionBound,
       show 1 < indexLimit by decide +kernel, and_self, ite_true, primitiveOutcome]
     simp only [show 1 ≤ dimension by omega, ite_true, PIR.Process.bind, Values.get, inputs, restrictValues]
     change (invoke table (MultilinearCollectBodies.mapHelper bindings)

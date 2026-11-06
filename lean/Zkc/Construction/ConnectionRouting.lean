@@ -27,6 +27,15 @@ def Routing.self (routing : Routing) : Nat :=
 /-- A reached action has all the associations required by its fixed profile.
 No action can become a successful refusal merely because discovery omitted it.
 This is a structural precondition, not a randomness or cryptographic law. -/
+def TypedServiceCovered (routing : Routing) (frames : Frames) (site contract : String)
+    (request : Request) (handle : Nat) : Prop :=
+  request.valid = true ∧
+    ((routing.mode = .validator ∧ contract = routing.context.contract ∧ ∃ origin,
+      routing.serviceRequest frames site request handle = some origin ∧ origin.request = some request) ∨
+    (∃ port origin, routing.localRequest frames site request handle = some (port, origin) ∧
+      port.contract = contract ∧ origin.request = some request))
+
+/-- Full reached-action coverage, including exact typed service requests. -/
 def ActionCovered (routing : Routing) (frames : Frames) :
     (Structured.participantInterfaceOn carriers).Op → Prop
   | .receive ty site sender =>
@@ -36,17 +45,24 @@ def ActionCovered (routing : Routing) (frames : Frames) :
           | .field field => ∃ draw message,
               routing.delivery frames site field sender = some (draw, message) ∧
               draw.request = some (.draw field)
+          | .index | .indices => ∃ request query message,
+              routing.typedDelivery frames site ty sender = some (request, query, message) ∧
+              request.sort = ty ∧ request.valid = true ∧ query.request = some request
           | _ => False
       | _, _ => ty.isHandle = false ∧
           ∃ origin, routing.message frames site sender routing.self = some origin
   | @Participant.Action.send _ _ _ _ ty site receiver _ =>
       ty.isHandle = false ∧
         ∃ origin, routing.message frames site routing.self receiver = some origin
-  | .query site field (.cons handle .nil) =>
+  | .query site (.draw field) (.cons handle .nil) =>
       (routing.mode = .validator ∧ ∃ origin,
         routing.draw frames site field handle = some origin ∧ origin.request = some (.draw field)) ∨
       (∃ port origin, routing.local frames site field handle = some (port, origin) ∧
         origin.request = some (.draw field))
+  | .query site (.sampleIndex contract) (.cons handle (.cons bound .nil)) =>
+      TypedServiceCovered routing frames site contract (.sampleIndex bound) handle
+  | .query site (.sampleIndices contract) (.cons handle (.cons bound (.cons count .nil))) =>
+      TypedServiceCovered routing frames site contract (.sampleIndices bound count) handle
 
 /-- Complete reached-source coverage. Stops retain their reason and need no
 unreachable suffix. Calls/repeats compose without unrolling runtime counts. -/

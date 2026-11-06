@@ -115,6 +115,9 @@ theorem step_local (program : Structured.Program) (context : Context)
       all_goals
         simp only [Domain.step, List.length_nil, List.length_cons, List.range'_succ, List.range'_zero,
           Nat.zero_add, Nat.reduceAdd, List.getElem?_cons_zero, List.getElem?_cons_succ]
+      all_goals try unfold Domain.challengeRequest
+      all_goals try unfold Domain.requestOperands
+      all_goals try unfold Domain.requestValue
       all_goals try rw [va]
       all_goals try rw [vb]
       all_goals try rw [vc]

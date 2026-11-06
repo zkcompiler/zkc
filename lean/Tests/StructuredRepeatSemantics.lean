@@ -187,7 +187,7 @@ private def serviceBody : Region protocolDialect [.index, service, service] [] :
     (.letOp (.draw 0 "bls12-381.fr" "second")
       (.cons (.there (.there (.there .here))) .nil) .nil (.ret .nil))
 private def queryProcess (site : String) (handle : Nat) : PIR.Process (participantInterface Int Int) Int :=
-  .call (.query site "bls12-381.fr" (.cons handle .nil)) .done
+  .call (.query site (.draw "bls12-381.fr") (.cons handle .nil)) .done
 private def aliasProcess (first second : Nat) : PIR.Process (participantInterface Int Int) Unit :=
   (queryProcess "prelude" first).bind fun _ =>
     ((denoteRepeat serviceSpec {} 0 (some 2) .nil (.cons (some first) (.cons (some second) .nil))
@@ -200,21 +200,23 @@ private def aliasProcess (first second : Nat) : PIR.Process (participantInterfac
 same-owner alias is one handle in six ordered queries, including prelude/suffix. -/
 theorem aliased_service_order (handle : Nat) :
     aliasProcess handle handle =
-      .call (.query "prelude" "bls12-381.fr" (.cons handle .nil)) (fun _ =>
-      .call (.query "first" "bls12-381.fr" (.cons handle .nil)) (fun _ =>
-      .call (.query "second" "bls12-381.fr" (.cons handle .nil)) (fun _ =>
-      .call (.query "first" "bls12-381.fr" (.cons handle .nil)) (fun _ =>
-      .call (.query "second" "bls12-381.fr" (.cons handle .nil)) (fun _ =>
-      .call (.query "suffix" "bls12-381.fr" (.cons handle .nil)) (fun _ => .done ())))))) := rfl
+      .call (.query "prelude" (.draw "bls12-381.fr") (.cons handle .nil)) (fun _ =>
+      .call (.query "first" (.draw "bls12-381.fr") (.cons handle .nil)) (fun _ =>
+      .call (.query "second" (.draw "bls12-381.fr") (.cons handle .nil)) (fun _ =>
+      .call (.query "first" (.draw "bls12-381.fr") (.cons handle .nil)) (fun _ =>
+      .call (.query "second" (.draw "bls12-381.fr") (.cons handle .nil)) (fun _ =>
+      .call (.query "suffix" (.draw "bls12-381.fr")
+        (.cons handle .nil)) (fun _ => .done ())))))) := rfl
 
 theorem distinct_service_order (first second : Nat) :
     aliasProcess first second =
-      .call (.query "prelude" "bls12-381.fr" (.cons first .nil)) (fun _ =>
-      .call (.query "first" "bls12-381.fr" (.cons first .nil)) (fun _ =>
-      .call (.query "second" "bls12-381.fr" (.cons second .nil)) (fun _ =>
-      .call (.query "first" "bls12-381.fr" (.cons first .nil)) (fun _ =>
-      .call (.query "second" "bls12-381.fr" (.cons second .nil)) (fun _ =>
-      .call (.query "suffix" "bls12-381.fr" (.cons first .nil)) (fun _ => .done ())))))) := rfl
+      .call (.query "prelude" (.draw "bls12-381.fr") (.cons first .nil)) (fun _ =>
+      .call (.query "first" (.draw "bls12-381.fr") (.cons first .nil)) (fun _ =>
+      .call (.query "second" (.draw "bls12-381.fr") (.cons second .nil)) (fun _ =>
+      .call (.query "first" (.draw "bls12-381.fr") (.cons first .nil)) (fun _ =>
+      .call (.query "second" (.draw "bls12-381.fr") (.cons second .nil)) (fun _ =>
+      .call (.query "suffix" (.draw "bls12-381.fr")
+        (.cons first .nil)) (fun _ => .done ())))))) := rfl
 
 /-- The closed profile refuses the callback before consulting operation shape. -/
 theorem closed_repeat_refused :

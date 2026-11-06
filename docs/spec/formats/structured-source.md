@@ -80,6 +80,7 @@ services have their own tags. This profile admits these types:
 | `["apply", "index", []]` | unsigned 64-bit index |
 | `["apply", "field", [["domain", "Field", domain-id]]]` | nominal scalar field |
 | `["apply", "vector", [["domain", "Field", domain-id]]]` | immutable vector over that field |
+| `["apply", "polynomial", [["domain", "Field", domain-id]]]` | normalized ascending coefficients (`poly.univariate`); zero is empty |
 | `["apply", "group", [["domain", "Group", domain-id]]]` | nominal group |
 | `["apply", "groups", [["domain", "Group", domain-id]]]` | immutable vector over that group |
 | `["apply", "indices", []]` | immutable ordered unsigned indices |
@@ -258,6 +259,8 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
 ["map", name, input-types, output-types, math-helper, rowwise]
 ```
 
+`!data.domain<T>` supplies an internal finite-iteration descriptor through these
+declarations; it is not a logical value type or an additional type constructor.
 Domain data references select exact input arguments. Domain references use a
 separate de Bruijn context: zero is the most recently constructed descriptor.
 Each constructor binds one descriptor; `returned-domain` selects the actual
@@ -506,7 +509,7 @@ An unconditional stop in a loop body uses `for`; `for_condition` requires a
 condition terminator. Nested branches in either form may still stop.
 
 Pure mathematical instructions have empty sites. Local call/control instructions retain
-their actual required sites, as do exchanges, draws and guards. Restrictions and
+their actual required sites, as do exchanges, service queries and guards. Restrictions and
 statements have empty sites. Nonempty sites are unique within a definition,
 including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 `incomplete` and `refused`.
@@ -546,6 +549,8 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["assemble", role-names]` | one same-typed ordinary input per distinct named role; select that role's component of its operand |
 | `["exchange", sender, receiver]` | sender alias and independent receiver value |
 | `["draw", owner, field]` | query the actual service handle operand; one field result |
+| `["sample_index", owner, contract]` | actual service and bound operands; one unsigned index result |
+| `["sample_indices", owner, contract]` | actual service, bound and count operands; one ordered indices result |
 | `["statement", relation, selectors, acceptance-index, target]` | ordered entry operands; zero results; target is a clause-name string or null |
 
 Every operand, result and region interface is checked against the selected
@@ -568,7 +573,7 @@ Ownership is checked independently of operand types:
 
 | Body kind | Admitted instructions |
 |---|---|
-| Protocol | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, assemble, exchange, draw, entry statement |
+| Protocol | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, assemble, exchange, service query, entry statement |
 | Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, closed Boolean branch, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
@@ -582,12 +587,15 @@ the original `protocol.guard`; projected participant guards are outside this sou
 stage. Conditional entry completion and construction-start
 selection remain outside this profile, including dormant definitions.
 
-Multi-role protocols cannot use Math folds or bounded reads, including through
-retained Math helpers. Those combinations require additional partial-component
-semantics. Existing single-role finite programs and owned Local finite work
-remain supported. Math calls propagate each input's availability through the
-actual helper body: `first(x,y) = x` does not require `y` at the same participant.
-Native verification also checks availability of unused intermediate expressions.
+Math folds and bounded reads are admitted in single-role and multi-role
+protocols, including retained Math helpers. Strict finite operations require
+all their operands at one executing role; their results are absent elsewhere.
+These requirements remain present for zero-result and unused computations.
+Math calls propagate each input's availability through the actual helper body:
+`first(x,y) = x` does not require `y` at the same participant. Native verification
+also checks availability of unused intermediate expressions. Finite execution
+retains empty iteration, optional results and reached stops; admission does not
+turn it into an unconditionally successful calculation.
 Local calls require all inputs at their owner, execute there even with zero
 results, and do not execute at other participants. Restriction and declared
 output scopes never erase preceding effects or stops.
@@ -910,6 +918,22 @@ admitted. Their native reference observations are bounded evidence. Full
 Sumcheck symbolic equations, affine resource models and production correspondence
 are separate obligations; no protocol-specific intrinsic supplies their meaning.
 
+### Index service queries
+
+`sample_index` and `sample_indices` use the actual installed service reference as
+operand zero. Their remaining SSA operands retain the positive constant u64 bound,
+and for `sample_indices` the positive constant u64 count, in that order. Native
+formation requires the service method, exact ordered input/result types and singleton
+owner. Unknown methods, capability mismatches and nonconstant/zero bounds or counts
+refuse. No bound is reconstructed from a vector length or sequence capacity.
+
+One scalar query returns one uniform index in `[0,bound)`. One block query returns
+an ordered sequence of `count` independent uniform indices in `[0,bound)`, with
+replacement. A scalar sequence has multiple query sites/events; a block has one
+query occurrence and one sequence reply. A provider's byte construction, refusal
+and resource limits are additional contracts. Neither descriptor grants the
+independent formal reader an interpretation. Existing `draw` encoding is unchanged.
+
 ## Primitive execution
 
 An `exec` descriptor retains the actual `exec.apply` operation, its binding
@@ -950,6 +974,64 @@ ordered vector over that field. Every row uses the same `exec.apply` operation.
 | `resource_unit.create` | `[] → [U]` | `[]` |
 | `resource_unit.pass` | `[U] → [U]` | `[]` |
 | `resource_unit.consume` | `[U] → []` | `[]` |
+
+The additional closed source bindings below use `J = Indices`, `P = Polynomial<F>`.
+They retain the installed scope, ordered ports, capability premises and parameter
+validators in `common/catalog/declarations.json`; membership supplies no selected
+implementation or formal meaning.
+
+| Binding contract | Inputs → outputs | Parameters |
+|---|---|---|
+| `bool.and` | `[B,B] → [B]` | `[]` |
+| `bool.not` | `[B] → [B]` | `[]` |
+| `bool.or` | `[B,B] → [B]` | `[]` |
+| `field.constant` | `[] → [F]` | `[field_literal]` |
+| `field.inverse` | `[F] → [F]` | `[]` |
+| `field.mul` | `[F,F] → [F]` | `[]` |
+| `indices.append` | `[J,I] → [J]` | `[]` |
+| `indices.at` | `[J,I] → [I]` | `[]` |
+| `indices.empty` | `[] → [J]` | `[]` |
+| `indices.length` | `[J] → [I]` | `[]` |
+| `poly.coefficients` | `[P] → [V]` | `[]` |
+| `poly.coset_interpolate` | `[V,F] → [P]` | `[]` |
+| `poly.domain_point` | `[F,I,I] → [F]` | `[]` |
+| `poly.domain_root` | `[I] → [F]` | `[]` |
+| `poly.even_odd_fold` | `[V,F,F] → [V]` | `[]` |
+| `poly.from_coefficients` | `[V] → [P]` | `[]` |
+| `poly.univariate_evaluate` | `[P,F] → [F]` | `[]` |
+| `vector.concat` | `[V,V] → [V]` | `[]` |
+| `vector.fill` | `[F,I] → [V]` | `[]` |
+| `vector.get` | `[V,I] → [F]` | `[]` |
+| `field.add` | `[F,F] → [F]` | `[]` |
+| `field.sub` | `[F,F] → [F]` | `[]` |
+| `poly.domain_points` | `[F,I] → [V]` | `[]` |
+| `poly.coset_evaluate_batch` | `[V,I,I,F,I] → [V]` | `[]` |
+| `poly.coset_evaluate_at` | `[V,I,I,F,F] → [V]` | `[]` |
+| `poly.coset_extend` | `[V,I,I,F,F,I] → [V]` | `[]` |
+| `poly.opening_quotient_sum` | `[V,I,I,F,J,V,V,V,V] → [V]` | `[]` |
+| `vector.add` | `[V,V] → [V]` | `[]` |
+| `vector.sub` | `[V,V] → [V]` | `[]` |
+| `vector.mul` | `[V,V] → [V]` | `[]` |
+| `vector.scale` | `[V,F] → [V]` | `[]` |
+| `vector.inverse` | `[V] → [V]` | `[]` |
+| `vector.geometric` | `[F,I] → [V]` | `[]` |
+| `vector.slice` | `[V,I,I] → [V]` | `[]` |
+| `vector.transpose` | `[V,I,I] → [V]` | `[]` |
+| `vector.embed` | `[V_base] → [V]` | `[]` |
+| `vector.rotate` | `[V,I] → [V]` | `[]` |
+| `vector.bit_reverse_rows` | `[V,I] → [V]` | `[]` |
+| `vector.prefix_sum` | `[V] → [V]` | `[]` |
+| `vector.prefix_product` | `[V] → [V]` | `[]` |
+
+`field.constant` retains the existing structured `field_literal` parameter,
+including nominal field, `natural`/`bits` encoding and canonical literal bytes.
+It cannot be decoded as a u64 natural or reduced modulo a characteristic by an
+importer. `vector.embed` resolves its input through the extension's `BaseField`
+member, as for scalar embedding. These producer additions require independent
+formal type, parameter and operation meanings before source admission succeeds.
+Math folds and bounded reads retain their operand-availability and bound
+obligations in multi-role roots. Exporting a numerical binding does not itself
+establish its independent formal laws or a complete protocol's security.
 
 `U` is the exact nominal `resource_unit` type with one `Slot` argument. Its
 structured type is `["apply", "resource_unit", [["domain", "Slot", identity]]]`;

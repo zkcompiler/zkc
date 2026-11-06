@@ -14,6 +14,7 @@ public import Zkc.Construction.ConnectionHelperProjection
 public import Zkc.Construction.ConnectionMathApplication
 public import Zkc.Construction.ConnectionHelperCalculation
 public import Zkc.Construction.ConnectionObservationPrefix
+public import Zkc.Construction.ConnectionServiceRoutes
 public import Zkc.Construction.ConnectionActionSupport
 public import Zkc.Construction.ConnectionContext
 public import Zkc.Construction.ConnectionMasking
@@ -36,8 +37,9 @@ The output location row is fixed before proposal and includes every component.
 The root's role/profile schema and reached-source route coverage are separate
 obligations; this module neither weakens nor replaces them. -/
 set_option autoImplicit false
+set_option backward.isDefEq.respectTransparency false
 namespace Zkc.Construction.ConnectionCertificate
-open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame ConnectionComputation
+open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame ConnectionServiceRequests ConnectionComputation
 
 abbrev Block := (model : DomainModel) → Domain.View.Block model.toCarriers
 
@@ -477,29 +479,31 @@ inductive Alignment (routing : Original.Routing) :
   | delivery {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
-      (site field : String) (peer : Nat)
-      {next : Form [] callees (.value (.field field) :: scope) out} {rest : Block}
+      (site : String) (service : ConnectionServiceRequests.Service) (peer : Nat)
+      {next : Form [] callees (.value service.request.sort :: scope) out} {rest : Block}
       (replacement : Replacement) (profile : routing.context.profile = .fiatShamir replacement)
       (mode : routing.mode = .producer) (draw message : Template)
-      (binding : ConnectionStaticRoutes.Delivery routing frames.sites
-        (qualifyProtocolSite context.applicationPrefix site) field (context.roles peer) draw message)
-      (contract : routing.context.contract = "random." ++ field ++ "/0")
-      (request : routing.context.request = some (.draw field))
+      (binding : ConnectionServiceRequests.Delivery routing frames.sites
+        (qualifyProtocolSite context.applicationPrefix site) service (context.roles peer) draw message)
+      (nominal : service.contract = routing.context.contract)
+      (publicService : routing.context.service.isSome = true)
+      (supported : service.request.nativeSupported = true)
       (stateRef pathRef : Nat)
       (stateRead : layout[stateRef]? = some (.history routing.context.suite))
       (pathRead : layout[pathRef]? = some (.coordinates frames.coordinates))
-      {prepared : Layout (.value (.field field) :: scope)} {preparation : Block}
-      (preparationProof : CoordinatePrefix (queryLayout layout field routing.context.suite) prepared preparation)
+      {challenge : Block}
+      (shape : Challenge layout routing.context draw stateRef pathRef service challenge)
+      {prepared : Layout (.value service.request.sort :: scope)} {preparation : Block}
+      (preparationProof : CoordinatePrefix (observedReceiveLayout layout service.request.sort routing.context.suite) prepared preparation)
       (observeStateRef observePathRef : Nat)
       (valueRead : prepared[layout.length]? = some (.data (.present (.var .here))))
       (observeStateRead : prepared[observeStateRef]? = some (.history routing.context.suite))
       (observePathRead : prepared[observePathRef]? = some (.coordinates (frames.rename .there).coordinates))
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (observedLayout prepared routing.context.suite) next rest) :
-      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.receive (.field field) site peer next)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.receive service.request.sort site peer next)
         (fun model => Domain.View.sequence
-          (Domain.View.challenge routing.context routing.context.suite field draw stateRef pathRef
-            [.data (.field field), .transcript routing.context.suite])
+          (challenge model)
           (preparationProof.prepend (fun model => Domain.View.sequence
             (Domain.View.observe routing.context routing.context.suite message observeStateRef layout.length observePathRef
               [.transcript routing.context.suite]) (rest model)) model))
@@ -526,41 +530,40 @@ inductive Alignment (routing : Original.Routing) :
   | publicQuery {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
-      (site field : String) (handle : Nat) (selected : handle = routing.selectedHandle) {next : Form [] callees (.value (.field field) :: scope) out} {rest : Block}
-      (mode : routing.mode = .validator) (publicService : routing.context.service.isSome = true)
-      (contract : routing.context.contract = "random." ++ field ++ "/0")
-      (request : routing.context.request = some (.draw field))
-      (template : Template)
-      (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
-        (routing.context.query (qualifyProtocolSite context.applicationPrefix site) (.draw field))
-        frames.sites routing.draws = some template)
+      (site : String) (service : ConnectionServiceRequests.Service)
+      {next : Form [] callees (.value service.request.sort :: scope) out} {rest : Block}
+      (mode : routing.mode = .validator) (template : Template)
+      (binding : Public routing frames.sites (qualifyProtocolSite context.applicationPrefix site)
+        service template)
+      (supported : service.request.nativeSupported = true)
       (stateRef pathRef : Nat)
       (stateRead : layout[stateRef]? = some (.history routing.context.suite))
       (pathRead : layout[pathRef]? = some (.coordinates frames.coordinates))
+      {challenge : Block}
+      (shape : Challenge layout routing.context template stateRef pathRef service challenge)
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
-        (queryLayout layout field routing.context.suite) next rest) :
+        (observedReceiveLayout layout service.request.sort routing.context.suite) next rest) :
       Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
-        (.query site field (.cons (.capability ("random." ++ field ++ "/0") handle) .nil) next)
-        (fun model => Domain.View.sequence
-          (Domain.View.challenge routing.context routing.context.suite field template stateRef pathRef
-            [.data (.field field), .transcript routing.context.suite]) (rest model))
+        (service.form site next)
+        (fun model => Domain.View.sequence (challenge model) (rest model))
   | localQuery {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
-      (site field : String) (handle : Nat) {next : Form [] callees (.value (.field field) :: scope) out} {rest : Block}
+      (site : String) (service : ConnectionServiceRequests.Service)
+      {next : Form [] callees (.value service.request.sort :: scope) out} {rest : Block}
       (port : ServicePort) (template : Template)
-      (mode : ConnectionStaticRoutes.LocalMode routing frames.sites
-        (qualifyProtocolSite context.applicationPrefix site) field handle)
-      (binding : ConnectionStaticRoutes.Local routing frames.sites
-        (qualifyProtocolSite context.applicationPrefix site) field handle port template)
-      (contract : port.contract = "random." ++ field ++ "/0")
-      (coordinates : List Nat) (readback : IndexReadback layout frames.coordinates coordinates)
+      (mode : LocalMode routing frames.sites (qualifyProtocolSite context.applicationPrefix site) service)
+      (binding : Local routing frames.sites (qualifyProtocolSite context.applicationPrefix site)
+        service port template)
+      (coordinates references : List Nat) (readback : IndexReadback layout frames.coordinates coordinates)
+      (operands : Operands layout service references)
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
-        (receiveLayout layout (.field field)) next rest) :
+        (receiveLayout layout service.request.sort) next rest) :
       Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
-        (.query site field (.cons (.capability ("random." ++ field ++ "/0") handle) .nil) next)
+        (service.form site next)
         (fun model => Domain.View.sequence
-          (Domain.View.localService routing.context port (.draw field) template coordinates [] [.data (.field field)]) (rest model))
+          (Domain.View.localService routing.context port service.request template coordinates references
+            [.data service.request.sort]) (rest model))
   | repeat {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat}
@@ -808,7 +811,7 @@ def Alignment.size {routing : Original.Routing} {context : ProtocolContext} {def
   | .indicesEmpty tail => 1 + tail.size
   | .indicesAppend _ _ _ _ _ _ tail => 1 + tail.size
   | .publicQuery (tail := tail) .. => 1 + tail.size
-  | .localQuery _ _ _ _ _ _ _ _ _ _ tail => 1 + tail.size
+  | .localQuery (tail := tail) .. => 1 + tail.size
   | .repeat _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ body tail =>
       1 + body.size + tail.size
   | .projectedRepeat (bodyCertificate := body) (tail := tail) .. => 1 + body.size + tail.size
@@ -824,11 +827,13 @@ theorem Alignment.callsMatch {routing : Original.Routing} {context : ProtocolCon
     {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {form : Form [] callees scope out} {target : Block}
     (derivation : Derivation routing context definitions callees (selection := selection) out role scopes outputs history frames layout form target) : form.CallsMatch := by
   induction derivation
+  case publicQuery => rwa [ConnectionServiceRequests.Service.form_callsMatch]
+  case localQuery => rwa [ConnectionServiceRequests.Service.form_callsMatch]
   case splitValue value absentMatched tail ih =>
     have presentMatched := (ConnectionSubstitution.form_callsMatch _ _).mp ih
     simp_all only [Form.CallsMatch, Form.lawCalls, Form.calleeCalls, List.map_append, Prod.mk.injEq]
   all_goals simp_all only [Form.CallsMatch, Form.lawCalls, Form.calleeCalls, List.map_append, List.map_cons, Prod.mk.injEq]
-  all_goals first | assumption | exact ⟨rfl, rfl⟩
+  all_goals exact ⟨rfl, rfl⟩
 
 abbrev Derivation.size := @Alignment.size
 abbrev Derivation.callsMatch := @Alignment.callsMatch
@@ -1307,73 +1312,85 @@ private noncomputable def sound
         (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.message origin payload] } stack captured (.cons value binders)
           (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
           (Original.observation_frame preparedRelated routing.context.suite (.message origin payload)) kept)
-  | @delivery context definitions callees selection out role scopes outputs history scope frames layout site field peer next rest replacement profile mode draw message binding
-      contract request stateRef pathRef stateRead pathRead prepared preparation preparationProof
+  | @delivery context definitions callees selection out role scopes outputs history scope frames layout site service peer next rest replacement profile mode draw message binding
+      nominal publicService supported stateRef pathRef stateRead pathRead challenge shape prepared preparation preparationProof
       observeStateRef observePathRef valueRead observeStateRead observePathRead tail ih =>
     let qualified := qualifyProtocolSite context.applicationPrefix site
     let queryOrigin := Domain.atCoordinates
-      (routing.context.query (draw.qualify (draw.event[2]?.getD "")) (.draw field))
+      ((service.routeContext routing.context).query (draw.qualify (draw.event[2]?.getD "")) service.request)
       ((frames.eval model binders).map (·.index))
     let messageOrigin := Domain.atCoordinates
-      (routing.context.message qualified (context.roles peer) routing.context.producer)
+      ((service.routeContext routing.context).message qualified (context.roles peer) routing.context.producer)
       ((frames.eval model binders).map (·.index))
-    have sourceRoute : routing.delivery state.frames qualified field (context.roles peer) =
-        some (queryOrigin, messageOrigin) := by
-      rw [reachedStack]
-      exact binding.source _ (frames.sites_eval model binders)
-    have asked : queryOrigin.request = some (.draw field) := by unfold queryOrigin Domain.atCoordinates; split <;> rfl
-    have msg : messageOrigin.request = none := by unfold messageOrigin Domain.atCoordinates; split <;> rfl
-    have queryTarget : Domain.queryOrigin routing.context routing.context.suite field draw
-        ((frames.eval model binders).map (·.index)) = some queryOrigin := by
-      rw [Domain.queryOrigin, ite_eq_left ⟨rfl, contract, request⟩,
-        template_reached frames binders binding.drawRoute]
-      change (if queryOrigin.request = some (.draw field) then some queryOrigin else none) = some queryOrigin
-      exact ite_eq_left asked
-    have folded : Original.fold routing (Occurrence.actions (.receive (.field field) qualified (context.roles peer))) state =
-        Original.receive routing state (.field field) qualified (context.roles peer) := by
+    have sameSites : state.frames.map (·.site) = frames.sites := by
+      rw [reachedStack]; exact frames.sites_eval model binders
+    have asked : queryOrigin.request = some service.request := by
+      rw [OccurrenceResolution.atCoordinates_request]; rfl
+    have msg : messageOrigin.request = none := by
+      unfold messageOrigin
+      rw [OccurrenceResolution.atCoordinates_request]
+      cases service <;> rfl
+    have folded : Original.fold routing (Occurrence.actions (.receive service.request.sort qualified (context.roles peer))) state =
+        Original.receive routing state service.request.sort qualified (context.roles peer) := by
       simp only [Original.fold, Occurrence.actions, PIR.Process.interpretState, Original.operations, profile]
       exact PIR.Process.bind_done _
     change Original.Simulation _ _ (Original.fold routing
-      ((Occurrence.actions (.receive (.field field) qualified (context.roles peer))).bind
+      ((Occurrence.actions (.receive service.request.sort qualified (context.roles peer))).bind
         (fun reply => next.denoteOn model Occurrence.actions tables (LawResults.empty model)
           context runs processes (.cons reply binders))) state) _
     rw [Original.fold_bind, folded]
-    simp only [Original.receive, mode, sourceRoute, PIR.Process.bind_assoc]
+    rw [binding.receive state sameSites mode]
+    simp only [PIR.Process.bind_assoc]
+    simp only [reachedStack]
     apply Original.Simulation.checkpoint environment retained
-    apply (Original.Simulation.queryField state queryOrigin field asked routing.context routing.context.suite
-      draw stateRef pathRef environment _ (related.readHistory stateRead)
-      (related.reachedCoordinates frames pathRef pathRead) queryTarget).bind
+    apply (shape.simulation model binders state environment related stateRead
+      _ (related.reachedCoordinates frames pathRef pathRead) queryOrigin asked binding.valid
+      supported nominal publicService (template_reached frames binders binding.queryRoute)).bind
     · intro process frame same
       subst frame
       exact retained
     · intro source target returned
       rcases source with ⟨value, reached⟩
-      obtain ⟨same, appended⟩ := returned
-      dsimp only at same appended
+      apply Classical.choice
+      obtain ⟨same, encoded, encoding, appended⟩ := returned
+      dsimp only at same encoding appended
       subst reached target
       have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append environment
-        [.data (.field field value), .transcript routing.context.suite (state.history ++ [.challenge queryOrigin])])
+        [encoded, .transcript routing.context.suite (state.history ++ [.challenge queryOrigin])])
+      refine ⟨?_⟩
       apply Original.Simulation.checkpoint _ kept
       rw [preparationProof.prepend_eq]
       apply preparationProof.simulation model (.cons value binders) (state.history ++ [.challenge queryOrigin]) captured _
-        (Original.query_frame related routing.context.suite field queryOrigin value) kept
+        (Returned.frame (request := service.request) (origin := queryOrigin)
+          (suite := routing.context.suite)
+          (source := (value, { state with history := state.history ++ [.challenge queryOrigin] }))
+          ⟨rfl, encoded, encoding, rfl⟩ related) kept
         _ _ _ _ (fun _ kept => kept)
       intro preparedEnvironment preparedRelated preparedRetained
       apply Original.Simulation.checkpoint _ preparedRetained
-      simp only [PIR.Process.bind]
       have valueReadback : Readback prepared (.cons (.present (.var .here)) .nil) [.data layout.length] :=
         .data _ valueRead .nil
-      have physicalRead := valueReadback.payload rfl preparedRelated
-      have encodedSame : physicalRead.choose = .field field value := Option.some.inj physicalRead.choose_spec.1.symm
+      have physicalRead := valueReadback.payload service.data preparedRelated
+      have payloadRead : Domain.Payload.ofValue service.request.sort value = some physicalRead.choose := by
+        exact physicalRead.choose_spec.1
+      dsimp only [Prod.fst, Prod.snd]
+      rw [payloadRead]
+      simp only [PIR.Process.bind_assoc, PIR.Process.bind]
       have observed := Original.Simulation.record
         (carriers := model.toCarriers) ({ state with history := state.history ++ [.challenge queryOrigin] })
-        messageOrigin (.field field value) routing.context message observeStateRef layout.length observePathRef
+        messageOrigin physicalRead.choose routing.context message observeStateRef layout.length observePathRef
         preparedEnvironment ((frames.eval model binders).map (·.index))
         (preparedRelated.readHistory observeStateRead)
-        (by rw [← encodedSame]; exact physicalRead.choose_spec.2)
-        (by simpa only [ScopedFrames.eval_rename (target := .value (.field field) :: scope) .there binders (.cons value binders) (fun _ => rfl) frames] using
+        physicalRead.choose_spec.2
+        (by simpa only [ScopedFrames.eval_rename (target := .value service.request.sort :: scope) .there binders (.cons value binders) (fun _ => rfl) frames] using
           preparedRelated.reachedCoordinates (frames.rename .there) observePathRef observePathRead)
-        (template_reached frames binders binding.messageRoute) msg
+        (by
+          have found := template_reached frames binders binding.messageRoute
+          have sameMessage : (service.routeContext routing.context).message qualified
+              (context.roles peer) routing.context.producer =
+              routing.context.message qualified (context.roles peer) routing.context.producer := by
+            cases service <;> rfl
+          simpa only [messageOrigin, sameMessage] using found) msg
       apply observed.bind
         (sourceNext := fun source => Original.fold routing
           (next.denoteOn model Occurrence.actions tables (LawResults.empty model) context runs processes
@@ -1385,11 +1402,11 @@ private noncomputable def sound
         obtain ⟨same, appended⟩ := returned
         rw [same, appended]
         have kept := ArtifactBinding.captures_trans preparedRetained (ArtifactBinding.captures_append _
-          [.transcript routing.context.suite (state.history ++ [.challenge queryOrigin] ++ [.message messageOrigin (.field field value)])])
+          [.transcript routing.context.suite (state.history ++ [.challenge queryOrigin] ++ [.message messageOrigin physicalRead.choose])])
         exact .checkpoint _ kept
-          (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.challenge queryOrigin] ++ [.message messageOrigin (.field field value)] } stack captured (.cons value binders)
+          (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.challenge queryOrigin] ++ [.message messageOrigin physicalRead.choose] } stack captured (.cons value binders)
             (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
-            (Original.observation_frame preparedRelated routing.context.suite (.message messageOrigin (.field field value))) kept)
+            (Original.observation_frame preparedRelated routing.context.suite (.message messageOrigin physicalRead.choose)) kept)
   | indicesEmpty tail ih =>
     have kept := ArtifactBinding.captures_trans retained
       (ArtifactBinding.captures_append environment [.indices []])
@@ -1404,83 +1421,65 @@ private noncomputable def sound
     apply Original.Simulation.checkpoint environment retained
     rw [step]
     exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack _ extended kept)
-  | @publicQuery context definitions callees selection out role scopes outputs history scope frames layout site field handle selected next rest mode publicService contract request template route
-      stateRef pathRef stateRead pathRead tail ih =>
-    subst handle
-    let qualified := qualifyProtocolSite context.applicationPrefix site
-    let origin := Domain.atCoordinates (routing.context.query qualified (.draw field))
-      ((frames.eval model binders).map (·.index))
-    have sourceRoute : routing.draw state.frames qualified field routing.selectedHandle = some origin := by
-      rw [reachedStack]
-      exact Original.Routing.draw_of_static publicService route _ (frames.sites_eval model binders)
-    have asked : origin.request = some (.draw field) := by
-      unfold origin Domain.atCoordinates
-      split <;> rfl
-    have folded : Original.fold routing (Occurrence.actions
-        (.query qualified field (.cons routing.selectedHandle .nil))) state =
-        Original.queryField state origin field := by
-      change (Original.query routing state qualified field routing.selectedHandle).bind PIR.Process.done = _
-      rw [Original.query, mode, sourceRoute]
-      exact PIR.Process.bind_done _
-    change Original.Simulation _ _ (Original.fold routing
-      ((Occurrence.actions (.query qualified field (.cons routing.selectedHandle .nil))).bind
-        (fun reply => next.denoteOn model Occurrence.actions tables (LawResults.empty model)
-          context runs processes (.cons reply binders))) state) _
-    rw [Original.fold_bind, folded]
+  | @publicQuery context definitions callees selection out role scopes outputs history scope frames layout
+      site service next rest mode template binding supported stateRef pathRef stateRead pathRead challenge shape tail ih =>
+    let origin := Domain.atCoordinates ((service.routeContext routing.context).query
+      (qualifyProtocolSite context.applicationPrefix site) service.request)
+      (state.frames.map (·.index))
+    have sameSites : state.frames.map (·.site) = frames.sites := by
+      rw [reachedStack]; exact frames.sites_eval model binders
+    rw [binding.fold site context mode next model tables runs processes binders state sameSites]
     apply Original.Simulation.checkpoint environment retained
-    apply (Original.Simulation.queryField state origin field asked routing.context routing.context.suite
-      template stateRef pathRef environment _ (related.readHistory stateRead)
-      (related.reachedCoordinates frames pathRef pathRead)
-      (query_reached frames binders contract request route)).bind
+    apply (shape.simulation model binders state environment related stateRead
+      (state.frames.map (·.index)) (by rw [reachedStack]; exact related.reachedCoordinates frames pathRef pathRead)
+      origin (by rw [OccurrenceResolution.atCoordinates_request]; rfl)
+      binding.valid supported binding.nominal binding.publicService
+      (by simpa only [origin, reachedStack] using template_reached frames binders binding.route)).bind
     · intro process frame same
       subst frame
       exact retained
     · intro source target returned
       rcases source with ⟨value, reached⟩
-      obtain ⟨same, appended⟩ := returned
-      dsimp only at same appended
+      apply Classical.choice
+      obtain ⟨same, encoded, encoding, appended⟩ := returned
+      dsimp only at same encoding appended
       subst reached target
-      have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append environment
-        [.data (.field field value), .transcript routing.context.suite (state.history ++ [.challenge origin])])
-      exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.challenge origin] } stack captured (.cons value binders)
-        (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
-        (Original.query_frame related routing.context.suite field origin value) kept)
-  | @localQuery context definitions callees selection out role scopes outputs history scope frames layout site field handle next rest port template mode binding contract
-      coordinates readback tail ih =>
-    let qualified := qualifyProtocolSite context.applicationPrefix site
-    let origin := Domain.atCoordinates binding.origin ((frames.eval model binders).map (·.index))
-    have asked : origin.request = some (.draw field) := by
-      unfold origin Domain.atCoordinates
-      split <;> rfl
-    have folded : Original.fold routing (Occurrence.actions
-        (.query qualified field (.cons handle .nil))) state =
-        Original.query routing state qualified field handle := by
-      simp only [Original.fold, Occurrence.actions, PIR.Process.interpretState, Original.operations]
-      exact PIR.Process.bind_done _
-    change Original.Simulation _ _ (Original.fold routing
-      ((Occurrence.actions (.query qualified field (.cons handle .nil))).bind
-        (fun reply => next.denoteOn model Occurrence.actions tables (LawResults.empty model)
-          context runs processes (.cons reply binders))) state) _
-    rw [Original.fold_bind, folded]
+      have kept := ArtifactBinding.captures_trans retained
+        (ArtifactBinding.captures_append environment [encoded,
+          .transcript routing.context.suite (state.history ++ [.challenge origin])])
+      exact ⟨.checkpoint _ kept
+        (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames
+          { state with history := state.history ++ [.challenge origin] } stack captured (.cons value binders)
+          (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
+          (Returned.frame (request := service.request) (origin := origin)
+            (suite := routing.context.suite)
+            (source := (value, { state with history := state.history ++ [.challenge origin] }))
+            ⟨rfl, encoded, encoding, rfl⟩ related) kept)⟩
+  | @localQuery context definitions callees selection out role scopes outputs history scope frames layout
+      site service next rest port template mode binding coordinates references readback operands tail ih =>
+    have sameSites : state.frames.map (·.site) = frames.sites := by
+      rw [reachedStack]; exact frames.sites_eval model binders
+    rw [binding.fold site context mode next model tables runs processes binders state sameSites]
     apply Original.Simulation.checkpoint environment retained
-    apply (Original.Simulation.localQuery routing state qualified field handle port origin
-      (by rw [reachedStack]; exact mode.sound _ (frames.sites_eval model binders))
-      (by rw [reachedStack]; exact binding.source _ (frames.sites_eval model binders)) asked
-      template coordinates environment _ (readback.read related) contract
-      (by simpa only [origin, ScopedFrames.coordinates_eval] using binding.target _ (frames.sites_eval model binders))).bind
+    apply (service.localSimulation routing frames.sites _ port template binding mode coordinates references
+      operands model binders state environment related sameSites
+      (by simpa only [reachedStack, ScopedFrames.coordinates_eval] using readback.read related)).bind
     · intro process frame same
       subst frame
       exact retained
     · intro source target returned
       rcases source with ⟨value, reached⟩
-      obtain ⟨same, appended⟩ := returned
-      dsimp only at same appended
+      apply Classical.choice
+      obtain ⟨same, encoded, encoding, appended⟩ := returned
+      dsimp only at same encoding appended
       subst reached target
-      have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append environment
-        [.data (.field field value)])
-      exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons value binders)
-        (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
-        (related.bindData (ty := .field field) value rfl) kept)
+      have kept := ArtifactBinding.captures_trans retained
+        (ArtifactBinding.captures_append environment [encoded])
+      exact ⟨.checkpoint _ kept
+        (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames
+          state stack captured (.cons value binders)
+          (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
+          (related.bindData value encoding) kept)⟩
   | @«repeat» context definitions callees selection out role scopes outputs history scope frames layout spec site callback count initial captures next body rest
       roster distinct active visible mappedVisible countReference countRead stateReferences initialReferences
       yieldData yielded initialHistory bodyHistory initialRead historyRead initialProfile bodyProfile yieldLocations

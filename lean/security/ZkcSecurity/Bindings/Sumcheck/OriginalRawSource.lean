@@ -40,7 +40,7 @@ noncomputable def step (context : Realizations.Sumcheck.Original.Context) (index
     (SumcheckVerifierLaws.highSite context.protocol) (context.protocol.roles 0))) fun high =>
   if state.scalar = low + high then
     .call (.action (.query (SumcheckVerifierLaws.challengeSite context.protocol)
-      "bls12-381.fr" (.cons context.handle .nil))) fun challenge =>
+      (.draw "bls12-381.fr") (.cons context.handle .nil))) fun challenge =>
     .call (.action (.send (ty := .field "bls12-381.fr")
       (SumcheckVerifierLaws.deliverySite context.protocol) (context.protocol.roles 0) challenge)) fun _ =>
     .call (.leave ⟨Realizations.Sumcheck.Original.loopSite context, index⟩) fun _ =>

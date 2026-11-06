@@ -39,6 +39,7 @@ private unsafe def closedInstructions (artifact : Expr) : MetaM (List Zkc.Constr
 private def deriveConnection (selectedLibrary : Option (TSyntax `term)) : TacticM Unit := withMainContext do
   Term.withoutErrToSorry <| withoutRecover do
     let goal ← getMainGoal
+    let remaining := (← getGoals).tail
     let expected := (← instantiateMVars (← goal.getType)).headBeta.consumeMData
     unless expected.isAppOf ``ConnectionAdmission.Required do
       throwError "derive_source_connection: expected the fixed connection requirement"
@@ -57,7 +58,7 @@ private def deriveConnection (selectedLibrary : Option (TSyntax `term)) : Tactic
         (ConnectionRootInputs.serviceCapabilities ($program).payload.entry.inputs)
         $artifact (by decide +kernel))) (some (mkConst ``Original.Routing))
     Term.synthesizeSyntheticMVarsNoPostponing
-    let routing ← Term.exprToSyntax routing
+    let routingExpr := routing
     Alignment.tracePhase "admission instruction reflection start"
     let instructions ← unsafe closedInstructions args[3]!
     Alignment.tracePhase "admission instructions reflected"
@@ -85,13 +86,38 @@ private def deriveConnection (selectedLibrary : Option (TSyntax `term)) : Tactic
     -- Let the root builder check the library at its expected type directly.
     -- An extra local alias would make otherwise closed source indices open
     -- during normalization and prevent their syntax from being shared.
-    evalTactic (← `(tactic| exact (by
-      let root : ConnectionRoot.RootCertificate $program $routing
-          (ConnectionAdmission.role $context $mode) $artifact := by
-        derive_root_connection_with_library target $target correspondence $correspondence
-          services (ConnectionRootInputs.serviceCapabilities ($program).payload.entry.inputs)
-          library $library
-      exact ConnectionAdmission.ofRootCertificate root (by kernel_rfl))))
+    let rootType := mkAppN (mkConst ``ConnectionRoot.RootCertificate)
+      #[args[0]!, routingExpr,
+        mkApp2 (mkConst ``ConnectionAdmission.role) args[1]! args[2]!, args[3]!]
+    let root ← Term.elabTerm (← `(by
+      derive_root_connection_with_library target $target correspondence $correspondence
+        services (ConnectionRootInputs.serviceCapabilities ($program).payload.entry.inputs)
+        library $library)) (some rootType)
+    Term.synthesizeSyntheticMVarsNoPostponing
+    let root ← instantiateMVars root
+    Alignment.tracePhase "admission root assigned"
+    -- All indices are already fixed by the original obligation. Construct the
+    -- explicit theorem application without asking elaborator unification to
+    -- recover them again through the source's checked payload. The ordinary
+    -- kernel checks this application, including the complete selection proof.
+    let supplied :=  #[args[0]!, args[1]!, args[2]!, args[3]!, routingExpr, root]
+    let mut selectedType := (← getConstInfo ``ConnectionAdmission.ofRootCertificate).type
+    for argument in supplied do
+      let .forallE _ _ body _ := selectedType
+        | throwError "connection-admission-theorem-shape"
+      selectedType := body.instantiate1 argument
+    let .forallE _ selectionEquation _ _ := selectedType
+      | throwError "connection-admission-selection-shape"
+    let selected ← mkFreshExprMVar selectionEquation
+    setGoals [selected.mvarId!]
+    Alignment.tracePhase "admission selection check"
+    evalTactic (← `(tactic| kernel_rfl))
+    Alignment.tracePhase "admission selection checked"
+    let proof := mkAppN (mkConst ``ConnectionAdmission.ofRootCertificate)
+      (supplied.push (← instantiateMVars selected))
+    goal.assign proof
+    setGoals remaining
+    Alignment.tracePhase "admission complete"
 
 elab "derive_source_connection" : tactic => deriveConnection none
 

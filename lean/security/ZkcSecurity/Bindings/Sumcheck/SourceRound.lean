@@ -31,7 +31,7 @@ abbrev lowOp (ctx : ProtocolContext) : (Occurrence.signature model.toCarriers).O
 abbrev highOp (ctx : ProtocolContext) : (Occurrence.signature model.toCarriers).Op :=
   .action (.receive (.field field) (SumcheckRoundNormalForms.round1Site ctx) (ctx.roles 0))
 abbrev queryOp (ctx : ProtocolContext) (handle : Nat) : (Occurrence.signature model.toCarriers).Op :=
-  .action (.query (SumcheckRoundNormalForms.challengeSite ctx) field (.cons handle .nil))
+  .action (.query (SumcheckRoundNormalForms.challengeSite ctx) (.draw field) (.cons handle .nil))
 abbrev deliveryOp (ctx : ProtocolContext) (r : model.Field field) : (Occurrence.signature model.toCarriers).Op :=
   .action (.send (ty := .field field) (SumcheckRoundNormalForms.deliverySite ctx) (ctx.roles 0) r)
 

@@ -35,13 +35,40 @@ class Profiles(unittest.TestCase):
             "index.constant", "index.add", "index.sub", "index.mul", "index.div", "index.mod",
             "index.equal", "index.less", "vector.empty", "vector.length", "vector.sum",
             "vector.split", "vector.append", "vector.equal", "field.equal", "field.embed",
-            "resource_unit.create", "resource_unit.pass", "resource_unit.consume"])
+            "resource_unit.create", "resource_unit.pass", "resource_unit.consume",
+            'bool.and', 'bool.not', 'bool.or',
+            'field.constant', 'field.inverse', 'field.mul',
+            'indices.append', 'indices.at', 'indices.empty',
+            'indices.length', 'poly.coefficients', 'poly.coset_interpolate',
+            'poly.domain_point', 'poly.domain_root', 'poly.even_odd_fold',
+            'poly.from_coefficients', 'poly.univariate_evaluate', 'vector.concat',
+            'vector.fill', 'vector.get', 'field.add',
+            'field.sub', 'poly.domain_points', 'poly.coset_evaluate_batch',
+            'poly.coset_evaluate_at', 'poly.coset_extend', 'poly.opening_quotient_sum',
+            'vector.add', 'vector.sub', 'vector.mul',
+            'vector.scale', 'vector.inverse', 'vector.geometric',
+            'vector.slice', 'vector.transpose', 'vector.embed',
+            'vector.rotate', 'vector.bit_reverse_rows', 'vector.prefix_sum',
+            'vector.prefix_product',
+        ])
         self.assertEqual(profile["implementation"], "unselected")
         for member in profile["operations"]:
             roots = [t["parameter"] for t in member["scope"] if t["kind"] == "root"]
-            self.assertEqual(roots, [] if member["operation"].startswith("index.") else [
+            self.assertEqual(roots, [] if member["operation"].split(".")[0] in ("index", "indices", "bool") else [
                 {"kind": "Domain", "sort": "Slot" if member["operation"].startswith("resource_unit.") else "Field"}])
         self.assertEqual(project(value, installation()), project(value, installation()))
+
+    def test_polynomial_and_literal_dependencies_are_explicit(self):
+        for constructor in ("indices", "polynomial"):
+            with self.subTest(constructor=constructor):
+                value = source()
+                value["consumerProfiles"][0]["typeConstructors"].remove(constructor)
+                with self.assertRaisesRegex(ValueError, "unsupported profile type constructor"):
+                    validate(value)
+        value = source()
+        value["consumerProfiles"][0]["parameterValidators"].remove("FieldLiteral")
+        with self.assertRaisesRegex(ValueError, "unsupported profile validator"):
+            validate(value)
 
     def test_profile_refusals(self):
         cases = [

@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Bindings.Transcript.HonestReadback
+public import Zkc.Construction.OriginalFold
 public import Zkc.Construction.OriginalEffects
 public import Zkc.Construction.ConnectionRouting
 public import Zkc.Source.Finite
@@ -53,7 +54,7 @@ inductive Pair (scope : PairScope) (Post : A → B → Prop) :
       (∀ reply, Pair scope Post (left reply) (right reply)) →
       Pair scope Post
         (.call (.action (.receive (.field field) delivery validator)) left)
-        (.call (.action (.query query field (.cons handle .nil))) fun reply =>
+        (.call (.action (.query query (.draw field) (.cons handle .nil))) fun reply =>
           .call (.action (.send (ty := .field field) delivery producer reply)) fun _ => right reply)
 
 namespace Pair
@@ -132,12 +133,14 @@ structure FoldLaws (scope : PairScope) (routingP routingV : Original.Routing) wh
     producer = scope.producer ∧ validator = scope.validator →
     (query, delivery) ∈ scope.deliveries →
     Original.ActionCovered (carriers := carriers) routingP state.frames (.receive (.field field) delivery validator) →
-    Original.ActionCovered (carriers := carriers) routingV state.frames (.query query field (.cons handle .nil)) →
+    Original.ActionCovered (carriers := carriers) routingV state.frames (.query query (.draw field)
+      (.cons handle .nil)) →
     (∀ value : carriers.Field field,
       Original.ActionCovered (carriers := carriers) routingV state.frames (.send (ty := .field field) delivery producer value)) →
     Readback (fun left right => left = right ∧ left.2.frames = state.frames)
       (Original.operations (carriers := carriers) routingP (.action (.receive (.field field) delivery validator)) state)
-      ((Original.operations (carriers := carriers) routingV (.action (.query query field (.cons handle .nil))) state).bind
+      ((Original.operations (carriers := carriers) routingV (.action (.query query (.draw field)
+        (.cons handle .nil))) state).bind
         fun (value, reached) =>
           (Original.operations (carriers := carriers) routingV (.action (.send (ty := .field field) delivery producer value)) reached).bind
             fun (_, final) => .done (value, final))

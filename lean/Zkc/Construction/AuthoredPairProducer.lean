@@ -27,16 +27,11 @@ def checkProducerFrom (program : Program) (context : Context) :
 def checkProducerStep (program : Program) (context : Context) (state : CheckState) :
     Instruction → Except String CheckState
   | ⟨.localService port request template coordinates, operands, results, []⟩ =>
-      match request with
-      | ⟨"draw", [], .field field⟩ =>
-          if state.pending = .none ∧ port.owner = context.role context.producer ∧
-              port.contract = "random." ++ field ++ "/0" ∧ operands = [] ∧
-              results = [.data (.field field)] ∧ template.entry = context.entry ∧
-              coordinates = state.inductions ∧ template.repeats = state.inductions.length ∧
-              coordinates.all (fun index => state.sorts[index]? == some (.data .index)) then
-            .ok { state with sorts := state.sorts ++ results }
-          else .error "construction-producer-local-service"
-      | _ => .error "construction-producer-local-service-request"
+      if state.pending != .none then .error "construction-pending" else do
+        let final ← checkPlainStep context context.producer context.validator
+          ⟨state.sorts, state.inductions⟩
+          ⟨.localService port request template coordinates, operands, results, []⟩
+        return { state with sorts := final.sorts }
   | ⟨.send site schema peer, [value], [], []⟩ =>
       if state.pending = .none ∧ schema = site ∧ peer = context.role context.validator ∧
           isData state.sorts[value]? then

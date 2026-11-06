@@ -45,25 +45,42 @@ Admission recognizes this exact nominal identity; the field laws of its carrier,
 its extension presentation and any concrete realization remain explicit
 premises of the model that interprets it. It shares the characteristic of the
 octic extension but neither its cardinality nor its representation, and its
-random service is not admitted. -/
+random service is admitted for its separately checked scalar and block index operations. -/
 def koalaBearQuarticCatalogue : Catalogue where
   nominals := [Installed.Domains.«koala-bear.ext4-binomial3»]
-  services := []
+  services := [Installed.Services.«random.koala-bear.ext4-binomial3/0»]
   types := [("field", "koala-bear.ext4-binomial3"), ("vector", "koala-bear.ext4-binomial3")]
+
+/-- Installed binary field identities, with their exact polynomial presentations.
+Their concrete carriers, bit-basis laws and executable codecs remain model obligations. -/
+def binaryCatalogue : Catalogue where
+  nominals := [Installed.Domains.«gf2-64.pentanomial-4-3-1»,
+    Installed.Domains.«gf2-64.pentanomial-4-3-1.ext3-trinomial1»]
+  services := []
+  types := [("field", "gf2-64.pentanomial-4-3-1"),
+    ("vector", "gf2-64.pentanomial-4-3-1"),
+    ("field", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
+    ("vector", "gf2-64.pentanomial-4-3-1.ext3-trinomial1")]
 
 /-- The rows understood by the structured importer. Admission of a row or type
 is separate from operation support and mathematical law evidence. -/
 def admittedCatalogue : Catalogue where
-  nominals := blsCatalogue.nominals ++ koalaBearCatalogue.nominals ++ koalaBearQuarticCatalogue.nominals
+  nominals := blsCatalogue.nominals ++ koalaBearCatalogue.nominals ++ koalaBearQuarticCatalogue.nominals ++ binaryCatalogue.nominals
   services := blsCatalogue.services ++ koalaBearCatalogue.services ++ koalaBearQuarticCatalogue.services
-  types := blsCatalogue.types ++ koalaBearCatalogue.types ++ koalaBearQuarticCatalogue.types
+  types := blsCatalogue.types ++ koalaBearCatalogue.types ++ koalaBearQuarticCatalogue.types ++
+    binaryCatalogue.types ++
+    (blsCatalogue.types ++ koalaBearCatalogue.types ++ koalaBearQuarticCatalogue.types ++
+      binaryCatalogue.types).filterMap
+      (fun (kind, domain) ↦ if kind == "field" then some ("polynomial", domain) else none)
 
 /-- The transcript suites whose challenges constructed participants draw. These
 rows are metadata: the sponge, encoding and decoder of a suite belong to the
 model that interprets it. -/
 def transcriptCatalogue : Catalogue where
   nominals := [Installed.Domains.«merlin3.bls12-381.fr64be/0»,
-    Installed.Domains.«merlin3.koala-bear.ext8-binomial3.rejection31le/0»]
+    Installed.Domains.«merlin3.koala-bear.ext8-binomial3.rejection31le/0»,
+    Installed.Domains.«hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0»,
+    Installed.Domains.«hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0»]
   services := []
 
 /-- The rows understood by the constructed-participant reader: the structured

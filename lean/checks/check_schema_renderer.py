@@ -270,7 +270,7 @@ class NeutralSchema(unittest.TestCase):
                     ["block", [[["exec", "exec.apply", "constant", [["natural", "7"]]],
                                 [], [INDEX], [], "literal"]], ["return", [0]]]]
         data = source([constant], [function])
-        self.assertIn('.exec "exec.apply" "constant" ["7"]', snapshot.render(data, "Constant"))
+        self.assertIn('.exec "exec.apply" "constant" [.natural "7"]', snapshot.render(data, "Constant"))
         for parameters in [[], ["7"], [["natural", "01"]], [["asset", "format", "0" * 64]]]:
             changed = deepcopy(data)
             changed[7][0][9][1][0][0][3] = parameters

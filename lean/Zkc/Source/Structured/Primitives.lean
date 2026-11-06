@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Vocabulary
+public import Zkc.Source.Structured.Numerical
 public import Zkc.Source.LogicalFormat
 
 @[expose] public section
@@ -11,6 +11,9 @@ Names and parameters are resolved by admission, never by helper dispatch. -/
 namespace Zkc.Source.Structured
 
 inductive Primitive where
+  | numerical (operation : Numerical) (domain base : String)
+  | binaryConstant (domain : String) (bits : Nat)
+  | booleanNot
   | indexConstant (value : Nat)
   | indexEqual | indexLess | indexAdd | indexMul | indexSub | indexDiv | indexMod
   | vectorEmpty (domain : String) | vectorLength (domain : String)
@@ -20,6 +23,9 @@ inductive Primitive where
   deriving DecidableEq, Repr
 
 def Primitive.arguments : Primitive → List Ty
+  | .numerical op d b => op.arguments d b
+  | .binaryConstant .. => []
+  | .booleanNot => [.boolean]
   | .indexConstant _ | .vectorEmpty _ => []
   | .indexEqual | .indexLess | .indexAdd | .indexMul | .indexSub | .indexDiv | .indexMod =>
       [.index, .index]
@@ -29,6 +35,9 @@ def Primitive.arguments : Primitive → List Ty
   | .fieldEqual d => [.field d, .field d]
 
 def Primitive.results : Primitive → List Ty
+  | .numerical op d b => op.results d b
+  | .binaryConstant d _ => [.field d]
+  | .booleanNot => [.boolean]
   | .indexConstant _ | .indexAdd | .indexMul | .indexSub | .indexDiv | .indexMod |
     .vectorLength _ => [.index]
   | .indexEqual | .indexLess | .vectorEqual _ | .fieldEqual _ => [.boolean]
@@ -53,7 +62,9 @@ def bindingRoot : String → Option (Option String)
   | "field.embed" => some (some "ExtensionField")
   | "vector.equal" => some (some "CommRing")
   | "resource_unit.create" | "resource_unit.pass" | "resource_unit.consume" => some (some "Slot")
-  | _ => none
+  | "bool.and" | "bool.or" | "bool.not" => some none
+  | "field.constant" | "field.add" | "field.sub" | "field.mul" => some (some "Field")
+  | contract => (Numerical.ofContract contract).map Numerical.root
 
 /-- The sort of a binding's static root. -/
 def bindingRootSort (contract : String) : String :=
@@ -84,6 +95,13 @@ base of an embedding is resolved from the actual nominal row before use. -/
 def bindingSignature (contract root : String) (base : String := "") :
     Except String (List Ty × List Ty) := do
   if contract == "field.embed" then return ([.field base], [.field root])
+  if contract == "field.constant" then return ([], [.field root])
+  if ["field.add", "field.sub", "field.mul"].contains contract then
+    return ([.field root, .field root], [.field root])
+  if ["bool.and", "bool.or"].contains contract then return ([.boolean, .boolean], [.boolean])
+  if contract == "bool.not" then return ([.boolean], [.boolean])
+  if let some numerical := Numerical.ofContract contract then
+    return (numerical.arguments root base, numerical.results root base)
   if contract == "resource_unit.create" then return ([], [.resourceUnit root])
   if contract == "resource_unit.pass" then return ([.resourceUnit root], [.resourceUnit root])
   if contract == "resource_unit.consume" then return ([.resourceUnit root], [])
@@ -129,12 +147,14 @@ def Binding.resolveRoot (catalogue : Catalogue) (binding : Binding) : Except Str
       binding.checkSignature root ""
       return root
     catalogue.require root .field capability
-    let base ← if binding.contract == "field.embed" then do
+    let base ← if binding.contract == "field.embed" || binding.contract == "vector.embed" then do
       let nominal ← catalogue.expect root .field
       let some base := nominal.member "BaseField" | throw "structured-domain-member"
       catalogue.requireEmbedding root base
       pure base
     else pure ""
+    if binding.contract == "poly.even_odd_fold" then
+      catalogue.require root .field "CharacteristicNotTwo"
     binding.checkSignature root base
     return root
   | _, _ => throw "structured-binding"

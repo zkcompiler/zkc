@@ -79,7 +79,7 @@ theorem checkTable_expansion (table : Meanings F G) {bindings : MultilinearPrefi
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, prepend_empty, prepend_one, prepend_three,
     Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate]
+    PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
       ite_true, Values.get, ← List.sum_eq_foldl]
@@ -115,7 +115,7 @@ theorem check_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-    Primitive.evaluate]
+    Primitive.evaluate, Primitive.evaluateOn]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
       ite_true, Values.get, Evaluation.invokeCallback]

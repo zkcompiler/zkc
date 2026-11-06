@@ -99,7 +99,7 @@ theorem repeat_distribution_of_queryLaw [SampleableType F]
     (context : ProtocolContext) (handle : Nat)
     (queryLaw : ∀ s, SameDist
       ((participantActions F G (.query (queryKey context handle).1
-        (queryKey context handle).2.1 (.cons handle .nil))).runM handler s)
+        (.draw (queryKey context handle).2.1) (.cons handle .nil))).runM handler s)
       (freshQuery (F := F) (before (queryKey context handle))
         (after (queryKey context handle)) s))
     (n : Nat) (point : List F) (claim : F) (s : S) :

@@ -256,11 +256,23 @@ def is_handle(value):
         is_handle(actual[1]) for actual in value[2] if actual[0] == "type")
 
 
+def contains_polynomial(value):
+    """The local polynomial carrier has no common-value transport codec."""
+    logical_type(value)
+    if value[0] == "variant":
+        return any(contains_polynomial(child) for _, fields in value[2] for child in fields)
+    if value[0] != "apply":
+        return False
+    return value[1] == "polynomial" or any(
+        contains_polynomial(argument[1]) for argument in value[2] if argument[0] == "type")
+
+
 def interpreted_type(value, payload=False):
     """Project only the existing formal vocabulary after neutral validation."""
     logical_type(value)
     if payload:
         require(not is_handle(value), "logical handle is not an ordinary payload")
+        require(not contains_polynomial(value), "polynomial value is local")
     tag = value[0]
     if tag == "service":
         return value
@@ -277,7 +289,7 @@ def interpreted_type(value, payload=False):
         return ["resource_unit", custody_slot(value)]
     if name in ("bool", "index", "indices"):
         return [name]
-    if name in ("field", "vector", "group", "groups"):
+    if name in ("field", "vector", "polynomial", "group", "groups"):
         return [name, arguments[0][2]]
     if name == "sequence":
         return [name, interpreted_type(arguments[0][1], payload)]
@@ -443,14 +455,30 @@ def validate_parameters(values, specification, field=None, modulus=None):
             require(len(values) == 3 and int(values[2][1]) <= 1, "matrix vector orientation")
     elif validator in ("FieldLiteral", "FieldLiterals"):
         require(field is not None and modulus is not None, "field parameter needs independent domain admission")
-        require(all(value[0] == "field_literal" and value[1] == field and value[2] == "natural"
-                    and int(value[3]) < modulus for value in values), "field literal domain or range")
+        widths = {"gf2-64.pentanomial-4-3-1": 64,
+                  "gf2-64.pentanomial-4-3-1.ext3-trinomial1": 192}
+        for value in values:
+            require(value[0] == "field_literal" and value[1] == field, "field literal domain")
+            if value[2] == "natural":
+                require(int(value[3]) < modulus, "field literal range")
+            else:
+                require(modulus == 2 and field in widths, "field literal encoding")
+                require(int(value[3], 16) < 2 ** widths[field], "field literal range")
     elif validator in ("AssetIdentity", "MatrixIdentity"):
         format_ = "zkc.matrix/0" if validator == "MatrixIdentity" else specification["assetFormat"]
         require(len(values) == 1 and values[0][0] == "asset" and values[0][1] == format_, "asset format mismatch")
     elif validator == "NativeOrigin":
         require(len(values) == 1 and values[0][0] == "origin", "expected native origin parameter")
         origin_hex(values[0])
+    elif validator == "NativeIndexBlock":
+        require(len(values) == 3 and values[0][0] == "origin"
+                and all(value[0] == "natural" for value in values[1:]), "native block parameters")
+        event = origin_structure(values[0][1])
+        require(event[0] == "query" and event[5] == "indices", "native block origin method")
+        bound, count = (int(value[1]) for value in values[1:])
+        # These constraints belong to this native constructed kernel only.
+        require(0 < bound <= 1 << 63 and bound & (bound - 1) == 0
+                and 0 < count <= 1048576, "native block provider limits")
     elif validator == "NumericalExpression":
         raise ValueError("numerical parameter needs installed expression interpretation")
     else:
@@ -634,6 +662,7 @@ class RealizationTypes:
         logical_type(value, budget=self.budget)
         if payload:
             require(not is_handle(value), "logical handle is not an ordinary payload")
+            require(not contains_polynomial(value), "polynomial value is local")
         return value
 
     def finish(self):

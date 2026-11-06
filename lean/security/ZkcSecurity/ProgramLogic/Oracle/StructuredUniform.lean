@@ -33,11 +33,13 @@ def withUniformQueries [SampleableType F]
     PIR.MonadHandler ProbComp (participantInterface F G) S E
   | .receive ty site peer, s => network (.receive ty site peer) s
   | .send (ty := ty) site peer value, s => network (.send (ty := ty) site peer value) s
-  | .query site field (.cons handle .nil), s =>
+  | .query site (.draw field) (.cons handle .nil), s =>
       let key : Key := (site, field, handle)
       if key ∈ ports then
         freshQuery (F := F) (before key) (after key) s
       else pure ⟨.stopped .refused, s, []⟩
+  | .query _ (.sampleIndex _) _, s | .query _ (.sampleIndices _) _, s =>
+      pure ⟨.stopped .refused, s, []⟩
 
 private theorem follow_result_identity {A : Type} (e : PIR.Execution S E A) :
     e.followM (m := ProbComp) (fun a s => pure (result a s)) = pure e := by
@@ -71,7 +73,7 @@ variable [SampleableType F]
 network. No honesty, reachability, or successful-callback premise is required. -/
 theorem withUniformQueries_query (site field : String) (handle : Nat)
     (member : (site, field, handle) ∈ ports) (s : S) :
-    (participantActions F G (.query site field (.cons handle .nil))).runM
+    (participantActions F G (.query site (.draw field) (.cons handle .nil))).runM
         (withUniformQueries network ports before after) s =
       freshQuery (before (site, field, handle)) (after (site, field, handle)) s := by
   rw [participantActions_runM]
@@ -84,7 +86,7 @@ theorem withUniformQueries_query (site field : String) (handle : Nat)
 events, even if the wrapped network would answer that query. -/
 theorem withUniformQueries_unconfigured (site field : String) (handle : Nat)
     (missing : (site, field, handle) ∉ ports) (s : S) :
-    (participantActions F G (.query site field (.cons handle .nil))).runM
+    (participantActions F G (.query site (.draw field) (.cons handle .nil))).runM
         (withUniformQueries network ports before after) s =
       pure ⟨.stopped .refused, s, []⟩ := by
   rw [participantActions_runM]
@@ -92,6 +94,16 @@ theorem withUniformQueries_unconfigured (site field : String) (handle : Nat)
     freshQuery (before (site, field, handle)) (after (site, field, handle)) s
     else pure ⟨.stopped .refused, s, []⟩) = _
   simp only [missing, ite_false]
-  rfl
+
+/-- This field-only provider does not reinterpret finite index replies as fields. -/
+@[simp] theorem withUniformQueries_index (site contract : String) (handle bound : Nat) (s : S) :
+    withUniformQueries network ports before after
+      (.query site (.sampleIndex contract) (.cons handle (.cons bound .nil))) s =
+      pure ⟨.stopped .refused, s, []⟩ := rfl
+
+@[simp] theorem withUniformQueries_block (site contract : String) (handle bound count : Nat) (s : S) :
+    withUniformQueries network ports before after
+      (.query site (.sampleIndices contract) (.cons handle (.cons bound (.cons count .nil)))) s =
+      pure ⟨.stopped .refused, s, []⟩ := rfl
 
 end ZkcSecurity.VCVio.StructuredUniform

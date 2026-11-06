@@ -68,8 +68,10 @@ open MathematicalCompanionSigmaGoals
 does not assume fresh independent services or equality of the two replies. -/
 def privateReplies : PIR.Handler (Occurrence.signature (uniformCarriers Rat Rat)) Nat String
   | .enter _, state | .leave _, state => ⟨.returned (), state, []⟩
-  | .action (.query site _ _), state => ⟨.returned (state + 2 : Rat), state + 1, [site]⟩
+  | .action (.query site (.draw _) _), state => ⟨.returned (state + 2 : Rat), state + 1, [site]⟩
   | .action (.receive (.field _) _ _), state => ⟨.returned (7 : Rat), state, []⟩
+  | .action (.query _ (.sampleIndex _) _), state
+  | .action (.query _ (.sampleIndices _) _), state => ⟨.stopped .refused, state, []⟩
   | .action (.receive ..), state => ⟨.stopped .refused, state, []⟩
   | .action (.send ..), state => ⟨.returned (), state, []⟩
 

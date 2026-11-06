@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.OriginalCorrespondence
+public import Zkc.Construction.OriginalSimulation
 public import ZkcSecurity.Bindings.Transcript.DomainReduction
 public import ZkcSecurity.ProgramLogic.Derivation
 

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Table
+public import Zkc.Source.Structured.PolynomialValue
 public import Mathlib.Algebra.Module.Defs
 
 @[expose] public section
@@ -43,6 +44,7 @@ mutual
     | .index => Nat
     | .field domain => carriers.Field domain
     | .vector domain => List (carriers.Field domain)
+    | .polynomial domain => PolynomialValue (carriers.Field domain)
     | .group domain => carriers.Group domain
     | .groups domain => List (carriers.Group domain)
     | .indices => List Nat

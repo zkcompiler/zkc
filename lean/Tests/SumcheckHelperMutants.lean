@@ -84,7 +84,7 @@ theorem sums_swapped_expansion (table : Meanings F G) (xs : List F) (dimension c
   simp only [sumsSwappedBody, inputs, messageResult, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, prepend_two, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-    Primitive.evaluate, primitiveOutcome, ← List.sum_eq_foldl]
+    Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, ← List.sum_eq_foldl]
 
   rfl
 
@@ -100,7 +100,7 @@ theorem check_permuted_expansion (table : Meanings F G) (xs point : List F) (cla
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-    Primitive.evaluate]
+    Primitive.evaluate, Primitive.evaluateOn]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
       ite_true, Values.get, Evaluation.invokeCallback]
@@ -126,7 +126,7 @@ theorem check_accept_malformed_expansion (table : Meanings F G) (xs point : List
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-    Primitive.evaluate]
+    Primitive.evaluate, Primitive.evaluateOn]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
       ite_true, Values.get, Evaluation.invokeCallback]
@@ -151,7 +151,7 @@ theorem check_ignore_claim_expansion (table : Meanings F G) (xs point : List F) 
   simp only [checkTableIgnoreClaimBody, checkInputs, inputs, boolResult, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate]
+    PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
       ite_true, ← List.sum_eq_foldl]

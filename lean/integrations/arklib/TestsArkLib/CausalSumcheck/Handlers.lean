@@ -37,7 +37,8 @@ noncomputable def earlyHandler : PIR.MonadHandler ProbComp Actual F String
         pure ⟨.returned r, r, ["sample-at-low", "low-ack"]⟩
       else pure ⟨.returned (1-s), s, ["high"]⟩
   | .receive _ _ _, s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
-  | .query _ _ _, s => pure ⟨.returned s, s, ["reused-query"]⟩
+  | .query _ (.draw _) _, s => pure ⟨.returned s, s, ["reused-query"]⟩
+  | .query .., s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
   | .send .., s => pure ⟨.returned (), s, ["delivered"]⟩
 
 /-- Constant-challenge provider: seed-seed is zero. The HIGH-time uniform
@@ -49,7 +50,8 @@ noncomputable def constantChallengeHandler : PIR.MonadHandler ProbComp Actual F 
         let seed ← ($ᵗ F)
         pure ⟨.returned 1, seed-seed, ["sample-at-high", "constant-challenge"]⟩
   | .receive _ _ _, s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
-  | .query _ _ _, s => pure ⟨.returned s, s, ["reused-query"]⟩
+  | .query _ (.draw _) _, s => pure ⟨.returned s, s, ["reused-query"]⟩
+  | .query .., s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
   | .send .., s => pure ⟨.returned (), s, ["delivered"]⟩
 
 /-- The literal high-only fresh uniform control: LOW is already zero; HIGH
@@ -61,7 +63,8 @@ noncomputable def uniformHighHandler : PIR.MonadHandler ProbComp Actual F String
         let r ← ($ᵗ F)
         pure ⟨.returned 1, r, ["sample-at-high"]⟩
   | .receive _ _ _, s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
-  | .query _ _ _, s => pure ⟨.returned s, s, ["reused-query"]⟩
+  | .query _ (.draw _) _, s => pure ⟨.returned s, s, ["reused-query"]⟩
+  | .query .., s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
   | .send .., s => pure ⟨.returned (), s, ["delivered"]⟩
 
 set_option backward.isDefEq.respectTransparency false in
@@ -152,9 +155,10 @@ theorem early_handler_not_factorizable :
 noncomputable def honestHandler : PIR.MonadHandler ProbComp Actual F String
   | .receive (.field _) _ _, s => pure ⟨.returned 0, s, ["endpoint"]⟩
   | .receive _ _ _, s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
-  | .query _ _ _, _ => do
+  | .query _ (.draw _) _, _ => do
       let r ← ($ᵗ F)
       pure ⟨.returned r, r, ["fresh-query"]⟩
+  | .query .., s => pure ⟨.stopped .refused, s, ["unexpected"]⟩
   | .send .., s => pure ⟨.returned (), s, ["delivered"]⟩
 
 set_option backward.isDefEq.respectTransparency false in

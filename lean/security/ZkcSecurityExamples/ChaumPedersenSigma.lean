@@ -88,7 +88,8 @@ theorem prover_sends (firstBase firstKey secondBase secondKey : G) (witness : F)
           (ChaumPedersenViews.program.participant F G 0 (ChaumPedersen.proverInputs firstBase firstKey
             secondBase secondKey witness nonceService)) =
         ⟨.returned (.cons none .nil), (),
-          [.query ChaumPedersen.nonceSite Zkc.Source.Structured.scalarDomain (.cons nonceService .nil),
+          [.query ChaumPedersen.nonceSite (.draw Zkc.Source.Structured.scalarDomain)
+            (.cons nonceService .nil),
            .send (ty := .group Zkc.Source.Structured.groupDomain) ChaumPedersen.firstCommitmentSite 1
              (nonce • firstBase),
            .send (ty := .group Zkc.Source.Structured.groupDomain) ChaumPedersen.secondCommitmentSite 1

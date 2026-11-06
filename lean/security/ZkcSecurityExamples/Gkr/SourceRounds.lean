@@ -32,7 +32,7 @@ def program (ctx : ProtocolContext) (site : String) (handle : Nat) :
     .call (.action (.receive (.field "bls12-381.fr") (GkrVerifier.roundSite ctx "1") (ctx.roles 0))) fun b =>
     .call (.action (.receive (.field "bls12-381.fr") (GkrVerifier.roundSite ctx "2") (ctx.roles 0))) fun c =>
     .done (some (a,b,c))
-  query _ _ _ := .action (.query (GkrVerifier.challengeSite ctx) "bls12-381.fr" (SourceRows.RoundCaptures.pack { service := handle }))
+  query _ _ _ := .action (.query (GkrVerifier.challengeSite ctx) (.draw "bls12-381.fr") (SourceRows.RoundCaptures.pack { service := handle }))
   challenge _ _ _ r := r
   deliver _ state _ r :=
     .call (.action (.send (ty := (.field "bls12-381.fr")) (GkrVerifier.deliverySite ctx) (ctx.roles 0) r)) fun _ =>

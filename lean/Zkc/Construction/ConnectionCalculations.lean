@@ -351,7 +351,7 @@ theorem form_math_present_closed (definitions : List CheckedDefinition) (helper 
             results context runs processes (.cons values.present binders) := by
   change (invoke _ helper (Comps.eval results terms binders)).bind _ = _
   rw [present, Evaluation.ComponentTablesOn.adequate_fold model _ _
-    (Evaluation.ComponentTablesOn.adequate_empty model) definitions helper arguments,
+    Evaluation.ComponentTablesOn.adequate_empty definitions helper arguments,
     Evaluation.closed_invoke_componentTablesOn, PIR.Process.bind_assoc]
   rfl
 

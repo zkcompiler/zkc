@@ -13,6 +13,7 @@ public import Zkc.Construction.Uniform.ScalarHandles
 family-specific presentation below is a source-to-source capability relabeling;
 no artifact, instruction, route, frame or oracle simulation is authored here. -/
 set_option autoImplicit false
+set_option maxRecDepth 50000
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcExamples.Construction.SumcheckSourceConnection

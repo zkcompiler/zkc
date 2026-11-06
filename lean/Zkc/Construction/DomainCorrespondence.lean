@@ -85,6 +85,22 @@ theorem challenge (suite field : String) (template : Template) (state coordinate
   intro env
   kernel_rfl
 
+theorem indexChallenge (suite : String) (bound : Nat) (template : Template)
+    (state boundReference coordinates : Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.indexChallenge suite bound template, [state, boundReference, coordinates], declared, []⟩
+      (View.indexChallenge context suite bound template state boundReference coordinates declared) := by
+  intro env
+  kernel_rfl
+
+theorem blockChallenge (suite : String) (bound count : Nat) (template : Template)
+    (state coordinates : Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.blockChallenge suite bound count template, [state, coordinates], declared, []⟩
+      (View.blockChallenge context suite bound count template state coordinates declared) := by
+  intro env
+  kernel_rfl
+
 theorem localService (port : ServicePort) (request : Request) (template : Template)
     (coordinates references : List Nat) (declared : List ValueSort) :
     Step (model := model) (program := program) (context := context)

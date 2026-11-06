@@ -25,7 +25,7 @@ theorem template_origin_length (context : Context) (template : Template) (origin
     | none => simp [asked] at found
     | some request =>
         simp [asked] at found
-        subst origin
+        rcases found with ⟨_, rfl⟩
         rfl
   · cases found
 
@@ -56,13 +56,16 @@ theorem queryOrigin_scoped (context : Context) (suite field : String) (template 
     (event : template.event = ["query", localEntry, site, port, contract, "draw", owner]) :
     Domain.queryOrigin context suite field template coordinates =
       some (Domain.atCoordinates (context.query (template.qualify site) (.draw field)) coordinates) := by
-  simp only [Domain.queryOrigin, suiteEq, contractEq, request, and_self, ite_true,
-    Domain.templateOrigin, entry, depth, kinds, Template.origin, event, Option.map_some]
-  have actual : (Domain.atCoordinates (context.query (template.qualify site) (.draw field)) coordinates).request =
-      some (.draw field) := by
+  have sourceOrigin : template.origin context =
+      some (context.query (template.qualify site) (.draw field)) := by
+    simp only [Template.origin, event, request]
+    rfl
+  have actual : (Domain.atCoordinates (context.query (template.qualify site) (.draw field))
+      coordinates).request = some (.draw field) := by
     simp only [Domain.atCoordinates]
     split <;> rfl
-  simp only [actual, ite_true]
+  simp only [Domain.queryOrigin, suiteEq, contractEq, request, and_self, ite_true,
+    Domain.templateOrigin, entry, depth, kinds, sourceOrigin, Option.map_some, actual]
 
 /-- Message admission uses the source site as its schema, independently of
 its payload. The dynamic suffix remains in the nominal occurrence. -/

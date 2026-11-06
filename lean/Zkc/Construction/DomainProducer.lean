@@ -43,9 +43,10 @@ abbrev LocalServices (m : Type → Type) (carriers : Structured.Carriers) (S : T
 def refuseLocal : LocalServices m carriers S :=
   fun _ _ _ state => pure (.stopped .refused, state)
 
-/-- Unsupported methods, operands and non-field requests cannot reach the oracle. -/
+/-- Only exactly formed field, scalar-index or block-index requests reach the
+public oracle. The historical declaration name is retained for existing laws. -/
 def drawRequest : Origin → Bool
-  | ⟨_, _, some ⟨"draw", [], .field _⟩⟩ => true
+  | ⟨_, _, some request⟩ => request.valid
   | _ => false
 
 /-- Production appends exact sent payloads. Validation consumes only successfully

@@ -29,6 +29,15 @@ def check (program : Program) : Bool :=
 /-- Boundaries and service queries are supported; only receives require data. -/
 abbrev sourceOperation {carriers : Carriers} := DomainSourceReading.DataOperation (carriers := carriers)
 
+/-- Apply the public support predicate before specializing a source process.
+Every nominal proof receive still requires recursive data support. -/
+theorem lossless (model : DomainModel) (routing : Original.Routing) {A : Type}
+    (source : PIR.Process (Occurrence.signature model.toCarriers) A)
+    (supported : OperationSupport sourceOperation source) (state : Original.State model.toCarriers) :
+    ZkcSecurity.FiatShamir.Original.LosslessOn NominalDomain.interface
+      (DomainSourceReading.presentation routing source state) :=
+  DomainSourceReading.presentation_lossless model routing source supported state
+
 private def fromClosed {I : PIR.Signature} : PIR.OperationInterpretation closedInterface I :=
   fun operation => nomatch operation
 
@@ -105,6 +114,7 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
         (helperTables model (Occurrence.signature model.toCarriers) definitions)
         self op args callbacks table context Occurrence.iterations) := by
   cases op with
+  | oracle => trivial
   | calculate op allowed =>
     exact calculation model definitions op allowed args
   | localCall helper kind owner site =>
@@ -155,6 +165,20 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
         | none => trivial
         | some values => exact ⟨trivial, fun _ => trivial⟩
       · trivial
+  | query owner operation site =>
+    cases callbacks
+    simp only [protocolOperationWithOn, Participant.query]
+    split
+    · cases RoleFamily.sequence args with
+      | none => trivial
+      | some values =>
+        simp only [PIR.Process.interpret_bind, PIR.Process.interpret, serviceAction]
+        split
+        · refine ⟨trivial, fun reply => ?_⟩
+          dsimp only [PIR.Process.bind]
+          split <;> trivial
+        · trivial
+    · trivial
   | statement => trivial
   | mark => cases args; trivial
   | protocolApply signature roles site =>

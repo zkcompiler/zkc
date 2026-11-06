@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Construction.ConnectionServiceCoverage
 public import Zkc.Construction.ConnectionRouteCoverageLoops
 public import Zkc.Construction.ConnectionApplicationCoverageFrame
 
@@ -11,7 +12,7 @@ The successful-leaf invariant retains the complete source-owned nominal row. -/
 set_option autoImplicit false
 namespace Zkc.Construction.ConnectionCertificate
 open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame ConnectionComputation
-open ConnectionRouteCoverage
+open ConnectionRouteCoverage ConnectionServiceRequests
 
 set_option hygiene false in
 macro "retain_connection_frame" : tactic => `(tactic|
@@ -250,37 +251,47 @@ macro "retain_connection_frame" : tactic => `(tactic|
       refine ⟨?_⟩
       simpa only [frames_cons, Form.denoteOn, PIR.Process.bind] using
         ih model tables bindings protocols processes calleesHold selectionMeaning captured (.cons value binders) reachedHistory _ (observed_frame preparedRelated routing.context.suite) (by retain_connection_frame)
-  | @delivery context definitions callees selection out role scopes outputs history scope frames layout site field peer next rest replacement profile mode draw message binding contract request stateRef pathRef stateRead pathRead prepared preparation preparationProof observeStateRef observePathRef valueRead observeStateRead observePathRead tail ih =>
+  | @delivery context definitions callees selection out role scopes outputs history scope frames layout site service peer next rest replacement profile mode draw message binding nominal publicService supported stateRef pathRef stateRead pathRead challenge shape prepared preparation preparationProof observeStateRef observePathRef valueRead observeStateRead observePathRead tail ih =>
     apply Covered.action
-    · exact ConnectionActionCoverage.delivery (context.roles peer) draw message replacement profile mode binding (frames.sites_eval model binders)
+    · exact binding.coverage replacement profile mode _ (frames.sites_eval model binders)
     · intro value
       apply Classical.choice
+      obtain ⟨encoded, encoding⟩ := Domain.Value.encode_exists (carriers := model.toCarriers)
+        (by simpa [Domain.dataType] using service.data) value
       obtain ⟨preparedEnvironment, preparedRelated, preparedKept⟩ := CoordinatePrefix.realizeRetained preparationProof
-        (query_frame related field routing.context.suite value)
+        (service_frame related service.request.sort routing.context.suite value encoded encoding)
       refine ⟨?_⟩
       simpa only [frames_cons, Form.denoteOn, PIR.Process.bind] using
         ih model tables bindings protocols processes calleesHold selectionMeaning captured (.cons value binders) reachedHistory _ (observed_frame preparedRelated routing.context.suite) (by retain_connection_frame)
   | indicesEmpty tail ih => exact ih model tables bindings protocols processes calleesHold selectionMeaning captured binders reachedHistory _ related.indicesEmpty (by retain_connection_frame)
   | indicesAppend terms term coordinateRef indexRef coordinates index tail ih =>
     exact ih model tables bindings protocols processes calleesHold selectionMeaning captured binders reachedHistory _ (related.indicesAppend coordinates index).2 (by retain_connection_frame)
-  | @publicQuery context definitions callees selection out role scopes outputs history scope frames layout site field handle selected next rest mode publicService contract request template route stateRef pathRef stateRead pathRead tail ih =>
-    apply Covered.action
-    · exact ConnectionActionCoverage.publicQuery handle selected mode publicService (frames.sites_eval model binders) route
+  | @publicQuery context definitions callees selection out role scopes outputs history scope frames layout
+      site service next rest mode template binding supported stateRef pathRef stateRead pathRead challenge shape tail ih =>
+    apply service.coverForm binding.valid
+    · exact binding.coverage mode _ (frames.sites_eval model binders)
     · intro value
-      have checked := ih model tables bindings protocols processes calleesHold selectionMeaning captured (.cons value binders) reachedHistory _ (query_frame related field routing.context.suite value) (by retain_connection_frame)
-      rw [frames_cons (slot := .value (.field field)) frames binders value] at checked
-      change Covered _ _ _ _ (next.denoteOn model Occurrence.actions tables (LawResults.empty model) context
-        (runsAtOn model Occurrence.actions Occurrence.iterations tables protocols context role) processes (.cons value binders))
-      exact checked
-  | @localQuery context definitions callees selection out role scopes outputs history scope frames layout site field handle next rest port template mode binding contract coordinates readback tail ih =>
-    apply Covered.action
-    · exact ConnectionActionCoverage.localQuery handle port binding (frames.sites_eval model binders)
+      apply Classical.choice
+      obtain ⟨encoded, encoding⟩ := Domain.Value.encode_exists (carriers := model.toCarriers)
+        (by simpa [Domain.dataType] using service.data) value
+      have checked := ih model tables bindings protocols processes calleesHold selectionMeaning captured
+        (.cons value binders) reachedHistory _
+        (service_frame related service.request.sort routing.context.suite value encoded encoding)
+        (by retain_connection_frame)
+      rw [frames_cons (slot := .value service.request.sort) frames binders value] at checked
+      exact ⟨checked⟩
+  | @localQuery context definitions callees selection out role scopes outputs history scope frames layout
+      site service next rest port template mode binding coordinates references readback operands tail ih =>
+    apply service.coverForm binding.valid
+    · exact binding.coverage _ (frames.sites_eval model binders)
     · intro value
-      have checked := ih model tables bindings protocols processes calleesHold selectionMeaning captured (.cons value binders) reachedHistory _ (related.bindData (ty := .field field) value rfl) (by retain_connection_frame)
-      rw [frames_cons (slot := .value (.field field)) frames binders value] at checked
-      change Covered _ _ _ _ (next.denoteOn model Occurrence.actions tables (LawResults.empty model) context
-        (runsAtOn model Occurrence.actions Occurrence.iterations tables protocols context role) processes (.cons value binders))
-      exact checked
+      apply Classical.choice
+      obtain ⟨encoded, encoding⟩ := Domain.Value.encode_exists (carriers := model.toCarriers)
+        (by simpa [Domain.dataType] using service.data) value
+      have checked := ih model tables bindings protocols processes calleesHold selectionMeaning captured
+        (.cons value binders) reachedHistory _ (related.bindData value encoding) (by retain_connection_frame)
+      rw [frames_cons (slot := .value service.request.sort) frames binders value] at checked
+      exact ⟨checked⟩
   | @«repeat» context definitions callees selection out role scopes outputs history scope frames layout spec site callback count initial captures next body rest roster distinct active visible mappedVisible countReference countRead stateReferences initialReferences yieldData yielded initialHistory bodyHistory initialRead historyRead initialProfile bodyProfile yieldLocations bodyForm normalized bodyCertificate tail bodyIH tailIH =>
     apply Classical.choice
     obtain ⟨initialValues, initialPresent, initialReading⟩ := read_components initialRead binders related

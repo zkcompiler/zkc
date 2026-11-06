@@ -14,7 +14,7 @@ variable {F G : Type} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
 
 def commitmentPrefix (base : G) (service : Nat) : PIR.Process (participantInterface F G) (G × F) :=
-  .call (.query nonceSite scalarDomain (.cons service .nil)) fun (nonce : F) =>
+  .call (.query nonceSite (.draw scalarDomain) (.cons service .nil)) fun (nonce : F) =>
   .call (.send (ty := .group groupDomain) wiring.commitmentSite 1 (nonce • base)) fun _ =>
   .done (nonce • base, nonce)
 
@@ -38,11 +38,10 @@ theorem prefix_run (base : G) (nonce : F) (service : Nat) :
     (commitmentPrefix base service).run
       (SchnorrHonestProver.replyHandler service (.returned nonce) (.stopped .refused)) () =
       ⟨.returned (nonce • base, nonce), (),
-        [.query nonceSite scalarDomain (.cons service .nil),
+        [.query nonceSite (.draw scalarDomain) (.cons service .nil),
          .send (ty := .group groupDomain) wiring.commitmentSite 1 (nonce • base)]⟩ := by
   simp [commitmentPrefix, PIR.Process.run, PIR.Execution.follow, SchnorrHonestProver.replyHandler,
     services, Values.get]
-  rfl
 
 def returnedValue {A : Type} : PIR.Outcome A → Option A
   | .returned result => some result

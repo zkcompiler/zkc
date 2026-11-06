@@ -44,7 +44,7 @@ theorem less_body (table : Meanings F G) (a b : Nat)
   simp [lessBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, Environment.push,
     SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-    Primitive.evaluate, primitiveOutcome, checkedIndices, aBound, bBound, boolResult]
+    Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, checkedIndices, aBound, bBound, boolResult]
 
 /-- This assumption is discharged from the retained declaration, not its name. -/
 def LessLaw (table : Meanings F G) : Prop :=
@@ -81,7 +81,7 @@ theorem rows_rejected (table : Meanings F G) (less : LessLaw table) (dimension :
   simp [rowsBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Environment.prepend,
     Environment.push, indexResult, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, primitiveOutcome, comparison, boolResult, large,
+    PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, comparison, boolResult, large,
     Evaluation.invokeCallback, show 64 < indexLimit by decide +kernel]
 
 def RowsLaw (table : Meanings F G) : Prop :=
@@ -152,7 +152,7 @@ theorem less_generic_body_all (table : Meanings F G) (a b : Nat) :
   simp only [lessBody, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, Environment.prepend, Environment.push,
-    SiteObservations.closed, SiteObservations.silent, Primitive.evaluate, checkedIndices,
+    SiteObservations.closed, SiteObservations.silent, Primitive.evaluate, Primitive.evaluateOn, checkedIndices,
     PIR.Process.bind]
   split <;> rfl
 

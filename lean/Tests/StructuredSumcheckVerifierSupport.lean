@@ -43,7 +43,7 @@ def scalarReply (site : String) (event : F → Event F) (state : State F) :
 
 def handler : PIR.Handler (participantInterface F F) (State F) (Event F)
   | .receive (.field _) site peer, state => scalarReply site (.receive site peer) state
-  | .query site _ (.cons handle .nil), state => scalarReply site (.query site handle) state
+  | .query site (.draw _) (.cons handle .nil), state => scalarReply site (.query site handle) state
   | .send (ty := .field _) site peer value, state =>
       match state.replies with
       | .ack :: rest => ⟨.returned (), ⟨rest, state.consumed + 1⟩, [.send site peer value]⟩

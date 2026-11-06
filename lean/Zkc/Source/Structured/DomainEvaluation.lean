@@ -18,49 +18,13 @@ model's action of the named field on the named group. Definitions that only
 name values take carriers; those that compute take a model.
 
 The uniform evaluator is the instance at `ringModel F G`, by the equations at
-the end of this module. It is kept as its own definition, so that existing
-proofs, which unfold it case by case, are unchanged. -/
+the end of this module. Primitive evaluation already shares the same equations:
+`Primitive.evaluate` is the exact ring-only specialization of
+`Primitive.evaluateOn`. Structural evaluation retains the existing definitions
+and their specialization theorems. -/
 
 set_option autoImplicit false
 namespace Zkc.Source.Structured
-
-/-- Primitive evaluation over a field model. Only the ring structure and
-decidable equality of each field identity are used. -/
-def Primitive.evaluateOn (model : FieldModel) :
-    (primitive : Primitive) → Values model.Value primitive.arguments →
-      PIR.Outcome (Values model.Value primitive.results)
-  | .indexConstant n, .nil =>
-      if n < indexLimit then .returned (.cons n .nil) else .stopped .refused
-  | .indexEqual, .cons a (.cons b .nil) =>
-      checkedIndices a b (.returned (.cons (decide (a = b)) .nil))
-  | .indexLess, .cons a (.cons b .nil) =>
-      checkedIndices a b (.returned (.cons (decide (a < b)) .nil))
-  | .indexAdd, .cons a (.cons b .nil) =>
-      checkedIndices a b (if a + b < indexLimit then .returned (.cons (a + b) .nil)
-        else .stopped .refused)
-  | .indexMul, .cons a (.cons b .nil) =>
-      checkedIndices a b (if a * b < indexLimit then .returned (.cons (a * b) .nil)
-        else .stopped .refused)
-  | .indexSub, .cons a (.cons b .nil) =>
-      checkedIndices a b (if b ≤ a then .returned (.cons (a - b) .nil) else .stopped .refused)
-  | .indexDiv, .cons a (.cons b .nil) =>
-      checkedIndices a b (if b = 0 then .stopped .refused else .returned (.cons (a / b) .nil))
-  | .indexMod, .cons a (.cons b .nil) =>
-      checkedIndices a b (if b = 0 then .stopped .refused else .returned (.cons (a % b) .nil))
-  | .vectorEmpty _, .nil => .returned (.cons [] .nil)
-  | .vectorLength _, .cons xs .nil =>
-      if xs.length < indexLimit then .returned (.cons xs.length .nil) else .stopped .exhausted
-  | .vectorSum _, .cons xs .nil => .returned (.cons (xs.foldl (· + ·) 0) .nil)
-  | .vectorSplit _, .cons xs .nil =>
-      if xs.length > 0 ∧ xs.length % 2 = 0 then
-        .returned (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) .nil))
-      else .stopped .refused
-  | .vectorAppend _, .cons xs (.cons x .nil) => .returned (.cons (xs ++ [x]) .nil)
-  | .vectorEqual _, .cons xs (.cons ys .nil) => .returned (.cons (decide (xs = ys)) .nil)
-  | .fieldEqual _, .cons x (.cons y .nil) => .returned (.cons (decide (x = y)) .nil)
-
-attribute [local simp] Primitive.evaluateOn
-
 
 namespace Evaluation
 
@@ -322,9 +286,7 @@ section Uniform
 variable {F G : Type}
 
 theorem Primitive.evaluate_eq_evaluateOn [CommRing F] [DecidableEq F] :
-    Primitive.evaluate (F := F) (G := G) = Primitive.evaluateOn (ringFieldModel F G) := by
-  funext primitive args
-  cases primitive <;> (iterate 3 (try (rcases args with _ | ⟨_, args⟩))) <;> rfl
+    Primitive.evaluate (F := F) (G := G) = Primitive.evaluateOn (ringFieldModel F G) := rfl
 
 
 namespace Evaluation
