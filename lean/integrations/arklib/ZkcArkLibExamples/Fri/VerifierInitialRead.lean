@@ -1,7 +1,8 @@
 module
 
 public import ZkcExamples.Structured.FriCheckPositions
-public import ZkcArkLibExamples.Fri.StoredWord
+public import Zkc.Source.Structured.RegisteredWord
+public import ZkcArkLib.Fri.SourcePublication
 public import Zkc.Source.Structured.MarkedPublication
 
 @[expose] public section
@@ -39,7 +40,7 @@ private theorem read (context : ProtocolContext) (receiver : context.roles 1 = 1
     (state : State model snapshot domains math Aux)
     (role : state.oracle.self = 1) (source : OracleAnchor) {n : Nat}
     (word : Fin (2 ^ n) → model.Field extension)
-    (live : StoredWord.Base state.oracle.entries state.oracle.self source word state.oracle.provider)
+    (live : PublishedWords.RegisteredWord (row := .field extension) state.oracle.entries state.oracle.self source word state.oracle.provider)
     (index : Fin (2 ^ n)) :
     PublishedWords.actionM oracles ordinary choose (initialRequest context source index.val) state =
       pure (response context source index.val (word index) state) := by
@@ -55,7 +56,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (source : OracleAnchor) (cap : FriCheckPositions.Captures model)
     (state : State model snapshot domains math Aux)
     (role : state.oracle.self = 1) {n : Nat} (word : Fin (2 ^ n) → model.Field extension)
-    (live : StoredWord.Base state.oracle.entries state.oracle.self source word state.oracle.provider)
+    (live : PublishedWords.RegisteredWord (row := .field extension) state.oracle.entries state.oracle.self source word state.oracle.provider)
     (inside : xs[ordinal.val] < 2 ^ n) :
     let process := iteration context cap xs ordinal.val source
     let handler := PublishedWords.actionM oracles ordinary choose
@@ -74,7 +75,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
   apply OraclePublication.runMarked
   intro current same
   have active : current.oracle.self = 1 := by rw [same, role]
-  have currentLive : StoredWord.Base current.oracle.entries current.oracle.self source word current.oracle.provider := by
+  have currentLive : PublishedWords.RegisteredWord (row := .field extension) current.oracle.entries current.oracle.self source word current.oracle.provider := by
     rw [same]; exact live
   have reply := read oracles ordinary choose context receiver current active source word currentLive ⟨_, inside⟩
   simp only [PublishedWords.actionM, Fin.val_mk] at reply
@@ -89,7 +90,7 @@ theorem rejectsClaim (context : ProtocolContext) (receiver : context.roles 1 = 1
     (source : OracleAnchor) (cap : FriCheckPositions.Captures model)
     (state : State model snapshot domains math Aux) (role : state.oracle.self = 1)
     {n : Nat} (word : Fin (2 ^ n) → model.Field extension)
-    (live : StoredWord.Base state.oracle.entries state.oracle.self source word state.oracle.provider)
+    (live : PublishedWords.RegisteredWord (row := .field extension) state.oracle.entries state.oracle.self source word state.oracle.provider)
     (inside : xs[ordinal.val] < 2 ^ n) (first : List (model.Field extension))
     (enabled : cap.associate = OracleProtocol.concrete model .boolean true)
     (vector : cap.first = OracleProtocol.concrete model (.vector extension) first)
@@ -104,7 +105,7 @@ theorem rejectsClaim (context : ProtocolContext) (receiver : context.roles 1 = 1
     (fun _ ↦ Or.inr rfl) state.oracle ?_ state rfl
   intro current same
   have active : current.oracle.self = 1 := by rw [same, role]
-  have currentLive : StoredWord.Base current.oracle.entries current.oracle.self source word current.oracle.provider := by
+  have currentLive : PublishedWords.RegisteredWord (row := .field extension) current.oracle.entries current.oracle.self source word current.oracle.provider := by
     rw [same]; exact live
   have reply := read oracles ordinary choose context receiver current active source word currentLive ⟨_, inside⟩
   simp only [PublishedWords.actionM, Fin.val_mk] at reply

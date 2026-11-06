@@ -41,7 +41,7 @@ inductive Registered {Aux : Type} (layers folds : List OracleAnchor) :
       (layer : VerifierRound.Selection store layers (wrappingAdd step 1) (2 ^ (n + 1)))
       (view : VerifierRound.Selection (charged store 1) folds (wrappingAdd step 1)
         (logicalShiftRight (2 ^ (n + 1)) 1))
-      (live : StoredWord.Base (d := extension) store.entries store.self
+      (live : PublishedWords.RegisteredWord (row := .field extension) store.entries store.self
         (layers.get ⟨wrappingAdd step 1, layer.inside⟩) word store.provider)
       (virtual : VirtualStore.Registered (charged store 1)
         (layers.get ⟨wrappingAdd step 1, layer.inside⟩) (folds.get ⟨wrappingAdd step 1, view.inside⟩)
@@ -60,8 +60,7 @@ noncomputable def Registered.withQueries {Aux : Type} {layers folds : List Oracl
   | @fold n r word beta shift rest index store layer view live virtual tail ih =>
     exact .fold ⟨layer.fits, layer.inside, layer.visible, layer.table, layer.lookup, layer.allowed, layer.valid, layer.size⟩
       ⟨view.fits, view.inside, view.visible, view.table, view.lookup, view.allowed, view.valid, view.size⟩
-      live ⟨virtual.older, virtual.newer, virtual.holder, virtual.receivers, virtual.live,
-        virtual.allowed, virtual.fresh, virtual.entries⟩ (ih _)
+      live (virtual.extend [] rfl (.refl _) _) (ih _)
 
 theorem advanced_eq {n : Nat} (bound : n + 1 ≤ 5) (shift value folded : Octic)
     (position : Fin (2 ^ (n + 1))) :

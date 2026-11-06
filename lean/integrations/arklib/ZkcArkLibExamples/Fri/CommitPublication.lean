@@ -1,6 +1,7 @@
 module
 
-public import ZkcArkLibExamples.Fri.StoredWord
+public import Zkc.Source.Structured.RegisteredWord
+public import ZkcArkLib.Fri.SourcePublication
 public import ZkcExamples.Structured.FriCommitRound
 public import Zkc.Source.Structured.PublishedWordsLaws
 
@@ -137,7 +138,7 @@ theorem returnedBase (context : ProtocolContext) (receiver : context.roles 1 = 1
     result.outcome = .returned reply →
       ∃ word : Fin (2 ^ n) → model.Field extension,
         attempt.outcome = .returned (List.ofFn word) ∧
-        Nonempty (StoredWord.Base result.state.oracle.entries result.state.oracle.self site.anchor word
+        Nonempty (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries result.state.oracle.self site.anchor word
           result.state.oracle.provider) := by
   let site := location state
   let req : OraclePublication.Request model := request context (2 ^ n) site
@@ -161,14 +162,15 @@ theorem returnedBase (context : ProtocolContext) (receiver : context.roles 1 = 1
       refine ⟨word, congrArg PIR.Outcome.returned canonical.symm, ?_⟩
       let Live (pub : PIR.Execution (PublishedWords.State model Aux) E Unit) : Prop :=
         let result := OraclePublication.complete state (candidate context (2 ^ n) state) pub
-        Nonempty (StoredWord.Base result.state.oracle.entries result.state.oracle.self site.anchor word
+        Nonempty (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries result.state.oracle.self site.anchor word
           result.state.oracle.provider)
       change Live (PublishedWords.finish req state.oracle.provider proposed)
       apply (congrArg Live installed).mpr
       refine ⟨{ registry := ⟨site.anchor, 2 ^ n, context.roles 0, [context.roles 1], .base none⟩
                 lookup := ?_, data := none, base := rfl, visible := ?_, registryRows := rfl,
                 stored := PublishedWords.word req cells, found := ?_, answer := rfl,
-                shape := shape.1, rows := rfl, cells := canonical.symm }⟩
+                shape := shape.1, rows := rfl, cells := canonical.symm,
+                holder := rfl, receivers := rfl, occurrence := rfl }⟩
       · simp [OraclePublication.complete, candidate, site, OracleStore.find]
       · simp [OraclePublication.complete, candidate, OracleStore.visible, self, receiver]
       · exact PublishedWords.find_word req cells _
@@ -190,6 +192,35 @@ theorem returnedBase (context : ProtocolContext) (receiver : context.roles 1 = 1
         cases outcome with
         | stopped reason => cases impossible
         | returned token => cases refused
+
+/-- On the actual receiver action, every successful choice returns the
+dynamic anchor of the published word and installs the reusable provider
+witness for that very word. Stops require no witness. -/
+theorem sendRegisters (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
+    (n : Nat) (bounded : 2 ^ n ≤ 32) (state : State model snapshot domains math Aux)
+    (role : state.oracle.self = 1) (atDef : (registrySite 0).definition = state.frame.definition)
+    (atRow : (registrySite 0).row = state.frame.row)
+    (fresh : OracleStore.hasAnchor state.oracle.entries (location state).anchor = false) :
+    let source := (location state).anchor
+    Std.Do.Internal.Ensures (fun result ↦ ∀ reply, result.outcome = .returned reply →
+      reply = .cons (OracleProtocol.concrete model (.oracle kind) source) .nil ∧
+      ∃ word : Fin (2 ^ n) → model.Field extension, Nonempty
+        (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries
+          result.state.oracle.self source word result.state.oracle.provider))
+      (PublishedWords.actionM oracles network choose (sendRequest context (2 ^ n)) state) := by
+  dsimp only
+  rw [send oracles network choose context receiver separate _ bounded state role atDef atRow fresh]
+  apply Std.Do.Internal.Ensures.bind (P := fun _ ↦ True)
+  · apply Zkc.MonadicPostcondition.of_refinement (do
+      let attempt ← choose (request context (2 ^ n) (location state)) state.oracle.provider.words state.oracle.provider.auxiliary
+      pure ⟨attempt, trivial⟩)
+    simp
+  · intro attempt _
+    apply Zkc.MonadicPostcondition.pure
+    intro reply returned
+    have handle := (installedWord context _ state attempt reply returned).1
+    obtain ⟨word, _, live⟩ := returnedBase context receiver n state role attempt reply returned
+    exact ⟨handle, word, live⟩
 
 /-- The first reached action in the source iteration runs the chooser on
 its original table. Only a returned publication resumes the original append,

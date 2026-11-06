@@ -1,4 +1,5 @@
 import Zkc.Source.Structured.PublishedWordsFrame
+import Zkc.Source.Structured.RegisteredWord
 import Tests.OracleProviderFrame
 import Tests.PublishedWords
 
@@ -8,6 +9,32 @@ open Zkc.Source.Structured.PublishedWords
 open Tests.OracleProcessData (model)
 
 namespace Tests.PublishedWordsFrame
+
+section
+-- Two three-cell words agree on the first read and disagree on the last.
+-- A second word at this anchor is impossible even if it has the right shape.
+private def originalCell (i : Fin 3) : Nat := i.val
+private def changedCell (i : Fin 3) : Nat := if i.val = 2 then 9 else i.val
+
+example : originalCell 0 = changedCell 0 := rfl
+
+example {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMathEnvironment}
+    {entries : OracleEntries model snapshot domains math} {participant : Nat} {source : OracleAnchor}
+    {state : State model Unit}
+    (live : RegisteredWord (row := .index) entries participant source originalCell state) :
+    ¬ Nonempty (RegisteredWord (row := .index) entries participant source changedCell state) := by
+  rintro ⟨alternative⟩
+  have last := congrFun (live.unique alternative) (2 : Fin 3)
+  contradiction
+
+-- Even a preserved provider table cannot authorize a new logical entry
+-- that shadows its dynamic anchor. The registry refuses this insertion.
+example {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMathEnvironment}
+    (entry : OracleStoredTable model snapshot domains math .index) :
+    OracleStore.insert [⟨.index, entry⟩] {entry with rows := 3} = none := by
+  apply OracleStore.insert_duplicate
+  simp [OracleStore.hasAnchor]
+end
 
 /-- No whole-run frame premise: every branch of an arbitrary original Process. -/
 theorem every_process_result {snapshot : Snapshot} {domains : List DomainSpec}

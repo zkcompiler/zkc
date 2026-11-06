@@ -1,7 +1,8 @@
 module
 
 public import ZkcArkLibExamples.Fri.VirtualWord
-public import ZkcArkLibExamples.Fri.StoredWord
+public import Zkc.Source.Structured.RegisteredWord
+public import ZkcArkLib.Fri.SourcePublication
 
 @[expose] public section
 
@@ -30,7 +31,7 @@ theorem foldedCell {Aux E : Type} {m : Nat} (size : m + 1 ≤ 63)
     (geometry : ∀ i : Fin (2 ^ (m + 1)), domain i = point RetainedDomain.root shift (m + 1) i)
     (word : Fin (2 ^ (m + 1)) → Octic) (beta : Octic) (index : Fin (2 ^ m))
     (older newer : Entries) (source anchor : OracleAnchor) (holder self : Nat) (receivers : List Nat)
-    (state : PublishedWords.State model Aux) (live : StoredWord.Base (d := extension) older self source word state)
+    (state : PublishedWords.State model Aux) (live : PublishedWords.RegisteredWord (row := .field extension) older self source word state)
     (allowed : OracleStore.visible self holder receivers = true)
     (fresh : OracleStore.hasAnchor newer anchor = false) (location : OracleLocation)
     (expansion : List (OracleAnchor × OracleLocation)) (count : Nat) :
@@ -71,12 +72,33 @@ structure Registered {Aux : Type} {m : Nat}
   newer : Entries
   holder : Nat
   receivers : List Nat
-  live : StoredWord.Base (d := extension) older runtime.self source word runtime.provider
+  live : PublishedWords.RegisteredWord (row := .field extension) older runtime.self source word runtime.provider
   allowed : OracleStore.visible runtime.self holder receivers = true
   fresh : OracleStore.hasAnchor newer anchor = false
   entries : runtime.entries = newer ++ (⟨kind.answer, table anchor (2 ^ m) holder receivers
     (VirtualReads.captures model source beta (2 ^ (m + 1)) (2 ^ m) shift (RetainedDomain.root (m + 1))
       (shift⁻¹ : Octic) ((RetainedDomain.root (m + 1))⁻¹ : Octic) ((2 : Octic)⁻¹ : Octic))⟩ :: older)
+
+/-- Later publications may extend the registry and advance the read count.
+The child still reads from the older prefix captured by this virtual table.
+Only the provider word travels through its provider frame. -/
+def Registered.extend {Aux : Type} {m : Nat}
+    {runtime : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math
+      (PublishedWords.State model Aux)}
+    {source anchor : OracleAnchor} {word : Fin (2 ^ (m + 1)) → Octic} {beta shift : Octic}
+    (view : Registered runtime source anchor word beta shift) (extra : Entries)
+    (fresh : OracleStore.hasAnchor extra anchor = false) {provider : PublishedWords.State model Aux}
+    (frame : PublishedWords.Preserves runtime.provider.words provider.words) (count : Nat) :
+    Registered {runtime with entries := extra ++ runtime.entries, provider := provider, queries := count}
+      source anchor word beta shift where
+  older := view.older
+  newer := extra ++ view.newer
+  holder := view.holder
+  receivers := view.receivers
+  live := view.live.extend [] rfl frame
+  allowed := view.allowed
+  fresh := by simpa [OracleStore.hasAnchor, List.any_append] using And.intro fresh view.fresh
+  entries := by dsimp only; rw [view.entries, List.append_assoc]
 
 /-- An actual receiver query of the registered virtual handle obtains the
 ArkLib fold. The frame supplies the invocation for all three reads. -/

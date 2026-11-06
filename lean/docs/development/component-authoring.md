@@ -336,6 +336,29 @@ draw, the checked straight-line body also supplies the marks between actions,
 the query and delivery locations, and any marks after the last action. The
 whole-body equation checks the order. A callback has its own mark schedule.
 
+There are two separate tests of reuse in the Sumcheck examples. At the
+two calls in `TwoSums`, the same installed callee proof runs on different
+arguments and in different frames. Each call still charges its own resources.
+A change in wire representation tests a different question.
+`Sumcheck.escape_uniform_le` takes a message law and a reference law. For
+a false claim, an attacker message fixed before a fresh uniform challenge,
+and a passing boundary check, it gives the error
+`max(messageDegree, referenceDegree) / |F|`. The endpoint-pair decoder
+interprets `(a,b)` as the two values at zero and one. The coefficient-triple
+decoder interprets `(a,b,c)` as the coefficients of `a + bX + cX²`. Both
+instantiate that theorem. The mixed-degree test uses a quadratic message
+against an affine reference and needs the larger degree.
+
+A second author using an installed encoding reuses its decoder, degree
+bound, and boundary and evaluation laws. A new encoding needs those laws
+and an equation linking the actual source evaluator to it. The GKR round
+companion also supplies the gate-specific reference and the residual after
+restriction. Its challenge occurrence and handler have to establish the
+sampling law used there. Reusing the round theorem proves neither freshness
+at another occurrence nor independence between two uses of the same draw.
+The focused checks are in `TestsSecurity.SumcheckReference` and
+`TestsSecurity.GkrRoundsResidual`.
+
 For a loop nested in another callback, select it inside that callback.
 `checked_repeat_prefix firstFoldBody := insideQuery using innerOnSpine`
 materializes the preceding operations and checks their equality with the
@@ -346,6 +369,19 @@ both the coefficient operand and the returned vector. The companion proves
 which registered word and virtual view the handles refer to. Reusing that
 association at another sampled position preserves the immutable words and
 accounts for each read, including repeated positions.
+
+For immutable base tables, `PublishedWords.RegisteredWord` connects a
+participant's visible logical registry entry to the provider's entire finite
+word at the same dynamic anchor. A successful FRI send establishes the
+connection for the word actually selected by the chooser.
+`RegisteredWord.extend` transports it when later publications preserve
+old provider entries and add fresh logical entries. An in-range source
+query then returns the original cell and charges one read, subject to the
+original cursor check. This law applies to any nominal row type and finite
+length. The FRI companion separately identifies the virtual parent in its
+captured registry, the challenge used to fold it, and the next word.
+Publication fixes what can be read. Whether a prover published a *correct*
+fold is the verifier's mathematical question.
 
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and

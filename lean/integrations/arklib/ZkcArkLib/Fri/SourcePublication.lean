@@ -1,7 +1,7 @@
 module
 
 public import ZkcArkLib.Fri.PhasesReadback
-public import Zkc.Source.Structured.PublishedWordsLaws
+public import Zkc.Source.Structured.RegisteredWord
 
 /-! # Published-word readback for the source FRI phases
 
@@ -33,17 +33,8 @@ theorem read_fixed_word {model : DomainModel} {d : String} {n : Nat} {Aux E : Ty
     (state : PublishedWords.State model Aux)
     (found : PublishedWords.find state.words (.field d) anchor = some stored) :
     PublishedWords.read (E := E) (Phases.publishedRequest d anchor position.val location expansion) state =
-      ⟨.returned (word position), state, []⟩ := by
-  have within := position.isLt
-  have limit : stored.rows < indexLimit := (Bool.and_eq_true_iff.mp shape).1 |> of_decide_eq_true
-  exact PublishedWords.read_compatible_cell (Phases.publishedRequest d anchor position.val location expansion)
-    state stored (word position) found answer shape
-    (by simp [Phases.publishedRequest, OracleStore.validRows, OracleKind.rows, limit])
-    (by rw [cells, rows]; exact List.length_ofFn)
-    (show position.val < stored.rows from rows.symm ▸ within) (by
-      change stored.cells[position.val]? = _
-      rw [cells, List.getElem?_ofFn, dite_eq_left within]
-      rfl)
+      ⟨.returned (word position), state, []⟩ :=
+  PublishedWords.readAt (model := model) (row := .field d) (size := 2 ^ n) (E := E) anchor word stored answer shape rows cells position location expansion state found
 
 theorem readback {model : DomainModel} {d : String} {n : Nat} {Aux E : Type}
     (anchor : OracleAnchor) (word : Fin (2 ^ n) → model.Field d)

@@ -30,7 +30,7 @@ private theorem firstFold (context : ProtocolContext) (receiver : context.roles 
     {n : Nat} (size : n + 1 ≤ 5) (shift : Octic) (nonzero : shift ≠ 0)
     (word : Fin (2 ^ (n + 1)) → Octic) (beta : Octic) (inside : xs[ordinal.val] < 2 ^ (n + 1))
     (state : State Aux) (role : state.oracle.self = 1)
-    (live : StoredWord.Base (d := extension) state.oracle.entries state.oracle.self source word state.oracle.provider)
+    (live : PublishedWords.RegisteredWord (row := .field extension) state.oracle.entries state.oracle.self source word state.oracle.provider)
     (view : VerifierRound.Selection (charged state.oracle 1) folds 0 (logicalShiftRight (2 ^ (n + 1)) 1))
     (virtual : VirtualStore.Registered (charged state.oracle 1) source (folds.get ⟨0, view.inside⟩) word beta shift) :
     let pos : Fin (2 ^ (n + 1)) := ⟨xs[ordinal.val], inside⟩
@@ -61,7 +61,7 @@ private theorem firstFold (context : ProtocolContext) (receiver : context.roles 
     state.oracle afterRead (fun current ↦ [.logical (.query (Phases.publishedRequest extension source pos.val
       {location with invocation := current.frame.invocation} []))]) _ property (fun _ ↦ Or.inr rfl) _ state rfl
   · intro current kept
-    have base : StoredWord.Base (d := extension) current.oracle.entries current.oracle.self source word current.oracle.provider :=
+    have base : PublishedWords.RegisteredWord (row := .field extension) current.oracle.entries current.oracle.self source word current.oracle.provider :=
       kept ▸ live
     have atSelf : 1 = current.oracle.self := kept ▸ role.symm
     have law := base.sourceQuery checkedUnit.oracles network choose current pos 1 1 context.roles location
@@ -102,7 +102,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (shift : Octic) (nonzero : shift ≠ 0) (word : Fin (2 ^ (n + 1)) → Octic) (beta : Octic)
     (rest : Layers Octic n r) (fits : rest.coefficients.length < indexLimit)
     (inside : xs[ordinal.val] < 2 ^ (n + 1)) (state : State Aux) (role : state.oracle.self = 1)
-    (live : StoredWord.Base (d := extension) state.oracle.entries state.oracle.self source word state.oracle.provider)
+    (live : PublishedWords.RegisteredWord (row := .field extension) state.oracle.entries state.oracle.self source word state.oracle.provider)
     (view : VerifierRound.Selection (charged state.oracle 1) folds 0 (logicalShiftRight (2 ^ (n + 1)) 1))
     (virtual : VirtualStore.Registered (charged state.oracle 1) source (folds.get ⟨0, view.inside⟩) word beta shift)
     (registry : VerifierPath.Registered layers folds rest (shift * shift) 0 (charged state.oracle 4)) :

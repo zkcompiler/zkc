@@ -323,7 +323,7 @@ run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Semantics.CallRestriction, `Zkc.Source.Structured.OracleReadEffects,
    `Zkc.Source.Structured.OracleReadback, `ZkcExamples.Structured.FriPower,
    `ZkcExamples.Structured.FriVirtualBody, `ZkcArkLibExamples.Fri.VirtualReads,
-   `ZkcArkLibExamples.Fri.VirtualWord, `ZkcArkLibExamples.Fri.StoredWord,
+   `ZkcArkLibExamples.Fri.VirtualWord, `Zkc.Source.Structured.RegisteredWord,
    `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal,
    `Zkc.Source.Structured.Bindings.Continuation, `Zkc.Source.Structured.Bindings.RepeatPrefix,
    `ZkcArkLibExamples.Fri.VerifierTerminalGuard, `ZkcArkLibExamples.Fri.VerifierPath,

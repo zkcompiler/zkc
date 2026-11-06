@@ -21,7 +21,7 @@ open Std.Do.Internal (Ensures)
 structure Publication {Aux : Type} {n r : Nat} (store : Store Aux) (source : OracleAnchor)
     (layers folds : List OracleAnchor) (word : Fin (2 ^ (n + 1)) → Octic)
     (beta shift : Octic) (rest : Layers Octic n r) where
-  initial : StoredWord.Base (d := extension) store.entries store.self source word store.provider
+  initial : PublishedWords.RegisteredWord (row := .field extension) store.entries store.self source word store.provider
   view : VerifierRound.Selection (charged store 1) folds 0 (logicalShiftRight (2 ^ (n + 1)) 1)
   virtual : VirtualStore.Registered (charged store 1) source (folds.get ⟨0, view.inside⟩) word beta shift
   later : VerifierPath.Registered layers folds rest (shift * shift) 0 (charged store 4)
@@ -35,8 +35,7 @@ noncomputable def Publication.withQueries {Aux : Type} {n r : Nat} {store : Stor
   initial := pub.initial
   view := ⟨pub.view.fits, pub.view.inside, pub.view.visible, pub.view.table, pub.view.lookup,
     pub.view.allowed, pub.view.valid, pub.view.size⟩
-  virtual := ⟨pub.virtual.older, pub.virtual.newer, pub.virtual.holder, pub.virtual.receivers,
-    pub.virtual.live, pub.virtual.allowed, pub.virtual.fresh, pub.virtual.entries⟩
+  virtual := pub.virtual.extend [] rfl (.refl _) _
   later := pub.later.withQueries _
 
 def samples {n s : Nat} (positions : Fin s → Fin (2 ^ (n + 1))) : List Nat :=

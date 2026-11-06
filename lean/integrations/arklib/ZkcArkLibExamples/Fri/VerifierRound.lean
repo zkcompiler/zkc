@@ -89,7 +89,7 @@ private theorem layerOutcomes (context : ProtocolContext) (receiver : context.ro
     (state : State model snapshot domains math Aux) (role : state.oracle.self = 1)
     (registered : Selection state.oracle layers (wrappingAdd step 1) carried.rows)
     {n : Nat} (word : Fin (2 ^ n) → model.Field extension) (inside : carried.position < 2 ^ n)
-    (live : StoredWord.Base state.oracle.entries state.oracle.self
+    (live : PublishedWords.RegisteredWord (row := .field extension) state.oracle.entries state.oracle.self
       (layers.get ⟨wrappingAdd step 1, registered.inside⟩) word state.oracle.provider)
     (property : PIR.Outcome (Values (FriBinding.Value model) roundSite.spec.state) → Runtime model snapshot domains math Aux → Prop)
     (refusal : ∀ store, property (.stopped .refused) store)
@@ -115,7 +115,7 @@ private theorem layerOutcomes (context : ProtocolContext) (receiver : context.ro
       {site 2 with invocation := current.frame.invocation} []))]) _
     property refusal _
   · intro current kept
-    have live' : StoredWord.Base current.oracle.entries current.oracle.self anchor word current.oracle.provider := by
+    have live' : PublishedWords.RegisteredWord (row := .field extension) current.oracle.entries current.oracle.self anchor word current.oracle.provider := by
       rw [kept]; exact live
     have role' : current.oracle.self = 1 := kept ▸ role
     have returned := live'.sourceQuery oracles network choose current index 1 1 context.roles (site 2)
@@ -141,7 +141,7 @@ theorem rejectsMismatch (context : ProtocolContext) (receiver : context.roles 1 
     (state : State model snapshot domains math Aux) (role : state.oracle.self = 1)
     (registered : Selection state.oracle layers (wrappingAdd step 1) carried.rows)
     {n : Nat} (word : Fin (2 ^ n) → model.Field extension) (inside : carried.position < 2 ^ n)
-    (live : StoredWord.Base state.oracle.entries state.oracle.self
+    (live : PublishedWords.RegisteredWord (row := .field extension) state.oracle.entries state.oracle.self
       (layers.get ⟨wrappingAdd step 1, registered.inside⟩) word state.oracle.provider)
     (mismatch : word ⟨carried.position, inside⟩ ≠ carried.expected) :
     Std.Do.Internal.Ensures (fun result ↦ result.outcome = .stopped .reject ∨ result.outcome = .stopped .refused)
@@ -222,7 +222,7 @@ theorem matchesFold {Aux E : Type}
     (layer : Selection state.oracle layers (wrappingAdd step 1) carried.rows)
     (fold : Selection {state.oracle with queries := state.oracle.queries + 1}
       folds (wrappingAdd step 1) (nextRows carried))
-    (live : StoredWord.Base (d := extension) (n := m + 1) state.oracle.entries state.oracle.self
+    (live : PublishedWords.RegisteredWord (row := .field extension) (size := 2 ^ (m + 1)) state.oracle.entries state.oracle.self
       (layers.get ⟨wrappingAdd step 1, layer.inside⟩) word state.oracle.provider)
     (registered : VirtualStore.Registered {state.oracle with queries := state.oracle.queries + 1}
       (layers.get ⟨wrappingAdd step 1, layer.inside⟩) (folds.get ⟨wrappingAdd step 1, fold.inside⟩)

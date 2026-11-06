@@ -35,6 +35,20 @@ theorem answerOfBase {model : DomainModel} {snapshot : Snapshot} {domains : List
       · simpa [answer, anchor] using ih (by simpa [find, anchor] using found)
     · simpa [answer, same] using ih (by simpa [find, same] using found)
 
+/-- Fresh entries at other anchors preserve the exact logical table, including
+its holder, visibility and virtual captures. A suffix alone permits shadowing. -/
+theorem findSkipNewer {model : DomainModel} {snapshot : Snapshot} {domains : List DomainSpec}
+    {math : OracleMathEnvironment} (newer older : OracleEntries model snapshot domains math)
+    (row : Ty) (anchor : OracleAnchor) (fresh : hasAnchor newer anchor = false) :
+    find (newer ++ older) row anchor = find older row anchor := by
+  induction newer with
+  | nil => rfl
+  | cons entry rest ih =>
+    rcases entry with ⟨storedRow, head⟩
+    have absent : head.anchor ≠ anchor ∧ hasAnchor rest anchor = false := by
+      simpa [hasAnchor] using fresh
+    simp [find, absent.1, ih absent.2]
+
 theorem answerSkipNewer {model : DomainModel} {snapshot : Snapshot} {domains : List DomainSpec}
     {math : OracleMathEnvironment} {S E : Type} (base : PIR.Handler (oracleReadInterface model.toCarriers) S E)
     (self : Nat) (newer older : OracleEntries model snapshot domains math) (request : OracleRead)
