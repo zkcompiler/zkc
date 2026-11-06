@@ -35,7 +35,7 @@ namespace {
 // native semantic callbacks debit this same allowance in addition to the
 // unchanged reservation. Owned expansion never uses the root cache.
 class CodecCapacity {
-  uint64_t remaining = 1000000;
+  uint64_t remaining = 2000000;
   bool limited = false;
   static constexpr uint64_t visits = 8;
 

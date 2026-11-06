@@ -28,7 +28,7 @@ evidence input. The checked source and candidate move together into the
 persistent owner; inspection still returns independent copies. Every raw
 candidate, check and export API independently checks its supplied subjects,
 including ordinary source admission and final paired candidate completion.
-The cumulative allowance is 1,000,000 work units and 100,000 native operation
+The cumulative allowance is 4,000,000 work units and 200,000 native operation
 visits. Raw entry points own an allowance; private composed implementations
 borrow the existing allowance through selection resolution, storage and capacity
 planning, query schedules, primitive emission, and actual-body readers. Primitive

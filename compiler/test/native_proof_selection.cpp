@@ -137,6 +137,139 @@ int main(int argc, char **argv) {
                 "resolved policy changed proof construction");
         require(bytes(*module) == original, "selection mutated original");
       });
+  cases.run(
+      "entry copy shares the raw preparation and discharge allowance", [&] {
+        auto baseline = parse(schnorr);
+        require(succeeded(verify(*baseline)) &&
+                    succeeded(admitStage(*baseline)),
+                "entry-copy baseline must verify and admit");
+        auto policy = take(selectNativeProofDraws(*baseline, selection()));
+        const uint64_t limit = zkc::detail::constructionPreparationWorkLimit;
+        require(limit == 3000000,
+                "entry-copy fixture expects the evaluation cap");
+
+        auto sourceWithDormantName = [&](size_t nameBytes) {
+          auto source = parse(schnorr);
+          auto unit = *source->getOps<protocol_ir::ProtocolModuleOp>().begin();
+          auto entry = SymbolTable(unit).lookup<protocol_ir::MathematicalOp>(
+              policy.entry);
+          // A second, unused but fully formed protocol changes retained storage
+          // without multiplying the selected dependency graph. Its symbol is a
+          // declared field, not arbitrary metadata presumed to pass admission.
+          auto dormant = cast<protocol_ir::MathematicalOp>(entry->clone());
+          dormant->setAttr(
+              SymbolTable::getSymbolAttrName(),
+              StringAttr::get(&context, std::string(nameBytes, 'd')));
+          dormant->removeAttr("origin");
+          unit.getBody().front().push_back(dormant);
+          require(succeeded(verify(*source)) && succeeded(admitStage(*source)),
+                  "dormant-symbol source must independently verify and admit");
+          return source;
+        };
+        auto completeRawWork = [&](ModuleOp source) -> Expected<uint64_t> {
+          auto unit = *source.getOps<protocol_ir::ProtocolModuleOp>().begin();
+          auto entry = SymbolTable(unit).lookup<protocol_ir::MathematicalOp>(
+              policy.entry);
+          auto execution = take(protocol::readSourceExecutionClosure(unit));
+          auto joint = zkc::detail::prepareNativeConstruction(
+              source, entry, execution, policy);
+          if (!joint)
+            return joint.takeError();
+          require(joint->source() == source &&
+                      &joint->execution() == &execution && joint->complete() &&
+                      !joint->needsRealization(),
+                  "raw control lost its owners or introduced deferred work");
+          // Read and discharge the actual selected projection too. Comparing
+          // only initial raw work with selectNativeProofDraws would conflate
+          // the entry copy reservation with the later request-frame traversal.
+          auto prepared = mathematical::PreparedProtocol::prepare(source);
+          require(bool(prepared) &&
+                      succeeded(prepared->selectEntries({policy.entry})),
+                  "raw control must prepare the actual selected entry");
+          auto realized = take(
+              mathematical::RealizedProtocol::realize(std::move(*prepared)));
+          auto projection = realized.project(false);
+          require(bool(projection) && succeeded(admitStage(*projection)),
+                  "raw control must have an admitted actual projection");
+          auto projectedUnit =
+              *projection->getOps<protocol_ir::ProtocolModuleOp>().begin();
+          auto requests = take(zkc::detail::planNativeRequests(
+              projectedUnit, policy, {}, &realized));
+          require(requests.root && requests.root->finished &&
+                      requests.root->requests.empty(),
+                  "entry-copy control must not add reconstructed requests");
+          if (auto error = joint->dischargeRequests(requests))
+            return std::move(error);
+          require(joint->complete(),
+                  "raw control did not finish its discharge");
+          return joint->workUsed();
+        };
+        auto fits = [&](size_t nameBytes) {
+          auto source = sourceWithDormantName(nameBytes);
+          auto work = completeRawWork(*source);
+          if (work) {
+            require(*work <= limit, "raw control exceeded its actual default");
+            return true;
+          }
+          require(
+              namesIdentifier(toString(work.takeError()),
+                              "native-construction-preparation-capacity"),
+              "raw boundary failed for a reason other than common capacity");
+          return false;
+        };
+        // Search a string length, with a fixed number of operations and rows.
+        // Both endpoints are checked; no particular internal debit formula is
+        // duplicated to predict the exact remaining allowance.
+        size_t low = 1, high = limit + 1;
+        require(fits(low) && !fits(high),
+                "invalid retained-copy search bracket");
+        while (high - low > 1) {
+          size_t middle = low + (high - low) / 2;
+          if (fits(middle))
+            low = middle;
+          else
+            high = middle;
+        }
+        require(fits(low) && !fits(high),
+                "lost adjacent raw acceptance bracket");
+        // The same added definition must be accepted by the entry route before
+        // testing its near-capacity refusal, including work above the old 1M
+        // cap.
+        auto within = sourceWithDormantName(low / 2);
+        auto withinBefore = bytes(*within);
+        require(
+            take(completeRawWork(*within)) > 1000000,
+            "entry positive control must exercise the newly admitted region");
+        auto selected = take(selectNativeProofDraws(*within, selection()));
+        require(encodeNativeProofPolicy(selected) ==
+                        encodeNativeProofPolicy(policy) &&
+                    bytes(*within) == withinBefore,
+                "unused symbol changed selection or mutated its source");
+
+        auto boundary = sourceWithDormantName(low);
+        auto original = bytes(*boundary);
+        auto boundaryUnit =
+            *boundary->getOps<protocol_ir::ProtocolModuleOp>().begin();
+        auto originalEntry =
+            SymbolTable(boundaryUnit)
+                .lookup<protocol_ir::MathematicalOp>(policy.entry);
+        require(take(completeRawWork(*boundary)) > 1000000,
+                "raw boundary did not reach the enlarged allowance");
+        // No selected construction or deferred realization adds a common debit
+        // in this fixture. Raw analysis plus actual discharge fits; retaining
+        // the original at entry must spend from that same account before those
+        // stages.
+        for (unsigned attempt = 0; attempt != 2; ++attempt)
+          refuses(selectNativeProofDraws(*boundary, selection()),
+                  "native-construction-preparation-capacity");
+        auto actualUnit =
+            *boundary->getOps<protocol_ir::ProtocolModuleOp>().begin();
+        require(bytes(*boundary) == original && actualUnit == boundaryUnit &&
+                    SymbolTable(actualUnit)
+                            .lookup<protocol_ir::MathematicalOp>(
+                                policy.entry) == originalEntry,
+                "entry capacity refusal replaced or mutated the original");
+      });
   for (bool withRequest : {false, true})
     cases.run(
         withRequest
@@ -171,6 +304,7 @@ int main(int argc, char **argv) {
           policy.validator = "V";
           policy.publicInputs = {1, 2, 3};
           policy.draws = {{"draw", "challenge"}};
+          // Keep the explicit smaller allowance for the multi-stage controls.
           auto prepare = [&](uint64_t budget = 1000000) {
             return zkc::detail::prepareNativeConstruction(
                 *module, entry, execution, policy, nullptr, {}, budget);

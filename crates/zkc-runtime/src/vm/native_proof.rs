@@ -97,7 +97,7 @@ enum ControlPosition {
 
 // This allowance covers admission work, including dormant regions. It is not
 // a runtime execution allowance and cannot be replenished at an arm boundary.
-const PROOF_WORK: usize = 1_000_000;
+const PROOF_WORK: usize = 8_000_000;
 struct ProofWork(usize);
 impl ProofWork {
     fn charge(&mut self, cost: usize) -> Result<()> {
@@ -1542,7 +1542,9 @@ impl ProofWalk<'_> {
                             local_setup(&function.body, self.work, 0)?;
                             self.work
                                 .charge(type_work::lookup_work(name, self.verified.len()))?;
-                            if !self.verified.contains(name) {
+                            if self.admitted.contracts().has_support_restriction()
+                                || !self.verified.contains(name)
+                            {
                                 verifier_function(function, self.admitted.contracts(), self.work)?;
                                 self.work
                                     .charge(type_work::lookup_work(name, self.verified.len()))?;

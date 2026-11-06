@@ -3304,9 +3304,343 @@ mod selected_control {
 }
 
 mod physical_accounting {
+    mod changing_permissions {
+        use super::*;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        #[derive(Debug)]
+        struct PermissionWindow {
+            field: PhysicalType,
+            calls: Arc<AtomicUsize>,
+            allowance: Arc<AtomicUsize>,
+        }
+
+        impl crate::vm::ContractSupport for PermissionWindow {
+            fn permits_type(&self, ty: &PhysicalType) -> bool {
+                ty != &self.field
+                    || self.calls.fetch_add(1, Ordering::SeqCst)
+                        < self.allowance.load(Ordering::SeqCst)
+            }
+            fn permits_binding(&self, _: &crate::vm::OperationBinding) -> bool {
+                true
+            }
+        }
+
+        fn probe(
+            codec: bool,
+            shared_function: bool,
+            allowance: usize,
+        ) -> (Result<NativeProofEntry>, usize) {
+            let (contracts, field, _) = selected_payload_context(true);
+            let mut f = if codec {
+                selected_payload_fixture(true, &field).selected(NativeProofOperation::Prove)
+            } else {
+                repeated(1, false)
+            };
+            let physical = field.spelling();
+            if !codec {
+                f.program[2] = json!([]);
+                f.program[3][0][4][1][1] = json!(physical);
+                f.program[3][0][6][0][5][0][2] = json!(if shared_function { "id" } else { "ib" });
+            } else {
+                let body = f.program[3][0][6].as_array_mut().unwrap();
+                let before_return = body.len() - 1;
+                body.insert(
+                    before_return,
+                    json!(["local", "read0", "id", ["candidate"], ["ignored0"]]),
+                );
+                body.insert(
+                    before_return + 1,
+                    json!([
+                        "local",
+                        "read1",
+                        if shared_function { "id" } else { "ib" },
+                        ["candidate"],
+                        ["ignored1"]
+                    ]),
+                );
+            }
+            for name in ["id", "ib"] {
+                f.program[2].as_array_mut().unwrap().push(json!([
+                    "function",
+                    name,
+                    [["x", physical]],
+                    [physical],
+                    [["return", ["x"]]],
+                    [name, []]
+                ]));
+            }
+            let calls = Arc::new(AtomicUsize::new(0));
+            let limit = Arc::new(AtomicUsize::new(usize::MAX));
+            let contracts = contracts.restricted(PermissionWindow {
+                field,
+                calls: calls.clone(),
+                allowance: limit.clone(),
+            });
+            let program = Program::decode(f.program.to_string().as_bytes(), &contracts).unwrap();
+            calls.store(0, Ordering::SeqCst);
+            limit.store(allowance, Ordering::SeqCst);
+            let maps = if codec {
+                f.maps()
+            } else {
+                BTreeMap::from([("V".into(), vec![0, 1])])
+            };
+            let construction = ProofConstruction {
+                suite: f.suite,
+                events: &f.events,
+                plan: f.plan.as_ref(),
+                source_inputs: &maps,
+            };
+            let selection = if codec {
+                NativeProofOperation::Prove
+            } else {
+                NativeProofOperation::Verify
+            };
+            let public = if codec { &[0][..] } else { &[0, 1][..] };
+            let entry = NativeProofEntry::new_for_operation(
+                program,
+                "main",
+                "P",
+                "V",
+                0,
+                construction,
+                selection,
+                public,
+            );
+            (entry, calls.load(Ordering::SeqCst))
+        }
+
+        fn compare(codec: bool) {
+            let (warm, hot_calls) = probe(codec, true, usize::MAX);
+            warm.unwrap();
+            let (cold, cold_calls) = probe(codec, false, usize::MAX);
+            cold.unwrap();
+            assert!(hot_calls > 0);
+            assert_eq!(cold_calls, hot_calls);
+            let previous_threshold = if codec { 7 } else { 3 };
+            assert!(hot_calls > previous_threshold);
+            let (warm, repeated_calls) = probe(codec, true, previous_threshold);
+            assert_eq!(warm.unwrap_err().0, "native-proof-verifier-resource");
+            let (cold, denied_calls) = probe(codec, false, previous_threshold);
+            let refusal = cold.unwrap_err();
+            assert_eq!(refusal.0, "native-proof-verifier-resource");
+            assert_eq!(denied_calls, repeated_calls);
+            assert_eq!(denied_calls, previous_threshold + 1);
+        }
+
+        fn constructor_probe(
+            wire: bool,
+            shared: bool,
+            cap: usize,
+            budget: usize,
+        ) -> (Result<usize>, usize) {
+            let (contracts, payload, _) = selected_payload_context(true);
+            let mut f = selected_payload_fixture(true, &payload);
+            let original = if wire { "wire" } else { "encode" };
+            let alias = if wire { "wirx" } else { "encodx" };
+            let functions = f.program[2].as_array_mut().unwrap();
+            let helper = functions.iter_mut().find(|fun| fun[1] == original).unwrap();
+            if wire {
+                // The wire helper has scalar state and byte inputs. A formed
+                // ordinary operation in its body consults the selected field.
+                helper[4].as_array_mut().unwrap().insert(
+                    0,
+                    json!(["op", "unused_field", "constant", ["1"], [], ["field_value"]]),
+                );
+            }
+            let mut second = helper.clone();
+            second[1] = json!(alias);
+            second[5][0] = json!(alias);
+            functions.push(second);
+            for row in 1..2 {
+                let mut event = f.events[0].clone();
+                let mut tree = zkc_format::logical::decode_tree(
+                    &zkc_format::logical::native_origin_template(
+                        &[event.origin.clone()],
+                        "message",
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+                tree[4][2] = json!(format!("message{row}"));
+                tree[4][3] = json!(format!("message{row}"));
+                event.origin = zkc_format::logical::encode_tree(&tree)
+                    .unwrap()
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect();
+                let symbol = format!("observe{row}");
+                let mut function = f.program[2]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|function| function[1] == "observe")
+                    .unwrap()
+                    .clone();
+                function[1] = json!(symbol);
+                function[5][0] = json!(symbol);
+                f.program[2].as_array_mut().unwrap().push(function);
+                let plan = f.plan.as_mut().unwrap();
+                let mut adapter = plan.adapters[0].clone();
+                adapter.symbol = symbol;
+                adapter.origins = vec![event.origin.clone()];
+                plan.adapters.push(adapter);
+                let codec = plan.codec.as_mut().unwrap();
+                let mut selection = codec.messages[0].clone();
+                selection.origins = vec![event.origin.clone()];
+                if !shared {
+                    if wire {
+                        selection.wire = alias.into();
+                    } else {
+                        selection.encode = alias.into();
+                    }
+                }
+                codec.messages.push(selection); // Reuse encode/receive/decode/wire/slice.
+                f.events.push(event);
+            }
+            let calls = Arc::new(AtomicUsize::new(0));
+            let limit = Arc::new(AtomicUsize::new(usize::MAX));
+            let contracts = contracts.restricted(PermissionWindow {
+                field: payload,
+                calls: calls.clone(),
+                allowance: limit.clone(),
+            });
+            let program = Program::decode(f.program.to_string().as_bytes(), &contracts).unwrap();
+            let plan = f.plan.as_ref().unwrap();
+            let mut helpers = BTreeMap::new();
+            for (adapter, event) in plan.adapters.iter().zip(&f.events) {
+                let helper = custom_helper(
+                    &program.program.functions[&adapter.symbol],
+                    &plan.state,
+                    std::slice::from_ref(event),
+                    "main",
+                    "V",
+                    &mut ProofWork(PROOF_WORK),
+                )
+                .unwrap();
+                helpers.insert(adapter.symbol.clone(), helper);
+            }
+            calls.store(0, Ordering::SeqCst);
+            limit.store(cap, Ordering::SeqCst);
+            let mut work = ProofWork(budget);
+            let result = codec::CheckedCodec::new(
+                &program,
+                plan.codec.as_ref().unwrap(),
+                &plan.state,
+                &helpers,
+                "P",
+                "V",
+                None,
+                &mut work,
+            )
+            .map(|_| budget - work.0);
+            (result, calls.load(Ordering::SeqCst))
+        }
+
+        fn compare_constructor(wire: bool) {
+            // The encoder sees the selected field on call 6 of the data fixture.
+            // For the wire fixture, calls 1..=5 cover the first row. In row two
+            // the payload takes call 6, encode takes 7, decode takes 8 and 9,
+            // and the operation inside the second wire helper takes call 10.
+            let (expected_calls, threshold) = if wire { (10, 9) } else { (8, 5) };
+            for shared in [true, false] {
+                let (allowed, calls) = constructor_probe(wire, shared, usize::MAX, PROOF_WORK);
+                let full_cost = allowed.unwrap();
+                assert_eq!(calls, expected_calls);
+                let (allowed, calls) = constructor_probe(wire, shared, usize::MAX, full_cost);
+                assert_eq!(allowed.unwrap(), full_cost);
+                assert_eq!(calls, expected_calls);
+                let (short, _) = constructor_probe(wire, shared, usize::MAX, full_cost - 1);
+                assert_eq!(short.unwrap_err().0, "native-proof-control-limit");
+
+                // A denied wire lookup can still spend work comparing explicit
+                // construction-state slots. Distinguish the callback from the
+                // final permission refusal and from ordinary budget exhaustion.
+                let (denied, calls) = constructor_probe(wire, shared, threshold, full_cost);
+                assert_eq!(denied.unwrap_err().0, "native-proof-verifier-resource");
+                assert_eq!(calls, threshold + 1);
+                let (mut low, mut high) = (0, full_cost);
+                while high - low > 1 {
+                    let middle = low + (high - low) / 2;
+                    let (result, calls) = constructor_probe(wire, shared, threshold, middle);
+                    let _ = result.unwrap_err();
+                    if calls == threshold + 1 {
+                        high = middle;
+                    } else {
+                        assert!(calls <= threshold);
+                        low = middle;
+                    }
+                }
+                let first_denied_call = high;
+                let (under_call, calls) = constructor_probe(wire, shared, threshold, high - 1);
+                assert_eq!(under_call.unwrap_err().0, "native-proof-control-limit");
+                assert_eq!(calls, threshold);
+                let (at_call, calls) = constructor_probe(wire, shared, threshold, high);
+                assert_eq!(calls, threshold + 1);
+                assert_eq!(
+                    at_call.unwrap_err().0,
+                    if wire {
+                        "native-proof-control-limit"
+                    } else {
+                        "native-proof-verifier-resource"
+                    }
+                );
+
+                low = 0;
+                high = full_cost;
+                while high - low > 1 {
+                    let middle = low + (high - low) / 2;
+                    let (result, calls) = constructor_probe(wire, shared, threshold, middle);
+                    match result.unwrap_err().0 {
+                        "native-proof-verifier-resource" => {
+                            assert_eq!(calls, threshold + 1);
+                            high = middle;
+                        }
+                        "native-proof-control-limit" => {
+                            assert!(calls <= threshold + 1);
+                            low = middle;
+                        }
+                        unexpected => panic!("unexpected constructor refusal {unexpected}"),
+                    }
+                }
+                let (under, under_calls) = constructor_probe(wire, shared, threshold, low);
+                assert_eq!(under.unwrap_err().0, "native-proof-control-limit");
+                assert_eq!(under_calls, if wire { threshold + 1 } else { threshold });
+                let (reached, reached_calls) = constructor_probe(wire, shared, threshold, high);
+                assert_eq!(reached.unwrap_err().0, "native-proof-verifier-resource");
+                assert_eq!(reached_calls, threshold + 1);
+                assert_eq!(first_denied_call == high, !wire);
+            }
+        }
+        #[test]
+        fn changing_constructor_data_permission() {
+            compare_constructor(false);
+        }
+        #[test]
+        fn changing_constructor_wire_permission() {
+            compare_constructor(true);
+        }
+
+        #[test]
+        fn changing_permission_verifier_probe() {
+            compare(false);
+        }
+
+        #[test]
+        fn changing_permission_codec_probe() {
+            compare(true);
+        }
+    }
     use super::*;
 
     fn repeated(calls: usize, aggregate: bool) -> Fixture {
+        repeated_named(calls, aggregate, "id")
+    }
+
+    fn repeated_named(calls: usize, aggregate: bool, identity: &str) -> Fixture {
         let physical = if aggregate {
             let arms: Vec<_> = (0..8)
                 .map(|i| json!([format!("a{i}"), vec!["bool"; 8]]))
@@ -3324,7 +3658,7 @@ mod physical_accounting {
                     json!([
                         "local",
                         format!("{prefix}.{i}"),
-                        "id",
+                        identity,
                         ["data"],
                         [format!("unused.{i}")]
                     ])
@@ -3339,11 +3673,11 @@ mod physical_accounting {
                 [],
                 [[
                     "function",
-                    "id",
+                    identity,
                     [["x", physical]],
                     [physical],
                     [["return", ["x"]]],
-                    ["id", []]
+                    [identity, []]
                 ]],
                 [[
                     "participant",
@@ -3452,17 +3786,30 @@ mod physical_accounting {
                 0,
             )
             .unwrap();
-        // The independently reviewed 20,000-call carrier used 420,069 old work
-        // units while rebuilding at least 2,600,000 default-layout nodes.
+        // The same 20,000 calls exceed a one-million-unit walk but fit the
+        // larger public allowance. A positive cache hit still pays for its key.
+        let large = repeated(10_000, true);
         assert_eq!(
-            repeated(10_000, true)
-                .admit_with(
-                    Some(NativeProofOperation::Verify),
-                    &BTreeMap::from([("V".into(), vec![0, 1])]),
-                    &[0, 1],
-                    0
-                )
-                .unwrap_err()
+            walk(&decode(&large), 1_000_000).unwrap_err().0,
+            "native-proof-control-limit"
+        );
+        let public = BTreeMap::from([("V".into(), vec![0, 1])]);
+        large
+            .admit_with(Some(NativeProofOperation::Verify), &public, &[0, 1], 0)
+            .unwrap();
+        // Keep both arms, the same number of calls and the same complete
+        // aggregate. A longer valid function key raises the actual charged
+        // lookup cost; formation still succeeds before both bounded checks.
+        let long_key = repeated_named(10_000, true, "aggregate_identity");
+        assert_eq!(
+            walk(&decode(&long_key), PROOF_WORK).unwrap_err().0,
+            "native-proof-control-limit"
+        );
+        assert_eq!(
+            long_key
+                .admit_with(Some(NativeProofOperation::Verify), &public, &[0, 1], 0)
+                .err()
+                .unwrap()
                 .0,
             "native-proof-control-limit"
         );

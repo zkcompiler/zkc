@@ -8,6 +8,7 @@
 #include <memory>
 
 namespace zkc::detail {
+inline constexpr uint64_t constructionPreparationWorkLimit = 3000000;
 struct NativeRequestPlan;
 /// Static dependency reasons, not instructions or an executable schedule.
 enum class ConstructionDependencyKind {
@@ -112,7 +113,8 @@ private:
 /// are premises, not repeated here under an unaccounted second budget. The
 /// closure is borrowed, never copied. All subsequent setup, source/symbol and
 /// closure traversal, fresh environments, edges and output growth share this
-/// allowance (at most 1,000,000); exhausted analysis returns no partial result.
+/// allowance, capped at constructionPreparationWorkLimit. Exhausted analysis
+/// returns no partial result.
 ///
 /// Fixed ABI: receive(Record, proof)->(Record, ranges),
 /// decode(chunks)->payload, wire(state, chunks)->state. Every opaque
@@ -144,6 +146,6 @@ llvm::Expected<NativeConstructionPreparation> prepareNativeConstruction(
     const NativeProofPolicy &policy,
     const protocol::ConstructionPlan *checkedPlan = nullptr,
     llvm::ArrayRef<protocol::ConstructionInvocation> invocations = {},
-    uint64_t workBudget = 1000000);
+    uint64_t workBudget = constructionPreparationWorkLimit);
 } // namespace zkc::detail
 #endif

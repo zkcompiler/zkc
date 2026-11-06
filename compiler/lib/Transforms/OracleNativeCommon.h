@@ -38,8 +38,8 @@ struct OracleNativeWork {
   OracleEmissionSession *emission = nullptr;
   zkc::detail::NativeTypeWork types;
 
-  uint64_t remaining = 1000000;
-  unsigned operations = 100000;
+  uint64_t remaining = 4000000;
+  unsigned operations = 200000;
   bool exhausted = false;
   // Native types/attributes are immutable. This cache holds only results
   // constructed for the exact kind under this allowance, never module indexes.

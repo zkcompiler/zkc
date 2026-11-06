@@ -2084,7 +2084,7 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
              const protocol::OracleRealizationPolicy &oracleSelection) {
   if (!source || failed(zkc::admitStage(source)))
     return error("native-proof-source");
-  uint64_t preparationAllowance = 1000000;
+  uint64_t preparationAllowance = detail::constructionPreparationWorkLimit;
   if (!reserveConstructionSource(source, preparationAllowance))
     return error("native-construction-preparation-capacity");
   auto originalOwner = OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone()));

@@ -729,6 +729,10 @@ impl std::fmt::Debug for Contracts {
     }
 }
 impl Contracts {
+    pub(super) fn has_support_restriction(&self) -> bool {
+        self.support.is_some()
+    }
+
     /// Retain catalog/layout identity while narrowing support. Repeated
     /// restrictions intersect; a new view cannot restore an omitted capability.
     pub fn restricted(&self, restriction: impl ContractSupport + 'static) -> Self {

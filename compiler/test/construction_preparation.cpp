@@ -17,6 +17,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
+#include <limits>
 
 using namespace mlir;
 using namespace llvm;
@@ -146,6 +147,7 @@ struct Fixture {
     require(succeeded(admitStage(*source)), "changed actual source must admit");
     execution = take(protocol::readSourceExecutionClosure(unit(*source)));
   }
+  // Deliberately smaller than the API default; exact-boundary controls use it.
   Expected<zkc::detail::NativeConstructionPreparation>
   prepare(uint64_t budget = 1000000) {
     return zkc::detail::prepareNativeConstruction(*source, entry, execution,
@@ -413,6 +415,103 @@ int main() {
         refuses(fixture.prepare(exact - 1),
                 "native-construction-preparation-capacity");
       });
+  for (size_t nameBytes : {size_t(500000), size_t(1000001)})
+    cases.run(
+        "common default and clamp charge admitted symbol storage " +
+            Twine(nameBytes),
+        [&] {
+          // Reuse the admitted selected-control program. Grow a real
+          // symbol name, not unrecognized metadata or dependency rows.
+          auto source = parseSourceString<ModuleOp>(controlSource(), &context);
+          require(bool(source) && succeeded(verify(*source)) &&
+                      succeeded(admitStage(*source)),
+                  "unmodified symbol fixture must verify and admit");
+          auto entry = *unit(*source)
+                            .getBody()
+                            .front()
+                            .getOps<pir::MathematicalOp>()
+                            .begin();
+          NativeProofPolicy policy;
+          policy.entry = "main";
+          policy.producer = "P";
+          policy.validator = "V";
+          auto execution =
+              take(protocol::readSourceExecutionClosure(unit(*source)));
+          size_t baselineRows;
+          {
+            auto baseline = take(zkc::detail::prepareNativeConstruction(
+                *source, entry, execution, policy, nullptr, {}, 1000000));
+            require(baseline.complete() && !baseline.needsRealization(),
+                    "small baseline must have no deferred obligation");
+            baselineRows = baseline.dependencies().size();
+          }
+          policy.entry.assign(nameBytes, 'n');
+          entry->setAttr(SymbolTable::getSymbolAttrName(),
+                         StringAttr::get(&context, policy.entry));
+          require(succeeded(verify(*source)) && succeeded(admitStage(*source)),
+                  "long symbol source must independently verify and admit");
+          execution = take(protocol::readSourceExecutionClosure(unit(*source)));
+          auto before = print(*source);
+          auto prepareDefault = [&] {
+            // Omit the argument: this tests the API's actual default.
+            return zkc::detail::prepareNativeConstruction(*source, entry,
+                                                          execution, policy);
+          };
+          auto prepareExplicit = [&](uint64_t budget) {
+            return zkc::detail::prepareNativeConstruction(
+                *source, entry, execution, policy, nullptr, {}, budget);
+          };
+          require(zkc::detail::constructionPreparationWorkLimit == 3000000,
+                  "fixture expects the proposed three-million profile");
+          refuses(prepareExplicit(0),
+                  "native-construction-preparation-capacity");
+          refuses(prepareExplicit(1000000),
+                  "native-construction-preparation-capacity");
+          if (nameBytes == 500000) {
+            auto actualDefault = take(prepareDefault());
+            auto explicitLimit = take(prepareExplicit(3000000));
+            auto clamped =
+                take(prepareExplicit(std::numeric_limits<uint64_t>::max()));
+            const uint64_t used = actualDefault.workUsed();
+            require(used > 1000000 && used < 3000000,
+                    "fixture must enter the newly admitted work region");
+            for (const auto *prepared :
+                 {&actualDefault, &explicitLimit, &clamped}) {
+              require(prepared->complete() && !prepared->needsRealization() &&
+                          prepared->workUsed() == used &&
+                          prepared->dependencies().size() == baselineRows &&
+                          prepared->source() == *source &&
+                          &prepared->execution() == &execution,
+                      "budget choice changed work, dependencies or owners");
+              for (auto [index, row] : enumerate(prepared->dependencies())) {
+                const auto &expected = actualDefault.dependencies()[index];
+                require(row.kind == expected.kind &&
+                            row.source == expected.source &&
+                            row.value == expected.value &&
+                            row.predecessors == expected.predecessors,
+                        "budget choice changed dependency identity or order");
+              }
+            }
+            auto exact = take(prepareExplicit(used));
+            require(exact.complete() && exact.workUsed() == used,
+                    "large exact allowance changed completion");
+            refuses(prepareExplicit(used - 1),
+                    "native-construction-preparation-capacity");
+          } else {
+            // The name alone is charged for the policy and retained
+            // symbol reads; its aggregate work exceeds the common cap.
+            refuses(prepareDefault(),
+                    "native-construction-preparation-capacity");
+            refuses(prepareExplicit(3000000),
+                    "native-construction-preparation-capacity");
+            refuses(prepareExplicit(std::numeric_limits<uint64_t>::max()),
+                    "native-construction-preparation-capacity");
+            refuses(prepareDefault(),
+                    "native-construction-preparation-capacity");
+          }
+          require(print(*source) == before,
+                  "budget probing mutated the admitted source");
+        });
   cases.run(
       "closure from a different actual source cannot authorize preparation",
       [&] {

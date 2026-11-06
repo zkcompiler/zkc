@@ -2258,8 +2258,8 @@ Expected<NativeConstructionPreparation> prepareNativeConstruction(
     const NativeProofPolicy &policy, const protocol::ConstructionPlan *plan,
     ArrayRef<protocol::ConstructionInvocation> invocations,
     uint64_t workBudget) {
-  if (workBudget > 1000000)
-    workBudget = 1000000;
+  if (workBudget > constructionPreparationWorkLimit)
+    workBudget = constructionPreparationWorkLimit;
   pir::ProtocolModuleOp module;
   if (source && !source.getBody()->empty())
     module = dyn_cast<pir::ProtocolModuleOp>(source.getBody()->front());

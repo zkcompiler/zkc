@@ -578,7 +578,8 @@ impl<'a> CheckedCodec<'a> {
         for name in [&codec.initialize, &codec.write, &codec.finish] {
             work.charge(type_work::lookup_work(name, data_functions.len()))?;
             if let Some(function) = selected_function(name, false)?
-                && data_functions.insert(name.clone())
+                && (data_functions.insert(name.clone())
+                    || admitted.contracts().has_support_restriction())
             {
                 data_function(function, admitted.contracts(), work)?;
             }
@@ -770,7 +771,8 @@ impl<'a> CheckedCodec<'a> {
                         + type_work::lookup_work(name, reserved.len()),
                 )?;
                 if let Some(function) = selected_function(name, false)?
-                    && data_functions.insert(name.clone())
+                    && (data_functions.insert(name.clone())
+                        || admitted.contracts().has_support_restriction())
                 {
                     data_function(function, admitted.contracts(), work)?;
                 }
@@ -784,7 +786,9 @@ impl<'a> CheckedCodec<'a> {
                     type_work::lookup_work(&selection.wire, wire_functions.len())
                         + type_work::lookup_work(&selection.wire, reserved.len()),
                 )?;
-                if wire_functions.insert(selection.wire.clone()) {
+                if wire_functions.insert(selection.wire.clone())
+                    || admitted.contracts().has_support_restriction()
+                {
                     construction_function(
                         function(&selection.wire)?,
                         state,
@@ -921,7 +925,9 @@ impl<'a> CheckedCodec<'a> {
             work,
             type_work::lookup_work(name, self.data_functions.borrow().len()),
         )?;
-        if !self.data_functions.borrow().contains(name) {
+        if self.admitted.contracts().has_support_restriction()
+            || !self.data_functions.borrow().contains(name)
+        {
             data_function(
                 &self.admitted.program.functions[name],
                 self.admitted.contracts(),

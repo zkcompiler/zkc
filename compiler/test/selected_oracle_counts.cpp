@@ -377,12 +377,14 @@ int main() {
           missingCount[item.remotes.front().receiver].body.leafCounts.clear();
           auto exercise = [&](auto &&operation) {
             OracleNativeWork successful;
+            const uint64_t successfulInitialWork = successful.remaining;
             auto plan = take(operation(item.controllers, successful));
-            uint64_t used = 1000000 - successful.remaining;
+            uint64_t used = successfulInitialWork - successful.remaining;
             OracleNativeWork prefix;
+            const uint64_t prefixInitialWork = prefix.remaining;
             refuses(operation(missingCount, prefix),
                     "oracle-common-communication-profile");
-            uint64_t cutoff = 1000000 - prefix.remaining;
+            uint64_t cutoff = prefixInitialWork - prefix.remaining;
             require(plan.queryBlocks.size() == 1 &&
                         plan.queryBlocks.front().queries.size() == 1,
                     "expected one actual authenticated query prefix");
@@ -794,10 +796,16 @@ module { "protocol.module"() ({
         auto selected = policy(OracleAuthentication::PerQuery);
         auto actual = take(emitOracleRealization(*source, selected));
         OracleNativeWork measured;
+        const uint64_t measuredInitialWork = measured.remaining;
         take(checkOracleRealizationWithWork(*source, actual, selected,
                                             measured));
-        auto used = uint64_t(1000000) - measured.remaining;
+        auto used = measuredInitialWork - measured.remaining;
         require(used > 1, "paired work was not charged");
+        OracleNativeWork exact;
+        exact.remaining = used;
+        take(checkOracleRealizationWithWork(*source, actual, selected, exact));
+        require(exact.remaining == 0 && !exact.exhausted,
+                "exact paired completion allowance was insufficient");
         OracleNativeWork limited;
         limited.remaining = used - 1;
         refuses(
@@ -805,6 +813,12 @@ module { "protocol.module"() ({
             "common-control-capacity");
         require(limited.exhausted && !limited.charge(0),
                 "paired completion reset its exhausted allowance");
+        auto retry =
+            checkOracleRealizationWithWork(*source, actual, selected, limited);
+        require(!retry && limited.exhausted && !limited.remaining &&
+                    !limited.charge(0),
+                "paired completion retry renewed its allowance");
+        consumeError(retry.takeError());
       });
   for (unsigned children : {0u, 1u, 2u, 3u})
     for (auto authentication :
@@ -898,12 +912,14 @@ module { "protocol.module"() ({
     selected.validator = "V";
     take(zkc::detail::readNativeRequestCounts(owner, unit, selected));
     auto attributes = unit->getAttrDictionary();
+    OracleNativeWork defaults;
+    const uint64_t oversizedBytes = defaults.remaining + 1;
     for (auto [bytes, code] :
-         {std::pair{600000u, "native-request-count-correspondence"},
-          std::pair{1000001u, "native-request-count-limit"}}) {
+         {std::pair{uint64_t(600000), "native-request-count-correspondence"},
+          std::pair{oversizedBytes, "native-request-count-limit"}}) {
       // Immutable storage is inspected once per allowance. The original
       // 600k probe now fits storage admission and fails exact equivalence;
-      // the larger probe exceeds 1m by its first string visit alone.
+      // the larger probe exceeds the default by its first string visit alone.
       unit->setAttr("capacity_probe",
                     StringAttr::get(&context, std::string(bytes, 'x')));
       auto changed = unit->getAttrDictionary();

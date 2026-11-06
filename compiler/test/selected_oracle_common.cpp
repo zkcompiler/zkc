@@ -136,8 +136,10 @@ void checked(Error failure) {
 // The final common-control completion keeps its own capacity identifier.
 template <class Action> void cumulativeBoundary(Action action) {
   OracleNativeWork measured;
+  const uint64_t measuredInitialWork = measured.remaining;
+  const unsigned measuredInitialVisits = measured.operations;
   checked(action(measured));
-  uint64_t cost = 1000000 - measured.remaining;
+  uint64_t cost = measuredInitialWork - measured.remaining;
   require(cost > 0 && !measured.exhausted, "missing production work debit");
   OracleNativeWork exact;
   exact.remaining = cost;
@@ -156,15 +158,39 @@ template <class Action> void cumulativeBoundary(Action action) {
   failure = action(shortWork);
   require(bool(failure), "production retry reset exhausted work");
   consumeError(std::move(failure));
+  unsigned visits = measuredInitialVisits - measured.operations;
+  if (visits) {
+    // Keep work plentiful so this boundary independently exercises visits.
+    OracleNativeWork exactVisits;
+    exactVisits.operations = visits;
+    checked(action(exactVisits));
+    require(exactVisits.operations == 0 && !exactVisits.exhausted &&
+                exactVisits.remaining == measured.remaining,
+            "exact production visit allowance changed work accounting");
+    OracleNativeWork shortVisits;
+    shortVisits.operations = visits - 1;
+    failure = action(shortVisits);
+    require(bool(failure), "one-less production visit allowance succeeded");
+    code = toString(std::move(failure));
+    require((namesIdentifier(code, "oracle-common-limit") ||
+             namesIdentifier(code, "common-control-capacity")) &&
+                shortVisits.exhausted && !shortVisits.remaining &&
+                !shortVisits.charge(0),
+            "visit exhaustion lost its capacity identifier or stickiness");
+    failure = action(shortVisits);
+    require(bool(failure), "production retry reset exhausted visits");
+    consumeError(std::move(failure));
+  }
   OracleNativeWork retry;
   checked(action(retry));
 }
-Type sharedNestedType(MLIRContext &context, unsigned depth) {
+Type sharedNestedType(MLIRContext &context, unsigned depth,
+                      StringRef identityNamespace = "accounting.control") {
   Type type = IntegerType::get(&context, 64, IntegerType::Unsigned);
   for (unsigned i = 0; i < depth; ++i) {
     auto identity = data::importVariantIdentity(
         &context,
-        VariantIdentity::Tuple{"accounting.control", std::to_string(i)});
+        VariantIdentity::Tuple{identityNamespace.str(), std::to_string(i)});
     auto arm = data::AlternativeAttr::get(&context,
                                           StringAttr::get(&context, "Record"),
                                           ArrayRef<Type>{type, type});
@@ -562,6 +588,7 @@ module { "protocol.module"() ({
                       "preserved 65-element JSON counterexample changed");
             for (uint64_t allowance : {cost - 1, cost, uint64_t(1000000)}) {
               OracleNativeWork work;
+              const unsigned workInitialVisits = work.operations;
               work.remaining = allowance;
               auto result = parseOracleRecordWithWork(text, work);
               if (allowance < cost) {
@@ -576,7 +603,8 @@ module { "protocol.module"() ({
               auto *array = actual.getAsArray();
               require(array && array->size() == 65 &&
                           work.remaining == allowance - cost &&
-                          !work.exhausted && work.operations == 100000,
+                          !work.exhausted &&
+                          work.operations == workInitialVisits,
                       "array reservation omitted independently counted work");
               const json::Value *owned = &array->front();
               for (unsigned i = 0; i < nesting; ++i) {
@@ -621,6 +649,7 @@ module { "protocol.module"() ({
           uint64_t cost = text.size() + (tokens) + elements + 1 + elements;
           for (uint64_t allowance : {cost - 1, cost}) {
             OracleNativeWork work;
+            const unsigned workInitialVisits = work.operations;
             work.remaining = allowance;
             auto result = parseOracleRecordWithWork(text, work);
             if (allowance < cost) {
@@ -631,7 +660,7 @@ module { "protocol.module"() ({
               auto actual = take(std::move(result));
               require(actual.getAsArray()->size() == elements &&
                           !work.remaining && !work.exhausted &&
-                          work.operations == 100000,
+                          work.operations == workInitialVisits,
                       "token growth or array inventory debit changed");
             }
           }
@@ -650,6 +679,7 @@ module { "protocol.module"() ({
                                 pieceReservation(2 * escapes);
                 for (uint64_t allowance : {cost - 1, cost, uint64_t(1000000)}) {
                   OracleNativeWork work;
+                  const unsigned workInitialVisits = work.operations;
                   work.remaining = allowance;
                   auto result = parseOracleRecordWithWork(text, work);
                   if (allowance < cost) {
@@ -661,7 +691,8 @@ module { "protocol.module"() ({
                     auto actual = take(std::move(result));
                     require(actual.getAsString() == expected &&
                                 work.remaining == allowance - cost &&
-                                !work.exhausted && work.operations == 100000,
+                                !work.exhausted &&
+                                work.operations == workInitialVisits,
                             "decoded spans changed spelling or reservation");
                   }
                 }
@@ -678,6 +709,7 @@ module { "protocol.module"() ({
         uint64_t cost = text.size() + 1 + 1 + 2 * 26 + pieceReservation(10);
         for (uint64_t allowance : {cost - 1, cost}) {
           OracleNativeWork work;
+          const unsigned workInitialVisits = work.operations;
           work.remaining = allowance;
           auto result = parseOracleRecordWithWork(text, work);
           if (allowance < cost) {
@@ -690,7 +722,7 @@ module { "protocol.module"() ({
                         *actual.getAsString() ==
                             StringRef(expected, sizeof(expected) - 1) &&
                         !work.remaining && !work.exhausted &&
-                        work.operations == 100000,
+                        work.operations == workInitialVisits,
                     "Unicode scalar assembly changed spelling or debit");
           }
         }
@@ -698,6 +730,7 @@ module { "protocol.module"() ({
   cases.run("reserved arrays preserve borrowed input addresses", [&] {
     std::string text = R"json([["first"],{"key":"second"}])json";
     OracleNativeWork work;
+    const unsigned workInitialVisits = work.operations;
     auto actual = take(parseOracleRecordWithWork(text, work));
     auto *array = actual.getAsArray();
     auto first = array->front().getAsArray()->front().getAsString();
@@ -708,7 +741,7 @@ module { "protocol.module"() ({
                 second->data() == text.data() + text.find("second") &&
                 StringRef(object->begin()->first).data() ==
                     text.data() + text.find("key") &&
-                !work.exhausted && work.operations == 100000,
+                !work.exhausted && work.operations == workInitialVisits,
             "array or stable-token construction detached borrowed input");
   });
   cases.run(
@@ -792,6 +825,7 @@ module { "protocol.module"() ({
             }
             for (uint64_t allowance : {cost - 1, cost}) {
               OracleNativeWork work;
+              const unsigned workInitialVisits = work.operations;
               work.remaining = allowance;
               auto result = parseOracleRecordWithWork(text, work);
               if (allowance < cost) {
@@ -806,7 +840,7 @@ module { "protocol.module"() ({
                 require(
                     object && object->size() == fields &&
                         object->getInteger(key) == 0 && !work.remaining &&
-                        !work.exhausted && work.operations == 100000,
+                        !work.exhausted && work.operations == workInitialVisits,
                     "long-key JSON escaped its independent exact reservation");
                 for (const auto &field : *object) {
                   StringRef name = field.first;
@@ -816,19 +850,37 @@ module { "protocol.module"() ({
                 }
               }
             }
-            OracleNativeWork defaults;
-            auto result = parseOracleRecordWithWork(text, defaults);
+            // Retain the original growth boundary under an explicit smaller
+            // allowance, independently of the public default.
+            constexpr uint64_t growthAllowance = 1000000;
+            OracleNativeWork growth;
+            growth.remaining = growthAllowance;
+            auto result = parseOracleRecordWithWork(text, growth);
             if (fields == 96) {
               refuses(std::move(result), "oracle-common-limit");
-              require(cost > 1000000 && defaults.exhausted &&
-                          !defaults.remaining && !defaults.charge(0),
-                      "second long-key growth escaped the default allowance");
+              require(cost > growthAllowance && growth.exhausted &&
+                          !growth.remaining && !growth.charge(0),
+                      "second long-key growth escaped the smaller allowance");
+              refuses(parseOracleRecordWithWork("{}", growth),
+                      "oracle-common-limit");
             } else {
               take(std::move(result));
-              require(defaults.remaining == 1000000 - cost &&
-                          !defaults.exhausted,
-                      "long-key positive lost the unchanged default allowance");
+              require(growth.remaining == growthAllowance - cost &&
+                          !growth.exhausted,
+                      "long-key positive lost the smaller allowance");
             }
+            OracleNativeWork defaults;
+            const uint64_t initialWork = defaults.remaining;
+            const unsigned initialVisits = defaults.operations;
+            auto actual = take(parseOracleRecordWithWork(text, defaults));
+            auto *object = actual.getAsObject();
+            require(object && cost <= initialWork &&
+                        defaults.remaining == initialWork - cost &&
+                        !defaults.exhausted &&
+                        defaults.operations == initialVisits &&
+                        object->size() == fields &&
+                        object->getInteger(key) == 0,
+                    "default JSON parsing changed content or accounting");
             if (!escaped && fields == 96) {
               require(text.size() == 180861,
                       "long-key source-derived counterexample changed");
@@ -883,6 +935,7 @@ module { "protocol.module"() ({
           }
           for (uint64_t allowance : {cost - 1, cost}) {
             OracleNativeWork work;
+            const unsigned workInitialVisits = work.operations;
             work.remaining = allowance;
             auto result = parseOracleRecordWithWork(text, work);
             if (allowance < cost) {
@@ -895,7 +948,8 @@ module { "protocol.module"() ({
               auto actual = take(std::move(result));
               auto expected = take(json::parse(text));
               require(equalNaturalJson(actual, expected) && !work.remaining &&
-                          !work.exhausted && work.operations == 100000,
+                          !work.exhausted &&
+                          work.operations == workInitialVisits,
                       "colliding JSON keys escaped their exact reservation");
             }
           }
@@ -957,9 +1011,11 @@ module { "protocol.module"() ({
     auto probe = OwningOpRef<ModuleOp>(cast<ModuleOp>((*original)->clone()));
     unsigned before = count(*probe);
     OracleNativeWork measured;
+    const unsigned measuredInitialVisits = measured.operations;
     take(emit(*probe, measured));
     unsigned inserted = count(*probe) - before;
-    require(inserted > 0 && 100000 - measured.operations == inserted,
+    require(inserted > 0 &&
+                measuredInitialVisits - measured.operations == inserted,
             "Merkle retained a synthetic operation debit");
     // Repeat on the same candidate: both sets and new live symbol lookups
     // count.
@@ -1038,18 +1094,21 @@ module { "protocol.module"() ({
     };
     for (bool nested : {false, true})
       for (auto [instructions, queries] :
-           {std::pair{128u, 8u}, std::pair{2048u, 512u}}) {
+           {std::pair{128u, 8u}, std::pair{4096u, 512u}}) {
         auto module = fixture(instructions, queries, nested);
         auto unit = cast<pir::ProtocolModuleOp>(module->getBody()->front());
         auto definition =
             *unit.getBody().front().getOps<pir::OracleDefinitionOp>().begin();
         OracleVirtualFunctionWork work;
+        const uint64_t initialWork = work.getWork().remaining;
         auto plan = planOracleVirtualFunctions(definition, work);
         // Owners visit the branch and its four nested instructions. The
         // selection scan visits each outer instruction once per query.
         uint64_t lowerBound =
             (nested ? 6 : 2) * uint64_t(instructions) * queries;
-        if (lowerBound > 1000000) {
+        if (instructions == 4096) {
+          require(lowerBound > initialWork,
+                  "large slice inventory no longer exceeds the default");
           refuses(std::move(plan), "oracle-common-limit");
           require(work.getWork().exhausted,
                   "empty slices escaped their independent visit lower bound");
@@ -1058,7 +1117,7 @@ module { "protocol.module"() ({
           require(
               actual.queries.size() == queries &&
                   actual.queries.front().position.block.instructions.empty() &&
-                  1000000 - work.getWork().remaining >= lowerBound,
+                  initialWork - work.getWork().remaining >= lowerBound,
               "empty dependency slices omitted full inventory scans");
         }
       }
@@ -1334,11 +1393,15 @@ module { "protocol.module"() ({
   });
   cases.run("native preflight charges environment work cumulatively", [&] {
     OracleNativeWork work;
-    require(work.charge(999999) && !work.charge(2) && !work.charge(0),
+    const uint64_t initialWork = work.remaining;
+    require(initialWork > 1 && work.charge(initialWork - 1) &&
+                work.remaining == 1 && !work.charge(2) && !work.charge(0),
             "exhausted work was reset or underflowed");
   });
   cases.run("native product accounting cannot overflow or reset", [&] {
     OracleNativeWork work;
+    // Fixed operands exercise product arithmetic under an explicit allowance.
+    work.remaining = 1000000;
     require(work.chargeProduct(1000, 1000) && work.remaining == 0 &&
                 work.chargeProduct(0, std::numeric_limits<uint64_t>::max()) &&
                 !work.chargeProduct(std::numeric_limits<uint64_t>::max(), 2) &&
@@ -1422,20 +1485,22 @@ module { "protocol.module"() ({
           uint64_t stored = 0;
           original->walk([&](Operation *) { ++stored; });
           OracleNativeWork direct;
+          const uint64_t directInitialWork = direct.remaining;
           facts::Work control(
               [&](uint64_t amount) { return direct.charge(amount); });
           auto requirements =
               take(zkc::detail::completeCommonControl(unit, control));
-          uint64_t completionCost = 1000000 - direct.remaining;
+          uint64_t completionCost = directInitialWork - direct.remaining;
           auto single = sharedControlSource(context, 1);
           OracleNativeWork singleWork;
+          const uint64_t singleWorkInitialWork = singleWork.remaining;
           facts::Work singleControl(
               [&](uint64_t amount) { return singleWork.charge(amount); });
           take(zkc::detail::completeCommonControl(
               cast<pir::ProtocolModuleOp>(single->getBody()->front()),
               singleControl));
           uint64_t partialCompletion =
-              1000000 - singleWork.remaining + 4 * stored;
+              singleWorkInitialWork - singleWork.remaining + 4 * stored;
           require(!requirements.empty() && completionCost > partialCompletion,
                   "fixture did not expand a compact shared selected closure");
           auto operation =
@@ -1457,12 +1522,13 @@ module { "protocol.module"() ({
             return Error::success();
           };
           OracleNativeWork prefix;
+          const uint64_t prefixInitialWork = prefix.remaining;
           auto preflight =
               take(OracleNativeSourcePreflight::read(*original, prefix));
           checked(checkOracleNativePreflight(*original, prefix, &preflight));
           require(preflight.reserveTraversal(*original),
                   "admission reservation");
-          uint64_t prefixCost = 1000000 - prefix.remaining;
+          uint64_t prefixCost = prefixInitialWork - prefix.remaining;
           checked(operation(prefix, preflight));
           // Cover more than the complete one-application module plus discovery,
           // but less than the actual repeated expansion. No independent
@@ -1502,9 +1568,10 @@ module { "protocol.module"() ({
         auto recipe = constantRecipe(context);
         auto firstCost = [&](ModuleOp module) {
           OracleNativeWork work;
+          const uint64_t workInitialWork = work.remaining;
           auto unit = cast<pir::ProtocolModuleOp>(module.getBody()->front());
           take(emitOracleLocalHelper(unit, recipe, work));
-          return 1000000 - work.remaining;
+          return workInitialWork - work.remaining;
         };
         uint64_t narrowCost = firstCost(*narrow), wideCost = firstCost(*wide);
         require(wideCost - narrowCost == uint64_t(declarations) * extraWidth,
@@ -1541,8 +1608,9 @@ module { "protocol.module"() ({
             OwningOpRef<ModuleOp>(cast<ModuleOp>((*original)->clone()));
         auto probeUnit = cast<pir::ProtocolModuleOp>(probe->getBody()->front());
         OracleNativeWork measured;
+        const uint64_t measuredInitialWork = measured.remaining;
         take(emitOracleLocalHelper(probeUnit, recipe, measured));
-        uint64_t cost = 1000000 - measured.remaining;
+        uint64_t cost = measuredInitialWork - measured.remaining;
         // These 128 dormant names alone copy 256 extra bytes each during
         // initial emitter inventory setup, before any binding can be created.
         constexpr uint64_t nameBytes = 128 * 256;
@@ -1586,10 +1654,11 @@ module { "protocol.module"() ({
           addDormantDeclarations(*module, declarations, 0);
           auto unit = cast<pir::ProtocolModuleOp>(module->getBody()->front());
           OracleNativeWork work;
+          const uint64_t workInitialWork = work.remaining;
           take(emitOracleLocalHelper(unit, recipe, work));
           require(succeeded(admitStage(*module)),
                   "distinct helper lost admission");
-          return 1000000 - work.remaining;
+          return workInitialWork - work.remaining;
         };
         auto oneBase = cost(one, 0), oneDormant = cost(one, dormant);
         auto manyBase = cost(several, 0), manyDormant = cost(several, dormant);
@@ -1899,7 +1968,8 @@ module { "protocol.module"() ({
           require(namesIdentifier(message, identifier),
                   "wrong wire refusal: " + message);
         };
-        expect(record + std::string(2 * 1024 * 1024, ' '),
+        OracleNativeWork defaults;
+        expect(record + std::string(defaults.remaining + 1, ' '),
                "oracle-common-limit");
         expect("{", "oracle-realization-record");
         expect(R"json({"key":0,"\u006bey":1})json",
@@ -1941,12 +2011,33 @@ module { "protocol.module"() ({
         // can retain native handles, while publication must pay every
         // expansion.
         auto original = commonEntrySource(context);
+        // Preserve the originally admitted fixture: larger native types can
+        // hit independent formation limits before publication is exercised.
         appendUnusedInput(*original, sharedNestedType(context, 12));
         auto actual = take(emitOracleRealization(*original));
         auto before = printed(*original),
              candidateBefore = printed(*actual.module);
-        refuses(exportOracleRealization(*original, actual),
+        // The old explicit allowance still refuses. The larger public default
+        // now publishes this same immutable input, with exact/one-less work
+        // and visit boundaries checked against the real publication path.
+        OracleNativeWork oldAllowance;
+        oldAllowance.remaining = 1000000;
+        refuses(exportOracleRealizationWithWork(*original, actual, {},
+                                                oldAllowance),
                 "oracle-common-limit");
+        require(oldAllowance.exhausted && !oldAllowance.charge(0),
+                "expanded descriptor exhaustion was not terminal");
+        auto publication = take(exportOracleRealization(*original, actual));
+        cumulativeBoundary([&](OracleNativeWork &work) -> Error {
+          auto result =
+              exportOracleRealizationWithWork(*original, actual, {}, work);
+          if (!result)
+            return result.takeError();
+          require(result->bytes == publication.bytes &&
+                      equalNaturalJson(result->data, publication.data),
+                  "descriptor publication changed at its exact allowance");
+          return Error::success();
+        });
         require(printed(*original) == before &&
                     printed(*actual.module) == candidateBefore,
                 "expanded type refusal mutated its immutable owners");
@@ -1969,24 +2060,27 @@ module { "protocol.module"() ({
           auto scratch =
               OwningOpRef<ModuleOp>(cast<ModuleOp>((*original)->clone()));
           OracleNativeWork work;
+          const unsigned workInitialVisits = work.operations;
+          const uint64_t workInitialWork = work.remaining;
           take(emitOracleMerkleWithWork(*scratch, kind, scheme,
                                         OracleLeafGrouping::Individual,
                                         OracleLeafOrder::BitReversed, work));
-          cost = 1000000 - work.remaining;
-          inserted = 100000 - work.operations;
+          cost = workInitialWork - work.remaining;
+          inserted = workInitialVisits - work.operations;
         }
         {
           auto scratch =
               OwningOpRef<ModuleOp>(cast<ModuleOp>((*original)->clone()));
           OracleNativeWork work;
+          const unsigned workInitialVisits = work.operations;
           work.remaining = cost - 1;
           refuses(emitOracleMerkleWithWork(*scratch, kind, scheme,
                                            OracleLeafGrouping::Individual,
                                            OracleLeafOrder::BitReversed, work),
                   "oracle-common-limit");
           require(
-              100000 - work.operations >= inserted - 1 && work.exhausted &&
-                  !work.charge(0) && !work.emission &&
+              workInitialVisits - work.operations >= inserted - 1 &&
+                  work.exhausted && !work.charge(0) && !work.emission &&
                   printed(*scratch) == before &&
                   succeeded(admitStage(*scratch)),
               "late cancellation failed to roll back linked helper/regions");
@@ -2026,11 +2120,12 @@ module { "protocol.module"() ({
         });
         require(bool(kind), "missing primitive kind");
         OracleVirtualFunctionWork work;
+        const uint64_t initialWork = work.getWork().remaining;
         require(work.reserveCapacity(4096, 4096 * 64),
                 "primitive capacity reservation");
         require(work.operations == 100000 - 4096 &&
                     work.slots == 1000000 - 4096 * 64 &&
-                    work.getWork().remaining == 1000000,
+                    work.getWork().remaining == initialWork,
                 "unused primitive upper bound became actual work");
         // The production builder listener still refuses at its first actual
         // node after any required live name inspection; capacity is not native
@@ -2088,10 +2183,11 @@ module { "protocol.module"() ({
         require(limited.exhausted && !limited.charge(0),
                 "serialization reset its cumulative allowance");
         OracleNativeWork sufficient;
+        const uint64_t initialWork = sufficient.remaining;
         auto publication = take(finishOraclePublication(value(), sufficient));
         require(publication.bytes.size() > 4096 &&
                     sufficient.remaining <
-                        1000000 - 2 * publication.bytes.size(),
+                        initialWork - 2 * publication.bytes.size(),
                 "publication omitted serialization or ownership work");
       });
   cases.run("source preflights share module and entry work cumulatively", [&] {
@@ -2112,11 +2208,13 @@ module { "protocol.module"() ({
     require(succeeded(admitStage(*original)), "multi-entry source formation");
     auto before = printed(*original);
     OracleNativeWork measured;
+    const uint64_t measuredInitialWork = measured.remaining;
     auto preflight =
         take(OracleNativeSourcePreflight::read(*original, measured));
-    uint64_t moduleCost = 1000000 - measured.remaining;
+    uint64_t moduleCost = measuredInitialWork - measured.remaining;
     auto names = take(oracleEntries(*original, &measured, &preflight));
-    uint64_t discoveryCost = 1000000 - measured.remaining - moduleCost;
+    uint64_t discoveryCost =
+        measuredInitialWork - measured.remaining - moduleCost;
     require(names.size() == 4, "multi-entry inventory changed");
     std::vector<uint64_t> closureCosts;
     for (const auto &name : names) {
@@ -2198,11 +2296,13 @@ module { "protocol.module"() ({
         references.walk(
             [&](SymbolRefAttr reference) { native.push_back(reference); });
         OracleNativeWork measured;
+        const uint64_t measuredInitialWork = measured.remaining;
         auto preflight =
             take(OracleNativeSourcePreflight::read(*original, measured));
-        uint64_t moduleCost = 1000000 - measured.remaining;
+        uint64_t moduleCost = measuredInitialWork - measured.remaining;
         auto indexed = take(preflight.getReferences(references));
-        uint64_t readCost = 1000000 - measured.remaining - moduleCost;
+        uint64_t readCost =
+            measuredInitialWork - measured.remaining - moduleCost;
         require(indexed == native && native.size() == 2 && native[0] == main &&
                     native[1] == sibling,
                 "shared symbol nodes changed native postorder or multiplicity");
@@ -2230,15 +2330,17 @@ module { "protocol.module"() ({
         auto selections =
             take(resolveOracleRealizationSelection(*original, {}));
         OracleNativeWork measured;
+        const uint64_t measuredInitialWork = measured.remaining;
         auto preflight =
             take(OracleNativeSourcePreflight::read(*original, measured));
-        uint64_t moduleCost = 1000000 - measured.remaining;
+        uint64_t moduleCost = measuredInitialWork - measured.remaining;
         take(oracleRequirements(*original, "main", selections, &measured,
                                 &preflight));
-        uint64_t firstCost = 1000000 - measured.remaining - moduleCost;
+        uint64_t firstCost =
+            measuredInitialWork - measured.remaining - moduleCost;
         take(oracleRequirements(*original, "sibling", selections, &measured,
                                 &preflight));
-        uint64_t used = 1000000 - measured.remaining;
+        uint64_t used = measuredInitialWork - measured.remaining;
         OracleNativeWork limited;
         limited.remaining = used - 1;
         auto bounded =
@@ -2262,16 +2364,21 @@ module { "protocol.module"() ({
           take(checkOracleRealization(*original, actual));
           auto candidateBefore = printed(*actual.module);
           Builder builder(&context);
-          constexpr unsigned width = 1000001;
+          OracleNativeWork defaults;
+          const uint64_t defaultWork = defaults.remaining;
+          const unsigned width = defaultWork + 1;
+          // Slots incur both their container width and each child visit.
+          // Use that lower bound to avoid allocating twice as many handles.
+          const unsigned slots = defaultWork / 2 + 1;
           Attribute oversized;
           switch (shape) {
           case 0: {
-            SmallVector<Attribute> repeated(width, builder.getStringAttr("x"));
+            SmallVector<Attribute> repeated(slots, builder.getStringAttr("x"));
             oversized = builder.getArrayAttr(repeated);
             break;
           }
           case 1: {
-            SmallVector<Type> repeated(width, builder.getI1Type());
+            SmallVector<Type> repeated(slots, builder.getI1Type());
             oversized = TypeAttr::get(builder.getFunctionType(repeated, {}));
             break;
           }
@@ -2284,7 +2391,8 @@ module { "protocol.module"() ({
             oversized = TypeAttr::get(IntegerType::get(&context, width));
             break;
           case 4: {
-            SmallVector<int8_t> bytes(width, 0);
+            // A dense byte array charges both elements and raw bytes.
+            SmallVector<int8_t> bytes(slots, 0);
             oversized = builder.getDenseI8ArrayAttr(bytes);
             break;
           }
@@ -2293,8 +2401,9 @@ module { "protocol.module"() ({
                 std::string(width, 'x'), builder.getUnitAttr())});
             break;
           case 6: {
-            SmallVector<Attribute> first(600000, builder.getStringAttr("x"));
-            SmallVector<Attribute> second(600000, builder.getStringAttr("y"));
+            const unsigned half = defaultWork / 4 + 1;
+            SmallVector<Attribute> first(half, builder.getStringAttr("x"));
+            SmallVector<Attribute> second(half, builder.getStringAttr("y"));
             oversized = builder.getArrayAttr(
                 {builder.getArrayAttr(first), builder.getArrayAttr(second)});
             break;
@@ -2344,14 +2453,17 @@ module { "protocol.module"() ({
   cases.run("combined Oracle preflight precedes candidate admission", [&] {
     auto original = commonEntrySource(context);
     auto actual = take(emitOracleRealization(*original));
+    take(checkOracleRealization(*original, actual));
     Builder builder(&context);
-    auto large = builder.getStringAttr(std::string(600000, 'x'));
+    OracleNativeWork defaults;
+    const uint64_t width = defaults.remaining / 2 + 1;
+    auto large = builder.getStringAttr(std::string(width, 'x'));
     original->getOperation()->setAttr("capacity_probe", large);
     actual.module->getOperation()->setAttr(
-        "capacity_probe", builder.getStringAttr(std::string(600000, 'y')));
+        "capacity_probe", builder.getStringAttr(std::string(width, 'y')));
     checked(boundOracleNativeIR(*original));
     checked(boundOracleNativeIR(*actual.module));
-    // Two distinct 600k spellings require at least 1.2m storage-byte visits.
+    // The two distinct spellings together exceed the default work allowance.
     // Each owner fits alone; exact immutable reuse cannot merge this pair.
     // A missing candidate terminator would diagnose during admission; the
     // combined size must refuse before reaching that unrelated malformed body.
@@ -2362,6 +2474,8 @@ module { "protocol.module"() ({
     terminal->remove();
     auto restore = llvm::scope_exit(
         [&] { program.getBody().front().getOperations().push_back(terminal); });
+    const auto originalBefore = printed(*original);
+    const auto candidateBefore = printed(*actual.module);
     unsigned diagnostics = 0;
     ScopedDiagnosticHandler capture(&context, [&](Diagnostic &) {
       ++diagnostics;
@@ -2369,6 +2483,9 @@ module { "protocol.module"() ({
     });
     refuses(checkOracleRealization(*original, actual), "oracle-common-limit");
     require(!diagnostics, "combined capacity was checked after admission");
+    require(printed(*original) == originalBefore &&
+                printed(*actual.module) == candidateBefore,
+            "combined capacity refusal mutated either supplied subject");
   });
   for (unsigned results : {1u, 4096u})
     cases.run(Twine("public oracle role/result work ") + Twine(results), [&] {
@@ -2397,7 +2514,7 @@ module { "protocol.module"() ({
                   printed(*actual.module) == candidateBefore,
               "role/result accounting changed source or candidate");
     });
-  for (unsigned shapes : {16u, 512u})
+  for (unsigned shapes : {16u, 2048u})
     cases.run(Twine("repeated Oracle shape role work ") + Twine(shapes), [&] {
       auto original = commonEntrySource(context);
       auto entry = mainEntry(*original);
@@ -2410,6 +2527,8 @@ module { "protocol.module"() ({
                                    builder.getIntegerType(64, false),
                                    handle->getResult(0), "rows");
       require(succeeded(admitStage(*original)), "shape fixture admission");
+      // With 1024 roles, each shape pays at least 1024 roster visits plus
+      // 1024 receiver-membership checks: 2048 shapes exceed 4M work.
       // Obtain the independently read candidate with two roles, then widen
       // only both entry rosters. The actual handle still belongs to P and V.
       auto actual = take(emitOracleRealization(*original));

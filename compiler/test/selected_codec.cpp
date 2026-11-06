@@ -25,6 +25,10 @@ using namespace zkc;
 using namespace zkc::test;
 namespace pir = protocol_ir;
 namespace {
+// Expected evaluation default, checked directly below through the private debit
+// API. Smaller retained allowances in cache fixtures are intentional controls.
+constexpr uint64_t codecWorkLimit = 2000000;
+constexpr int64_t codecLogicalElementLimit = codecWorkLimit / 8;
 // This is the actual transcript-side boundary exercised by the codec cases in
 // language_constructions.cpp. Form it directly: selected NativeProof admission
 // is a separate integration gate and must not be disabled to run codec tests.
@@ -961,6 +965,16 @@ int main() {
                                               fixture.transcript),
             "native-proof-codec-group");
   });
+  cases.run("codec default permits exactly two million debit units", [&] {
+    zkc::detail::CodecCapacity exact, oversized;
+    require(exact.charge(codecWorkLimit) && exact.charge(0) &&
+                !exact.exhausted(),
+            "exact default debit must fit before an overdraw");
+    require(!exact.charge(1) && exact.exhausted() && !exact.charge(0),
+            "one more unit must exhaust the default without renewal");
+    require(!oversized.charge(codecWorkLimit + 1) && oversized.exhausted(),
+            "oversized first debit must refuse");
+  });
   cases.run("wide codec input layouts use bounded role-local indexes", [&] {
     Fixture fixture(context);
     SmallVector<unsigned> selected;
@@ -1071,7 +1085,7 @@ int main() {
                    (!reading || capacity.jsonArray(codec)) &&
                    capacity.charge(available);
           };
-          size_t low = 0, high = 1000001;
+          size_t low = 0, high = codecWorkLimit + 1;
           require(fits(low) && !fits(high), "invalid index capacity bracket");
           while (high - low > 1) {
             size_t middle = low + (high - low) / 2;
@@ -1101,7 +1115,8 @@ int main() {
         SmallVector<int64_t>{4294967296LL, 2147483648LL},
         SmallVector<int64_t>{std::numeric_limits<int64_t>::max(), 2},
         SmallVector<int64_t>{std::numeric_limits<int64_t>::max()},
-        SmallVector<int64_t>{125000}, SmallVector<int64_t>{1000, 1000}})
+        SmallVector<int64_t>{codecLogicalElementLimit},
+        SmallVector<int64_t>{1000, 1000}})
     cases.run("codec bounds logical resource shape " + Twine(shape.front()) +
                   " through " + Twine(shape.back()) + " at rank " +
                   Twine(shape.size()),
@@ -1141,6 +1156,8 @@ int main() {
   for (SmallVector<int64_t> shape :
        {SmallVector<int64_t>{}, SmallVector<int64_t>{1},
         SmallVector<int64_t>{8, 16}, SmallVector<int64_t>{124000},
+        SmallVector<int64_t>{125000},
+        SmallVector<int64_t>{codecLogicalElementLimit - 1000},
         SmallVector<int64_t>{0, std::numeric_limits<int64_t>::max(),
                              std::numeric_limits<int64_t>::max()},
         SmallVector<int64_t>{std::numeric_limits<int64_t>::max(), 0,
@@ -1155,7 +1172,9 @@ int main() {
                             !capacity.exhausted(),
                         "bounded or zero-extent resource was refused");
               });
-  for (int64_t count : {int64_t(124000), int64_t(125000)})
+  for (int64_t count :
+       {int64_t(124000), int64_t(125000), codecLogicalElementLimit - 1000,
+        codecLogicalElementLimit})
     cases.run(
         "codec charges dense splat logical elements " + Twine(count), [&] {
           auto type = RankedTensorType::getChecked(
@@ -1164,9 +1183,10 @@ int main() {
           require(bool(type), "dense fixture must have a valid tensor type");
           auto value = DenseElementsAttr::get(type, ArrayRef<uint8_t>{0});
           zkc::detail::CodecCapacity capacity;
-          require(capacity.attribute(value) == (count == 124000),
+          require(capacity.attribute(value) ==
+                      (count < codecLogicalElementLimit),
                   "dense splat used physical rather than logical size");
-          require(capacity.exhausted() == (count == 125000),
+          require(capacity.exhausted() == (count == codecLogicalElementLimit),
                   "dense logical limit did not retain its refusal");
         });
   cases.run(
@@ -1220,8 +1240,8 @@ int main() {
         // Native origins validate each name at construction, so use many
         // valid raw-string fields instead of manufacturing an invalid attr.
         value = fixture.builder.getArrayAttr(SmallVector<Attribute>(
-            8192, runtime::StartOriginAttr::get(
-                      &context, StringRef(large).take_front(128), "site")));
+            16384, runtime::StartOriginAttr::get(
+                       &context, StringRef(large).take_front(128), "site")));
       // Both entry points must see the outer module, before any stage verifier
       // can diagnose this deliberately unadmitted metadata.
       candidate->getOperation()->setAttr("capacity_fixture", value);
@@ -1328,9 +1348,9 @@ int main() {
     auto candidate = copy(*fixture.source);
     auto codec = fixture.construct(*candidate);
     fixture.source->getOperation()->setAttr(
-        "capacity_fixture",
-        fixture.builder.getStringAttr(std::string(550000, 's')));
-    codec[7] = std::string(550000, 't');
+        "capacity_fixture", fixture.builder.getStringAttr(
+                                std::string(codecWorkLimit / 2 + 50000, 's')));
+    codec[7] = std::string(codecWorkLimit / 2 + 50000, 't');
     zkc::detail::CodecCapacity sourceOnly, planOnly;
     require(sourceOnly.operation(*fixture.source) && planOnly.jsonArray(codec),
             "each input must fit separately to test cumulative accounting");
@@ -1353,7 +1373,7 @@ int main() {
     };
     // Leave fewer than eight units after preflight. The following construction
     // must exhaust during generated work, rather than reset its allowance.
-    size_t low = 0, high = 1000001;
+    size_t low = 0, high = codecWorkLimit + 1;
     require(fits(low) && !fits(high), "invalid capacity search bracket");
     while (high - low > 1) {
       size_t middle = low + (high - low) / 2;
@@ -1386,7 +1406,8 @@ int main() {
     source->getBody()->addArgument(type, builder.getUnknownLoc());
     auto cloned = copy(*source);
     zkc::detail::CodecCapacity capacity;
-    require(capacity.charge(900000) && capacity.operation(*source),
+    require(capacity.charge(codecWorkLimit - 100000) &&
+                capacity.operation(*source),
             "bounded initial root inspection failed");
     for (unsigned i = 0; i != 128; ++i)
       require(capacity.operation(i % 2 ? *source : *cloned),
@@ -1397,7 +1418,7 @@ int main() {
     require(refused && capacity.exhausted(),
             "physical clones or root lookups became free");
     zkc::detail::CodecCapacity fresh;
-    require(fresh.charge(980000) && !fresh.operation(*cloned),
+    require(fresh.charge(codecWorkLimit - 20000) && !fresh.operation(*cloned),
             "root summaries escaped their original allowance");
   });
   cases.run("dictionary hits still charge every named attribute slot", [&] {
@@ -1408,7 +1429,8 @@ int main() {
                                       builder.getUnitAttr());
     auto cloned = copy(*source);
     zkc::detail::CodecCapacity capacity;
-    require(capacity.operation(*source) && capacity.charge(990000),
+    require(capacity.operation(*source) &&
+                capacity.charge(codecWorkLimit - 10000),
             "wide dictionary must fit its first inspection");
     bool refused = false;
     for (unsigned i = 0; i != 8 && !refused; ++i)
@@ -1426,6 +1448,8 @@ int main() {
       subjects.push_back(std::move(subject));
     }
     zkc::detail::CodecCapacity cumulative;
+    require(cumulative.charge(codecWorkLimit - 1000000),
+            "could not retain the distinct-root allowance");
     for (auto [i, subject] : enumerate(subjects)) {
       zkc::detail::CodecCapacity alone;
       require(alone.operation(*subject), "each distinct root must fit alone");
@@ -1445,14 +1469,17 @@ int main() {
     auto attribute = builder.getStringAttr(std::string(300000, 'a'));
     subject->getOperation()->setAttr("payload", attribute);
     zkc::detail::CodecCapacity capacity;
-    require(capacity.operation(*subject) && capacity.operation(*subject),
+    require(capacity.charge(codecWorkLimit - 1000000) &&
+                capacity.operation(*subject) && capacity.operation(*subject),
             "bounded native roots must fit before owned expansion");
     require(capacity.types(SmallVector<Type>{type}),
             "first owned type occurrence should fit");
     require(!capacity.attribute(attribute) && capacity.exhausted(),
             "raw owned attribute occurrence reused a native root summary");
     zkc::detail::CodecCapacity repeatedTypes;
-    require(repeatedTypes.operation(*subject), "initial native roots failed");
+    require(repeatedTypes.charge(codecWorkLimit - 1000000) &&
+                repeatedTypes.operation(*subject),
+            "initial native roots failed");
     require(!repeatedTypes.types(SmallVector<Type>{type, type}),
             "repeated owned types were deduplicated");
   });
@@ -1462,17 +1489,34 @@ int main() {
     subject->getOperation()->setAttr(
         "payload", builder.getStringAttr(std::string(600000, 's')));
     zkc::detail::CodecCapacity capacity;
-    require(capacity.operation(*subject) && capacity.operation(*subject),
+    require(capacity.charge(codecWorkLimit - 1000000) &&
+                capacity.operation(*subject) && capacity.operation(*subject),
             "read-only root sharing failed");
     capacity.finishNativePreflight();
     require(!capacity.operation(*subject) && capacity.exhausted(),
             "post-preflight inspection reused roots or restarted the budget");
+    zkc::detail::CodecCapacity callbackCapacity;
+    require(callbackCapacity.charge(codecWorkLimit - 1000000) &&
+                callbackCapacity.operation(*subject) &&
+                callbackCapacity.operation(*subject),
+            "callback control must warm the same stable roots");
+    bool entered = false;
+    limit(zkc::detail::codecWithNativeWork(
+        callbackCapacity, "native-codec-limit", [&]() -> Error {
+          entered = true;
+          require(!callbackCapacity.operation(*subject),
+                  "callback reused a preflight root or renewed the allowance");
+          return Error::success();
+        }));
+    require(entered && callbackCapacity.exhausted(),
+            "callback boundary did not discard roots before entry");
   });
   cases.run("exhaustion refuses cached roots, nulls and zero work", [&] {
     OwningOpRef<ModuleOp> subject(ModuleOp::create(UnknownLoc::get(&context)));
     zkc::detail::CodecCapacity capacity;
     require(capacity.operation(*subject), "could not warm empty native roots");
-    require(!capacity.charge(1000001), "fixture must exhaust the allowance");
+    require(!capacity.charge(codecWorkLimit + 1),
+            "fixture must exhaust the allowance");
     require(!capacity.operation(*subject) && !capacity.operation(nullptr) &&
                 !capacity.type(Type{}) && !capacity.attribute(Attribute{}) &&
                 !capacity.charge(0) && !capacity.text("") &&
@@ -1539,7 +1583,8 @@ int main() {
     zkc::detail::NativeTypeWorkScope outer(
         outerWork, [&](uint64_t amount) { outerCharges += amount; });
     zkc::detail::CodecCapacity capacity;
-    require(capacity.charge(999999), "could not reserve callback fixture");
+    require(capacity.charge(codecWorkLimit - 1),
+            "could not reserve callback fixture");
     bool entered = false, completed = false;
     limit(zkc::detail::codecWithNativeWork(
         capacity, "native-codec-limit", [&]() -> Error {
@@ -1576,7 +1621,7 @@ int main() {
                              fixture.transcript) &&
              capacity.jsonArray(codec) && capacity.charge(8);
     };
-    size_t low = 0, high = 1000001;
+    size_t low = 0, high = codecWorkLimit + 1;
     require(fits(low) && !fits(high), "invalid callback capacity bracket");
     while (high - low > 1) {
       size_t middle = low + (high - low) / 2;
@@ -1613,7 +1658,7 @@ int main() {
                   staged->getOperation()->setAttr(
                       "staged", fixture.builder.getUnitAttr());
                   entered = true;
-                  zkc::detail::NativeTypeWorkScope::charge(1000001);
+                  zkc::detail::NativeTypeWorkScope::charge(codecWorkLimit + 1);
                   published = true;
                   unit(*candidate).getBody().takeBody(unit(*staged).getBody());
                   return json::Array{};
