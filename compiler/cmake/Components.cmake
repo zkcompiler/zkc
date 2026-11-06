@@ -246,6 +246,7 @@ add_zkc_component(IR
   lib/Analysis/ResidueTile.cpp
   lib/Analysis/ComputationUnit.cpp
   lib/Analysis/Finite.cpp
+  lib/Analysis/FiniteClosure.cpp
   lib/Analysis/Computation.cpp
   lib/Analysis/ComputationMeaning.cpp
   lib/Analysis/MathematicalFacts.cpp

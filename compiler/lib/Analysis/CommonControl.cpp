@@ -1,6 +1,7 @@
 #include "zkc/Analysis/CommonControl.h"
 #include "../Dialect/AdmissionPrivate.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "zkc/Analysis/FiniteClosure.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/SelectedControl.h"
@@ -65,6 +66,7 @@ struct Derivation {
   bool fullRequirements = true;
   llvm::DenseSet<Operation *> matchedCounts;
   SymbolTableCollection symbols;
+  finite::ClosureClasses finiteClosures;
   SmallVector<Node, 0> nodes{Node{}};
   llvm::DenseMap<size_t, SmallVector<Term>> interned;
   SmallVector<Recurrence> recurrences;
@@ -719,6 +721,13 @@ struct Derivation {
         // handle ordinary data or establish equality of opaque histories.
         environment[selection.getHandle()] = absent();
       } else if (mathematical::isTotal(op)) {
+        NamedAttrList attributes(op->getAttrs());
+        if (finite::isComputation(op) &&
+            failed(finiteClosures.resolveEdges(
+                op, attributes, symbols,
+                [&](uint64_t n) { return charge(n); })))
+          return failure();
+        auto properties = attributes.getDictionary(op->getContext());
         for (auto [index, result] : enumerate(op->getResults())) {
           Components values = absent();
           for (unsigned role = 0; role < roles; ++role) {
@@ -736,7 +745,7 @@ struct Derivation {
                 inputs[0] = tag(inputs[0]);
               values[role] =
                   expression(op->getName().getStringRef(), result.getType(),
-                             op->getAttrDictionary(), inputs, index);
+                             properties, inputs, index);
             }
           }
           environment[result] = std::move(values);

@@ -472,18 +472,13 @@ pub protocol Example roles(P)(flag: bool @P, a: index @P, b: index @P) -> bool @
     return flag and fold(packed(range(a, b))[0], true, fn(state, item) => state)
 )");
   });
-  // Observed integration gap: InstalledViewScheme is not yet recognized by
-  // the coordinator-owned Boolean mathematical-expression classifier. This
-  // receipt preserves the original failing positive, not a language ban.
-  cases.run("known integration gap: direct scheme in protocol Boolean Math",
-            [] {
-              refuses(check(R"(
+  cases.run("direct installed scheme in protocol Boolean Math", [] {
+    accepted(R"(
 def fold<I: Type + Copy + Drop, S: Type + Copy + Drop>(rows: Finite<I>, initial: S, step: fn(S, item: I) -> S where item_from(item, rows)) -> S = finite("math.fold")
 pub protocol Example roles(P)(flag: bool @P, a: index @P, b: index @P) -> bool @P:
     return flag and fold(ds::append([], range(a, b))[0], true, fn(state, item) => state)
-)"),
-                      "source.mode");
-            });
+)");
+  });
   for (StringRef expression : {"(d, ())", "(d, true)", "[d, ()]"})
     cases.run("mixed source category " + expression, [&] {
       auto result =

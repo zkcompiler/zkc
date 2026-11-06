@@ -49,7 +49,9 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
     if (target.kind != Declaration::Kind::Math &&
         target.kind != Declaration::Kind::Variant &&
         !(target.kind == Declaration::Kind::View &&
-          (!target.descriptorResult || inference->descriptorTypes.count(id))))
+          (!target.descriptorResult || inference->descriptorTypes.count(id))) &&
+        !(target.kind == Declaration::Kind::InstalledViewScheme &&
+          inference->descriptorTypes.count(id)))
       return refuse();
     break;
   }
