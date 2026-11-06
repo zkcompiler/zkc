@@ -55,6 +55,20 @@ end ZkcSecurity.Tools.SourceInputReadback
 namespace ZkcSecurity.Tools.SourceInputReadback
 open Lean Meta Zkc.Source Zkc.Source.Structured ZkcSecurity.Claims.HonestPair
 
+/-- Materialize the ordered row while preserving its carrier family. Reducing
+the family itself exposes the implementation of the domain model and prevents
+ordinary consumers from rewriting with the registered predicate's public laws. -/
+partial def opaqueValues (family row : Expr) : MetaM Expr := do
+  let row ← match Kernel.whnf (← getEnv) (← getLCtx) row with
+    | .ok value => pure value
+    | .error error => throwError "source-input-clauses: cannot read opaque arguments: {error.toMessageData {}}"
+  if row.isAppOf ``Values.nil then return mkAppN row.getAppFn (row.getAppArgs.set! 1 family)
+  unless row.isAppOfArity ``Values.cons 6 do
+    throwError "source-input-clauses: expected an ordered opaque argument row"
+  let args := row.getAppArgs
+  return mkAppN row.getAppFn #[args[0]!, family, ← UnitViews.normalize args[2]!,
+    ← UnitViews.normalize args[3]!, ← UnitViews.normalize args[4]!, ← opaqueValues family args[5]!]
+
 /-- Recover the selected opaque instance and its concrete argument row. The
 predicate itself belongs to the registry and stays abstract during readback. -/
 def expandOpaque (clause readLaw applied : Expr) : MetaM Simp.Result := do
@@ -70,7 +84,7 @@ def expandOpaque (clause readLaw applied : Expr) : MetaM Simp.Result := do
   let selected ← match Kernel.whnf (← getEnv) (← getLCtx) operands[instanceIndex]! with
     | .ok value => pure value
     | .error error => throwError "source-input-clauses: cannot read opaque instance: {error.toMessageData {}}"
-  let values ← UnitViews.normalize operands.back!
+  let values ← opaqueValues operands[0]! operands.back!
   let applied := mkAppN predicate.getAppFn
     ((operands.set! instanceIndex selected).set! (operands.size - 1) values)
   return { expr := applied, proof? := some (mkExpectedPropHint readLaw (← mkEq clause applied)) }
