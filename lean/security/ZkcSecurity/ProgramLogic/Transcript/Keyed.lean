@@ -76,6 +76,26 @@ def mono (certificate : KeyedCertificate R game fails) {smaller : α → Prop}
   resample := certificate.resample
   trace table hit := certificate.trace table (implies _ hit)
 
+/-- Combine two reasons the same run can fail. Both trace proofs use the
+same answer table and actual query log. If one key can witness both events,
+its two charges add. Disjoint families can set the other charge to zero. -/
+def union {first second : α → Prop}
+    (left : KeyedCertificate R game first) (right : KeyedCertificate R game second) :
+    KeyedCertificate R game (fun value ↦ first value ∨ second value) where
+  charge key := left.charge key + right.charge key
+  bad key table := left.bad key table ∨ right.bad key table
+  resample key table :=
+    (prEvent_or_le ($ᵗ (R key))
+      (fun raw ↦ left.bad key (Function.update table key raw))
+      (fun raw ↦ right.bad key (Function.update table key raw))).trans
+        (add_le_add (left.resample key table) (right.resample key table))
+  trace table hit := by
+    rcases hit with firstHit | secondHit
+    · obtain ⟨query, logged, bad⟩ := left.trace table firstHit
+      exact ⟨query, logged, Or.inl bad⟩
+    · obtain ⟨query, logged, bad⟩ := right.trace table secondHit
+      exact ⟨query, logged, Or.inr bad⟩
+
 /-- A certificate with larger charges. -/
 def weaken (certificate : KeyedCertificate R game fails) {larger : D → ENNReal}
     (le : ∀ key, certificate.charge key ≤ larger key) : KeyedCertificate R game fails where
