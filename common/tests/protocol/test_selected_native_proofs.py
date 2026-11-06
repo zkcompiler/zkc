@@ -206,8 +206,8 @@ CHOSEN = (('branch', 'choose', 'then'),)
 
 
 def exercise_native(toolchain, journal, directory, text, paths, public, rounds, *, flags=(),
-                    extra_transitions=0):
-    args = compile_source(toolchain, journal, directory, text, paths, flags=flags)
+                    extra_transitions=0, suite=MERLIN):
+    args = compile_source(toolchain, journal, directory, text, paths, flags=flags, suite=suite)
     proof, invocation, produced = prove(toolchain, journal, directory, args, public)
     accepted = verify(toolchain, journal, invocation, proof)
     assert produced['binding_scope'] == accepted['binding_scope'] == 'transcript'
@@ -248,12 +248,14 @@ def test_merlin_selected_and_event_free_arm(toolchain, journal, directory, choic
               'source-stop', 'artifact-stopped')
 
 
-@pytest.mark.parametrize('nesting,rounds', [
-    (nesting, rounds) for nesting in ('branch-in-repeat', 'repeat-in-branch')
+@pytest.mark.parametrize('nesting,rounds,suite', [
+    pytest.param(nesting, rounds, suite, id=f'{nesting}-{rounds}{suffix}')
+    for suite, suffix in [(MERLIN, ''), (KECCAK, '-keccak')]
+    for nesting in ('branch-in-repeat', 'repeat-in-branch')
     for rounds in (0, 1, 3)
 ])
-def test_selected_repeat_occurrences(toolchain, journal, directory, nesting, rounds):
-    text = source_text()
+def test_selected_repeat_occurrences(toolchain, journal, directory, nesting, rounds, suite):
+    text = source_text().replace(MERLIN, suite)
     region = 'SELECTED' if nesting == 'branch-in-repeat' else 'ROUND'
     body = between(text, region)
     text = text.replace(body, '#[site(iterations)] for _ in 0..rounds roles(P,V) max 3 {\n'
@@ -261,7 +263,7 @@ def test_selected_repeat_occurrences(toolchain, journal, directory, nesting, rou
     loop = (('repeat', 'iterations'),)
     path = loop + CHOSEN if nesting == 'branch-in-repeat' else CHOSEN + loop
     exercise_native(toolchain, journal, directory, text,
-                    {**round_paths(path), 'tally': ()}, public_values(rounds=rounds), rounds)
+                    {**round_paths(path), 'tally': ()}, public_values(rounds=rounds), rounds, suite=suite)
 
 
 @pytest.mark.parametrize('choice', [True, False], ids=['one-round', 'two-rounds'])
