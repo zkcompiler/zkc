@@ -393,6 +393,22 @@ captured registry, the challenge used to fold it, and the next word.
 Publication fixes what can be read. Whether a prover published a *correct*
 fold is the verifier's mathematical question.
 
+For a publication followed by a virtual construction, `Region.cutFirst`
+selects a reached operation on the continuation spine. A bind still executes
+its nested body, and an earlier stop skips the operation. The checked prefix
+returns the live SSA values. `OperationCut.resume` puts its reply and those
+values back into the original continuation, with the same actions and stops.
+
+In the retained FRI round, the delivery continuation carries the actual parent
+anchor and the sampled field. The receiver reads the row count at that anchor
+before constructing the view. `CommitCaptures.registeredAfterDelivery`
+relates a successfully returned view to that parent, challenge and word on
+this execution. The source supplies the operation, the capture order and the
+caller environment. The companion supplies the retained coset, the semantics
+of the linked arithmetic helpers, and the earlier publication witness.
+The protocol and the virtual oracle use the same power law with their
+respective linked helper tables.
+
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and
 postconditions. An honest-only equation cannot prove the malformed-input

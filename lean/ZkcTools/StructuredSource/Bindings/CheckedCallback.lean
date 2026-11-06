@@ -3,6 +3,7 @@ module
 public meta import ZkcTools.StructuredSource.Bindings.CallbackView
 public meta import ZkcTools.Generation.Commands
 public import Zkc.Source.Structured.Bindings.RepeatPrefix
+public import Zkc.Source.RegionSelection
 
 public meta section
 namespace ZkcTools.StructuredSource.Bindings
@@ -32,19 +33,27 @@ open Zkc.Source Zkc.Source.Structured ZkcTools.StructuredSource.Presentation
 
 /-- Render the linear prefix once. Its complete source equality remains
 kernel checked, while downstream proofs can reduce the literal typed tree. -/
-def elaboratePrefix {inputs outputs : List Ty} (name occurrence linear : String)
+def elaboratePrefix {inputs outputs : List Ty} (command name expression : String)
     (body : Region protocolDialect inputs outputs) : CommandElabM Unit := do
   let commands := ["def " ++ name ++ " : Region protocolDialect " ++ typesText inputs ++
     " " ++ typesText outputs ++ " :=\n  " ++ regionText body,
-    "theorem " ++ name ++ "_exact : " ++ occurrence ++ ".beforeRepeat " ++ linear ++
+    "theorem " ++ name ++ "_exact : " ++ expression ++
       " = " ++ name ++ " := by kernel_rfl"]
-  emitChecked "checked_repeat_prefix" commands
+  emitChecked command commands
 
 elab "checked_repeat_prefix " name:ident " := " occurrence:ident " using " linear:ident : command => do
   let n := quote name.getId.toString
   let o := quote occurrence.getId.toString
   let l := quote linear.getId.toString
   let body ← `((Zkc.Source.Structured.Bindings.RepeatAt.beforeRepeat $occurrence $linear))
-  elabCommand (← `(command| run_cmd elaboratePrefix $n $o $l $body))
+  elabCommand (← `(command| run_cmd elaboratePrefix "checked_repeat_prefix" $n ($o ++ ".beforeRepeat " ++ $l) $body))
+
+/-- Materialize the exact prefix of an ordinary operation cut for
+incremental proof over its reached instructions. -/
+elab "checked_cut_prefix " name:ident " := " cut:ident : command => do
+  let n := quote name.getId.toString
+  let expression := quote (cut.getId.toString ++ ".before")
+  let body ← `((Region.OperationCut.before $cut))
+  elabCommand (← `(command| run_cmd elaboratePrefix "checked_cut_prefix" $n $expression $body))
 
 end ZkcTools.StructuredSource.Bindings

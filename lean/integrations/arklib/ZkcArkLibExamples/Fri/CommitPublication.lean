@@ -229,7 +229,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
     (step : Nat) (st : FriCommitRound.State model) (bounded : st.rows ≤ 32) :
     ∃ marks next, FriCommitRound.iteration model context step st =
         OracleProtocol.withMarks marks (.call (sendRequest context st.rows) next) ∧
-      FriCommitRound.beforeDraw context st next ∧
+      FriCommitRound.beforeDraw context step st next ∧
       ∀ current : State model snapshot domains math Aux,
         current.oracle.self = 1 →
         (registrySite 0).definition = current.frame.definition → (registrySite 0).row = current.frame.row →

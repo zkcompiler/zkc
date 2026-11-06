@@ -2,7 +2,7 @@ import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
-import ZkcArkLibExamples.Fri.CommitVirtual
+import ZkcArkLibExamples.Fri.CommitCaptures
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -38,6 +38,22 @@ example : DrawSites.fromBody (.letOp (.exchange .index 1 0 "forwarded") [] [] .n
     (.letOp (.query 1 (.sampleIndex contract) "fresh") [] [] .nil (.ret []))) = none := rfl
 
 example : DrawSites.fromBody (.bind [] (.stop .reject) (.ret [])) = none := rfl
+
+private def selectsMark : ProtocolOp → Bool
+  | .mark _ => true
+  | _ => false
+
+-- A mark inside a nested body is not a mark on the caller's continuation.
+example : (Region.cutFirst selectsMark (d := protocolDialect) (Γ := []) (out := [])
+    (.bind (.letOp (.mark "inner") .nil .nil (.ret (.nil : Operands [] []))) (.ret .nil))).isNone := rfl
+
+-- The following mark is structurally present, but the stopping prefix keeps
+-- it unreachable under every interpretation.
+private def stoppedCaller : Region protocolDialect [] [] :=
+  .bind (.stop (out := []) .reject) (.letOp (.mark "later") .nil .nil (.ret .nil))
+
+example {I : PIR.Signature} (meaning : RegionMeaning protocolDialect I) (env : Environment meaning.Value []) :
+    ((Region.cutFirst selectsMark stoppedCaller).get (by kernel_rfl)).reached meaning env = .halt .reject := rfl
 end
 
 -- A wrong source cursor cannot register a virtual view, even when the
@@ -363,7 +379,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
   "FRI-VERIFIER-CELLS-AND-ROUNDS-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check
-  [`ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitPublication,
+  [`Zkc.Source.RegionSelection, `ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitGeometry,
+   `ZkcArkLibExamples.Fri.BinaryDomain, `ZkcArkLibExamples.Fri.CommitCaptures, `ZkcArkLibExamples.Fri.CommitPublication,
    `ZkcArkLibExamples.Fri.CommitChallenge]
   "FRI-PUBLICATION-BEFORE-CHALLENGE-PASS" (exactModules := true))
 

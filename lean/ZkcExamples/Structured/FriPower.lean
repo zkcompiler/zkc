@@ -202,4 +202,35 @@ def powerLaw : ReferenceLaw model helper11Helper.inputs helper11Helper.outputs w
         DomainNode.admit, admitted, Finite.admitThen, Finite.continueWith, outcome,
         primitiveOutcome, pack, Values.split, PIR.Process.bind]
 
+/-- The public protocol and the virtual oracle link power into different
+tables. Exact association with the four smaller helper bodies suffices for
+either installation. -/
+theorem dependencies (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
+    (stepBody : BodyIn definitions helper7Helper (stepLaw model).body)
+    (callbackBody : BodyIn definitions helper8Helper (callbackLaw model).body)
+    (halfBody : BodyIn definitions helper9Helper (halfLaw model).body)
+    (widthBody : BodyIn definitions helper10Helper (widthLaw model).body)
+    (generator : model.Field extension) (exponent : Nat) :
+    (powerLaw model).Requires (closedMeaningsOn model definitions)
+      (.cons generator (.cons exponent .nil)) := by
+  constructor
+  · intro value
+    apply (widthLaw model).invoke (helper := helper10Helper) definitions linked
+      widthBody (.cons value .nil)
+    intro value offset amount
+    exact (halfLaw model).invoke (helper := helper9Helper) definitions linked
+      halfBody
+      (.cons value (.cons offset (.cons amount .nil))) trivial
+  · intro state index lower upper
+    cases state with | mk result factor remaining =>
+    apply (callbackLaw model).invoke (helper := helper8Helper) definitions linked
+      callbackBody
+      ((WordPower.pack model extension ⟨result, factor, remaining⟩).append
+        (.cons index (.cons lower (.cons upper .nil))))
+    intro state index
+    cases state with | mk result factor remaining =>
+    exact (stepLaw model).invoke (helper := helper7Helper) definitions linked
+      stepBody
+      ((WordPower.pack model extension ⟨result, factor, remaining⟩).append (.cons index .nil)) trivial
+
 end ZkcExamples.Structured.FriPower

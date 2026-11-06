@@ -124,7 +124,7 @@ theorem installed (st : State model) (atService : st.service = service)
           (Values (FriBinding.Value model) FriCommitRound.roundSite.spec.state)),
         sent (.cons (concrete model FriBinding.initialSort.type anchor) .nil) =
           withMarks appendMarks (.call (appendRequest context st.layers anchor) appended) ∧
-        (∀ beta, AtMarkedCall (FriCommitRound.delivery context beta) (fun _ ↦ True) (sampled beta)) ∧
+        (∀ beta, AtMarkedCall (FriCommitRound.delivery context beta) (fun next ↦ next () = FriCommitRound.deliveredSuffix context step st anchor beta) (sampled beta)) ∧
         ∀ current : CommitPublication.State model snapshot domains math Aux,
           current.oracle.self = 1 → st.layers.length < 3 →
           st.layers.all (OracleExecution.visibleReference current.oracle kind) = true →

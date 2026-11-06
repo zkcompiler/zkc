@@ -37,26 +37,13 @@ def arguments (source : OracleAnchor) (beta : model.Field extension) (sourceRows
 
 theorem powerRequires (generator : model.Field extension) (exponent : Nat) :
     (FriPower.powerLaw model).Requires (closedMeaningsOn model math.definitions)
-      (.cons generator (.cons exponent .nil)) := by
-  constructor
-  · intro value
-    apply (FriPower.widthLaw model).invoke (helper := helper10Helper) math.definitions math.linked
-      (by rw [FriVirtualBody.mathDefinitions]; exact_body helper10Definition) (.cons value .nil)
-    intro value offset amount
-    exact (FriPower.halfLaw model).invoke (helper := helper9Helper) math.definitions math.linked
-      (by rw [FriVirtualBody.mathDefinitions]; exact_body helper9Definition)
-      (.cons value (.cons offset (.cons amount .nil))) trivial
-  · intro state index lower upper
-    cases state with | mk result factor remaining =>
-    apply (FriPower.callbackLaw model).invoke (helper := helper8Helper) math.definitions math.linked
-      (by rw [FriVirtualBody.mathDefinitions]; exact_body helper8Definition)
-      ((WordPower.pack model extension ⟨result, factor, remaining⟩).append
-        (.cons index (.cons lower (.cons upper .nil))))
-    intro state index
-    cases state with | mk result factor remaining =>
-    exact (FriPower.stepLaw model).invoke (helper := helper7Helper) math.definitions math.linked
-      (by rw [FriVirtualBody.mathDefinitions]; exact_body helper7Definition)
-      ((WordPower.pack model extension ⟨result, factor, remaining⟩).append (.cons index .nil)) trivial
+      (.cons generator (.cons exponent .nil)) :=
+  FriPower.dependencies model math.definitions math.linked
+    (by rw [FriVirtualBody.mathDefinitions]; exact_body helper7Definition)
+    (by rw [FriVirtualBody.mathDefinitions]; exact_body helper8Definition)
+    (by rw [FriVirtualBody.mathDefinitions]; exact_body helper9Definition)
+    (by rw [FriVirtualBody.mathDefinitions]; exact_body helper10Definition) generator exponent
+
 
 abbrev components (domain : DomainModel) := (math.tables domain (readInterface domain)).components
 
