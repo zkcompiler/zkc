@@ -42,9 +42,9 @@ def nominalData (base key : G) : Environment F G :=
 
 theorem embedded (base key : G) : DomainAdapter.embedValues (data (F := F) base key) = some (nominalData (F := F) base key) := rfl
 
-theorem native_prepared : ∀ name ∈ Instruction.helperList SchnorrProof.participant.instructions,
+theorem native_prepared : ∀ name ∈ Instruction.helpers SchnorrProof.participant.instructions,
     Prepared installed validator (Domain.helperTable (Structured.ringModel F G) SchnorrProof.program) name := by
-  simp [Instruction.helperList_eq, helpers]
+  simp [helpers]
 
 def nativeFinal : NativeScope :=
   (checkNativeCode SchnorrProof.program SchnorrProof.context lowered.code (nativeEntryScope validator)).get

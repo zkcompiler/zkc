@@ -60,7 +60,7 @@ int main() {
 )",
           "facade.zkc"},
          {"m", R"(use facade::{Alias}
-operator infixl(60) ⊙ = home::merge
+notation infixl(60) self ⊙ other = home::merge(self,other)
 pub protocol Demo roles(P)(item: Alias<bool> @P) -> bool @P:
     qualified = home::merge<T = bool>(item, other = true)
     method = item.merge<T = bool>(other = true)

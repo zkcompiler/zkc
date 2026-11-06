@@ -166,6 +166,13 @@ The remaining kinds are `body`, `port`, `parameter`, `notation`, `selector`,
 `spec_block`, `claim`, `verify`, `setup`, `alternative`, `proof`, `gate`, `application`,
 `rule`, `import`, `module_link`, finite `binder` and callback `item_from`.
 
+The existing `requirement.capability` string is the written path of a call-shaped
+requirement, including an installed consumer requirement such as
+`NativeMessage(T)`. Its `arguments` retain the written type indices. This syntax
+slot does not assert capability satisfaction or native authority; declaration
+resolution classifies the installed requirement independently. The node shape,
+source owner and version are unchanged.
+
 A `proof` node includes a required ordered `gates` list, empty when omitted in
 source. Each `gate` child retains its authored span, identifier `path` array and
 literal `bits` difficulty. This written order is distinct from the checked
@@ -315,6 +322,57 @@ the source fragment it checks has complete applicable coverage. Private
 declarations are retained here, including declarations outside the selected
 executable closure.
 
+Independent header replay authenticates every checked declaration's authored
+data preconditions, including unused generic and abstract mathematical helpers.
+The immutable source inventory determines required replay even when a candidate
+erases all its premises. A header with no authored data clauses cannot acquire
+candidate premises. The ordered conditions must preserve kind, input positions,
+projection paths, axes, and the exact condition and selector source spans;
+omission, addition, duplication and permutation refuse. Candidate premise and
+path work is charged before snapshot copying and comparison. Additional data
+requirements inferred during closed specialization remain subject to its
+independent body replay from authenticated root premises.
+
+Static header replay also authenticates the parameter telescope and its resolved
+permissions, natural inequalities, symbolic usage bounds and installed capability
+predicates. Parameter annotations and inherited module/section contexts count as
+source contracts, including on unused generic and abstract declarations. The
+immutable source inventory determines replay; candidate flags cannot suppress it.
+An explicit `where`, including `where ()`, forbids body contract inference.
+Parameter names, atoms, sorts, selected interfaces and static arguments must
+retain the interpretation used to resolve the premises. Copy retains its Drop
+implication. Natural equality preserves normalized symbolic identities rather
+than testing concrete samples. Static premise diagnostic spans do not determine
+semantic identity; data-selector provenance above remains source exact.
+
+The original source checker alone owns contract inference eligibility and the
+inferred product. After inference finishes, it freezes inferred natural, usage
+and capability bounds separately from mutable checked declarations. Header
+replay reconstructs authored and signature-derived premises with the existing
+lazy signature checker once and freezes that static product as its source-derived
+obligation inventory. Later comparisons authenticate inferred additions and
+strengthened signature usage leaves against the separate inference product. A
+candidate's `inferred` flag is insufficient authority. Explicit/abstract effect ceilings remain source
+exact; inferred body effects and results retain their existing body-check owners.
+The premise comparison is shared with conformance and View checking; general
+header replay does not require equality of unreconstructed body results or
+compare generated API artifacts to nonexistent authored signatures.
+
+This retained inference product is native source-check evidence, not an
+independent derivation of body inference or a formal elaboration theorem.
+Authored premises are reconstructed from syntax; inferred body premises rely on
+the original checking lifecycle and its frozen record. Original checked-project
+contracts authenticate here. Closed specialization maps and discharges them;
+its inferred data requirements remain subject to the separate body replay above.
+Variable premise counts, natural terms/factors, telescope strings, static type
+arguments, explicit effect dependencies and selector paths are charged before
+snapshot copies and comparison. View and conformance reconstruction preflight
+every copied declaration, including unused declarations whose effect dependency
+maps are unrelated to the header currently being compared.
+Static-only comparisons do not copy unrelated admission-origin lists. Data,
+consumer and managed-header replay retains its lazy reconstruction when those
+contracts apply. No whole-body re-elaboration is required by this comparison.
+
 Retention is charged before storing each resolution record. Inspection shares
 one work counter between structural indexing and proposal construction, rechecks
 the project's ceilings and bounds serialization by `apiInspectionBytes`. Refusal
@@ -345,6 +403,107 @@ origin against the frozen declaration index. An association slot and a matching
 signature shape do not establish that identity. Missing retained occurrence
 handles or syntax refuse with a witness diagnostic.
 
+Ordinary enum construction and Boolean selection take their required producer
+from the immutable authored occurrence. Enum occurrences require variant
+construction with the frozen resolved nominal instantiation, authored alternative
+and ordered payloads, including constructor authority and complete mathematical
+admission. And/Or occurrences require selected control in Local and Math, or
+their exact implicit Math invocation in Protocol. The expression mapping must
+identify that producer's result; Local state joins may project its Boolean
+component. Replacing the action, removing its occurrence hint or dropping the
+mapping cannot bypass replay. Boolean literals retain their authored constant
+and mode, and belong to the immutable required-producer inventory. Their
+occurrence is covered only after the exact producer and mapped Boolean result
+have been checked; erasing a mapping, with or without its occurrence hint,
+does not remove this obligation, including in dormant or captureless bodies.
+Every continuing arm of a Local or Math And/Or selection must yield its authored
+Boolean tail. Replay follows identity projections and, for Local state joins, the
+Boolean first field of the typed tuple pack before following its identity
+projections. Mutable state remains in the pack's remaining fields. This
+authentication does not evaluate dormant arms or turn selected work into eager
+work. Existing source work limits and independent native comparison and
+admission remain separate obligations.
+
+Authored scalar decimal literals also require their exact producer and mapped
+result, including unused constants and constants in headers, arms and deferred
+bodies. Formation retains an immutable resolved carrier and payload using the
+ordinary literal rules: index spelling is normalized to its uint64 decimal
+value, while field parameters retain their validated spelling and resolved
+static context. Replay checks that exact type, constant identity and payload;
+candidate types, optional occurrence hints and aliases cannot supply or erase
+the source authority. Noncanonical candidate parameters and overflow do not
+authenticate a different source literal.
+The authored producer envelope admits no static arguments or parameter rewrite
+hooks: Local literals use primitive origin, exactly one payload parameter, no
+binding arguments and no asset references; Math literals use their literal
+payload and no parameters. Both have no operands. Boolean literals obey the
+same envelope. Authored `index<N>()` is a separate static call occurrence and
+retains its ordinary specialization path.
+
+Administrative result and state carriers use one typed indexed relation.
+Unit has no fields; a tuple aggregate has exactly its declared arity and each
+operand has the corresponding field type. Explicit-result projections retain
+their projected type. Typed identity chains preserve this relation for explicit
+results with state, state-only tuples, single direct states and Unit, with
+bounded traversal and charged type comparisons.
+
+Oracle queries also belong to the immutable required-producer inventory. Their
+mapped result and exact authored position must match the checked query. A
+Protocol query retains its exact mapped handle. A query inside an Oracle
+definition retains the exact constructor source input reached by typed identity
+aliases from the authored handle; another input of the same Oracle type is not
+interchangeable. Alias traversal is bounded and charged. Candidate occurrence
+hints are optional here and cannot replace operand correspondence or remove the
+query's coverage obligation. Native role, shape and dependency admission remains
+an additional check.
+
+Mandatory bound-Name reads and binding occurrences come from reachable frozen
+syntax and resolved binding categories. Data bindings remain distinct from
+managed services, scoped functions and finite descriptors. Each authored data
+binding or assignment that constructs a value requires exactly one identity
+projection in its expected checked region, with its exact binding and result
+spans; a loop index instead requires its source input. Parameter destructuring
+retains its source parameter and field path. An initializer that always stops
+constructs no binding value. Candidate values supply proposed local types only
+after this coverage is authenticated. Moving or erasing a candidate span,
+mapping or optional occurrence hint cannot turn an ordinary resolved Name into
+an unrecognized read. Initializer identity, projection paths and mutable
+generations remain separate checked obligations.
+
+Expected mutable generations are derived from retained authored evaluation
+structure before candidate operation traversal. Read, after-header capture,
+definition and control-join events are distinct. Each authenticated lexical
+region indexes its own definitions and joins, seeded by its enclosing input
+snapshot. A control captures state after evaluating its headers; a deferred
+body captures at its eager creation event, before later arguments can mutate
+state. Incoming control operands retain their source binding and projection
+path, using the shared source free-place relation and ordered state roots;
+overwriting a state before its first read does not authorize another binding.
+Actual SSA transitions must authenticate those snapshots and the latest
+continuing state. Formation freezes the exact initially available and continuing
+state bindings using ordinary usage resolution. Replay checks that membership,
+including an unused joined state; a candidate cannot choose which states were
+consumed. Source writes invalidate old generations even if the candidate
+removes an entire state join. This relation does not sort candidate operations
+by spans and permits independent administrative reordering. Zero-trip loops,
+consumed states and stopped arms retain their existing outcome obligations.
+Finite descriptor recipes retain their eager resolved operand references in the
+immutable source record. A protocol repeat's recipe-capture suffix must match
+those available source values through typed identity edges and validated
+type-preserving participant restrictions. Each immediate identity edge preserves
+participant availability, oracle holder and ordinary data placement. Comparing
+only compressed endpoints is insufficient: an intermediate edge cannot discard
+and then restore that metadata. Identity edges cannot restore components
+discarded by a restriction. Restriction inputs
+must precede their producer, retain ordinary data placement and supply every selected participant;
+they cannot gain participants. This equivalence is specific to recipe captures,
+whose final availability is exactly the intersection of the eager operand's
+participants and the loop roster. Traversal and type/participant comparisons
+debit the existing source work budget. It does not reread mutable bindings at
+loop entry. Ordinary captures retain the entry-generation rule. This preserves
+earlier descriptor snapshots and non-place operands while
+rejecting changed, missing or additional recipe captures.
+
 Construction initializer and codec references retain their exact authored
 occurrence, including inherited references and substituted arguments. A valid
 provider at another occurrence cannot authorize a changed projection. Replaying
@@ -357,6 +516,33 @@ to another arm refuses. Transparent blocks share their enclosing checked region;
 eager Boolean operands and Local short-circuit arms follow their respective
 source evaluation rules. Managed roots come from authored service inputs and
 lexically visible aliases, independently of candidate capture slots.
+
+Every authored lexical body also authenticates its guaranteed-stop status
+against frozen syntax, independently of candidate stop flags and effects. A
+reachable explicit stop requires its exact authored reason and no results.
+Transparent blocks forward their exit. If every arm of an If, Match or Boolean
+selection stops, the containing body is guaranteed to stop, but its own
+terminator is unreachable: replay imposes no parent reason and checks each
+child region's reachable reason separately. This remains true when native Match
+alternatives reorder the written arms. A For body can stop without making its
+parent guaranteed to stop, because the loop may execute zero times; a callback
+body is deferred. Both bodies are still checked, including dormant regions and
+unused callbacks. An implicit Protocol Math Boolean wrapper derives its exit
+from the selected expression, while using the containing Protocol region for
+lexical membership. Exit derivation is memoized under the shared source work
+allowance and uses an explicit worklist rather than another depth limit.
+The same source inventory requires every reachable control occurrence exactly
+once in its expected region, including continuing selections and loops.
+Missing, duplicate or misplaced controls refuse independently of candidate
+results, mappings, stop flags and effects. The selected expression's implicit
+Protocol Math wrapper has its own inventory within the containing lexical
+region. This control coverage authenticates the region mapping consumed by
+binding replay; it does not assign a reason to an unreachable parent terminator.
+Generated Oracle predicates inventory only syntax reachable from their actual
+root. Inventory construction, region mapping and binding replay share the
+existing bounded source work allowance.
+Generated bodies without an authored lexical region retain their existing
+operation, effect and admission checks.
 
 `route` names the resolution route:
 
@@ -456,12 +642,23 @@ the template and substitution.
 `statics` contains `[parameter-name, term]` in declaration order, using the
 [closed source-term grammar](../formats/structured-source.md#definition-origins).
 `scoped` contains actual selected callback symbols in parameter order. `domains`
-contains closed finite constructor graphs: `inputs` are closed source terms;
-`nodes` have `kind`, `item`, `operands`, `children` and `axis`; `result` selects a
-node. Operands select this descriptor's input signature and children select prior
-nodes. Kinds are `elements`, `indices`, `range`, `zip`, `product`, `matrix_row`,
+contains closed descriptor constructor graphs: `inputs` are closed source
+terms; `nodes` have exactly `kind`, `contract`, `operands`, `children` and
+`axis`; `result` selects a node and its complete result contract. `contract`
+is the complete closed descriptor source term, using its installed constructor
+and ordered typed arguments (currently `["builtin", "finite", [item-term]]`).
+Operands select this descriptor's ordinary input signature. Each child is
+exactly `{ "node": prior-node-index, "contract": descriptor-term }` and must
+match that node's complete contract independently of the parent's contract.
+Node and edge contract arity and every typed index are retained; no item-only
+field or graph-wide family substitutes for them. Kinds are `elements`, `indices`, `range`, `zip`, `product`, `matrix_row`,
 `matrix_column`, `matrix_coordinates` and `source_array`. No open parameter or
 factory node, internal shape key, or caller SSA value is serialized as a domain.
+Finite leaves retain this version-0 shape without an item-only compatibility
+reader. A structural argument uses the explicit
+[descriptor formation envelope](descriptor-formation.md#closed-source-export).
+Finite remains the installed native leaf/consumer family. Independent Lean
+descriptor interpretation remains unimplemented.
 
 `layout.inputs` and `layout.captures` retain the closed source callable's alias
 partition in source argument/hidden-capture slots. They are not flattened
@@ -534,6 +731,28 @@ in the actual snapshot's domain, relation, binding and definition tables. Empty
 rows remain explicit for closed declarations without a standalone exported row.
 The association never guesses a definition from its printed name.
 
+Explicit and inferred event labels are authenticated against the frozen written
+statement in its lexical region. Replay reconstructs the default from the
+ordered binding or repeat index and derives the required outer event family from
+immutable syntax and authenticated source-call resolution. Messages, managed
+queries, protocol calls, Oracle construction, Oracle queries, sequence append
+and selection, selected control and protocol repetition retain their distinct
+families. A query in an Oracle definition is a source query; a Protocol query is
+a receiver event. A candidate action cannot select its own source obligation.
+
+Replay matches exactly one event of the required family at the exact authored
+outer span in the same lexical region, and rejects missing, added, swapped or
+duplicate candidate labels. Replacing a query with pure computation or another
+event family does not discharge that obligation, even for an unused answer.
+Removing optional expression hints or source-to-value mappings cannot erase it.
+An inferred ordered binding has no protocol site only when its source resolves
+to a non-event computation, including a legitimate Local call; missing call
+resolution does not establish this exception. Explicit labels still require an
+eligible event. Eager Protocol Boolean helpers, scoped mathematical bodies and
+generated Oracle predicates do not inherit unrelated protocol labels from their
+shared source syntax. Source indexing, call resolution indexing, exact-span
+matching, operation traversal and label bytes use the bounded work allowance.
+
 ### Generated definitions and occurrences
 
 Emission assigns every native site and creates every generated helper, and it
@@ -577,8 +796,9 @@ function or oracle definition row of the snapshot is the symbol of exactly one
 `instances` or `generated` entry; every realize, finite, collect and map row has
 its `computation` row association; binding rows are identified by their
 contract and arguments. A row of another producer is a new `purpose`, never an
-exemption. Every occurrence names a snapshot definition and one of its sites,
-and every origin names a snapshot definition. The export check is canonical
+exemption. Occurrence rows cover every nonempty site in canonical order, including
+virtual oracle bodies. An empty written-node list does not waive site coverage.
+Every origin names a snapshot definition. The export check is canonical
 equality, so any edit refuses.
 
 Occurrences, `generated` entries and their `origins` are exact-artifact

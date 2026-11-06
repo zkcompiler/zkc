@@ -671,7 +671,7 @@ module m;#[linear] struct Ticket{}fn advance(x:Ticket)->Ticket{let p=zkc::record
           "fn run(n:index)->index{let rows=" +
           name.str() +
           "(index<0>(),n);return fold(rows,index<0>(),fn(s,item)=>item);}");
-      require(!named(project, "run").body->domainBindings.empty(),
+      require(!named(project, "run").body->descriptorBindings.empty(),
               "domain homonym was replaced by a record intrinsic");
     });
   cases.run(

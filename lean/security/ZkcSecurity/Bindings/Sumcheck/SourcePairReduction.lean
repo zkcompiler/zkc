@@ -17,6 +17,7 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured SumcheckReferenceInstallation TableComponent
 open ZkcSecurity.Source
 
+variable {foldNames : MultilinearBodies.FoldNames}
 variable (model : DomainModel) [fieldLaw : Fact (IsField (model.Field field))]
 local instance : Field (model.Field field) := fieldLaw.out.toField
 variable {Frame : Type}
@@ -29,7 +30,7 @@ def returned (original : List (model.Field field)) (callerFrame : Frame)
     v = SumcheckVerifierBodies.reduceReturnValues (some 0) (validatorSlots model state)
 
 theorem reduction (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (roundBodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (roundBodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (producerBodies : SourceProducerReduction.Bodies model definitions)
     (validatorBodies : SumcheckReductionReference.Bodies model definitions)
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))

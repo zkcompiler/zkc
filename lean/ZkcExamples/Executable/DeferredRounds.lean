@@ -27,8 +27,8 @@ theorem rescheduled : Code.instructionList lowered.code ≠ DeferredRounds.parti
 /-- Independent reader identity, without any semantic premise. -/
 theorem lowered_reading : lowered = checkedReading := by
   have read := checkLowering_read installed DeferredRounds.participant validator lowered accepted
-  have noHelpers : Instruction.helperList DeferredRounds.participant.instructions = [] := by
-    rw [Instruction.helperList_eq, helpers]
+  have noHelpers : Instruction.helpers DeferredRounds.participant.instructions = [] := by
+    rw [helpers]
   rw [noHelpers, reading_checked] at read
   exact (Except.ok.inj read).symm
 
@@ -47,9 +47,9 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 
 /-- No helper needs preparation for any actual program. -/
 theorem prepared (program : Structured.Program) :
-    ∀ name ∈ Instruction.helperList DeferredRounds.participant.instructions,
+    ∀ name ∈ Instruction.helpers DeferredRounds.participant.instructions,
       Prepared installed validator (Domain.helperTable (Structured.ringModel F G) program) name := by
-  simp [Instruction.helperList_eq, helpers]
+  simp [helpers]
 
 def nominalData (x : F) : Environment F G := [.data (.field "bls12-381.fr" x)]
 

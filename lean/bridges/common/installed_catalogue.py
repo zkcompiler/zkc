@@ -96,7 +96,7 @@ def service_methods(declarations):
                 "invalid frontend owner")
         require((owner, name) not in names, "duplicate frontend ownership")
         names.add((owner, name))
-        require(row["kind"] in ("Math", "Local", "Interface"), "invalid frontend kind")
+        require(row["kind"] in ("Math", "Local", "Interface", "Requirement"), "invalid frontend kind")
         require(type(row["prelude"]) is bool, "expected prelude Boolean")
         if row["prelude"]:
             require(name not in prelude, "duplicate prelude frontend name")
@@ -128,6 +128,16 @@ def service_methods(declarations):
         schema.string(association["target"])
         if association["kind"] == "rule":
             require(association["target"] in rules, "unknown frontend rule")
+        requirement_rule = (association["kind"] == "rule"
+                            and rules[association["target"]]["kind"] == "Requirement")
+        if row["kind"] == "Requirement" or requirement_rule:
+            require(row["kind"] == "Requirement" and association["kind"] == "rule" and not row["inputs"]
+                    and row["output"] is None, "invalid consumer requirement shape")
+            rule = rules[association["target"]]
+            require(rule["kind"] == "Requirement" and not rule["inputs"]
+                    and rule["output"] is None
+                    and rule["statics"] == [static["parameter"] for static in row["statics"]],
+                    "consumer requirement rule signature mismatch")
         if association == {"kind": "rule", "target": "RandomConstructor"}:
             require(rules["RandomConstructor"] == {
                 "name": "RandomConstructor", "kind": "Interface",

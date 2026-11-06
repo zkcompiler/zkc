@@ -67,6 +67,12 @@ private:
   bool save(Variable, Span);
   std::vector<std::function<bool()>> pending;
   uint64_t revision = 0;
+  /// Complete reconstructed candidates owned solely by this solver. No public
+  /// mutable Type aliases them. Any equation mutation or checkpoint restore
+  /// clears the memo; variable IDs and revision numbers confer no authority.
+  /// Hits still preflight and debit their actual owned Type copy against the
+  /// current caller allowance and depth/node bounds.
+  std::map<Variable, Type> reconstructed;
   Variable root(Variable);
   bool occurs(Variable, Variable, Span, unsigned = 1);
   bool equal(Variable, Variable, Span, unsigned);
@@ -96,7 +102,7 @@ struct ExpressionTypes {
   };
   std::map<uint32_t, Operator> operators;
   std::map<uint32_t, ScopedSignature> scopedSignatures;
-  std::map<uint32_t, Type> domainItems;
+  std::map<uint32_t, Type> descriptorTypes;
   std::set<uint32_t> collectionDomains;
 };
 } // namespace zkc::language::detail

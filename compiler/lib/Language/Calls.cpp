@@ -1,7 +1,7 @@
 #include "BindingWitness.h"
 #include "BodyCheck.h"
 #include "BodySummary.h"
-#include "FiniteDomains.h"
+#include "DescriptorFactories.h"
 #include "RecordIntrinsics.h"
 #include "ScopedWitness.h"
 #include "zkc/Language/Builtins.h"
@@ -44,7 +44,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   if (const auto *association =
           checker.output.declarationIndex->association(target.declaration);
       isRecordIntrinsic(association))
-    return recordCall(expr, target, *association->rule, depth);
+    return recordCall(expr, target, *association->rule(), depth);
   if (callee.generated && !callee.generated->constructible &&
       (callee.kind == Declaration::Kind::Record ||
        callee.kind == Declaration::Kind::Variant)) {
@@ -53,6 +53,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return {};
   }
   if (callee.kind == Declaration::Kind::Variant) {
+    if (oracleMode()) {
+      fail("source.mode", "oracle plans do not admit enum construction",
+           expr.span);
+      return {};
+    }
     auto split = StringRef(expr.text).rsplit("::");
     const auto &type = inference->expressions.at(id);
     if (restricted(type) && !checker.types.constructorAllowed(decl, type)) {
@@ -70,11 +75,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
            expr.span);
       return {};
     }
-    if (!local()) {
-      fail("source.mode", "variant construction requires local mode",
-           expr.span);
+    // Admit the complete nominal value, including unselected alternatives.
+    // Structural formation is total; associated representation constructors
+    // below retain their separate ordered contract.
+    if ((math() || protocol()) && !data(type, expr.span))
       return {};
-    }
     std::vector<ValueId> args;
     for (unsigned i = 0; i < expr.children.size(); ++i) {
       auto v = expression(expr.children[i], alt->fields[i].type, depth + 1);
@@ -82,8 +87,17 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         return {};
       args.push_back(*v);
     }
+    auto available = combine(args, expr.span);
+    if (!available)
+      return {};
+    if (!checker.types.chargeType(type, expr.span))
+      return {};
+    auto &enumTypes = witnesses.enumTypes[decl.id.index];
+    if (!enumTypes)
+      enumTypes = std::make_shared<std::map<uint32_t, Type>>();
+    enumTypes->try_emplace(id, type);
     return emit(Construct{std::move(args), alt->name, Construct::Kind::Variant},
-                type, {}, expr.span);
+                type, *available, expr.span);
   }
   if (callee.kind == Declaration::Kind::Associated) {
     if (!local() || expr.children.size() != 1) {
@@ -118,7 +132,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
          expr.span);
     return {};
   }
-  if (callee.kind != Declaration::Kind::Math &&
+  if (callee.kind != Declaration::Kind::View &&
+      callee.kind != Declaration::Kind::Math &&
       callee.kind != Declaration::Kind::Local &&
       callee.kind != Declaration::Kind::EntryFunction) {
     fail("source.call", "expected a mathematical or local helper", expr.span);
@@ -147,7 +162,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   std::vector<ValueId> args(callee.inputs.size());
   std::vector<ValueId> authoredOperands;
   std::vector<unsigned> scopedArgs(callee.scopedInputs.size());
-  std::vector<unsigned> domainArgs(callee.domainInputs.size());
+  std::vector<unsigned> domainArgs(callee.descriptorInputs.size());
   std::vector<ValueId> captureOperands;
   if (binding.size() != expr.children.size() ||
       !checkCallInputMapping(
@@ -168,7 +183,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         return {};
       domainArgs[slot.index] = *argument;
       auto operands =
-          domainOperands(checker.types, body, {*argument}, expr.span);
+          descriptorOperands(checker.types, body, {*argument}, expr.span);
       if (!operands)
         return {};
       captureOperands.insert(captureOperands.end(), operands->values.begin(),
@@ -184,8 +199,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       const auto &binding = body.scopedBindings[*argument];
       captureOperands.insert(captureOperands.end(), binding.captures.begin(),
                              binding.captures.end());
-      auto domains = domainOperands(checker.types, body, binding.domainCaptures,
-                                    expr.span);
+      auto domains = descriptorOperands(checker.types, body,
+                                        binding.descriptorCaptures, expr.span);
       if (!domains)
         return {};
       captureOperands.insert(captureOperands.end(), domains->values.begin(),
@@ -252,8 +267,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       inputs.push_back({{arg.index}, false});
     std::vector<Dependencies> selectedDomains;
     for (auto domain : domainArgs) {
-      auto dependency =
-          summarizeDomainBinding(checker.types, body, domain, {}, {}, 1, true);
+      auto dependency = summarizeDescriptorBinding(checker.types, body, domain,
+                                                   {}, {}, 1, true);
       if (!dependency)
         return {};
       selectedDomains.push_back(std::move(*dependency));
@@ -345,7 +360,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     evidence.scopedSource = witnesses.calls.size();
     evidence.argumentOrder = binding;
     evidence.scopedArguments = scopedArgs;
-    evidence.domainArguments = domainArgs;
+    evidence.descriptorArguments = domainArgs;
     ScopedCallSource source{{decl.id,
                              target.declaration,
                              id,
@@ -364,6 +379,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                         argument.span);
           if (!checker.types.charge(1, argument.span))
             return false;
+          // Layout descriptor sources are independently related to the actual
+          // recipe from syntax by DescriptorSourceWitness. No factory replay
+          // inventory is manufactured from the candidate's expression maps.
+          if (syntax.layoutSyntax)
+            return true;
           if (inference->collectionDomains.count(expression) ||
               argument.binding)
             return true;
@@ -381,7 +401,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
             return false;
           const auto &factory =
               checker.output.declarations[selected->declaration.index];
-          if (factory.kind != Declaration::Kind::DomainFunction)
+          if (factory.kind != Declaration::Kind::View ||
+              !factory.descriptorResult)
             return fail("source.scoped-witness",
                         "domain source is not a factory", argument.span);
           const auto &statics = inference->arguments.at(expression);
@@ -437,7 +458,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!visible)
       return {};
     if (evidence.scopedSource)
-      witnesses.calls[*evidence.scopedSource]->notationFamily = visible->vec();
+      witnesses.calls[*evidence.scopedSource]->notationFamily = visible;
     if (!checkOperatorOperands(checker.types, *expr.notation, evidence, binding,
                                authoredOperands, expr.span))
       return {};
@@ -459,7 +480,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     auto &families = witnesses.notations[decl.id.index];
     if (!families)
       families = std::make_shared<NotationFamilies>();
-    families->try_emplace(id, visible->vec());
+    families->try_emplace(id, visible);
   }
   auto emitCall = [&](decltype(Operation::action) action,
                       Components available) -> std::optional<ValueId> {

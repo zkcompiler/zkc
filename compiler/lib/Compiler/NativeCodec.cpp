@@ -1,11 +1,12 @@
 #include "NativeCodec.h"
+#include "NativeCodecCapacity.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
-#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -38,7 +39,9 @@ class CodecEmitter {
   std::map<std::string, SmallVector<Attribute>> before, after;
   std::map<unsigned, FlatSymbolRefAttr> slices;
   FlatSymbolRefAttr conditionalWrite, conditionalFinish;
-  uint64_t remaining = 1000000;
+  CodecCapacity &capacity;
+
+  bool charge(uint64_t count = 1) { return capacity.charge(count); }
 
   std::string fresh() {
     std::string name;
@@ -91,6 +94,8 @@ class CodecEmitter {
     auto found = slices.find(count);
     if (found != slices.end())
       return found->second;
+    if (!charge(16 * uint64_t(count) + 32))
+      return {};
     SmallVector<Type> inputs{bytes}, outputs(count, bytes);
     inputs.append(2 * count, index);
     auto f = function(inputs, outputs);
@@ -143,6 +148,11 @@ class CodecEmitter {
                           FlatSymbolRefAttr reference, ValueRange inputs,
                           StringRef anchor, bool following = false) {
     auto f = symbols.lookup<func::FuncOp>(reference.getValue());
+    if (!capacity.text(reference.getValue()) || !capacity.text(anchor) ||
+        !charge(1 + inputs.size() +
+                protocol::scopedDataSignature(f).getNumResults() +
+                helpers.size()))
+      return {};
     auto location =
         builder.getInsertionPoint() == builder.getInsertionBlock()->end()
             ? participant.getLoc()
@@ -178,9 +188,18 @@ class CodecEmitter {
     }
     for (const auto &item : *transcript[6].getAsArray()) {
       const auto &adapter = *item.getAsArray();
-      for (const auto &origin : *adapter[2].getAsArray())
-        observers[sites.lookup(*origin.getAsString())] = FlatSymbolRefAttr::get(
-            module.getContext(), *adapter[0].getAsString());
+      if (!charge(1 + adapter[2].getAsArray()->size()))
+        return error("native-proof-codec-limit");
+      for (const auto &origin : *adapter[2].getAsArray()) {
+        auto name = *adapter[0].getAsString();
+        auto found = sites.find(*origin.getAsString());
+        if (!capacity.text(name) ||
+            (found != sites.end() && !capacity.text(found->second)))
+          return error("native-proof-codec-limit");
+        observers[found == sites.end() ? StringRef()
+                                       : StringRef(found->second)] =
+            FlatSymbolRefAttr::get(module.getContext(), name);
+      }
     }
     for (const auto &rule : plan.rules) {
       if (!protocol::isCodecRule(rule.kind))
@@ -206,16 +225,22 @@ class CodecEmitter {
     for (auto &item : messages) {
       auto &message = item.second;
       message.slice = slicer(message.decode->chunks.size());
+      if (!message.slice)
+        return error("native-proof-codec-limit");
       for (const auto &site : message.encode->sites) {
         leaves[site] = &message;
         auto observation = observers.lookup(site);
         if (!observation)
           return error("native-proof-codec-observation");
+        if (!charge(1 + message.observations.size()))
+          return error("native-proof-codec-limit");
         if (!is_contained(message.observations, observation))
           message.observations.push_back(observation);
         auto *event = bySite.lookup(site);
         if (!event)
           return error("native-proof-codec-origin");
+        if (!capacity.text(event->origin))
+          return error("native-proof-codec-limit");
         message.origins.push_back(event->origin);
       }
     }
@@ -225,6 +250,9 @@ class CodecEmitter {
                 ArrayRef<Operation *> transport, SmallVectorImpl<Value> &record,
                 Value proof,
                 const StringMap<SmallVector<pir::LocalCallOp>> &calls) {
+    if (!charge(4 * record.size() + 4 * selected.decode->chunks.size() +
+                3 * transport.size() + selected.observations.size()))
+      return error("native-proof-codec-limit");
     if (transport.size() != selected.encode->sites.size() ||
         !llvm::equal(
             transport, selected.encode->sites,
@@ -239,6 +267,27 @@ class CodecEmitter {
       if (found == calls.end() || found->second.size() != 1)
         return error("native-proof-codec-observation");
       observations.push_back(found->second.front());
+    }
+    // Read through the final observer, not just the final leaf: moving a
+    // single-leaf observer across a branch or a stopping call is also illegal.
+    // Ordered cursors avoid a quadratic membership search for large groups.
+    unsigned nextTransport = 0, nextObservation = 0;
+    for (auto *between = transport.front();
+         nextTransport != transport.size() ||
+         nextObservation != observations.size();
+         between = between->getNextNode()) {
+      if (!charge())
+        return error("native-proof-codec-limit");
+      if (!between)
+        return error("native-proof-codec-group");
+      if (nextTransport < transport.size() &&
+          between == transport[nextTransport])
+        ++nextTransport;
+      else if (nextObservation < observations.size() &&
+               between == observations[nextObservation].getOperation())
+        ++nextObservation;
+      else if (!mathematical::isTotal(between))
+        return error("native-proof-codec-group");
     }
     auto first = observations.front();
     StringRef anchor = first.getSite();
@@ -257,6 +306,8 @@ class CodecEmitter {
       for (auto *op : transport)
         inputs.push_back(cast<pir::EmitOp>(op).getInput());
       auto call = invoke(participant, selected.encode->handler, inputs, anchor);
+      if (!call)
+        return error("native-proof-codec-limit");
       record.assign(call.getResults().take_front(codec.record.size()).begin(),
                     call.getResults().take_front(codec.record.size()).end());
       append_range(chunks, call.getResults().drop_front(codec.record.size()));
@@ -264,11 +315,15 @@ class CodecEmitter {
       inputs.push_back(proof);
       auto call =
           invoke(participant, selected.receive->handler, inputs, anchor);
+      if (!call)
+        return error("native-proof-codec-limit");
       record.assign(call.getResults().take_front(codec.record.size()).begin(),
                     call.getResults().take_front(codec.record.size()).end());
       inputs.assign(1, proof);
       append_range(inputs, call.getResults().drop_front(codec.record.size()));
       auto sliced = invoke(participant, selected.slice, inputs, anchor);
+      if (!sliced)
+        return error("native-proof-codec-limit");
       append_range(chunks, sliced.getResults());
     }
     if (selected.wire) {
@@ -277,12 +332,16 @@ class CodecEmitter {
       append_range(inputs, chunks);
       auto observed =
           invoke(participant, selected.wire->handler, inputs, anchor);
+      if (!observed)
+        return error("native-proof-codec-limit");
       for (unsigned i = 0; i < plan.state.size(); ++i)
         first->setOperand(i, observed.getResult(i));
     }
     if (!writing) {
       auto decoded =
           invoke(participant, selected.decode->handler, chunks, anchor);
+      if (!decoded)
+        return error("native-proof-codec-limit");
       for (auto [i, op] : enumerate(transport))
         op->getResult(0).replaceAllUsesWith(decoded.getResult(i));
       // Preserve one contiguous decode/observation sequence. Total
@@ -296,11 +355,11 @@ class CodecEmitter {
   }
   Error block(pir::ParticipantOp participant, Block &body,
               SmallVector<Value> record, Value proof, unsigned depth) {
-    if (depth > 64)
+    if (depth > 64 || !charge(record.size() + body.getNumArguments()))
       return error("native-proof-codec-limit");
     StringMap<SmallVector<pir::LocalCallOp>> calls;
     for (auto &op : body) {
-      if (!remaining--)
+      if (!charge(1 + op.getNumOperands() + op.getNumResults()))
         return error("native-proof-codec-limit");
       if (auto call = dyn_cast<pir::LocalCallOp>(op))
         calls[call.getCallee()].push_back(call);
@@ -308,11 +367,63 @@ class CodecEmitter {
     SmallVector<Operation *> transport;
     for (auto cursor = body.begin(); cursor != body.end();) {
       auto &op = *cursor++;
-      if (!remaining--)
+      if (!charge())
         return error("native-proof-codec-limit");
-      if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op)) {
+      if (auto branch = dyn_cast<pir::ParticipantBranchOp>(op)) {
         if (!transport.empty())
           return error("native-proof-codec-group");
+        if (branch.getNumRegions() > 512 ||
+            !charge(branch.getNumOperands() + branch.getNumResults() +
+                    2 * record.size() + unsigned(bool(proof)) +
+                    branch.getNumRegions()))
+          return error("native-proof-codec-limit");
+        SmallVector<Value> inputs(branch.getInputs());
+        append_range(inputs, record);
+        if (proof)
+          inputs.push_back(proof);
+        SmallVector<Type> outputs(branch.getResultTypes());
+        append_range(outputs, codec.record);
+        builder.setInsertionPoint(branch);
+        OperationState state(branch.getLoc(), branch->getName());
+        state.addOperands(inputs);
+        state.addTypes(outputs);
+        state.addAttributes(branch->getAttrs());
+        for (unsigned i = 0; i < branch.getNumRegions(); ++i)
+          state.addRegion();
+        auto replacement =
+            cast<pir::ParticipantBranchOp>(builder.create(state));
+        for (auto [source, target] :
+             zip(branch.getArms(), replacement.getArms())) {
+          target.takeBody(source);
+          auto &child = target.front();
+          if (!charge(child.getNumArguments() + record.size() +
+                      unsigned(bool(proof))))
+            return error("native-proof-codec-limit");
+          // Payload formals and all existing transcript/replica captures keep
+          // their actual order. Each arm starts from its own new formals.
+          SmallVector<Value> nested;
+          for (Type type : codec.record)
+            nested.push_back(child.addArgument(type, branch.getLoc()));
+          Value captured =
+              proof ? child.addArgument(bytes, branch.getLoc()) : Value();
+          if (auto e = block(participant, child, std::move(nested), captured,
+                             depth + 1))
+            return e;
+        }
+        for (auto [oldValue, newValue] :
+             zip(branch.getResults(), replacement.getResults()))
+          oldValue.replaceAllUsesWith(newValue);
+        record.assign(
+            replacement.getResults().take_back(codec.record.size()).begin(),
+            replacement.getResults().take_back(codec.record.size()).end());
+        branch.erase();
+      } else if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op)) {
+        if (!transport.empty())
+          return error("native-proof-codec-group");
+        if (!charge(loop.getNumOperands() + loop.getNumResults() +
+                    loop.getBody().front().getNumArguments() +
+                    3 * record.size() + 2 * unsigned(bool(proof))))
+          return error("native-proof-codec-limit");
         unsigned split = 1 + loop.getCarried();
         SmallVector<Value> inputs(loop.getInputs());
         inputs.insert(inputs.begin() + split, record.begin(), record.end());
@@ -345,6 +456,10 @@ class CodecEmitter {
             replacement.getResults().take_back(codec.record.size()).end());
         loop.erase();
       } else if (auto yielded = dyn_cast<pir::ProtocolYieldOp>(op)) {
+        if (!transport.empty())
+          return error("native-proof-codec-group");
+        if (!charge(record.size()))
+          return error("native-proof-codec-limit");
         yielded->insertOperands(yielded.getNumOperands(), record);
       } else if (isa<pir::FinishOp, pir::FinishIfOp>(op)) {
         if (!transport.empty())
@@ -363,6 +478,8 @@ class CodecEmitter {
             conditional ? (writing ? conditionalWrite : conditionalFinish)
                         : (writing ? codec.write : codec.finish),
             inputs, conditional ? conditional.getSite() : "");
+        if (!call)
+          return error("native-proof-codec-limit");
         if (writing) {
           if (conditional) {
             SmallVector<Value> values(conditional.getValues());
@@ -384,6 +501,9 @@ class CodecEmitter {
         auto *selected = leaves.lookup(site.getValue());
         if (!selected)
           return error("native-proof-codec-coverage");
+        if (transport.size() >= selected->encode->sites.size() ||
+            site.getValue() != selected->encode->sites[transport.size()])
+          return error("native-proof-codec-group");
         transport.push_back(&op);
         if (site.getValue() == selected->encode->sites.back()) {
           // Moving observer calls may invalidate the current list iterator.
@@ -403,9 +523,9 @@ class CodecEmitter {
 
 public:
   CodecEmitter(pir::ProtocolModuleOp module, const NativeProofPolicy &policy,
-               const protocol::ConstructionPlan &plan)
+               const protocol::ConstructionPlan &plan, CodecCapacity &capacity)
       : module(module), policy(policy), plan(plan), codec(*plan.codec),
-        builder(module.getContext()), symbols(module) {
+        builder(module.getContext()), symbols(module), capacity(capacity) {
     bytes = data::BytesType::get(module.getContext());
     index = builder.getIntegerType(64, false);
     module.walk([&](Operation *op) {
@@ -420,6 +540,8 @@ public:
     bool needsConditional = false;
     module.walk([&](pir::FinishIfOp) { needsConditional = true; });
     if (needsConditional) {
+      if (!charge(16 * codec.record.size() + 64))
+        return error("native-proof-codec-limit");
       auto write = conditional(codec.write, true);
       if (!write)
         return write.takeError();
@@ -449,16 +571,25 @@ public:
       participant.setFunctionType(builder.getFunctionType(inputs, outputs));
       SmallVector<Value> layout;
       for (auto item : original.getAs<ArrayAttr>("participants")) {
+        if (!charge())
+          return error("native-proof-codec-limit");
         auto ports = cast<DictionaryAttr>(item);
         if (ports.getAs<FlatSymbolRefAttr>("participant") !=
             FlatSymbolRefAttr::get(participant))
           continue;
         auto originalInputs = ports.getAs<ArrayAttr>("inputs");
+        // Index this role's original port identities once. Repeated linear
+        // searches multiply the admitted input width by the codec width.
+        if (!charge(originalInputs.size()) || !charge(codec.inputs.size()))
+          return error("native-proof-codec-limit");
+        llvm::DenseMap<Attribute, unsigned> positions;
+        for (auto [position, input] : enumerate(originalInputs))
+          positions.try_emplace(input, position);
         for (unsigned input : codec.inputs) {
-          auto found = find(originalInputs, builder.getI64IntegerAttr(input));
-          if (found == originalInputs.end())
+          auto found = positions.find(builder.getI64IntegerAttr(input));
+          if (found == positions.end())
             return error("native-proof-codec-layout");
-          layout.push_back(body.getArgument(found - originalInputs.begin()));
+          layout.push_back(body.getArgument(found->second));
         }
       }
       Operation *position = &body.front();
@@ -480,6 +611,8 @@ public:
       builder.setInsertionPoint(position);
       auto initialized = invoke(participant, codec.initialize, layout, anchor,
                                 !anchor.empty());
+      if (!initialized)
+        return error("native-proof-codec-limit");
       if (anchor.empty()) {
         prefix.push_back(before[""].back());
         before[""].pop_back();
@@ -489,18 +622,46 @@ public:
                     SmallVector<Value>(initialized.getResults()), proof, 0))
         return std::move(e);
     }
-    auto rewrite = [&](auto &&self, ArrayAttr actions, bool root) -> ArrayAttr {
+    auto rewrite = [&](auto &&self, ArrayAttr actions, bool root,
+                       unsigned depth) -> Expected<ArrayAttr> {
+      if (depth > 64 || !charge(actions.size() +
+                                (root ? prefix.size() + before[""].size() : 0)))
+        return error("native-proof-codec-limit");
       SmallVector<Attribute> rewritten;
       if (root)
         append_range(rewritten, prefix);
       for (auto item : actions) {
         auto action = cast<DictionaryAttr>(item);
         auto site = action.getAs<StringAttr>("site");
+        if (!charge(before[site.str()].size() + after[site.str()].size()))
+          return error("native-proof-codec-limit");
         append_range(rewritten, before[site.str()]);
         if (!leaves.count(site.str())) {
           if (auto nested = action.getAs<ArrayAttr>("body")) {
             NamedAttrList fields(action);
-            fields.set("body", self(self, nested, false));
+            auto body = self(self, nested, false, depth + 1);
+            if (!body)
+              return body.takeError();
+            fields.set("body", *body);
+            action = fields.getDictionary(module.getContext());
+          }
+          if (auto arms = action.getAs<ArrayAttr>("arms")) {
+            if (arms.size() > 512 || !charge(arms.size()))
+              return error("native-proof-codec-limit");
+            SmallVector<Attribute> rewrittenArms;
+            for (auto item : arms) {
+              auto arm = cast<DictionaryAttr>(item);
+              NamedAttrList fields(arm);
+              auto body =
+                  self(self, arm.getAs<ArrayAttr>("body"), false, depth + 1);
+              if (!body)
+                return body.takeError();
+              fields.set("body", *body);
+              rewrittenArms.push_back(
+                  fields.getDictionary(module.getContext()));
+            }
+            NamedAttrList fields(action);
+            fields.set("arms", builder.getArrayAttr(rewrittenArms));
             action = fields.getDictionary(module.getContext());
           }
           rewritten.push_back(action);
@@ -514,13 +675,18 @@ public:
     NamedAttrList updated(construction);
     SmallVector<Attribute> allHelpers(
         construction.getAs<ArrayAttr>("helpers").getValue());
-    for (auto helper : helpers)
+    for (auto helper : helpers) {
+      if (!charge(allHelpers.size() + 1))
+        return error("native-proof-codec-limit");
       if (!is_contained(allHelpers, helper))
         allHelpers.push_back(helper);
+    }
     updated.set("helpers", builder.getArrayAttr(allHelpers));
-    updated.set(
-        "actions",
-        rewrite(rewrite, construction.getAs<ArrayAttr>("actions"), true));
+    auto actions =
+        rewrite(rewrite, construction.getAs<ArrayAttr>("actions"), true, 0);
+    if (!actions)
+      return actions.takeError();
+    updated.set("actions", *actions);
     updated.set(
         "codec",
         builder.getDictionaryAttr(
@@ -535,6 +701,9 @@ public:
         builder.getArrayAttr({interface.getDictionary(module.getContext())}));
     json::Array slots, inputs, associations;
     for (Type type : codec.record) {
+      // Reserve the actual owned type/spelling expansion independently of IR.
+      if (!capacity.type(type))
+        return error("native-proof-codec-limit");
       auto logical = protocol::encodeBoundType(type, false);
       if (!logical)
         return logical.takeError();
@@ -548,8 +717,11 @@ public:
         continue;
       const auto &m = found->second;
       json::Array origins;
-      for (const auto &origin : m.origins)
+      for (const auto &origin : m.origins) {
+        if (!capacity.text(origin))
+          return error("native-proof-codec-limit");
         origins.push_back(origin);
+      }
       associations.push_back(json::Array{
           m.encode->handler.getValue(), m.receive->handler.getValue(),
           m.decode->handler.getValue(),
@@ -574,14 +746,28 @@ constructNativeCodec(ModuleOp module, const NativeProofPolicy &policy,
                      const protocol::ConstructionPlan &plan,
                      ArrayRef<NativeTranscriptEvent> events,
                      const json::Array &transcript) {
-  // Only the selected entry's participants and what they reference take part.
-  auto unit = dyn_cast<pir::ProtocolModuleOp>(module.getBody()->front());
-  if (auto e = requireUnconditionalProtocolControl(
-          {unit ? SymbolTable::lookupSymbolIn(unit, policy.entry) : nullptr},
-          "native-codec-control-profile"))
-    return std::move(e);
-  return CodecEmitter(cast<pir::ProtocolModuleOp>(module.getBody()->front()),
-                      policy, plan)
-      .run(events, transcript);
+  CodecCapacity capacity;
+  if (!capacity.operation(module))
+    return error("native-proof-codec-limit");
+  capacity.finishNativePreflight();
+  if (!capacity.inputs(policy, plan, events, transcript))
+    return error("native-proof-codec-limit");
+  return codecWithNativeWork(
+      capacity, "native-proof-codec-limit", [&]() -> Expected<json::Array> {
+        // Generated work and native callbacks can exhaust after setup. All
+        // changes remain staged until the terminal check before publication.
+        // Type/resource payloads stay stable; emission creates new handles.
+        auto original = cast<pir::ProtocolModuleOp>(module.getBody()->front());
+        OwningOpRef<pir::ProtocolModuleOp> staged(
+            cast<pir::ProtocolModuleOp>(original->clone()));
+        auto result = CodecEmitter(*staged, policy, plan, capacity)
+                          .run(events, transcript);
+        if (!result)
+          return result.takeError();
+        if (!capacity.charge(0))
+          return error("native-proof-codec-limit");
+        original.getBody().takeBody(staged->getBody());
+        return std::move(*result);
+      });
 }
 } // namespace zkc::detail

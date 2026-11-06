@@ -129,19 +129,42 @@ theorem guard (site : String) (condition : Nat) (declared : List ValueSort) :
   intro env
   kernel_rfl
 
+/-- One selected-region rule works for arbitrary closed arms, captures and
+result tuples. Both body correspondences are required, including dormant arms. -/
+theorem mathBranch (selector : Nat) (captures : List Nat) (declared : List ValueSort)
+    (yes no : InstructionRegion) {yesView noView : View.Block model.toCarriers}
+    (yesSame : Block (program := program) (context := context) yes.instructions yesView)
+    (noSame : Block (program := program) (context := context) no.instructions noView) :
+    Step (program := program) (context := context)
+      ⟨.mathBranch, selector :: captures, declared, [yes, no]⟩
+      (View.mathBranch program selector captures declared yes no yesView noView) := by
+  have yesMeaning : evaluate model program context yes.instructions = yesView := funext yesSame
+  have noMeaning : evaluate model program context no.instructions = noView := funext noSame
+  intro env
+  rcases yes with ⟨yesInputs, yesBody, yesYielded⟩
+  rcases no with ⟨noInputs, noBody, noYielded⟩
+  change selectMath program selector captures declared _ _
+    (evaluate model program context yesBody) (evaluate model program context noBody) env = _
+  rw [yesMeaning, noMeaning]
+  rfl
+
 theorem loop (site : String) (maximum : Nat) (yielded : List Nat) (count : Nat)
     (initial : List Nat) (declared : List ValueSort) {body : List Instruction}
     {view : View.Block model.toCarriers}
     (same : Block (program := program) (context := context) body view) :
     Step (program := program) (context := context)
-      ⟨.loop site maximum yielded, count :: initial, declared, body⟩
+      ⟨.loop site maximum, count :: initial, declared, [⟨(.data .index :: declared), body, yielded⟩]⟩
       (View.loop maximum yielded count initial declared view) := by
   have bodies : evaluate model program context body = view := funext same
   intro env
   have raw : step model program context
-      ⟨.loop site maximum yielded, count :: initial, declared, body⟩ env =
+      ⟨.loop site maximum, count :: initial, declared, [⟨(.data .index :: declared), body, yielded⟩]⟩ env =
       View.loop maximum yielded count initial declared
-        (evaluate model program context body) env := by kernel_rfl
+        (evaluate model program context body) env := by
+          change executeLoop (.data .index :: declared) maximum yielded count initial declared
+            (evaluate model program context body) env = _
+          simp only [executeLoop, View.loop, true_and]
+          rfl
   rw [raw, bodies]
 
 theorem participant (artifact : Participant) {view : View.Block model.toCarriers}

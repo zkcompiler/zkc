@@ -394,6 +394,121 @@
           }
         }
       ]
+    },
+    {
+      "name": "a renamed finite descriptor constructor retains its installed form",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "set",
+          "where": {
+            "name": "finite"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "traversal"
+        }
+      ]
+    },
+    {
+      "name": "a renamed consumer requirement keeps its installed identity",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "NativePayload"
+        }
+      ]
+    },
+    {
+      "name": "structural declarations preserve renamed source slots",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "statics",
+            0,
+            "name"
+          ],
+          "value": "Steps"
+        },
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "inputs",
+            0,
+            "name"
+          ],
+          "value": "advance"
+        },
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "inputs",
+            1,
+            "name"
+          ],
+          "value": "fixed"
+        }
+      ]
+    },
+    {
+      "name": "a concrete installed natural static retains its ordinary source kind",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "insert",
+          "value": {
+            "identity": "index.scalar-control",
+            "owner": "zkc::scalars",
+            "name": "constant",
+            "kind": "Math",
+            "statics": [
+              {
+                "name": "N",
+                "parameter": {
+                  "kind": "Nat",
+                  "sort": ""
+                }
+              }
+            ],
+            "inputs": [],
+            "output": {
+              "constructor": "index"
+            },
+            "association": {
+              "kind": "primitive",
+              "target": "index.constant"
+            },
+            "prelude": false
+          }
+        }
+      ]
     }
   ],
   "refused": [
@@ -6310,6 +6425,733 @@
         "generator": "invalid service method",
         "native": "invalid or duplicate service method",
         "rust": "invalid or duplicate service method"
+      }
+    },
+    {
+      "name": "a finite descriptor form without an installed row",
+      "rule": "installed finite descriptor authority",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "delete",
+          "where": {
+            "name": "finite"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "missing frontend constructor form",
+        "native": "missing frontend constructor form",
+        "rust": "missing frontend constructor form"
+      }
+    },
+    {
+      "name": "a duplicate finite descriptor form",
+      "rule": "installed finite descriptor authority",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendConstructors",
+          "op": "insert",
+          "value": {
+            "name": "another_finite",
+            "form": "FiniteDescriptor"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend constructor form",
+        "native": "duplicate frontend constructor form",
+        "rust": "duplicate frontend constructor form"
+      }
+    },
+    {
+      "name": "consumer requirements cannot have executable signatures",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "kind"
+          ],
+          "value": "Math"
+        }
+      ],
+      "diagnostics": {
+        "generator": "source declaration kind and signature disagree",
+        "native": "source declaration kind and signature disagree",
+        "rust": "source declaration kind and signature disagree"
+      }
+    },
+    {
+      "name": "consumer requirements cannot use primitive authority",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "association"
+          ],
+          "value": {
+            "kind": "primitive",
+            "target": "bool.and"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend primitive kind mismatch",
+        "native": "frontend primitive kind mismatch",
+        "rust": "frontend primitive kind mismatch"
+      }
+    },
+    {
+      "name": "consumer requirement indices match their registered rule",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "statics"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
+      }
+    },
+    {
+      "name": "consumer requirement family cannot select a record helper",
+      "rule": "installed consumer requirement formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "consumer.native-message"
+          },
+          "path": [
+            "association"
+          ],
+          "value": {
+            "kind": "rule",
+            "target": "RecordUnpack"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "frontend rule signature mismatch",
+        "native": "frontend rule signature mismatch",
+        "rust": "frontend rule signature mismatch"
+      }
+    },
+    {
+      "name": "scheme form does not permit another output variable",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorFold"
+          },
+          "path": [
+            "output",
+            "variable"
+          ],
+          "value": 0
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "descriptor scheme form mismatch",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme sort is exact",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorFold"
+          },
+          "path": [
+            "variables",
+            1
+          ],
+          "value": "OptionalExtent"
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "descriptor scheme form mismatch",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme contract variables cannot escape their scope",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorAppend"
+          },
+          "path": [
+            "inputs",
+            1,
+            "contract",
+            "variable"
+          ],
+          "value": 3
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "invalid contract variable pattern",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme extent variables cannot use a contract sort",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorReplace"
+          },
+          "path": [
+            "inputs",
+            0,
+            "contract",
+            "extent",
+            "variable"
+          ],
+          "value": 0
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "invalid extent variable pattern",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme static extents cannot escape their telescope",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorCheckExtent"
+          },
+          "path": [
+            "output",
+            "extent",
+            "index"
+          ],
+          "value": 1
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "invalid static extent pattern",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "unsized extent and a sized static pattern are distinct",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorAppend"
+          },
+          "path": [
+            "output",
+            "extent"
+          ],
+          "value": {
+            "kind": "static",
+            "index": 0
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "invalid static extent pattern",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme descriptor ports are not selected member ports",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorFold"
+          },
+          "path": [
+            "inputs",
+            0
+          ],
+          "value": {
+            "kind": "descriptor",
+            "contract": {
+              "kind": "contract",
+              "variable": 0
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "descriptor scheme form mismatch",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme ordered ports are exact",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorFold"
+          },
+          "path": [
+            "inputs"
+          ],
+          "value": [
+            {
+              "kind": "descriptor",
+              "contract": {
+                "kind": "contract",
+                "variable": 0
+              }
+            },
+            {
+              "kind": "selectedView",
+              "context": {
+                "kind": "contract",
+                "variable": 0
+              },
+              "state": {
+                "kind": "contract",
+                "variable": 1
+              }
+            },
+            {
+              "kind": "descriptor",
+              "contract": {
+                "kind": "contract",
+                "variable": 1
+              }
+            }
+          ]
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "descriptor scheme form mismatch",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme cannot add a public static kind",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "set",
+          "where": {
+            "name": "DescriptorFold"
+          },
+          "path": [
+            "statics"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "descriptor scheme form mismatch",
+        "native": "descriptor scheme form mismatch",
+        "rust": "descriptor scheme form mismatch"
+      }
+    },
+    {
+      "name": "scheme forms cannot be duplicated",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "duplicate",
+          "where": {
+            "name": "DescriptorFold"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate descriptor scheme",
+        "native": "duplicate descriptor scheme",
+        "rust": "duplicate descriptor scheme"
+      }
+    },
+    {
+      "name": "all six scheme forms are required",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendSchemes",
+          "op": "delete",
+          "where": {
+            "name": "DescriptorFold"
+          }
+        }
+      ],
+      "diagnostics": {
+        "generator": "missing descriptor scheme form",
+        "native": "missing descriptor scheme form",
+        "rust": "missing descriptor scheme form"
+      }
+    },
+    {
+      "name": "scheme declaration output must equal its definition",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "output",
+            "variable"
+          ],
+          "value": 0
+        }
+      ],
+      "diagnostics": {
+        "generator": "View scheme declaration mismatch",
+        "native": "View scheme declaration mismatch",
+        "rust": "View scheme declaration mismatch"
+      }
+    },
+    {
+      "name": "scheme declaration ordered ports must equal its definition",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.append"
+          },
+          "path": [
+            "inputs",
+            1,
+            "contract",
+            "variable"
+          ],
+          "value": 1
+        }
+      ],
+      "diagnostics": {
+        "generator": "View scheme declaration mismatch",
+        "native": "invalid contract variable pattern",
+        "rust": "View scheme declaration mismatch"
+      }
+    },
+    {
+      "name": "scheme declaration natural telescope must equal its definition",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "statics"
+          ],
+          "value": []
+        }
+      ],
+      "diagnostics": {
+        "generator": "View scheme declaration mismatch",
+        "native": "View scheme declaration mismatch",
+        "rust": "View scheme declaration mismatch"
+      }
+    },
+    {
+      "name": "scheme cannot be associated twice",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.concat"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "DescriptorAppend"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid View scheme association",
+        "native": "invalid View scheme association",
+        "rust": "invalid View scheme association"
+      }
+    },
+    {
+      "name": "contract heads cannot target leaf families",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.product"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "finite"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid contract constructor association",
+        "native": "invalid contract constructor association",
+        "rust": "invalid contract constructor association"
+      }
+    },
+    {
+      "name": "contract heads cannot be associated twice",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.sequence"
+          },
+          "path": [
+            "association",
+            "target"
+          ],
+          "value": "descriptor_product"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid contract constructor association",
+        "native": "invalid contract constructor association",
+        "rust": "invalid contract constructor association"
+      }
+    },
+    {
+      "name": "structural identity is unique across declaration alternatives",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "identity"
+          ],
+          "value": "record.unpack"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend identity",
+        "native": "duplicate frontend identity",
+        "rust": "duplicate frontend identity"
+      }
+    },
+    {
+      "name": "structural owner and name cannot shadow concrete exports",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "owner"
+          ],
+          "value": "zkc::records"
+        },
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "name"
+          ],
+          "value": "unpack"
+        }
+      ],
+      "diagnostics": {
+        "generator": "duplicate frontend ownership",
+        "native": "duplicate source export",
+        "rust": "duplicate frontend ownership"
+      }
+    },
+    {
+      "name": "head association must be constructor",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.product"
+          },
+          "path": [
+            "association",
+            "kind"
+          ],
+          "value": "rule"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid contract constructor association",
+        "native": "invalid contract constructor association",
+        "rust": "invalid contract constructor association"
+      }
+    },
+    {
+      "name": "View association must be scheme",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "association",
+            "kind"
+          ],
+          "value": "primitive"
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid View scheme association",
+        "native": "invalid View scheme association",
+        "rust": "invalid View scheme association"
+      }
+    },
+    {
+      "name": "contract heads cannot enter implicit prelude",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.product"
+          },
+          "path": [
+            "prelude"
+          ],
+          "value": true
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid contract constructor association",
+        "native": "invalid contract constructor association",
+        "rust": "invalid contract constructor association"
+      }
+    },
+    {
+      "name": "View schemes cannot enter implicit prelude",
+      "rule": "installed structural declaration formation",
+      "edits": [
+        {
+          "document": "declarations",
+          "table": "frontendDeclarations",
+          "op": "set",
+          "where": {
+            "identity": "descriptor.fold"
+          },
+          "path": [
+            "prelude"
+          ],
+          "value": true
+        }
+      ],
+      "diagnostics": {
+        "generator": "invalid View scheme association",
+        "native": "invalid View scheme association",
+        "rust": "invalid View scheme association"
       }
     }
   ]

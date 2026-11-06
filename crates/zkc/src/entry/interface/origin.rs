@@ -18,6 +18,8 @@ pub(in crate::entry) enum OriginTerm {
     Unit,
     Tuple(Vec<Self>),
     Array(Box<Self>, String),
+    DescriptorProduct(Vec<Self>),
+    DescriptorSequence(Box<Self>, Option<String>),
     Nominal(NominalKind, String, Vec<Self>),
     Builtin(String, Vec<Self>),
     Formal(String, Vec<Self>),
@@ -26,6 +28,7 @@ pub(in crate::entry) enum OriginTerm {
 #[derive(Debug, PartialEq, Eq)]
 pub(in crate::entry) enum NominalKind {
     Record,
+    LogicalRecord,
     Variant,
     Associated,
     Module,
@@ -67,9 +70,17 @@ impl<'de> Deserialize<'de> for Excess {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Category {
+    Term,
+    Descriptor,
+    Natural,
+}
+
 struct Term<'a> {
     remaining: &'a mut usize,
     depth: usize,
+    category: Category,
 }
 impl<'de> DeserializeSeed<'de> for Term<'_> {
     type Value = OriginTerm;
@@ -89,6 +100,15 @@ impl<'de> Visitor<'de> for Term<'_> {
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
         use OriginTerm::*;
         let tag = text(&mut seq)?;
+        if self.category == Category::Natural && tag != "nat"
+            || self.category == Category::Descriptor
+                && !matches!(
+                    tag.as_str(),
+                    "descriptor-product" | "descriptor-sequence" | "builtin"
+                )
+        {
+            return Err(A::Error::custom("wrong static term category"));
+        }
         let result = match tag.as_str() {
             "nat" => Natural(decimal(&mut seq)?),
             "field" => Field(text(&mut seq)?),
@@ -98,12 +118,42 @@ impl<'de> Visitor<'de> for Term<'_> {
             "bool" => Boolean,
             "index" => Index,
             "unit" => Unit,
-            "tuple" => Tuple(children(&mut seq, self.remaining, self.depth)?),
+            "tuple" => Tuple(children(
+                &mut seq,
+                self.remaining,
+                self.depth,
+                Category::Term,
+                512,
+            )?),
+            "descriptor-product" => DescriptorProduct(children(
+                &mut seq,
+                self.remaining,
+                self.depth,
+                Category::Descriptor,
+                512,
+            )?),
+            "descriptor-sequence" => {
+                let child = seq
+                    .next_element_seed(Term {
+                        remaining: self.remaining,
+                        depth: self.depth + 1,
+                        category: Category::Descriptor,
+                    })?
+                    .ok_or_else(|| A::Error::custom("missing descriptor element"))?;
+                let extent = seq
+                    .next_element_seed(Extent {
+                        remaining: self.remaining,
+                        depth: self.depth + 1,
+                    })?
+                    .ok_or_else(|| A::Error::custom("missing descriptor extent"))?;
+                DescriptorSequence(Box::new(child), extent)
+            }
             "array" => {
                 let child = seq
                     .next_element_seed(Term {
                         remaining: self.remaining,
                         depth: self.depth + 1,
+                        category: Category::Term,
                     })?
                     .ok_or_else(|| A::Error::custom("missing array element"))?;
                 Array(Box::new(child), decimal(&mut seq)?)
@@ -111,6 +161,7 @@ impl<'de> Visitor<'de> for Term<'_> {
             "nominal" => {
                 let kind = match text(&mut seq)?.as_str() {
                     "record" => NominalKind::Record,
+                    "logical_record" => NominalKind::LogicalRecord,
                     "variant" => NominalKind::Variant,
                     "associated" => NominalKind::Associated,
                     "module" => NominalKind::Module,
@@ -120,11 +171,33 @@ impl<'de> Visitor<'de> for Term<'_> {
                 if !path(&name) {
                     return Err(A::Error::custom("invalid nominal path"));
                 }
-                Nominal(kind, name, children(&mut seq, self.remaining, self.depth)?)
+                Nominal(
+                    kind,
+                    name,
+                    children(&mut seq, self.remaining, self.depth, Category::Term, 512)?,
+                )
             }
             "builtin" | "formal" => {
                 let name = text(&mut seq)?;
-                let arguments = children(&mut seq, self.remaining, self.depth)?;
+                // Exact existing leaf syntax only. Formation and native authority
+                // remain separate from recognizing a closed descriptor child.
+                if self.category == Category::Descriptor && name != "finite" {
+                    return Err(A::Error::custom("unknown descriptor leaf schema"));
+                }
+                let arguments = children(
+                    &mut seq,
+                    self.remaining,
+                    self.depth,
+                    Category::Term,
+                    if self.category == Category::Descriptor {
+                        1
+                    } else {
+                        512
+                    },
+                )?;
+                if self.category == Category::Descriptor && arguments.len() != 1 {
+                    return Err(A::Error::custom("invalid Finite leaf arity"));
+                }
                 if tag == "builtin" {
                     Builtin(name, arguments)
                 } else {
@@ -141,10 +214,46 @@ impl<'de> Visitor<'de> for Term<'_> {
     }
 }
 
+struct Extent<'a> {
+    remaining: &'a mut usize,
+    depth: usize,
+}
+impl<'de> DeserializeSeed<'de> for Extent<'_> {
+    type Value = Option<String>;
+    fn deserialize<D: Deserializer<'de>>(self, decoder: D) -> Result<Self::Value, D::Error> {
+        decoder.deserialize_option(self)
+    }
+}
+impl<'de> Visitor<'de> for Extent<'_> {
+    type Value = Option<String>;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("null or a closed Natural term")
+    }
+    fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+        Ok(None)
+    }
+    fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+        Ok(None)
+    }
+    fn visit_some<D: Deserializer<'de>>(self, decoder: D) -> Result<Self::Value, D::Error> {
+        let term = Term {
+            remaining: self.remaining,
+            depth: self.depth,
+            category: Category::Natural,
+        }
+        .deserialize(decoder)?;
+        let OriginTerm::Natural(value) = term else {
+            return Err(D::Error::custom("invalid descriptor extent"));
+        };
+        Ok(Some(value))
+    }
+}
+
 struct Terms<'a> {
     remaining: &'a mut usize,
     depth: usize,
     limit: usize,
+    category: Category,
 }
 impl<'de> DeserializeSeed<'de> for Terms<'_> {
     type Value = Vec<OriginTerm>;
@@ -169,6 +278,7 @@ impl<'de> Visitor<'de> for Terms<'_> {
             let Some(term) = seq.next_element_seed(Term {
                 remaining: self.remaining,
                 depth: self.depth,
+                category: self.category,
             })?
             else {
                 return Ok(result);
@@ -181,11 +291,14 @@ fn children<'de, A: SeqAccess<'de>>(
     seq: &mut A,
     remaining: &mut usize,
     depth: usize,
+    category: Category,
+    limit: usize,
 ) -> Result<Vec<OriginTerm>, A::Error> {
     seq.next_element_seed(Terms {
         remaining,
         depth: depth + 1,
-        limit: 512,
+        limit,
+        category,
     })?
     .ok_or_else(|| A::Error::custom("missing static term children"))
 }
@@ -197,6 +310,7 @@ pub(super) fn arguments<'de, D: Deserializer<'de>>(
         remaining: &mut 4096,
         depth: 0,
         limit: 128,
+        category: Category::Term,
     }
     .deserialize(decoder)
 }

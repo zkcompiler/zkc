@@ -60,7 +60,7 @@ structure Realization (a : Artifact) (appendBound : Nat) : Prop where
   occurrences : Source.Occurrences a.description
   helpers : Source.Helpers (F := F) (G := G) a.description
   prices : Source.Prices a.description (helperCost a.vocabulary a.validator (F := F) (G := G)) appendBound
-  prepared : ∀ name ∈ Instruction.helperList a.participant.instructions,
+  prepared : ∀ name ∈ Instruction.helpers a.participant.instructions,
     Prepared a.vocabulary a.validator (Domain.helperTable (Structured.ringModel F G) a.description.program) name
 
 theorem code_instructions (n : Names) (maximum : Nat) :

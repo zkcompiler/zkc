@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Protocol/Contracts.h"
+#include "../../NativeTypeWork.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "llvm/ADT/DenseMap.h"
@@ -25,6 +26,7 @@ class Contracts {
     return diagnostics::emit(owner.emitOpError(), "protocol-contract", detail);
   }
   std::optional<Selector> selector(Attribute attr) {
+    zkc::detail::NativeTypeWorkScope::charge(8 + owner.getRoles().size());
     auto row = dyn_cast<ArrayAttr>(attr);
     if (!remaining || !row || row.size() != 3)
       return {};
@@ -55,6 +57,8 @@ class Contracts {
           output, unsigned(port), {}, handle.getKind().getDataType(), true};
     }
     auto roles = dyn_cast<ArrayAttr>(scopes[port]);
+    if (roles)
+      zkc::detail::NativeTypeWorkScope::charge(roles.size());
     if (!roles || !is_contained(roles, role))
       return {};
     return Selector{output, unsigned(port), role, types[port]};
@@ -71,6 +75,7 @@ class Contracts {
   }
   LogicalResult application(Attribute attr, bool &hasOutput,
                             ContractApplication *result = nullptr) {
+    zkc::detail::NativeTypeWorkScope::charge(12);
     auto row = dyn_cast<ArrayAttr>(attr);
     if (!remaining || !row || row.size() != 2)
       return refuse(
@@ -78,6 +83,8 @@ class Contracts {
     --remaining;
     auto reference = dyn_cast<FlatSymbolRefAttr>(row[0]);
     auto operands = dyn_cast<ArrayAttr>(row[1]);
+    if (reference)
+      zkc::detail::NativeTypeWorkScope::charge(reference.getValue().size());
     auto declaration =
         reference ? symbols.lookupNearestSymbolFrom<relation::DeclareOp>(
                         owner, reference)
@@ -97,6 +104,7 @@ class Contracts {
       result->relation = reference;
     hasOutput = false;
     for (auto [operand, type] : zip(operands, signature.getInputs())) {
+      zkc::detail::NativeTypeWorkScope::charge(4);
       auto selected = selector(operand);
       if (!selected || selected->type != type)
         return refuse(
@@ -108,6 +116,7 @@ class Contracts {
     return success();
   }
   bool matches(StatementOp statement, ArrayAttr clause) {
+    zkc::detail::NativeTypeWorkScope::charge(8);
     if (!remaining)
       return false;
     --remaining;
@@ -124,6 +133,7 @@ class Contracts {
       return false;
     for (auto [operand, value, role] :
          zip(operands, statement.getInputs(), statement.getSelectors())) {
+      zkc::detail::NativeTypeWorkScope::charge();
       auto selected = selector(operand);
       if (!selected || selected->output ||
           (selected->anchor
@@ -140,6 +150,9 @@ public:
   Contracts(MathematicalOp owner, SymbolTableCollection &symbols)
       : owner(owner), symbols(symbols) {}
   LogicalResult run(DeclarationContracts *result = nullptr) {
+    // The filtered statement iterator still visits every direct operation.
+    zkc::detail::NativeTypeWorkScope::charge(
+        8 + owner.getBody().front().getOperations().size());
     auto clauses = owner.getContractsAttr();
     if (!clauses)
       clauses = ArrayAttr::get(owner.getContext(), {});
@@ -149,6 +162,7 @@ public:
     SmallVector<ArrayAttr> targets;
     llvm::DenseMap<StringAttr, unsigned> clauseIndices;
     for (auto attr : clauses) {
+      zkc::detail::NativeTypeWorkScope::charge(12);
       auto row = dyn_cast<ArrayAttr>(attr);
       if (!row || row.size() != 5)
         return refuse("clause requires exactly kind, name, subject, residual "
@@ -161,6 +175,7 @@ public:
           !name || name.getValue().empty() || name.getValue().size() > 512 ||
           !names.insert(name.getValue()).second)
         return refuse("clause kind or unique name is invalid");
+      zkc::detail::NativeTypeWorkScope::charge(name.getValue().size());
       ContractClause clause;
       clause.kind = kind;
       clause.name = name;
@@ -193,11 +208,13 @@ public:
       if (kind == "target")
         targets.push_back(row);
       if (result) {
+        zkc::detail::NativeTypeWorkScope::charge(8);
         clauseIndices[name] = result->clauses.size();
         result->clauses.push_back(std::move(clause));
       }
     }
     for (auto statement : owner.getBody().front().getOps<StatementOp>()) {
+      zkc::detail::NativeTypeWorkScope::charge(8);
       if (result && failed(statement->getName().verifyInvariants(statement)))
         return failure();
       // Named Entry projections resolve only within this declaration. Unnamed
@@ -205,6 +222,7 @@ public:
       auto selected = statement.getTargetAttr();
       if ((selected || !targets.empty()) &&
           !any_of(targets, [&](ArrayAttr target) {
+            zkc::detail::NativeTypeWorkScope::charge();
             if (!remaining)
               return false;
             --remaining;
@@ -232,6 +250,10 @@ LogicalResult verifyContracts(MathematicalOp owner,
 }
 FailureOr<DeclarationContracts> readContracts(MathematicalOp owner,
                                               SymbolTableCollection &symbols) {
+  zkc::detail::NativeTypeWorkScope::charge(8);
+  if (owner)
+    zkc::detail::NativeTypeWorkScope::charge(
+        owner.getFunctionType().getNumInputs());
   if (!owner || failed(owner->getName().verifyInvariants(owner)) ||
       !hasSingleElement(owner.getBody()) || owner.getBody().front().empty() ||
       owner.getBody().front().getArgumentTypes() !=

@@ -222,12 +222,25 @@ int main() {
         require(requirements.size() == 1 &&
                     requirements[0].components[0].input == 0,
                 "wrapper lost its callee's actual input obligation");
-        auto untrusted =
+        auto delivered =
             replaceText(text, "   protocol.apply @child(%choice)",
                         "   %received = protocol.exchange %choice "
                         "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n "
                         "  protocol.apply @child(%received)");
-        rejects(context, untrusted, "common-control-provenance");
+        auto received = admitted(context, delivered);
+        uint64_t receivedRemaining = 10000;
+        facts::Work receivedWork(receivedRemaining);
+        require(take(deriveCommonControlRequirements(program(*received),
+                                                     receivedWork))
+                    .empty(),
+                "delivered actual retained an external input premise");
+        auto changed = replaceText(
+            delivered, "   protocol.apply @child(%received)",
+            "   %no = arith.constant false\n"
+            "   %changed = \"protocol.assemble_roles\"(%received,%no) "
+            "{roles=[\"P\",\"V\"]} : (i1,i1)->i1\n"
+            "   protocol.apply @child(%changed)");
+        rejects(context, changed, "common-control-provenance");
       });
   cases.run(
       "unrelated selected declarations preserve generic loop admission", [&] {
@@ -248,16 +261,20 @@ int main() {
             source, "}) {profile=#protocol.profile<protocol>}",
             (Twine(main) + "}) {profile=#protocol.profile<protocol>}").str());
         auto module = admitted(context, source);
-        // Named Entry inventory remains strict even though generic
-        // formation does not discharge loop-count agreement.
+        // Named Entry reconstruction derives the completed send's actual
+        // count. An unrelated dormant declaration supplies no premise.
         uint64_t remaining = 100000;
         facts::Work work(remaining);
-        refuses(deriveCommonControlRequirements(program(*module), work),
-                "common-control-provenance");
+        require(take(deriveCommonControlRequirements(program(*module), work))
+                    .empty(),
+                "communicated loop count retained an input premise");
         auto invoked =
             replaceText(source, "   %one =",
                         "   %yes = arith.constant true\n"
-                        "   protocol.apply @unused(%yes) "
+                        "   %no = arith.constant false\n"
+                        "   %divergent = \"protocol.assemble_roles\"(%yes,%no) "
+                        "{roles=[\"P\",\"V\"]} : (i1,i1)->i1\n"
+                        "   protocol.apply @unused(%divergent) "
                         "{site=\"call\",roles=[\"V\",\"P\"]} : (i1)->()\n"
                         "   %one =");
         rejects(context, invoked, "common-control-provenance");
@@ -413,10 +430,11 @@ int main() {
     require(succeeded(admitStage(*target)),
             "constructed tag projection refused");
   });
-  cases.run("a static enum tag does not certify ordered payload control", [&] {
-    auto text =
-        replaceText(fixture("constructed"), "     \"protocol.yield\"(%payload)",
-                    R"mlir(     %zero = "data.index"() {value=0:ui64} : ()->ui64
+  cases.run(
+      "communicated enum payloads agree independently of static tags", [&] {
+        auto text = replaceText(
+            fixture("constructed"), "     \"protocol.yield\"(%payload)",
+            R"mlir(     %zero = "data.index"() {value=0:ui64} : ()->ui64
      %enabled = "data.index_equal"(%payload,%zero) : (ui64,ui64)->i1
      "protocol.branch"(%enabled) ({
        "protocol.yield"() : ()->()
@@ -424,18 +442,42 @@ int main() {
        "protocol.yield"() : ()->()
      }) {site="payload_choice",roles=["P","V"],output_roles=[],alternatives=["then","else"]} : (i1)->()
      "protocol.yield"(%payload))mlir");
-    rejects(context, text, "common-control-provenance");
-  });
-  cases.run("received role components do not establish common control", [&] {
-    auto text =
-        replaceText(emptyBranch(), "  \"protocol.branch\"",
-                    "  %received = protocol.exchange %choice "
-                    "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n "
-                    " \"protocol.branch\"");
-    text = replaceText(text, "\"protocol.branch\"(%choice)",
-                       "\"protocol.branch\"(%received)");
-    rejects(context, text, "common-control-provenance");
-  });
+        auto source = admitted(context, text);
+        uint64_t remaining = 10000;
+        facts::Work work(remaining);
+        require(take(deriveCommonControlRequirements(program(*source), work))
+                    .empty(),
+                "delivered payload gained an input premise");
+        auto changed = replaceText(text, "   %whole =",
+                                   "   %other = \"data.index\"() "
+                                   "{value=0:ui64} : ()->ui64\n   %whole =");
+        changed = replaceText(changed, "(%x,%received)", "(%x,%other)");
+        rejects(context, changed, "common-control-provenance");
+      });
+  cases.run(
+      "received role components establish only their actual common control",
+      [&] {
+        auto text =
+            replaceText(emptyBranch(), "  \"protocol.branch\"",
+                        "  %received = protocol.exchange %choice "
+                        "{site=\"receive\",sender=\"P\",receiver=\"V\"} : i1\n "
+                        " \"protocol.branch\"");
+        text = replaceText(text, "\"protocol.branch\"(%choice)",
+                           "\"protocol.branch\"(%received)");
+        auto source = admitted(context, text);
+        uint64_t remaining = 10000;
+        facts::Work work(remaining);
+        require(take(deriveCommonControlRequirements(program(*source), work))
+                    .empty(),
+                "delivered selector gained an input premise");
+        auto changed = replaceText(
+            text, "  \"protocol.branch\"(%received)",
+            "  %no = arith.constant false\n"
+            "  %changed = \"protocol.assemble_roles\"(%received,%no) "
+            "{roles=[\"P\",\"V\"]} : (i1,i1)->i1\n"
+            "  \"protocol.branch\"(%changed)");
+        rejects(context, changed, "common-control-provenance");
+      });
   for (auto pair : std::initializer_list<std::pair<StringRef, StringRef>>{
            {"alternatives=[\"then\",\"else\"]",
             "alternatives=[\"then\",\"then\"]"},
@@ -645,8 +687,12 @@ int main() {
         take(protocol::analyzeOracleObservations(*source, "main", "V"));
     require(!observation.queryBeforeDraw(),
             "alternatives invented a sequential oracle/draw path");
-    refuses(protocol::oracleRequirements(*source, "main", {}),
-            "oracle-realization-control-profile");
+    auto selection =
+        take(protocol::resolveOracleRealizationSelection(*source, {}));
+    auto requirements =
+        take(protocol::oracleRequirements(*source, "main", selection));
+    require(requirements.storage.constructors.size() == 2,
+            "native realization planning discarded a dormant constructor");
   });
   cases.run("oracle batching remains inside the actual selected arm", [&] {
     auto text =
@@ -861,28 +907,43 @@ int main() {
         }
       });
   cases.run(
-      "security stages refuse unsupported selected transcript profiles", [&] {
-        auto source = admitted(context, fixture("branch"));
+      "selected transcript construction retains actual branch events", [&] {
+        auto text =
+            replaceText(fixture("branch"), "     %seven = ",
+                        "     %delivered = protocol.exchange %random "
+                        "{site=\"challenge\",sender=\"V\",receiver=\"P\"} : "
+                        "!algebra.field<\"bls12-381.fr\">\n     %seven = ");
+        text = replaceText(text, "   \"protocol.return\"(%result) : (ui64)->()",
+                           "   %accepted = arith.constant true\n   "
+                           "\"protocol.return\"(%accepted) : (i1)->()");
+        text = replaceText(text,
+                           "function_type=(i1,ui64,!protocol.service_ref<"
+                           "\"random.bls12-381.fr/0\">,i1)->ui64",
+                           "function_type=(i1,ui64,!protocol.service_ref<"
+                           "\"random.bls12-381.fr/0\">,i1)->i1");
+        auto source = admitted(context, text);
         NativeProofPolicy policy;
         policy.entry = "main";
         policy.producer = "P";
         policy.validator = "V";
         policy.suite = "merlin3.bls12-381.fr64be/0";
         policy.services = {2};
+        policy.publicInputs = {0, 3};
         policy.draws = {{"alternative_draw", "challenge"}};
-        refuses(constructNativeProof(*source, policy),
-                "native-proof-control-profile");
+        auto built = take(constructNativeProof(*source, policy));
+        if (auto e = checkNativeProof(*source, *built.module, policy))
+          throw std::runtime_error(toString(std::move(e)));
+        unsigned branches = 0;
+        built.module->walk([&](pir::ParticipantBranchOp branch) {
+          ++branches;
+          require(branch.getArms().size() == 2, "construction dropped an arm");
+        });
+        require(branches == 2, "each participant must retain its branch");
         auto target = projected(*source);
-        refuses(zkc::detail::planNativeRequests(unit(*target), policy, {}),
-                "native-request-control-profile");
-        protocol::ConstructionPlan plan{};
-        refuses(
-            zkc::detail::constructNativeCodec(*target, policy, plan, {}, {}),
-            "native-codec-control-profile");
+        take(zkc::detail::planNativeRequests(unit(*target), policy, {}));
       });
-  // Selected control outside the selected entry's static closure does not
-  // gate the entry. Reached total Math is value computation, not a
-  // conditional protocol interaction.
+  // Selected control outside the entry does not gate its static closure;
+  // supported reached mathematical selection is constructed and checked too.
   {
     auto schnorr = [] {
       auto buffer =
@@ -953,31 +1014,17 @@ int main() {
         take(protocol::oracleRequirements(*source, "main", {}));
       });
     }
-    cases.run("total selected helpers preserve proof construction", [&] {
-      auto source = admitted(context, reached);
-      auto built = take(constructNativeProof(*source, policy));
-      if (auto e = checkNativeProof(*source, *built.module, policy))
-        throw std::runtime_error(toString(std::move(e)));
-      take(protocol::oracleRequirements(*source, "main", {}));
-      data::BranchOp selected;
-      built.module->walk([&](data::BranchOp branch) {
-        if (!selected && branch->getParentOfType<pir::ParticipantOp>())
-          selected = branch;
-      });
-      require(bool(selected), "construction lost the actual selected Math");
-      auto &arm = selected.getArms().front().front();
-      auto yield = cast<data::YieldOp>(arm.getTerminator());
-      require(arm.getNumArguments() == 2 && yield.getNumOperands() == 1,
-              "unexpected selected helper fixture");
-      yield->setOperand(0, arm.getArgument(1));
-      require(succeeded(admitStage(*built.module)),
-              "mutated Math should remain well formed");
-      auto refused = checkNativeProof(*source, *built.module, policy);
-      require(bool(refused), "changed selected Math passed correspondence");
-      require(namesIdentifier(toString(std::move(refused)),
-                              "native-proof-correspondence"),
-              "changed selected Math failed outside correspondence");
-    });
+    cases.run("an entry that calls a selected helper constructs and checks",
+              [&] {
+                auto source = admitted(context, reached);
+                auto built = take(constructNativeProof(*source, policy));
+                if (auto e = checkNativeProof(*source, *built.module, policy))
+                  throw std::runtime_error(toString(std::move(e)));
+                // The ordinary selected Math helper is retained and
+                // independently compared exactly, so Oracle planning needs no
+                // second interpreter.
+                take(protocol::oracleRequirements(*source, "main", {}));
+              });
     // Only Alice demands the selection, so projection places it at Alice
     // alone and the projected comparison reads it where Alice sends it.
     auto demanded = replaceText(

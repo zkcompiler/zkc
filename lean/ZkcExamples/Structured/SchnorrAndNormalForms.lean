@@ -2,6 +2,8 @@ module
 
 public import ZkcExamples.Structured.SchnorrAndViews
 public import ZkcExamples.Structured.Generated.Scalar.SchnorrAnd
+public import ZkcExamples.Construction.SchnorrAndProofPresentation
+public import Zkc.Source.Structured.DerivationRules
 public import Zkc.Source.Structured.ReplyScript
 public import Zkc.Source.Structured.ContractExecution
 public import Zkc.Source.Structured.ContractElaboration
@@ -82,8 +84,11 @@ theorem verifier_run (firstBase firstKey secondBase secondKey : G) (challenges :
          .send (ty := .field scalarDomain) deliverySite 0 challenge,
          .receive (.field scalarDomain) firstResponseSite 0,
          .receive (.field scalarDomain) secondResponseSite 0]⟩ := by
-  rw [Generated.Scalar.SchnorrAnd.Root.verifier_participant]
-  kernel_rfl
+  change (verifierReplies firstCommitment secondCommitment challenge firstResponse secondResponse).run
+    (Generated.Scalar.SchnorrAnd.program.participant F G 1
+      (ZkcExamples.Construction.SchnorrAndProof.verifierInputs firstBase firstKey secondBase secondKey challenges)) = _
+  rw [ZkcExamples.Construction.SchnorrAndProof.participant_equation (F := F) firstBase firstKey secondBase secondKey challenges]
+  rfl
 
 /-! The selected contract clause: its relation binding, the formula's process and
 the decision observed at the deciding role. -/
@@ -140,10 +145,20 @@ def Relation (firstBase firstKey secondBase secondKey : G) (firstWitness secondW
   formulaBinding.process (arguments firstBase firstKey secondBase secondKey firstWitness secondWitness) =
     .done (.cons true .nil)
 
+set_option smartUnfolding true in
+set_option backward.isDefEq.respectTransparency false in
 theorem formula_process (firstBase firstKey secondBase secondKey : G) (firstWitness secondWitness : F) :
     formulaBinding.process (arguments firstBase firstKey secondBase secondKey firstWitness secondWitness) =
       .done (.cons ((decide (firstKey = firstWitness • firstBase)) && (decide (secondKey = secondWitness • secondBase))) .nil) := by
-  rfl
+  rw [FormulaBinding.process_eq_body]
+  conv_lhs => whnf
+  simp only [meaning, Evaluation.meaning]
+  erw [Evaluation.operation_branch (F := F) (G := G) SiteObservations.closed
+    (closedMeanings imported.program.payload.definitions)
+    [.group "bls12-381.g1", .group "bls12-381.g1", .field "bls12-381.fr"] [.boolean]
+    (decide (firstKey = firstWitness • firstBase)) (.cons secondBase (.cons secondKey (.cons secondWitness .nil)))]
+  split <;> simp_all only [Bool.true_and, Bool.false_and]
+  all_goals rfl
 
 theorem relation_iff (firstBase firstKey secondBase secondKey : G) (firstWitness secondWitness : F) :
     Relation firstBase firstKey secondBase secondKey firstWitness secondWitness ↔ firstKey = firstWitness • firstBase ∧ secondKey = secondWitness • secondBase := by
@@ -174,8 +189,10 @@ theorem target_formula_law : (target (F := F) (G := G)).interpretation.FormulaLa
   cases args with | cons firstWitness args =>
   cases args with | cons secondWitness args =>
   cases args
-  simp only [Bool.decide_and]
-  rfl
+  change formulaBinding.process (arguments firstBase firstKey secondBase secondKey firstWitness secondWitness) =
+    .done (.cons (decide (firstKey = firstWitness • firstBase ∧ secondKey = secondWitness • secondBase)) .nil)
+  rw [Bool.decide_and]
+  exact formula_process (F := F) (G := G) firstBase firstKey secondBase secondKey firstWitness secondWitness
 
 def rootInvocation : InvocationCoordinate := ⟨0, []⟩
 
@@ -199,6 +216,8 @@ def observedBoundary (firstBase firstKey secondBase secondKey : G) (challenges :
 theorem observed_accepts_iff (firstBase firstKey secondBase secondKey : G) (challenges : Nat) (firstCommitment secondCommitment : G) (challenge firstResponse secondResponse : F) :
     decisionSelector.read {} (observedBoundary firstBase firstKey secondBase secondKey challenges firstCommitment secondCommitment challenge firstResponse secondResponse) = some true ↔
       firstResponse • firstBase = firstCommitment + (challenge • firstKey) ∧ secondResponse • secondBase = secondCommitment + (challenge • secondKey) := by
+  unfold observedBoundary
+  rw [verifier_run]
   change (some ((decide (firstResponse • firstBase = firstCommitment + (challenge • firstKey))) && (decide (secondResponse • secondBase = secondCommitment + (challenge • secondKey)))) = some true) ↔ _
   simp
 

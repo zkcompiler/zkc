@@ -31,6 +31,11 @@ even when logical uses share an alias. The selected code and
 its lexical static context determine the instance; runtime captures and caller
 participants do not. A scoped parameter has no runtime value or MLIR function
 type, and every scoped invocation becomes an ordinary helper call before emission.
+Named callback selections retain their exact declaration/provider/route, static
+arguments, signature and effects as a separate binding alternative. They close
+through the ordinary declaration instance cache, without generating a lambda
+body or adding capture inputs. Immutable source selection witnesses authenticate
+the candidate before closure; independent specialization checks the actual helper.
 
 Domain closure uses the same capture layout. Factory graphs remain static while
 their data operands become ordinary helper inputs. Scoped computations can capture
@@ -61,6 +66,13 @@ condition and selector independently; native finite analysis then discharges
 conditions at actual calls and consumers. Closure specialization independently
 recomputes residual requirements from the checked candidate body. These checks
 preserve the unconditional mathematical invocation contract of `exec.compute`.
+
+Ordinary View bodies share the Math calling convention while retaining View
+as their source declaration mode. Their ordinary data ports have no scope or
+outcome wrapper. Local bodies and Local callbacks invoke them with
+`exec.compute`; source emission and independent comparison apply the same
+result-category distinction. Finite-result Views continue to form static
+recipes rather than ordinary runtime callees.
 
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact

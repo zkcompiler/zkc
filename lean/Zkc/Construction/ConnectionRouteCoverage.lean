@@ -122,6 +122,32 @@ macro "retain_connection_frame" : tactic => `(tactic|
     intro values
     simpa only [frames_cons, Form.denoteOn, PIR.Process.bind] using
       ih model tables bindings protocols processes calleesHold selectionMeaning captured (.cons values.present binders) reachedHistory _ (tuple_frame model outputsData values binders related) (by retain_connection_frame)
+  | @inlineMath context definitions callees selection out role scopes outputs history scope frames layout
+      definition association arguments references inputsData outputsData readback
+      spine extent yielded body next rest tail ih =>
+    apply Classical.choice
+    obtain ⟨values, present, read⟩ := read_components readback binders related
+    have sourceEq := ConnectionCalculations.form_math_present_closed model Occurrence.actions
+      (LawResults.empty model) context (runsAtOn model Occurrence.actions Occurrence.iterations tables protocols context role)
+      processes definitions definition.helper arguments values next binders present
+    rw [← bindings association.index] at sourceEq
+    rw [sourceEq, association.invoke model values]
+    have inputEncoding := Original.encodeHelperResult_eq inputsData values
+    obtain ⟨inputRelation, inputBound⟩ := ConnectionMathFrames.read_encoded values environment references
+      inputEncoding (read.trans inputEncoding)
+    have aligned := body.sound model values environment outputsData related.length.symm
+      (by simpa only [related.length] using inputBound) inputRelation
+    refine ⟨Covered.closedSimulationBind _ aligned _ ?_⟩
+    intro value frame returned
+    obtain ⟨resultRead, size, capturedFrame⟩ := returned
+    obtain ⟨resultRelation, _⟩ := ConnectionMathFrames.read_encoded value frame yielded
+      (Original.encodeHelperResult_eq outputsData value) resultRead
+    have nextRelated := ConnectionMathApplication.exit binders related capturedFrame extent size
+      value yielded resultRelation
+    have continued := ih model tables bindings protocols processes calleesHold selectionMeaning captured
+      (.cons value.present binders) reachedHistory frame nextRelated (ArtifactBinding.captures_trans retained capturedFrame)
+    simp only [frames_cons] at continued
+    exact continued
   | @projectionHelper context definitions callees selection out role scopes outputs history scope frames layout definition projection arguments next target nextMatched tail ih =>
     have tableEquality := bindings ⟨projection.before.length, by
       have length := congrArg List.length projection.declarations
@@ -166,7 +192,7 @@ macro "retain_connection_frame" : tactic => `(tactic|
       Occurrence.actions tables context _ processes next binders]
     exact ih model tables bindings protocols processes calleesHold selectionMeaning captured binders
       reachedHistory environment related (by retain_connection_frame)
-  | @inlineMissingCalculation context definitions callees selection out role scopes outputs history scope frames layout
+  | @inlineMissingStrict context definitions callees selection out role scopes outputs history scope frames layout
       definition calculation arguments missing next target nextMatched tail ih =>
     have tableEquality := bindings ⟨calculation.before.length, by
       have length := congrArg List.length calculation.declarations

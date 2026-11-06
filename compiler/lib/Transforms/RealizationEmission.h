@@ -5,7 +5,10 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/StringSet.h"
+#include <cstdint>
+#include <functional>
 #include <map>
 
 namespace zkc::mathematical {
@@ -25,16 +28,33 @@ class RealizationEmitter {
   std::string prefix;
   llvm::StringSet<> names;
   unsigned next = 0;
+  std::function<void(uint64_t)> reserve;
+  std::function<mlir::Operation *(llvm::StringRef)> liveLookup;
+  struct CreatedBinding {
+    std::string name;
+    mlir::Operation *operation;
+    mlir::DictionaryAttr attributes;
+  };
   std::map<std::pair<std::string, std::string>,
-           llvm::DenseMap<mlir::ArrayAttr, std::string>>
+           llvm::DenseMap<mlir::ArrayAttr, CreatedBinding>>
       bindings;
 
 public:
-  RealizationEmitter(mlir::Operation *candidate, llvm::StringRef bindingPrefix);
+  RealizationEmitter(
+      mlir::Operation *candidate, llvm::StringRef bindingPrefix,
+      std::function<void(uint64_t)> reserve = {},
+      std::function<mlir::Operation *(llvm::StringRef)> liveLookup = {});
   void reserveNames(mlir::Operation *source);
 
   mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
                                   const NativeBindingApplication &);
+  // Reserve every live declaration lookup before executing it, including
+  // declarations inserted by other producer work since construction. Failure
+  // emits no binding; the caller owns sticky exhaustion and scratch disposal.
+  mlir::FailureOr<mlir::FlatSymbolRefAttr>
+  bindingWithWork(mlir::OpBuilder &, mlir::Location,
+                  const NativeBindingApplication &,
+                  llvm::function_ref<bool(uint64_t)> charge);
 };
 } // namespace zkc::mathematical
 

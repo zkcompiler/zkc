@@ -5,6 +5,8 @@
 #include "llvm/Support/Error.h"
 #include <cstdint>
 namespace zkc::protocol {
+struct OracleNativeWork;
+class OracleNativeSourcePreflight;
 struct OracleQuerySize {
   uint64_t leaves = 0;
   uint64_t nodes = 0;
@@ -28,5 +30,9 @@ struct OracleQueryCapacity {
 llvm::Expected<OracleQueryCapacity>
 analyzeOracleQueryCapacity(mlir::ModuleOp prepared, llvm::StringRef entry,
                            uint64_t work = 1000000);
+llvm::Expected<OracleQueryCapacity>
+analyzeOracleQueryCapacityWithWork(mlir::ModuleOp, llvm::StringRef, uint64_t,
+                                   OracleNativeWork &,
+                                   const OracleNativeSourcePreflight &);
 } // namespace zkc::protocol
 #endif

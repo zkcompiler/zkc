@@ -193,6 +193,7 @@ inductive Descriptor where
       (scopes : List (List String))
   | localCall (name owner : String)
   | fold (domain step predicate : String)
+  | mathBranch
   | branch | loop | loopCondition
   | guard (owner : String)
   | restrict (roles : List String)

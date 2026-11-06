@@ -23,7 +23,7 @@ def formula : FormulaBinding imported relation := by bind_contract
 
 abbrev public_sums.helper : Helper := (⟨"zkf_71838ae694224dd160cf5b65d1bde35de122773b8eeb322b05ddaf4708d2957e", .math, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean]⟩ : Helper)
 def public_sums.body : Region dialect public_sums.helper.inputs public_sums.helper.outputs :=
-  (.letOp (.invoke (⟨"zkl_9d89739f0825e451fe8a58993c7a5d6dc7767d148c154dbd13182e883a66e305", .math, [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)) (.cons .here .nil) .nil (.letOp (.fieldEqual "bls12-381.fr") (.cons (.there (.there (.there .here))) (.cons .here .nil)) .nil (.letOp (.invoke (⟨"zkl_9d89739f0825e451fe8a58993c7a5d6dc7767d148c154dbd13182e883a66e305", .math, [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)) (.cons (.there (.there (.there .here))) .nil) .nil (.letOp (.fieldEqual "bls12-381.fr") (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons .here .nil)) .nil (.letOp .booleanAnd (.cons (.there (.there .here)) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))))
+  (.letOp (.invoke (⟨"zkl_9d89739f0825e451fe8a58993c7a5d6dc7767d148c154dbd13182e883a66e305", .math, [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)) (.cons .here .nil) .nil (.letOp (.fieldEqual "bls12-381.fr") (.cons (.there (.there (.there .here))) (.cons .here .nil)) .nil (.letOp (.branch [(.vector "bls12-381.fr"), (.field "bls12-381.fr")] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) (.cons (.letOp (.invoke (⟨"zkl_9d89739f0825e451fe8a58993c7a5d6dc7767d148c154dbd13182e883a66e305", .math, [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)) (.cons .here .nil) .nil (.letOp (.fieldEqual "bls12-381.fr") (.cons (.there (.there .here)) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) (.ret (.cons .here .nil)))))
 theorem public_sums.association : BodyIn imported.program.payload.definitions public_sums.helper public_sums.body := by bind_structured_bodies
 
 abbrev public_sums.callee.helper : Helper := (⟨"zkl_9d89739f0825e451fe8a58993c7a5d6dc7767d148c154dbd13182e883a66e305", .math, [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)
@@ -54,7 +54,7 @@ theorem public_sums.selected : formula.definition.helper = public_sums.helper :=
 
 abbrev public_sums.entryFinal.helper : Helper := (⟨"s3h7a6b637h626f6f6c65616e4h626f7468", .math, [.boolean, .boolean], [.boolean]⟩ : Helper)
 def public_sums.entryFinal.body : Region dialect public_sums.entryFinal.helper.inputs public_sums.entryFinal.helper.outputs :=
-  (.letOp .booleanAnd (.cons .here (.cons (.there .here) .nil)) .nil (.ret (.cons .here .nil)))
+  (.letOp (.branch [.boolean] [.boolean]) (.cons .here (.cons (.there .here) .nil)) (.cons (.ret (.cons .here .nil)) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) (.ret (.cons .here .nil)))
 theorem public_sums.entryFinal.association : BodyIn imported.program.payload.definitions public_sums.entryFinal.helper public_sums.entryFinal.body := by bind_structured_bodies
 
 theorem public_sums.entry_final : MathematicsAliases.finalMath? imported.program.payload.entry.raw =

@@ -1,4 +1,5 @@
 #include "NativeBindingApplication.h"
+#include "OracleAccounting.h"
 #include "OracleQueryBatch.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -58,6 +59,10 @@ struct Layout {
       const auto &controller = *root.controller;
       const auto &discovery = *root.demand;
       const auto &window = *root.window;
+      if (!context.charge(64 + 8 * (controller.stores.size() +
+                                    controller.state.size() +
+                                    discovery.state.size())))
+        return false;
       if (!window.capacity || window.capacity >= 1048576)
         return false;
       if (!capacity) {
@@ -146,7 +151,7 @@ struct Reader {
         boolean(IntegerType::get(unit.getContext(), 1)),
         scope(runtime::ScopeType::get(unit.getContext())) {}
   bool expect(bool condition) {
-    valid &= condition;
+    valid &= context.charge() && condition;
     return valid;
   }
   struct Cursor {
@@ -157,6 +162,10 @@ struct Reader {
       if (!reader.valid || !reader.expect(offset < steps.size()))
         return nullptr;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(
+              1 + step.inputs.size() + step.outputs.size() +
+              step.regions.size() + site.size())))
+        return nullptr;
       auto tag = step.operation->getAttrOfType<StringAttr>(
           operation == "func.call" ? "runtime.site" : "site");
       if (!reader.expect(step.operation->getName().getStringRef() ==
@@ -183,9 +192,10 @@ struct Reader {
       if (!reader.valid)
         return values;
       auto op = cast<exec::ApplyOp>(step->operation);
-      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-          op, op.getBindingAttr());
-      if (reader.expect(matchesNativeBinding(
+      auto binding = reader.context.getSymbols()
+                         .lookupNearestSymbolFrom<runtime::BindingOp>(
+                             op, op.getBindingAttr());
+      if (reader.expect(reader.context.matchesBinding(
               binding, {contract.str(), SmallVector<Attribute>(statics), {}})))
         reader.expect(invocationParametersMatch(
             contract, binding.getArgumentsAttr(), op.getParametersAttr(),
@@ -207,8 +217,9 @@ struct Reader {
           result(step, scopedDataSignature(helper).getResults(), inputs);
       if (reader.valid)
         reader.expect(
-            SymbolTable::lookupSymbolIn(
-                reader.unit, cast<func::CallOp>(step->operation).getCallee()) ==
+            reader.context.getSymbols()
+                .getSymbolTable(reader.unit)
+                .lookup(cast<func::CallOp>(step->operation).getCallee()) ==
             helper.getOperation());
       return values;
     }
@@ -403,14 +414,16 @@ struct Reader {
 Error checkOracleQueryBatch(const OracleVerificationContext &context,
                             ArrayRef<OracleQueryBatchRoot> roots,
                             const OracleQueryBatch &actual) {
-  Layout layout;
-  if (!layout.read(context, roots, actual))
-    return error("oracle-batch-body");
-  Reader reader(context, roots, actual, layout);
-  reader.collect();
-  reader.checkAvailable();
-  reader.replay();
-  reader.finish();
-  return reader.valid ? Error::success() : error("oracle-batch-body");
+  return oracleVerificationWithWork(context.getWork(), [&]() -> Error {
+    Layout layout;
+    if (!layout.read(context, roots, actual))
+      return error("oracle-batch-body");
+    Reader reader(context, roots, actual, layout);
+    reader.collect();
+    reader.checkAvailable();
+    reader.replay();
+    reader.finish();
+    return reader.valid ? Error::success() : error("oracle-batch-body");
+  });
 }
 } // namespace zkc::protocol

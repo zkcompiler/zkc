@@ -288,6 +288,16 @@ adapter law. Structural `check` alone does not supply registered meaning or a
 security theorem. Formula helpers and captured assets retain their own meaning
 owners. A caller must supply its actual family registry and any protocol theorem.
 
+At the security ABI, each input clause reads its ordered selectors from the
+subject's actual boundary and assignments. The first missing selected operand
+makes that clause false even when later options are unknown. Selectors may
+repeat a coordinate. Options outside the clause stay arbitrary. For a formula,
+the input law interprets its selected body in the unit's complete linked
+definition table. For an opaque relation, it applies the installed predicate to
+the same typed argument row, preserving the model's carrier. For example, the
+GKR circuit-shape clause can use its public shape law with an absent producer
+service handle because the clause reads only the seven circuit arguments.
+
 A statement retains its relation, exact entry operands, role selectors,
 Boolean acceptance-result index and optional target name. A named target must
 resolve to the containing protocol's retained target clause and agree with that
@@ -1357,9 +1367,9 @@ The latter case still checks the exact suite, returned history and immutable
 caller captures. Layouts keep one logical designation per physical cell, so an
 alias-sensitive continuation may still be refused. Return selection supports
 any finite subset whose substitution passes the syntax equality; it does not
-prove algebraic equivalence of different continuations. Helper expansion handles
-a return projection or one total primitive with present operands or a
-statically absent operand; arbitrary helper inlining is not claimed. These are
+prove algebraic equivalence of different continuations. The simple helper rules cover a return projection or one total primitive with
+present or statically absent operands. A multi-step Math body uses the checked
+region alignment described below; arbitrary helper inlining is not claimed. These are
 proposer/derivation coverage limits, not restrictions added to the theorem's
 runtime quantifiers.
 
@@ -1539,6 +1549,43 @@ internal checked partial return selection and complete root returns are unchange
 Product construction and projection follow the native Math/Protocol profile and
 retain ordinary availability checks. No deleted projection walker is involved.
 
+### Mathematical region admission and constructed regions
+
+The Math descriptor `data_branch` lowers to the existing typed Boolean branch.
+Both closed arms are formed; bound facts travel through their explicit captures.
+Availability summarizes both arms and adds selector dependencies to intermediate
+requirements and results. The region interpreter evaluates only the chosen arm.
+Realization totality is derived recursively from both arm totality premises;
+finite computations with possible stops remain a distinct admission profile.
+
+Constructed `Instruction` stores ordered `InstructionRegion` records containing
+input sorts, instructions and yielded references. There is no loop-only body
+field or yield list on `Operation.loop`. Loops extend their outer frame with an
+index and carried values. Math selection starts a fresh capture-only frame.
+The structural rule checks every Math arm and rejects protocol operations or
+non-data values. The Domain evaluator also checks actual helper kinds against
+the admitted source and returns the complete declared tuple from the selected
+arm. Correspondence requires both arm equations; neither static admission nor
+a digest establishes the source connection. Helper, catalogue and occurrence
+inventories traverse all stored regions, including dormant ones.
+
+A participant can lack a helper operand that another participant has. For a
+one-step helper whose source is a strict total operation or a Boolean branch
+followed by a return, the connection checks the operands of that exact step.
+If any is absent, the step produces absent components for its result slots.
+The helper still evaluates its original return positions over those slots
+and its original arguments. Thus returning an available argument preserves
+it even when the step was skipped. The checked participant needs no physical
+instruction for that step. This rule requires a proof from the component
+interpreter and cannot erase an arbitrary call, event or stop.
+
+An oracle unit's checked Math environment admits a Boolean branch with exactly
+two pure, formed arms and a pure continuation. Calls in either arm must resolve
+to the associated Math environment; a dormant Local call or stop refuses this
+profile. The evaluator still selects only the reached arm. Output dependency
+analysis may conservatively include the selector and all explicit captures;
+admission does not prove exact query locality or cryptographic security.
+
 ### Canonical execution selection at property consumers
 
 An imported unit containing an Oracle declaration or logical Oracle type selects its checked
@@ -1562,6 +1609,14 @@ Its interpretation erases only structural application/iteration/mark bookkeeping
 `checkOrdinarySource` constructs the source-bound fragment witness; the source
 runtime guard and the retained-body check are both required. This result does not
 identify an arbitrary ordinary provider with the canonical Oracle store or cursor.
+
+The Math fragment includes selected Boolean regions. Both callback bodies must
+pass the recursive fragment check. A missing selector or capture returns absent
+results. When all operands are present the Boolean chooses one callback, which
+receives its captures with their structural Oracle values intact. The embedding
+relates the chosen callback to the closed ordinary callback on present inputs and
+retains its entire process, including every stop. The dormant arm contributes
+formation obligations without issuing actions.
 
 A protocol containing logical oracles can still reuse ordinary Math companion laws.
 `ReferenceLaw.invokeOracleConcrete` combines exact `BodyIn` association, the original

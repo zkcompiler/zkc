@@ -119,6 +119,7 @@ class Inventory:
         self.identities = {}
         self.symbol_rows = {}
         self.definitions = {}
+        self.body_owners = set()
         expected_sites = []
         for table in (4, 5, 6, 7):
             for index, row in enumerate(sequence(self.snapshot[table], "snapshot table")):
@@ -129,7 +130,9 @@ class Inventory:
                     require(len(row) == 10 and symbol not in self.definitions,
                             "source inventory: malformed or repeated definition")
                     self.definitions[symbol] = row
-                    sites = list(block_sites(row[9]))
+                if isinstance(row[-1], list) and row[-1][:1] == ["block"]:
+                    self.body_owners.add(symbol)
+                    sites = list(block_sites(row[-1]))
                     require(len(sites) == len(set(sites)), "source inventory: repeated definition site")
                     expected_sites.extend((symbol, site) for site in sites)
         for kind, entries, associations in (
@@ -276,7 +279,7 @@ class Inventory:
         for origin in sequence(entry["origins"], "generated origins"):
             fields(origin, "definition site", "generated origin")
             key = (string(origin["definition"], "origin definition"), string(origin["site"], "origin site"))
-            require(key[0] in self.definitions, "source inventory: origin outside snapshot")
+            require(key[0] in self.body_owners, "source inventory: origin outside snapshot bodies")
             origins.append(key)
         # Pure mathematical sites may be absent from the structured snapshot.
         # They are still provenance, never an executable occurrence address.

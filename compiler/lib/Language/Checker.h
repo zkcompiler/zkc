@@ -3,6 +3,7 @@
 #include "BodySummary.h"
 #include "CallResolution.h"
 #include "Internal.h"
+#include "ScopedWitness.h"
 #include "Semantics.h"
 #include "UsagePlan.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -14,6 +15,10 @@ struct BodyWitnesses {
   std::vector<std::shared_ptr<ScopedInvocationSource>> invocations;
   std::vector<std::shared_ptr<IntrinsicCallSource>> intrinsics;
   std::map<unsigned, std::shared_ptr<NotationFamilies>> notations;
+  std::map<unsigned, std::shared_ptr<std::map<uint32_t, Type>>> enumTypes;
+  std::map<unsigned, std::shared_ptr<std::map<uint32_t, Natural>>> repeatMaxima;
+  std::map<unsigned, std::shared_ptr<SourceLiterals>> literals;
+  std::map<unsigned, std::shared_ptr<SourceControlSnapshots>> controlSnapshots;
 };
 struct BodyPlan {
   UsagePlan usage;
@@ -33,6 +38,13 @@ public:
   Checker(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
   /// Static selection over completed signatures and frozen source namespaces.
   Checker(CheckedStorage &, Work &, AccessContext);
+  /// Bounded, synchronous observation of completed metadata. The source and
+  /// private scratch storage must outlive this checker. Only scratch receives
+  /// reference bookkeeping; metadata and shared source/index pointees are
+  /// const.
+  static llvm::Expected<std::unique_ptr<Checker>>
+  observe(CheckedStorage &scratch, const CheckedStorage &, Work &,
+          AccessContext);
   // Lazy signature completion captures this driver; keep its address stable.
   Checker(const Checker &) = delete;
   Checker &operator=(const Checker &) = delete;
@@ -47,11 +59,16 @@ public:
   /// Dependencies use the same signature cycle checks; bodies are not checked.
   bool prepareSignatureReconstruction(DeclarationId, const SyntaxDeclaration &);
   bool reconstructSignature(DeclarationId id) { return signature(id); }
+  /// Replay typed View recipes with lazy dependency checking and the same
+  /// authored inference policy as formation, in a private signature snapshot.
+  void beginViewReconstruction();
+  void prepareViewReconstruction(DeclarationId, const SyntaxDeclaration &);
   /// Eligibility is derived from authored headers, never candidate bound flags.
   bool permitsContractInference(DeclarationId id) const {
     return inferredContracts.count(&output.declarations[id.index]);
   }
   CheckedStorage &output;
+  const std::vector<Declaration> &declarations;
   Work &work;
   Semantics types;
   BodySummaryCache bodySummaries;
@@ -108,18 +125,23 @@ public:
   std::optional<std::vector<bool>>
   enclosingParameters(const Declaration &, const Declaration &, Span);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
+  /// Restore abstract binder routes from the authenticated immutable header
+  /// inventory.
+  bool useWrittenParameterRoutes(llvm::ArrayRef<ReferenceRecord>);
   /// Resolve a callee. Without recording, the lookup only classifies the
   /// written name and the caller records nothing.
-  std::optional<CallableReference>
-  callable(const Declaration &, llvm::StringRef, Span, bool record = true);
+  std::optional<CallableReference> callable(const Declaration &,
+                                            llvm::StringRef, Span,
+                                            bool record = true,
+                                            bool descriptorContext = false);
   std::optional<CallableReference> method(const Declaration &, const Type &,
                                           llvm::StringRef, Span);
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
                                                  const SyntaxOperator &,
                                                  bool filtered = false);
-  std::optional<std::vector<OperatorBinding>>
+  std::optional<std::map<std::string, OperatorBinding>>
   operatorCandidates(const Declaration &, const SyntaxDeclaration &, uint32_t);
-  std::optional<llvm::ArrayRef<OperatorBinding>>
+  std::shared_ptr<const AuthoredOperatorFamily>
   operatorWitnessFamily(const Declaration &, const SyntaxDeclaration &,
                         uint32_t);
   bool body(DeclarationId, unsigned);
@@ -162,12 +184,27 @@ public:
   std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
 
 private:
+  Checker(CheckedStorage &scratch, const CheckedStorage &, Work &,
+          AccessContext);
+  bool observing = false;
   bool checkBody(Declaration &, Body &, unsigned);
   bool inferUsage(Declaration &, Body::Mode, unsigned);
   bool collectUsage(const Declaration &, const Type &, Usage, Span,
                     llvm::StringRef, llvm::StringRef);
-  std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
-                                    unsigned, bool allowPlacement);
+  // A call-local owning result from elaboration. Only Checker can certify the
+  // result of its immediately preceding complete substitution. The handle is
+  // consumed by type() before exposing a mutable Type, never cached or shared.
+  class ElaboratedType {
+    friend class Checker;
+    std::optional<Type> value;
+    bool complete = false;
+    ElaboratedType() = default;
+    ElaboratedType(Type value) : value(std::move(value)) {}
+    ElaboratedType(std::optional<Type> value, bool complete = false)
+        : value(std::move(value)), complete(complete) {}
+  };
+  ElaboratedType elaborateType(const Declaration &, const SyntaxType &,
+                               unsigned, bool allowPlacement);
   std::vector<SyntaxDeclaration> syntax;
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<unsigned, SyntaxDeclaration> reconstructedSources;
@@ -205,7 +242,7 @@ private:
   // Keep this cache separate from inference's candidate enumeration.
   using OperatorFamilyKey =
       std::tuple<unsigned, std::optional<uint32_t>, std::string>;
-  std::map<OperatorFamilyKey, std::vector<OperatorBinding>>
+  std::map<OperatorFamilyKey, std::shared_ptr<const AuthoredOperatorFamily>>
       operatorWitnessFamilies;
   std::vector<unsigned> signatureState;
   std::set<const Declaration *> inferredContracts;

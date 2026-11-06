@@ -21,6 +21,7 @@ open ZkcExamples.Structured SumcheckReferenceInstallation
 open TableComponent
 open OracleComp OracleSpec
 
+variable {foldNames : MultilinearBodies.FoldNames}
 variable (model : DomainModel) [fieldLaw : Fact (IsField (model.Field field))]
 local instance : Field (model.Field field) := fieldLaw.out.toField
 
@@ -151,7 +152,7 @@ def no (original : List (model.Field field)) (callerFrame : Frame)
       runtime = encode model runtime.index reference ∧ (layout model).representation.No reference
 
 variable (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-  (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+  (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
   (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
   (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx 1 2) (handle : Nat)
 

@@ -22,13 +22,17 @@ structure ChallengeOccurrence where
 mutual
 def challengeOccurrence (instruction : Zkc.Construction.Instruction) : List ChallengeOccurrence :=
   match instruction with
-  | ⟨.challenge suite field template, _, _, body⟩ =>
-      ⟨suite, field, template⟩ :: challengeOccurrences body
-  | ⟨_, _, _, body⟩ => challengeOccurrences body
+  | ⟨.challenge suite field template, _, _, regions⟩ =>
+      ⟨suite, field, template⟩ :: regionChallenges regions
+  | ⟨_, _, _, regions⟩ => regionChallenges regions
 
 def challengeOccurrences : List Zkc.Construction.Instruction → List ChallengeOccurrence
   | [] => []
   | first :: rest => challengeOccurrence first ++ challengeOccurrences rest
+
+def regionChallenges : List InstructionRegion → List ChallengeOccurrence
+  | [] => []
+  | ⟨_, body, _⟩ :: rest => challengeOccurrences body ++ regionChallenges rest
 end
 
 /-- Labels select an actual retained challenge occurrence before evidence.

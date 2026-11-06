@@ -223,7 +223,10 @@ int main(int argc, char **argv) {
   mutation("helper absorbs a different valid occurrence", [&](ModuleOp module) {
     bool changed = false;
     auto origin = take(protocol::encodeNativeOriginTemplate(
-        "main", {}, {"message", "main", "other", "other", "Alice", "Bob"}));
+        {"main",
+         {},
+         protocol::NativeMessageOrigin{"main", "other", "other", "Alice",
+                                       "Bob"}}));
     module.walk([&](Operation *op) {
       auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
       if (!ref || changed)

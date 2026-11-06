@@ -57,6 +57,59 @@ def isLocalValue : Option ValueSort → Bool
   | some (.data ty) => ty.isCustody || !ty.isHandle
   | _ => false
 
+/-- Admission of two closed arms from their independently checked body rows.
+The recursive traversal remains structurally recursive on instructions. -/
+def checkMathArmResults (results : List ValueSort) (yes no : InstructionRegion)
+    (checkedYes checkedNo : Except String (List ValueSort)) : Except String Unit := do
+  if yes.inputs != no.inputs || !yes.inputs.all (fun s => isData (some s)) ||
+      !results.all (fun s => isData (some s)) then throw "construction-math-captures"
+  let yesSorts ← checkedYes
+  let noSorts ← checkedNo
+  if yes.yielded.map (yesSorts[·]?) != results.map some ||
+      no.yielded.map (noSorts[·]?) != results.map some then throw "construction-math-yields"
+
+mutual
+/-- Formation of a closed mathematical frame. Both arms are checked even when
+one selector is constant. Effects, guards and handles cannot enter Math. Helper
+admission is an explicit parameter: construction shape checks leave call linking
+to source connection; execution validates every arm against the actual source ABI. -/
+def checkMathFrom (admitCall : String → List ValueSort → List ValueSort → Bool) : List ValueSort → List Instruction → Except String (List ValueSort)
+  | sorts, [] => .ok sorts
+  | sorts, instruction :: rest => do
+      let next ← checkMathStep admitCall sorts instruction
+      checkMathFrom admitCall next rest
+
+def checkMathStep (admitCall : String → List ValueSort → List ValueSort → Bool) (sorts : List ValueSort) : Instruction → Except String (List ValueSort)
+  | ⟨.calculate calculation, operands, results, []⟩ =>
+      if operands.map (sorts[·]?) = calculation.op.arguments.map (some ∘ .data) ∧
+          results = calculation.op.results.map .data ∧ results.all (fun s => isData (some s)) then
+        .ok (sorts ++ results)
+      else .error "construction-math-calculation"
+  | ⟨.call name, operands, results, []⟩ => do
+      let some inputs := operands.mapM (sorts[·]?) | throw "construction-math-call"
+      if inputs.all (fun s => isData (some s)) ∧ results.all (fun s => isData (some s)) ∧
+          admitCall name inputs results then return sorts ++ results
+      else throw "construction-math-call"
+  | ⟨.mathBranch, selector :: captures, results, [⟨yesInputs, yesBody, yesYielded⟩, ⟨noInputs, noBody, noYielded⟩]⟩ => do
+      if sorts[selector]? != some (.data .boolean) ||
+          captures.map (sorts[·]?) != yesInputs.map some || yesInputs != noInputs ||
+          !yesInputs.all (fun s => isData (some s)) ||
+          !results.all (fun s => isData (some s)) then throw "construction-math-captures"
+      checkMathArmResults results ⟨yesInputs, yesBody, yesYielded⟩ ⟨noInputs, noBody, noYielded⟩
+        (checkMathFrom admitCall yesInputs yesBody) (checkMathFrom admitCall noInputs noBody)
+      return sorts ++ results
+  | _ => .error "construction-math-operation"
+
+end
+
+/-- Shared closed-arm formation, independent of the caller's unrelated cells.
+The caller separately checks the selector and ordered capture boundary. -/
+def checkMathArms (admitCall : String → List ValueSort → List ValueSort → Bool)
+    (results : List ValueSort) (yes no : InstructionRegion) : Except String Unit :=
+  checkMathArmResults results yes no
+    (checkMathFrom admitCall yes.inputs yes.instructions)
+    (checkMathFrom admitCall no.inputs no.instructions)
+
 /-- The transcript occurrence carries exactly the enclosing induction values. -/
 def coordinatesValid (state : CheckState) (template : Template) (coordinates : Nat) : Bool :=
   state.sorts[coordinates]? == some .indices && state.path coordinates == some state.inductions &&
@@ -205,13 +258,18 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
               results.all (fun result => isLocalValue (some result)) then
             .ok { state with sorts := state.sorts ++ results }
           else .error "construction-call"
+  | instruction@⟨.mathBranch, _, _, _⟩ => do
+      if state.pending matches .observe .. then throw "construction-pending"
+      let sorts ← checkMathStep (fun _ _ _ => true) state.sorts instruction
+      return { state with sorts := sorts }
   | ⟨.guard _, [condition], [], []⟩ =>
       match state.pending with
       | .observe _ _ => .error "construction-pending"
       | _ =>
           if state.sorts[condition]? = some (.data .boolean) then .ok state
           else .error "construction-guard"
-  | ⟨.loop _ _ yielded, count :: initial, results, body⟩ =>
+  | ⟨.loop _ _, count :: initial, results, [⟨regionInputs, body, yielded⟩]⟩ =>
+      if regionInputs != .data .index :: results then .error "construction-loop-region-inputs" else
       match state.pending, initial.idxOf? state.current with
       | .none, some position =>
           let fresh := state.sorts.length
@@ -303,6 +361,9 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
           results.all (fun sort => isLocalValue (some sort)) then
         .ok { state with sorts := state.sorts ++ results }
       else .error "construction-plain-call"
+  | instruction@⟨.mathBranch, _, _, _⟩ => do
+      let sorts ← checkMathStep (fun _ _ _ => true) state.sorts instruction
+      return { state with sorts := sorts }
   | ⟨.guard _, [condition], [], []⟩ =>
       if state.sorts[condition]? = some (.data .boolean) then .ok state
       else .error "construction-plain-guard"
@@ -312,7 +373,8 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
           coordinates operands results then
         .ok { state with sorts := state.sorts ++ results }
       else .error "construction-plain-local-service"
-  | ⟨.loop _ _ yielded, count :: initial, results, body⟩ =>
+  | ⟨.loop _ _, count :: initial, results, [⟨regionInputs, body, yielded⟩]⟩ =>
+      if regionInputs != .data .index :: results then .error "construction-loop-region-inputs" else
       let fresh := state.sorts.length
       if state.sorts[count]? = some (.data .index) ∧
           initial.map (state.sorts[·]?) = results.map some ∧

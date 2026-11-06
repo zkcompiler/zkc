@@ -606,4 +606,34 @@ theorem equal_select_arms_component_needs_condition
 
 #eval run
 
+private def selectedUnused : CheckedDefinition := formed "selected-unused" .math
+  (.letOp (.branch [scalar] []) (Operands.identity _)
+    (.cons (.ret .nil)
+      (.cons (.letOp (.fieldAdd "bls12-381.fr")
+        (.cons .here (.cons .here .nil)) .nil (.ret .nil)) .nil))
+    (.ret .nil) : Region dialect [.boolean, scalar] [])
+
+/-- Even an unused intermediate in a dormant arm needs the selector's owner. -/
+theorem selected_dormant_requirement_retained :
+    checkUnitAvailability [selectedUnused]
+      [root [[0], [1]] []
+        (mathCall selectedUnused.helper rfl (Operands.identity _) (.ret .nil))] =
+      .error "structured-availability-requirement" := by decide +kernel
+
+theorem selected_shared_owner_accepted :
+    checkUnitAvailability [selectedUnused]
+      [root [[0], [0]] []
+        (mathCall selectedUnused.helper rfl (Operands.identity _) (.ret .nil))] =
+      .ok () := by decide +kernel
+
+private def selectedResult : CheckedDefinition := formed "selected-result" .math
+  (.letOp (.branch [scalar, scalar] [scalar]) (Operands.identity _)
+    (.cons (.ret (.cons .here .nil))
+      (.cons (.ret (.cons (.there .here) .nil)) .nil))
+    (.ret (.cons .here .nil)) : Region dialect [.boolean, scalar, scalar] [scalar])
+
+theorem selected_results_include_control_and_both_arms :
+    (summarizeHelpers [selectedResult]).map (fun summaries => summaries.map (·.results)) =
+      .ok [[[0, 1, 2]]] := by decide +kernel
+
 end Tests.StructuredAvailability

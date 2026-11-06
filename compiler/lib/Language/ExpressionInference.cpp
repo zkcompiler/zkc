@@ -2,6 +2,7 @@
 #include "BodyCheck.h"
 #include "CallableConstraints.h"
 #include "DataRequirements.h"
+#include "DescriptorFactories.h"
 #include "ManagedServices.h"
 #include "OperatorInference.h"
 #include "RecordIntrinsics.h"
@@ -72,7 +73,37 @@ class ExpressionInference {
     for (const auto &input : signature.inputs)
       equations.inputs.push_back(
           types.instantiate(input, parameters, expr.span));
-    if (expr.kind == K::Name) {
+    if (expr.kind == K::Name && !expr.binding) {
+      auto target = owner.callable(expr);
+      if (!target)
+        return;
+      output.callees.emplace(id, *target);
+      const auto &callee =
+          checker.output.declarations[target->declaration.index];
+      if ((callee.kind != Declaration::Kind::Math &&
+           callee.kind != Declaration::Kind::Local) ||
+          (callee.kind == Declaration::Kind::Math) !=
+              (signature.mode == ScopedSignature::Mode::Math) ||
+          !callee.scopedInputs.empty() || !callee.descriptorInputs.empty() ||
+          !callee.services.empty() || !callee.roles.empty() ||
+          callee.inputs.size() != equations.inputs.size() ||
+          callee.outputs.size() != 1) {
+        fail("source.scoped",
+             "named callable mode or complete signature differs", expr.span);
+        return;
+      }
+      contexts.emplace(
+          id, CallContext{scopedMode.value_or(owner.body.mode), scopedDepth});
+      if (!accountCall(id, callee))
+        return;
+      auto constraints = signatureInstance(id, callee, *target);
+      if (!constraints)
+        return;
+      for (unsigned i = 0; i < equations.inputs.size(); ++i)
+        types.equal(equations.inputs[i], constraints->inputs[i], expr.span);
+      types.equal(equations.result, constraints->outputs.front(), expr.span);
+      calls.push_back({id, callee.id, std::move(constraints->parameters)});
+    } else if (expr.kind == K::Name) {
       auto actual = scopedSignature(expr);
       if (!actual || actual->mode != signature.mode ||
           (actual->allowance.mayStop && !signature.allowance.mayStop) ||
@@ -108,7 +139,8 @@ class ExpressionInference {
     }
     scopedEquations.emplace(id, std::move(equations));
   }
-  Variable domainArgument(uint32_t id, unsigned depth) {
+  Variable domainArgument(uint32_t id, unsigned depth,
+                          std::optional<Variable> expected = {}) {
     const auto &expr = syntax.expressions[id];
     if (depth > checker.work.limits.expressionDepth ||
         !checker.types.charge(1, expr.span)) {
@@ -119,6 +151,90 @@ class ExpressionInference {
         found != domainExpressions.end())
       return found->second;
     Variable result = types.fresh(expr.span);
+    if (expected)
+      types.equal(result, *expected, expr.span);
+    // An ordinary data collection keeps its established Finite adaptation.
+    // Structural expectations and authored descriptor routes use the common
+    // author; the collection adapter never classifies an aggregate's category.
+    auto demand =
+        expected ? types.structure(*expected, expr.span) : std::nullopt;
+    bool structuralDemand =
+        demand && (demand->head.kind == T::DescriptorProduct ||
+                   demand->head.kind == T::DescriptorSequence);
+    if (syntax.layoutSyntax && expr.kind != K::DomainProduct &&
+        (structuralDemand || checker.domainExpression(decl, syntax, id))) {
+      std::vector<DescriptorBinding> recipes;
+      std::map<BindingId, unsigned> descriptorNames;
+      auto domainName = [&](BindingId id, const Type &contract) {
+        descriptorNames.emplace(id, recipes.size());
+        recipes.push_back({DescriptorBinding::Kind::Parameter,
+                           DescriptorContract(contract),
+                           {},
+                           {},
+                           0,
+                           unsigned(recipes.size()),
+                           expr.span});
+      };
+      for (const auto &[name, node] : owner.domains)
+        domainName(
+            name, descriptorType(owner.body.descriptorBindings[node].contract));
+      for (const auto &[name, variable] : domains) {
+        auto contract = types.get(variable, expr.span);
+        if (!contract)
+          return result;
+        domainName(name, *contract);
+      }
+      std::map<BindingId, ValueId> dataNames;
+      std::vector<Type> dataTypes;
+      auto dataName = [&](BindingId id, const Type &type) {
+        dataNames.emplace(id, ValueId{unsigned(dataTypes.size())});
+        dataTypes.push_back(type);
+      };
+      for (const auto &[name, state] : owner.bindings)
+        dataName(name, state.type);
+      for (const auto &[name, variable] : bindings) {
+        if (dataNames.count(name))
+          continue;
+        auto type = types.get(variable, expr.span);
+        if (!type)
+          return result;
+        dataName(name, *type);
+      }
+      auto evaluate =
+          [&](uint32_t child,
+              const std::optional<Type> &expected) -> std::optional<ValueId> {
+        auto value = expression(child, depth + 1);
+        if (expected)
+          constrain(value.type, *expected, syntax.expressions[child].span);
+        auto actual = types.get(value.type, syntax.expressions[child].span);
+        if (!actual)
+          return {};
+        ValueId id{unsigned(dataTypes.size())};
+        dataTypes.push_back(std::move(*actual));
+        return id;
+      };
+      auto selected = authorDescriptorExpression(
+          checker, decl, syntax, recipes, descriptorNames, dataNames,
+          [&](ValueId id) -> const Type * { return &dataTypes.at(id.index); },
+          evaluate, id, owner.callDepth, types.get(result, expr.span));
+      if (!selected)
+        return result;
+      constrain(result, descriptorType(recipes[*selected].contract), expr.span);
+      for (const auto &recipe : recipes) {
+        if (!recipe.expression)
+          continue;
+        auto site = *recipe.expression;
+        auto item = known(descriptorType(recipe.contract), recipe.span);
+        domainExpressions.emplace(site, item);
+        if (recipe.factory) {
+          output.callees.emplace(site, *recipe.factory);
+          output.arguments.emplace(site, recipe.arguments);
+          output.inputs.emplace(site, recipe.argumentOrder);
+        }
+      }
+      domainExpressions.insert_or_assign(id, result);
+      return result;
+    }
     if (expr.kind == K::DomainProduct) {
       if (expr.children.size() != 2) {
         fail("source.finite-domain", "domain product requires two operands",
@@ -127,8 +243,19 @@ class ExpressionInference {
       }
       auto left = domainArgument(expr.children[0], depth + 1);
       auto right = domainArgument(expr.children[1], depth + 1);
-      types.equal(result, types.shape(Type(T::Tuple), {left, right}, expr.span),
-                  expr.span);
+      auto finiteItem = [&](Variable descriptor) {
+        auto item = types.fresh(expr.span);
+        Type head(T::Descriptor);
+        head.family = DescriptorFamily::Finite;
+        types.equal(descriptor, types.shape(head, {item}, expr.span),
+                    expr.span);
+        return item;
+      };
+      auto pair = types.shape(Type(T::Tuple),
+                              {finiteItem(left), finiteItem(right)}, expr.span);
+      Type head(T::Descriptor);
+      head.family = DescriptorFamily::Finite;
+      types.equal(result, types.shape(head, {pair}, expr.span), expr.span);
       domainExpressions.emplace(id, result);
       return result;
     }
@@ -138,7 +265,9 @@ class ExpressionInference {
         types.equal(result, found->second, expr.span);
       else if (auto found = owner.domains.find(*expr.binding);
                found != owner.domains.end())
-        constrain(result, owner.body.domainBindings[found->second].item,
+        constrain(result,
+                  descriptorType(
+                      owner.body.descriptorBindings[found->second].contract),
                   expr.span);
       else
         collection = true;
@@ -148,7 +277,7 @@ class ExpressionInference {
         return result;
       const auto &callee =
           checker.output.declarations[target->declaration.index];
-      if (callee.kind != Declaration::Kind::DomainFunction) {
+      if (callee.kind != Declaration::Kind::View || !callee.descriptorResult) {
         collection = true;
       } else {
         output.callees.emplace(id, *target);
@@ -172,11 +301,17 @@ class ExpressionInference {
         auto kind = collectionElementKind(head, arguments.size());
         if ((head.kind == T::Array && arguments.size() == 2) ||
             kind == CollectionElementKind::Parameter) {
-          types.equal(result, arguments.front(), span);
+          Type head(T::Descriptor);
+          head.family = DescriptorFamily::Finite;
+          types.equal(result, types.shape(head, {arguments.front()}, span),
+                      span);
           return true;
         }
         if (kind == CollectionElementKind::Index) {
-          constrain(result, Type(T::Index), span);
+          constrain(
+              result,
+              descriptorType({DescriptorFamily::Finite, {Type(T::Index)}}),
+              span);
           return true;
         }
         return fail("source.finite-domain",
@@ -401,18 +536,17 @@ class ExpressionInference {
   }
   /// `rows` lifts the marked data inputs and every result of a pointwise map
   /// to native vectors of the helper's scalar types.
-  std::vector<Variable> application(uint32_t id, const Declaration &callee,
-                                    std::optional<Type> module, unsigned depth,
-                                    const std::vector<bool> &rows = {},
-                                    ArrayRef<std::optional<Type>> bound = {}) {
+  std::optional<CallableConstraints>
+  signatureInstance(uint32_t id, const Declaration &callee,
+                    const CallableReference &target,
+                    ArrayRef<std::optional<Type>> bound = {}) {
     const auto &expr = syntax.expressions[id];
-    if (!accountCall(id, callee, expr.kind == K::Map))
-      return {};
-    auto constraints = instantiateCallable(types, checker.types, callee,
-                                           {callee.id, module}, expr.span);
+    auto constraints =
+        instantiateCallable(types, checker.types, callee, target, expr.span);
     if (checker.types.diagnostic)
       return {};
     const auto &parameters = constraints.parameters;
+    const auto &module = target.module;
     for (unsigned i = 0; i < bound.size(); ++i)
       if (bound[i])
         types.equal(parameters.at(callee.parameters[i].atom),
@@ -449,6 +583,20 @@ class ExpressionInference {
         types.equal(parameters.at(parameter.atom),
                     known(parameterType(parameter), expr.span), expr.span);
       }
+    return constraints;
+  }
+  std::vector<Variable> application(uint32_t id, const Declaration &callee,
+                                    std::optional<Type> module, unsigned depth,
+                                    const std::vector<bool> &rows = {},
+                                    ArrayRef<std::optional<Type>> bound = {}) {
+    const auto &expr = syntax.expressions[id];
+    if (!accountCall(id, callee, expr.kind == K::Map))
+      return {};
+    auto instance = signatureInstance(id, callee, {callee.id, module}, bound);
+    if (!instance)
+      return {};
+    const auto &constraints = *instance;
+    const auto &parameters = constraints.parameters;
     auto binding =
         bindArguments(checker.types, inputNames(callee), expr.children.size(),
                       expr.callLabels, true, expr.span, "source.call");
@@ -456,6 +604,20 @@ class ExpressionInference {
       return {};
     output.inputs.emplace(id, *binding);
     calls.push_back({id, callee.id, parameters});
+    // Source checking collects rigid data equations before authoring fresh
+    // descriptor aggregates. Runtime evaluation still follows authored order.
+    if (syntax.layoutSyntax && rows.empty())
+      for (unsigned i = 0; i < expr.children.size(); ++i) {
+        auto slot =
+            callee.inputOrder.empty()
+                ? Declaration::InputSlot{Declaration::InputSlot::Kind::Data,
+                                         (*binding)[i]}
+                : callee.inputOrder[(*binding)[i]];
+        if (slot.kind == Declaration::InputSlot::Kind::Data) {
+          auto value = expression(expr.children[i], depth + 1);
+          types.equal(constraints.inputs[slot.index], value.type, expr.span);
+        }
+      }
     for (unsigned i = 0; i < expr.children.size(); ++i) {
       auto slot = !callee.inputOrder.empty()
                       ? callee.inputOrder[(*binding)[i]]
@@ -469,9 +631,10 @@ class ExpressionInference {
                                         callee.services[slot.index].span),
                       known(*field, expr.span), expr.span);
       } else if (slot.kind == Declaration::InputSlot::Kind::Domain) {
-        types.equal(types.instantiate(callee.domainInputs[slot.index].item,
-                                      parameters, expr.span),
-                    domainArgument(expr.children[i], depth + 1), expr.span);
+        auto contract = types.instantiate(
+            descriptorType(callee.descriptorInputs[slot.index].contract),
+            parameters, expr.span);
+        domainArgument(expr.children[i], depth + 1, contract);
       } else if (slot.kind == Declaration::InputSlot::Kind::Data) {
         auto parameter = constraints.inputs[slot.index];
         auto argument = expression(expr.children[i], depth + 1);
@@ -499,9 +662,9 @@ class ExpressionInference {
                          depth + 1);
       }
     std::vector<Variable> results;
-    if (callee.domainResult)
-      results.push_back(
-          types.instantiate(*callee.domainResult, parameters, expr.span));
+    if (callee.descriptorResult)
+      results.push_back(types.instantiate(
+          descriptorType(*callee.descriptorResult), parameters, expr.span));
     for (auto result : constraints.outputs)
       results.push_back(rows.empty() ? result : vectorOf(result, expr.span));
     return results;
@@ -586,7 +749,10 @@ class ExpressionInference {
           syntax.bindings[statement.pattern.binding->index].domain) {
         auto firstCall = calls.size();
         auto firstExpression = expressionOrder.size();
-        auto item = domainArgument(statement.expression, depth + 1);
+        auto item = domainArgument(
+            statement.expression, depth + 1,
+            statement.type ? std::optional(annotation(*statement.type))
+                           : std::nullopt);
         if (!finishCalls(firstCall, firstExpression, statement.span))
           return {item};
         if (!types.get(item, statement.span))
@@ -704,9 +870,9 @@ class ExpressionInference {
       const auto *association =
           checker.output.declarationIndex->association(target->declaration);
       if (isRecordIntrinsic(association)) {
-        const bool repack = association->rule ==
+        const bool repack = association->rule() ==
                             protocol::FrontendSignature::RecordRepack,
-                   inspect = association->rule ==
+                   inspect = association->rule() ==
                              protocol::FrontendSignature::RecordInspect;
         if (expr.children.size() != (repack ? 2u : 1u) ||
             !expr.callLabels.empty() || !expr.arguments.empty()) {
@@ -737,7 +903,7 @@ class ExpressionInference {
                                                     : unpacked,
                         span);
           }
-          return fields.has_value() || checker.types.diagnostic.has_value();
+          return bool(fields) || checker.types.diagnostic.has_value();
         });
         return;
       }
@@ -755,7 +921,7 @@ class ExpressionInference {
       if (!type)
         return;
       constrain(result.type, *type, expr.span);
-      std::optional<std::vector<TypeField>> fields;
+      std::shared_ptr<const std::vector<TypeField>> fields;
       if (expr.kind == K::Record)
         fields = checker.types.fields(*type, expr.span);
       else if (auto alternatives =
@@ -763,8 +929,12 @@ class ExpressionInference {
         auto alt = llvm::find_if(*alternatives, [&](const auto &alternative) {
           return alternative.name == split.second;
         });
-        if (alt != alternatives->end())
-          fields = alt->fields;
+        if (alt != alternatives->end()) {
+          if (!checker.types.charge(1, expr.span))
+            return;
+          fields = std::make_shared<const std::vector<TypeField>>(
+              std::move(alt->fields));
+        }
       }
       if (!fields || fields->size() != expr.children.size()) {
         if (!checker.types.diagnostic)
@@ -807,6 +977,7 @@ class ExpressionInference {
     }
     if (callee.kind != Declaration::Kind::Local &&
         callee.kind != Declaration::Kind::EntryFunction &&
+        callee.kind != Declaration::Kind::View &&
         callee.kind != Declaration::Kind::Math &&
         callee.kind != Declaration::Kind::Oracle &&
         callee.kind != Declaration::Kind::Protocol) {
@@ -969,6 +1140,12 @@ class ExpressionInference {
         break;
       }
       if (expr.notation->position == NotationDescriptor::Position::Reduction) {
+        if (visible->empty()) {
+          fail("source.reduction-target",
+               "this reduction descriptor has no binding for the written form",
+               expr.span);
+          break;
+        }
         if (visible->size() != 1) {
           fail("source.notation-ambiguous",
                "finite binder requires one visible reduction binding; select "
@@ -976,7 +1153,7 @@ class ExpressionInference {
                expr.span);
           break;
         }
-        const auto &binding = visible->front();
+        const auto &binding = visible->begin()->second;
         if (expr.filteredReduction && !binding.filtered) {
           fail("source.reduction-target",
                "this reduction binding has no filtered companion", expr.span);
@@ -987,10 +1164,11 @@ class ExpressionInference {
         const auto &arguments = expr.filteredReduction
                                     ? binding.filtered->arguments
                                     : binding.arguments;
-        output.operators.emplace(
-            id, ExpressionTypes::Operator{
-                    {operatorBindingKey(binding, checker.output.declarations)},
-                    binding.span});
+        ExpressionTypes::Operator witness;
+        auto node = visible->extract(visible->begin());
+        witness.family.push_back(std::move(node.key()));
+        witness.binding = binding.span;
+        output.operators.emplace(id, std::move(witness));
         output.callees.emplace(id, target);
         if (!recordNotation(id, binding.module, target))
           break;
@@ -1008,11 +1186,13 @@ class ExpressionInference {
         inputs.push_back(child(i));
       std::vector<OperatorInference::Candidate> candidates;
       ExpressionTypes::Operator witness;
-      for (auto &binding : *visible) {
-        witness.family.push_back(
-            operatorBindingKey(binding, checker.output.declarations));
-        candidates.push_back({binding.target, std::move(binding.arguments),
-                              binding.span, binding.module});
+      while (!visible->empty()) {
+        auto node = visible->extract(visible->begin());
+        auto &binding = node.mapped();
+        witness.family.push_back(std::move(node.key()));
+        candidates.push_back({std::move(binding.target),
+                              std::move(binding.arguments), binding.span,
+                              binding.module});
       }
       output.operators.emplace(id, std::move(witness));
       operators->add(id, expr.span, std::move(inputs), result.type,
@@ -1382,7 +1562,13 @@ public:
             types, checker.types, checker.output.declarations)) {}
   std::optional<ExpressionTypes> run(uint32_t id, std::optional<Type> expected,
                                      bool domain) {
-    auto result = domain ? Result{domainArgument(id, 1)} : expression(id, 1);
+    auto result =
+        domain ? Result{domainArgument(
+                     id, 1,
+                     expected ? std::optional(known(
+                                    *expected, syntax.expressions[id].span))
+                              : std::nullopt)}
+               : expression(id, 1);
     if (expected)
       constrain(result.type, *expected, syntax.expressions[id].span);
     if (!finishCalls(0, 0, syntax.expressions[id].span))
@@ -1401,7 +1587,7 @@ public:
                syntax.expressions[id].span);
         return {};
       }
-      output.domainItems.emplace(id, *type);
+      output.descriptorTypes.emplace(id, *type);
     }
     for (const auto &[id, equations] : scopedEquations) {
       ScopedSignature signature{equations.mode, {}, {}, equations.allowance};

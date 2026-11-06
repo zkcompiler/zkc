@@ -471,33 +471,9 @@ def Validator.read (vocabulary : Vocabulary) (helpers : List String) (validator 
     | .error refusal => .error refusal
   else .error .entry
 
-/-- The helpers constructed instructions call by name. -/
-def Instruction.helpers : List Instruction → List String
-  | [] => []
-  | ⟨.call helper, _, _, _⟩ :: rest => helper :: Instruction.helpers rest
-  | ⟨.loop _ _ _, _, _, body⟩ :: rest => Instruction.helpers body ++ Instruction.helpers rest
-  | _ :: rest => Instruction.helpers rest
-
-mutual
-/-- `Instruction.helpers` by structural recursion, which the kernel evaluates. -/
-def Instruction.helperList : List Instruction → List String
-  | [] => []
-  | instruction :: rest => Instruction.helpersOf instruction ++ Instruction.helperList rest
-
-/-- The helpers one constructed instruction calls by name. -/
-def Instruction.helpersOf : Instruction → List String
-  | ⟨.call helper, _, _, _⟩ => [helper]
-  | ⟨.loop _ _ _, _, _, body⟩ => Instruction.helperList body
-  | _ => []
-end
-
-theorem Instruction.helperList_eq :
-    ∀ instructions : List Instruction, Instruction.helperList instructions = Instruction.helpers instructions
-  | [] => by simp [Instruction.helperList, Instruction.helpers]
-  | ⟨operation, operands, results, body⟩ :: rest => by
-      cases operation <;>
-        simp [Instruction.helperList, Instruction.helpersOf, Instruction.helpers, Instruction.helperList_eq rest,
-          Instruction.helperList_eq body]
+/-- Helper names in the complete stored region tree, including dormant arms. -/
+def Instruction.helpers (instructions : List Instruction) : List String :=
+  (Zkc.Construction.Instruction.callList instructions).map Prod.fst
 
 /-- A computed result that is present is that result. -/
 theorem ok_of_isSome {ε α : Type} :
@@ -510,7 +486,7 @@ theorem ok_of_isSome {ε α : Type} :
 of its reading. Even an identical schedule passes the result-schema check. -/
 def checkLowering (vocabulary : Vocabulary) (participant : Participant) (validator : Validator) :
     Except Refusal Lowered := do
-  let lowered ← validator.read vocabulary (Instruction.helperList participant.instructions)
+  let lowered ← validator.read vocabulary (Instruction.helpers participant.instructions)
   unless validator.symbol = participant.symbol do throw (Refusal.different "symbol")
   unless validator.entry = participant.policy.entry do throw (Refusal.different "entry")
   unless validator.role = participant.policy.validator do throw (Refusal.different "role")
@@ -526,7 +502,7 @@ facts. It assumes no execution equality or protocol-validity proposition. -/
 theorem checkLowering_checks {vocabulary : Vocabulary} {participant : Participant}
     {validator : Validator} {lowered : Lowered}
     (accepted : checkLowering vocabulary participant validator = .ok lowered) :
-    validator.read vocabulary (Instruction.helperList participant.instructions) = .ok lowered ∧
+    validator.read vocabulary (Instruction.helpers participant.instructions) = .ok lowered ∧
       validator.symbol = participant.symbol ∧ validator.entry = participant.policy.entry ∧
       validator.role = participant.policy.validator ∧
       validator.inputs.map (·.2.sort) = participant.inputs ∧
@@ -535,7 +511,7 @@ theorem checkLowering_checks {vocabulary : Vocabulary} {participant : Participan
         participant.instructions participant.returned
         (Code.instructionList lowered.code) lowered.returned).toOption.isSome = true := by
   unfold checkLowering at accepted
-  cases reading : validator.read vocabulary (Instruction.helperList participant.instructions) with
+  cases reading : validator.read vocabulary (Instruction.helpers participant.instructions) with
   | error refusal => simp [reading, bind, Except.bind] at accepted
   | ok candidate =>
     simp only [reading, bind, Except.bind] at accepted

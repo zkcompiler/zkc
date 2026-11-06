@@ -76,14 +76,14 @@
     "Zkc.Executable.DomainVM.checked_execute_metered": {
       "package": "main",
       "module": "Zkc.Executable.DomainNativeExecution",
-      "structural": "c1e1183d9bd9c0ee",
-      "explicit": "e75f7b7867db860f"
+      "structural": "83862d9b53cf34d7",
+      "explicit": "f1766f4e5b5b3acc"
     },
     "Zkc.Executable.DomainVM.checked_validate_prunes": {
       "package": "main",
       "module": "Zkc.Executable.DomainNativeByteTransport",
-      "structural": "0ddf931d7f434152",
-      "explicit": "99633a9fb59a49c4"
+      "structural": "c355b674b314377a",
+      "explicit": "6b8c9f37194f31ef"
     },
     "Zkc.Executable.checkHelpers_sound": {
       "package": "main",
@@ -322,8 +322,8 @@
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifierLayer_process": {
       "package": "main",
       "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
-      "structural": "39c18f15681a25d2",
-      "explicit": "a8f2dac4fcc2f0ff"
+      "structural": "1b0e081fe7fc1382",
+      "explicit": "d8b0e1afc090f3ff"
     },
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifier_participant": {
       "package": "main",
@@ -334,8 +334,8 @@
     "ZkcExamples.Structured.Generated.Presentations.Gkr.Rounds.verifierRounds_invocation": {
       "package": "main",
       "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
-      "structural": "207eb76e193f1491",
-      "explicit": "5ff0d4560ab9d437"
+      "structural": "4b029d90282baee6",
+      "explicit": "1c44c04219d39368"
     },
     "ZkcExamples.Structured.Generated.Scalar.ChaumPedersen.Root.verifier_process": {
       "package": "main",

@@ -1,6 +1,10 @@
 module
 
 public import Zkc.Source.Structured.Linking
+public import Zkc.Source.Structured.SumReference
+public import Zkc.Protocols.Multilinear.Source.Bindings
+public import ZkcExamples.Structured.SumcheckSourceBodies
+public import ZkcExamples.Structured.SumcheckReduceBodies
 public import Zkc.Source.RegionDerivation
 public import Zkc.Protocols.Multilinear.Source.MapFirstBodies
 
@@ -22,15 +26,7 @@ abbrev shapeHelper : Helper :=
   ⟨"zkf_9ca6c98faa0d00ed80eb608a89db1544ad71443a8944af6ac99e6fd78cb3660b",
     .math, [vector, .index], [.boolean]⟩
 
-def shapeBody : Region dialect shapeHelper.inputs shapeHelper.outputs :=
-  .letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil <|
-  .letOp .indexPowerOfTwo (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
-  .letOp (.indexConstant 2) .nil .nil <|
-  .letOp .indexLess (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.booleanConstant false) .nil .nil <|
-  .letOp .booleanEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil
-    (.ret (.cons .here .nil))
+abbrev shapeBody := SumcheckSourceBodies.inputShapeBody
 
 abbrev addHelper : Helper :=
   ⟨"zkl_3fc17a64a5bb6e75192d0a1362e9954f0d434a10d0f93e319db6b516835a1005",
@@ -90,17 +86,7 @@ def valuesBody : Region dialect valuesHelper.inputs valuesHelper.outputs :=
 abbrev tableShapeHelper : Helper :=
   ⟨"zkf_326ab2331715c62ba21cb6a967c927ba6ad7f7f2da5e84eb0e5de0fc610f26ca", .math, [(.vector "bls12-381.fr"), .index, .index], [.boolean]⟩
 
-def tableShapeBody : Region dialect tableShapeHelper.inputs tableShapeHelper.outputs :=
-  .letOp (.invoke (⟨ "zkl_d1a35db6ce1dd3faf44d81ee2d033b68f50349356a0525683219ffff3d77f275", .math, [(.vector "bls12-381.fr"), .index, .index], [.index] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .letOp (.indexConstant 1) .nil .nil <|
-  .letOp .indexEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp (.invoke (⟨ "zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", .math, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr")] ⟩ : Helper)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil <|
-  .letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil <|
-  .letOp (.invoke (⟨ "zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94", .math, [(.vector "bls12-381.fr"), .index, .index], [.index] ⟩ : Helper)) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil))) .nil <|
-  .letOp .indexPowerOfTwo (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
-  .ret (.cons .here .nil)
-
+abbrev tableShapeBody := SumcheckReduceBodies.tableShapeFormulaBody
 
 /-- All dependencies must belong to the same actual linked helper inventory. -/
 structure Bodies (definitions : List CheckedDefinition) : Prop where
@@ -115,15 +101,9 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 theorem shape_equation (table : Meanings F G) (raw : List F) (rounds : Nat) :
     shapeBody.denote (meaning F G table) (Values.cons raw (.cons rounds .nil)).get =
       .done (.cons (decide (raw.length = 2 ^ rounds ∧ rounds ≤ 2)) .nil) := by
-  change (PIR.Process.done (Values.cons
-    (naturalPowerOfTwo raw.length rounds && (decide (2 < rounds) == false)) .nil) :
-      Closed (Values (assignment F G) [.boolean])) = _
-  rw [naturalPowerOfTwo_eq_decide]
-  by_cases bound : rounds ≤ 2
-  · have upper : ¬ 2 < rounds := by omega
-    simp [bound, upper]
-  · have upper : 2 < rounds := by omega
-    simp [bound, upper]
+  exact (Evaluation.denote_meaning_eq_meaningOn SiteObservations.closed table shapeBody _).trans
+    ((ReferenceLibrary.Sum.inputShape (ringModel F G) "bls12-381.fr" 2).valid
+      table (.cons raw (.cons rounds .nil)) trivial)
 
 private abbrev identityEffect : PIR.OperationInterpretation closedInterface closedInterface :=
   fun op => .call op .done
@@ -177,7 +157,7 @@ theorem total_equation (xs : List F) (bounded : xs.length < indexLimit) :
   have admitted : foldSpec.domain.admit (Values.cons xs
       (Values.nil : Values (assignment F G) [])) =
       .returned (xs.map fun item => .cons item .nil) := by
-    simp [foldSpec, DomainSpec.admit_elements, Collection.values, Values.get, bounded]
+    simp [foldSpec, DomainSpec.admit_elements, Collection.values, bounded]
   have folded := Evaluation.denoteFold_reference_map (closedMeanings (F := F) (G := G) definitions) foldSpec
     (.cons xs .nil) (.cons (0 : F) .nil) .nil xs (fun item => .cons item .nil) admitted
     (fun (state : Values (assignment F G) [scalar]) (x : F) => Values.cons (state.get .here + x) .nil) (fun _ => True) trivial (by
@@ -257,19 +237,11 @@ theorem tableShape_equation
       (.cons xs (.cons dimension (.cons width .nil))) =
       .done (.cons (decide (width = 1 ∧ xs.length = 2 ^ dimension)) .nil) := by
   rw [association.invoke linked]
-  change (invoke (closedMeanings (F := F) (G := G) definitions) MapFirstBodies.widthHelper
-    (.cons xs (.cons dimension (.cons width .nil)))).bind _ = _
-  rw [widthBody.invoke linked]
-  change (invoke (closedMeanings (F := F) (G := G) definitions) valuesHelper
-    (.cons xs (.cons dimension (.cons width .nil)))).bind _ = _
-  rw [values.invoke linked]
-  change (invoke (closedMeanings (F := F) (G := G) definitions) MapFirstBodies.variablesHelper
-    (.cons xs (.cons dimension (.cons width .nil)))).bind _ = _
-  rw [variablesBody.invoke linked]
-  change (PIR.Process.done (Values.cons
-    (decide (width = 1) && naturalPowerOfTwo xs.length dimension) .nil) :
-    Closed (Values (assignment F G) [.boolean])) = _
-  rw [naturalPowerOfTwo_eq_decide]
-  by_cases width = 1 <;> by_cases xs.length = 2 ^ dimension <;> simp_all
+  let table := closedMeanings (F := F) (G := G) definitions
+  let args : Values (assignment F G) tableShapeHelper.inputs := .cons xs (.cons dimension (.cons width .nil))
+  refine (Evaluation.denote_meaning_eq_meaningOn SiteObservations.closed table tableShapeBody args.get).trans ?_
+  apply (ReferenceLibrary.Sum.tableShape (ringModel F G) "bls12-381.fr"
+    MultilinearSourceBindings.common).valid table args
+  exact ⟨widthBody.invoke linked args, values.invoke linked args, variablesBody.invoke linked args⟩
 
 end ZkcExamples.Structured.SumcheckRelationContract

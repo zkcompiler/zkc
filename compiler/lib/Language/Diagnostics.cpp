@@ -151,6 +151,8 @@ std::string formatType(const Type &type) {
   using K = Type::Kind;
   if (type.kind == K::Natural)
     return formatNatural(type.dimension);
+  if (type.kind == K::DescriptorProduct || type.kind == K::DescriptorSequence)
+    return spelling(type);
   if (type.kind == K::Array)
     return "[" + formatType(type.arguments.front()) + "; " +
            formatNatural(type.dimension) + "]";

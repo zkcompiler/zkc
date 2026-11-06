@@ -25,9 +25,9 @@ structured_associations SumcheckSourceViews
     interpolate := MapFirstBodies.interpolate, interpolateRealization := SumcheckSourceBodies.interpolateRealization,
     mapCallback := SumcheckSourceBodies.mapCallback, map := SumcheckSourceBodies.map,
     first := SumcheckSourceBodies.first, append := SumcheckHelperBodies.append,
-    step := MapPrefixBodies.step, foldStep := MapPrefixBodies.foldStep,
+    step := MapPrefixBodies.step, foldStep := SumcheckSourceBodies.foldStep,
     fold := SumcheckSourceBodies.fold, foldWrapper := SumcheckSourceBodies.foldWrapper,
-    «prefix» := MapPrefixBodies.prefix, values := MapFirstBodies.values,
+    «prefix» := SumcheckSourceBodies.prefix, values := MapFirstBodies.values,
     valuesRealization := SumcheckSourceBodies.valuesRealization,
     checkTable := SumcheckSourceBodies.checkTable, check := SumcheckHelperBodies.check]
 

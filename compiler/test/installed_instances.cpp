@@ -287,9 +287,10 @@ std::string domainSource(const generated::DomainConstructor &constructor,
   return "domain fn defined" + signature + "=domain(\"" + identity.str() +
          "\");\n";
 }
-language::DomainBinding::Kind bindingKind(generated::DomainConstructorKind k) {
+language::DescriptorBinding::Kind
+bindingKind(generated::DomainConstructorKind k) {
   using K = generated::DomainConstructorKind;
-  using B = language::DomainBinding::Kind;
+  using B = language::DescriptorBinding::Kind;
   switch (k) {
   case K::Elements:
     return B::Elements;
@@ -916,10 +917,10 @@ int main(int argc, char **argv) {
         continue;
       }
       const auto *decl = declaration(*project, "m::defined");
-      if (!decl || !decl->domainDefinition ||
-          decl->domainDefinition->constructor !=
+      if (!decl || !decl->descriptorDefinition ||
+          decl->descriptorDefinition->constructor !=
               bindingKind(constructor.kind) ||
-          decl->domainDefinition->axis != constructor.axis)
+          decl->descriptorDefinition->axis != constructor.axis)
         found.push_back("decoded " + constructor.identity);
       auto unlisted =
           checkSource(domainSource(constructor, constructor.identity + "_x"));

@@ -134,6 +134,14 @@ def guard (condition : Nat) (declared : List ValueSort) : Block carriers := fun 
     | _ => .halt .refused
   else .halt .refused
 
+/-- A mathematical arm is a closed data computation. The retained signature,
+helper classification and all-arm formation remain explicit; body meanings are
+independently supplied and bound by the correspondence theorem. -/
+def mathBranch (program : Structured.Program) (selector : Nat) (captures : List Nat)
+    (declared : List ValueSort) (yes no : InstructionRegion)
+    (yesBody noBody : Block carriers) : Block carriers :=
+  selectMath program selector captures declared yes no yesBody noBody
+
 /-- Immutable captures, induction coordinates and explicit yields use the
 existing generic loop. The body is an independently bound Process view. -/
 def loop (maximum : Nat) (yielded : List Nat) (count : Nat) (initial : List Nat)

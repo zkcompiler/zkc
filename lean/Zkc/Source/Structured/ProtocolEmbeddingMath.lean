@@ -550,9 +550,12 @@ variable {I : PIR.Signature}
 
 /-- A syntactic condition on the actual retained Math body, including lexical binds.
 No helper equation, input presence or mathematical definedness is assumed here. -/
-def MathOperation (op : Op) : Prop := op.isCalculation = true ∨ ∃ site, op = .mark site
+def MathLeaf (op : Op) : Prop := op.isCalculation = true ∨ ∃ site, op = .mark site
 
-theorem math_no_regions (op : Op) (allowed : MathOperation op) : op.regions = [] := by
+def MathOperation (op : Op) : Prop :=
+  MathLeaf op ∨ ∃ captures outputs, op = .branch captures outputs
+
+theorem math_no_regions (op : Op) (allowed : MathLeaf op) : op.regions = [] := by
   rcases allowed with calculation | ⟨site, rfl⟩
   · exact op.calculation_no_regions calculation
   · rfl
@@ -562,7 +565,7 @@ theorem math_operation_embed (model : DomainModel)
     (ordinary captured : Evaluation.ComponentTablesOn model.toCarriers I)
     (helpers : ProtocolCalculation.Tables model.toCarriers I)
     (related : MathTablesRelated model captured helpers) (adequate : captured.Adequate)
-    (op : Op) (allowed : MathOperation op)
+    (op : Op) (allowed : MathLeaf op)
     (args : Values (Component model.Value) op.arguments)
     (bodies : Values (RegionFunction model.Value I) op.regions) :
     ProtocolCalculation.operation model demand self ordinary helpers op
@@ -575,6 +578,78 @@ theorem math_operation_embed (model : DomainModel)
   · cases args
     cases bodies
     rfl
+
+/-- A nested Math region is invoked with present captures. Its original closed
+process may return, stop, or request an interaction. -/
+private def MathCallbacks (model : DomainModel) {ss : List (List Ty × List Ty)}
+    (closed : Values (RegionFunction model.Value I) ss)
+    (openMath : Values (RegionFunction (Component (ProtocolValue model.toCarriers)) I) ss) : Prop :=
+  ∀ {signature} (ref : Var ss signature) args,
+    (openMath.get ref) (ProtocolValue.embedComponents args.present) =
+      ((closed.get ref) args).bind fun result ↦ .done (ProtocolValue.embedComponents result.present)
+
+private theorem selected_missing (model : DomainModel) {ts us : List Ty}
+    (args : Values (Component model.Value) (.boolean :: ts))
+    (onYes onNo : RegionFunction (Component (ProtocolValue model.toCarriers)) I (ts, us))
+    (missing : RoleFamily.sequence args = none) :
+    ProtocolCalculation.selected model (ProtocolValue.embedComponents args) onYes onNo =
+      .done (Values.absent _ us) := by
+  unfold ProtocolCalculation.selected
+  rw [sequence_embed args, missing]
+  rfl
+
+private theorem selected_present (model : DomainModel) {ts us : List Ty}
+    (flag : Bool) (xs : Values model.Value ts)
+    (onYes onNo : RegionFunction (Component (ProtocolValue model.toCarriers)) I (ts, us)) :
+    ProtocolCalculation.selected model
+        (ProtocolValue.embedComponents (.cons flag xs : Values model.Value (.boolean :: ts)).present) onYes onNo =
+      (if flag then onYes else onNo) (ProtocolValue.embedComponents xs.present) := by
+  unfold ProtocolCalculation.selected
+  rw [embed_present, RoleFamily.sequence_present]
+  simp only [ProtocolValue.embedValues, ProtocolValue.toConcrete_ofConcrete, embed_present]
+
+private theorem math_region_embed (model : DomainModel)
+    (demand : OracleDataDemandInterpretation model.toCarriers I) (self : Nat)
+    (ordinary captured : Evaluation.ComponentTablesOn model.toCarriers I)
+    (helpers : ProtocolCalculation.Tables model.toCarriers I)
+    (related : MathTablesRelated model captured helpers) (adequate : captured.Adequate)
+    (op : Op) (allowed : MathOperation op) (args : Values (Component model.Value) op.arguments)
+    (closed : Values (RegionFunction model.Value I) op.regions)
+    (openMath : Values (RegionFunction (Component (ProtocolValue model.toCarriers)) I) op.regions)
+    (callbacks : MathCallbacks model closed openMath) :
+    ProtocolCalculation.regionOperation model demand self ordinary helpers op
+      (ProtocolValue.embedComponents args) openMath =
+      (Evaluation.componentOperationOn model (.silent _) captured op args closed).bind
+        (fun result ↦ .done (ProtocolValue.embedComponents result)) := by
+  rcases allowed with leaf | ⟨ts, us, rfl⟩
+  · rw [← math_operation_embed model demand self ordinary captured helpers related adequate
+      op leaf args closed]
+    have noRegions := math_no_regions op leaf
+    cases op <;> first | rfl | contradiction
+  · cases closed with | cons yes rest =>
+    cases rest with | cons no rest =>
+    cases rest
+    cases openMath with | cons onYes rest =>
+    cases rest with | cons onNo rest =>
+    cases rest
+    cases sequenced : RoleFamily.sequence args with
+    | none =>
+      change ProtocolCalculation.selected model (ProtocolValue.embedComponents args) onYes onNo =
+        (strictComponent (Evaluation.meaningOn model (.silent _) captured.closed)
+          (Op.branch ts us) args (.cons yes (.cons no .nil))).bind _
+      rw [selected_missing model args onYes onNo sequenced]
+      simp only [strictComponent, sequenced, PIR.Process.bind, embed_absent]
+      rfl
+    | some values =>
+      have present := sequence_some args values sequenced
+      subst args
+      cases values with | cons flag xs =>
+      erw [Evaluation.componentOperationOn_branch model (.silent _) captured ts us flag xs yes no, PIR.Process.bind_assoc]
+      change ProtocolCalculation.selected model (ProtocolValue.embedComponents _) onYes onNo = _
+      erw [selected_present model flag xs onYes onNo]
+      cases flag
+      · exact callbacks (.there .here) xs
+      · exact callbacks .here xs
 
 /-- Both sides execute the same Region. Optional Math inputs are never sequenced at
 helper entry. Closed Local callback semantics is retained by the original component side. -/
@@ -590,16 +665,20 @@ theorem math_body_embed (model : DomainModel)
       (body.component (Evaluation.meaningOn model (.silent _) captured.closed)
         (Evaluation.componentOperationOn model (.silent _) captured) env).bind
           (fun result ↦ .done (ProtocolValue.embedComponents result)) := by
-  induction body using Region.rec (motive_2 := fun _ _ ↦ True) with
+  revert fragment env
+  induction body using Region.rec (motive_2 := fun _ bodies ↦ Fragments MathOperation bodies →
+    MathCallbacks model (bodies.denote (Evaluation.meaningOn model (.silent _) captured.closed))
+      (bodies.denote (ProtocolCalculation.meaning model demand self ordinary helpers))) with
   | ret args =>
+    intro _ env
     simp only [Region.denote, Region.component, mapValues_eval, map_components,
       PIR.Process.bind]
-  | stop reason => rfl
-  | letOp op args bodies next _ ih =>
-    simp only [Region.denote, Region.component, ProtocolCalculation.meaning,
-      mapValues_eval, map_components]
-    rw [math_operation_embed model demand self ordinary captured helpers related adequate
-      op fragment.1 _ _]
+  | stop reason => intro _ _; rfl
+  | letOp op args bodies next bodiesIH ih =>
+    intro fragment env
+    simp only [Region.denote, Region.component, mapValues_eval, map_components]
+    rw [math_region_embed model demand self ordinary captured helpers related adequate
+      op fragment.1 _ _ _ (bodiesIH fragment.2.1)]
     simp only [PIR.Process.bind_assoc, PIR.Process.bind]
     congr 1
     funext result
@@ -608,6 +687,7 @@ theorem math_body_embed (model : DomainModel)
     rw [← envEq]
     exact ih fragment.2.2 _
   | bind body next ih nextIH =>
+    intro fragment env
     simp only [Region.denote, Region.component, ih fragment.1,
       PIR.Process.bind_assoc, PIR.Process.bind]
     congr 1
@@ -616,8 +696,24 @@ theorem math_body_embed (model : DomainModel)
     rw [map_components] at envEq
     rw [← envEq]
     exact nextIH fragment.2 _
-  | nil => trivial
-  | cons => trivial
+  | nil => rename_i fragment; intro signature ref; cases ref
+  | cons body rest bodyIH restIH =>
+    rename_i fragment
+    intro signature ref
+    cases ref with
+    | there ref => exact restIH fragment.2 ref
+    | here =>
+      intro args
+      change body.denote (ProtocolCalculation.meaning model demand self ordinary helpers) (ProtocolValue.embedComponents args.present).get = _
+      have converted : @Eq (Environment (Component (ProtocolValue model.toCarriers)) _)
+          (ProtocolValue.embedComponents args.present).get
+          (fun ref ↦ component _ (some (args.get ref))) := by
+        funext ty ref
+        rw [← map_components, mapValues_get, Values.get_present]
+      rw [converted, bodyIH fragment.1]
+      rw [body.component_present _ _ (Evaluation.componentOperationOn_adequate
+        model (.silent _) captured adequate) args.get, PIR.Process.bind_assoc]
+      rfl
 
 /-- Each helper uses the immutable prefix captured by its actual source definition. -/
 theorem math_tables_extend (model : DomainModel)

@@ -4,9 +4,16 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Language/Layout.h"
 #include <functional>
+#include <list>
 #include <set>
 namespace zkc::language::detail {
 Type parameterType(const Parameter &);
+/// Caller precharges the complete copy/traversal. Children are built once by
+/// the owning traversal; this helper copies every other Type field.
+Type typeHead(const Type &, bool includeDimension = true);
+/// Private memo routing only, after a complete Copy preflight. Every bucket
+/// collision requires separately debited whole-Type equality.
+size_t typeLookupHash(const Type &);
 bool valueType(const Type &);
 using Substitution = std::map<std::string, Type>;
 enum class Usage { Copy, Drop };
@@ -19,6 +26,8 @@ class Semantics {
 public:
   Semantics(const std::vector<Declaration> &, llvm::ArrayRef<Asset>, Work &,
             std::function<bool(DeclarationId)> complete = {});
+  Semantics(const Semantics &) = delete;
+  Semantics &operator=(const Semantics &) = delete;
   void indexDeclaration(const Declaration &);
   void indexParameter(const Parameter &, DeclarationId, unsigned);
   Work &work;
@@ -61,12 +70,36 @@ public:
     Type resultType() const;
   };
 
-  bool chargeType(const Type &, Span);
+  /// Inference heads and witness candidates awaiting source comparison need
+  /// resource preflight before complete shape validation. Neither preflight
+  /// alone nor a partial solver head establishes an admitted contract.
+  bool chargeType(const Type &, Span, bool complete = true);
+  bool chargeIdentity(const Type &, Span);
+  /// Bounded private memo equality; nominal identity omits observed metadata.
+  std::optional<bool> sameSnapshot(const Type &, const Type &, Span,
+                                   bool complete = true);
+  bool chargeContract(const DescriptorContract &contract, Span span) {
+    return chargeType(descriptorType(contract), span) &&
+           (isDescriptor(descriptorType(contract)) ||
+            fail("source.descriptor", "expected a descriptor contract", span));
+  }
+  std::optional<DescriptorContract>
+  substitute(const DescriptorContract &contract, const Substitution &bindings,
+             Span span) {
+    if (!chargeContract(contract, span))
+      return {};
+    auto type = substitute(descriptorType(contract), bindings, span);
+    if (!type || !isDescriptor(*type))
+      return {};
+    return DescriptorContract(std::move(*type));
+  }
   bool chargeConstruction(const ConstructionDefinition &, Span);
   const Parameter *parameter(llvm::StringRef) const;
   const Declaration *typeDeclaration(const Type &) const;
   bool symbolic(const Type &) const;
   llvm::Expected<protocol::BoundType> nativeLayout(const Type &);
+  /// Complete source carrier observation, independent of encoded byte width.
+  llvm::Expected<bool> nativeMessagePayload(const Type &);
   /// Synchronously borrow declarations for a bounded port observation. Returned
   /// layout trees own their storage; performed work is reconciled on errors
   /// too. The caller attaches its span when accepting an error.
@@ -107,17 +140,14 @@ public:
                                                      llvm::StringRef code,
                                                      llvm::StringRef message,
                                                      unsigned = 1);
-  std::optional<std::vector<TypeField>> fields(const Type &, Span,
-                                               unsigned = 1);
-  /// The fields of a product type without copying a memoized declared record.
-  /// The result points into `computed` or into this view's record memo and is
-  /// valid until the next query.
-  const std::vector<TypeField> *
-  productFields(const Type &, Span, unsigned,
-                std::optional<std::vector<TypeField>> &computed);
+  /// Immutable, owned product fields. Declared-record results share a private
+  /// memo; the returned fields survive later queries and this view's lifetime.
+  std::shared_ptr<const std::vector<TypeField>> fields(const Type &, Span,
+                                                       unsigned = 1);
   /// Signature-only product shape. An abstract representation or open array
   /// length returns no shape and no diagnostic; it cannot select an overload.
-  std::optional<std::vector<TypeField>> structuralFields(const Type &, Span);
+  std::shared_ptr<const std::vector<TypeField>> structuralFields(const Type &,
+                                                                 Span);
   std::optional<std::vector<Alternative>> alternatives(const Type &, Span,
                                                        unsigned = 1);
   bool checkArguments(const Declaration &, llvm::ArrayRef<Type>, Span,
@@ -134,6 +164,11 @@ public:
                           const Substitution &extra = {});
   bool assumptions(const Declaration &, const NaturalBound &,
                    const Substitution &, Span);
+  /// Read-only structural View implication: direct domination or one premise
+  /// after additive cancellation. No inference hook is available here.
+  bool structuralAssumptions(const Declaration &, const NaturalBound &,
+                             const Substitution &, Span,
+                             llvm::StringRef code = "source.bound");
   bool capabilityFormation(const CapabilityBound &);
   bool entails(const Declaration *, const CapabilityBound &,
                llvm::StringRef code = "source.capability");
@@ -175,7 +210,7 @@ public:
                         unsigned = 1);
   /// Structural projection only; bounds and access are checked after inference.
   std::optional<Type> projectionType(const Type &, llvm::StringRef, Span);
-  std::optional<Type> projectedType(const Declaration &, Type,
+  std::optional<Type> projectedType(const Declaration &, const Type &,
                                     llvm::ArrayRef<unsigned>, Span);
   std::optional<unsigned> fieldIndex(const Declaration &, const Type &,
                                      llvm::StringRef, Span,
@@ -219,15 +254,27 @@ public:
   llvm::Error takeError();
 
 private:
+  friend class zkc::language::Layouts;
+  /// Only a synchronous nested Layouts may borrow the completed lookup index.
+  /// It creates fresh semantic query state: inference/completion hooks and
+  /// caches are never inherited. The owner outlives that one layout query.
+  Semantics(const Semantics &owner, Work &);
   const std::vector<Declaration> &declarations;
   llvm::ArrayRef<Asset> assets;
-  std::map<std::string, DeclarationId> qualified;
-  std::map<std::string, std::pair<DeclarationId, unsigned>> parameters;
+  struct Index {
+    std::map<std::string, DeclarationId> qualified;
+    std::map<std::string, std::pair<DeclarationId, unsigned>> parameters;
+  };
+  std::optional<Index> ownedIndex;
+  // Entries are IDs/ordinals into the live vector object. Only the root's
+  // explicit indexing methods mutate storage; borrowers have no owned index.
+  const Index &index;
   std::function<bool(DeclarationId)> complete;
   unsigned normalizationDepth = 0;
   /// Keyed by lookup key. Like every memo below, it is confined to this view,
   /// which one checker or one Layouts owns over one immutable declaration set.
-  std::set<std::string> checkedLogicalRecords;
+  // Snapshot-local owned candidates, never source admission authority.
+  std::map<size_t, std::list<Type>> checkedLogicalRecords;
   /// One generated Entry family's ordinary roster, walked once. Fields keep
   /// selection order; each role lists its own fields in that order. Roles are
   /// indexed by name separately; the telescope order is never sorted.
@@ -247,10 +294,18 @@ private:
   /// term names it. `depth` is the greatest query depth that produced them; a
   /// deeper query recomputes, so depth refusals are unchanged.
   struct DeclaredFields {
-    std::vector<TypeField> fields;
-    unsigned depth;
+    const Type type;
+    const std::shared_ptr<const std::vector<TypeField>> fields;
+    const unsigned depth;
+    DeclaredFields(const Type &type,
+                   std::shared_ptr<const std::vector<TypeField>> fields,
+                   unsigned depth)
+        : type(type), fields(std::move(fields)), depth(depth) {}
   };
-  std::map<std::string, DeclaredFields> declaredFields;
+  // Private hashes select a bucket; full candidate equality selects an entry.
+  // Owned keys have no mutable aliases and live only in this Semantics view.
+  // Lists retain borrowed field-vector addresses across recursive insertions.
+  std::map<size_t, std::list<DeclaredFields>> declaredFields;
 };
 llvm::Error specialize(std::vector<Declaration> &, llvm::ArrayRef<Asset>,
                        Work &, DeclarationId,

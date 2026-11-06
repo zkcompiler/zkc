@@ -13,6 +13,7 @@ These native contracts define `.zkc` source and its checked translation. The
 | [Mathematical notation](notation.md) | Descriptors, fixity, delimiter calls, scope, inspection and bounds |
 | [Distributed records](records.md) | Role telescopes, field placements, exact placed identity and source/native integration boundary |
 | [Definitions and types](definitions.md) | Capture, names, static terms, mathematics, permissions, callables and bounds |
+| [Structural descriptor formation](descriptor-formation.md) | Products, homogeneous sequences, selected View folds, ordered formation and the internal source-export handoff |
 | [Record placement](record-placement.md) | Accepted recursive record schemas, role applications, custody and native component contract; integration in progress |
 | [Selected control](selected-control.md) | Closed selected arms, exact joins and derived common-input requirements |
 | [Protocol bodies and relations](protocols.md) | Ordered control, availability, services, composition, repetition, completion and specification clauses |

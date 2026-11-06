@@ -16,7 +16,7 @@ interpretation of the lowering check. -/
 theorem checkLowering_read (vocabulary : Vocabulary) (participant : Participant)
     (validator : Validator) (lowered : Lowered)
     (accepted : checkLowering vocabulary participant validator = .ok lowered) :
-    validator.read vocabulary (Instruction.helperList participant.instructions) = .ok lowered :=
+    validator.read vocabulary (Instruction.helpers participant.instructions) = .ok lowered :=
   (checkLowering_checks accepted).1
 
 
@@ -91,7 +91,7 @@ theorem checked_execute_metered
     (program : Structured.Program) (context : Context) (initial : History F G)
     (challenge : History F G → m F) (vocabulary : Vocabulary) (participant : Participant) (validator : Validator)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
-    (prepared : ∀ name ∈ Instruction.helperList participant.instructions,
+    (prepared : ∀ name ∈ Instruction.helpers participant.instructions,
       Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)
     (lowered : Lowered) (final : NativeScope)
     (checked : checkNativeLowering program context vocabulary participant validator = .ok (lowered, final))
@@ -111,7 +111,7 @@ theorem checked_validate_metered
     (program : Structured.Program) (context : Context) (initial : History F G)
     (challenge : History F G → m F) (vocabulary : Vocabulary) (participant : Participant) (validator : Validator)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
-    (prepared : ∀ name ∈ Instruction.helperList participant.instructions,
+    (prepared : ∀ name ∈ Instruction.helpers participant.instructions,
       Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)
     (lowered : Lowered) (final : NativeScope)
     (checked : checkNativeLowering program context vocabulary participant validator = .ok (lowered, final))

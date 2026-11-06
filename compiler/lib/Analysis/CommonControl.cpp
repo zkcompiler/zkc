@@ -1,5 +1,7 @@
 #include "zkc/Analysis/CommonControl.h"
+#include "../Dialect/AdmissionPrivate.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "zkc/Analysis/FiniteClosure.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/SelectedControl.h"
@@ -7,6 +9,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
 #include <set>
@@ -20,7 +23,14 @@ using Term = unsigned;
 using Components = SmallVector<Term>;
 using Environment = llvm::DenseMap<Value, Components>;
 struct Node {
-  enum Kind { Expression, Input, Carry, Exit, Iteration } kind = Expression;
+  enum Kind {
+    Expression,
+    Input,
+    Carry,
+    Exit,
+    Iteration,
+    Unknown
+  } kind = Expression;
   Type type;
   StringAttr name;
   DictionaryAttr attributes;
@@ -41,6 +51,9 @@ struct Recurrence {
   Components count;
   SmallVector<Components> initial, transition;
   bool atMostOne = false;
+  // Agreement of this invocation's count observation only. Never rewrite the
+  // opaque Local terms in the environment or grant them general congruence.
+  bool pairedCount = false;
 };
 struct Demand {
   Term left, right;
@@ -49,16 +62,77 @@ struct Demand {
 struct Derivation {
   pir::MathematicalOp entry;
   facts::Work &work;
+  const detail::OracleCountEquations *equations = nullptr;
+  bool fullRequirements = true;
+  llvm::DenseSet<Operation *> matchedCounts;
   SymbolTableCollection symbols;
+  finite::ClosureClasses finiteClosures;
   SmallVector<Node, 0> nodes{Node{}};
+  llvm::DenseMap<size_t, SmallVector<Term>> interned;
   SmallVector<Recurrence> recurrences;
   SmallVector<Demand> demands;
   SmallVector<CommonControlRequirement> requirements;
   llvm::DenseSet<Operation *> active;
   unsigned roles;
   unsigned observationDepth = 0;
-  Derivation(pir::MathematicalOp entry, facts::Work &work)
-      : entry(entry), work(work), roles(entry.getRoles().size()) {}
+  Derivation(pir::MathematicalOp entry, facts::Work &work,
+             const detail::OracleCountEquations *equations = nullptr,
+             bool fullRequirements = true)
+      : entry(entry), work(work), equations(equations),
+        fullRequirements(fullRequirements), roles(entry.getRoles().size()) {}
+
+  Expected<bool> pairedCount(pir::RepeatOp repeat) {
+    if (!equations)
+      return false;
+    const detail::OracleRepeatCount *matched = nullptr;
+    for (const auto &law : equations->getObservations()) {
+      if (!charge())
+        return failure();
+      if (law.repeat != repeat)
+        continue;
+      if (matched)
+        return failure();
+      matched = &law;
+    }
+    if (!matched)
+      return false;
+    const auto &law = *matched;
+    auto assembly = law.assembly;
+    auto actualEntry = law.actualEntry;
+    if (!charge(1 + law.counts.size() + law.ancestry.size()) ||
+        repeat->getParentOfType<ModuleOp>() != law.candidate ||
+        repeat->getParentOfType<pir::MathematicalOp>() != law.actualEntry ||
+        repeat.getMaximum() != law.maximum || !law.capacity ||
+        repeat.getInputs()[0] != assembly.getOutput() ||
+        assembly.getRoles().size() != law.counts.size() ||
+        law.counts.size() != repeat.getRoles().size() ||
+        !llvm::equal(assembly.getInputs(), law.counts))
+      return failure();
+    // The reader's complete association includes the actual arm, nested loop
+    // and store-carry ancestry. A printed site or an equal-typed clone cannot
+    // match it. Each traversal creates a fresh recurrence invocation below,
+    // including repeated calls with different role/argument substitutions.
+    Operation *child = repeat;
+    for (const auto &[parent, arm] : law.ancestry) {
+      if (!charge() || child->getParentOp() != parent ||
+          child->getParentRegion()->getRegionNumber() != arm)
+        return failure();
+      child = parent;
+    }
+    if (child->getParentOp() != actualEntry.getOperation())
+      return failure();
+    for (auto [role, count] : zip(assembly.getRoles(), law.counts)) {
+      auto result = dyn_cast<OpResult>(count);
+      auto call = result ? dyn_cast<pir::LocalCallOp>(result.getOwner())
+                         : pir::LocalCallOp();
+      if (!charge() || !call || result.getResultNumber() != 0 ||
+          call.getRoleAttr() != role || !charge(repeat.getRoles().size()) ||
+          !is_contained(repeat.getRoles(), role))
+        return failure();
+    }
+    matchedCounts.insert(repeat);
+    return true;
+  }
 
   Error failure() {
     return error(work.exhausted() ? "common-control-capacity"
@@ -66,11 +140,36 @@ struct Derivation {
   }
   bool charge(uint64_t amount = 1) { return work.charge(amount); }
   Components absent() const { return Components(roles, 0); }
+  Term unknown(Type type, unsigned role) {
+    if (!charge())
+      return 0;
+    Node node;
+    node.kind = Node::Unknown;
+    node.type = type;
+    node.role = role;
+    // Fresh atoms cannot be hash-consed. Their actual traversal/result/role
+    // occurrence is this term's unique coordinate, including repeated calls.
+    nodes.push_back(std::move(node));
+    return nodes.size() - 1;
+  }
   Term intern(Node node) {
     if (!charge(1 + node.operands.size() + node.input.path.size() +
                 node.projectionTypes.size()))
       return 0;
-    for (unsigned i = 1; i < nodes.size(); ++i) {
+    // Index structural candidates so retaining fresh opaque subjects does not
+    // make unrelated total work scan the entire graph. Collisions still use
+    // the exact comparison below and debit the same bounded work allowance.
+    size_t key = hash_combine(
+        node.kind, node.type, node.name, node.attributes, node.coordinate,
+        hash_combine_range(node.operands.begin(), node.operands.end()),
+        node.alternative, node.input.input, node.input.role,
+        hash_combine_range(node.input.path.begin(), node.input.path.end()),
+        node.tagOnly, node.extentAxis.has_value(), node.extentAxis.value_or(0),
+        node.invocation, node.role,
+        hash_combine_range(node.projectionTypes.begin(),
+                           node.projectionTypes.end()));
+    auto &candidates = interned[key];
+    for (Term i : candidates) {
       if (!charge(1 + nodes[i].operands.size() + nodes[i].input.path.size() +
                   nodes[i].projectionTypes.size()))
         return 0;
@@ -88,14 +187,17 @@ struct Derivation {
         return i;
     }
     nodes.push_back(std::move(node));
-    return nodes.size() - 1;
+    Term result = nodes.size() - 1;
+    candidates.push_back(result);
+    return result;
   }
   Term expression(StringRef name, Type type, DictionaryAttr attributes,
                   ArrayRef<Term> inputs, unsigned coordinate = 0) {
     bool complete = all_of(
         inputs, [&](Term input) { return input && nodes[input].complete; });
-    // A constructor's tag remains static even when a payload has ordered
-    // provenance. Its full value is still unavailable for congruence.
+    // A constructor's tag remains static even when a payload is unavailable.
+    // A fresh opaque atom is available for exact forwarding, not for equating
+    // independent ordered computations.
     if (!complete && name != "data.make" && name != "selected")
       return 0;
     Node node;
@@ -297,6 +399,10 @@ struct Derivation {
       const Node a = nodes[left], b = nodes[right];
       if (a.type != b.type || a.kind != b.kind)
         return false;
+      // Equal opaque subjects were handled by exact term identity above.
+      // Different Local/service results never agree by name or dependencies.
+      if (a.kind == Node::Unknown)
+        return false;
       if (a.kind == Node::Input) {
         if (a.tagOnly != b.tagOnly || a.extentAxis != b.extentAxis)
           return false;
@@ -344,7 +450,7 @@ struct Derivation {
         enqueue(loop.initial[a.coordinate]);
         if (a.kind == Node::Exit || !loop.atMostOne)
           enqueue(loop.transition[a.coordinate]);
-        if (a.kind == Node::Exit)
+        if (a.kind == Node::Exit && !loop.pairedCount)
           pending.emplace_back(loop.count[a.role], loop.count[b.role]);
         continue;
       }
@@ -474,12 +580,21 @@ struct Derivation {
         auto selected = roster(repeat.getRoles(), mapping);
         if (!selected)
           return selected.takeError();
-        if (auto e = common(op, repeat.getInputs()[0], *selected, environment))
-          return std::move(e);
+        auto paired = pairedCount(repeat);
+        if (!paired)
+          return paired.takeError();
+        // Only ordinary selected closures impose all repeat-count demands.
+        // An equation-only traversal still validates each actual paired count,
+        // but leaves unrelated generic repeats under their joint runtime rule.
+        if (fullRequirements && !*paired)
+          if (auto e =
+                  common(op, repeat.getInputs()[0], *selected, environment))
+            return std::move(e);
         if (!charge(1 + uint64_t(roles) * (repeat.getCarried() + 1)))
           return failure();
         unsigned invocation = recurrences.size();
         Recurrence recurrence;
+        recurrence.pairedCount = *paired;
         recurrence.count = components(environment, repeat.getInputs()[0]);
         recurrence.atMostOne = repeat.getMaximum() <= 1;
         bool smallCount = true;
@@ -563,6 +678,22 @@ struct Derivation {
           return outputs.takeError();
         for (auto [result, components] : zip(op->getResults(), *outputs))
           environment[result] = std::move(components);
+      } else if (auto exchange = dyn_cast<pir::ExchangeOp>(op)) {
+        auto sender = mapping.find(exchange.getSender());
+        auto receiver = mapping.find(exchange.getReceiver());
+        if (sender == mapping.end() || receiver == mapping.end() ||
+            sender->second == receiver->second)
+          return failure();
+        auto input = components(environment, exchange.getInput());
+        Term sent = input[sender->second];
+        if (!sent)
+          return failure();
+        // This SSA result exists on the completed normal path only. Keep
+        // exactly the actual sender and receiver; other input components
+        // retain their original subjects. No delivery/stop rule changes.
+        Components values = absent();
+        values[sender->second] = values[receiver->second] = sent;
+        environment[exchange.getOutput()] = std::move(values);
       } else if (auto view = dyn_cast<pir::RestrictRolesOp>(op)) {
         auto selected = roster(view.getRoles(), mapping);
         if (!selected)
@@ -590,6 +721,13 @@ struct Derivation {
         // handle ordinary data or establish equality of opaque histories.
         environment[selection.getHandle()] = absent();
       } else if (mathematical::isTotal(op)) {
+        NamedAttrList attributes(op->getAttrs());
+        if (finite::isComputation(op) &&
+            failed(finiteClosures.resolveEdges(
+                op, attributes, symbols,
+                [&](uint64_t n) { return charge(n); })))
+          return failure();
+        auto properties = attributes.getDictionary(op->getContext());
         for (auto [index, result] : enumerate(op->getResults())) {
           Components values = absent();
           for (unsigned role = 0; role < roles; ++role) {
@@ -607,16 +745,21 @@ struct Derivation {
                 inputs[0] = tag(inputs[0]);
               values[role] =
                   expression(op->getName().getStringRef(), result.getType(),
-                             op->getAttrDictionary(), inputs, index);
+                             properties, inputs, index);
             }
           }
           environment[result] = std::move(values);
         }
       } else {
-        // Ordered outputs, services and received values have no total/static
-        // provenance. Their mere availability never supplies agreement.
-        for (Value result : op->getResults())
-          environment[result] = absent();
+        // Fresh opaque subjects preserve exact forwarding without treating
+        // independent ordered computations as congruent total expressions.
+        for (Value result : op->getResults()) {
+          Components values = absent();
+          if (!isa<pir::ServiceReferenceType>(result.getType()))
+            for (unsigned role = 0; role < roles; ++role)
+              values[role] = unknown(result.getType(), role);
+          environment[result] = std::move(values);
+        }
       }
     }
     return failure();
@@ -654,6 +797,13 @@ struct Derivation {
     }
     if (work.exhausted())
       return failure();
+    if (equations)
+      for (const auto &law : equations->getObservations()) {
+        if (!charge())
+          return failure();
+        if (law.actualEntry == entry && !matchedCounts.contains(law.repeat))
+          return failure();
+      }
     return std::move(requirements);
   }
 };
@@ -664,6 +814,17 @@ deriveCommonControlRequirements(pir::MathematicalOp entry, facts::Work &work) {
     return error(work.exhausted() ? "common-control-capacity"
                                   : "common-control-provenance");
   Derivation derivation{entry, work};
+  return derivation.run();
+}
+Expected<SmallVector<CommonControlRequirement>>
+detail::deriveCommonControlRequirements(pir::MathematicalOp entry,
+                                        facts::Work &work,
+                                        const OracleCountEquations &equations,
+                                        bool fullRequirements) {
+  if (!entry || !work.charge())
+    return error(work.exhausted() ? "common-control-capacity"
+                                  : "common-control-provenance");
+  Derivation derivation{entry, work, &equations, fullRequirements};
   return derivation.run();
 }
 } // namespace zkc

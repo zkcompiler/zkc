@@ -320,15 +320,49 @@ void generatedOccurrences(Cases &cases) {
     list(dropped, "generated").erase(list(dropped, "generated").begin());
     inventoryRefuses(dropped, "is not exactly one instance");
     refused(checkSourceCorrespondenceExport(value, zkc::printJson(dropped)));
+    // Retaining only valid occurrences is insufficient when a site is omitted.
+    auto missing = pristine;
+    auto &sites = list(missing, "occurrences");
+    sites.erase(sites.begin());
+    inventoryRefuses(missing, "occurrences do not cover every snapshot site");
     // An occurrence of a site the snapshot does not have.
     auto invented = pristine;
     (*list(invented, "occurrences")[0].getAsObject())["site"] = "s9999";
-    inventoryRefuses(invented, "occurrence names no snapshot site");
+    inventoryRefuses(invented,
+                     "occurrence does not match the next snapshot site");
+    auto reordered = pristine;
+    auto &order = list(reordered, "occurrences");
+    std::swap(order[0], order[1]);
+    inventoryRefuses(reordered,
+                     "occurrence does not match the next snapshot site");
   });
 }
 } // namespace
 int main() {
   Cases cases;
+  cases.run("all selected Math arms retain exactly one association", [] {
+    auto document = report(original("x && x"));
+    accepted(checkCorrespondenceInventory(document));
+    associations(document);
+    const auto &rows = *document.getAsObject()->getArray("rows");
+    auto nested = llvm::find_if(rows, [](const json::Value &value) {
+      return value.getAsObject()->getArray("row")->size() > 6;
+    });
+    require(nested != rows.end(), "selected arm association absent");
+    auto ordinal = std::distance(rows.begin(), nested);
+    auto dropped = document;
+    auto &droppedRows = list(dropped, "rows");
+    droppedRows.erase(droppedRows.begin() + ordinal);
+    inventoryRefuses(dropped, "cover the complete snapshot");
+    auto repeated = document;
+    list(repeated, "rows").push_back(*nested);
+    inventoryRefuses(repeated, "dangling or repeated");
+    auto dangling = document;
+    *list(dangling, "rows")[ordinal].getAsObject()->get("row") =
+        json::Array{7, 999999, 9, 1, 0, 3, 0};
+    inventoryRefuses(dangling, "dangling or repeated");
+  });
+
   cases.run(
       "installed rows retain original association without written spans", [] {
         auto project = take(analyze(take(capture({{"m",

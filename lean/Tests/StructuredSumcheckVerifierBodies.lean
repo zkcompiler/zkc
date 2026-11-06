@@ -44,9 +44,9 @@ def shapeWithoutMaximum : Region dialect SumcheckRelationContract.shapeHelper.in
 theorem omitted_maximum_breaks_shape_association :
     SumcheckSourceViews.inputShapeDefinition.raw ≠ shapeWithoutMaximum.erase := by
   intro same
-  have lengths := congrArg (fun body => body.operations.length) same
-  change 7 = 2 at lengths
-  contradiction
+  rw [SumcheckSourceViews.inputShape_raw] at same
+  exact (by decide +kernel : SumcheckSourceBodies.inputShapeBody.erase.operations.length ≠
+    shapeWithoutMaximum.erase.operations.length) (congrArg (fun body => body.operations.length) same)
 
 theorem original_return_consumes_pending :
     ProtocolOp.localCall SumcheckPendingBodies.atPrefixHelper rfl 1 "s48" ∈

@@ -126,6 +126,22 @@ prefix. They use a commutative ring and assume no interaction, delivery or
 challenge distribution. The [structured honest prover](../support.md#honest-sumcheck-prover)
 applies them to the actual imported prover.
 
+## Installing the same mathematics in different source programs
+
+A prefix restriction uses the wrapper, domain and step of the fold in the
+admitted helper table. The standalone Sumcheck, the composed two-sum
+verifier and GKR have separate fold instantiations. Each installation checks
+the complete helper signature and typed body against its own program. The
+prefix theorem takes those identities as parameters and retains exhaustion,
+ordered outputs and the value of each selected callback.
+
+In the two-sum relation, an oversized first vector exhausts the first fold.
+A false first equality returns false immediately, including when evaluating
+the second vector would exhaust its fold. A true first equality selects the
+second computation. At the terminal Boolean helper, the admitted program
+uses the Math component table with the operands visible to that participant.
+The theorem for present operands follows the exact body in this table.
+
 ## Role-local contracts and the execution boundary
 
 `role_local_update` keeps the delivered pair and two challenges explicit. If

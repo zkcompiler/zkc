@@ -108,6 +108,7 @@ def Op.preparationAllowed (profile : PreparationProfile) : Op → Bool
       .booleanXor | .booleanEqual | .booleanNotEqual => profile == .realization
   | .makeProduct .. | .getProduct .. => profile == .realization
   | .select type => profile == .realization && profile.typeAllowed type
+  | .branch .. => profile == .realization
   | _ => false
 
 /-- Finite computation admission retains reached domain exhaustion and checked
@@ -119,25 +120,48 @@ def Op.computationAllowed : Op → Bool
 
 end Zkc.Source.Structured
 
-namespace Zkc.Source.RawRegion
+namespace Zkc.Source
 open Structured
 
-/-- Return and region-free total-profile operations only. Typed formation and
-full-signature helper linking remain separate explicit evidence. -/
-def preparationAllowed (profile : PreparationProfile) : RawRegion Ty Op → Bool
+mutual
+/-- Total-profile syntax checks every stored callback, including dormant arms.
+Typed formation and full-signature helper linking remain separate evidence. -/
+def RawRegion.preparationAllowed (profile : PreparationProfile) : RawRegion Ty Op → Bool
   | .ret _ => true
-  | .letOp op _ results .nil next =>
-    op.preparationAllowed profile && profile.typesAllowed results && next.preparationAllowed profile
+  | .letOp op _ results bodies next =>
+    op.preparationAllowed profile && profile.typesAllowed results &&
+      bodies.preparationAllowed profile && next.preparationAllowed profile
   | _ => false
 
-/-- A named finite fold carries its checked callbacks in the shared helper
-inventory. Arbitrary nested regions and Local control remain outside Math. -/
-def computationAllowed : RawRegion Ty Op → Bool
+def RawRegions.preparationAllowed (profile : PreparationProfile) : RawRegions Ty Op → Bool
+  | .nil => true
+  | .cons inputs outputs body rest =>
+    profile.typesAllowed inputs && profile.typesAllowed outputs &&
+      body.preparationAllowed profile && rest.preparationAllowed profile
+end
+
+mutual
+/-- Finite computation retains the same closed region carrier. Reached checked
+reads and domain construction may stop; admission checks every arm. -/
+def RawRegion.computationAllowed : RawRegion Ty Op → Bool
   | .ret _ => true
-  | .letOp op _ results .nil next =>
+  | .letOp op _ results bodies next =>
     op.computationAllowed && PreparationProfile.realization.typesAllowed results &&
-      next.computationAllowed
+      bodies.computationAllowed && next.computationAllowed
   | _ => false
+
+def RawRegions.computationAllowed : RawRegions Ty Op → Bool
+  | .nil => true
+  | .cons inputs outputs body rest =>
+    PreparationProfile.realization.typesAllowed inputs &&
+      PreparationProfile.realization.typesAllowed outputs &&
+      body.computationAllowed && rest.computationAllowed
+end
+
+end Zkc.Source
+
+namespace Zkc.Source.RawRegion
+open Structured
 
 /-- Every intermediate scalar belongs to the selected map field, including
 discarded results. Helper port and dependency checks are supplied by selection. -/
@@ -161,7 +185,7 @@ def selectMathHelpers (typesAllowed : List Ty → Bool)
         definition.helpers.all selected.contains then definition.helper :: selected
     else selected) []
 
-/-- The narrow region-free closure used by immediate-return proofs. -/
+/-- The total closure used by immediate-return proofs, including closed selection. -/
 def preparationHelpers (profile : PreparationProfile) : List CheckedDefinition → List Helper :=
   selectMathHelpers profile.typesAllowed (·.preparationAllowed profile)
 

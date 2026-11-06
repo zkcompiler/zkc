@@ -6,6 +6,9 @@ public import Tests.IndexServicesPrivate
 @[expose] public section
 
 /-! Accepted layout controls and refused mutations for actual tiny roots. -/
+-- Whole-root connection proposals retain large kernel terms. Check the roots
+-- in source order so independent proofs do not compete for memory.
+set_option Elab.async false
 set_option autoImplicit false
 set_option maxRecDepth 30000
 set_option maxHeartbeats 12000000
@@ -26,15 +29,17 @@ theorem shifted_scalar_connected :
     ConnectionAdmission.Required Scalar.program Scalar.context .validator shiftedScalar := by
   derive_source_connection
 
-/-- The repeat body has an additional real instruction, retained once in the
-finite body derivation rather than copied for each runtime iteration. -/
+/-- Extend the one actual loop region, preserving its ABI and return positions.
+An unexpected region count cannot silently leave the positive control unchanged. -/
 def extendedRepeat : Participant :=
   { Repeated.Validator.participant with
     instructions := Repeated.Validator.participant.instructions.map fun instruction =>
-      match instruction.operation with
-      | .loop .. => { instruction with body := instruction.body ++
-          [⟨.calculate (.indexConstant 99), [], [.data .index], []⟩] }
-      | _ => instruction }
+      match instruction.operation, instruction.regions with
+      | .loop .., [region] => { instruction with regions := [{region with instructions :=
+          region.instructions ++ [⟨.calculate (.indexConstant 99), [], [.data .index], []⟩]}] }
+      | _, _ => instruction }
+
+example : extendedRepeat.instructions ≠ Repeated.Validator.participant.instructions := by decide +kernel
 
 theorem extended_repeat_connected :
     ConnectionAdmission.Required Repeated.program Repeated.context .validator extendedRepeat := by
@@ -73,11 +78,14 @@ def wrongCount : Participant :=
 def wrongAncestry : Participant :=
   { Repeated.Validator.participant with
     instructions := Repeated.Validator.participant.instructions.map fun instruction =>
-      { instruction with body := instruction.body.map fun step =>
-        match step.operation with
-        | .indexChallenge suite bound template =>
-          { step with operation := .indexChallenge suite bound { template with steps := [] } }
-        | _ => step } }
+      { instruction with regions := instruction.regions.map fun region =>
+          { region with instructions := region.instructions.map fun step =>
+              match step.operation with
+              | .indexChallenge suite bound template =>
+                { step with operation := .indexChallenge suite bound { template with steps := [] } }
+              | _ => step } } }
+
+example : wrongAncestry.instructions ≠ Repeated.Validator.participant.instructions := by decide +kernel
 
 
 namespace Outcomes

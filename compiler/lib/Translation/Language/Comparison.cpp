@@ -1,3 +1,4 @@
+#include "ConstructionSites.h"
 #include "DataPreconditions.h"
 #include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -441,8 +442,14 @@ class Comparator {
                                 const LayoutLeaf &output, StringRef alternative,
                                 StringRef site) {
     if (!scoped) {
-      fail("variant construction requires scoped execution");
-      return {};
+      auto *actual = next(block, cursor, span, "data.make", inputs, 1);
+      if (!actual || !attributes(*actual) ||
+          !types(actual->getResultTypes(), {output}) ||
+          !string(*actual, "alternative", alternative)) {
+        fail("mathematical variant identity or payload differs");
+        return {};
+      }
+      return Values{actual->getResult(0)};
     }
     Values result;
     auto *actual =
@@ -1414,7 +1421,9 @@ class Comparator {
         auto &target = project.declarations()[call->callee.index];
         bool owned = target.kind == Declaration::Kind::Local &&
                      source.mode == Body::Mode::Protocol;
-        bool math = target.kind == Declaration::Kind::Math;
+        bool math = target.kind == Declaration::Kind::Math ||
+                    (target.kind == Declaration::Kind::View &&
+                     !target.descriptorResult);
         auto input = flatten(call->operands);
         auto *actual = scoped
                            ? invoke(block, cursor, op.span,
@@ -2137,6 +2146,13 @@ class Comparator {
       return false;
     const auto &source = *definition.construction;
     const auto &target = project.declarations()[definition.target->index];
+    detail::ConstructionSites sourceSites(project, limits, remaining,
+                                          definition);
+    auto &constructionLayouts = sourceSites.observer();
+    if (auto error = sourceSites.collect()) {
+      failure = std::move(error);
+      return false;
+    }
     if (plan->symbol.getValue() != definition.symbol ||
         plan->target.getValue() != target.symbol ||
         plan->provider != typeIdentity(*source.provider) ||
@@ -2150,14 +2166,10 @@ class Comparator {
       return fail("construction identity or root differs");
     for (auto [expected, actual] :
          zip(source.applications, plan->applications)) {
-      std::string site;
-      for (const auto &part : expected.path) {
-        auto label = nativeSiteName(part, 0);
-        site = site.empty()
-                   ? label
-                   : mathematical::expandedApplicationSite(site, label);
-      }
-      if (!charge(site.size() + 1) || actual.site != site ||
+      auto site = take(sourceSites.application(expected));
+      if (!site)
+        return false;
+      if (!charge(site->size() + 1) || actual.site != *site ||
           actual.construction.getValue() !=
               project.declarations()[expected.construction.index].symbol)
         return fail("construction application differs");
@@ -2168,12 +2180,12 @@ class Comparator {
              project.declarations()[source.initializer->declaration.index]
                  .symbol))
       return fail("construction initializer differs");
-    auto state = take(layouts.get(*source.state));
+    auto state = take(constructionLayouts.get(*source.state));
     if (!state || !types(plan->state, (*state)->leaves))
       return false;
     std::vector<unsigned> offsets{0};
     for (const auto &port : target.inputs) {
-      auto layout = take(layouts.get(port.type));
+      auto layout = take(constructionLayouts.get(port.type));
       if (!layout)
         return false;
       offsets.push_back(offsets.back() + (*layout)->leaves.size());
@@ -2188,7 +2200,7 @@ class Comparator {
     if (source.codec) {
       const auto &expected = *source.codec;
       const auto &actual = *plan->codec;
-      auto record = take(layouts.get(expected.record));
+      auto record = take(constructionLayouts.get(expected.record));
       if (!record || !types(actual.record, (*record)->leaves))
         return false;
       SmallVector<unsigned> inputs;
@@ -2222,30 +2234,22 @@ class Comparator {
           return fail("construction start inputs differ");
         continue;
       }
-      auto layout = take(layouts.get(*expected.payload));
+      auto layout = take(constructionLayouts.get(*expected.payload));
       if (!layout || !types(actual.payload, (*layout)->leaves))
         return false;
       if (expected.chunks) {
-        auto chunks = take(layouts.get(*expected.chunks));
+        auto chunks = take(constructionLayouts.get(*expected.chunks));
         if (!chunks || !types(actual.chunks, (*chunks)->leaves))
           return false;
       } else if (!actual.chunks.empty())
         return fail("unexpected codec byte shape");
-      for (auto [i, site] : enumerate(actual.sites)) {
-        std::string prefix;
-        for (const auto &part : ArrayRef(expected.path).drop_back()) {
-          auto label = nativeSiteName(part, 0);
-          prefix = prefix.empty()
-                       ? label
-                       : mathematical::expandedApplicationSite(prefix, label);
-        }
-        auto label = nativeSiteName(expected.path.back(), 0);
-        if (expected.kind != ConstructionRule::Kind::Query)
-          label += "_" + std::to_string(i);
-        auto name = prefix.empty()
-                        ? label
-                        : mathematical::expandedApplicationSite(prefix, label);
-        if (!charge(name.size()) || site != name)
+      auto sites = take(sourceSites.rule(expected, (*layout)->leaves.size()));
+      if (!sites)
+        return false;
+      if (actual.sites.size() != sites->size())
+        return fail("construction occurrence lane count differs");
+      for (auto [site, name] : zip(actual.sites, *sites)) {
+        if (!charge(name.size() + 1) || site != name)
           return fail("construction occurrence selector differs");
       }
     }

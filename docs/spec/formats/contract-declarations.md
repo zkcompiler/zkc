@@ -29,7 +29,7 @@ does not install a runtime implementation by adding a declaration.
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
 `capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`,
 `mathematicalIntrinsics`, `consumerProfiles`, `frontendDeclarations`,
-`frontendRules`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
+`frontendRules`, `frontendSchemes`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
 `serviceSignatures`, `serviceMethods`, and the [installed-instance](#installed-instances)
 tables `domains`, `logicalTypes`, `frameTags`, `codecs`, `aggregateFrames`,
 `randomServices`, `limits`, `finiteDefinitions` and `domainConstructors`. The
@@ -714,7 +714,7 @@ The [native block format](native-index-block.md) owns the exact bytes.
 ## Frontend declaration associations
 
 The exact version-0 envelope also contains `frontendDeclarations`,
-`frontendRules`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
+`frontendRules`, `frontendSchemes`, `frontendNotations`, `frontendConstructors`, `frontendHomes`,
 `serviceSignatures` and `serviceMethods`. These source-facing rows grant source resolution and typed
 elaboration facts, never executable implementations, physical installation or
 formal interpretations; backend choices stay in the
@@ -726,17 +726,17 @@ extend their owning typed contracts.
 ### Installed source declarations
 
 `frontendDeclarations` lists every installed source declaration in declaration
-order. A row has exactly:
+order. The existing concrete alternative has exactly:
 
 | Field | Meaning |
 |---|---|
 | `identity` | Unique installation identity, such as `record.unpack`, distinct from every frontend declaration and service method identity. |
 | `owner` | The installed module path that declares it, a `zkc::` path. |
 | `name` | Its identifier in that module. |
-| `kind` | `Math`, `Local` or `Interface`. |
+| `kind` | `Math`, `Local`, `Interface` or `Requirement`. |
 | `statics` | Ordered static parameters, each `{name, parameter}` with a `{kind, sort}` of `Domain`, `Type` or `Nat`. |
 | `inputs` | Ordered data inputs, each `{name, type}`. |
-| `output` | The result type, or null for an interface. |
+| `output` | The result type, or null for an interface or consumer requirement. |
 | `association` | Exactly one `{kind, target}`: a `primitive` or a `rule`. |
 | `prelude` | Boolean membership in the installed prelude scope. This does not grant fallback permission after a selected binding fails. |
 
@@ -744,7 +744,7 @@ A type is `{static}`, the index of a static parameter, optionally with an
 associated `member` of that parameter's sort from `members`, or
 `{constructor}`, a parameterless installed type constructor. A `primitive`
 association names a mathematical intrinsic for a `Math` declaration and an
-executable operation for a `Local` one; an interface has no primitive. A `rule`
+executable operation for a `Local` one; interfaces and consumer requirements have no primitive. A `rule`
 association names a `frontendRules` row, and the declaration's kind, static
 kinds, inputs and output must equal that row's shape. Identities, the owner
 and name pair, static and input names within a row, and prelude names are
@@ -754,6 +754,21 @@ A rule row has exactly `name`, `kind`, `statics` (parameter kinds), `inputs`
 (types) and `output`. Rule shapes are data: a validator checks a rule
 association against the declared shape, not against a fixed list of rules.
 The frontend implements the semantics of the rules it names and refuses others.
+
+`Requirement` rows have only static indices: `inputs` is empty and `output` is
+null. They install consumer demands, with no executable body, descriptor value,
+user implementation or general capability implication. The current
+`NativeMessage` rule has exactly one `Type` static index. Its export is
+`zkc::transport::NativeMessage`, identity `consumer.native-message`.
+The source checker resolves it through the declaration index, including normal
+imports and aliases. Its expansion and discharge are defined in the
+[consumer requirement contract](../language/definitions.md#installed-consumer-requirements).
+This extends the existing frontend kind vocabulary; all version-0 row fields
+and exact unknown-field validation remain unchanged. The Python, TableGen and
+Rust catalog readers validate and project the new kind independently. The
+independent Lean Python installed-catalog reader accepts its exact static shape
+without adding any formal interpretation or changing numerical profile rows.
+
 
 The installed modules are the distinct owners. The frontend reads each module's
 rows as its checker input: the module keeps an empty installation buffer at
@@ -766,6 +781,91 @@ field is refused, including when `prelude` is also present. Ordinary authored
 source syntax is unchanged. The installation identity frames every field of
 every declaration, notation and service method row, including `prelude`, method
 identity and constructor ownership.
+
+### Installed structural contracts and schemes
+
+This exact schema migration is an **internal implementation slice** of the
+Constraint authoring package. Publication requires the parent aggregate,
+scheme-call, fold, closure and native consumers, plus independently maintained
+strict readers. These tables alone grant no public complete Constraint support.
+
+`frontendDeclarations.kind` selects exactly one signature alternative. The
+concrete alternative above is unchanged. A `ContractConstructor` row contains
+exactly `identity`, `owner`, `name`, `kind`, `association` and `prelude`; its
+association is `{kind: "constructor", target}`. It has no static telescope,
+ports, output or source body. The target names a `frontendConstructors` row
+whose form is `DescriptorProduct` or `DescriptorSequence`. Each such head is
+associated exactly once. Checked installation shells retain their derived source
+symbols and exact row association. They cannot carry specialization origins,
+static or scoped actual arguments, closure captures, generated entry metadata,
+or authored protocol/specification/Oracle definitions. Independent source replay
+checks those invariants as well as the absence of a concrete signature or body.
+Both installed exports are in `zkc::descriptor`, named
+`Product` and `Sequence`, with explicit non-prelude membership.
+
+A `View` scheme row has the same nine outer fields as a concrete row, but its
+`association` is `{kind: "scheme", target}` and its signature contains scheme
+ports and patterns, rather than ordinary source type terms. It is non-prelude.
+The target names exactly one `frontendSchemes` row. Each scheme is referenced
+exactly once. All declaration alternatives share identity, owner/name, export,
+service-method identity and slot-name uniqueness checks.
+
+A scheme has exactly `{name, form, variables, statics, inputs, output}`.
+`variables` is an ordered list of internal `Contract` or `OptionalExtent` sorts;
+`statics` contains ordinary `{kind: "Nat", sort: ""}` parameter kinds. These
+metavariables introduce no public generic binder or descriptor keyword.
+
+```text
+Pattern = {kind: "contract", variable}
+        | {kind: "product", elements: [Pattern...]}
+        | {kind: "sequence", element: Pattern, extent: Extent}
+Extent = {kind: "unsized"}
+       | {kind: "extent", variable}
+       | {kind: "static", index}
+Port = {kind: "descriptor", contract: Pattern}
+     | {kind: "selectedView", context: Pattern, state: Pattern}
+```
+
+A declaration input adds exactly `name` to a Port; its output is a Pattern.
+Declaration statics remain `{name, parameter}`. Their kinds and ordered port and
+output patterns must equal the selected scheme exactly. Contract indices name
+Contract variables; extent indices name OptionalExtent variables; static
+extent indices name Nat statics. Unknown/duplicate keys, unscoped indices,
+wrong sorts, signatures, ownership or association targets refuse. Every pattern
+is bounded to depth 32 (root depth zero) and 1,024 visited occurrences before
+recursive projection; active-path cycles refuse even when subtrees are shared.
+The JSON decoders also refuse duplicate keys. The producer, TableGen backend
+and Rust generator validate their own representations independently.
+
+The installation contains exactly these six checked forms. Here `C`, `A` are
+Contract metavariables, `L` is an OptionalExtent metavariable, `N` is an ordinary
+Nat static, `D(P)` is a descriptor port, and `V(C,A)` is a selected View port.
+`Seq(C,_)` has an explicitly absent extent, distinct from zero.
+
+| Form | Variables | Nat statics | Ordered ports | Output |
+|---|---|---|---|---|
+| Append | C | none | D(Seq(C,_)), D(C) | Seq(C,_) |
+| Concat | C | none | D(Seq(C,_)), D(Seq(C,_)) | Seq(C,_) |
+| Replace | C, L | index | D(Seq(C,L)), D(C) | Seq(C,L) |
+| ForgetExtent | C, L | none | D(Seq(C,L)) | Seq(C,_) |
+| CheckExtent | C | N | D(Seq(C,_)) | Seq(C,N) |
+| Fold | C, A | count | V(C,A), D(C), D(A) | A |
+
+Their installed names are respectively `append`, `concat`, `replace`,
+`unsized`, `sized` and `fold`. The schema carries their exact association
+and shape; it supplies no evaluator or operation row. Installation identity
+frames signature alternatives, constructor/scheme joins, internal sorts,
+ordered recursive patterns, optional extents, statics and port labels.
+C++ projects an `InstalledSignature` variant and immutable `SchemeId` join;
+Rust projects its own `FrontendSignature`, `ContractPattern`, `SchemePort` and
+`SchemeId` models. Dumps retain the exact authored alternatives.
+
+The independent reader `lean/bridges/common/installed_catalogue.py` still
+refuses these shell alternatives with `missing catalog fields`; its exact
+source-row and closed type/origin vocabularies require Lean-owner migration.
+No common independent Python catalogue reader outside `lean/` consumes these
+fields. The common Python module here is the production generator, not an
+independent reader. No compatibility reader is provided.
 
 ### Installed notations
 
@@ -793,17 +893,26 @@ constructor authority. Ordinary unrestricted unpack is pure; custody retirement,
 inspection and repacking require ordered execution and an outer `<-` in layout
 source. Custody-retiring restricted destructuring has the same ordered requirement.
 
-`frontendConstructors` lists the logical type heads the source language owns
+`frontendConstructors` lists the structural type heads the source language owns
 that are not catalog type constructors. A row has exactly `name` and `form`.
 The name is the head's spelling, an identifier that is unique and names no
-`types` row. The form is the logical meaning the frontend gives the head:
-`OracleHandle`, one logical oracle handle over an oracle kind, or
+`types` row. The form is the structural meaning the frontend gives the head:
+`OracleHandle`, one logical oracle handle over an oracle kind;
 `OracleHandleSequence`, a bounded ordered sequence of such handles with a
-static maximum. Exactly one row has each form; the installed rows spell them
-`oracle` and `oracle_sequence`. The rows own the spelling and the frontend owns
-each form's meaning: the frontend forms, prints, encodes in static terms and
-looks up the home of a logical handle only through its row, and a spelling that
-no row names is not a logical head. The interface schema kinds `oracle` and
+static maximum; or `FiniteDescriptor`, a static traversal descriptor with one
+ordinary Copy/Drop item parameter. Exactly one row has each form; the installed
+rows spell them `oracle`, `oracle_sequence` and `finite`. The Finite form is
+a descriptor category, not an ordinary `Type`, logical handle or runtime
+representation. An installed source alias may export it as `Finite<I>`;
+that alias's visible name grants no family authority. The rows own the spelling
+and the frontend owns each form's meaning: it forms, prints, encodes in static
+terms and looks up the home of these structural heads through their rows.
+`DescriptorProduct` and `DescriptorSequence` additionally identify installed-only
+contract heads. Their formation requires an actual installed DeclarationId
+selected through the ordinary index; the raw builtin head route refuses them.
+They are not ordinary catalog Type constructors or executable operations.
+A spelling that no row names grants no frontend-constructor authority.
+The interface schema kinds `oracle` and
 `oracle_sequence` belong to the [Entry format](entry.md) and do not follow the
 rows. The installation identity frames each row's name and form.
 

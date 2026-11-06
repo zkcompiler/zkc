@@ -304,7 +304,9 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
       [&](const Type &type, unsigned depth) -> Error {
     if (depth > limits.typeDepth)
       return detail::failure("source.limit", "component declaration depth");
-    auto complexity = typeComplexity(type, limits.typeNodes, limits.typeDepth);
+    auto complexity =
+        typeComplexity(type, limits.typeNodes, limits.typeDepth,
+                       work.remaining(), nullptr, true, TypeWork::Identity);
     if (!complexity)
       return complexity.takeError();
     if (auto e = work.charge(*complexity))
@@ -348,7 +350,9 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
       return Error::success();
     required |=
         declaration.resource.has_value() || type.kind == K::LogicalRecord;
-    auto term = encodeStaticTerm(type);
+    auto term =
+        encodeStaticTerm(type, work.limits, work.remaining(),
+                         [&](uint64_t amount) { return work.charge(amount); });
     if (!term)
       return term.takeError();
     if (auto e = nominalPaths(type, 0))
@@ -368,7 +372,9 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
       for (const auto &field : source) {
         if (auto e = work.charge(field.name.size() + 1))
           return std::move(e);
-        auto term = encodeStaticTerm(field.layout->type);
+        auto term = encodeStaticTerm(
+            field.layout->type, work.limits, work.remaining(),
+            [&](uint64_t amount) { return work.charge(amount); });
         if (!term)
           return term.takeError();
         if (auto e = nominalPaths(field.layout->type, 0))
@@ -469,7 +475,9 @@ Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
         auto layout = layouts.protocolPort(port);
         if (!layout)
           return layout.takeError();
-        auto term = encodeStaticTerm(port.type);
+        auto term = encodeStaticTerm(
+            port.type, work.limits, work.remaining(),
+            [&](uint64_t amount) { return work.charge(amount); });
         if (!term)
           return term.takeError();
         if (auto e = nominalPaths(port.type, 0))
@@ -893,7 +901,9 @@ Expected<std::string> inspectSourceClaimInventory(const CheckedProject &project,
           return std::move(e);
         json::Array arguments;
         for (const auto &argument : block.arguments) {
-          auto term = encodeStaticTerm(argument);
+          auto term = encodeStaticTerm(
+              argument, work.limits, work.remaining(),
+              [&](uint64_t amount) { return work.charge(amount); });
           if (!term)
             return term.takeError();
           arguments.push_back(std::move(*term));

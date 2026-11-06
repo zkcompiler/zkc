@@ -111,11 +111,10 @@ def sharedHelper (d : Domains) (name : String) : Helper :=
 def sharedRelationBody (d : Domains) : Region dialect (sharedHelper d "").inputs [.boolean] :=
   .letOp (.groupScale d.group d.scalar) (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
   .letOp (.groupEqual d.group) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .letOp (.groupScale d.group d.scalar) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)) .nil <|
-  .letOp (.groupEqual d.group) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
+  .letOp (.branch [(.group d.group), (.group d.group), (.field d.scalar)] [.boolean]) (.cons .here (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) (.cons (.letOp (.groupScale d.group d.scalar) (.cons .here (.cons (.there (.there .here)) .nil)) .nil (.letOp (.groupEqual d.group) (.cons (.there (.there .here)) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
   .ret (.cons .here .nil)
 
+set_option backward.isDefEq.respectTransparency false in
 def sharedLaw (model : DomainModel) (d : Domains) :
     ReferenceLaw model (sharedHelper d "").inputs [.boolean] where
   body := sharedRelationBody d
@@ -125,10 +124,20 @@ def sharedLaw (model : DomainModel) (d : Domains) :
       (args.get (.there (.there (.there (.there .here))))) (args.get .here)) &&
      decide (args.get (.there (.there (.there .here))) = model.smul d.group d.scalar
       (args.get (.there (.there (.there (.there .here))))) (args.get (.there (.there .here))))) .nil)
-  valid _ args _ := by
+  valid table args _ := by
     match args with
     | .cons firstBase (.cons firstPoint (.cons secondBase (.cons secondPoint
-        (.cons firstWitness .nil)))) => rfl
+        (.cons witness .nil)))) =>
+      change _ = (PIR.Process.done (I := closedInterface) (.cons ((decide (firstPoint = model.smul d.group d.scalar witness firstBase)) &&
+        decide (secondPoint = model.smul d.group d.scalar witness secondBase)) .nil : Values model.Value [.boolean]))
+      conv_lhs => whnf
+      simp only [Evaluation.meaningOn]
+      erw [Evaluation.operationOn_branch model SiteObservations.closed table
+        [.group d.group, .group d.group, .field d.scalar] [.boolean]
+        (decide (firstPoint = model.smul d.group d.scalar witness firstBase))
+        (.cons secondBase (.cons secondPoint (.cons witness .nil)))]
+      split <;> simp_all only [Bool.true_and, Bool.false_and]
+      all_goals rfl
 
 /-- Exact outcomes install in the complete linked helper table. Effectful
 consumers use the same laws through `ReferenceLaw.invokeOn`. -/

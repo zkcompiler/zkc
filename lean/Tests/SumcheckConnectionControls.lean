@@ -37,7 +37,8 @@ def editList (instructions : List Instruction) (index : Nat) (edit : Instruction
 
 /-- Change one instruction of the round loop's body. -/
 def changeBody (participant : Participant) (index : Nat) (edit : Instruction → Instruction) : Participant :=
-  changeAt participant 2 fun loop => { loop with body := editList loop.body index edit }
+  changeAt participant 2 fun loop => { loop with regions := loop.regions.map fun region =>
+    { region with instructions := editList region.instructions index edit } }
 
 /-! The first two instructions construct and open Pending at slots 4--8.
 The loop at instruction 2 captures nine values, carries point/claim/transcript,
@@ -45,7 +46,8 @@ and yields [30,35,29]. The suffix repacks custody/point/claim through atPrefix;
 the terminal check at instruction 4 then reads [0,12,13,14]. -/
 
 /-- The round check is dropped. -/
-def roundCheckDropped : Participant := (changeAt actual 2 fun loop => { loop with body := loop.body.eraseIdx 10 })
+def roundCheckDropped : Participant := (changeAt actual 2 fun loop => { loop with regions := loop.regions.map fun region =>
+    { region with instructions := region.instructions.eraseIdx 10 } })
 
 example : checkExport original roundCheckDropped = .ok () := by decide +kernel
 example : True := by
@@ -91,7 +93,7 @@ example : True := by
 
 /-- The loop yields the claim it started the iteration with. -/
 def staleClaimYielded : Participant := (changeAt actual 2 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s18" 2 [30, 11, 29] })
+        { loop with regions := loop.regions.map fun region => { region with yielded := [30, 11, 29] } })
 
 example : checkExport original staleClaimYielded = .ok () := by decide +kernel
 example : True := by
@@ -103,7 +105,7 @@ example : True := by
 
 /-- The loop admits three rounds where the source repeat admits two. -/
 def loopBoundChanged : Participant := (changeAt actual 2 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s18" 3 [30, 35, 29] })
+        { loop with operation := .loop "apply_18_label_726564756365_s18" 3 })
 
 example : checkExport original loopBoundChanged = .ok () := by decide +kernel
 example : True := by
@@ -114,7 +116,7 @@ example : True := by
   exact True.intro
 
 /-- The loop names the repeat site without its application path. -/
-def loopSiteUnqualified : Participant := (changeAt actual 2 fun loop => { loop with operation := .loop "s18" 2 [30, 35, 29] })
+def loopSiteUnqualified : Participant := (changeAt actual 2 fun loop => { loop with operation := .loop "s18" 2 })
 
 example : checkExport original loopSiteUnqualified = .ok () := by decide +kernel
 -- The loop's display label does not enter its Domain meaning. The actual

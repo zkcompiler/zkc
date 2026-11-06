@@ -38,14 +38,15 @@ mathematical laws below consume this evidence without rechecking the source.
 The strict bound supports all-input terminal rejection, including malformed
 raw tables; it is not a shape assumption on an adversarial input. -/
 structure Installation (program : Zkc.Source.Structured.Program) where
+  foldNames : MultilinearBodies.FoldNames
   maximum : Nat
   maximum_small : maximum < 64
   reductionName : String
   reduction : Zkc.Source.Structured.Template.Association program.payload
     (reductionSignature reductionName) (SumcheckVerifierBodies.reduceBody maximum)
-  roundBodies : Bodies program.payload.definitions MultilinearSourceBindings.sumcheck
+  roundBodies : Bodies program.payload.definitions (MultilinearSourceBindings.sumcheckFor foldNames)
   admissionBodies : Multilinear.Admission.Bodies program.payload.definitions field
-    MultilinearSourceBindings.sumcheck SumcheckPendingBodies.custodySlot SumcheckHelperBodies.checkHelper.name
+    (MultilinearSourceBindings.sumcheckFor foldNames) SumcheckPendingBodies.custodySlot SumcheckHelperBodies.checkHelper.name
   validatorBodies : ∀ model, SumcheckReductionReference.Bodies model program.payload.definitions
   producerBodies : ∀ model, SourceProducerReduction.Bodies model program.payload.definitions
   initial : ∀ model, BodyIn program.payload.definitions

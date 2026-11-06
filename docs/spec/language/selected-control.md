@@ -87,8 +87,25 @@ the requirement retains the container type and never combines this facet with
 `tagOnly`. Equal extents establish no equality of elements.
 Equal enum tags grant no payload equality. Static roots, congruent admitted
 total mathematics and exact structural forwarding transport provenance.
-Local results, service outputs and received values supply no such provenance;
-required unknown provenance refuses with `source.common-provenance`. Branch
+An actual completed send makes its receiver-only result retain the immutable
+payload subject at the actual sender. On the normal continuing path, that
+received component and the original sender component agree without an external
+common-input requirement. A received component can be forwarded by its actual recipient.
+Ordinary wrappers retain this rule through their selected bodies, actual argument
+and ordered role mappings; abstract Protocol signatures grant no result rule.
+The input's other components and nonreceivers gain no fact. Multicast retains
+its ordered individual deliveries: a partial prefix establishes nothing for an
+undelivered recipient or a stopped continuation. Transport, refusal and scoped
+completion semantics remain those of the existing execution profile.
+
+Local and service results are distinct opaque immutable subjects per actual
+result, role and invocation. Only explicit forwarding of that very subject can
+justify agreement, followed by congruent admitted total computations and typed
+projections. Equal dependency sets, operation names or repeated invocations do
+not equate distinct opaque results. This normal-path prescribed-execution rule
+supplies no statement/schema authority, adversarial honesty or peer completion.
+Source `requires` and optional specifications never discharge normal control.
+Required unknown provenance refuses with `source.common-provenance`. Branch
 results preserve every continuing result association. For value provenance,
 an observation whose arms forward the same exact immutable expression does not
 require selector equality. This bounded structural comparison introduces no
@@ -129,6 +146,9 @@ allowance.
 Source common-control analysis retains a typed expression instance for each
 checked callable and exact lexical specialization. Calls retain shared edges;
 applications bind actual values and roles and allocate fresh recurrence subjects.
+Applications containing communication or fresh opaque results retain their
+actual occurrences. Cached templates preserve the selected callable/body and
+capture aliases; no caller-discharged premise is part of a reusable instance.
 Only demanded carry slots receive application-local component maps. Snapshotting
 those maps debits the current work allowance before copying. Dormant branches
 and zero-trip bodies still contribute source-formation demands. Completed

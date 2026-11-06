@@ -261,7 +261,6 @@ module C: I { type State: Copy + Drop = bool; }
   for (unsigned i = 0; i < width; ++i)
     wide += "type T" + std::to_string(i) + ": Copy + Drop=bool;";
   wide += "}";
-  auto baseWork = check(wide).checkedWork();
   auto projected = wide, unprojected = wide;
   for (unsigned i = 0; i < uses; ++i) {
     projected +=
@@ -272,8 +271,14 @@ module C: I { type State: Copy + Drop = bool; }
   require(check(projected).checkedWork() >=
               check(unprojected).checkedWork() + 2 * width * uses,
           "associated projection scans escaped the work budget");
-  for (unsigned i = 0; i < uses; ++i)
+  // Compare identical helper bodies so their required checking and source
+  // retention work does not count as lookup traversal.
+  auto direct = wide;
+  for (unsigned i = 0; i < uses; ++i) {
+    direct += "fn f" + std::to_string(i) + "(x:bool)->bool{return x;}";
     wide += "fn f" + std::to_string(i) + "(x:C::T511)->C::T511{return x;}";
+  }
+  auto baseWork = check(direct).checkedWork();
   auto full = check(wide);
   require(full.checkedWork() >= baseWork + 2 * uses,
           "indexed module lookups escaped the work budget");
@@ -643,7 +648,7 @@ protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry fn Demo(
   auto emptyMessage = check(R"(module m;
 protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}entry fn Demo(inputs: Relay<()>::Inputs) { return Relay<()>::run(inputs); })");
   refuses(zkc::test::closeProtocolDeployment(emptyMessage, "m::Demo"),
-          "source.wire");
+          "source.message-payload");
   auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
 module First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
@@ -825,7 +830,7 @@ void managedServices() {
        std::vector<std::tuple<std::string, std::string, std::string>>{
            {"Draw<Fr>(alias, coins)", "Draw<Fr>(alias)", "source.call"},
            {"Draw<Fr>(alias, coins)", "Draw<Fr>(unknown, coins)",
-            "source.name"},
+            "source.service"},
            {"Draw<Fr>(alias, coins)", "Draw<Fr>(go, coins)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @(P,V)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @P", "source.service"},

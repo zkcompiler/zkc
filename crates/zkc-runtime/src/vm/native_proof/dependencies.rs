@@ -1,6 +1,7 @@
 //! Dependency admission for private participant inputs and service replies.
-//! Shared construction inputs and event-loop counts cannot depend on those
-//! values. The caller selects participants needing this check. It establishes
+//! Shared construction inputs and selectors/counts of regions with shared
+//! effects cannot depend on those values. The caller selects participants
+//! needing this check. It establishes
 //! value dependence, not termination or a cryptographic independence theorem.
 use super::*;
 use std::sync::Arc;
@@ -39,7 +40,7 @@ struct Dependencies<'a> {
     functions: &'a BTreeMap<String, Arc<Function>>,
     adapters: &'a BTreeSet<String>,
     returns: &'a [PhysicalType],
-    cache: BTreeMap<(String, Vec<bool>), Vec<bool>>,
+    cache: BTreeMap<(String, Vec<bool>), Option<Vec<bool>>>,
     work: usize,
     producer: bool,
 }
@@ -58,10 +59,14 @@ impl Dependencies<'_> {
             .map(|n| Ok((n.clone(), flag(env, n)?)))
             .collect()
     }
-    fn local(&mut self, function: &str, inputs: Vec<bool>) -> Result<Vec<bool>> {
+    fn local(&mut self, function: &str, inputs: Vec<bool>) -> Result<Option<Vec<bool>>> {
         self.charge(function.len() + inputs.len())?;
         let key = (function.to_owned(), inputs);
-        if let Some(size) = self.cache.get(&key).map(Vec::len) {
+        if let Some(size) = self
+            .cache
+            .get(&key)
+            .map(|result| result.as_ref().map_or(0, Vec::len))
+        {
             self.charge(size)?;
             return Ok(self.cache[&key].clone());
         }
@@ -72,15 +77,23 @@ impl Dependencies<'_> {
         if function.inputs.len() != key.1.len() {
             return Err(refuse("native-proof-dependency-shape"));
         }
+        self.charge(function.inputs.len())?;
         let env = function
             .inputs
             .iter()
             .map(|(n, _)| n.clone())
             .zip(key.1.iter().copied())
             .collect();
-        let outputs = self
-            .local_block(&function.body, env, 0)?
-            .unwrap_or_else(|| vec![false; function.outputs.len()]);
+        // A stopped function has no output row. Do not manufacture public
+        // outputs and let them justify a continuing branch join.
+        let outputs = self.local_block(&function.body, env, 0)?;
+        self.charge(outputs.as_ref().map_or(0, Vec::len))?;
+        if outputs
+            .as_ref()
+            .is_some_and(|values| values.len() != function.outputs.len())
+        {
+            return Err(refuse("native-proof-dependency-shape"));
+        }
         self.cache.insert(key, outputs.clone());
         Ok(outputs)
     }
@@ -122,6 +135,7 @@ impl Dependencies<'_> {
                     ..
                 } => {
                     self.charge(outputs.len())?;
+                    let private = flag(&env, condition)?;
                     let mut joined = vec![false; outputs.len()];
                     let mut returning = 0;
                     for branch in [then_body, else_body] {
@@ -132,7 +146,11 @@ impl Dependencies<'_> {
                             merge(&mut joined, &values)?;
                         }
                     }
-                    if returning > 1 && flag(&env, condition)? {
+                    if returning == 0 {
+                        return Ok(None);
+                    }
+                    self.charge(outputs.len())?;
+                    if returning > 1 && private {
                         joined.fill(true);
                     }
                     bind(&mut env, outputs, &joined)?;
@@ -144,7 +162,7 @@ impl Dependencies<'_> {
                     outputs,
                     ..
                 } => {
-                    self.charge(outputs.len())?;
+                    self.charge(outputs.len() + arms.len())?;
                     let private = flag(&env, input)?;
                     let mut joined = vec![false; outputs.len()];
                     let mut returning = 0;
@@ -158,6 +176,10 @@ impl Dependencies<'_> {
                             merge(&mut joined, &values)?;
                         }
                     }
+                    if returning == 0 {
+                        return Ok(None);
+                    }
+                    self.charge(outputs.len())?;
                     if returning > 1 && private {
                         joined.fill(true);
                     }
@@ -207,6 +229,7 @@ impl Dependencies<'_> {
                             break;
                         }
                     }
+                    self.charge(outputs.len())?;
                     bind(&mut env, outputs, &carried_flags)?;
                 }
                 LocalInstruction::Stop { .. } => return Ok(None),
@@ -214,45 +237,153 @@ impl Dependencies<'_> {
                     self.charge(values.len())?;
                     return Ok(Some(flags(&env, values)?));
                 }
-                LocalInstruction::Release(_) => (),
+                LocalInstruction::Release(values) => self.charge(values.len())?,
             }
         }
         Err(refuse("native-proof-dependency-shape"))
     }
+    // Scan the entire static region, even after discovering an effect. This
+    // both bounds dormant arms and avoids path enumeration.
     fn shared(&mut self, body: &[Instruction], depth: usize) -> Result<bool> {
         if depth > 64 {
             return Err(refuse("native-proof-dependency-limit"));
         }
+        let mut shared = false;
         for op in body {
             self.charge(1)?;
-            match op {
-                Instruction::Send { .. } | Instruction::Receive { .. } => return Ok(true),
-                Instruction::Local { function, .. } if self.adapters.contains(function) => {
-                    return Ok(true);
+            shared |= match op {
+                Instruction::Send { .. } | Instruction::Receive { .. } => true,
+                Instruction::Local { function, .. } => self.adapters.contains(function),
+                Instruction::Loop { body, .. } => self.shared(body, depth + 1)?,
+                Instruction::Conditional {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    let left = self.shared(then_body, depth + 1)?;
+                    let right = self.shared(else_body, depth + 1)?;
+                    left || right
                 }
-                Instruction::Loop { body, .. } if self.shared(body, depth + 1)? => return Ok(true),
-                _ => (),
-            }
+                Instruction::Match { arms, .. } => {
+                    self.charge(arms.len())?;
+                    let mut found = false;
+                    for arm in arms {
+                        found |= self.shared(&arm.body, depth + 1)?;
+                    }
+                    found
+                }
+                _ => false,
+            };
         }
-        Ok(false)
+        Ok(shared)
+    }
+    fn participant_captures(
+        &mut self,
+        env: &Environment,
+        captures: &[(String, String)],
+    ) -> Result<Environment> {
+        self.charge(captures.len())?;
+        captures
+            .iter()
+            .map(|(local, parent)| Ok((local.clone(), flag(env, parent)?)))
+            .collect()
     }
     fn participant(
         &mut self,
         body: &[Instruction],
-        mut env: Environment,
+        env: Environment,
         depth: usize,
     ) -> Result<Vec<bool>> {
+        Ok(self
+            .participant_block(body, env, depth)?
+            .unwrap_or_default())
+    }
+    fn participant_block(
+        &mut self,
+        body: &[Instruction],
+        mut env: Environment,
+        depth: usize,
+    ) -> Result<Option<Vec<bool>>> {
         if depth > 64 {
             return Err(refuse("native-proof-dependency-limit"));
         }
         for op in body {
             self.charge(1)?;
             match op {
-                Instruction::Conditional { .. } | Instruction::Match { .. } => {
-                    return Err(refuse("native-proof-selected-control"));
-                }
-                Instruction::Query { outputs, .. } => {
+                Instruction::Conditional {
+                    condition,
+                    captures,
+                    then_body,
+                    else_body,
+                    outputs,
+                    ..
+                } => {
+                    let private = flag(&env, condition)?;
                     self.charge(outputs.len())?;
+                    let mut joined = vec![false; outputs.len()];
+                    let mut continuing = 0;
+                    for branch in [then_body, else_body] {
+                        if private && self.shared(branch, depth + 1)? {
+                            return Err(refuse("native-proof-private-dependency"));
+                        }
+                        let nested = self.participant_captures(&env, captures)?;
+                        if let Some(values) = self.participant_block(branch, nested, depth + 1)? {
+                            self.charge(values.len())?;
+                            merge(&mut joined, &values)?;
+                            continuing += 1;
+                        }
+                    }
+                    if continuing == 0 {
+                        return Ok(None);
+                    }
+                    self.charge(outputs.len())?;
+                    if continuing > 1 && private {
+                        joined.fill(true);
+                    }
+                    bind(&mut env, outputs, &joined)?;
+                }
+                Instruction::Match {
+                    input,
+                    captures,
+                    arms,
+                    outputs,
+                    ..
+                } => {
+                    // The whole variant is private if any payload is private.
+                    // Tag equality alone never declassifies its payload.
+                    let private = flag(&env, input)?;
+                    self.charge(outputs.len() + arms.len())?;
+                    let mut joined = vec![false; outputs.len()];
+                    let mut continuing = 0;
+                    for arm in arms {
+                        if private && self.shared(&arm.body, depth + 1)? {
+                            return Err(refuse("native-proof-private-dependency"));
+                        }
+                        let mut nested = self.participant_captures(&env, captures)?;
+                        self.charge(arm.payload.len())?;
+                        bind(&mut nested, &arm.payload, &vec![private; arm.payload.len()])?;
+                        if let Some(values) =
+                            self.participant_block(&arm.body, nested, depth + 1)?
+                        {
+                            self.charge(values.len())?;
+                            merge(&mut joined, &values)?;
+                            continuing += 1;
+                        }
+                    }
+                    if continuing == 0 {
+                        return Ok(None);
+                    }
+                    self.charge(outputs.len())?;
+                    if continuing > 1 && private {
+                        joined.fill(true);
+                    }
+                    bind(&mut env, outputs, &joined)?;
+                }
+                Instruction::Query {
+                    inputs, outputs, ..
+                } => {
+                    self.charge(inputs.len() + outputs.len())?;
+                    flags(&env, inputs)?;
                     bind(&mut env, outputs, &vec![true; outputs.len()])?;
                 }
                 Instruction::Local {
@@ -266,7 +397,9 @@ impl Dependencies<'_> {
                     if self.adapters.contains(function) && selected.contains(&true) {
                         return Err(refuse("native-proof-private-dependency"));
                     }
-                    let result = self.local(function, selected)?;
+                    let Some(result) = self.local(function, selected)? else {
+                        return Ok(None);
+                    };
                     bind(&mut env, outputs, &result)?;
                 }
                 Instruction::Receive { output, .. } => {
@@ -301,11 +434,7 @@ impl Dependencies<'_> {
                         .collect::<Result<_>>()?;
                     loop {
                         self.charge(carried.len())?;
-                        self.charge(captures.len())?;
-                        let mut nested: Environment = captures
-                            .iter()
-                            .map(|(local, parent)| Ok((local.clone(), flag(&env, parent)?)))
-                            .collect::<Result<_>>()?;
+                        let mut nested = self.participant_captures(&env, captures)?;
                         nested.insert(count.induction.clone(), control);
                         nested.extend(
                             carried
@@ -313,22 +442,30 @@ impl Dependencies<'_> {
                                 .map(|(n, _)| n.clone())
                                 .zip(carried_flags.iter().copied()),
                         );
-                        let result = self.participant(body, nested, depth + 1)?;
+                        // Zero iterations still continue with the incoming row;
+                        // a stopped iteration contributes no successor.
+                        let Some(result) = self.participant_block(body, nested, depth + 1)? else {
+                            break;
+                        };
                         self.charge(result.len())?;
                         if !merge(&mut carried_flags, &result)? {
                             break;
                         }
                     }
+                    self.charge(outputs.len())?;
                     bind(&mut env, outputs, &carried_flags)?;
                 }
                 Instruction::ReturnIf {
+                    condition,
                     values,
                     continuations,
                     ..
                 } => {
+                    flag(&env, condition)?;
                     // Completion may depend on private verifier data. The false
                     // edge only renames the existing affine inputs.
-                    self.charge(values.len())?;
+                    self.charge(values.len() + continuations.len())?;
+                    flags(&env, values)?;
                     if values.len() != self.returns.len() {
                         return Err(refuse("native-proof-dependency-shape"));
                     }
@@ -342,7 +479,7 @@ impl Dependencies<'_> {
                 }
                 Instruction::Return(values) | Instruction::Yield(values) => {
                     self.charge(values.len())?;
-                    return flags(&env, values);
+                    return Ok(Some(flags(&env, values)?));
                 }
             }
         }
@@ -991,6 +1128,455 @@ mod tests {
         assert_eq!(
             checker.local("wide", vec![]).unwrap_err().0,
             "native-proof-dependency-limit"
+        );
+    }
+
+    fn branch(
+        condition: &str,
+        captures: &[(&str, &str)],
+        left: Vec<Instruction>,
+        right: Vec<Instruction>,
+        outputs: &[&str],
+    ) -> Instruction {
+        Instruction::Conditional {
+            site: "branch".into(),
+            condition: condition.into(),
+            captures: captures
+                .iter()
+                .map(|(a, b)| ((*a).into(), (*b).into()))
+                .collect(),
+            then_body: left.into(),
+            else_body: right.into(),
+            outputs: names(outputs),
+        }
+    }
+    fn yielded(values: &[&str]) -> Vec<Instruction> {
+        vec![Instruction::Yield(names(values))]
+    }
+    fn stopped() -> Arc<Function> {
+        function(
+            "stop",
+            &[],
+            0,
+            vec![LocalInstruction::Stop {
+                site: "stop".into(),
+                reason: "reject".into(),
+            }],
+        )
+    }
+
+    #[test]
+    fn participant_branches_join_each_output_and_keep_captures_local() {
+        let select = branch(
+            "public",
+            &[("left", "public"), ("right", "private")],
+            yielded(&["left", "right"]),
+            yielded(&["left", "left"]),
+            &["shared", "secret"],
+        );
+        assert_eq!(
+            check(
+                vec![identity()],
+                vec![
+                    query("private"),
+                    select,
+                    call("observe", &["shared"], &["state"]),
+                    Instruction::Return(names(&["state", "secret"]))
+                ],
+                1000
+            )
+            .unwrap(),
+            [false, true]
+        );
+        // A definition in then is neither an implicit else capture nor a join.
+        let select = branch(
+            "public",
+            &[],
+            vec![query("hidden"), Instruction::Yield(vec![])],
+            yielded(&["hidden"]),
+            &[],
+        );
+        assert_eq!(
+            check(vec![], vec![select, Instruction::Return(vec![])], 1000)
+                .unwrap_err()
+                .0,
+            "native-proof-dependency-scope"
+        );
+        let select = branch("public", &[], yielded(&[]), yielded(&[]), &[]);
+        assert_eq!(
+            check(
+                vec![],
+                vec![select, Instruction::Return(names(&["hidden"]))],
+                1000
+            )
+            .unwrap_err()
+            .0,
+            "native-proof-dependency-scope"
+        );
+    }
+
+    #[test]
+    fn private_participant_selector_taints_joins_and_rejects_dormant_effects() {
+        let select = branch(
+            "private",
+            &[("value", "public")],
+            yielded(&["value"]),
+            yielded(&["value"]),
+            &["out"],
+        );
+        assert_eq!(
+            check(
+                vec![],
+                vec![
+                    query("private"),
+                    select,
+                    Instruction::Return(names(&["out"]))
+                ],
+                1000
+            )
+            .unwrap(),
+            [true]
+        );
+        for producer in [false, true] {
+            let select = branch(
+                "private",
+                &[("value", "public")],
+                yielded(&[]),
+                vec![
+                    call("observe", &["value"], &["state"]),
+                    Instruction::Yield(vec![]),
+                ],
+                &[],
+            );
+            assert_eq!(
+                check_as(
+                    vec![identity()],
+                    vec![query("private"), select, Instruction::Return(vec![])],
+                    1000,
+                    producer
+                )
+                .unwrap_err()
+                .0,
+                "native-proof-private-dependency"
+            );
+        }
+    }
+
+    #[test]
+    fn private_nested_effects_are_found_through_branches_and_loops() {
+        let observed = branch(
+            "flag",
+            &[("value", "value")],
+            yielded(&[]),
+            vec![
+                call("observe", &["value"], &["state"]),
+                Instruction::Yield(vec![]),
+            ],
+            &[],
+        );
+        let nested = loop_body(
+            "value",
+            &[],
+            &["flag", "value"],
+            vec![observed, Instruction::Yield(vec![])],
+            &[],
+        );
+        let select = branch(
+            "private",
+            &[("flag", "public"), ("value", "public")],
+            yielded(&[]),
+            vec![nested, Instruction::Yield(vec![])],
+            &[],
+        );
+        assert_eq!(
+            check(
+                vec![identity()],
+                vec![query("private"), select, Instruction::Return(vec![])],
+                1000
+            )
+            .unwrap_err()
+            .0,
+            "native-proof-private-dependency"
+        );
+    }
+
+    #[test]
+    fn stopped_arms_have_no_join_row_but_other_arms_are_statically_checked() {
+        let select = branch(
+            "private",
+            &[("value", "public")],
+            vec![
+                call("stop", &[], &[]),
+                Instruction::Yield(names(&["value"])),
+            ],
+            yielded(&["value"]),
+            &["out"],
+        );
+        assert_eq!(
+            check(
+                vec![stopped(), identity()],
+                vec![
+                    query("private"),
+                    select,
+                    call("observe", &["out"], &["state"]),
+                    Instruction::Return(names(&["state"]))
+                ],
+                1000
+            )
+            .unwrap(),
+            [false]
+        );
+        let select = branch(
+            "public",
+            &[],
+            vec![call("stop", &[], &[]), Instruction::Yield(vec![])],
+            yielded(&["missing"]),
+            &[],
+        );
+        assert_eq!(
+            check(
+                vec![stopped()],
+                vec![select, Instruction::Return(vec![])],
+                1000
+            )
+            .unwrap_err()
+            .0,
+            "native-proof-dependency-scope"
+        );
+        let functions = BTreeMap::from([("stop".into(), stopped())]);
+        let adapters = BTreeSet::new();
+        let mut checker = Dependencies {
+            functions: &functions,
+            adapters: &adapters,
+            returns: &[],
+            cache: BTreeMap::new(),
+            work: 1000,
+            producer: false,
+        };
+        let select = branch(
+            "public",
+            &[],
+            vec![call("stop", &[], &[]), Instruction::Yield(vec![])],
+            vec![call("stop", &[], &[]), Instruction::Yield(vec![])],
+            &[],
+        );
+        assert_eq!(
+            checker
+                .participant_block(
+                    &[select, Instruction::Return(vec![])],
+                    BTreeMap::from([("public".into(), false)]),
+                    0
+                )
+                .unwrap(),
+            None
+        );
+        assert_eq!(checker.cache[&("stop".into(), vec![])], None);
+    }
+
+    fn variant_match(selector: &str, outputs: &[&str]) -> Instruction {
+        use crate::vm::code::ParticipantArm;
+        Instruction::Match {
+            site: "match".into(),
+            input: selector.into(),
+            captures: vec![("captured".into(), "public".into())],
+            arms: vec![
+                ParticipantArm {
+                    alternative: "some".into(),
+                    payload: names(&["payload", "unobserved"]),
+                    body: yielded(&["payload", "captured"]).into(),
+                },
+                ParticipantArm {
+                    alternative: "none".into(),
+                    payload: vec![],
+                    body: yielded(&["captured", "captured"]).into(),
+                },
+            ],
+            outputs: names(outputs),
+        }
+    }
+
+    #[test]
+    fn whole_variant_privacy_reaches_payload_and_all_continuing_joins() {
+        for private in [false, true] {
+            let selector = if private { "secret" } else { "public" };
+            assert_eq!(
+                check(
+                    vec![],
+                    vec![
+                        query("secret"),
+                        variant_match(selector, &["payload", "captured"]),
+                        Instruction::Return(names(&["payload", "captured"]))
+                    ],
+                    1000
+                )
+                .unwrap(),
+                [private, private]
+            );
+        }
+        // Variant construction joins every payload dependency, including an
+        // unobserved field; the tag is not a separate public value.
+        let spelling = zkc_test_support::variants::logical(
+            "Choice",
+            serde_json::json!([["some", ["bool", "bool"]], ["none", []]]),
+        );
+        let variant =
+            PhysicalType::default_for(crate::vm::LogicalType::parse(&spelling).unwrap()).unwrap();
+        let mut make = function(
+            "make",
+            &["a", "b"],
+            1,
+            vec![
+                LocalInstruction::Variant {
+                    site: "variant".into(),
+                    ty: variant.clone(),
+                    alternative: "some".into(),
+                    payload: names(&["a", "b"]),
+                    output: "v".into(),
+                },
+                LocalInstruction::Return(names(&["v"])),
+            ],
+        );
+        Arc::get_mut(&mut make).unwrap().outputs = vec![variant];
+        assert_eq!(
+            check(
+                vec![make],
+                vec![
+                    query("secret"),
+                    call("make", &["public", "secret"], &["v"]),
+                    variant_match("v", &["a", "b"]),
+                    Instruction::Return(names(&["a", "b"]))
+                ],
+                1000
+            )
+            .unwrap(),
+            [true, true]
+        );
+    }
+
+    #[test]
+    fn match_payload_and_captures_do_not_escape_to_siblings() {
+        let mut select = variant_match("public", &["a", "b"]);
+        let Instruction::Match { arms, .. } = &mut select else {
+            unreachable!()
+        };
+        arms[1].body = yielded(&["payload", "captured"]).into();
+        assert_eq!(
+            check(vec![], vec![select, Instruction::Return(vec![])], 1000)
+                .unwrap_err()
+                .0,
+            "native-proof-dependency-scope"
+        );
+        let mut select = variant_match("public", &["a", "b"]);
+        let Instruction::Match { arms, .. } = &mut select else {
+            unreachable!()
+        };
+        arms[1].body = yielded(&["captured"]).into();
+        assert_eq!(
+            check(vec![], vec![select, Instruction::Return(vec![])], 1000)
+                .unwrap_err()
+                .0,
+            "native-proof-dependency-shape"
+        );
+    }
+
+    #[test]
+    fn branch_result_fixed_point_rechecks_later_private_selectors() {
+        let selected = branch(
+            "carried",
+            &[("value", "public")],
+            yielded(&[]),
+            vec![
+                call("observe", &["value"], &["state"]),
+                Instruction::Yield(vec![]),
+            ],
+            &[],
+        );
+        let outer = loop_body(
+            "public",
+            &[("carried", "public")],
+            &["public"],
+            vec![
+                selected,
+                query("next"),
+                Instruction::Yield(names(&["next"])),
+            ],
+            &["out"],
+        );
+        assert_eq!(
+            check(
+                vec![identity()],
+                vec![outer, Instruction::Return(vec![])],
+                2000
+            )
+            .unwrap_err()
+            .0,
+            "native-proof-private-dependency"
+        );
+    }
+
+    #[test]
+    fn branch_work_is_bounded_without_enumerating_combinations() {
+        let mut body: Vec<_> = (0..100)
+            .map(|_| branch("public", &[], yielded(&[]), yielded(&[]), &[]))
+            .collect();
+        body.push(Instruction::Return(vec![]));
+        assert!(check(vec![], body.clone(), 1000).is_ok());
+        assert_eq!(
+            check(vec![], body, 100).unwrap_err().0,
+            "native-proof-dependency-limit"
+        );
+        let captures: Vec<_> = (0..100)
+            .map(|i| (format!("c{i}"), "public".into()))
+            .collect();
+        let wide = Instruction::Conditional {
+            site: "wide".into(),
+            condition: "public".into(),
+            captures,
+            then_body: yielded(&[]).into(),
+            else_body: yielded(&[]).into(),
+            outputs: vec![],
+        };
+        assert_eq!(
+            check(vec![], vec![wide, Instruction::Return(vec![])], 50)
+                .unwrap_err()
+                .0,
+            "native-proof-dependency-limit"
+        );
+    }
+
+    #[test]
+    fn dormant_match_effects_and_conditional_join_arity_are_checked() {
+        let mut selected = variant_match("secret", &["a", "b"]);
+        let Instruction::Match { arms, .. } = &mut selected else {
+            unreachable!()
+        };
+        arms[1].body = vec![
+            call("observe", &["captured"], &["state"]),
+            Instruction::Yield(names(&["captured", "captured"])),
+        ]
+        .into();
+        assert_eq!(
+            check(
+                vec![identity()],
+                vec![query("secret"), selected, Instruction::Return(vec![])],
+                1000
+            )
+            .unwrap_err()
+            .0,
+            "native-proof-private-dependency"
+        );
+        let selected = branch(
+            "public",
+            &[("value", "public")],
+            yielded(&["value"]),
+            yielded(&[]),
+            &["out"],
+        );
+        assert_eq!(
+            check(vec![], vec![selected, Instruction::Return(vec![])], 1000)
+                .unwrap_err()
+                .0,
+            "native-proof-dependency-shape"
         );
     }
 }

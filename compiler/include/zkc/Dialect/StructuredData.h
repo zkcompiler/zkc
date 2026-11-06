@@ -17,8 +17,12 @@ llvm::Expected<mlir::Type> importLogicalTypeData(mlir::MLIRContext *,
                                                  const llvm::json::Value &);
 /// A list shares one expanded-work budget, including repeated native types.
 /// The enclosing format owns interning, uniqueness, ordering and entry limits.
+/// Optional output checks canonical constructor/argument spelling at every
+/// decoded occurrence. It reports only after successful complete decoding;
+/// the enclosing reader decides its semantic/refusal ordering.
 llvm::Expected<llvm::SmallVector<mlir::Type>>
-importLogicalTypesData(mlir::MLIRContext *, const llvm::json::Array &);
+importLogicalTypesData(mlir::MLIRContext *, const llvm::json::Array &,
+                       bool *canonical = nullptr);
 
 /// Standalone /0 inventory. Entries are unique, ordered and share the same
 /// expanded-work budget; enclosing inline schemas use the helpers above.

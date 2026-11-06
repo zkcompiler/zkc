@@ -51,14 +51,14 @@ private theorem loop_scope (program : Structured.Program) (context : Context)
       (⟨scope.slots ++ carried, match transcriptPosition (carried.map NativeSlot.sort) with
         | some position => scope.slots.length + position | none => scope.current⟩ : NativeScope).Holds
       (Domain.step (Structured.ringModel F G) program context
-        ⟨.loop site maximum yielded, count :: references, carried.map NativeSlot.sort, body⟩ env) := by
+        ⟨.loop site maximum, count :: references, carried.map NativeSlot.sort, [⟨(.data .index :: carried.map NativeSlot.sort), body, yielded⟩]⟩ env) := by
   obtain ⟨bound, boundFound⟩ := holds.index countSort
   obtain ⟨initial, initialFound, initialHolds⟩ := holds.read readCarried
   have initialSorted : Domain.sortsMatch (carried.map NativeSlot.sort) initial = true := by
     simp only [Domain.sortsMatch, beq_iff_eq]
     exact NativeScope.Holds.schema (scope := ⟨carried, 0⟩) initialHolds
   change PIR.Yields (fun final => List.Forall₂ NativeSlot.Holds (scope.slots ++ carried) final) _
-  simp only [Domain.step, boundFound, initialFound, initialSorted, and_true]
+  simp only [Domain.step, Domain.executeLoop, boundFound, initialFound, initialSorted, and_true]
   split
   · have invariant := Domain.iterate_yields
       (Domain.evaluate (Structured.ringModel F G) program context body) env yielded

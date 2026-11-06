@@ -212,6 +212,10 @@ def descriptor(value):
         record(args, 3 if tag == "fold" else 2)
         name = lean_render.BINARY_OPERATIONS.get(tag, "fold")
         return "." + name + " " + " ".join(text(arg) for arg in args)
+    if tag == "data_branch":
+        if args != [["then", "else"]]:
+            raise ValueError("unsupported mathematical branch alternatives")
+        return ".mathBranch"
     raise ValueError(f"unknown descriptor: {tag}")
 
 

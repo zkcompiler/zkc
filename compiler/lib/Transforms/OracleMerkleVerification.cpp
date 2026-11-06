@@ -1,4 +1,5 @@
 #include "NativeBindingApplication.h"
+#include "OracleAccounting.h"
 #include "OracleMerkle.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
@@ -23,7 +24,7 @@ struct Reader {
                                IntegerType::Unsigned)),
         boolean(IntegerType::get(context.getModule().getContext(), 1)) {}
   bool expect(bool condition) {
-    valid &= condition;
+    valid &= context.charge() && condition;
     return valid;
   }
   struct Cursor {
@@ -34,6 +35,10 @@ struct Reader {
       if (!reader.valid || !reader.expect(offset < steps.size()))
         return nullptr;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(
+              1 + step.inputs.size() + step.outputs.size() +
+              step.regions.size() + site.size())))
+        return nullptr;
       auto attr = step.operation->getAttrOfType<StringAttr>(
           name == "func.call" ? "runtime.site" : "site");
       if (!reader.expect(step.operation->getName().getStringRef() == name &&
@@ -58,8 +63,9 @@ struct Reader {
       if (!reader.valid)
         return values;
       auto op = cast<exec::ApplyOp>(step->operation);
-      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-          op, op.getBindingAttr());
+      auto binding = reader.context.getSymbols()
+                         .lookupNearestSymbolFrom<runtime::BindingOp>(
+                             op, op.getBindingAttr());
       if (!reader.expect(binding && binding.getContract() == contract &&
                          binding.getImplementation().empty() &&
                          binding.getArguments().size() == statics.size() &&
@@ -68,7 +74,7 @@ struct Reader {
       SmallVector<Attribute> arguments;
       for (const auto &identity : statics)
         arguments.push_back(StringAttr::get(op.getContext(), identity));
-      reader.expect(matchesNativeBinding(
+      reader.expect(reader.context.matchesBinding(
           binding, {contract.str(), std::move(arguments), {}}));
       reader.expect(invocationParametersMatch(
           contract, binding.getArgumentsAttr(), op.getParametersAttr(),
@@ -95,9 +101,9 @@ struct Reader {
       auto values = result(step, outputs, inputs);
       if (reader.valid) {
         auto op = cast<func::CallOp>(step->operation);
-        reader.expect(SymbolTable::lookupSymbolIn(reader.context.getUnit(),
-                                                  op.getCallee()) ==
-                      expected.getOperation());
+        reader.expect(reader.context.getSymbols()
+                          .getSymbolTable(reader.context.getUnit())
+                          .lookup(op.getCallee()) == expected.getOperation());
       }
       return values;
     }
@@ -126,6 +132,10 @@ struct Reader {
       if (!reader.valid || !reader.expect(offset + 1 == steps.size()))
         return;
       const auto &step = steps[offset++];
+      if (!reader.expect(reader.context.charge(1 + step.inputs.size() +
+                                               step.outputs.size() +
+                                               step.regions.size())))
+        return;
       reader.expect((region ? isa<exec::CompleteOp>(step.operation)
                             : isa<exec::ReturnOp>(step.operation)) &&
                     step.regions.empty() && step.outputs.empty() &&
@@ -134,6 +144,11 @@ struct Reader {
   };
   void body(func::FuncOp function, TypeRange inputs, TypeRange outputs,
             bool region, llvm::function_ref<void(Cursor &, ValueRange)> check) {
+    if (!valid)
+      return;
+    if (!expect(context.charge(1 + inputs.size() + outputs.size()) &&
+                function && context.reserveRead(function)))
+      return;
     if (!valid)
       return;
     Types arguments{runtime::ScopeType::get(context.getModule().getContext())};
@@ -227,10 +242,16 @@ struct Reader {
 Error checkOracleMerkle(ModuleOp candidate, const OracleMerkleFunctions &actual,
                         protocol_ir::OracleKindAttr kind, StringRef scheme,
                         OracleLeafGrouping grouping, OracleLeafOrder order) {
-  auto context = OracleVerificationContext::read(candidate);
+  OracleNativeWork rawWork;
+  auto context = OracleVerificationContext::read(candidate, rawWork);
   if (!context) {
-    consumeError(context.takeError());
-    return error("oracle-merkle-body");
+    return llvm::handleErrors(context.takeError(),
+                              [&](const Refusal &failure) -> Error {
+                                if (failure.code == "oracle-common-limit" ||
+                                    failure.code == "common-control-capacity")
+                                  return error(failure.code, failure.detail);
+                                return error("oracle-merkle-body");
+                              });
   }
   return checkOracleMerkle(*context, actual, kind, scheme, grouping, order);
 }
@@ -238,82 +259,85 @@ Error checkOracleMerkle(const OracleVerificationContext &context,
                         const OracleMerkleFunctions &actual,
                         protocol_ir::OracleKindAttr kind, StringRef scheme,
                         OracleLeafGrouping grouping, OracleLeafOrder order) {
-  auto refuse = [] { return error("oracle-merkle-body"); };
-  auto *ctx = context.getModule().getContext();
-  if (!kind || kind.getContext() != ctx || kind.getIdentity() != "table" ||
-      (grouping != OracleLeafGrouping::Individual &&
-       grouping != OracleLeafGrouping::AntipodalPairs) ||
-      (order != OracleLeafOrder::Natural &&
-       order != OracleLeafOrder::BitReversed) ||
-      failed(protocol_ir::OracleKindAttr::verify(
-          [&]() { return emitError(context.getModule().getLoc()); },
-          kind.getIdentity(), kind.getArguments())))
-    return refuse();
-  auto signature = resolveLogicalSignature(
-      [&] { return emitError(context.getModule().getLoc()); }, ctx,
-      "oracle.check", {StringAttr::get(ctx, scheme)});
-  auto opening = resolveLogicalSignature(
-      [&] { return emitError(context.getModule().getLoc()); }, ctx,
-      "oracle.open", {StringAttr::get(ctx, scheme)});
-  auto answer = dyn_cast<algebra::FieldType>(kind.getAnswerType());
-  if (!answer || !signature || !opening || signature.getNumInputs() != 6 ||
-      opening.getNumInputs() != 2 || opening.getNumResults() != 2 ||
-      signature.getInput(4) != kind.getDataType() ||
-      opening.getResult(0) != kind.getDataType() ||
-      opening.getResult(1) != signature.getInput(5))
-    return refuse();
-  Type root = signature.getInput(0);
-  Type proof = signature.getInput(5);
-  Type state = opening.getInput(0);
-  Reader reader(context);
-  auto index = reader.index;
-  unsigned width = grouping == OracleLeafGrouping::Individual ? 1 : 2;
-  reader.position(actual.position, grouping, order);
-  reader.body(actual.commit, {kind.getDataType(), index}, {root, state}, false,
-              [&](Reader::Cursor &c, ValueRange a) {
-                auto zero = c.number(0, "first_query");
-                auto position = c.call(actual.position, {index, index, index},
-                                       {a[1], zero}, "layout");
-                auto count =
-                    c.apply("vector.length", index, a[0], "actual_rows",
-                            {answer.getDomain().str()})[0];
-                c.require(c.binary("index.equal", count, a[1], "exact_rows"),
-                          "admit_data");
-                auto w = c.number(width, "width");
-                Value values = a[0];
-                if (grouping == OracleLeafGrouping::AntipodalPairs)
-                  values = c.apply("vector.transpose", kind.getDataType(),
-                                   {values, w, position[0]}, "group_rows",
-                                   {answer.getDomain().str()})[0];
-                if (order == OracleLeafOrder::BitReversed)
-                  values =
-                      c.apply("vector.bit_reverse_rows", kind.getDataType(),
-                              {values, w}, "permute_leaves",
+  return oracleVerificationWithWork(context.getWork(), [&]() -> Error {
+    auto refuse = [] { return error("oracle-merkle-body"); };
+    auto *ctx = context.getModule().getContext();
+    if (!kind || kind.getContext() != ctx || kind.getIdentity() != "table" ||
+        (grouping != OracleLeafGrouping::Individual &&
+         grouping != OracleLeafGrouping::AntipodalPairs) ||
+        (order != OracleLeafOrder::Natural &&
+         order != OracleLeafOrder::BitReversed) ||
+        failed(protocol_ir::OracleKindAttr::verify(
+            [&]() { return emitError(context.getModule().getLoc()); },
+            kind.getIdentity(), kind.getArguments())))
+      return refuse();
+    auto signature = resolveLogicalSignature(
+        [&] { return emitError(context.getModule().getLoc()); }, ctx,
+        "oracle.check", {StringAttr::get(ctx, scheme)});
+    auto opening = resolveLogicalSignature(
+        [&] { return emitError(context.getModule().getLoc()); }, ctx,
+        "oracle.open", {StringAttr::get(ctx, scheme)});
+    auto answer = dyn_cast<algebra::FieldType>(kind.getAnswerType());
+    if (!answer || !signature || !opening || signature.getNumInputs() != 6 ||
+        opening.getNumInputs() != 2 || opening.getNumResults() != 2 ||
+        signature.getInput(4) != kind.getDataType() ||
+        opening.getResult(0) != kind.getDataType() ||
+        opening.getResult(1) != signature.getInput(5))
+      return refuse();
+    Type root = signature.getInput(0);
+    Type proof = signature.getInput(5);
+    Type state = opening.getInput(0);
+    Reader reader(context);
+    auto index = reader.index;
+    unsigned width = grouping == OracleLeafGrouping::Individual ? 1 : 2;
+    reader.position(actual.position, grouping, order);
+    reader.body(actual.commit, {kind.getDataType(), index}, {root, state},
+                false, [&](Reader::Cursor &c, ValueRange a) {
+                  auto zero = c.number(0, "first_query");
+                  auto position = c.call(actual.position, {index, index, index},
+                                         {a[1], zero}, "layout");
+                  auto count =
+                      c.apply("vector.length", index, a[0], "actual_rows",
                               {answer.getDomain().str()})[0];
-                c.finish(c.apply("oracle.commit", {root, state}, {values, w},
-                                 "commit", {scheme.str()}));
-              });
-  reader.body(actual.open, {state, index, index}, {kind.getDataType(), proof},
-              false, [&](Reader::Cursor &c, ValueRange a) {
-                auto position = c.call(actual.position, {index, index, index},
-                                       {a[1], a[2]}, "layout");
-                c.finish(c.apply("oracle.open", {kind.getDataType(), proof},
-                                 {a[0], position[1]}, "open", {scheme.str()}));
-              });
-  reader.body(
-      actual.authenticate, {root, index, index, kind.getDataType(), proof},
-      kind.getAnswerType(), false, [&](Reader::Cursor &c, ValueRange a) {
-        auto position = c.call(actual.position, {index, index, index},
-                               {a[1], a[2]}, "layout");
-        auto w = c.number(width, "width");
-        auto valid = c.apply("oracle.check", reader.boolean,
-                             {a[0], w, position[0], position[1], a[3], a[4]},
-                             "authenticate", {scheme.str()})[0];
-        c.require(valid, "admit_opening");
-        c.finish(c.apply("vector.get", kind.getAnswerType(),
-                         {a[3], position[2]}, "answer",
-                         {answer.getDomain().str()}));
-      });
-  return reader.valid ? Error::success() : refuse();
+                  c.require(c.binary("index.equal", count, a[1], "exact_rows"),
+                            "admit_data");
+                  auto w = c.number(width, "width");
+                  Value values = a[0];
+                  if (grouping == OracleLeafGrouping::AntipodalPairs)
+                    values = c.apply("vector.transpose", kind.getDataType(),
+                                     {values, w, position[0]}, "group_rows",
+                                     {answer.getDomain().str()})[0];
+                  if (order == OracleLeafOrder::BitReversed)
+                    values =
+                        c.apply("vector.bit_reverse_rows", kind.getDataType(),
+                                {values, w}, "permute_leaves",
+                                {answer.getDomain().str()})[0];
+                  c.finish(c.apply("oracle.commit", {root, state}, {values, w},
+                                   "commit", {scheme.str()}));
+                });
+    reader.body(actual.open, {state, index, index}, {kind.getDataType(), proof},
+                false, [&](Reader::Cursor &c, ValueRange a) {
+                  auto position = c.call(actual.position, {index, index, index},
+                                         {a[1], a[2]}, "layout");
+                  c.finish(c.apply("oracle.open", {kind.getDataType(), proof},
+                                   {a[0], position[1]}, "open",
+                                   {scheme.str()}));
+                });
+    reader.body(
+        actual.authenticate, {root, index, index, kind.getDataType(), proof},
+        kind.getAnswerType(), false, [&](Reader::Cursor &c, ValueRange a) {
+          auto position = c.call(actual.position, {index, index, index},
+                                 {a[1], a[2]}, "layout");
+          auto w = c.number(width, "width");
+          auto valid = c.apply("oracle.check", reader.boolean,
+                               {a[0], w, position[0], position[1], a[3], a[4]},
+                               "authenticate", {scheme.str()})[0];
+          c.require(valid, "admit_opening");
+          c.finish(c.apply("vector.get", kind.getAnswerType(),
+                           {a[3], position[2]}, "answer",
+                           {answer.getDomain().str()}));
+        });
+    return reader.valid ? Error::success() : refuse();
+  });
 }
 } // namespace zkc::protocol

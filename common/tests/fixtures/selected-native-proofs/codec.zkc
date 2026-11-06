@@ -1,0 +1,84 @@
+module selected;
+domain F=field("bls12-381.fr");
+interface Transcript {
+  type State:Copy+Drop;
+  fn initialize()->State effects(stop, opaque);
+  fn observe(t:State,v:F)->State effects(stop, opaque);
+  fn draw(t:State)->(State,F) effects(stop, opaque);
+}
+module History:Transcript {
+  type State:Copy+Drop=F;
+  fn initialize()->State{return State(0);}
+  fn observe(t:State,v:F)->State{return State(unpack(t)*3+v);}
+  fn draw(t:State)->(State,F){return(State(unpack(t)+1),unpack(t));}
+}
+protocol Square roles(P,V)(choice:bool@(P,V),rounds:index@(P,V),
+    public:F@(P,V),enabled:bool@(P,V),finish:bool@(P,V),
+    secret:F@P,challenges:Random<F>@V)->(ok:bool@V) completes {
+  #[site(commitment)] let first=send P->V((secret,secret));
+  #[site(challenge)] let challenge=challenges.draw();
+  #[site(delivery)] let actual=send V->P(challenge);
+  let mut total@P=public;
+  let mut expected@V=public;
+  let mut accepted@V=first.0*first.1==public;
+  #[site(choose)] if choice roles(P,V) {
+    require @P(enabled);
+    require @V(enabled);
+    total=secret*secret+public;
+    expected=public+public;
+    let ()=finish_if @P(finish)();
+    let _=finish_if @V(finish)(ok=accepted);
+  } else {}
+  #[site(response)] let last=send P->V((total+actual,secret));
+  return accepted && last.0==expected+challenge && last.1==first.1;
+}
+construction Derived for Square {
+  transcript History;replace challenges;
+  on start(t,public){return History::observe(t,public);}
+  on message {commitment,response}(t,value){return History::observe(t,value.0);}
+  on message delivery(t,value){return t;}
+  on query challenge(t){return History::draw(t);}
+}
+
+type Bytes=builtin("bytes");
+fn empty()->Bytes=primitive("bytes.empty");
+fn concat(a:Bytes,b:Bytes)->Bytes=primitive("bytes.concat");
+fn slice(b:Bytes,start:index,count:index)->Bytes=primitive("bytes.slice");
+fn length(b:Bytes)->index=primitive("bytes.length");
+fn field_bytes(f:F)->Bytes=primitive("encoding.field_be");
+fn field_read(b:Bytes)->(bool,F)=primitive("encoding.field_from_be");
+interface Codec {
+  type Record:Copy+Drop;
+  fn initialize(layout:())->Record effects(stop, opaque);
+  fn write(r:Record)->Bytes effects(stop, opaque);
+  fn finish(r:Record,proof:Bytes)->() effects(stop, opaque);
+  fn encode(r:Record,value:(F,F))->(Record,Bytes) effects(stop, opaque);
+  fn receive(r:Record,proof:Bytes)->(Record,(index,index)) effects(stop, opaque);
+}
+module Packing:Codec {
+  type Record:Copy+Drop=(Bytes,index);
+  fn initialize(layout:())->Record{return Record((empty(),0));}
+  fn write(r:Record)->Bytes{let(b,n)=unpack(r);return b;}
+  fn finish(r:Record,proof:Bytes)->(){let(b,n)=unpack(r);require length(proof)==n;return ();}
+  fn encode(r:Record,value:(F,F))->(Record,Bytes){
+    let(b,n)=unpack(r);
+    let chunk=concat(field_bytes(value.0),field_bytes(value.1));
+    return(Record((concat(b,chunk),n+64)),chunk);
+  }
+  fn receive(r:Record,proof:Bytes)->(Record,(index,index)){
+    let(b,n)=unpack(r);return(Record((b,n+64)),(n,64));
+  }
+}
+construction Encoded for Square {
+  base Derived;format Packing;
+  on encode {commitment,response}(r,value){return Packing::encode(r,value);}
+  on receive {commitment,response}(r,proof){return Packing::receive(r,proof);}
+  on decode {commitment,response}(chunk){
+    let(ok,a)=field_read(slice(chunk,0,32));require ok;
+    let(ok,b)=field_read(slice(chunk,32,32));require ok;
+    return(a,b);
+  }
+  on wire {commitment,response}(t,chunk){return t;}
+}
+proof Demo=Square{prover P;verifier V;public{choice,rounds,public,enabled,finish};
+  accept ok;construction Encoded;}

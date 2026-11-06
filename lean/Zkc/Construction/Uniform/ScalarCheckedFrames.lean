@@ -93,9 +93,10 @@ def loops {routing : Original.Routing} {context : ProtocolContext} {definitions 
   | .strictHelper _ _ _ _ _ _ _ _ tail => loops tail
   | .ownedHelper _ _ _ _ _ _ _ _ _ tail => loops tail
   | .mathHelper _ _ _ _ _ _ _ _ _ tail => loops tail
+  | .inlineMath (tail := tail) .. => loops tail
   | .projectionHelper _ _ _ _ tail => loops tail
   | .inlineCalculation _ _ _ _ tail => loops tail
-  | .inlineMissingCalculation _ _ _ _ _ tail => loops tail
+  | .inlineMissingStrict _ _ _ _ _ tail => loops tail
   | .calculation _ _ _ _ _ _ _ tail => loops tail
   | .receive _ _ _ _ _ _ _ tail => loops tail
   | .send (tail := tail) .. => loops tail

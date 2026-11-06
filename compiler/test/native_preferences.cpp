@@ -68,7 +68,7 @@ std::string source(StringRef contract, StringRef domain,
 }
 std::string observationSource(MLIRContext &context, bool fixed, bool joined) {
   auto origin = take(encodeNativeOriginTemplate(
-      "main", {}, {"message", "Round", "point", "point", "P", "V"}));
+      {"main", {}, NativeMessageOrigin{"Round", "point", "point", "P", "V"}}));
   auto text =
       R"(!T = !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">
 !G = !algebra.group<"bls12-381.g2">

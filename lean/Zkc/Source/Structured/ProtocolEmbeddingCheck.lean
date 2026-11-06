@@ -41,15 +41,14 @@ theorem checkFragment_sound {d : Dialect} (test : d.Op → Bool) (allowed : d.Op
     exact ⟨bodyIH checked.1, restIH checked.2⟩
 
 def checkMathOperation (op : Op) : Bool :=
-  op.isCalculation || match op with | .mark _ => true | _ => false
+  op.isCalculation || match op with | .mark _ | .branch .. => true | _ => false
 
 theorem checkMathOperation_sound (op : Op) (checked : checkMathOperation op = true) :
     MathOperation op := by
   simp only [checkMathOperation, Bool.or_eq_true] at checked
   rcases checked with calculation | mark
-  · exact .inl calculation
-  · right
-    cases op <;> simp_all
+  · exact .inl (.inl calculation)
+  · cases op <;> simp_all [MathOperation, MathLeaf]
 
 def checkOrdinaryOperation : ProtocolOp → Bool
   | .oracle .. => false

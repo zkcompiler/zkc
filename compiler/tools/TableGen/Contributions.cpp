@@ -4,7 +4,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
-#include <functional>
 #include <set>
 #include <string>
 
@@ -138,8 +137,9 @@ DeclarationOrder::DeclarationOrder(const RecordKeeper &records)
     const auto *declaration = entry.first;
     unsigned source = entry.second;
     std::set<const Record *> seen;
-    std::function<void(const Init *)> inspect;
-    std::function<void(const Record *)> visit = [&](const Record *record) {
+    std::set<const Init *> seenValues;
+    std::vector<const Init *> pendingValues;
+    auto visit = [&](const Record *record) {
       if (!seen.insert(record).second)
         return;
       auto found = owners.find(record);
@@ -150,22 +150,29 @@ DeclarationOrder::DeclarationOrder(const RecordKeeper &records)
               "reference requires an undeclared contribution dependency");
         return;
       }
-      for (const auto &field : record->getValues())
-        inspect(field.getValue());
+      for (const auto &field : reverse(record->getValues()))
+        pendingValues.push_back(field.getValue());
     };
-    inspect = [&](const Init *value) {
+    // Preserve depth-first source order without using the C++ call stack for
+    // the record/initializer graph. Shared metadata is inspected once per
+    // contribution root; a named declaration still ends the traversal.
+    visit(declaration);
+    while (!pendingValues.empty()) {
+      const auto *value = pendingValues.back();
+      pendingValues.pop_back();
+      if (!seenValues.insert(value).second)
+        continue;
       if (const auto *reference = dyn_cast<DefInit>(value))
         visit(reference->getDef());
       else if (const auto *list = dyn_cast<ListInit>(value))
-        for (const auto *element : list->getElements())
-          inspect(element);
+        for (const auto *element : reverse(list->getElements()))
+          pendingValues.push_back(element);
       else if (const auto *dag = dyn_cast<DagInit>(value)) {
-        inspect(dag->getOperator());
-        for (const auto *argument : dag->getArgs())
-          inspect(argument);
+        for (const auto *argument : reverse(dag->getArgs()))
+          pendingValues.push_back(argument);
+        pendingValues.push_back(dag->getOperator());
       }
-    };
-    visit(declaration);
+    }
   }
 }
 

@@ -35,6 +35,18 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
       transform context challenge (verifier firstBase firstPoint secondBase secondPoint handle) initial proof := by
   rw [compiledVerifier, ScalarVerifier.verify_eq_runK program context participant acceptancePosition
     challenge (inputs firstBase firstPoint secondBase secondPoint) (ChaumPedersenDomainConnection.inputs firstBase firstPoint secondBase secondPoint) (by rfl) initial proof]
-  convert ChaumPedersenDomainConnection.domain_transform challenge firstBase firstPoint secondBase secondPoint handle initial proof using 1 <;> kernel_rfl
+  have origin : ScalarVerifier.origin participant = Uniform.SourceProcess.legacyOrigin := by
+    funext key
+    rfl
+  have accepts (result : Domain.Result (uniformCarriers F G)) :
+      ScalarVerifier.acceptance acceptancePosition result = Uniform.SourceProcess.acceptance result.values := by
+    rw [acceptancePosition_eq]
+    exact ScalarConnection.acceptance_first result
+  rw [origin]
+  simp only [accepts]
+  have connected := ChaumPedersenDomainConnection.domain_transform challenge firstBase firstPoint secondBase secondPoint handle initial proof
+  rw [ChaumPedersenDomainConnection.source_equation] at connected
+  rw [verifier_correspondence]
+  exact connected
 
 end ZkcExamples.Construction.ChaumPedersenProof

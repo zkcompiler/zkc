@@ -89,12 +89,12 @@ theorem native_checked : DomainVM.checkNativeLowering SumcheckProof.program Sumc
     installed SumcheckProof.participant validator = .ok (lowered, nativeScope) := by
   kernel_rfl
 
-theorem domain_prepared : ∀ name ∈ Instruction.helperList SumcheckProof.participant.instructions,
+theorem domain_prepared : ∀ name ∈ Instruction.helpers SumcheckProof.participant.instructions,
     Prepared installed validator (Domain.helperTable (Structured.ringModel F G) SumcheckProof.program) name := by
   rw [Domain.Binding.helperTable_ringModel]
-  change ∀ name ∈ Instruction.helperList SumcheckProof.participant.instructions,
+  change ∀ name ∈ Instruction.helpers SumcheckProof.participant.instructions,
     Prepared installed validator (Zkc.Construction.helperTable SumcheckProof.program F G) name
-  rw [Instruction.helperList_eq, helpers_named]
+  rw [helpers_named]
   exact SumcheckHelpers.prepared
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in

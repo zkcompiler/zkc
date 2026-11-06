@@ -37,6 +37,16 @@ structure Bindings where
   fold : String
   valuesRealization : String
 
+/-- Names on the checked restriction edge, from the wrapper through its domain
+and step. Different instantiations of the same source fold may have different names. -/
+structure FoldNames where
+  wrapper : String
+  domain : String
+  step : String
+
+def Bindings.withFoldNames (bindings : Bindings) (names : FoldNames) : Bindings :=
+  { bindings with foldWrapper := names.wrapper, foldDomain := names.domain, foldStep := names.step }
+
 def lessBody (_domain : String) (_bindings : Bindings) : Region dialect [.index, .index] [.boolean] :=
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.exec (.indexLess)) (.cons .here (.cons (.there .here) .nil)) .nil <|

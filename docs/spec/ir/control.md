@@ -121,21 +121,23 @@ operations inside matches. Neither structural control admission nor a local
 Boolean result proves public transcript schedule safety.
 
 Native proof construction, reverse request planning, native codec construction
-and oracle realization require unconditional protocol interactions. After stage
-admission, they refuse Protocol and participant selected regions in the entry's
-static closure, with
-`native-proof-control-profile`, `native-request-control-profile`,
-`native-codec-control-profile` and `oracle-realization-control-profile`
-respectively, before any candidate mutation. The closure starts at the selected
-entry, its projected participants or the selected construction. It contains
-every nested operation of a reached definition, including dormant arms, and
-the definitions that the reached symbol references name, transitively:
-applications, helper and local calls, and oracle and relation declarations.
-Reachability is static: no selector is evaluated and no arm is pruned. A
-declaration outside the closure, such as an uncalled helper with a Math
-selection or an uncalled protocol with a Protocol selection, does not change
-the judgment. One allowance of 100,000 operations and symbol uses bounds the
-traversal, and exhausting it refuses with the same code.
+and oracle realization apply their own selected-control profiles to the common
+prepared source and actual candidate. The supported Protocol profile retains
+branch coordinates, captures and selected events through preparation and
+independent actual-body checks. Reverse-request dependency reconstruction and
+candidate admission still impose their own restrictions; structural branch
+admission alone does not establish support in any of these consumers.
+
+Source closure inspection includes every nested operation of a reached
+definition, including dormant arms, and the definitions named by reached symbol
+references, transitively: applications, helper and local calls, and oracle and
+relation declarations. Reachability is static: no selector is evaluated and no
+arm is pruned. A declaration outside that closure does not gate the selected
+entry. The shared unconditional-control helper remains available for consumers
+requiring that narrower profile: it refuses Protocol and participant selections,
+permits total Math, and charges all operations and symbol uses against one
+allowance of 100,000. Common preparation retains its cumulative work ledger;
+the narrower helper does not replace that ledger or grant a correspondence.
 
 Total `data.branch` regions are mathematical value computations, not conditional
 protocol interactions. Stage admission checks every arm and excludes protocol
@@ -217,8 +219,23 @@ no input equality. A statically constructed enum tag needs no payload equality,
 even when the payload has ordered provenance. These groups are
 requirements for actual entry admission; formation, a public flag, a producer
 annotation and the existence of an API result discharge none of them. A common
-enum tag establishes no payload equality. Local actions, entropy, received
-values and unsupported provenance cannot establish common control. Calls
+enum tag establishes no payload equality. An actual `protocol.exchange` forwards
+the immutable input component at its actual sender to its output components at
+exactly that sender and receiver on the completed normal path. This establishes
+agreement without an external input requirement, including when that very
+opaque Local or entropy result is delivered. Other input components and
+nonreceivers retain their distinct subjects. Ordered multicast prefixes grant
+no fact to undelivered recipients or stopped continuations. No messages, transport
+outcomes, acknowledgements or participant completion rules are changed.
+
+Independent native reconstruction retains fresh opaque result/role/invocation
+identities, actual SSA operands and actual selected call/role mappings. Distinct
+Local actions, entropy results and unsupported provenance cannot agree merely
+through matching operations or dependency sets. Congruent admitted total work
+and typed observations may follow actual forwarding. This is a prescribed
+normal-path control rule, with no statement/schema authority or adversarial
+honesty premise. Source requirements and optional specifications discharge none
+of these checks. Calls
 substitute actual ports and role maps through checked acyclic bodies. Repeats
 retain initializer, recurrence and zero-path dependencies separately.
 
@@ -229,6 +246,14 @@ retained dormant arms. An unrelated, uncalled definition cannot switch another
 definition's admission policy. Branch-free generic iteration retains its
 [joint count check](iteration.md); source-certified and named Entry admission
 still derive and discharge the required common-input inventory independently.
+Finite expressions can agree across private helper names. The reader resolves each
+domain, step and predicate at its use and compares the closed definitions through
+typed MLIR operation equivalence. It preserves ordered SSA uses, result positions,
+capture types, regions, and non-executable properties. A changed domain, captured
+operand or callback body can introduce a selector requirement. This analysis
+consumes the caller's cumulative work. Its transient classes have no role in
+source identity, statement binding or proof reuse.
+
 Call-closure discovery and subsequent derivations share one cumulative work
 allowance; discovery is not unmetered preparation for that derivation.
 
@@ -245,7 +270,7 @@ Unknown state in an unrelated carry creates no agreement obligation.
 Tag, guarded payload and extent observations project the initial and transition
 values separately. Projecting a selected value rejoins the arm observations:
 an identical known observation in every arm is independent of the selector.
-Unknown observations cannot establish equality, and a Protocol branch's own
+Distinct unknown observations cannot establish equality, and a Protocol branch's own
 scheduling demand remains separate. Payload alternatives and ordinals remain
 distinct; an
 inactive constructor alternative has no payload obligation on that guarded
@@ -256,6 +281,83 @@ count, initial and transition dependencies, including a possible zero path.
 Analysis checks stored bodies even for zero counts, without unrolling runtime
 bounds. Exhausted derivation work refuses with `common-control-capacity`;
 missing provenance refuses with `common-control-provenance`.
+
+### Paired Oracle repeat counts
+
+Oracle realization may replace a logical query block with participant-local
+counting work followed by a generated shared Repeat. Ordinary common-control
+analysis treats opaque Local results as distinct. A source/candidate pair may
+establish the count observation only after an independent reader has checked
+the actual source queries, generated operations, complete helper bodies and
+complete declaration inventory. A name, declaration signature, record or
+producer-supplied equation cannot establish it.
+
+For the checked recipes, a base constructor contributes one leaf and a virtual
+constructor contributes the sum of its ordered child-query occurrences. An empty
+virtual constructor contributes zero; repeated children and queries count with
+multiplicity. With positive capacity `c`, the generated Repeat count is
+`floor((leaves + c - 1) / c)`. The actual arithmetic, guarded representable
+bound, allocations, stored count and local return must match the recipe. These
+are normal-return observations under the retained source scheduling and anchor
+correspondence premises. They establish neither successful peer completion nor
+equality of complete stores, answers, authentication outcomes or failure paths.
+
+The observation belongs to one exact immutable original/candidate association,
+entry, query-block occurrence, generated Repeat and assembly, local result,
+role association, lexical arm ancestry and symbolic repeat coordinates. It is
+available only to that Repeat's scheduling demand and corresponding exit-count
+recurrence. Other Local results, carry initializers and transitions retain the
+ordinary rules. Original selector, coordinate and enclosing-count input
+requirements remain undischarged entry obligations alongside the candidate's
+requirements.
+
+Count observations do not select an entire generic definition for stronger
+ordinary scheduling checks. Definitions already selected by a Protocol branch
+or Oracle sequence access, and their callers, retain their full requirements,
+including where realization removes the original sequence access. An otherwise
+branch-free generic definition is traversed to validate every supplied count
+observation at its exact generated Repeat; unrelated ordinary repeats retain
+their existing joint runtime count rule. Demanded recurrence initializers and
+transitions still use ordinary derivation.
+
+Structural candidate checking is an internal phase of the paired reader, never
+public stage admission. Ordinary `admitStage`, raw-module projection and raw
+CPU run checking remain strict. The checked realization owner retains both
+actual subjects and supplies its unchanged candidate to projection and CPU
+bundle checking; optional simplification follows participant projection.
+Mutable inspection copies have no inherited count-equation authority. An
+external copy must establish its own complete pair association before use.
+
+All observation construction, body and inventory comparison, common-control
+completion, retained requirements and owner-copy work is bounded. A composed
+operation carries one cumulative allowance across these phases. Count completion
+exhaustion reports `common-control-capacity`; native preflight and body/inventory
+exhaustion retain `oracle-common-limit`. Neither exhaustion yields partial
+admission. These native checks do not supply an independent formal count-law
+proof or a security theorem.
+
+Entry source preflights debit that same allowance. One module size inspection
+and symbol/reference index may be reused only within the composed operation,
+for the exact source or candidate module and allowance while it remains
+immutable. Actual clones and structural comparisons reserve their operation,
+operand, result, block, region and attribute-slot work before traversal;
+interned attribute/type storage is inspected separately rather than charged
+as if cloning recursively copied it. This
+borrow is neither persistent trust nor authority for another module or clone.
+Each reached entry closure is still inspected and charged independently, and
+only its completed native-profile inspection can be reused on a repeated
+request for that same entry within the immutable borrow. Every actual closure
+visit and consumed symbolic reference remains charged. Local
+recipe construction stops at its first failed charge before copying or
+appending further instructions. Ordinary source admission also charges its
+actual common-control derivation to that composed allowance, including each
+application of a shared helper; a stored-structure reservation does not cover
+helper expansion. Local helper emission reserves its current candidate's
+declaration scan and symbol-name copies before constructing the emitter's name
+set. This reservation includes dormant declarations and previous generated
+helpers and bindings, and is repeated against the actual inventory after
+candidate mutation. Exhaustion stops before the name set is constructed or
+further instructions are emitted.
 
 Projection produces `protocol.participant_branch`, preserving the site and
 alternatives, each participant's captures/results and each actual arm. Services

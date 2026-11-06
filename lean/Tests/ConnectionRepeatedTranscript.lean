@@ -137,15 +137,13 @@ def bodyInstructions : List Zkc.Construction.Instruction :=
   stepInstructions "first" 15 17 ++ stepInstructions "second" 21 22
 def outerInstructions : List Zkc.Construction.Instruction := [
   ⟨.indicesAppend,[6,7],[.indices],[]⟩,
-  ⟨.loop "inner" 5 [22,24,26],[1,8,9,10],
-    [.data (.field field),.data (.field field),.transcript "suite"],bodyInstructions⟩]
+  ⟨.loop "inner" 5, [1,8,9,10], [.data (.field field),.data (.field field),.transcript "suite"], [⟨(.data .index :: [.data (.field field),.data (.field field),.transcript "suite"]), bodyInstructions, [22,24,26]⟩]⟩]
 def artifact : Zkc.Construction.Participant :=
   ⟨snapshot.source,snapshot.source,policy,"main.V",
     [.data .index,.data .index,.data .boolean,.data (.field field),.data (.field field),.transcript "suite"],
     [.data .boolean,.data (.field field),.data (.field field),.transcript "suite"],
     [⟨.indicesEmpty,[],[.indices],[]⟩,
-      ⟨.loop "outer" 3 [12,13,14],[0,3,4,5],
-        [.data (.field field),.data (.field field),.transcript "suite"],outerInstructions⟩],
+      ⟨.loop "outer" 3, [0,3,4,5], [.data (.field field),.data (.field field),.transcript "suite"], [⟨(.data .index :: [.data (.field field),.data (.field field),.transcript "suite"]), outerInstructions, [12,13,14]⟩]⟩],
     [2,7,8,9],[]⟩
 
 theorem context_checked : exportContext snapshot artifact = some context := by kernel_rfl

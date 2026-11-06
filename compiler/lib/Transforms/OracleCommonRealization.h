@@ -73,6 +73,9 @@ struct OracleCommonEntryRealization {
   std::vector<OracleResultReference> resultReferences;
 };
 struct OracleCommonRealization {
+  // Private immutable source owner; external checking still reads its supplied
+  // original independently. This field and emitter associations grant no proof.
+  mlir::OwningOpRef<mlir::ModuleOp> original;
   mlir::OwningOpRef<mlir::ModuleOp> module;
   std::vector<OracleCommonEntryRealization> entries;
 };
@@ -88,11 +91,12 @@ llvm::Expected<OracleRealizationFacts>
 checkOracleRealization(mlir::ModuleOp prepared,
                        const OracleCommonRealization &actual,
                        const OracleRealizationPolicy &policy = {});
-// Re-derive layouts, capacities and the common recipe from the frozen original,
-// then read the actual common SSA and every generated helper body. The reader
-// never invokes emission. This is native correspondence, not a Lean simulation.
-// A boundary publication retains its data and exact bytes together. Native
-// analyses consume OracleRealizationFacts, never these field names.
+// Re-derive layouts, capacities and source/candidate associations from the
+// frozen original, then read the actual common SSA and every generated helper
+// body. The reader never invokes emission. This is native correspondence, not a
+// Lean simulation. A boundary publication retains its data and exact bytes
+// together. Native analyses consume OracleRealizationFacts, never these field
+// names.
 struct OracleRealizationPublication {
   llvm::json::Value data;
   std::string bytes;

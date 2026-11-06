@@ -43,7 +43,7 @@ theorem fold_equation (xs : List F) (dimension columns : Nat) (point : List F) :
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
     program.payload foldDefinition fold_member
     foldBody fold_exact (.cons point (.cons xs (.cons dimension (.cons columns .nil))))).trans
-      (fold_body _ xs dimension columns point)
+      (fold_body (symbols := bindings.symbols) _ xs dimension columns point)
 
 theorem foldWrapper_equation (xs : List F) (dimension columns : Nat) (point : List F) :
     invoke (program.payload.meanings F G) foldWrapperHelper (prefixInputs xs dimension columns point) =
@@ -77,7 +77,7 @@ theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
   refine (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
     program.payload prefixDefinition prefix_member
     prefixBody prefix_exact (prefixInputs xs dimension columns point)).trans ?_
-  refine (prefix_body _ xs dimension columns point).trans ?_
+  refine (prefix_body (symbols := bindings.symbols) _ xs dimension columns point).trans ?_
   refine (foldWrapper_equation (G := G) xs dimension columns point).trans ?_
   change Evaluation.denoteFold (program.payload.meanings F G) foldSpec
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
@@ -120,12 +120,12 @@ theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F
   refine (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
     program.payload prefixDefinition prefix_member
     prefixBody prefix_exact (prefixInputs xs dimension columns point)).trans ?_
-  refine (prefix_body _ xs dimension columns point).trans ?_
+  refine (prefix_body (symbols := bindings.symbols) _ xs dimension columns point).trans ?_
   refine (foldWrapper_equation (G := G) xs dimension columns point).trans ?_
   change Evaluation.denoteFold (program.payload.meanings F G) foldSpec
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
   rw [Evaluation.denoteFold_pack]
-  have stopped := domain_admit (G := G) point
+  have stopped := domain_admit (G := G) (symbols := bindings.symbols) point
   rw [ite_eq_right invalid] at stopped
   simp only [stopped, Finite.admitThen]
 

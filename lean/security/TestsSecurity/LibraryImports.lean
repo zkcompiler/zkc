@@ -825,6 +825,7 @@ import ZkcSecurityTools.InputLaws
 import ZkcSecurityTools.PairConstruction
 import ZkcSecurityTools.SigmaReadback
 import ZkcSecurityTools.SourceInputClauses
+import ZkcSecurityTools.SourceInputReadback
 import ZkcSecurityTools.SourceProperties.Assembly
 import ZkcSecurityTools.SourceProperties.Builder
 import ZkcSecurityTools.SourceProperties.Loops

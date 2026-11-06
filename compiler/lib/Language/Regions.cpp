@@ -2,8 +2,8 @@
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<RegionInputs>
-BodyChecker::regionInputs(const Expression &control) {
+std::optional<RegionInputs> BodyChecker::regionInputs(const Expression &control,
+                                                      bool includeHead) {
   FreePlaceEnvironment environment;
   for (const auto &[id, state] : bindings) {
     (void)state;
@@ -22,7 +22,8 @@ BodyChecker::regionInputs(const Expression &control) {
     environment.domains.insert(id);
   }
   environment.place = [&](uint32_t id) { return sourcePlace(id, 1, true); };
-  return queryFreePlaces(checker.types, syntax, control, environment);
+  return queryFreePlaces(checker.types, syntax, control, environment,
+                         includeHead);
 }
 std::optional<std::set<BindingId>>
 BodyChecker::regionStates(const RegionInputs &inputs, Span span) {

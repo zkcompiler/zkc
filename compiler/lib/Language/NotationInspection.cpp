@@ -255,6 +255,8 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
           });
           authored("authored_static_arguments", binding.authoredArguments);
           strings("holes", binding.holes);
+          if (binding.filteredOnly)
+            json.attribute("filtered_only", true);
           json.attributeBegin("filtered_target");
           if (!binding.filtered)
             json.value(nullptr);
@@ -402,10 +404,10 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                     bool domain =
                         slot.kind == Declaration::InputSlot::Kind::Domain;
                     json.attribute("kind", domain ? "domain" : "scoped");
-                    json.attribute("binding",
-                                   domain
-                                       ? evidence.domainArguments[slot.index]
-                                       : evidence.scopedArguments[slot.index]);
+                    json.attribute(
+                        "binding",
+                        domain ? evidence.descriptorArguments[slot.index]
+                               : evidence.scopedArguments[slot.index]);
                   } else {
                     json.attribute("kind", "data");
                     json.attribute("runtime_value",

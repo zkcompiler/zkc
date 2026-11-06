@@ -1,8 +1,10 @@
 #include "BodyMapping.h"
 #include "BodySummary.h"
+#include "CallableConstraints.h"
 #include "ClosureInputs.h"
 #include "DataRequirements.h"
-#include "DomainClosure.h"
+#include "DescriptorClosure.h"
+#include "DescriptorFrames.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "OracleDefinitions.h"
@@ -11,6 +13,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/SourceTerms.h"
+#include "zkc/Support/Refusal.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -33,13 +36,17 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       return false;
   for (const auto &binding : body.scopedBindings) {
     if (!types.charge(binding.captures.size() + binding.scopedCaptures.size() +
-                          binding.domainCaptures.size() + 1,
+                          binding.descriptorCaptures.size() + 1,
                       binding.span) ||
         !types.chargeType(binding.signature.result, binding.span))
       return false;
     for (const auto &input : binding.signature.inputs)
       if (!types.chargeType(input, binding.span))
         return false;
+    if (binding.named) {
+      if (!chargeSelectedCallable(types, *binding.named, binding.span))
+        return false;
+    }
     // The immutable nested Body is charged when its helper is instantiated.
     // Captured-place metadata is copied here with the containing binding.
     if (binding.computation)
@@ -48,13 +55,16 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
             !types.chargeType(capture.type, capture.firstUse))
           return false;
   }
-  for (const auto &domain : body.domainBindings) {
+  for (const auto &domain : body.descriptorBindings) {
     if (!types.charge(domain.operands.size() + domain.children.size() +
                           domain.arguments.size() +
                           domain.argumentOrder.size() + 1,
                       domain.span) ||
-        !types.chargeType(domain.item, domain.span))
+        !types.chargeContract(domain.contract, domain.span))
       return false;
+    for (const auto &edge : domain.children)
+      if (!types.chargeContract(edge.contract, domain.span))
+        return false;
     for (const auto &argument : domain.arguments)
       if (!types.chargeType(argument, domain.span))
         return false;
@@ -76,7 +86,7 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       if (!types.charge(binding.operands.size() + binding.symbol.size() +
                             binding.argumentOrder.size() +
                             binding.scopedArguments.size() +
-                            binding.domainArguments.size() +
+                            binding.descriptorArguments.size() +
                             binding.roles.size() + binding.services.size() + 1,
                         op.span))
         return false;
@@ -127,7 +137,7 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
     } else if (const auto *call = std::get_if<HelperCall>(&op.action)) {
       if (!types.charge(call->operands.size() + call->arguments.size() +
                             call->scopedArguments.size() +
-                            call->domainArguments.size() + 1,
+                            call->descriptorArguments.size() + 1,
                         op.span))
         return false;
       for (const auto &argument : call->arguments)
@@ -168,7 +178,7 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
         return false;
     } else if (const auto *control = std::get_if<Control>(&op.action)) {
       if (!types.charge(control->operands.size() + control->regions.size() +
-                            control->domainArguments.size() +
+                            control->descriptorArguments.size() +
                             control->roles.size() + control->services.size(),
                         op.span))
         return false;
@@ -187,6 +197,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                        ArrayRef<Asset> assets, Work &work,
                        DeclarationId selected,
                        std::optional<HostInvocation::Kind> operation) {
+  // This owner constructs the lookup maps once. Nested layout observations
+  // borrow them; their work must not pay for repeated index reconstruction.
+  if (auto error = chargeSemanticIndex(declarations, work))
+    return error;
   Semantics types(declarations, assets, work);
   auto close = [&]() -> bool {
     const unsigned templates = declarations.size();
@@ -203,11 +217,12 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     std::vector<DeclarationId> generatedTemplates;
     std::function<std::optional<DeclarationId>(
         DeclarationId, ArrayRef<Type>, unsigned, ArrayRef<DeclarationId>,
-        ArrayRef<std::shared_ptr<const DomainShape>>, const ClosureLayout &)>
+        ArrayRef<std::shared_ptr<const DescriptorShape>>,
+        const ClosureLayout &)>
         instantiate;
     std::function<bool(Body &, const Substitution &, Body::Mode, unsigned,
                        unsigned &, const std::vector<Environment> &,
-                       ArrayRef<DomainEnvironment>)>
+                       ArrayRef<DescriptorEnvironment>)>
         closeBody;
     auto closeType = [&](Type &type, const Substitution &bindings, Span span) {
       auto result = types.substitute(type, bindings, span);
@@ -269,7 +284,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode,
                     unsigned depth, unsigned &height,
                     const std::vector<Environment> &environment,
-                    ArrayRef<DomainEnvironment> domains) {
+                    ArrayRef<DescriptorEnvironment> domains) {
       body.mode = mode;
       ValueOrigins bodyOrigins(types, body);
       for (auto &service : body.services)
@@ -297,17 +312,18 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (mode == Body::Mode::Local)
           value.components.clear();
       }
-      std::vector<std::optional<DomainEnvironment>> resolvedDomains(
-          body.domainBindings.size());
+      std::vector<std::optional<DescriptorEnvironment>> resolvedDomains(
+          body.descriptorBindings.size());
       auto resolveDomain =
-          [&](unsigned index) -> std::optional<DomainEnvironment> {
+          [&](unsigned index) -> std::optional<DescriptorEnvironment> {
         if (index >= resolvedDomains.size()) {
           types.fail("source.finite-domain", "domain edge outside body", {});
           return {};
         }
         if (!resolvedDomains[index])
-          resolvedDomains[index] = closeDomain(types, declarations, body, index,
-                                               bindings, domains, &bodyOrigins);
+          resolvedDomains[index] =
+              closeDescriptor(types, declarations, body, index, bindings,
+                              domains, &bodyOrigins);
         return resolvedDomains[index];
       };
       std::vector<std::optional<Environment>> resolved(
@@ -322,6 +338,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                      body.values.empty() ? Span{} : body.values.front().span);
           return {};
         }
+        if (!types.charge(1, {}))
+          return {};
         if (resolved[index])
           return resolved[index];
         const auto &binding = body.scopedBindings[index];
@@ -336,6 +354,32 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           }
           return resolved[index] = environment[*binding.parameter];
         }
+        if (binding.named) {
+          const auto &selection = *binding.named;
+          std::vector<Type> arguments;
+          for (const auto &argument : selection.arguments) {
+            auto value = types.substitute(argument, bindings, binding.span);
+            if (!value)
+              return {};
+            arguments.push_back(std::move(*value));
+          }
+          auto module = selection.target.module;
+          if (module) {
+            module = types.substitute(*module, bindings, binding.span);
+            if (!module)
+              return {};
+          }
+          auto dispatch = types.dispatch(module, selection.target.declaration,
+                                         arguments, binding.span);
+          if (!dispatch)
+            return {};
+          auto helper = instantiate(dispatch->declaration, dispatch->arguments,
+                                    depth + 1, {}, {}, {});
+          if (!helper)
+            return {};
+          height = std::max(height, heights.at(helper->index) + 1);
+          return resolved[index] = Environment{*helper, {}};
+        }
         const auto &computation = *binding.computation;
         std::vector<DeclarationId> selected;
         std::vector<ValueId> hiddenCaptures;
@@ -347,8 +391,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           hiddenCaptures.insert(hiddenCaptures.end(), value->captures.begin(),
                                 value->captures.end());
         }
-        std::vector<std::shared_ptr<const DomainShape>> selectedDomains;
-        for (auto capture : binding.domainCaptures) {
+        std::vector<std::shared_ptr<const DescriptorShape>> selectedDomains;
+        for (auto capture : binding.descriptorCaptures) {
           auto domain = resolveDomain(capture);
           if (!domain)
             return {};
@@ -361,6 +405,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         auto found = scopedTemplates.find(identity);
         DeclarationId source;
         if (found == scopedTemplates.end()) {
+          if (auto error = chargeRequirementSnapshot(
+                  declarations[computation.lexicalOwner.index], work)) {
+            types.accept(std::move(error), binding.span);
+            return {};
+          }
           Declaration helper = declarations[computation.lexicalOwner.index];
           helper.id = {uint32_t(declarations.size())};
           source = helper.id;
@@ -391,10 +440,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           helper.outputs.clear();
           helper.inputOrder.clear();
           helper.scopedInputs.clear();
-          helper.domainInputs.clear();
-          helper.domainArguments.clear();
-          helper.domainResult.reset();
-          helper.domainDefinition.reset();
+          helper.descriptorInputs.clear();
+          helper.descriptorArguments.clear();
+          helper.descriptorResult.reset();
+          helper.descriptorDefinition.reset();
           helper.finiteDefinition.reset();
           helper.dataPreconditions.clear();
           helper.body = computation.body;
@@ -412,11 +461,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               helper.scopedInputs.push_back(
                   {"body" + std::to_string(*capture.parameter),
                    capture.signature, capture.span});
-          for (const auto &capture : helper.body->domainBindings)
+          for (const auto &capture : helper.body->descriptorBindings)
             if (capture.parameter)
-              helper.domainInputs.push_back(
-                  {"domain" + std::to_string(*capture.parameter), capture.item,
-                   capture.span});
+              helper.descriptorInputs.push_back(
+                  {"domain" + std::to_string(*capture.parameter),
+                   capture.contract, capture.span});
           declarations.push_back(std::move(helper));
           generatedTemplates.push_back(source);
           scopedTemplates.emplace(identity, source);
@@ -654,8 +703,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             if (!types.checkArguments(source, call->arguments, op.span))
               return false;
             if (!source.body || source.body->operations.size() != 1 ||
-                source.domainInputs.size() != 1 ||
-                call->domainArguments.size() != 1 ||
+                source.descriptorInputs.size() != 1 ||
+                call->descriptorArguments.size() != 1 ||
                 call->scopedArguments.size() != source.scopedInputs.size() ||
                 call->operands.size() != source.inputs.size() ||
                 op.results.size() != source.outputs.size())
@@ -675,7 +724,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             for (unsigned i = 0; i < source.outputs.size(); ++i)
               if (!matches(source.outputs[i].type, op.results[i]))
                 return false;
-            auto item = source.domainInputs.front().item;
+            auto item =
+                descriptorType(source.descriptorInputs.front().contract);
             if (!closeType(item, selectedBindings, op.span))
               return false;
             std::vector<ScopedSignature> signatures;
@@ -717,10 +767,16 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             // Resolving a callback can grow declarations; keep no borrowed
             // declaration or body reference across that operation.
             const auto finite = *application;
-            auto domain = resolveDomain(call->domainArguments.front());
+            auto domain = resolveDomain(call->descriptorArguments.front());
             if (!domain)
               return false;
-            if (item != domain->shape->nodes[domain->shape->result].item)
+            if (!domain->shape ||
+                domain->shape->result >= domain->shape->nodes.size() ||
+                !finiteDescriptorItem(
+                    domain->shape->nodes[domain->shape->result].contract) ||
+                item !=
+                    descriptorType(
+                        domain->shape->nodes[domain->shape->result].contract))
               return types.fail("source.finite-domain",
                                 "closed domain item type differs", op.span);
             auto step = resolveScoped(call->scopedArguments[finite.body], 1);
@@ -762,8 +818,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             hiddenCaptures.insert(hiddenCaptures.end(), value->captures.begin(),
                                   value->captures.end());
           }
-          std::vector<std::shared_ptr<const DomainShape>> selectedDomains;
-          for (auto argument : call->domainArguments) {
+          std::vector<std::shared_ptr<const DescriptorShape>> selectedDomains;
+          for (auto argument : call->descriptorArguments) {
             auto domain = resolveDomain(argument);
             if (!domain)
               return false;
@@ -789,7 +845,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           auto instance = instantiate(target, call->arguments, depth + 1,
                                       selected, selectedDomains, layout);
           call->scopedArguments.clear();
-          call->domainArguments.clear();
+          call->descriptorArguments.clear();
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -893,14 +949,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           for (const auto &entry : environment)
             captures.insert(captures.end(), entry.captures.begin(),
                             entry.captures.end());
-          std::vector<DomainEnvironment> selectedDomains;
-          for (auto argument : control->domainArguments) {
+          std::vector<DescriptorEnvironment> selectedDomains;
+          for (auto argument : control->descriptorArguments) {
             auto domain = resolveDomain(argument);
             if (!domain)
               return false;
             captures.insert(captures.end(), domain->operands.begin(),
                             domain->operands.end());
-            control->domainShapes.push_back(domain->shape);
+            control->descriptorShapes.push_back(domain->shape);
             selectedDomains.push_back(std::move(*domain));
           }
           const bool loop = control->kind == Control::Kind::For;
@@ -991,7 +1047,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             control->operands.insert(control->operands.end(),
                                      extraOperands->begin(),
                                      extraOperands->end());
-          control->domainArguments.clear();
+          control->descriptorArguments.clear();
         }
       }
       auto effects = inferEffects(types, declarations, body);
@@ -1003,7 +1059,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             body.operations.empty() ? Span{} : body.operations.front().span);
       body.effects = std::move(*effects);
       body.scopedBindings.clear();
-      body.domainBindings.clear();
+      body.descriptorBindings.clear();
       if (mode == Body::Mode::Math) {
         std::vector<Dependencies> inputs;
         for (unsigned i = 0; i < body.inputs; ++i)
@@ -1025,7 +1081,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     };
     instantiate = [&](DeclarationId origin, ArrayRef<Type> args, unsigned depth,
                       ArrayRef<DeclarationId> scoped,
-                      ArrayRef<std::shared_ptr<const DomainShape>> domains,
+                      ArrayRef<std::shared_ptr<const DescriptorShape>> domains,
                       const ClosureLayout &providedLayout)
         -> std::optional<DeclarationId> {
       const auto &source = declarations[origin.index];
@@ -1059,9 +1115,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                      source.span);
           return {};
         }
-        if (!types.chargeType(arg, source.span))
+        if (!types.chargeIdentity(arg, source.span))
           return {};
-        detail::frame(key, typeIdentity(arg));
+        frameTypeIdentity(key, arg);
       }
       if (scoped.size() != source.scopedInputs.size()) {
         types.fail("source.scoped", "specialization scoped arity differs",
@@ -1078,7 +1134,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         }
         frame(key, declarations[selected.index].symbol);
       }
-      if (domains.size() != source.domainInputs.size()) {
+      if (domains.size() != source.descriptorInputs.size()) {
         types.fail("source.finite-domain",
                    "specialization domain arity differs", source.span);
         return {};
@@ -1088,6 +1144,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (!domain || !types.charge(domain->identity.size() + 1, source.span))
           return {};
         frame(key, domain->identity);
+        auto formation = descriptorFormationKey(types, *domain, source.span);
+        if (!formation ||
+            !descriptorIdentityFrame(types, key, *formation, source.span))
+          return {};
       }
       auto layout = providedLayout;
       if (layout.inputs.empty() && source.inputs.size())
@@ -1139,6 +1199,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       // Charge the snapshot before allocating it. Recursive instances can grow
       // the declaration vector, so no reference into that vector crosses
       // closeBody.
+      if (auto error = chargeRequirementSnapshot(source, work)) {
+        types.accept(std::move(error), source.span);
+        return {};
+      }
       for (const auto &role : source.roles)
         if (!types.charge(role.size() + 1, source.span))
           return {};
@@ -1214,13 +1278,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       DeclarationId id{uint32_t(declarations.size())};
       result.id = id;
       // checkArguments has discharged every template admission against args.
-      result.admissions.clear();
+      std::vector<AdmissionObligation>().swap(result.admissions);
+      std::vector<ConsumerRequirement>().swap(result.consumerRequirements);
       result.origin = origin;
       result.members.clear();
       result.staticArguments.assign(args.begin(), args.end());
       result.scopedArguments.assign(scoped.begin(), scoped.end());
       result.closureLayout = layout;
-      result.domainArguments.assign(domains.begin(), domains.end());
+      result.descriptorArguments.assign(domains.begin(), domains.end());
       // Native participant carriers bound identifiers to 128 bytes. Reuse the
       // instance key for long declaration paths instead of narrowing source
       // names.
@@ -1351,19 +1416,20 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           }
           environment.push_back(std::move(selected));
         }
-        std::vector<DomainEnvironment> domainEnvironment;
+        std::vector<DescriptorEnvironment> domainEnvironment;
         for (unsigned i = 0; i < domains.size(); ++i) {
           const auto &domain = domains[i];
-          auto item = types.substitute(result.domainInputs[i].item, bindings,
-                                       result.span);
-          if (!item || domain->result >= domain->nodes.size() ||
-              *item != domain->nodes[domain->result].item) {
+          auto item = types.substitute(result.descriptorInputs[i].contract,
+                                       bindings, result.span);
+          if (!item || !domain->arena ||
+              domain->payload >= domain->arena->payloads.size() ||
+              *item != domain->arena->payloads[domain->payload].contract) {
             if (!types.diagnostic)
               types.fail("source.finite-domain",
                          "closed domain item type differs", result.span);
             return {};
           }
-          DomainEnvironment selected{domain, {}};
+          DescriptorEnvironment selected{domain, {}};
           for (const auto &type : domain->inputs) {
             if (offset >= layout.captures.size()) {
               types.fail("source.closure-inputs",
@@ -1415,9 +1481,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           return {};
         result.dataPreconditions = std::move(*assumptions);
         auto requirements = deriveDataPreconditions(
-            types, declarations, result, *body,
+            types, declarations, result, *body, result.dataPreconditions,
             result.scopedOrigin || !result.scopedInputs.empty() ||
-                !result.domainInputs.empty());
+                !result.descriptorInputs.empty());
         if (!requirements)
           return {};
         result.dataPreconditions = std::move(*requirements);
@@ -1507,7 +1573,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           !checkOracleDefinition(types, declarations, result))
         return {};
       result.scopedInputs.clear();
-      result.domainInputs.clear();
+      result.descriptorInputs.clear();
       result.inputOrder.clear();
       for (unsigned i = 0; i < result.inputs.size(); ++i)
         result.inputOrder.push_back({Declaration::InputSlot::Kind::Data, i});
@@ -1563,14 +1629,23 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         continue;
       json::Array arguments;
       for (const auto &argument : decl.staticArguments) {
-        if (!types.chargeType(argument, decl.span))
-          return false;
-        auto encoded = encodeStaticTerm(argument);
-        if (!encoded) {
-          consumeError(encoded.takeError());
-          return types.fail("source.relation",
-                            "opaque static argument is not closed", decl.span);
-        }
+        auto encoded =
+            encodeStaticTerm(argument, types.work.limits,
+                             types.work.remaining(), [&](uint64_t amount) {
+                               return types.work.charge(amount, decl.span);
+                             });
+        if (!encoded)
+          return types.accept(
+              handleErrors(
+                  encoded.takeError(),
+                  [&](const Refusal &error) -> Error {
+                    if (error.code == "source.static-term")
+                      return failure("source.relation",
+                                     "opaque static argument is not closed",
+                                     decl.span);
+                    return make_error<Refusal>(error.code, error.detail);
+                  }),
+              decl.span);
         arguments.push_back(std::move(*encoded));
       }
       std::string canonical;

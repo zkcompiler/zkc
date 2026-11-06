@@ -1,4 +1,5 @@
 #include "OracleQueryResponse.h"
+#include "OracleEmissionAccounting.h"
 #include "RealizationEmission.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -16,18 +17,25 @@ using Types = SmallVector<Type>;
 using Control = exec::ScopedExecutionBuilder;
 using Controller = OracleQueryController;
 struct Emitter {
+  OracleNativeWork &common;
   protocol_ir::ProtocolModuleOp unit;
   const OracleQueryExchange &model;
   OracleQueryResponse result;
+  OracleEmissionListener emission;
   OpBuilder builder;
-  mathematical::RealizationEmitter bindings;
+  OracleBindingEmitter bindings;
   Type index;
   unsigned next = 0;
-  Emitter(protocol_ir::ProtocolModuleOp unit, const OracleQueryExchange &model)
-      : unit(unit), model(model), builder(unit.getContext()),
-        bindings(unit, "_oracle_response_binding_"),
+  Emitter(protocol_ir::ProtocolModuleOp unit, const OracleQueryExchange &model,
+          OracleNativeWork &common)
+      : common(common), unit(unit), model(model), emission(common),
+        builder(unit.getContext(), &emission),
+        bindings(unit, "_oracle_response_binding_", common),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)) {}
   Error plan(OracleVirtualFunctionWork &work) {
+    if (!common.charge(64 + model.arms.size() + model.state.size() +
+                       model.receiverStores.size() + model.holderStores.size()))
+      return error("oracle-common-limit");
     auto refuse = [] { return error("oracle-response-layout"); };
     if (model.arms.empty() ||
         model.arms.size() > oracleExchangeConstructorLimit ||
@@ -128,19 +136,21 @@ struct Emitter {
     uint64_t slotsNeeded = operations * (width + 16);
     if (operations > work.operations || slotsNeeded > work.slots)
       return error("oracle-response-limit");
-    work.operations -= operations;
-    work.slots -= slotsNeeded;
+    if (!work.reserveCapacity(operations, slotsNeeded))
+      return error("oracle-response-limit");
     return Error::success();
   }
   func::FuncOp function(StringRef label, TypeRange inputs, TypeRange outputs,
                         bool region,
                         llvm::function_ref<void(Control &, ValueRange)> emit) {
+    reserveOracleEmission(common, 8 + inputs.size() + outputs.size());
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&unit.getBody().front());
     std::string name;
     do {
-      name = "_oracle_response_" + label.str() + "_" + std::to_string(next++);
-    } while (SymbolTable::lookupSymbolIn(unit, name));
+      name = "_oracle_response_" + label.str() + "_" +
+             std::to_string(oracleEmissionOrdinal(common, next));
+    } while (lookupOracleEmissionSymbol(unit, name, common));
     Types formals{runtime::ScopeType::get(unit.getContext())};
     append_range(formals, inputs);
     auto helper = func::FuncOp::create(
@@ -156,6 +166,7 @@ struct Emitter {
       helper->setAttr("runtime.origin",
                       builder.getArrayAttr({builder.getStringAttr(name),
                                             builder.getArrayAttr({})}));
+    reserveOracleEmission(common, 1 + helper.getNumArguments());
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
     emit(control, helper.getArguments().drop_front());
@@ -322,18 +333,24 @@ struct Emitter {
 Expected<OracleQueryResponse>
 emitOracleQueryResponse(ModuleOp candidate, const OracleQueryExchange &model,
                         OracleVirtualFunctionWork &sharedBudget) {
-  if (!candidate || !hasSingleElement(candidate.getBody()->getOperations()))
-    return error("oracle-response-source");
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
-      failed(zkc::admitStage(candidate)))
-    return error("oracle-response-source");
-  Emitter emitter(unit, model);
-  if (auto e = emitter.plan(sharedBudget))
-    return std::move(e);
-  emitter.emitAuthenticate();
-  emitter.emitResume();
-  return std::move(emitter.result);
+  return oracleExpectedWithWork(
+      sharedBudget.getWork(), [&]() -> Expected<OracleQueryResponse> {
+        if (!candidate ||
+            !hasSingleElement(candidate.getBody()->getOperations()))
+          return error("oracle-response-source");
+        auto unit = dyn_cast<protocol_ir::ProtocolModuleOp>(
+            candidate.getBody()->front());
+        if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
+            failed(sharedBudget.checkSubject(candidate)))
+          return error("oracle-response-source");
+        auto session = startOracleEmissionSession(sharedBudget.getWork(), unit);
+        Emitter emitter(unit, model, sharedBudget.getWork());
+        if (auto e = emitter.plan(sharedBudget))
+          return std::move(e);
+        emitter.emitAuthenticate();
+        emitter.emitResume();
+        commitOracleEmissionSession(session);
+        return std::move(emitter.result);
+      });
 }
 } // namespace zkc::protocol

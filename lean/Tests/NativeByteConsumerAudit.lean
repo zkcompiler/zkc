@@ -250,6 +250,11 @@ import all Zkc.Construction.ConnectionLibrary
 import all Zkc.Construction.ConnectionLoopFrames
 import all Zkc.Construction.ConnectionLoops
 import all Zkc.Construction.ConnectionMasking
+import all Zkc.Construction.ConnectionMathApplication
+import all Zkc.Construction.ConnectionMathFrames
+import all Zkc.Construction.ConnectionMathRegion
+import all Zkc.Construction.ConnectionMathRegionSoundness
+import all Zkc.Construction.ConnectionMathSimulation
 import all Zkc.Construction.ConnectionObservationPrefix
 import all Zkc.Construction.ConnectionObservations
 import all Zkc.Construction.ConnectionOrigins

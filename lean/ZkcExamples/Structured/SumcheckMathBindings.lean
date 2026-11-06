@@ -16,6 +16,8 @@ abbrev collection : MultilinearCollectBodies.Bindings where
   computation := "_mathematical_admission_1"
 
 abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
-  ⟨"_finite_admission_3", "_mathematical_admission_2"⟩
+  ⟨"_finite_admission_3", "_mathematical_admission_2", ⟨"zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402",
+    "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_domain",
+    "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_body"⟩⟩
 
 end ZkcExamples.Structured.SumcheckMathBindings

@@ -1,6 +1,8 @@
 //! Build-time projection. No JSON parser or allocation enters the generated
 //! runtime table. Formation is checked before any Rust output is published.
 
+#[path = "descriptor.rs"]
+mod descriptor;
 #[path = "installed.rs"]
 mod installed;
 #[path = "validation.rs"]
@@ -718,6 +720,7 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
             "consumerProfiles",
             "frontendDeclarations",
             "frontendRules",
+            "frontendSchemes",
             "frontendNotations",
             "frontendConstructors",
             "frontendHomes",
@@ -736,30 +739,80 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
         &[],
     )?;
     choice(&v["format"], &["zkc.contract-declarations/0"])?;
+    descriptor::validate(&v)?;
     let mut fields = vec![
+        (
+            "frontend_schemes",
+            descriptor::schemes(&v["frontendSchemes"])?,
+        ),
+        (
+            "frontend_constructors",
+            array(&v["frontendConstructors"], |r| {
+                object(r, &["name", "form"], &[])?;
+                Ok(record(
+                    "FrontendConstructor",
+                    &[
+                        ("name", quoted(&r["name"])?),
+                        (
+                            "form",
+                            variant(&r["form"], "FrontendConstructorForm", descriptor::HEADS)?,
+                        ),
+                    ],
+                ))
+            })?,
+        ),
         (
             "frontend_declarations",
             array(&v["frontendDeclarations"], |r| {
-                object(
-                    r,
-                    &[
-                        "identity",
-                        "owner",
-                        "name",
-                        "kind",
-                        "statics",
-                        "inputs",
-                        "output",
-                        "association",
-                        "prelude",
-                    ],
-                    &[],
-                )?;
-                object(&r["association"], &["kind", "target"], &[])?;
-                let target = quoted(&r["association"]["target"])?;
-                let association = match choice(&r["association"]["kind"], &["primitive", "rule"])? {
-                    "primitive" => format!("FrontendAssociation::Primitive({target})"),
-                    _ => format!("FrontendAssociation::Rule({target})"),
+                let signature = if let Some(shell) = descriptor::signature(r, &v)? {
+                    shell
+                } else {
+                    object(
+                        r,
+                        &[
+                            "identity",
+                            "owner",
+                            "name",
+                            "kind",
+                            "statics",
+                            "inputs",
+                            "output",
+                            "association",
+                            "prelude",
+                        ],
+                        &[],
+                    )?;
+                    object(&r["association"], &["kind", "target"], &[])?;
+                    let target = quoted(&r["association"]["target"])?;
+                    let association =
+                        match choice(&r["association"]["kind"], &["primitive", "rule"])? {
+                            "primitive" => format!("FrontendAssociation::Primitive({target})"),
+                            _ => format!("FrontendAssociation::Rule({target})"),
+                        };
+                    format!(
+                        "FrontendSignature::Concrete({})",
+                        record(
+                            "ConcreteSourceSignature",
+                            &[
+                                ("statics", descriptor::statics(&r["statics"])?),
+                                (
+                                    "inputs",
+                                    array(&r["inputs"], |s| {
+                                        object(s, &["name", "type"], &[])?;
+                                        Ok(record(
+                                            "SourceInput",
+                                            &[
+                                                ("name", quoted(&s["name"])?),
+                                                ("term", source_term(&s["type"])?),
+                                            ],
+                                        ))
+                                    })?
+                                ),
+                                ("output", optional(r.get("output"), source_term)?),
+                                ("association", association),
+                            ]
+                        )
+                    )
                 };
                 Ok(record(
                     "FrontendDeclaration",
@@ -772,37 +825,17 @@ pub fn generate(declarations: &[u8], installation: &[u8]) -> Result<String> {
                             variant(
                                 &r["kind"],
                                 "SourceDeclarationKind",
-                                &["Math", "Local", "Interface"],
+                                &[
+                                    "Math",
+                                    "Local",
+                                    "Interface",
+                                    "Requirement",
+                                    "ContractConstructor",
+                                    "View",
+                                ],
                             )?,
                         ),
-                        (
-                            "statics",
-                            array(&r["statics"], |s| {
-                                object(s, &["name", "parameter"], &[])?;
-                                Ok(record(
-                                    "SourceStatic",
-                                    &[
-                                        ("name", quoted(&s["name"])?),
-                                        ("kind", kind(&s["parameter"])?),
-                                    ],
-                                ))
-                            })?,
-                        ),
-                        (
-                            "inputs",
-                            array(&r["inputs"], |s| {
-                                object(s, &["name", "type"], &[])?;
-                                Ok(record(
-                                    "SourceInput",
-                                    &[
-                                        ("name", quoted(&s["name"])?),
-                                        ("term", source_term(&s["type"])?),
-                                    ],
-                                ))
-                            })?,
-                        ),
-                        ("output", optional(r.get("output"), source_term)?),
-                        ("association", association),
+                        ("signature", signature),
                         ("prelude", flag(&r["prelude"])?),
                     ],
                 ))

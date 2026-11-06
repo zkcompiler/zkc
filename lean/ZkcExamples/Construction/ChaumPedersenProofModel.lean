@@ -7,9 +7,9 @@ public import Zkc.Protocols.Schnorr.Variants
 /-! The model of the compiled Chaum–Pedersen proof Entry's original validator.
 
 The wiring names the export's prover role, domains and the commitment,
-challenge, delivery and response sites of `sigma::ChaumPedersen`. The generated
+challenge, delivery and response sites of `sigma::ChaumPedersen`. The checked
 `ChaumPedersenProof.process_equation` states that the admitted original
-validator is the common Chaum–Pedersen verifier, by computation.
+validator is the common Chaum–Pedersen verifier, by its source presentation.
 -/
 
 namespace ZkcExamples.Construction.ChaumPedersenProof

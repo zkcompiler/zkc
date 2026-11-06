@@ -15,7 +15,7 @@ open Zkc.Construction Zkc.Executable
 /-- Read the actual artifact and check canonical normalization against its
 participant, including the exact ordered return selection and output schema. -/
 def certified (participant : Participant) (validator : Validator) : Bool :=
-  match Validator.read installed (Instruction.helperList participant.instructions) validator with
+  match Validator.read installed (Instruction.helpers participant.instructions) validator with
   | .error _ => false
   | .ok reading =>
       (CanonicalNormalization.check participant.inputs participant.outputs

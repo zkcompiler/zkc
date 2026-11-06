@@ -72,6 +72,9 @@ public:
   /// Residual coefficients stay nonnegative; no multiplicative factors cancel.
   llvm::Expected<std::pair<Natural, Natural>>
   cancelCommonTerms(const Natural &, const Natural &);
+  /// Coefficient domination of normalized nonnegative polynomials. This does
+  /// not multiply, chain premises, or infer new assumptions.
+  llvm::Expected<bool> dominatedBy(const Natural &, const Natural &);
   /// Expand 2^(c + sum(k_i * N_i)). Nonlinear symbolic exponents and towers
   /// refuse. Closed coefficients must fit uint64; symbolic values stay bounded
   /// by the shared normalization limits, not by an assumed value of N_i.

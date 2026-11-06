@@ -97,7 +97,10 @@ bool Checker::prepareOraclePredicates() {
         return;
       }
       Expression both;
-      both.kind = Expression::Kind::And;
+      // Every requires clause has an independently retained checked value.
+      // Their generated aggregate is eager; authored And/Or stays selected.
+      both.kind = Expression::Kind::Intrinsic;
+      both.text = "bool.and";
       both.children = {*conjunction, condition};
       both.span = span;
       conjunction = append(std::move(both));
@@ -143,7 +146,8 @@ bool Checker::prepareOraclePredicates() {
       equal.span = shape.span;
       auto atBound = append(std::move(equal));
       Expression within;
-      within.kind = Expression::Kind::Or;
+      within.kind = Expression::Kind::Intrinsic;
+      within.text = "bool.or";
       within.children = {below, atBound};
       within.span = shape.span;
       conjoin(append(std::move(within)), shape.span);
@@ -168,7 +172,7 @@ bool Checker::oracleSignature(Declaration &decl, unsigned depth) {
       decl.outputs.front().type.kind != Type::Kind::Oracle ||
       decl.outputs.front().type.arguments.size() != 1 || !decl.roles.empty() ||
       !decl.services.empty() || !decl.scopedInputs.empty() ||
-      !decl.domainInputs.empty() || decl.effectAllowance ||
+      !decl.descriptorInputs.empty() || decl.effectAllowance ||
       !decl.dataPreconditions.empty() ||
       llvm::any_of(source.inputs, [](const SyntaxPort &port) {
         return port.scoped || port.domain || port.binding;

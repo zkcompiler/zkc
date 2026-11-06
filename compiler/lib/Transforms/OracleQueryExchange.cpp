@@ -1,4 +1,5 @@
 #include "OracleQueryExchange.h"
+#include "OracleEmissionAccounting.h"
 #include "RealizationEmission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -14,129 +15,163 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
                         const OracleQueryController &receiver,
                         const OracleQueryController &holder,
                         ArrayRef<OracleMerkleFunctions> merkle) {
-  auto refuse = [] { return error("oracle-common-communication-profile"); };
-  OracleQueryExchange result;
-  result.holder = holder.role;
-  result.state = receiver.state;
-  result.receiverStores = receiver.stores;
-  SmallVector<data::AlternativeAttr> alternatives;
-  VariantIdentity::Tuple constructors;
-  for (auto [slot, item] : enumerate(receiver.constructors)) {
-    const auto &anchor = storage.constructors[item.source];
-    if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual)
-      continue;
-    if (anchor.scheme.empty() || anchor.holder == receiver.role ||
-        anchor.holder != holder.role || item.source >= merkle.size())
+  OracleNativeWork common;
+  return planOracleQueryExchangeWithWork(storage, receiver, holder, merkle,
+                                         common);
+}
+Expected<OracleQueryExchange> planOracleQueryExchangeWithWork(
+    const OracleAnchorStorage &storage, const OracleQueryController &receiver,
+    const OracleQueryController &holder, ArrayRef<OracleMerkleFunctions> merkle,
+    OracleNativeWork &common) {
+  return oracleExpectedWithWork(common, [&]() -> Expected<OracleQueryExchange> {
+    auto refuse = [] { return error("oracle-common-communication-profile"); };
+    if (!common.charge(32 + holder.role.size() + receiver.state.size() +
+                       receiver.stores.size()))
+      return error("oracle-common-limit");
+    OracleQueryExchange result;
+    result.holder = holder.role;
+    result.state = receiver.state;
+    result.receiverStores = receiver.stores;
+    SmallVector<data::AlternativeAttr> alternatives;
+    VariantIdentity::Tuple constructors;
+    for (auto [slot, item] : enumerate(receiver.constructors)) {
+      if (!common.charge(64 + holder.constructors.size()))
+        return error("oracle-common-limit");
+      if (item.source >= storage.constructors.size())
+        return refuse();
+      const auto &anchor = storage.constructors[item.source];
+      if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual)
+        continue;
+      if (anchor.scheme.empty() || anchor.holder == receiver.role ||
+          anchor.holder != holder.role || item.source >= merkle.size())
+        return refuse();
+      unsigned source = item.source;
+      auto held = find_if(holder.constructors, [&](const auto &other) {
+        return other.source == source;
+      });
+      if (held == holder.constructors.end())
+        return refuse();
+      auto functions = merkle[item.source];
+      if (!functions.open || !functions.authenticate ||
+          item.kind >= receiver.resume.size())
+        return refuse();
+      auto reference = oracleReferenceTypeWithWork(anchor.kind, common);
+      if (!reference)
+        return reference.takeError();
+      OracleQueryExchange::Arm arm;
+      arm.constructor = item.source;
+      arm.kind = item.kind;
+      arm.receiverSlot = slot;
+      arm.alternative = "Constructor" + std::to_string(item.source);
+      arm.reference = *reference;
+      auto payload = cast<exec::OutcomeType>(functions.open.getResultTypes()[0])
+                         .getPayload();
+      arm.opened.assign(payload.begin(), payload.end());
+      if (arm.opened.size() != 2)
+        return refuse();
+      if (held->role >= anchor.roles.size() ||
+          item.role >= anchor.roles.size() ||
+          !common.charge(4 * (anchor.roles[held->role].fields.size() +
+                              anchor.roles[item.role].fields.size())))
+        return refuse();
+      auto field = [&](unsigned role, StringRef name) {
+        const auto &fields = anchor.roles[role].fields;
+        return unsigned(
+            find_if(fields,
+                    [&](const auto &field) { return field.name == name; }) -
+            fields.begin());
+      };
+      arm.openingState = field(held->role, "opening_state");
+      arm.holderRows = field(held->role, "shape.rows");
+      arm.root = field(item.role, "root");
+      arm.receiverRows = field(item.role, "shape.rows");
+      if (arm.openingState >= anchor.roles[held->role].fields.size() ||
+          arm.holderRows >= anchor.roles[held->role].fields.size() ||
+          arm.root >= anchor.roles[item.role].fields.size() ||
+          arm.receiverRows >= anchor.roles[item.role].fields.size())
+        return refuse();
+      arm.holderLookup = held->lookup;
+      arm.receiverLookup = item.lookup;
+      arm.open = functions.open;
+      arm.authenticate = functions.authenticate;
+      arm.resume = receiver.resume[item.kind];
+      auto *context = arm.opened.front().getContext();
+      alternatives.push_back(data::AlternativeAttr::get(
+          context, StringAttr::get(context, arm.alternative), arm.opened));
+      constructors.push_back(std::to_string(item.source));
+      result.holderStores.push_back(anchor.roles[held->role].sequence);
+      result.arms.push_back(std::move(arm));
+    }
+    if (result.arms.empty())
       return refuse();
-    unsigned source = item.source;
-    auto held = find_if(holder.constructors, [&](const auto &other) {
-      return other.source == source;
-    });
-    if (held == holder.constructors.end())
-      return refuse();
-    auto functions = merkle[item.source];
-    if (!functions.open || !functions.authenticate ||
-        item.kind >= receiver.resume.size())
-      return refuse();
-    auto reference = oracleReferenceType(anchor.kind);
-    if (!reference)
-      return reference.takeError();
-    OracleQueryExchange::Arm arm;
-    arm.constructor = item.source;
-    arm.kind = item.kind;
-    arm.receiverSlot = slot;
-    arm.alternative = "Constructor" + std::to_string(item.source);
-    arm.reference = *reference;
-    auto payload = cast<exec::OutcomeType>(functions.open.getResultTypes()[0])
-                       .getPayload();
-    arm.opened.assign(payload.begin(), payload.end());
-    if (arm.opened.size() != 2)
-      return refuse();
-    auto field = [&](unsigned role, StringRef name) {
-      const auto &fields = anchor.roles[role].fields;
-      return unsigned(
-          find_if(fields,
-                  [&](const auto &field) { return field.name == name; }) -
-          fields.begin());
+    if (!common.charge(128) ||
+        !common.chargeProduct(4, storage.entry.size() + receiver.role.size() +
+                                     holder.role.size() +
+                                     11 * constructors.size()))
+      return error("oracle-common-limit");
+    auto nominal = [&](StringRef family) {
+      return VariantIdentity::Tuple{
+          family.str(), toHex(storage.entry, true), toHex(receiver.role, true),
+          toHex(holder.role, true), VariantIdentity::Tuple(constructors)};
     };
-    arm.openingState = field(held->role, "opening_state");
-    arm.holderRows = field(held->role, "shape.rows");
-    arm.root = field(item.role, "root");
-    arm.receiverRows = field(item.role, "shape.rows");
-    if (arm.openingState >= anchor.roles[held->role].fields.size() ||
-        arm.holderRows >= anchor.roles[held->role].fields.size() ||
-        arm.root >= anchor.roles[item.role].fields.size() ||
-        arm.receiverRows >= anchor.roles[item.role].fields.size())
+    if (alternatives.size() > oracleExchangeConstructorLimit)
       return refuse();
-    arm.holderLookup = held->lookup;
-    arm.receiverLookup = item.lookup;
-    arm.open = functions.open;
-    arm.authenticate = functions.authenticate;
-    arm.resume = receiver.resume[item.kind];
-    auto *context = arm.opened.front().getContext();
-    alternatives.push_back(data::AlternativeAttr::get(
-        context, StringAttr::get(context, arm.alternative), arm.opened));
-    constructors.push_back(std::to_string(item.source));
-    result.holderStores.push_back(anchor.roles[held->role].sequence);
-    result.arms.push_back(std::move(arm));
-  }
-  if (result.arms.empty())
-    return refuse();
-  auto nominal = [&](StringRef family) {
-    return VariantIdentity::Tuple{
-        family.str(), toHex(storage.entry, true), toHex(receiver.role, true),
-        toHex(holder.role, true), VariantIdentity::Tuple(constructors)};
-  };
-  if (alternatives.size() > oracleExchangeConstructorLimit)
-    return refuse();
-  auto *context = receiver.state.front().getContext();
-  auto requestIdentity = data::importVariantIdentity(
-      context, nominal("zkc.oracle.opening-request/0"));
-  auto responseIdentity = data::importVariantIdentity(
-      context, nominal("zkc.oracle.opening-response/0"));
-  if (!requestIdentity || !responseIdentity)
-    return refuse();
-  auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
-  auto record =
-      data::AlternativeAttr::get(context, StringAttr::get(context, "Record"),
-                                 ArrayRef<Type>{index, index, index});
-  result.request = data::VariantType::getChecked(
-      UnknownLoc::get(context), context, requestIdentity,
-      ArrayRef<data::AlternativeAttr>{record});
-  result.response = data::VariantType::getChecked(
-      UnknownLoc::get(context), context, responseIdentity,
-      ArrayRef<data::AlternativeAttr>(alternatives));
-  if (!result.request || !result.response)
-    return refuse();
-  return result;
+    auto *context = receiver.state.front().getContext();
+    auto requestIdentity = data::importVariantIdentity(
+        context, nominal("zkc.oracle.opening-request/0"));
+    auto responseIdentity = data::importVariantIdentity(
+        context, nominal("zkc.oracle.opening-response/0"));
+    if (!requestIdentity || !responseIdentity)
+      return refuse();
+    auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
+    auto record =
+        data::AlternativeAttr::get(context, StringAttr::get(context, "Record"),
+                                   ArrayRef<Type>{index, index, index});
+    result.request = data::VariantType::getChecked(
+        UnknownLoc::get(context), context, requestIdentity,
+        ArrayRef<data::AlternativeAttr>{record});
+    result.response = data::VariantType::getChecked(
+        UnknownLoc::get(context), context, responseIdentity,
+        ArrayRef<data::AlternativeAttr>(alternatives));
+    if (!result.request || !result.response)
+      return refuse();
+    return result;
+  });
 }
 namespace {
 using Values = SmallVector<Value>;
 using Types = SmallVector<Type>;
 using Control = exec::ScopedExecutionBuilder;
 struct Emitter {
+  OracleNativeWork &common;
   protocol_ir::ProtocolModuleOp unit;
   const OracleExchangeRecipe &recipe;
   const OracleQueryExchange &model;
+  OracleEmissionListener emission;
   OpBuilder builder;
-  mathematical::RealizationEmitter bindings;
+  OracleBindingEmitter bindings;
   Type index;
   unsigned next = 0;
-  Emitter(ModuleOp module, const OracleExchangeRecipe &recipe)
-      : unit(cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front())),
-        recipe(recipe), model(*recipe.exchange), builder(module.getContext()),
-        bindings(unit, "_oracle_exchange_binding_"),
+  Emitter(ModuleOp module, const OracleExchangeRecipe &recipe,
+          OracleNativeWork &common)
+      : common(common),
+        unit(cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front())),
+        recipe(recipe), model(*recipe.exchange), emission(common),
+        builder(module.getContext(), &emission),
+        bindings(unit, "_oracle_exchange_binding_", common),
         index(
             IntegerType::get(module.getContext(), 64, IntegerType::Unsigned)) {}
   func::FuncOp function(TypeRange inputs, TypeRange outputs, bool region,
                         llvm::function_ref<void(Control &, ValueRange)> emit) {
+    reserveOracleEmission(common, 8 + inputs.size() + outputs.size());
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&unit.getBody().front());
     std::string name = recipe.name;
     if (region)
       do {
-        name = recipe.name + "_arm_" + std::to_string(next++);
-      } while (SymbolTable::lookupSymbolIn(unit, name));
+        name = recipe.name + "_arm_" +
+               std::to_string(oracleEmissionOrdinal(common, next));
+      } while (lookupOracleEmissionSymbol(unit, name, common));
     Types formals{runtime::ScopeType::get(unit.getContext())};
     append_range(formals, inputs);
     auto helper = func::FuncOp::create(
@@ -152,6 +187,7 @@ struct Emitter {
       helper->setAttr("runtime.origin",
                       builder.getArrayAttr({builder.getStringAttr(name),
                                             builder.getArrayAttr({})}));
+    reserveOracleEmission(common, 1 + helper.getNumArguments());
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
     emit(control, helper.getArguments().drop_front());
@@ -247,6 +283,25 @@ struct Emitter {
 } // namespace
 func::FuncOp emitOracleQueryExchange(ModuleOp module,
                                      const OracleExchangeRecipe &recipe) {
-  return Emitter(module, recipe).emit();
+  OracleNativeWork common;
+  auto result = emitOracleQueryExchangeWithWork(module, recipe, common);
+  if (!result) {
+    consumeError(result.takeError());
+    return {};
+  }
+  return *result;
+}
+Expected<func::FuncOp>
+emitOracleQueryExchangeWithWork(ModuleOp module,
+                                const OracleExchangeRecipe &recipe,
+                                OracleNativeWork &common) {
+  return oracleExpectedWithWork(common, [&]() -> Expected<func::FuncOp> {
+    if (!recipe.exchange)
+      return error("oracle-common-communication-profile");
+    if (!common.charge(64 + recipe.inputs.size() + recipe.outputs.size()) ||
+        !common.chargeProduct(64, recipe.exchange->arms.size()))
+      return error("oracle-common-limit");
+    return Emitter(module, recipe, common).emit();
+  });
 }
 } // namespace zkc::protocol

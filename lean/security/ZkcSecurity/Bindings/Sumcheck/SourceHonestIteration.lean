@@ -14,6 +14,7 @@ open ZkcSecurity.Families.Sumcheck ZkcSecurity.Realizations.Sumcheck
 open Zkc.Source Zkc.Source.Structured Zkc.Transcript Zkc.Obligations
 open ZkcExamples.Structured SumcheckReferenceInstallation TableComponent
 
+variable {foldNames : MultilinearBodies.FoldNames}
 variable (model : DomainModel) [fieldLaw : Fact (IsField (model.Field field))]
 local instance : Field (model.Field field) := fieldLaw.out.toField
 variable {Frame H E : Type}
@@ -67,7 +68,7 @@ theorem advance_yes {n : Nat} (reference : PrefixState (model.Field field) Frame
   exact math.2.1
 
 variable (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-  (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+  (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
   (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
   (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx 1 2) (handle : Nat)
 include linked bodies distinct

@@ -43,8 +43,8 @@ struct OracleQueryBatch {
 // control.require(false) diagnoses an impossible empty positive round. Any
 // source failure propagates first. No empty packet is exchanged. CommonPlan
 // owns positive structural rounds; zero-total blocks skip collect and invoke
-// batch.finish once. Failure removes additions and restores the shared work
-// allowance.
+// batch.finish once. Failure removes additions and restores primitive capacity
+// reservations; cumulative work and operation visits are never refunded.
 llvm::Expected<OracleQueryBatch>
 emitOracleQueryBatch(mlir::ModuleOp candidate,
                      llvm::ArrayRef<OracleQueryBatchRoot> roots,

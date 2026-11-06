@@ -9,6 +9,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/SHA256.h"
 #include <map>
+#include <type_traits>
 
 using namespace llvm;
 using namespace mlir;
@@ -16,13 +17,47 @@ namespace zkc::detail {
 namespace {
 namespace pir = protocol_ir;
 using Path = std::vector<unsigned>;
-using Steps = std::vector<std::array<std::string, 3>>;
+using Steps = std::vector<protocol::NativeOriginStep>;
 json::Array sourceOrigin(const NativeSourceOrigin &origin) {
   json::Array steps, event;
-  for (const auto &step : origin.steps)
-    steps.push_back(json::Array{step[0], step[1], step[2]});
-  for (const auto &part : origin.event)
-    event.push_back(part);
+  // This is the authored oracle lineage JSON boundary, not a wire codec.
+  // Preserve the existing apply/repeat and event bytes used by the digest.
+  for (const auto &step : origin.steps) {
+    switch (step.kind) {
+    case protocol::NativeOriginStep::Kind::Apply:
+      steps.push_back(json::Array{"apply", step.protocol, step.site});
+      break;
+    case protocol::NativeOriginStep::Kind::Repeat:
+      steps.push_back(json::Array{"repeat", step.protocol, step.site});
+      break;
+    case protocol::NativeOriginStep::Kind::Branch:
+      steps.push_back(
+          json::Array{"branch", step.protocol, step.site, step.alternative});
+      break;
+    }
+  }
+  std::visit(
+      [&](const auto &source) {
+        using Event = std::decay_t<decltype(source)>;
+        if constexpr (std::is_same_v<Event, protocol::NativeQueryOrigin>)
+          event = json::Array{
+              "query",        source.protocol,
+              source.site,    "input_" + std::to_string(source.serviceInput),
+              source.service, source.method,
+              source.owner};
+        else if constexpr (std::is_same_v<Event, protocol::NativeMessageOrigin>)
+          event = json::Array{"message",     source.protocol, source.site,
+                              source.schema, source.sender,   source.receiver};
+        else if constexpr (std::is_same_v<Event, protocol::NativeStartOrigin>)
+          event = json::Array{"start", source.protocol, source.site};
+        else if constexpr (std::is_same_v<Event, NativeRepeatOrigin>)
+          event = json::Array{"repeat", origin.protocol, origin.site};
+        else if constexpr (std::is_same_v<Event, NativeBranchOrigin>)
+          event = json::Array{"branch", origin.protocol, origin.site};
+        else if constexpr (std::is_same_v<Event, NativeOracleOrigin>)
+          event = json::Array{"oracle", origin.protocol, origin.site};
+      },
+      origin.event);
   return json::Array{std::move(steps), std::move(event)};
 }
 pir::MathematicalOp program(ModuleOp module, StringRef entry) {
@@ -34,7 +69,22 @@ pir::MathematicalOp program(ModuleOp module, StringRef entry) {
               : pir::MathematicalOp();
 }
 } // namespace
-Expected<StringMap<NativeSourceOrigin>>
+Expected<protocol::NativeOriginTemplate>
+exportNativeSourceOrigin(StringRef entry, const NativeSourceOrigin &origin) {
+  return std::visit(
+      [&](const auto &event) -> Expected<protocol::NativeOriginTemplate> {
+        using Event = std::decay_t<decltype(event)>;
+        if constexpr (std::is_same_v<Event, protocol::NativeQueryOrigin> ||
+                      std::is_same_v<Event, protocol::NativeMessageOrigin> ||
+                      std::is_same_v<Event, protocol::NativeStartOrigin>)
+          return protocol::NativeOriginTemplate{entry.str(), origin.steps,
+                                                event};
+        else
+          return error("native-proof-origin");
+      },
+      origin.event);
+}
+Expected<RealizedNativeOrigins>
 realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
                       StringRef entry,
                       const StringMap<NativeSourceOrigin> &authored) {
@@ -103,15 +153,14 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
   };
   StringMap<NativeSourceOrigin> result;
   llvm::StringSet<> encodedOrigins;
-  auto collect = [&](auto &&self, Block &body,
-                     const Steps &repeatFrames) -> Error {
-    if (repeatFrames.size() > 64)
+  auto collect = [&](auto &&self, Block &body, const Steps &frames) -> Error {
+    if (frames.size() > 64)
       return error("native-proof-origin-limit");
     for (Operation &op : body) {
       if (!work.charge())
         return error("native-proof-origin-limit");
       if (!isa<pir::RepeatOp, pir::ExchangeOp, pir::QueryOp,
-               pir::ConstructionStartOp>(op))
+               pir::ConstructionStartOp, pir::BranchOp>(op))
         continue;
       auto site = op.getAttrOfType<StringAttr>("site");
       if (!site)
@@ -120,7 +169,19 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
       auto authoredOrigin = authored.find(site.getValue());
       if (authoredOrigin != authored.end()) {
         origin = authoredOrigin->second;
-        if (origin.event.empty() || origin.event[0] == "oracle")
+        if ((isa<pir::RepeatOp>(op) &&
+             !std::holds_alternative<NativeRepeatOrigin>(origin.event)) ||
+            (isa<pir::BranchOp>(op) &&
+             !std::holds_alternative<NativeBranchOrigin>(origin.event)) ||
+            (isa<pir::QueryOp>(op) &&
+             !std::holds_alternative<protocol::NativeQueryOrigin>(
+                 origin.event)) ||
+            (isa<pir::ExchangeOp>(op) &&
+             !std::holds_alternative<protocol::NativeMessageOrigin>(
+                 origin.event)) ||
+            (isa<pir::ConstructionStartOp>(op) &&
+             !std::holds_alternative<protocol::NativeStartOrigin>(
+                 origin.event)))
           return error("native-proof-realization-origin");
       } else {
         const auto *metadata = occurrences.lookup(site.getValue());
@@ -168,14 +229,14 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
             "zkc.oracle." +
             toHex(SHA256::hash(arrayRefFromStringRef(provenance)), true);
         origin.site = site.str();
-        // Keep full authored loop prefixes so generated and authored events
-        // inside one loop identify the same frame. The reserved namespace
+        // Keep full authored control prefixes so generated and authored events
+        // inside one region identify the same frames. The reserved namespace
         // states that this event's site is already expanded; its apply frames
         // remain provenance, not a second spelling expansion.
-        origin.steps = repeatFrames;
-        bool generatedParent = any_of(repeatFrames, [](const auto &step) {
-          return step[0] == "repeat" &&
-                 StringRef(step[1]).starts_with("zkc.oracle.");
+        origin.steps = frames;
+        bool generatedParent = any_of(frames, [](const auto &step) {
+          return step.kind == protocol::NativeOriginStep::Kind::Repeat &&
+                 StringRef(step.protocol).starts_with("zkc.oracle.");
         });
         if (!generatedParent)
           if (auto sourceSite =
@@ -185,26 +246,39 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
               origin.steps = sourceOrigin->second.steps;
           }
         if (auto message = dyn_cast<pir::ExchangeOp>(op))
-          origin.event = {"message",
-                          origin.protocol,
-                          origin.site,
-                          origin.site,
-                          message.getSender().str(),
-                          message.getReceiver().str()};
+          origin.event = protocol::NativeMessageOrigin{
+              origin.protocol, origin.site, origin.site,
+              message.getSender().str(), message.getReceiver().str()};
         else
-          origin.event = {"repeat", origin.protocol, origin.site};
+          origin.event = NativeRepeatOrigin{};
       }
       if (result.size() >= 2048 ||
           !result.try_emplace(site.getValue(), origin).second)
         return error("native-proof-origin-limit");
       if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
         Steps child(origin.steps);
-        child.push_back({"repeat", origin.protocol, origin.site});
+        child.push_back({protocol::NativeOriginStep::Kind::Repeat,
+                         origin.protocol, origin.site});
         if (auto e = self(self, repeat.getBody().front(), child))
           return e;
+      } else if (auto branch = dyn_cast<pir::BranchOp>(op)) {
+        // Retained origins carry original sites even after static application
+        // expansion. Visit all arms without evaluating the selector.
+        for (auto [index, arm] : enumerate(branch.getArms())) {
+          Steps child(origin.steps);
+          child.push_back({protocol::NativeOriginStep::Kind::Branch,
+                           origin.protocol, origin.site,
+                           cast<StringAttr>(branch.getAlternatives()[index])
+                               .getValue()
+                               .str()});
+          if (auto e = self(self, arm.front(), child))
+            return e;
+        }
       } else {
-        auto encoded = protocol::encodeNativeOriginTemplate(entry, origin.steps,
-                                                            origin.event);
+        auto typed = exportNativeSourceOrigin(entry, origin);
+        if (!typed)
+          return typed.takeError();
+        auto encoded = protocol::encodeNativeOriginTemplate(*typed);
         if (!encoded)
           return encoded.takeError();
         if (!encodedOrigins.insert(*encoded).second)
@@ -216,9 +290,9 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
   if (auto e = collect(collect, after.getBody().front(), {}))
     return std::move(e);
   for (const auto &item : authored)
-    if (!item.second.event.empty() && item.second.event[0] != "oracle" &&
+    if (!std::holds_alternative<NativeOracleOrigin>(item.second.event) &&
         !result.contains(item.first()))
       return error("native-proof-origin-coverage");
-  return result;
+  return RealizedNativeOrigins{std::move(candidate), std::move(result)};
 }
 } // namespace zkc::detail

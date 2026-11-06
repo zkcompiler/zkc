@@ -1,6 +1,7 @@
 module
 
 public import ZkcTools.ConstructionBindings.Common
+public import Zkc.Construction.Rule
 
 @[expose] public section
 
@@ -31,34 +32,43 @@ def selector (path : List Nat) : String :=
 def loopSelector (path : List Nat) : String :=
   selector path.dropLast ++ "Step" ++ toString (path.getLast?.getD 0)
 
-def collect : Nat → List Zkc.Construction.Instruction → Nat → List Nat → Except String (List Repeat)
+def collect : Nat → List Zkc.Construction.Instruction → List ValueSort → List Nat → Except String (List Repeat)
   | 0, _, _, _ => .error "construction-binding-frame-depth"
-  | fuel + 1, instructions, start, path => do
-    let mut offset := start
+  | fuel + 1, instructions, inputs, path => do
+    let mut slots := inputs
+    let mut offset := inputs.length
     let mut repeats := []
     for (instruction, index) in instructions.zipIdx do
       unless instruction.operands.all (· < offset) do
         throw "construction-binding-frame-forward-reference"
       match instruction.operation with
-      | .loop site maximum yielded =>
+      | .loop site maximum =>
+        let [region] := instruction.regions | throw "construction-binding-frame-loop-region"
+        unless region.inputs == .data .index :: instruction.results do
+          throw "construction-binding-frame-loop-signature"
+        let yielded := region.yielded
         let count :: initial := instruction.operands
           | throw "construction-binding-frame-loop-operands"
         let here := path ++ [index]
-        let children ← collect fuel instruction.body
-          (offset + 1 + instruction.results.length) here
-        let arity := instruction.body.foldl (fun size step => size + step.results.length)
+        let children ← collect fuel region.instructions
+          (slots ++ region.inputs) here
+        let arity := region.instructions.foldl (fun size step => size + step.results.length)
           (offset + 1 + instruction.results.length)
         unless yielded.length == instruction.results.length && yielded.all (· < arity) do
           throw "construction-binding-frame-yield"
         repeats := repeats ++ [⟨here, offset, site, maximum, count, initial,
-          yielded, instruction.results, instruction.body⟩] ++ children
+          yielded, instruction.results, region.instructions⟩] ++ children
+      | .mathBranch =>
+        unless (checkMathStep (fun _ _ _ => true) slots instruction).isOk do
+          throw "construction-binding-frame-math-region"
       | _ =>
-        unless instruction.body.isEmpty do throw "construction-binding-frame-region"
+        unless instruction.regions.isEmpty do throw "construction-binding-frame-region"
       offset := offset + instruction.results.length
+      slots := slots ++ instruction.results
     return repeats
 
 def analyze (artifact : Participant) : Except String (List Repeat) := do
-  let repeats ← collect 1024 artifact.instructions artifact.inputs.length []
+  let repeats ← collect 1024 artifact.instructions artifact.inputs []
   let arity := artifact.instructions.foldl (fun size step => size + step.results.length)
     artifact.inputs.length
   unless artifact.returned.all (· < arity) do throw "construction-binding-frame-return"

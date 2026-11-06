@@ -106,7 +106,7 @@ theorem point_overflow (raw point : List (model.Field field)) (token : CustodyTo
   rw [Evaluation.closed_invoke_componentTablesOn]
   rw [ReferenceLaw.invoke (model := model)
     (helper := Generated.Bindings.SmallSumcheckInputs.helper33Helper)
-    (pointOverflow model field SumcheckSourceSelections.bindings SumcheckPendingBodies.custodySlot)
+    (pointOverflow model field (sourceBindings selection) SumcheckPendingBodies.custodySlot)
     (source selection).payload.definitions (source selection).payload.linked (admissionBodies selection).check
     (terminalInputs model field SumcheckPendingBodies.custodySlot raw token point scalar) overflow]
   rfl
@@ -118,11 +118,11 @@ theorem large_dimension (raw point : List (model.Field field)) (token : CustodyT
       Generated.Bindings.SmallSumcheckInputs.helper33Helper
       (terminalInputs model field SumcheckPendingBodies.custodySlot raw token point scalar) = .done (boolResult model false) := by
   have shape : invoke (closed model (definitions := (source selection).payload.definitions))
-      (shapeHelper field SumcheckSourceSelections.bindings)
+      (shapeHelper field (sourceBindings selection))
       (tableValues model field raw point.length 1) = .done (boolResult model false) := by
     apply ReferenceLaw.invoke (model := model)
-      (helper := shapeHelper field SumcheckSourceSelections.bindings)
-      (largeShape model field SumcheckSourceSelections.bindings)
+      (helper := shapeHelper field (sourceBindings selection))
+      (largeShape model field (sourceBindings selection))
       (source selection).payload.definitions (source selection).payload.linked (admissionBodies selection).shape
     refine ⟨rfl, large, ?_, ?_⟩
     · simpa [tableValues, less, Values.get, primitiveOutcome, boolResult, show 0 < indexLimit by decide +kernel,
@@ -134,7 +134,7 @@ theorem large_dimension (raw point : List (model.Field field)) (token : CustodyT
   rw [Evaluation.closed_invoke_componentTablesOn]
   rw [ReferenceLaw.invoke (model := model)
     (helper := Generated.Bindings.SmallSumcheckInputs.helper33Helper)
-    (largeCheck model field SumcheckSourceSelections.bindings SumcheckPendingBodies.custodySlot)
+    (largeCheck model field (sourceBindings selection) SumcheckPendingBodies.custodySlot)
     (source selection).payload.definitions (source selection).payload.linked (admissionBodies selection).check
     (terminalInputs model field SumcheckPendingBodies.custodySlot raw token point scalar) ⟨finite, shape⟩]
   rfl

@@ -2,16 +2,20 @@
 #include "Arguments.h"
 #include "BindingWitness.h"
 #include "CallResolution.h"
+#include "CallableConstraints.h"
 #include "ConstructionWitness.h"
+#include "DescriptorFactories.h"
+#include "DescriptorFrames.h"
+#include "DescriptorSourceWitness.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
-#include "FiniteDomains.h"
 #include "FreePlaces.h"
 #include "HelperResults.h"
 #include "ManagedServices.h"
 #include "RecordIntrinsics.h"
 #include "Semantics.h"
 #include "SignatureWitness.h"
+#include "SiteLabels.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -20,15 +24,16 @@ bool same(Span a, Span b) {
   return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
-uint64_t indexedWork(uint64_t count) {
+uint64_t indexLookupWork(uint64_t count) {
   uint64_t levels = 1;
   for (auto size = count; size > 1; size >>= 1)
     levels += 2;
-  return count * levels;
+  return levels;
 }
+uint64_t indexedWork(uint64_t count) { return count * indexLookupWork(count); }
 Body::Mode sourceMode(Declaration::Kind kind) {
   return kind == Declaration::Kind::Oracle ? Body::Mode::Oracle
-         : kind == Declaration::Kind::Math ||
+         : kind == Declaration::Kind::View || kind == Declaration::Kind::Math ||
                  kind == Declaration::Kind::Relation
              ? Body::Mode::Math
          : kind == Declaration::Kind::Local ||
@@ -36,20 +41,326 @@ Body::Mode sourceMode(Declaration::Kind kind) {
              ? Body::Mode::Local
              : Body::Mode::Protocol;
 }
+/// Derive exits from frozen syntax once per lexical owner. A guaranteed stop
+/// need not have a reachable parent terminator: all-stopped selections retain
+/// their reasons in the child regions, in native rather than written arm order.
+class SourceExits {
+  Semantics &types;
+  const SyntaxDeclaration &syntax;
+  struct Exit {
+    bool stopped = false;
+    std::optional<StringRef> reason;
+  };
+  struct Entry {
+    enum { Unseen, Active, Ready } state = Unseen;
+    Exit exit;
+  };
+  std::vector<Entry> bodies, expressions;
+  struct Node {
+    bool body;
+    uint32_t id;
+  };
+  Entry *entry(Node node) {
+    auto &table = node.body ? bodies : expressions;
+    return node.id < table.size() ? &table[node.id] : nullptr;
+  }
+  bool refuse(Span span) {
+    return types.fail("source.binding-witness",
+                      "body exit differs from authored control", span);
+  }
+  bool derive(Node root, Span span) {
+    if (bodies.empty() && expressions.empty()) {
+      if (!types.charge(syntax.bodies.size() + syntax.expressions.size() + 1,
+                        span))
+        return false;
+      bodies.resize(syntax.bodies.size());
+      expressions.resize(syntax.expressions.size());
+    }
+    struct Frame {
+      Node node;
+      size_t next = 0;
+    };
+    std::vector<Frame> pending{{root}};
+    while (!pending.empty()) {
+      if (!types.charge(1, span))
+        return false;
+      auto &frame = pending.back();
+      auto *result = entry(frame.node);
+      if (!result)
+        return refuse(span);
+      if (result->state == Entry::Ready) {
+        pending.pop_back();
+        continue;
+      }
+      result->state = Entry::Active;
+      std::optional<Node> child;
+      auto next = frame.next++;
+      if (frame.node.body) {
+        const auto &body = syntax.bodies[frame.node.id];
+        if (next < body.statements.size())
+          child = {false, body.statements[next].expression};
+        else if (next - body.statements.size() < body.results.size())
+          child = {false, body.results[next - body.statements.size()].second};
+      } else {
+        const auto &expr = syntax.expressions[frame.node.id];
+        if (next < expr.children.size())
+          child = {false, expr.children[next]};
+        else if (next - expr.children.size() < expr.regions.size())
+          child = {true, expr.regions[next - expr.children.size()]};
+      }
+      if (child) {
+        auto *dependency = entry(*child);
+        if (!dependency || dependency->state == Entry::Active)
+          return refuse(span);
+        if (dependency->state != Entry::Ready)
+          pending.push_back({*child});
+        continue;
+      }
+      if (frame.node.body) {
+        const auto &body = syntax.bodies[frame.node.id];
+        if (!types.charge(body.statements.size() + body.results.size() + 1,
+                          body.span))
+          return false;
+        for (const auto &statement : body.statements)
+          if (const auto &exit = expressions[statement.expression].exit;
+              exit.stopped) {
+            result->exit = exit;
+            break;
+          }
+        if (!result->exit.stopped && body.stopped)
+          result->exit = {true, body.stopReason};
+        for (const auto &[name, expression] : body.results)
+          if (!result->exit.stopped)
+            result->exit = expressions[expression].exit;
+      } else {
+        const auto &expr = syntax.expressions[frame.node.id];
+        if (!types.charge(expr.regions.size() + 1, expr.span))
+          return false;
+        using K = Expression::Kind;
+        if (expr.kind == K::Block) {
+          if (expr.regions.size() != 1)
+            return refuse(expr.span);
+          result->exit = bodies[expr.regions.front()].exit;
+        } else if (expr.kind == K::If || expr.kind == K::Match ||
+                   expr.kind == K::And || expr.kind == K::Or) {
+          if (expr.regions.empty())
+            return refuse(expr.span);
+          result->exit.stopped = llvm::all_of(expr.regions, [&](auto region) {
+            return bodies[region].exit.stopped;
+          });
+        }
+        // For may execute zero times; Lambda defers its body. Other expressions
+        // cannot embed always-stopping operands in a valid authored definition
+        // (Expressions.cpp). Calls and guards may stop, but can also continue.
+      }
+      result->state = Entry::Ready;
+      pending.pop_back();
+    }
+    return true;
+  }
+
+public:
+  SourceExits(Semantics &types, const SyntaxDeclaration &syntax)
+      : types(types), syntax(syntax) {}
+  std::optional<bool> stops(uint32_t expression) {
+    if (!derive({false, expression}, syntax.span))
+      return {};
+    return expressions[expression].exit.stopped;
+  }
+  bool check(const Body &body, uint32_t region,
+             std::optional<uint32_t> selected) {
+    Node root{!selected, selected.value_or(region)};
+    if (!derive(root, syntax.span))
+      return false;
+    const auto &exit = entry(root)->exit;
+    if (exit.reason && !types.charge(exit.reason->size() + 1, syntax.span))
+      return false;
+    return (body.stopped == exit.stopped &&
+            (!exit.stopped || body.results.empty()) &&
+            (!exit.reason || body.stopReason == *exit.reason)) ||
+           refuse(syntax.span);
+  }
+};
 /// Resolved lexical scopes are immutable source identities. Transparent blocks
 /// share a checked Body with their parent; selected arms and lambdas do not.
 /// Build this product for every authored body mode, not just managed services.
 class LexicalRegions {
   Semantics &types;
   const SyntaxDeclaration &syntax;
+  SourceExits exits;
   struct Scope {
-    unsigned region = 0, eagerRegion = 0, begin = 0, end = 0;
+    unsigned region = 0, begin = 0, end = 0;
   };
   std::vector<Scope> scopes;
+  std::map<unsigned, std::vector<const Statement *>> siteStatements;
+  std::map<uint32_t, SiteEventFamily> siteCalls;
+  std::set<uint32_t> selectedRoots;
+  std::vector<std::optional<uint32_t>> bodyWrappers, expressionWrappers;
+  SourceOccurrences occurrences;
+  SourceOccurrences::Region regionKey(uint32_t body) const {
+    return {scopes[body].region, bodyWrappers[body]};
+  }
+  bool pattern(const Pattern &pattern, SourceOccurrences::Binding definition,
+               SourceOccurrences::Region region, unsigned depth) {
+    if (depth > types.work.limits.expressionDepth)
+      return types.fail("source.limit", "binding inventory depth exceeded",
+                        pattern.span);
+    if (!types.charge(definition.path.size() + pattern.children.size() + 1,
+                      pattern.span))
+      return false;
+    if (pattern.kind == Pattern::Kind::Name && pattern.binding) {
+      if (pattern.binding->index >= syntax.bindings.size())
+        return refuse(pattern.span);
+      const auto &binding = syntax.bindings[pattern.binding->index];
+      if (!binding.service && !binding.scoped && !binding.domain) {
+        definition.binding = *pattern.binding;
+        definition.span = pattern.span;
+        occurrences.bindings[region].push_back(definition);
+      }
+    }
+    for (unsigned i = 0; i < pattern.children.size(); ++i) {
+      auto child = definition;
+      child.path.push_back(pattern.kind == Pattern::Kind::Record
+                               ? pattern.labels[i]
+                               : std::to_string(i));
+      if (!this->pattern(pattern.children[i], std::move(child), region,
+                         depth + 1))
+        return false;
+    }
+    return true;
+  }
+  bool inventory(const std::vector<bool> &bodies,
+                 const std::vector<bool> &expressions) {
+    for (unsigned i = 0; i < bodies.size(); ++i) {
+      if (!bodies[i])
+        continue;
+      for (const auto &statement : syntax.bodies[i].statements) {
+        if (!types.charge(1, statement.span))
+          return false;
+        if (statement.kind != Statement::Kind::Let &&
+            statement.kind != Statement::Kind::Assign)
+          continue;
+        // An always-stopping initializer never creates its binding value.
+        // Query the existing source-exit memo, not candidate stop flags.
+        auto stopped = exits.stops(statement.expression);
+        if (!stopped)
+          return false;
+        if (*stopped)
+          continue;
+        SourceOccurrences::Binding definition{
+            {0}, statement.pattern.span, statement.expression, {}, {}};
+        if (statement.exchange)
+          definition.exchange = statement.span;
+        if (statement.kind == Statement::Kind::Let) {
+          if (!pattern(statement.pattern, definition, regionKey(i), 1))
+            return false;
+        } else if (statement.pattern.binding) {
+          definition.binding = *statement.pattern.binding;
+          definition.span = statement.span;
+          occurrences.bindings[regionKey(i)].push_back(std::move(definition));
+        }
+      }
+    }
+    for (unsigned id = 0; id < expressions.size(); ++id) {
+      if (!expressions[id])
+        continue;
+      const auto &expr = syntax.expressions[id];
+      if (!types.charge(expr.payloads.size() + 1, expr.span))
+        return false;
+      auto region = regionOf(id);
+      if (!region)
+        return refuse(expr.span);
+      using K = Expression::Kind;
+      if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For ||
+          expr.kind == K::And || expr.kind == K::Or)
+        occurrences.controls[{*region, expressionWrappers[id]}].push_back(id);
+      if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For ||
+          expr.kind == K::And || expr.kind == K::Or || expr.kind == K::Block) {
+        auto stopped = exits.stops(id);
+        if (!stopped)
+          return false;
+        if (!*stopped)
+          occurrences.values[{*region, expressionWrappers[id]}].push_back(id);
+      }
+      if (expr.kind == K::For && expr.index.binding) {
+        if (expr.regions.size() != 1)
+          return refuse(expr.span);
+        occurrences.bindings[regionKey(expr.regions.front())].push_back(
+            {*expr.index.binding, expr.index.span, {}, 0, {}, {}, true});
+      }
+      for (unsigned arm = 0; arm < expr.payloads.size(); ++arm) {
+        if (arm >= expr.regions.size())
+          return refuse(expr.span);
+        for (unsigned port = 0; port < expr.payloads[arm].size(); ++port)
+          if (!pattern(expr.payloads[arm][port], {{0}, {}, {}, port, {}},
+                       regionKey(expr.regions[arm]), 1))
+            return false;
+      }
+    }
+    return true;
+  }
 
 public:
+  bool layoutSource() const { return syntax.layoutSyntax; }
   LexicalRegions(Semantics &types, const SyntaxDeclaration &syntax)
-      : types(types), syntax(syntax) {}
+      : types(types), syntax(syntax), exits(types, syntax) {}
+  const SourceOccurrences &sourceOccurrences() const { return occurrences; }
+  bool selected(const ScopedSource &source) {
+    if (!types.charge(1, syntax.span))
+      return false;
+    if (source.syntax.get() != &syntax ||
+        source.expression >= syntax.expressions.size())
+      return refuse(syntax.span);
+    auto kind = syntax.expressions[source.expression].kind;
+    if (kind == Expression::Kind::And || kind == Expression::Kind::Or)
+      selectedRoots.insert(source.expression);
+    return true;
+  }
+  bool cover(const Body &body, unsigned region,
+             std::optional<uint32_t> selected) {
+    SourceOccurrences::Region context{region, selected};
+    auto found = occurrences.controls.find(context);
+    unsigned count =
+        found == occurrences.controls.end() ? 0 : found->second.size();
+    if (!types.charge(indexedWork(count) + body.operations.size() +
+                          indexLookupWork(occurrences.candidates.size() + 1),
+                      syntax.span))
+      return false;
+    std::set<uint32_t> expected, observed;
+    if (found != occurrences.controls.end())
+      expected.insert(found->second.begin(), found->second.end());
+    for (const auto &op : body.operations) {
+      if (!std::holds_alternative<Control>(op.action) &&
+          !std::holds_alternative<ProtocolRepeat>(op.action))
+        continue;
+      if (!types.charge(2 * indexLookupWork(count + 1), op.span))
+        return false;
+      if (!op.expression || !expected.count(*op.expression) ||
+          !observed.insert(*op.expression).second)
+        return types.fail("source.binding-witness",
+                          "control occurrence coverage differs", op.span);
+    }
+    if (observed != expected ||
+        !occurrences.candidates.emplace(&body, context).second)
+      return types.fail("source.binding-witness",
+                        "control occurrence coverage differs", syntax.span);
+    return true;
+  }
+  bool call(const SourceCall &source, const Declaration &target) {
+    if (!types.charge(indexLookupWork(siteCalls.size() + 1), syntax.span))
+      return false;
+    if (source.syntax.get() != &syntax ||
+        source.expression >= syntax.expressions.size() ||
+        source.reference.target.index != target.id.index)
+      return refuse(syntax.span);
+    auto family = sourceCallSiteFamily(target.kind, source.reference.category);
+    auto [found, inserted] = siteCalls.emplace(source.expression, family);
+    return inserted || found->second == family || refuse(syntax.span);
+  }
+  bool checkExit(const Body &body, uint32_t region,
+                 std::optional<uint32_t> selected) {
+    return exits.check(body, region, selected);
+  }
   bool prepare() {
     if (!types.charge(syntax.bodies.size() + syntax.expressions.size() + 1,
                       syntax.span))
@@ -63,10 +374,17 @@ public:
     // bodies reachable from this declaration's actual root have authority.
     std::vector<bool> bodies(scopes.size()),
         expressions(syntax.expressions.size());
-    std::vector<std::pair<bool, uint32_t>> pending{{true, 0}};
+    bodyWrappers.resize(scopes.size());
+    expressionWrappers.resize(syntax.expressions.size());
+    struct Pending {
+      bool body;
+      uint32_t id;
+      std::optional<uint32_t> selected;
+    };
+    std::vector<Pending> pending{{true, 0, {}}};
     unsigned expectedBodies = 0;
     while (!pending.empty()) {
-      auto [isBody, id] = pending.back();
+      auto [isBody, id, selected] = pending.back();
       pending.pop_back();
       if (!types.charge(1, syntax.span))
         return false;
@@ -76,30 +394,33 @@ public:
         if (bodies[id])
           continue;
         bodies[id] = true;
+        bodyWrappers[id] = selected;
         ++expectedBodies;
         const auto &body = syntax.bodies[id];
         for (const auto &statement : body.statements)
-          pending.emplace_back(false, statement.expression);
+          pending.push_back({false, statement.expression, selected});
         for (const auto &result : body.results)
-          pending.emplace_back(false, result.second);
+          pending.push_back({false, result.second, selected});
       } else {
         if (id >= expressions.size())
           return refuse(syntax.span);
         if (expressions[id])
           continue;
         expressions[id] = true;
+        if (selectedRoots.count(id))
+          selected = id;
+        expressionWrappers[id] = selected;
         const auto &expr = syntax.expressions[id];
         for (auto child : expr.children)
-          pending.emplace_back(false, child);
+          pending.push_back({false, child, selected});
         for (auto region : expr.regions) {
           if (region >= scopes.size())
             return refuse(expr.span);
           if (expr.kind != Expression::Kind::Block)
-            boundary[region] = expr.kind == Expression::Kind::And ||
-                                       expr.kind == Expression::Kind::Or
-                                   ? 2
-                                   : 1;
-          pending.emplace_back(true, region);
+            boundary[region] = 1;
+          pending.push_back(
+              {true, region,
+               expr.kind == Expression::Kind::Block ? selected : std::nullopt});
         }
       }
     }
@@ -114,46 +435,121 @@ public:
         children[*parent].push_back(i);
     }
     unsigned clock = 0, visited = 0;
-    std::function<bool(unsigned, unsigned, unsigned, unsigned)> visit =
-        [&](unsigned id, unsigned region, unsigned eagerRegion,
-            unsigned depth) {
+    std::function<bool(unsigned, unsigned, unsigned)> visit =
+        [&](unsigned id, unsigned region, unsigned depth) {
           if (depth > types.work.limits.expressionDepth)
             return types.fail("source.limit", "lexical region depth exceeded",
                               syntax.bodies[id].span);
           if (!types.charge(1, syntax.bodies[id].span))
             return false;
           ++visited;
-          scopes[id] = {boundary[id] ? id : region,
-                        boundary[id] == 1 ? id : eagerRegion, clock++, 0};
+          scopes[id] = {boundary[id] ? id : region, clock++, 0};
           for (auto child : children[id])
-            if (!visit(child, scopes[id].region, scopes[id].eagerRegion,
-                       depth + 1))
+            if (!visit(child, scopes[id].region, depth + 1))
               return false;
           scopes[id].end = clock;
           return true;
         };
-    if (!visit(0, 0, 0, 1))
+    if (!visit(0, 0, 1))
       return false;
-    return visited == expectedBodies || refuse(syntax.span);
+    if (visited != expectedBodies)
+      return refuse(syntax.span);
+    for (unsigned i = 0; i < scopes.size(); ++i) {
+      if (!bodies[i])
+        continue;
+      const auto &statements = syntax.bodies[i].statements;
+      if (!types.charge(indexedWork(statements.size()) + 1,
+                        syntax.bodies[i].span))
+        return false;
+      auto &region = siteStatements[scopes[i].region];
+      for (const auto &statement : statements)
+        region.push_back(&statement);
+    }
+    return inventory(bodies, expressions);
+  }
+  bool sites(const Body &body, unsigned region, Body::Mode mode) {
+    auto invalid = [&](Span span) {
+      return types.fail("source.site-witness",
+                        "event label differs from its authored statement",
+                        span);
+    };
+    if (!types.charge(indexedWork(body.operations.size()) + 1, syntax.span))
+      return false;
+    using Key = std::tuple<unsigned, unsigned, unsigned>;
+    auto key = [](Span span) {
+      return Key{span.source.index, span.begin, span.end};
+    };
+    std::map<Key, std::vector<const Operation *>> events;
+    for (const auto &operation : body.operations) {
+      if (operation.site &&
+          !types.charge(operation.site->size() + 1, operation.span))
+        return false;
+      if (siteEvent(operation))
+        events[key(operation.span)].push_back(&operation);
+    }
+    std::set<const Operation *> matched;
+    auto statements = siteStatements.find(region);
+    if ((mode == Body::Mode::Protocol || mode == Body::Mode::Oracle) &&
+        statements != siteStatements.end()) {
+      for (const auto *statement : statements->second) {
+        if (!types.charge(indexLookupWork(siteCalls.size()) + 1,
+                          statement->span))
+          return false;
+        auto label = sourceSiteLabel(syntax, *statement, mode);
+        if (!label)
+          continue;
+        if (!types.charge(label->size() + 1, statement->span))
+          return false;
+        const auto &expression = syntax.expressions[statement->expression];
+        auto call = siteCalls.find(statement->expression);
+        auto family = sourceSiteFamily(*statement, expression, mode,
+                                       call == siteCalls.end()
+                                           ? std::nullopt
+                                           : std::optional(call->second));
+        if (!family)
+          return invalid(statement->span);
+        if (*family == SiteEventFamily::None) {
+          if (statement->site)
+            return invalid(statement->span);
+          continue;
+        }
+        auto found = events.find(
+            key(statement->exchange ? statement->span : expression.span));
+        if (found == events.end())
+          return invalid(statement->span);
+        if (found->second.size() != 1)
+          return invalid(statement->span);
+        const auto *operation = found->second.front();
+        if (siteEventFamily(*operation) != *family ||
+            operation->site != label || !matched.insert(operation).second)
+          return invalid(operation->span);
+      }
+    }
+    for (const auto &operation : body.operations)
+      if (operation.site && !matched.count(&operation))
+        return invalid(operation.span);
+    return true;
   }
   bool refuse(Span span) {
     return types.fail("source.binding-witness",
                       "candidate region differs from authored lexical region",
                       span);
   }
-  bool contains(uint32_t expression, unsigned region, Body::Mode mode,
-                Span span) {
+  std::optional<unsigned> regionOf(uint32_t expression) const {
+    if (expression >= syntax.expressions.size())
+      return {};
+    auto scope = syntax.expressions[expression].scope;
+    if (!scope || *scope >= scopes.size() ||
+        scopes[*scope].begin == scopes[*scope].end)
+      return {};
+    return scopes[*scope].region;
+  }
+  bool contains(uint32_t expression, unsigned region, Body::Mode, Span span) {
     if (!types.charge(1, span))
       return false;
     if (expression >= syntax.expressions.size())
       return refuse(span);
-    auto scope = syntax.expressions[expression].scope;
-    return (scope && *scope < scopes.size() &&
-            scopes[*scope].begin < scopes[*scope].end &&
-            (mode == Body::Mode::Local
-                 ? scopes[*scope].region
-                 : scopes[*scope].eagerRegion) == region) ||
-           refuse(span);
+    return regionOf(expression) == region || refuse(span);
   }
   bool visible(unsigned declarationScope, unsigned useScope) const {
     return declarationScope < scopes.size() && useScope < scopes.size() &&
@@ -184,27 +580,6 @@ public:
       if (!types.diagnostic)
         refuse(op.span);
       return {};
-    }
-    // Region placement alone does not authenticate the values selecting it.
-    // Bind every evaluated header operand to the retained written expression.
-    unsigned header = loop ? 2 : 1;
-    if (expr.children.size() < header || !types.charge(header, op.span)) {
-      if (!types.diagnostic)
-        refuse(op.span);
-      return {};
-    }
-    for (unsigned i = repeat ? 1 : 0; i < header; ++i) {
-      auto value = body.expressionValues.find(expr.children[i]);
-      ValueId actual = repeat ? std::get<ProtocolRepeat>(op.action).count
-                              : (i < control->operands.size()
-                                     ? control->operands[i]
-                                     : ValueId{uint32_t(body.values.size())});
-      if (value == body.expressionValues.end() ||
-          value->second.index != actual.index ||
-          actual.index >= body.values.size()) {
-        refuse(op.span);
-        return {};
-      }
     }
     if (!match)
       return expr.regions;
@@ -254,59 +629,6 @@ public:
       result.push_back(at->second);
     }
     return result;
-  }
-  bool yield(const Body &body, unsigned region, Span controlSpan) {
-    if (body.stopped)
-      return true;
-    const auto &written = syntax.bodies.at(region);
-    if (!types.charge(written.results.size() + 1, written.span))
-      return false;
-    if (written.results.empty())
-      return true; // Unit tails can carry mutable state without a value result.
-    if (written.results.size() != 1 || body.results.empty())
-      return refuse(written.span);
-    auto expected = body.expressionValues.find(written.results.front().second);
-    if (expected == body.expressionValues.end() ||
-        expected->second.index >= body.values.size())
-      return refuse(written.span);
-    if (body.values[expected->second.index].type.kind == Type::Kind::Unit)
-      return true;
-    if (!types.charge(body.values.size() + body.operations.size(), controlSpan))
-      return false;
-    std::vector<const Operation *> producers(body.values.size());
-    for (const auto &op : body.operations)
-      for (auto value : op.results) {
-        if (!types.charge(1, op.span))
-          return false;
-        if (value.index >= producers.size() || producers[value.index])
-          return refuse(op.span);
-        producers[value.index] = &op;
-      }
-    auto actual = body.results.front();
-    bool packed = false;
-    for (unsigned steps = 0; actual.index != expected->second.index; ++steps) {
-      if (!types.charge(1, controlSpan))
-        return false;
-      if (steps > body.operations.size() || actual.index >= producers.size())
-        return refuse(controlSpan);
-      const auto *op = producers[actual.index];
-      if (!op || !same(op->span, controlSpan) || op->results.size() != 1)
-        return refuse(controlSpan);
-      if (const auto *projection = std::get_if<Projection>(&op->action);
-          projection && projection->path.empty()) {
-        actual = projection->input;
-      } else if (const auto *tuple = std::get_if<Construct>(&op->action);
-                 !packed && tuple &&
-                 tuple->kind == Construct::Kind::Aggregate &&
-                 tuple->operands.size() > 1 &&
-                 body.values[actual.index].type.kind == Type::Kind::Tuple) {
-        // A selected arm forwards its explicit result before mutable state.
-        actual = tuple->operands.front();
-        packed = true;
-      } else
-        return refuse(controlSpan);
-    }
-    return true;
   }
 };
 /// A retained managed binding resolves once to an authored declaration input.
@@ -554,7 +876,16 @@ public:
   bool run(const Body &outer, const ScopedBinding &binding) {
     const auto &computation = *binding.computation;
     const auto &authored = syntax.expressions.at(source.expression);
-    if (authored.kind != Expression::Kind::Lambda ||
+    const bool selected = authored.kind == Expression::Kind::And ||
+                          authored.kind == Expression::Kind::Or;
+    ScopedSignature totalBoolean;
+    totalBoolean.mode = ScopedSignature::Mode::Math;
+    totalBoolean.result = Type{};
+    if ((selected
+             ? outer.mode != Body::Mode::Protocol ||
+                   !(source.signature == totalBoolean) ||
+                   authored.children.size() != 2 || authored.regions.size() != 2
+             : authored.kind != Expression::Kind::Lambda) ||
         !same(binding.span, authored.span) ||
         computation.lexicalOwner.index != source.owner.index ||
         computation.expression != source.expression ||
@@ -682,21 +1013,21 @@ public:
     if (scoped.size() != computation.scopedCaptures.size() ||
         scoped.size() != binding.scopedCaptures.size())
       return refuse(binding.span);
-    if (domains.size() != computation.domainCaptures.size() ||
-        domains.size() != binding.domainCaptures.size())
+    if (domains.size() != computation.descriptorCaptures.size() ||
+        domains.size() != binding.descriptorCaptures.size())
       return refuse(binding.span);
     unsigned domainIndex = 0;
     for (auto name : domains) {
       auto outerIndex = source.domains.at(name);
-      if (computation.domainCaptures[domainIndex] != name.index ||
-          binding.domainCaptures[domainIndex] != outerIndex ||
-          outerIndex >= outer.domainBindings.size() ||
-          domainIndex >= body.domainBindings.size())
+      if (computation.descriptorCaptures[domainIndex] != name.index ||
+          binding.descriptorCaptures[domainIndex] != outerIndex ||
+          outerIndex >= outer.descriptorBindings.size() ||
+          domainIndex >= body.descriptorBindings.size())
         return refuse(binding.span);
-      const auto &parameter = body.domainBindings[domainIndex];
-      if (parameter.kind != DomainBinding::Kind::Parameter ||
+      const auto &parameter = body.descriptorBindings[domainIndex];
+      if (parameter.kind != DescriptorBinding::Kind::Parameter ||
           parameter.parameter != domainIndex ||
-          parameter.item != outer.domainBindings[outerIndex].item)
+          parameter.contract != outer.descriptorBindings[outerIndex].contract)
         return refuse(binding.span);
       ++domainIndex;
     }
@@ -784,24 +1115,79 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   // This closure is immutable for the whole check; share operand-relative
   // summaries, while each declaration reconstructs its own premise scope.
   HelperResults helperResults(types, storage.declarations);
+  if (auto error = checkViewSources(storage, work))
+    return error;
   if (auto error = checkModuleContracts(storage, work))
     return error;
   if (auto error = checkSignatureSources(storage, work))
     return error;
   if (auto error = checkConstructionSources(storage, work))
     return error;
-  auto servicePorts = replayServicePorts(storage, work);
+  auto servicePorts = replayHeaderContracts(storage, work);
   if (!servicePorts)
     return servicePorts.takeError();
+  CheckedStorage descriptorScratch(storage.capture, "");
+  std::unique_ptr<Checker> descriptorObservation;
+  auto descriptorReader = [&]() -> Checker * {
+    if (!descriptorObservation) {
+      auto observation =
+          Checker::observe(descriptorScratch, storage, work, SourceAccess{{0}});
+      if (!observation) {
+        types.accept(observation.takeError());
+        return nullptr;
+      }
+      descriptorObservation = std::move(*observation);
+      if (!descriptorObservation->useWrittenParameterRoutes(
+              *storage.authoredReferences)) {
+        types.accept(descriptorObservation->types.takeError());
+        return nullptr;
+      }
+    }
+    return descriptorObservation.get();
+  };
   std::map<uint32_t, std::unique_ptr<LexicalRegions>> lexicalSources;
   for (const auto &[owner, source] : storage.bodySources) {
     if (!source || !source->syntax)
       return failure("source.binding-witness", "missing lexical source syntax");
     auto lexical = std::make_unique<LexicalRegions>(types, *source->syntax);
-    if (!lexical->prepare())
-      return types.takeError();
     lexicalSources.emplace(owner, std::move(lexical));
   }
+  for (const auto &source : storage.scopedSources) {
+    if (!source || !types.charge(1, {}))
+      return types.diagnostic
+                 ? types.takeError()
+                 : failure("source.scoped-witness", "missing scoped source");
+    auto lexical = lexicalSources.find(source->owner.index);
+    if (lexical == lexicalSources.end() || !lexical->second->selected(*source))
+      return types.diagnostic
+                 ? types.takeError()
+                 : failure("source.scoped-witness", "missing scoped owner");
+  }
+  for (auto &[owner, lexical] : lexicalSources)
+    if (!lexical->prepare())
+      return types.takeError();
+  auto indexSiteCall = [&](const auto &source) {
+    if (!types.charge(indexLookupWork(lexicalSources.size()) + 1, {}))
+      return false;
+    if (!source || source->target.index >= storage.declarations.size())
+      return types.fail("source.binding-witness", "missing call source", {});
+    auto lexical = lexicalSources.find(source->owner.index);
+    return lexical != lexicalSources.end() &&
+           lexical->second->call(*source,
+                                 storage.declarations[source->target.index]);
+  };
+  // Index immutable resolution before walking candidate operations. The call
+  // witness below independently reauthorizes targets, arguments and coverage.
+  for (const auto &source : storage.scopedCalls)
+    if (!indexSiteCall(source))
+      return types.diagnostic
+                 ? types.takeError()
+                 : failure("source.binding-witness", "missing call owner");
+  for (const auto &source : storage.intrinsicCalls)
+    if (!indexSiteCall(source))
+      return types.diagnostic
+                 ? types.takeError()
+                 : failure("source.binding-witness", "missing call owner");
   std::map<uint32_t, std::unique_ptr<ServiceRoots>> serviceSources;
   for (const auto &[owner, ports] : *servicePorts) {
     auto source = storage.bodySources.find(owner);
@@ -838,13 +1224,21 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   };
   std::vector<unsigned> uses(storage.scopedSources.size());
   std::vector<unsigned> callUses(storage.scopedCalls.size());
+  std::map<const Body *, std::set<unsigned>> descriptorCoverage;
+  using DescriptorRegion = std::pair<std::optional<uint32_t>, const Body *>;
+  std::map<std::pair<unsigned, uint32_t>, std::vector<DescriptorRegion>>
+      descriptorRegions;
+  std::map<const Body *, std::pair<const Body *, ArrayRef<unsigned>>>
+      descriptorTransfers;
+  std::map<const Body *, std::pair<const Body *, const Operation *>>
+      descriptorRepeats;
   std::vector<unsigned> intrinsicUses(storage.intrinsicCalls.size());
   std::vector<unsigned> invocationUses(storage.scopedInvocations.size());
   auto authoredCall = [&](const Body &body, const Operation &op,
                           const SourceCall &source) {
     const char *diagnostic =
         op.binding && (!op.binding->scopedArguments.empty() ||
-                       !op.binding->domainArguments.empty())
+                       !op.binding->descriptorArguments.empty())
             ? "source.scoped-witness"
             : "source.binding-witness";
     auto refuse = [&](StringRef message =
@@ -1033,7 +1427,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       if (binding.roles != expected)
         return refuse();
     }
-    if (!binding.scopedArguments.empty() || !binding.domainArguments.empty())
+    if (!binding.scopedArguments.empty() ||
+        !binding.descriptorArguments.empty())
       return true;
     return checkCallAction(types, storage.declarations, body, op,
                            storage.declarationIndex.get());
@@ -1089,8 +1484,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     };
     const auto *call = std::get_if<HelperCall>(&op.action);
     if (!op.binding || !op.binding->scopedSource) {
-      if (call &&
-          (!call->scopedArguments.empty() || !call->domainArguments.empty()))
+      if (call && (!call->scopedArguments.empty() ||
+                   !call->descriptorArguments.empty()))
         return refuse();
       if (managed)
         return missing();
@@ -1110,10 +1505,11 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       return types.diagnostic ? false : refuse();
     const auto &expr = source.syntax->expressions.at(source.expression);
     const auto &callee = storage.declarations[source.target.index];
-    if (binding.scopedArguments.empty() && binding.domainArguments.empty()) {
+    if (binding.scopedArguments.empty() &&
+        binding.descriptorArguments.empty()) {
       if (!binding.notation)
-        return source.notationFamily.empty() || refuse();
-      if (!expr.notation || !expr.scope ||
+        return !source.notationFamily || refuse();
+      if (!source.notationFamily || !expr.notation || !expr.scope ||
           *expr.scope >= source.syntax->bodies.size() ||
           !source.syntax->bodies[*expr.scope].notationEnvironment ||
           op.results.size() != 1 ||
@@ -1138,13 +1534,13 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
              checkOperatorOperands(types, *expr.notation, binding,
                                    binding.argumentOrder, authored, op.span) &&
              checkOperatorWitness(
-                 types, storage.declarations, source.notationFamily,
+                 types, storage.declarations, *source.notationFamily,
                  *expr.notation, binding, inputs,
                  body.values[op.results.front().index].type, op.span);
     }
     if (!call || call->callee.index != source.target.index ||
         call->scopedArguments != binding.scopedArguments ||
-        call->domainArguments != binding.domainArguments)
+        call->descriptorArguments != binding.descriptorArguments)
       return refuse();
     if (expr.kind == Expression::Kind::MethodCall) {
       if (expr.children.empty())
@@ -1168,11 +1564,11 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         expr.children.size() != callee.inputOrder.size() ||
         binding.argumentOrder.size() != expr.children.size() ||
         call->scopedArguments.size() != callee.scopedInputs.size() ||
-        call->domainArguments.size() != callee.domainInputs.size())
+        call->descriptorArguments.size() != callee.descriptorInputs.size())
       return refuse();
     if (expr.kind == Expression::Kind::NotationCall ||
         expr.kind == Expression::Kind::Subscript) {
-      if (!expr.notation ||
+      if (!source.notationFamily || !expr.notation ||
           expr.notation->position != NotationDescriptor::Position::Reduction ||
           expr.filteredReduction != binding.filteredReduction ||
           op.results.size() != 1 || op.results[0].index >= body.values.size() ||
@@ -1185,14 +1581,14 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           !checkOperatorOperands(types, *expr.notation, binding,
                                  binding.argumentOrder, {}, op.span) ||
           !checkOperatorWitness(types, storage.declarations,
-                                source.notationFamily, *expr.notation, binding,
+                                *source.notationFamily, *expr.notation, binding,
                                 {}, body.values[op.results[0].index].type,
                                 op.span) ||
           !checkCallAction(types, storage.declarations, body, op,
                            storage.declarationIndex.get()))
         return false;
     } else if (binding.notation || binding.filteredReduction ||
-               !source.notationFamily.empty())
+               bool(source.notationFamily))
       return refuse();
     std::function<bool(uint32_t, unsigned, unsigned)> domain =
         [&](uint32_t expression, unsigned index, unsigned depth) {
@@ -1202,19 +1598,40 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           if (!types.charge(1, op.span))
             return false;
           if (expression >= source.syntax->expressions.size() ||
-              index >= body.domainBindings.size())
+              index >= body.descriptorBindings.size())
             return refuse();
           const auto &argument = source.syntax->expressions[expression];
-          const auto &application = body.domainBindings[index];
+          const auto &application = body.descriptorBindings[index];
           if (argument.kind == Expression::Kind::Name && argument.binding) {
             auto lexical = source.domains.find(*argument.binding);
             if (lexical != source.domains.end())
               return lexical->second == index || refuse();
           }
+          if (source.syntax->layoutSyntax) {
+            std::map<BindingId, ValueId> data;
+            auto *reader = descriptorReader();
+            if (!reader)
+              return false;
+            DescriptorSourceWitness witness(
+                *reader, reader->declarations[source.owner.index],
+                *source.syntax, body.descriptorBindings, source.domains,
+                std::move(data), 0, &body, true);
+            auto result = witness.expression(
+                expression, depth, &descriptorType(application.contract));
+            if (!result || *result != index) {
+              if (reader->types.diagnostic)
+                types.accept(reader->types.takeError());
+              return types.diagnostic ? false : refuse();
+            }
+            auto &covered = descriptorCoverage[&body];
+            covered.insert(witness.coverage().begin(),
+                           witness.coverage().end());
+            return true;
+          }
           if (argument.kind == Expression::Kind::DomainProduct) {
             if (argument.children.size() != 2 ||
                 application.children.size() != 2 ||
-                application.kind != DomainBinding::Kind::Product ||
+                application.kind != DescriptorBinding::Kind::Product ||
                 application.expression != expression ||
                 !same(application.span, argument.span) ||
                 !application.operands.empty() || application.axis ||
@@ -1224,13 +1641,20 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               return refuse();
             Type item(Type::Kind::Tuple);
             for (unsigned i = 0; i < 2; ++i) {
-              if (!domain(argument.children[i], application.children[i],
+              if (!domain(argument.children[i], application.children[i].node,
                           depth + 1))
                 return false;
-              item.arguments.push_back(
-                  body.domainBindings[application.children[i]].item);
+              const auto &edge = application.children[i];
+              const auto &contract =
+                  body.descriptorBindings[edge.node].contract;
+              auto *element = finiteDescriptorItem(contract);
+              if (!element || edge.contract != contract)
+                return refuse();
+              item.arguments.push_back(*element);
             }
-            return application.item == item || refuse();
+            return application.contract ==
+                       DescriptorContract{DescriptorFamily::Finite, {item}} ||
+                   refuse();
           }
           auto expected = source.domainCalls.find(expression);
           if (expected == source.domainCalls.end()) {
@@ -1248,17 +1672,19 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               return refuse();
             const auto &type = body.values[value->second.index].type;
             auto kind = type.kind == Type::Kind::Array
-                            ? DomainBinding::Kind::SourceArray
-                            : DomainBinding::Kind::Elements;
+                            ? DescriptorBinding::Kind::SourceArray
+                            : DescriptorBinding::Kind::Elements;
             return (application.kind == kind &&
-                    finiteDomainElement(type) == application.item) ||
+                    finiteDescriptorItem(application.contract) &&
+                    finiteDomainElement(type) ==
+                        *finiteDescriptorItem(application.contract)) ||
                    refuse();
           }
           const auto &authored = expected->second;
           if (argument.kind != Expression::Kind::Call ||
               authored.target.declaration.index >=
                   storage.declarations.size() ||
-              application.kind != DomainBinding::Kind::Application ||
+              application.kind != DescriptorBinding::Kind::Application ||
               application.expression != expression ||
               !same(application.span, argument.span) || application.axis ||
               application.parameter || !application.factory ||
@@ -1270,11 +1696,11 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
             return refuse();
           const auto &factory =
               storage.declarations[authored.target.declaration.index];
-          if (factory.kind != Declaration::Kind::DomainFunction ||
-              !factory.domainResult ||
+          if (factory.kind != Declaration::Kind::View ||
+              !factory.descriptorResult ||
               application.arguments.size() != factory.parameters.size() ||
               application.operands.size() != factory.inputs.size() ||
-              application.children.size() != factory.domainInputs.size())
+              application.children.size() != factory.descriptorInputs.size())
             return refuse();
           auto order =
               bindArguments(types, inputNames(factory),
@@ -1288,21 +1714,22 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 "self:" +
                     storage.declarations[factory.parent->index].qualifiedName,
                 *authored.target.module);
-          auto item = types.substitute(*factory.domainResult, substitution,
+          auto item = types.substitute(*factory.descriptorResult, substitution,
                                        argument.span);
-          if (!item || *item != application.item)
+          if (!item || *item != application.contract)
             return refuse();
           for (unsigned i = 0; i < argument.children.size(); ++i) {
             const auto &slot = factory.inputOrder[(*order)[i]];
             auto child = argument.children[i];
             if (slot.kind == Declaration::InputSlot::Kind::Domain) {
               auto nested = application.children[slot.index];
-              if (!domain(child, nested, depth + 1))
+              if (!domain(child, nested.node, depth + 1))
                 return false;
-              auto item =
-                  types.substitute(factory.domainInputs[slot.index].item,
-                                   substitution, argument.span);
-              if (!item || *item != body.domainBindings[nested].item)
+              auto item = types.substitute(
+                  factory.descriptorInputs[slot.index].contract, substitution,
+                  argument.span);
+              if (!item || *item != nested.contract ||
+                  *item != body.descriptorBindings[nested.node].contract)
                 return refuse();
             } else if (slot.kind == Declaration::InputSlot::Kind::Data) {
               auto value = body.expressionValues.find(child);
@@ -1331,7 +1758,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 slot.kind == Declaration::InputSlot::Kind::Scoped
                     ? callee.scopedInputs[slot.index].name
                 : slot.kind == Declaration::InputSlot::Kind::Domain
-                    ? callee.domainInputs[slot.index].name
+                    ? callee.descriptorInputs[slot.index].name
                     : callee.inputs[slot.index].name;
             if (name == label.name)
               parameter = j;
@@ -1343,7 +1770,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       assigned[parameter] = true;
       const auto &slot = callee.inputOrder[parameter];
       if (slot.kind == Declaration::InputSlot::Kind::Domain) {
-        if (!domain(expr.children[i], call->domainArguments[slot.index], 1))
+        if (!domain(expr.children[i], call->descriptorArguments[slot.index], 1))
           return false;
         continue;
       }
@@ -1372,6 +1799,13 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         if (lexical == source.scoped.end() || lexical->second != index ||
             !actual.parameter)
           return refuse();
+      } else if (argument.kind == Expression::Kind::Name && actual.named) {
+        if (!actual.source || *actual.source >= storage.scopedSources.size())
+          return refuse();
+        const auto &named = *storage.scopedSources[*actual.source];
+        if (!named.named || named.owner.index != source.owner.index ||
+            named.expression != expr.children[i])
+          return refuse();
       } else
         return refuse();
     }
@@ -1380,10 +1814,12 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   };
   using Formal = std::pair<const ScopedSignature *, Span>;
   std::function<bool(const Body &, ArrayRef<Formal>, unsigned, DeclarationId,
-                     ArrayRef<unsigned>, std::optional<uint32_t>, Body::Mode)>
+                     ArrayRef<unsigned>, std::optional<uint32_t>, Body::Mode,
+                     std::optional<uint32_t>)>
       visit = [&](const Body &body, ArrayRef<Formal> formals, unsigned depth,
                   DeclarationId lexicalOwner, ArrayRef<unsigned> roots,
-                  std::optional<uint32_t> region, Body::Mode mode) {
+                  std::optional<uint32_t> region, Body::Mode mode,
+                  std::optional<uint32_t> selectedExpression) {
         if (depth > work.limits.expressionDepth)
           return types.fail("source.limit", "scoped witness body depth", {});
         if (!types.charge(body.values.size() + body.operations.size() +
@@ -1397,6 +1833,12 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         auto *lexical = lexicalSource == lexicalSources.end()
                             ? nullptr
                             : lexicalSource->second.get();
+        if (region && (!lexical ||
+                       !lexical->checkExit(body, *region, selectedExpression)))
+          return types.diagnostic
+                     ? false
+                     : types.fail("source.binding-witness",
+                                  "missing lexical exit source", {});
         auto belongs = [&](uint32_t expression, Span span) {
           if (!region)
             return true;
@@ -1404,6 +1846,16 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                          : types.fail("source.binding-witness",
                                       "missing lexical region source", span);
         };
+        if (region && (!lexical || !lexical->sites(body, *region, mode)))
+          return false;
+        if (region && !lexical->cover(body, *region, selectedExpression))
+          return false;
+        if (region && lexical->layoutSource()) {
+          if (!types.charge(sizeof(DescriptorRegion) + 3 * sizeof(void *), {}))
+            return false;
+          descriptorRegions[{lexicalOwner.index, *region}].emplace_back(
+              selectedExpression, &body);
+        }
         for (const auto &[expression, value] : body.expressionValues)
           if (!belongs(expression, {}))
             return false;
@@ -1453,9 +1905,9 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               return types.fail("source.scoped-witness",
                                 "scoped formal identity differs", binding.span);
             ++formalIndex;
-            if (binding.source || binding.computation ||
+            if (binding.source || binding.computation || binding.named ||
                 !binding.captures.empty() || !binding.scopedCaptures.empty() ||
-                !binding.domainCaptures.empty())
+                !binding.descriptorCaptures.empty())
               return types.fail("source.scoped-witness",
                                 "formal scoped binding has an environment",
                                 binding.span);
@@ -1468,17 +1920,104 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               *binding.source >= storage.scopedSources.size() ||
               !storage.scopedSources[*binding.source] ||
               !storage.scopedSources[*binding.source]->syntax ||
-              !binding.computation || ++uses[*binding.source] != 1)
+              (!binding.computation && !binding.named) ||
+              (binding.computation && binding.named) ||
+              ++uses[*binding.source] != 1)
             return types.fail("source.scoped-witness",
                               "missing or duplicated scoped source witness",
                               binding.span);
           const auto &source = *storage.scopedSources[*binding.source];
+          if (bool(source.named) != bool(binding.named) ||
+              (!source.named && !binding.computation))
+            return types.fail("source.scoped-witness",
+                              "scoped binding alternative differs from source",
+                              binding.span);
+          if (!source.syntax ||
+              source.expression >= source.syntax->expressions.size())
+            return types.fail("source.scoped-witness", "missing scoped syntax",
+                              binding.span);
+          const auto &authored = source.syntax->expressions[source.expression];
+          if (source.named) {
+            if (!binding.named ||
+                !chargeSelectedCallable(types, *binding.named, binding.span))
+              return types.diagnostic
+                         ? false
+                         : types.fail("source.scoped-witness",
+                                      "missing named selection", binding.span);
+            if (!binding.named || binding.computation ||
+                !binding.captures.empty() || !binding.scopedCaptures.empty() ||
+                !binding.descriptorCaptures.empty() ||
+                source.owner.index != lexicalOwner.index ||
+                !belongs(source.expression, binding.span) ||
+                authored.kind != Expression::Kind::Name || authored.binding ||
+                !same(authored.span, binding.span) ||
+                !(binding.signature == source.signature) ||
+                !sameSelectedCallable(*binding.named, *source.named))
+              return types.fail("source.scoped-witness",
+                                "named callable source differs", binding.span);
+            const auto &selection = *source.named;
+            const auto &reference = selection.target.reference;
+            if (!selection.target.module) {
+              auto resolved = storage.declarationIndex->lookup(
+                  SourceAccess{source.owner}, authored.text,
+                  {[&] { return types.charge(1, binding.span); }, {}});
+              auto *actual = std::get_if<ResolvedReference>(&resolved);
+              if (!actual || *actual != reference)
+                return types.fail("source.scoped-witness",
+                                  "named callable lookup differs",
+                                  binding.span);
+            } else {
+              if (!reference.abstract ||
+                  reference.abstract->module != *selection.target.module)
+                return types.fail("source.scoped-witness",
+                                  "named abstract context differs",
+                                  binding.span);
+              for (const auto &step : reference.path) {
+                auto resolved = storage.declarationIndex->member(
+                    SourceAccess{source.owner}, step.owner, step.name,
+                    {[&] { return types.charge(1, binding.span); }, {}});
+                if (!std::holds_alternative<ResolvedReference>(resolved))
+                  return types.fail("source.scoped-witness",
+                                    "named callable route is inaccessible",
+                                    binding.span);
+              }
+            }
+            auto selected =
+                selectCallable(types, storage.declarations, selection.target,
+                               selection.arguments, binding.span);
+            if (!selected || !sameSelectedCallable(*selected, selection) ||
+                selected->signature.mode != binding.signature.mode ||
+                selected->signature.inputs != binding.signature.inputs ||
+                selected->signature.result != binding.signature.result ||
+                !effectsWithin(types, selected->effects,
+                               EffectSummary{binding.signature.allowance},
+                               binding.span))
+              return types.diagnostic
+                         ? false
+                         : types.fail("source.scoped-witness",
+                                      "named callable signature differs",
+                                      binding.span);
+            continue;
+          }
+          const bool selected = authored.kind == Expression::Kind::And ||
+                                authored.kind == Expression::Kind::Or;
           if (source.owner.index != lexicalOwner.index ||
               !belongs(source.expression, binding.span) ||
-              source.expression >= source.syntax->expressions.size() ||
-              source.syntax->expressions[source.expression].regions.size() != 1)
+              authored.regions.size() != (selected ? 2u : 1u))
             return types.fail("source.binding-witness",
                               "callback lexical region differs", binding.span);
+          if (!lexical)
+            return types.fail("source.binding-witness",
+                              "missing callback lexical source", binding.span);
+          // An implicit Protocol Math wrapper executes only the selected
+          // expression, but retains its containing region for lexical
+          // membership.
+          auto callbackRegion = selected
+                                    ? lexical->regionOf(source.expression)
+                                    : std::optional(authored.regions.front());
+          if (!callbackRegion)
+            return types.fail("source.binding-witness",
+                              "missing callback lexical source", binding.span);
           if (!types.charge(binding.scopedCaptures.size(), binding.span))
             return false;
           std::vector<Formal> captured;
@@ -1495,14 +2034,25 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               !CaptureCheck(types, source,
                             storage.declarations[source.owner.index], producers)
                    .run(body, binding) ||
-              !checkScopedValues(types, storage, source, binding) ||
-              !visit(
-                  *binding.computation->body, captured, depth + 1, source.owner,
-                  {},
-                  source.syntax->expressions[source.expression].regions.front(),
-                  source.signature.mode == ScopedSignature::Mode::Math
-                      ? Body::Mode::Math
-                      : Body::Mode::Local))
+              !checkScopedValues(types, storage, source, binding))
+            return false;
+          if (source.syntax->layoutSyntax) {
+            if (!types.charge(2 * sizeof(const Body *) +
+                                  sizeof(ArrayRef<unsigned>) +
+                                  4 * sizeof(void *),
+                              binding.span))
+              return false;
+            descriptorTransfers.emplace(
+                binding.computation->body.get(),
+                std::make_pair(&body, ArrayRef(binding.descriptorCaptures)));
+          }
+          if (!visit(*binding.computation->body, captured, depth + 1,
+                     source.owner, {}, callbackRegion,
+                     source.signature.mode == ScopedSignature::Mode::Math
+                         ? Body::Mode::Math
+                         : Body::Mode::Local,
+                     selected ? std::optional(source.expression)
+                              : std::nullopt))
             return false;
           if (!effectsWithin(types, binding.computation->body->effects,
                              EffectSummary{binding.signature.allowance},
@@ -1565,13 +2115,32 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 source.expression >= source.syntax->expressions.size())
               return refuse();
             const auto &expr = source.syntax->expressions[source.expression];
+            const auto &selected = body.scopedBindings[invoke->binding];
+            if (expr.kind == Expression::Kind::And ||
+                expr.kind == Expression::Kind::Or) {
+              if (body.mode != Body::Mode::Protocol || !selected.source ||
+                  *selected.source >= storage.scopedSources.size() ||
+                  !storage.scopedSources[*selected.source] ||
+                  storage.scopedSources[*selected.source]->owner.index !=
+                      source.owner.index ||
+                  storage.scopedSources[*selected.source]->expression !=
+                      source.expression ||
+                  storage.scopedSources[*selected.source]->syntax !=
+                      source.syntax ||
+                  !selected.computation || selected.parameter ||
+                  selected.computation->expression != source.expression ||
+                  !invoke->operands.empty() ||
+                  op.expression != source.expression ||
+                  op.results.size() != 1 || !same(expr.span, op.span))
+                return refuse();
+              continue;
+            }
             if (expr.kind != Expression::Kind::Call || !expr.binding ||
                 !same(expr.span, op.span))
               return refuse();
             if (expr.binding->index >= source.syntax->bindings.size())
               return refuse();
             const auto &lexical = source.syntax->bindings[expr.binding->index];
-            const auto &selected = body.scopedBindings[invoke->binding];
             // Scoped names refer to declaration formals. Extraction and
             // region forwarding preserve their original declaration span;
             // the expected identity comes from resolved source syntax, not
@@ -1591,7 +2160,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           }
           auto nested = [&](ArrayRef<ServiceId> advertised,
                             ArrayRef<unsigned> roles,
-                            ArrayRef<std::shared_ptr<const Body>> regions) {
+                            ArrayRef<std::shared_ptr<const Body>> regions,
+                            std::optional<ArrayRef<unsigned>> descriptors) {
             std::vector<uint32_t> authored;
             if (region) {
               auto expected = lexical->regions(body, op);
@@ -1606,13 +2176,19 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                 if (!regions[i])
                   return types.fail("source.binding-witness",
                                     "missing candidate region", op.span);
-                if (region && std::holds_alternative<Control>(op.action) &&
-                    !lexical->yield(*regions[i], authored[i], op.span))
-                  return false;
+                if (descriptors && lexical && lexical->layoutSource()) {
+                  if (!types.charge(2 * sizeof(const Body *) +
+                                        sizeof(ArrayRef<unsigned>) +
+                                        4 * sizeof(void *),
+                                    op.span))
+                    return false;
+                  descriptorTransfers.emplace(
+                      regions[i].get(), std::make_pair(&body, *descriptors));
+                }
                 if (!visit(*regions[i], formals, depth + 1, lexicalOwner,
                            expectedRoots,
                            region ? std::optional(authored[i]) : std::nullopt,
-                           mode))
+                           mode, {}))
                   return false;
               }
               return true;
@@ -1646,11 +2222,22 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
             return visitRegions(*expected);
           };
           if (const auto *control = std::get_if<Control>(&op.action))
-            if (!nested(control->services, control->roles, control->regions))
+            if (!nested(control->services, control->roles, control->regions,
+                        ArrayRef(control->descriptorArguments)))
               return false;
-          if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
-            if (!nested(repeat->services, repeat->roles, {repeat->region}))
+          if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+            if (lexical && lexical->layoutSource()) {
+              if (!types.charge(2 * sizeof(const Body *) +
+                                    sizeof(const Operation *) +
+                                    4 * sizeof(void *),
+                                op.span))
+                return false;
+              descriptorRepeats.emplace(repeat->region.get(),
+                                        std::make_pair(&body, &op));
+            }
+            if (!nested(repeat->services, repeat->roles, {repeat->region}, {}))
               return false;
+          }
         }
         auto effects = inferEffects(types, storage.declarations, body);
         if (!effects || *effects != body.effects)
@@ -1678,17 +2265,270 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                       : std::nullopt;
     auto mode =
         region ? sourceMode(source->second->syntax->kind) : decl.body->mode;
-    if (!visit(*decl.body, formals, 1, decl.id, roots, region, mode) ||
+    if (!visit(*decl.body, formals, 1, decl.id, roots, region, mode, {}) ||
         !checkFiniteContracts(types, storage.declarations, decl, *decl.body,
                               helperResults))
       return types.takeError();
     if (auto source = storage.bodySources.find(decl.id.index);
         source != storage.bodySources.end() &&
         (!source->second ||
-         !checkInvocationValues(types, storage, *source->second, *decl.body)))
+         !checkInvocationValues(
+             types, storage, *source->second, *decl.body,
+             lexicalSources.at(decl.id.index)->sourceOccurrences())))
       return types.diagnostic
                  ? types.takeError()
                  : failure("source.binding-witness", "missing body source");
+    if (source != storage.bodySources.end() && source->second &&
+        source->second->syntax && source->second->syntax->layoutSyntax) {
+      const auto &syntax = *source->second->syntax;
+      using Domains = std::map<BindingId, unsigned>;
+      std::set<const Body *> relatedBodies;
+      std::function<bool(const Body &, uint32_t, Domains, bool,
+                         std::optional<uint32_t>, unsigned)>
+          relateBody = [&](const Body &actual, uint32_t region,
+                           Domains captures, bool root,
+                           std::optional<uint32_t> selected, unsigned depth) {
+            if (depth > work.limits.expressionDepth ||
+                !types.charge(sizeof(const Body *) + 4 * sizeof(void *),
+                              decl.span) ||
+                !relatedBodies.insert(&actual).second)
+              return types.diagnostic
+                         ? false
+                         : types.fail("source.view-witness",
+                                      "descriptor lexical body repeats",
+                                      decl.span);
+            auto *reader = descriptorReader();
+            if (!reader)
+              return false;
+            DescriptorSourceWitness witness(
+                *reader, reader->declarations[decl.id.index], syntax,
+                actual.descriptorBindings, std::move(captures), {}, 0, &actual,
+                true);
+            auto nested = [&](uint32_t expression, uint32_t child,
+                              const Domains &domains) -> std::optional<bool> {
+              bool implicit = child == UINT32_MAX;
+              auto at = descriptorRegions.find(
+                  {decl.id.index, implicit ? region : child});
+              if (at == descriptorRegions.end())
+                return {};
+              const Body *target = nullptr;
+              for (const auto &[selection, body] : at->second)
+                if ((implicit ? selection == expression : !selection) &&
+                    body != &actual) {
+                  if (target)
+                    return types.fail("source.view-witness",
+                                      "descriptor lexical body is ambiguous",
+                                      syntax.expressions[expression].span);
+                  target = body;
+                }
+              if (!target)
+                return {};
+              FreePlaceEnvironment environment;
+              if (!types.charge(indexedWork(domains.size()) +
+                                    domains.size() * (sizeof(BindingId) +
+                                                      4 * sizeof(void *)),
+                                decl.span))
+                return false;
+              for (const auto &[name, node] : domains)
+                environment.domains.insert(name);
+              auto free =
+                  queryFreePlaces(types, syntax, syntax.expressions[expression],
+                                  environment, implicit);
+              if (!free)
+                return false;
+              auto transfer = descriptorTransfers.find(target);
+              auto copied = descriptorRepeats.find(target);
+              if (transfer == descriptorTransfers.end() &&
+                  copied != descriptorRepeats.end()) {
+                // Protocol repetition retains source recipes, not
+                // descriptor parameters. Inspect their exact copied
+                // prefix and source operand suffix; the existing value
+                // witness relates that suffix to the actual captures and
+                // their owning Body inputs.
+                if (copied->second.first != &actual)
+                  return types.fail("source.view-witness",
+                                    "descriptor recipe owner differs",
+                                    decl.span);
+                const auto &op = *copied->second.second;
+                const auto &repeat = std::get<ProtocolRepeat>(op.action);
+                std::vector<unsigned> pending;
+                std::set<unsigned> reachable;
+                if (!types.charge(free->domains.size() * sizeof(unsigned),
+                                  op.span))
+                  return false;
+                for (auto name : free->domains)
+                  pending.push_back(domains.at(name));
+                while (!pending.empty()) {
+                  auto index = pending.back();
+                  pending.pop_back();
+                  if (!types.charge(sizeof(unsigned) + 4 * sizeof(void *),
+                                    op.span))
+                    return false;
+                  if (index >= actual.descriptorBindings.size())
+                    return types.fail("source.view-witness",
+                                      "foreign descriptor recipe", op.span);
+                  if (!reachable.insert(index).second)
+                    continue;
+                  if (!types.charge(
+                          actual.descriptorBindings[index].children.size() *
+                              sizeof(unsigned),
+                          op.span))
+                    return false;
+                  for (const auto &edge :
+                       actual.descriptorBindings[index].children)
+                    pending.push_back(edge.node);
+                }
+                std::map<unsigned, unsigned> mapping, operands;
+                std::vector<ValueId> recipes;
+                unsigned prefix = 0;
+                for (auto index : reachable) {
+                  const auto &before = actual.descriptorBindings[index];
+                  if (prefix >= target->descriptorBindings.size())
+                    return types.fail("source.view-witness",
+                                      "missing copied descriptor", op.span);
+                  const auto &after = target->descriptorBindings[prefix];
+                  if (!chargeDescriptorBindingCopy(types, before) ||
+                      !chargeDescriptorBindingCopy(types, after))
+                    return false;
+                  auto expected =
+                      descriptorOccurrenceAuthority(types, before, {});
+                  auto supplied =
+                      descriptorOccurrenceAuthority(types, after, {});
+                  if (!expected || !supplied)
+                    return false;
+                  if (*expected != *supplied || before.kind != after.kind ||
+                      before.parameter != after.parameter ||
+                      before.axis != after.axis ||
+                      before.expression != after.expression ||
+                      bool(before.factory) != bool(after.factory) ||
+                      before.children.size() != after.children.size() ||
+                      before.operands.size() != after.operands.size())
+                    return types.fail("source.view-witness",
+                                      "copied descriptor differs", op.span);
+                  for (unsigned i = 0; i < before.children.size(); ++i) {
+                    auto child = mapping.find(before.children[i].node);
+                    if (child == mapping.end() ||
+                        after.children[i].node != child->second ||
+                        before.children[i].contract !=
+                            after.children[i].contract)
+                      return types.fail("source.view-witness",
+                                        "copied descriptor edge differs",
+                                        op.span);
+                  }
+                  for (unsigned i = 0; i < before.operands.size(); ++i) {
+                    if (!types.charge(sizeof(ValueId) + 2 * sizeof(unsigned) +
+                                          4 * sizeof(void *),
+                                      op.span))
+                      return false;
+                    auto [at, fresh] = operands.emplace(
+                        before.operands[i].index, operands.size());
+                    if (fresh)
+                      recipes.push_back(before.operands[i]);
+                    // Save the suffix ordinal until its source-derived
+                    // size is known; candidate operand slots never define
+                    // it.
+                    if (after.operands[i].index >= target->values.size())
+                      return types.fail("source.view-witness",
+                                        "foreign copied descriptor input",
+                                        op.span);
+                  }
+                  if (!types.charge(2 * sizeof(unsigned) + 4 * sizeof(void *),
+                                    op.span))
+                    return false;
+                  mapping.emplace(index, prefix++);
+                }
+                const SourceControlSnapshot *snapshot = nullptr;
+                if (source->second->controlSnapshots) {
+                  auto at = source->second->controlSnapshots->find(expression);
+                  if (at != source->second->controlSnapshots->end())
+                    snapshot = &at->second;
+                }
+                if ((!recipes.empty() && !snapshot) ||
+                    (snapshot && !llvm::equal(recipes, snapshot->recipes,
+                                              [](ValueId a, ValueId b) {
+                                                return a.index == b.index;
+                                              })) ||
+                    repeat.captures.size() < recipes.size())
+                  return types.fail("source.view-witness",
+                                    "descriptor recipe snapshot differs",
+                                    op.span);
+                auto inputBase = 1 + repeat.carried.size() +
+                                 repeat.captures.size() - recipes.size();
+                for (const auto &[index, mapped] : mapping) {
+                  const auto &before = actual.descriptorBindings[index];
+                  const auto &after = target->descriptorBindings[mapped];
+                  for (unsigned i = 0; i < before.operands.size(); ++i)
+                    if (after.operands[i].index !=
+                        inputBase + operands.at(before.operands[i].index))
+                      return types.fail(
+                          "source.view-witness",
+                          "copied descriptor input origin differs", op.span);
+                  descriptorCoverage[target].insert(mapped);
+                }
+                Domains captured;
+                for (auto name : free->domains)
+                  captured.emplace(name, mapping.at(domains.at(name)));
+                return relateBody(*target, child, std::move(captured), false,
+                                  {}, depth + 1);
+              }
+              if (transfer == descriptorTransfers.end() ||
+                  transfer->second.first != &actual ||
+                  transfer->second.second.size() != free->domains.size())
+                return types.fail(
+                    "source.view-witness",
+                    "descriptor capture coverage differs from source",
+                    syntax.expressions[expression].span);
+              if (!types.charge(free->domains.size() *
+                                    (sizeof(BindingId) + sizeof(unsigned) +
+                                     4 * sizeof(void *)),
+                                decl.span))
+                return false;
+              Domains captured;
+              unsigned parameter = 0;
+              for (auto name : free->domains) {
+                if (transfer->second.second[parameter] != domains.at(name))
+                  return types.fail(
+                      "source.view-witness",
+                      "descriptor capture origin differs from source",
+                      syntax.expressions[expression].span);
+                const auto &original =
+                    actual.descriptorBindings[domains.at(name)];
+                if (parameter >= target->descriptorBindings.size())
+                  return types.fail("source.view-witness",
+                                    "missing source descriptor capture",
+                                    decl.span);
+                const auto &node = target->descriptorBindings[parameter];
+                if (!types.chargeContract(node.contract, node.span) ||
+                    !types.chargeContract(original.contract, original.span))
+                  return false;
+                if (node.kind != DescriptorBinding::Kind::Parameter ||
+                    node.parameter != parameter ||
+                    node.contract != original.contract ||
+                    !same(node.span, original.span) || !node.operands.empty() ||
+                    !node.children.empty() || node.factory || node.expression ||
+                    node.selectedView || !node.arguments.empty() ||
+                    !node.argumentOrder.empty() || node.axis)
+                  return types.fail("source.view-witness",
+                                    "descriptor capture differs from source",
+                                    node.span);
+                captured.emplace(name, parameter++);
+              }
+              return relateBody(
+                  *target, implicit ? region : child, std::move(captured),
+                  false, implicit ? std::optional(expression) : std::nullopt,
+                  depth + 1);
+            };
+            return witness.bodyDefinitions(descriptorCoverage[&actual], region,
+                                           root, nested, selected);
+          };
+      if (!relateBody(*decl.body, 0, {}, true, {}, 1))
+        return descriptorObservation && descriptorObservation->types.diagnostic
+                   ? descriptorObservation->types.takeError()
+               : types.diagnostic
+                   ? types.takeError()
+                   : failure("source.view-witness",
+                             "missing source descriptor formation");
+    }
     if (decl.effectAllowance &&
         !effectsWithin(types, decl.body->effects, *decl.effectAllowance,
                        decl.span)) {
@@ -1701,7 +2541,9 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     if (!source || !source->syntax ||
         (!source->syntax->bodies.empty() &&
          (owner >= storage.declarations.size() ||
-          !storage.declarations[owner].body)))
+          (!storage.declarations[owner].body &&
+           !(storage.declarations[owner].kind == Declaration::Kind::View &&
+             storage.declarations[owner].descriptorDefinition)))))
       return failure("source.binding-witness", "missing authored body");
   for (auto count : intrinsicUses)
     if (count != 1)

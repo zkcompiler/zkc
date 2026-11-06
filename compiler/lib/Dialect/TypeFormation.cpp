@@ -1,5 +1,6 @@
 #include "zkc/Dialect/TypeFormation.h"
 #include "Data/IR/Structure.h"
+#include "NativeTypeWork.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/ResourceUnit.h"
@@ -127,10 +128,41 @@ representationFor(const CatalogTypeApplication &application, StringRef name,
 struct Formation {
   llvm::function_ref<InFlightDiagnostic()> emit;
   unsigned remaining = 200000;
+  unsigned maximumDepth = 0;
 
   LogicalResult refuse(StringRef reason) { return emit() << reason; }
   LogicalResult inspect(Type type, unsigned depth,
                         LogicalTypePermissions &permissions) {
+    detail::NativeTypeWorkScope::charge();
+    auto *work = detail::NativeTypeWorkScope::current();
+    if (work) {
+      auto found = work->formations.find(type);
+      if (found != work->formations.end()) {
+        if (found->second.nodes > remaining ||
+            depth + found->second.height >= 64)
+          return refuse("excessive expanded logical structure");
+        remaining -= found->second.nodes;
+        maximumDepth = std::max(maximumDepth, depth + found->second.height);
+        permissions = found->second.permissions;
+        return success();
+      }
+    }
+    auto before = remaining, outerDepth = maximumDepth;
+    maximumDepth = depth;
+    auto result = inspectUncached(type, depth, permissions);
+    auto height = maximumDepth - depth;
+    maximumDepth = std::max(maximumDepth, outerDepth);
+    if (work && succeeded(result)) {
+      detail::NativeTypeWorkScope::charge();
+      work->formations.try_emplace(
+          type, detail::NativeTypeWork::Formation{permissions,
+                                                  before - remaining, height});
+    }
+    return result;
+  }
+  LogicalResult inspectUncached(Type type, unsigned depth,
+                                LogicalTypePermissions &permissions) {
+    detail::NativeTypeWorkScope::charge();
     if (!type || depth >= 64 || !remaining--)
       return refuse("missing type or excessive expanded logical structure");
     auto child = [&](Type type) {
@@ -234,6 +266,8 @@ struct Formation {
   LogicalResult inspectApplication(const CatalogTypeApplication &application,
                                    MLIRContext *context, unsigned depth,
                                    LogicalTypePermissions &permissions) {
+    detail::NativeTypeWorkScope::charge(1 + application.constructor.size() +
+                                        application.arguments.size());
     auto child = [&](Type type) {
       LogicalTypePermissions nested;
       if (failed(inspect(type, depth + 1, nested)))
@@ -304,8 +338,28 @@ struct Formation {
 LogicalResult verifyLogicalType(llvm::function_ref<InFlightDiagnostic()> emit,
                                 Type type,
                                 LogicalTypePermissions *permissions) {
-  return verifyLogicalTypes(emit, TypeRange{type}, permissions);
+  detail::NativeTypeWorkScope::charge();
+  auto *work = detail::NativeTypeWorkScope::current();
+  if (work) {
+    auto found = work->formed.find(type);
+    if (found != work->formed.end()) {
+      if (permissions)
+        *permissions = found->second;
+      return success();
+    }
+  }
+  LogicalTypePermissions result;
+  if (failed(verifyLogicalTypes(emit, TypeRange{type}, &result)))
+    return failure();
+  if (work) {
+    detail::NativeTypeWorkScope::charge();
+    work->formed.try_emplace(type, result);
+  }
+  if (permissions)
+    *permissions = result;
+  return success();
 }
+
 LogicalResult verifyLogicalTypes(llvm::function_ref<InFlightDiagnostic()> emit,
                                  TypeRange types,
                                  LogicalTypePermissions *permissions) {
@@ -447,6 +501,17 @@ verifyLogicalTypeApplication(llvm::function_ref<InFlightDiagnostic()> emit,
 Type constructLogicalType(llvm::function_ref<InFlightDiagnostic()> emit,
                           MLIRContext *context,
                           const CatalogTypeApplication &application) {
+  detail::NativeTypeWorkScope::charge(1 + application.constructor.size() +
+                                      application.arguments.size());
+  auto *work = detail::NativeTypeWorkScope::current();
+  detail::NativeTypeWork::Application key;
+  if (work && context) {
+    key = {StringAttr::get(context, application.constructor),
+           ArrayAttr::get(context, application.arguments)};
+    if (auto found = work->constructed.find(key);
+        found != work->constructed.end())
+      return found->second;
+  }
   if (failed(verifyLogicalTypeApplication(emit, context, application)))
     return {};
   const auto *adapter =
@@ -467,6 +532,10 @@ Type constructLogicalType(llvm::function_ref<InFlightDiagnostic()> emit,
         emit(), "logical-type-construction",
         "native type is unavailable or has a different application");
     return {};
+  }
+  if (work && context) {
+    detail::NativeTypeWorkScope::charge();
+    work->constructed.try_emplace(key, type);
   }
   return type;
 }

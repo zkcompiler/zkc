@@ -1061,7 +1061,12 @@ int main(int argc, char **argv) {
           auto merkle = input.merkle;
           auto opening = input.openOne;
           auto capacity = input.packetCapacity;
-          auto work = input.work;
+          // A distinct raw negative query pays its complete admission from a
+          // fresh allowance. This does not refresh the composed positive
+          // construction's sticky allowance, or any production work object.
+          OracleVirtualFunctionWork work;
+          work.operations = input.work.operations;
+          work.slots = input.work.slots;
           StringRef code = "oracle-packet-layout";
           if (refusal == 0 || refusal == 1) {
             if (refusal == 0)

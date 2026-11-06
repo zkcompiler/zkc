@@ -94,13 +94,15 @@ theorem step_schema (model : Structured.DomainModel) (program : Structured.Progr
     yields_bind_all process _ (Domain.View.append declared env) appendChecked
   unfold Domain.step
   split
+  all_goals try unfold Domain.executeLoop
+  all_goals try unfold Domain.selectMath
   all_goals repeat' first
     | exact appendChecked _
     | exact bindChecked _
     | exact Domain.Value.encode_sort (by assumption)
     | unfold Domain.challengeRequest
     | unfold Domain.localRequest
-    | (apply yields_bind_all; intro reply)
+    | (apply yields_bind_all; intro final)
     | (change True; trivial)
     | (change ∃ values, _ = env ++ values ∧ _; exact ⟨_, rfl, by assumption⟩)
     | (change ∃ values, _ = env ++ values ∧ _; refine ⟨_, rfl, ?_⟩

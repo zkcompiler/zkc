@@ -1,11 +1,13 @@
 #include "BodyCheck.h"
-#include "FiniteDomains.h"
+#include "DescriptorFactories.h"
+#include "DescriptorFrames.h"
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<DomainOperands> domainOperands(Semantics &types, const Body &body,
-                                             ArrayRef<unsigned> roots,
-                                             Span span) {
-  DomainOperands result;
+std::optional<DescriptorOperands> descriptorOperands(Semantics &types,
+                                                     const Body &body,
+                                                     ArrayRef<unsigned> roots,
+                                                     Span span) {
+  DescriptorOperands result;
   std::vector<unsigned> pending(roots.begin(), roots.end());
   std::set<unsigned> seen;
   while (!pending.empty()) {
@@ -15,34 +17,34 @@ std::optional<DomainOperands> domainOperands(Semantics &types, const Body &body,
       return {};
     if (!seen.insert(index).second)
       continue;
-    if (index >= body.domainBindings.size()) {
+    if (index >= body.descriptorBindings.size()) {
       types.fail("source.finite-domain", "domain operand edge outside body",
                  span);
       return {};
     }
-    const auto &domain = body.domainBindings[index];
+    const auto &domain = body.descriptorBindings[index];
     if (!types.charge(domain.operands.size() + domain.children.size(), span))
       return {};
-    result.parameterized |= domain.kind == DomainBinding::Kind::Parameter;
+    result.parameterized |= domain.kind == DescriptorBinding::Kind::Parameter;
     result.values.insert(result.values.end(), domain.operands.begin(),
                          domain.operands.end());
-    pending.insert(pending.end(), domain.children.begin(),
-                   domain.children.end());
+    for (const auto &child : domain.children)
+      pending.push_back(child.node);
   }
   return result;
 }
-bool BodyChecker::addDomain(BindingId id, const DomainParameter &parameter,
+bool BodyChecker::addDomain(BindingId id, const DescriptorParameter &parameter,
                             unsigned formal) {
-  if (!checker.types.chargeType(parameter.item, parameter.span))
+  if (!checker.types.chargeContract(parameter.contract, parameter.span))
     return false;
-  domains.emplace(id, body.domainBindings.size());
-  body.domainBindings.push_back({DomainBinding::Kind::Parameter,
-                                 parameter.item,
-                                 {},
-                                 {},
-                                 0,
-                                 formal,
-                                 parameter.span});
+  domains.emplace(id, body.descriptorBindings.size());
+  body.descriptorBindings.push_back({DescriptorBinding::Kind::Parameter,
+                                     parameter.contract,
+                                     {},
+                                     {},
+                                     0,
+                                     formal,
+                                     parameter.span});
   return true;
 }
 bool BodyChecker::inheritDomains(BodyChecker &nested,
@@ -50,9 +52,9 @@ bool BodyChecker::inheritDomains(BodyChecker &nested,
                                  std::vector<unsigned> &arguments) {
   for (auto binding : selected) {
     auto index = domains.at(binding);
-    const auto &domain = body.domainBindings[index];
-    DomainParameter formal{syntax.bindings[binding.index].name, domain.item,
-                           domain.span};
+    const auto &domain = body.descriptorBindings[index];
+    DescriptorParameter formal{syntax.bindings[binding.index].name,
+                               domain.contract, domain.span};
     if (!nested.addDomain(binding, formal, arguments.size()))
       return false;
     arguments.push_back(index);
@@ -73,37 +75,27 @@ bool BodyChecker::captureDomains(
       return false;
     if (!reachable.insert(index).second)
       continue;
-    if (index >= body.domainBindings.size())
+    if (index >= body.descriptorBindings.size())
       return fail("source.finite-domain", "captured domain edge outside body",
                   span);
-    const auto &source = body.domainBindings[index];
-    if (source.parameter || source.kind == DomainBinding::Kind::Parameter)
+    const auto &source = body.descriptorBindings[index];
+    if (source.parameter || source.kind == DescriptorBinding::Kind::Parameter)
       return fail("source.finite-domain",
                   "protocol domain capture has an unbound formal", span);
     if (!checker.types.charge(source.children.size(), span))
       return false;
-    pending.insert(pending.end(), source.children.begin(),
-                   source.children.end());
+    for (const auto &child : source.children)
+      pending.push_back(child.node);
   }
   std::map<unsigned, unsigned> nodes;
   std::map<unsigned, ValueId> operands;
   // Checked recipes are topologically ordered. Copy the reachable constructor
   // applications, not their runtime results; admission stays at the consumer.
   for (auto index : reachable) {
-    const auto &source = body.domainBindings[index];
-    if (!checker.types.charge(source.operands.size() + source.children.size() +
-                                  source.arguments.size() +
-                                  source.argumentOrder.size() + 1,
-                              span) ||
-        !checker.types.chargeType(source.item, span))
+    const auto &source = body.descriptorBindings[index];
+    if (!chargeDescriptorBindingCopy(checker.types, source))
       return false;
-    for (const auto &argument : source.arguments)
-      if (!checker.types.chargeType(argument, span))
-        return false;
-    if (source.factory && source.factory->module &&
-        !checker.types.chargeType(*source.factory->module, span))
-      return false;
-    DomainBinding copy = source;
+    DescriptorBinding copy = source;
     for (auto &operand : copy.operands) {
       auto found = operands.find(operand.index);
       if (found == operands.end()) {
@@ -115,14 +107,14 @@ bool BodyChecker::captureDomains(
       operand = found->second;
     }
     for (auto &child : copy.children) {
-      auto found = nodes.find(child);
+      auto found = nodes.find(child.node);
       if (found == nodes.end())
         return fail("source.finite-domain",
                     "captured domain recipe is not topological", span);
-      child = found->second;
+      child.node = found->second;
     }
-    nodes.emplace(index, nested.body.domainBindings.size());
-    nested.body.domainBindings.push_back(std::move(copy));
+    nodes.emplace(index, nested.body.descriptorBindings.size());
+    nested.body.descriptorBindings.push_back(std::move(copy));
   }
   for (auto binding : selected)
     nested.domains.emplace(binding, nodes.at(domains.at(binding)));
@@ -136,30 +128,74 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
     fail("source.limit", "domain argument depth exceeded", expr.span);
     return {};
   }
+  if (syntax.layoutSyntax && expr.kind != Expression::Kind::DomainProduct &&
+      !inference->collectionDomains.count(id)) {
+    std::map<BindingId, ValueId> data;
+    for (const auto &[name, state] : bindings)
+      if (state.value)
+        data.emplace(name, *state.value);
+    auto evaluate =
+        [&](uint32_t child,
+            const std::optional<Type> &expected) -> std::optional<ValueId> {
+      if (expected && !checker.types.chargeType(*expected, expr.span))
+        return {};
+      auto value = expression(child, expected, depth + 1);
+      if (!value || product(*value) ||
+          !use(*value, syntax.expressions[child].span))
+        return {};
+      body.expressionValues.insert_or_assign(child, *value);
+      return value;
+    };
+    auto selected = authorDescriptorExpression(
+        checker, decl, syntax, body.descriptorBindings, domains, data,
+        [&](ValueId value) -> const Type * {
+          return &body.values.at(value.index).type;
+        },
+        evaluate, id, callDepth, inference->descriptorTypes.at(id));
+    if (!selected)
+      return {};
+    auto retained =
+        descriptorOperands(checker.types, body, {*selected}, expr.span);
+    if (!retained)
+      return {};
+    for (auto operand : retained->values)
+      if (operand.index >= body.values.size() || !use(operand, expr.span))
+        return {};
+    return selected;
+  }
   if (expr.kind == Expression::Kind::DomainProduct) {
-    std::vector<unsigned> children;
+    std::vector<DescriptorEdge> children;
     for (auto child : expr.children) {
       auto domain = domainArgument(child, depth + 1);
       if (!domain)
         return {};
-      children.push_back(*domain);
+      children.push_back({*domain, body.descriptorBindings[*domain].contract});
     }
-    DomainBinding product{DomainBinding::Kind::Product,
-                          inference->domainItems.at(id),
-                          {},
-                          std::move(children),
-                          0,
-                          {},
-                          expr.span};
+    DescriptorBinding product{
+        DescriptorBinding::Kind::Product,
+        *descriptorContract(inference->descriptorTypes.at(id)),
+        {},
+        std::move(children),
+        0,
+        {},
+        expr.span};
     product.expression = id;
-    auto index = body.domainBindings.size();
-    body.domainBindings.push_back(std::move(product));
+    auto index = body.descriptorBindings.size();
+    body.descriptorBindings.push_back(std::move(product));
     return index;
   }
   if (expr.kind == Expression::Kind::Name && expr.binding) {
     auto found = domains.find(*expr.binding);
-    if (found != domains.end())
+    if (found != domains.end()) {
+      auto retained =
+          descriptorOperands(checker.types, body, {found->second}, expr.span);
+      if (!retained)
+        return {};
+      for (auto operand : retained->values)
+        if (operand.index >= body.values.size() || !use(operand, expr.span))
+          return {};
       return found->second;
+    }
   }
   if (inference->collectionDomains.count(id)) {
     auto value = expression(id, {}, depth + 1);
@@ -175,14 +211,14 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
       return {};
     body.expressionValues.insert_or_assign(id, *value);
     return collectionDomain(checker.types, body.values[value->index].type,
-                            *value, body.domainBindings, id, expr.span);
+                            *value, body.descriptorBindings, id, expr.span);
   }
   const auto &target = inference->callees.at(id);
   const auto &callee = checker.output.declarations[target.declaration.index];
   const auto &arguments = inference->arguments.at(id);
   const auto &order = inference->inputs.at(id);
   std::vector<ValueId> operands(callee.inputs.size());
-  std::vector<unsigned> domainArguments(callee.domainInputs.size());
+  std::vector<unsigned> descriptorArguments(callee.descriptorInputs.size());
   // Only ordinary operands execute here. Composite admission stays at the
   // finite consumer after its initial state and callback snapshots execute.
   for (unsigned i = 0; i < expr.children.size(); ++i) {
@@ -192,7 +228,7 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
       auto value = domainArgument(child, depth + 1);
       if (!value)
         return {};
-      domainArguments[slot.index] = *value;
+      descriptorArguments[slot.index] = *value;
     } else {
       auto value = expression(child, {}, depth + 1);
       if (!value)
@@ -209,8 +245,8 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
       operands[slot.index] = *value;
     }
   }
-  return instantiateDomain(checker.types, callee, target, arguments, operands,
-                           domainArguments, order, body.domainBindings, id,
-                           expr.span);
+  return instantiateDescriptor(checker.types, callee, target, arguments,
+                               operands, descriptorArguments, order,
+                               body.descriptorBindings, id, expr.span);
 }
 } // namespace zkc::language::detail

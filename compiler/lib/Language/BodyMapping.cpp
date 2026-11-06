@@ -9,7 +9,7 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
   list(body.results);
   for (auto &[id, value] : body.expressionValues)
     value = map(value);
-  for (auto &domain : body.domainBindings)
+  for (auto &domain : body.descriptorBindings)
     list(domain.operands);
   for (auto &binding : body.scopedBindings)
     list(binding.captures);
@@ -36,7 +36,7 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
                         std::is_same_v<T, FiniteApplication>)
             list(action.operands);
           else if constexpr (std::is_same_v<T, FiniteComputation>) {
-            list(action.domainOperands);
+            list(action.descriptorOperands);
             list(action.operands);
             list(action.body.captures);
             if (action.predicate)

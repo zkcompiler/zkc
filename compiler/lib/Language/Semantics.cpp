@@ -11,20 +11,27 @@ Semantics::Semantics(const std::vector<Declaration> &declarations,
       naturals(work.limits.work, work.limits.naturalTerms,
                work.limits.naturalFactors,
                [&work](uint64_t amount) { return work.charge(amount); }),
-      declarations(declarations), assets(assets),
-      complete(std::move(complete)) {
+      declarations(declarations), assets(assets), ownedIndex(std::in_place),
+      index(*ownedIndex), complete(std::move(complete)) {
   for (const auto &decl : declarations) {
     indexDeclaration(decl);
     for (unsigned i = 0; i < decl.parameters.size(); ++i)
       indexParameter(decl.parameters[i], decl.id, i);
   }
 }
+Semantics::Semantics(const Semantics &owner, Work &work)
+    : work(work),
+      naturals(work.limits.work, work.limits.naturalTerms,
+               work.limits.naturalFactors,
+               [&work](uint64_t amount) { return work.charge(amount); }),
+      authorities(owner.authorities), declarations(owner.declarations),
+      index(owner.index) {}
 Expected<std::optional<std::string>>
 Semantics::nominalAuthority(StringRef path) const {
   if (authorities.final)
     return definingAuthority(*authorities.final, path);
-  auto found = qualified.find(path.str());
-  if (found == qualified.end())
+  auto found = index.qualified.find(path.str());
+  if (found == index.qualified.end())
     return failure("source.authority",
                    "no checked declaration has path " + path);
   if (declarations[found->second.index].generated)
@@ -32,12 +39,45 @@ Semantics::nominalAuthority(StringRef path) const {
   return std::optional<std::string>(std::string(64, '-'));
 }
 void Semantics::indexDeclaration(const Declaration &decl) {
+  assert(ownedIndex && "only the semantic index owner can add declarations");
   if (!decl.origin && !decl.anonymous)
-    qualified.emplace(decl.qualifiedName, decl.id);
+    ownedIndex->qualified.emplace(decl.qualifiedName, decl.id);
 }
 void Semantics::indexParameter(const Parameter &parameter, DeclarationId id,
                                unsigned index) {
-  parameters.emplace(parameter.atom, std::make_pair(id, index));
+  assert(ownedIndex && "only the semantic index owner can add parameters");
+  ownedIndex->parameters.emplace(parameter.atom, std::make_pair(id, index));
+}
+// Private memo routing only. Collisions always compare the complete owned
+// Type; this hash is never an identity or source/native admission witness.
+size_t typeLookupHash(const Type &type) {
+  hash_code dimension = hash_value(type.dimension.terms().size());
+  for (const auto &[factors, coefficient] : type.dimension.terms()) {
+    dimension = hash_combine(dimension, coefficient, factors.size());
+    for (const auto &factor : factors)
+      dimension = hash_combine(dimension, unsigned(factor.kind), factor.name,
+                               factor.member);
+  }
+  if (type.kind == Type::Kind::Natural)
+    return hash_combine(unsigned(type.kind), dimension);
+  auto result = hash_combine(
+      unsigned(type.kind), type.domain, type.sort, dimension, type.symbolic,
+      type.arguments.size(),
+      type.kind == Type::Kind::Descriptor ? unsigned(type.family) : 0);
+  for (const auto &child : type.arguments)
+    result = hash_combine(result, typeLookupHash(child));
+  return result;
+}
+
+Type typeHead(const Type &type, bool includeDimension) {
+  Type result(type.kind, type.domain);
+  result.family = type.family;
+  result.sort = type.sort;
+  if (includeDimension)
+    result.dimension = type.dimension;
+  result.symbolic = type.symbolic;
+  result.assumptions = type.assumptions;
+  return result;
 }
 Type parameterType(const Parameter &p) {
   using K = Type::Kind;
@@ -67,7 +107,8 @@ bool Semantics::fail(StringRef code, const Twine &message, Span span,
   return false;
 }
 bool Semantics::accept(Error error, std::optional<Span> fallback) {
-  auto found = diagnose(std::move(error), fallback);
+  auto found =
+      diagnose(work.contextualize(std::move(error), fallback), fallback);
   if (!found)
     return true;
   if (!diagnostic)
@@ -215,16 +256,40 @@ bool Semantics::chargeConstruction(const ConstructionDefinition &value,
   }
   return true;
 }
-bool Semantics::chargeType(const Type &type, Span span) {
+bool Semantics::chargeType(const Type &type, Span span, bool complete) {
   auto cost =
-      typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth);
+      typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth,
+                     work.remaining(), nullptr, complete, TypeWork::Copy);
   if (!cost)
     return accept(cost.takeError(), span);
   return charge(*cost, span);
 }
+bool Semantics::chargeIdentity(const Type &type, Span span) {
+  auto cost =
+      typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth,
+                     work.remaining(), nullptr, true, TypeWork::Identity);
+  if (!cost)
+    return accept(cost.takeError(), span);
+  return charge(*cost, span);
+}
+std::optional<bool> Semantics::sameSnapshot(const Type &type,
+                                            const Type &expected, Span span,
+                                            bool complete) {
+  TypeComparison comparison{expected};
+  auto cost = typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth,
+                             work.remaining(), nullptr, complete,
+                             TypeWork::Copy, &comparison);
+  if (!cost) {
+    accept(cost.takeError(), span);
+    return {};
+  }
+  if (!charge(*cost, span))
+    return {};
+  return comparison.equal;
+}
 const Parameter *Semantics::parameter(StringRef atom) const {
-  auto found = parameters.find(atom.str());
-  if (found == parameters.end())
+  auto found = index.parameters.find(atom.str());
+  if (found == index.parameters.end())
     return nullptr;
   auto [id, index] = found->second;
   return &declarations[id.index].parameters[index];
@@ -235,12 +300,13 @@ const Declaration *Semantics::typeDeclaration(const Type &type) const {
       type.kind != K::Variant && type.kind != K::Associated &&
       type.kind != K::Module)
     return nullptr;
-  auto found = qualified.find(type.domain);
-  return found == qualified.end() ? nullptr
-                                  : &declarations[found->second.index];
+  auto found = index.qualified.find(type.domain);
+  return found == index.qualified.end() ? nullptr
+                                        : &declarations[found->second.index];
 }
 bool Semantics::symbolic(const Type &type) const {
-  return type.symbolic || !type.dimension.isClosed() ||
+  return type.kind == Type::Kind::Parameter || type.symbolic ||
+         !type.dimension.isClosed() ||
          llvm::any_of(type.arguments, [&](auto &t) { return symbolic(t); });
 }
 Substitution Semantics::substitution(const Declaration &decl,
@@ -265,37 +331,104 @@ std::optional<Type> Semantics::substitute(const Type &input,
       fail("source.limit", "type substitution depth limit", span);
     return {};
   }
+  bool resultNeedsPreflight = true;
+  if (depth == 1 || normalizationDepth == 1) {
+    // Bound the selected tree as a whole before any recursive result copy.
+    // Each binding is an ordinary static term, not a descriptor-kind variable.
+    bool normalizationNeeded = false, bindingSelected = false;
+    bool reductionNeeded = false;
+    auto cost = typeComplexity(
+        input, work.limits.typeNodes, work.limits.typeDepth - depth + 1,
+        work.remaining(),
+        [&](const Type &term) -> const Type * {
+          // Replaced heads return the selected term directly; they perform no
+          // normalization or formation of the unreplaced pattern.
+          if (term.symbolic) {
+            auto found = bindings.find(term.domain);
+            if (found != bindings.end()) {
+              bindingSelected = true;
+              return &found->second;
+            }
+          }
+          reductionNeeded |= (term.kind == Type::Kind::OracleProjection &&
+                              term.arguments.size() == 1) ||
+                             ((term.kind == Type::Kind::Associated ||
+                               !domainSort(term).empty()) &&
+                              !term.arguments.empty());
+          normalizationNeeded |=
+              (!bindings.empty() && !term.dimension.isClosed()) ||
+              term.kind == Type::Kind::OracleKind ||
+              term.kind == Type::Kind::LogicalRecord ||
+              (term.kind == Type::Kind::OracleProjection &&
+               term.arguments.size() == 1) ||
+              ((term.kind == Type::Kind::Associated ||
+                !domainSort(term).empty()) &&
+               !term.arguments.empty());
+          return nullptr;
+        },
+        true, TypeWork::Copy);
+    if (!cost) {
+      accept(cost.takeError(), span);
+      return {};
+    }
+    if (!charge(*cost, span))
+      return {};
+    // The preflight inspected every head and found no substitution, natural
+    // normalization, projection or logical formation to perform. Preserve the
+    // validated tree with one copy, rather than rebuilding and revalidating it.
+    if (!normalizationNeeded && !bindingSelected)
+      return input;
+    // Selection and Natural arithmetic preserve every stored Type kind, child
+    // count and level. Preflight checked their selected parent categories;
+    // NaturalArithmetic admits every new polynomial allocation on this ledger
+    // and the Natural branch restores canonical head metadata. Only projection
+    // reduction can change the stored tree and require a fresh whole check.
+    resultNeedsPreflight = reductionNeeded;
+  }
+  if (isDescriptor(input) && input.symbolic) {
+    fail("source.descriptor", "descriptor contracts have no symbolic head",
+         span);
+    return {};
+  }
   if (input.symbolic) {
     auto found = bindings.find(input.domain);
     if (found != bindings.end()) {
-      if (!chargeType(found->second, span))
-        return {};
+      // The owning selected-tree preflight already debited this exact copy,
+      // including its complete metadata and its actual insertion depth.
       return found->second;
     }
   }
-  if (!chargeType(input, span))
-    return {};
-  Type result = input;
-  for (auto &arg : result.arguments) {
+  // The whole selected-tree debit above pays for these shallow heads and
+  // their child vectors. Never copy a subtree only to overwrite its children.
+  Type result = typeHead(input);
+  result.arguments.reserve(input.arguments.size());
+  for (const auto &arg : input.arguments) {
     auto t = substitute(arg, bindings, span, depth + 1);
     if (!t)
       return {};
-    arg = std::move(*t);
+    result.arguments.push_back(std::move(*t));
   }
-  if (!result.dimension.isClosed()) {
+  // Natural owns a canonical polynomial. With no bindings there is no
+  // arithmetic to perform or polynomial to materialize again.
+  if (!bindings.empty() && !result.dimension.isClosed()) {
     // A projection of a bound asset atom is decided here, from the captured
     // asset or by renaming, before the polynomial is normalized.
     std::map<std::pair<std::string, std::string>, Natural> projections;
+    bool bindingRelevant = false;
     for (const auto &[factors, coefficient] : result.dimension.terms()) {
       (void)coefficient;
       if (!charge(factors.size() + 1, span))
         return {};
       for (const auto &factor : factors) {
-        if (factor.kind != Natural::Factor::Kind::Projection)
-          continue;
         auto found = bindings.find(factor.name);
+        if (factor.kind != Natural::Factor::Kind::Projection) {
+          bindingRelevant |= found != bindings.end() &&
+                             found->second.kind == Type::Kind::Natural;
+          continue;
+        }
         if (found == bindings.end())
           continue;
+        bindingRelevant = true;
         auto key = std::make_pair(factor.name, factor.member);
         if (projections.count(key))
           continue;
@@ -305,25 +438,27 @@ std::optional<Type> Semantics::substitute(const Type &input,
         projections.emplace(std::move(key), std::move(value->dimension));
       }
     }
-    auto n = naturals.substitute(
-        result.dimension,
-        [&](const Natural::Factor &factor) -> const Natural * {
-          if (factor.kind == Natural::Factor::Kind::Projection) {
-            auto found =
-                projections.find(std::make_pair(factor.name, factor.member));
-            return found == projections.end() ? nullptr : &found->second;
-          }
-          auto found = bindings.find(factor.name);
-          return found != bindings.end() &&
-                         found->second.kind == Type::Kind::Natural
-                     ? &found->second.dimension
-                     : nullptr;
-        });
-    if (!n) {
-      accept(n.takeError(), span);
-      return {};
+    if (bindingRelevant) {
+      auto n = naturals.substitute(
+          result.dimension,
+          [&](const Natural::Factor &factor) -> const Natural * {
+            if (factor.kind == Natural::Factor::Kind::Projection) {
+              auto found =
+                  projections.find(std::make_pair(factor.name, factor.member));
+              return found == projections.end() ? nullptr : &found->second;
+            }
+            auto found = bindings.find(factor.name);
+            return found != bindings.end() &&
+                           found->second.kind == Type::Kind::Natural
+                       ? &found->second.dimension
+                       : nullptr;
+          });
+      if (!n) {
+        accept(n.takeError(), span);
+        return {};
+      }
+      result.dimension = std::move(*n);
     }
-    result.dimension = std::move(*n);
     if (result.kind == Type::Kind::Natural) {
       result.symbolic = !result.dimension.isClosed();
       if (!result.symbolic)
@@ -343,8 +478,8 @@ std::optional<Type> Semantics::substitute(const Type &input,
     if (result.arguments.front().kind != Type::Kind::Module)
       return associated(result.arguments.front(),
                         StringRef(result.domain).rsplit("::").second, span);
-    auto found = qualified.find(result.domain);
-    if (found == qualified.end()) {
+    auto found = index.qualified.find(result.domain);
+    if (found == index.qualified.end()) {
       fail("source.type", "unknown associated declaration", span);
       return {};
     }
@@ -365,6 +500,9 @@ std::optional<Type> Semantics::substitute(const Type &input,
         return {};
       }
   if (result.kind == Type::Kind::LogicalRecord && !logicalRecord(result, span))
+    return {};
+  if (resultNeedsPreflight && (depth == 1 || normalizationDepth == 1) &&
+      !chargeType(result, span))
     return {};
   return result;
 }
@@ -434,8 +572,8 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
     if (auto p = parameter(base.domain); p && p->interface)
       owner = &declarations[p->interface->index];
     else if (StringRef(base.domain).starts_with("self:")) {
-      auto found = qualified.find(base.domain.substr(5));
-      if (found != qualified.end())
+      auto found = index.qualified.find(base.domain.substr(5));
+      if (found != index.qualified.end())
         owner = &declarations[found->second.index];
     }
   } else
@@ -533,7 +671,7 @@ Semantics::dispatch(const std::optional<Type> &module, DeclarationId required,
   const bool callable = target.kind == Declaration::Kind::Math ||
                         target.kind == Declaration::Kind::Local ||
                         target.kind == Declaration::Kind::Protocol ||
-                        target.kind == Declaration::Kind::DomainFunction;
+                        target.kind == Declaration::Kind::View;
   if (callable && completeDispatchBody &&
       !completeDispatchBody(*provided, enclosingCalls))
     return {};
@@ -603,6 +741,8 @@ std::optional<Type> Semantics::associated(const Type &base,
 std::optional<Substitution>
 Semantics::boundMemberSubstitution(const Declaration &callee,
                                    const Type &module, Span span) {
+  if (!chargeType(module, span))
+    return {};
   if (!callee.parent) {
     fail("source.call", "bound callable has no interface owner", span);
     return {};
@@ -813,6 +953,57 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
                   span, {bound.span});
   }
   return true;
+}
+bool Semantics::structuralAssumptions(const Declaration &caller,
+                                      const NaturalBound &bound,
+                                      const Substitution &bindings, Span span,
+                                      StringRef code) {
+  if (!charge(2 * sizeof(Type), span))
+    return false;
+  auto leftCopy = naturals.add(bound.lhs, Natural{});
+  if (!leftCopy)
+    return accept(leftCopy.takeError(), span);
+  auto rightCopy = naturals.add(bound.rhs, Natural{});
+  if (!rightCopy)
+    return accept(rightCopy.takeError(), span);
+  Type lhs(Type::Kind::Natural), rhs(Type::Kind::Natural);
+  lhs.dimension = std::move(*leftCopy);
+  rhs.dimension = std::move(*rightCopy);
+  auto l = substitute(lhs, bindings, span), r = substitute(rhs, bindings, span);
+  if (!l || !r)
+    return false;
+  auto requested = naturals.cancelCommonTerms(l->dimension, r->dimension);
+  if (!requested)
+    return accept(requested.takeError(), span);
+  auto dominates = [&](const Natural &a, const Natural &b) -> bool {
+    auto result = naturals.dominatedBy(a, b);
+    if (!result) {
+      accept(result.takeError(), span);
+      return false;
+    }
+    return *result;
+  };
+  const auto &[left, right] = *requested;
+  if (dominates(left, right))
+    return true;
+  if (diagnostic)
+    return false;
+  // A closed contradiction cannot be licensed by an inconsistent premise.
+  if (left.isClosed() && right.isClosed())
+    return fail(code, "natural requirement is false", span, {bound.span});
+  for (const auto &given : caller.bounds) {
+    if (!charge(1, span))
+      return false;
+    auto premise = naturals.cancelCommonTerms(given.lhs, given.rhs);
+    if (!premise)
+      return accept(premise.takeError(), span);
+    if (dominates(left, premise->first) && dominates(premise->second, right))
+      return true;
+    if (diagnostic)
+      return false;
+  }
+  return fail(code, "contract does not establish structural View bound", span,
+              {bound.span});
 }
 bool Semantics::assumptions(const Declaration &caller,
                             const NaturalBound &bound,

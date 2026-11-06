@@ -69,10 +69,18 @@ class GroundMatch {
                         [&](const Type &arg) { return ready(arg); });
   }
   bool match(const Type &pattern, const Type &actual, unsigned depth) {
+    // Validate complete current candidates once before descending. Recursive
+    // comparisons borrow these same heads; they do not copy/revalidate every
+    // subtree at every ancestor. Computed Natural candidates enter here again.
+    if (!types.chargeType(pattern, span) || !types.chargeType(actual, span))
+      return false;
+    return matchChecked(pattern, actual, depth);
+  }
+  bool matchChecked(const Type &pattern, const Type &actual, unsigned depth) {
     if (depth > types.work.limits.typeDepth)
       return types.fail("source.limit", "binding witness type depth exceeded",
                         span);
-    if (!types.chargeType(pattern, span) || !types.chargeType(actual, span))
+    if (!types.charge(1, span))
       return false;
     // Only a bare formal is injective. Composite naturals and associations
     // are compared after their inputs are known.
@@ -130,7 +138,7 @@ class GroundMatch {
         return false;
     }
     for (unsigned i = 0; i < pattern.arguments.size(); ++i)
-      if (!match(pattern.arguments[i], actual.arguments[i], depth + 1))
+      if (!matchChecked(pattern.arguments[i], actual.arguments[i], depth + 1))
         return false;
     return true;
   }
@@ -199,17 +207,21 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
   if ((callee.kind != Declaration::Kind::Math &&
        callee.kind != Declaration::Kind::Local) ||
       !callee.inputs.empty() || !callee.services.empty() ||
-      callee.domainInputs.size() != 1 || callee.scopedInputs.size() != count ||
-      callee.outputs.size() != 1 || callee.inputOrder.size() != count + 1)
+      callee.descriptorInputs.size() != 1 ||
+      callee.scopedInputs.size() != count || callee.outputs.size() != 1 ||
+      callee.inputOrder.size() != count + 1)
     return refuse();
   using K = Declaration::InputSlot::Kind;
   if (callee.inputOrder[0].kind != K::Domain || callee.inputOrder[0].index != 0)
+    return refuse();
+  auto *item = finiteDescriptorItem(callee.descriptorInputs[0].contract);
+  if (!item)
     return refuse();
   for (unsigned i = 0; i < count; ++i) {
     const auto &parameter = callee.scopedInputs[i];
     const auto &signature = parameter.signature;
     if (!types.charge(parameter.itemOrigins.size(), span) ||
-        !types.chargeType(callee.domainInputs[0].item, span) ||
+        !types.chargeContract(callee.descriptorInputs[0].contract, span) ||
         !types.chargeType(signature.result, span))
       return false;
     for (const auto &input : signature.inputs)
@@ -217,7 +229,7 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
         return false;
     if (callee.inputOrder[i + 1].kind != K::Scoped ||
         callee.inputOrder[i + 1].index != i ||
-        signature.inputs != std::vector<Type>{callee.domainInputs[0].item} ||
+        signature.inputs != std::vector<Type>{*item} ||
         (!parameter.itemOrigins.empty() &&
          parameter.itemOrigins != std::map<unsigned, unsigned>{{0, 0}}))
       return refuse();
@@ -258,7 +270,23 @@ bool checkNotationOccurrence(Semantics &types, const Expression &expr,
                             expr.filteredReduction);
 }
 
-std::optional<ArrayRef<OperatorBinding>>
+AuthoredOperatorFamily::AuthoredOperatorFamily(
+    std::map<std::string, OperatorBinding> &&family) {
+  bindings.reserve(family.size());
+  identities.reserve(family.size());
+  while (!family.empty()) {
+    auto node = family.extract(family.begin());
+    identities.push_back(std::move(node.key()));
+    auto &binding = node.mapped();
+    // A shared_ptr<const T> can still originate from a mutable shared owner.
+    // Detach this small descriptor so no such alias can alter frozen keys.
+    if (binding.notation)
+      binding.notation =
+          std::make_shared<const NotationDescriptor>(*binding.notation);
+    bindings.push_back(std::move(binding));
+  }
+}
+std::shared_ptr<const AuthoredOperatorFamily>
 Checker::operatorWitnessFamily(const Declaration &decl,
                                const SyntaxDeclaration &source,
                                uint32_t expression) {
@@ -281,6 +309,7 @@ Checker::operatorWitnessFamily(const Declaration &decl,
   // Reconstruct the family from the checked lexical environment, without
   // using operatorCandidates or any candidate list produced by inference.
   std::map<std::string, OperatorBinding> family;
+  bool shadows = false;
   auto include = [&](const OperatorBinding &binding) {
     if (!binding.notation)
       return types.fail("source.binding-witness",
@@ -296,19 +325,34 @@ Checker::operatorWitnessFamily(const Declaration &decl,
         binding.target.declaration.index >= output.declarations.size())
       return types.fail("source.binding-witness",
                         "notation binding shape differs", expr.span);
+    shadows = true;
+    if ((binding.filteredOnly && !expr.filteredReduction) ||
+        (expr.filteredReduction && !binding.filtered))
+      return true;
+    if (!chargeOperatorBindingKeys(binding, types, expr.span))
+      return false;
     auto key = operatorBindingKey(binding, output.declarations);
     if (!types.charge(key.size() + 1, expr.span))
+      return false;
+    if (!chargeOperatorBindingCopies(binding, types, expr.span))
       return false;
     family.try_emplace(std::move(key), binding);
     return true;
   };
-  auto retain = [&](OperatorFamilyKey key) -> ArrayRef<OperatorBinding> {
-    std::vector<OperatorBinding> result;
-    for (auto &[identity, binding] : family)
-      result.push_back(std::move(binding));
-    auto stored =
-        operatorWitnessFamilies.emplace(std::move(key), std::move(result));
-    return stored.first->second;
+  auto retain = [&](OperatorFamilyKey key)
+      -> std::shared_ptr<const AuthoredOperatorFamily> {
+    if (!types.charge(2 * family.size() + 1, expr.span))
+      return {};
+    for (const auto &[identity, binding] : family)
+      if (binding.notation &&
+          !types.charge(binding.notation->symbol.size() +
+                            binding.notation->closing.size() + 1,
+                        expr.span))
+        return {};
+    auto result = std::shared_ptr<const AuthoredOperatorFamily>(
+        new AuthoredOperatorFamily(std::move(family)));
+    return operatorWitnessFamilies.emplace(std::move(key), std::move(result))
+        .first->second;
   };
   auto scope = expr.scope;
   unsigned depth = 0;
@@ -321,23 +365,27 @@ Checker::operatorWitnessFamily(const Declaration &decl,
     const auto &region = source.bodies[*scope];
     if (!types.charge(region.resolvedOperators.size() + 1, expr.span))
       return {};
-    OperatorFamilyKey key{decl.id.index, scope, descriptorKey};
+    OperatorFamilyKey key{
+        decl.id.index, scope,
+        descriptorKey + (expr.filteredReduction ? ":filtered" : ":plain")};
     if (auto found = operatorWitnessFamilies.find(key);
         found != operatorWitnessFamilies.end())
-      return ArrayRef<OperatorBinding>(found->second);
+      return found->second;
     for (const auto &binding : region.resolvedOperators)
       if (!include(binding))
         return {};
-    if (!family.empty())
+    if (shadows)
       return retain(std::move(key));
     scope = region.parent;
   }
   // All declarations in one module share its immutable imported family.
   // A lexical family above replaces that family for its descriptor.
-  OperatorFamilyKey key{decl.module.index, std::nullopt, descriptorKey};
+  OperatorFamilyKey key{decl.module.index, std::nullopt,
+                        descriptorKey +
+                            (expr.filteredReduction ? ":filtered" : ":plain")};
   if (auto found = operatorWitnessFamilies.find(key);
       found != operatorWitnessFamilies.end())
-    return ArrayRef<OperatorBinding>(found->second);
+    return found->second;
   if (!types.charge(visibleOperators[decl.module.index].size() + 1, expr.span))
     return {};
   for (auto site : visibleOperators[decl.module.index]) {
@@ -418,16 +466,46 @@ bool checkOperatorOperands(Semantics &types, const NotationDescriptor &notation,
   return true;
 }
 
-bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
-                          ArrayRef<OperatorBinding> expected,
-                          const NotationDescriptor &notation,
-                          const CallBinding &witness, ArrayRef<Type> inputs,
-                          const Type &output, Span span) {
+namespace {
+bool checkOperatorWitnessImpl(Semantics &types,
+                              ArrayRef<Declaration> declarations,
+                              ArrayRef<OperatorBinding> expected,
+                              const AuthoredOperatorFamily *frozen,
+                              const NotationDescriptor &notation,
+                              const CallBinding &witness, ArrayRef<Type> inputs,
+                              const Type &output, Span span) {
   auto refuse = [&] {
     return types.fail(
         "source.binding-witness",
         "operator binding evidence differs from its definition environment",
         span);
+  };
+  auto matchesKey = [&](unsigned i) {
+    const auto &binding = expected[i];
+    if (!types.charge(witness.family[i].size() + 1, span))
+      return false;
+    if (!frozen) {
+      return chargeOperatorBindingKeys(binding, types, span) &&
+             witness.family[i] == operatorBindingKey(binding, declarations);
+    }
+    // Immutable source keys are reusable text, not candidate admission. Check
+    // every Type against this consumer's actual limits and remaining Work.
+    auto reference = [&](const CallableReference &target) {
+      return (!target.reference.abstract ||
+              types.chargeType(target.reference.abstract->module, span)) &&
+             (!target.module || types.chargeType(*target.module, span));
+    };
+    auto arguments = [&](const auto &values) {
+      for (const auto &value : values)
+        if (value && !types.chargeType(*value, span))
+          return false;
+      return true;
+    };
+    if (!reference(binding.target) || !arguments(binding.arguments) ||
+        (binding.filtered && (!reference(binding.filtered->target) ||
+                              !arguments(binding.filtered->arguments))))
+      return false;
+    return witness.family[i] == frozen->keys()[i];
   };
   if (witness.target.declaration.index >= declarations.size() ||
       witness.family.size() != expected.size() || !witness.origin ||
@@ -442,7 +520,8 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
     if (!binding.notation || *binding.notation != notation ||
         binding.symbol != notation.symbol ||
         !sameSpan(binding.span, *witness.origin) ||
-        (witness.filteredReduction && !binding.filtered))
+        (witness.filteredReduction && !binding.filtered) ||
+        (binding.filteredOnly && !witness.filteredReduction))
       return refuse();
     const auto &target =
         witness.filteredReduction ? binding.filtered->target : binding.target;
@@ -450,8 +529,7 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
                                 ? binding.filtered->arguments
                                 : binding.arguments;
     if (!sameTarget(target, witness.target) ||
-        target.declaration.index >= declarations.size() ||
-        witness.family[0] != operatorBindingKey(binding, declarations))
+        target.declaration.index >= declarations.size() || !matchesKey(0))
       return refuse();
     const auto &selected = declarations[target.declaration.index];
     if (arguments.size() != selected.parameters.size() ||
@@ -503,10 +581,7 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
         (callee.kind != Declaration::Kind::Math &&
          callee.kind != Declaration::Kind::Local))
       return refuse();
-    if (!types.charge(witness.family[i].size() + 1, span))
-      return false;
-    if (witness.family[i] != operatorBindingKey(binding, declarations) ||
-        binding.symbol != witness.symbol)
+    if (!matchesKey(i) || binding.symbol != witness.symbol)
       return refuse();
     bool chosen = sameTarget(binding.target, witness.target) &&
                   sameSpan(binding.span, *witness.origin);
@@ -536,6 +611,25 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
   return result && (*result == output || refuse());
 }
 
+} // namespace
+bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
+                          ArrayRef<OperatorBinding> expected,
+                          const NotationDescriptor &notation,
+                          const CallBinding &witness, ArrayRef<Type> inputs,
+                          const Type &output, Span span) {
+  return checkOperatorWitnessImpl(types, declarations, expected, nullptr,
+                                  notation, witness, inputs, output, span);
+}
+bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
+                          const AuthoredOperatorFamily &expected,
+                          const NotationDescriptor &notation,
+                          const CallBinding &witness, ArrayRef<Type> inputs,
+                          const Type &output, Span span) {
+  return checkOperatorWitnessImpl(types, declarations, expected.entries(),
+                                  &expected, notation, witness, inputs, output,
+                                  span);
+}
+
 bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
                      const Body &body, const Operation &operation,
                      const DeclarationIndex *index) {
@@ -556,7 +650,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
                                           operation)
                  : refuse();
   if (index && index->association(binding.target.declaration) &&
-      index->association(binding.target.declaration)->rule ==
+      index->association(binding.target.declaration)->rule() ==
           protocol::FrontendSignature::RandomConstructor)
     return refuse();
   if (binding.installedSignature || binding.lexicalOwner ||
@@ -603,15 +697,16 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
         binding.services.size() != callee.services.size() ||
         binding.roles.size() != callee.roles.size() ||
         operation.results.size() != callee.outputs.size() ||
-        !binding.scopedArguments.empty() || !binding.domainArguments.empty() ||
-        binding.notation ||
-        !checkCallInputMapping(
-            types, binding.argumentOrder,
-            callee.inputOrder.empty()
-                ? callee.inputs.size() + callee.services.size() +
-                      callee.scopedInputs.size() + callee.domainInputs.size()
-                : callee.inputOrder.size(),
-            operation.span))
+        !binding.scopedArguments.empty() ||
+        !binding.descriptorArguments.empty() || binding.notation ||
+        !checkCallInputMapping(types, binding.argumentOrder,
+                               callee.inputOrder.empty()
+                                   ? callee.inputs.size() +
+                                         callee.services.size() +
+                                         callee.scopedInputs.size() +
+                                         callee.descriptorInputs.size()
+                                   : callee.inputOrder.size(),
+                               operation.span))
       return refuse();
     std::set<unsigned> distinctRoles(binding.roles.begin(),
                                      binding.roles.end());
@@ -692,14 +787,14 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
           types, binding.argumentOrder,
           callee.inputOrder.empty()
               ? callee.inputs.size() + callee.services.size() +
-                    callee.scopedInputs.size() + callee.domainInputs.size()
+                    callee.scopedInputs.size() + callee.descriptorInputs.size()
               : callee.inputOrder.size(),
           operation.span))
     return false;
   if (binding.arguments.size() != callee.parameters.size() ||
       binding.operands.size() != callee.inputs.size() ||
       binding.scopedArguments.size() != callee.scopedInputs.size() ||
-      binding.domainArguments.size() != callee.domainInputs.size() ||
+      binding.descriptorArguments.size() != callee.descriptorInputs.size() ||
       callee.outputs.size() != 1 || operation.results.size() != 1 ||
       operation.results.front().index >= body.values.size())
     return refuse();
@@ -714,12 +809,12 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
         *expected != body.values[binding.operands[i].index].type)
       return refuse();
   }
-  for (unsigned i = 0; i < binding.domainArguments.size(); ++i) {
-    auto index = binding.domainArguments[i];
-    auto expected =
-        types.substitute(callee.domainInputs[i].item, subst, operation.span);
-    if (!expected || index >= body.domainBindings.size() ||
-        *expected != body.domainBindings[index].item)
+  for (unsigned i = 0; i < binding.descriptorArguments.size(); ++i) {
+    auto index = binding.descriptorArguments[i];
+    auto expected = types.substitute(callee.descriptorInputs[i].contract, subst,
+                                     operation.span);
+    if (!expected || index >= body.descriptorBindings.size() ||
+        *expected != body.descriptorBindings[index].contract)
       return refuse();
   }
   auto result =
@@ -779,7 +874,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
             action->arguments == binding.arguments &&
             action->module == binding.target.module &&
             action->scopedArguments == binding.scopedArguments &&
-            action->domainArguments == binding.domainArguments &&
+            action->descriptorArguments == binding.descriptorArguments &&
             sameOperands(action->operands, binding.operands)) ||
            refuse();
   }

@@ -169,6 +169,32 @@ Expected<json::Object> describe(const CheckedProject &project,
                      {"type", type(bound.type)},
                      {"permissions", permissions(bound.permissions)},
                      {"inferred", bound.inferred}});
+  for (const auto &bound : decl.consumerRequirements) {
+    if (auto error = detail::chargeConsumerRequirement(bound, work))
+      return std::move(error);
+    if (bound.reference.target.index >= project.declarations().size() ||
+        bound.reference.provider.index >= project.declarations().size())
+      return error("source.requirement",
+                   "invalid consumer requirement reference");
+    const auto *installed =
+        project.declarationIndex().ruleAssociation(bound.reference.target);
+    if (!installed ||
+        installed->kind != protocol::SourceDeclarationKind::Requirement)
+      return error("source.requirement",
+                   "expected an installed consumer requirement");
+    json::Array arguments;
+    for (const auto &argument : bound.arguments)
+      arguments.push_back(type(argument));
+    requirements.push_back(json::Object{
+        {"kind", "consumer"},
+        {"identity", installed->identity},
+        {"export",
+         project.declarations()[bound.reference.target.index].qualifiedName},
+        {"provider",
+         project.declarations()[bound.reference.provider.index].qualifiedName},
+        {"arguments", std::move(arguments)},
+        {"inferred", false}});
+  }
   auto location = [&](Span span) {
     return json::Object{{"module", project.sources()[span.source.index].module},
                         {"begin", span.begin},
@@ -180,10 +206,11 @@ Expected<json::Object> describe(const CheckedProject &project,
     for (auto span : obligation.calls)
       calls.push_back(location(span));
     admissions.push_back(json::Object{
-        {"kind", obligation.boundary == Boundary::Participants ? "participants"
-                 : obligation.boundary == Boundary::Construction
-                     ? "construction"
-                     : "message"},
+        {"kind",
+         obligation.boundary == Boundary::Participants     ? "participants"
+         : obligation.boundary == Boundary::Construction   ? "construction"
+         : obligation.boundary == Boundary::MessagePayload ? "message_payload"
+                                                           : "message"},
         {"type", type(obligation.type)},
         {"source", location(obligation.span)},
         {"calls", std::move(calls)}});
@@ -240,8 +267,9 @@ Expected<json::Object> describe(const CheckedProject &project,
                      ? "domain"
                      : "service"},
         {"index", slot.index}});
-  bool domain = decl.kind == Declaration::Kind::DomainFunction;
-  bool ordered = decl.kind != Declaration::Kind::Math && !domain;
+  bool view = decl.kind == Declaration::Kind::View;
+  bool domain = view && decl.descriptorResult.has_value();
+  bool ordered = decl.kind != Declaration::Kind::Math && !view;
   // A rule association is an installed definition without a body.
   const auto *association = project.declarationIndex().ruleAssociation(decl.id);
   const bool installed = association != nullptr;
@@ -271,8 +299,9 @@ Expected<json::Object> describe(const CheckedProject &project,
                      : decl.finiteDefinition ? "finite"
                      : decl.abstract         ? "abstract"
                                              : "body"},
-      {"kind", decl.kind == Declaration::Kind::Oracle          ? "oracle"
-               : domain                                        ? "domain"
+      {"kind", decl.kind == Declaration::Kind::Requirement     ? "requirement"
+               : decl.kind == Declaration::Kind::Oracle        ? "oracle"
+               : view                                          ? "view"
                : !ordered                                      ? "math"
                : decl.kind == Declaration::Kind::EntryFunction ? "entry"
                : decl.kind == Declaration::Kind::Local         ? "local"
@@ -397,16 +426,18 @@ Expected<json::Object> describe(const CheckedProject &project,
     result["association"] = association->identity;
   if (decl.finiteDefinition)
     result["finite"] = *decl.finiteDefinition;
-  if (domain || !decl.domainInputs.empty()) {
+  if (domain || !decl.descriptorInputs.empty()) {
     json::Array domains;
-    for (const auto &input : decl.domainInputs)
+    for (const auto &input : decl.descriptorInputs)
       domains.push_back(
-          json::Object{{"name", input.name}, {"item", type(input.item)}});
-    result["domain_inputs"] = std::move(domains);
-    if (decl.domainResult)
-      result["domain_result"] = type(*decl.domainResult);
-    if (decl.domainDefinition && decl.domainDefinition->constructor)
-      result["definition"] = "domain_constructor";
+          json::Object{{"name", input.name},
+                       {"contract", type(descriptorType(input.contract))}});
+    result["descriptor_inputs"] = std::move(domains);
+    if (decl.descriptorResult)
+      result["descriptor_result"] =
+          type(descriptorType(*decl.descriptorResult));
+    if (decl.descriptorDefinition && decl.descriptorDefinition->constructor)
+      result["definition"] = "descriptor_constructor";
   }
   if (decl.effectAllowance || decl.abstract) {
     auto allowance = decl.effectAllowance.value_or(EffectSummary{});
@@ -480,7 +511,7 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
         decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
         decl.kind != Declaration::Kind::EntryFunction &&
-        decl.kind != Declaration::Kind::DomainFunction &&
+        decl.kind != Declaration::Kind::View &&
         decl.kind != Declaration::Kind::Protocol &&
         decl.kind != Declaration::Kind::Construction &&
         decl.kind != Declaration::Kind::Module &&
@@ -713,6 +744,15 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
           return result;
         };
         switch (decl.kind) {
+        case Declaration::Kind::InstalledContractConstructor:
+          dataKind("contract-constructor");
+          break;
+        case Declaration::Kind::InstalledViewScheme:
+          dataKind("view-scheme");
+          break;
+        case Declaration::Kind::Requirement:
+          dataKind("requirement");
+          break;
         case Declaration::Kind::Domain:
         case Declaration::Kind::Alias:
           dataKind(decl.kind == Declaration::Kind::Domain ? "domain" : "alias");

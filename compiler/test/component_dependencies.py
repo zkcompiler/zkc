@@ -187,7 +187,7 @@ def main():
     private_headers = {
         "ZkcSource": set(),
         "ZkcSyntax": {ROOT / "lib/Syntax/Storage.h"},
-        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "CommonSummary", "ConstructionWitness", "ManagedServices", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan", "LexicalRecords", "WrittenSource", "WrittenSourceIndex")},
+        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "CommonSummary", "ConstructionWitness", "ManagedServices", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "DescriptorFactories", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DescriptorClosure", "DescriptorWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan", "LexicalRecords", "WrittenSource", "WrittenSourceIndex")},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
@@ -195,6 +195,8 @@ def main():
         "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h",
         ROOT / "lib/Dialect/Protocol/IR/OracleAnalysis.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
     }
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/AdmissionPrivate.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/NativeTypeWork.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Data/IR/Structure.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Algebra/ParameterSupport.h")
@@ -209,10 +211,11 @@ def main():
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
     private_headers["ZkcLanguage"].update(
         ROOT / f"lib/Language/{name}.h"
-        for name in ("CallResolution", "CommonRequirements", "Conformance", "RecordIntrinsics")
+        for name in ("CallResolution", "CommonRequirements", "Conformance", "RecordIntrinsics", "SiteLabels")
     )
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
     private_headers["ZkcTranslation"].add(ROOT / "lib/Translation/Entry/Native.h")
+    private_headers["ZkcTranslation"].add(ROOT / "lib/Translation/Language/ConstructionSites.h")
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))
     private_headers["ZkcTransforms"] = {
         ROOT / "lib/Transforms/MathematicalSupport.h",
@@ -240,6 +243,13 @@ def main():
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/OracleCommonRealization.h",
         ROOT / "lib/Transforms/OracleCommonPlan.h",
+        ROOT / "lib/Transforms/OracleNativeCommon.h",
+        ROOT / "lib/Transforms/OracleAccounting.h",
+        ROOT / "lib/Transforms/OracleEmissionAccounting.h",
+        ROOT / "lib/Transforms/OracleOwnedRealization.h",
+        ROOT / "lib/Transforms/OraclePrivateComposite.h",
+        ROOT / "lib/Transforms/OracleCheckedReader.h",
+        ROOT / "lib/Transforms/OraclePublication.h",
         ROOT / "lib/Transforms/OracleRealizationFacts.h",
         ROOT / "lib/Transforms/OracleRealizationSelection.h",
         ROOT / "lib/Transforms/OracleVirtualRecipe.h",
@@ -290,6 +300,8 @@ def main():
         ROOT / "lib/Compiler/PublicCoinGraph.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeCodec.h",
+        ROOT / "lib/Compiler/NativeCodecCapacity.h",
+        ROOT / "lib/Compiler/NativeConstructionPreparation.h",
         ROOT / "lib/Compiler/IRFingerprint.h",
         ROOT / "lib/Compiler/ConstructionBinding.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",
@@ -331,6 +343,16 @@ def main():
     bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/RealizedProtocol.h")}
+    # Only the independent paired transform completes structural admission
+    # using its exact native observations. Target consumers do not receive this
+    # interface; they retain the private immutable realized owner instead.
+    bridges.add(("ZkcTransforms", ROOT / "lib/Dialect/AdmissionPrivate.h"))
+    bridges.update((name, ROOT / "lib/Dialect/NativeTypeWork.h")
+                   for name in ("ZkcTransforms", "ZkcCompiler", "ZkcCpuTarget"))
+    # These consumers use the bounded native storage walk, never the common
+    # planner or the private count-equation constructor.
+    bridges.update((name, ROOT / "lib/Transforms/OracleNativeCommon.h")
+                   for name in ("ZkcCompiler", "ZkcCpuTarget"))
     # The checked owner exposes these data-only facts, not its planner or
     # emitter. Keep that transitive implementation boundary explicit.
     bridges.update((name, ROOT / "lib/Transforms/OracleRealizationFacts.h")

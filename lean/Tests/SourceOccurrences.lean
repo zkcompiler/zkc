@@ -19,8 +19,10 @@ private def context : Context :=
 
 private def loopBody : List Instruction :=
   match exported.instructions[2]? with
-  | some instruction => instruction.body
-  | none => []
+  | some instruction => match instruction.regions with
+    | [region] => region.instructions
+    | _ => []
+  | _ => []
 
 private def messageTemplate : Template :=
   match loopBody[3]? with

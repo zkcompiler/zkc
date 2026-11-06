@@ -399,7 +399,31 @@ term   := ["nat", decimal] | ["field", id] | ["group", id]
         | ["tuple", [term...]] | ["array", term, decimal]
         | ["nominal", "record"|"logical_record"|"variant"|"associated"|"module", path, [term...]]
         | ["builtin"|"formal", name, [term...]]
+        | ["descriptor-product", [descriptor...]]
+        | ["descriptor-sequence", descriptor, null | ["nat", decimal]]
+descriptor := ["descriptor-product", [descriptor...]]
+            | ["descriptor-sequence", descriptor, null | ["nat", decimal]]
+            | ["builtin", "finite", [term]]
 ```
+
+The two structural descriptor tags have exactly two and three slots respectively.
+Product children are ordered descriptor terms, including an empty list. Sequence
+has exactly one descriptor element and a required extent slot: `null` is unsized,
+whereas `["nat","0"]` is sized zero. Every present Natural counts as a term node
+at the next term level; `null` does not. Extents are closed canonical decimals,
+never symbolic terms. Ordinary tuple/array tags and generic builtin spellings do
+not stand for these structural forms.
+
+Descriptor-child recognition is a contextual restriction of this wire grammar,
+not a second source Type system. The existing primitive Finite leaf has exactly
+the unchanged bytes `["builtin","finite",[term]]`; its payload uses the general
+term grammar. This syntax check does not establish the payload's data category,
+source formation, installed family authority, permissions or native meaning.
+Those remain separate checked-source and consumer judgments. Other builtin or
+formal names cannot grant descriptor-child category. General term positions
+retain their existing alternatives, including generic builtin/formal terms.
+Future catalog-native descriptor leaves require explicit leaf-schema integration
+in each independent reader; no Constraint leaf is installed by this grammar.
 
 The template path is the logical qualified NFC declaration path, without a
 filesystem path, capped at 2048 UTF-8 bytes. Named arguments occur in declaration
@@ -415,6 +439,33 @@ alone establishes neither body equality nor native/formal correspondence.
 Handwritten native IR may omit this source metadata, but cannot then be exported
 by this profile; no origin is inferred from its symbol. Local and protocol
 origins are decoded by definition kind and do not share a binding-value grammar.
+
+The native protocol-origin transport has an `ArrayAttr` root. Strings use
+`StringAttr`, arrays use `ArrayAttr`, and JSON `null` uses MLIR `UnitAttr`
+(printed as `unit`). This is distinct from the ordinary `["unit"]` term,
+which is an `ArrayAttr` containing the string `"unit"`. The transport accepts no
+other attribute kinds or stringified JSON substitute. Decoding retains its
+attribute traversal bounds and then checks the complete origin grammar above;
+`UnitAttr` in any other term position does not make a valid origin. Opaque
+relation static arguments use this same transport and aggregate origin limits.
+
+Native declaration containers recognize the same contextual structural tags
+and exact arities, including a general term payload for primitive Finite.
+Their separate cumulative work, depth and context checks still apply; the
+wire's text, list and table ceilings do not limit these native containers.
+Canonical native keys retain null, present zero and child order, ignoring only
+optional `StringAttr` types. Declaration reference and authority inventories
+traverse structural children. Structural descriptors retain logical category
+and cannot be hidden in ordinary declaration carriers. Structured export's
+static domain inventory traverses Product children and Sequence elements,
+including Finite payloads; an optional null extent contributes no domain.
+
+The public C++ checked-Type producer and strict C++/Rust readers implement these
+structural terms at version `0`, with no compatibility reader. This wire
+consumer's bounds do not bound the internal generic descriptor container.
+Structural source formation and its actual native bridge remain separate
+integration gates. Independent Lean origin/logical readers and interpretation
+require their own migration; native codec acceptance does not establish it.
 
 Math helpers are private.
 Native protocol formation permits no explicit `sym_visibility`
@@ -536,6 +587,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["product.make", constructor]` | ordered components to the exact declared product |
 | `["product.get", index]` | total projection of a component at its checked type |
 | `["call", name]` | ordinary Math helper call |
+| `["data_branch", ["then", "else"]]` | closed Boolean Math selection; ordered capture-only arms, exact result yields |
 | `["apply", name]` | Local function, finite, collect, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
 | `["protocol_apply", name, role-names]` | Retained static protocol application with positional role substitution |
@@ -573,7 +625,7 @@ Ownership is checked independently of operand types:
 | Body kind | Admitted instructions |
 |---|---|
 | Protocol | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, assemble, exchange, service query, entry statement |
-| Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
+| Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, closed Boolean branch, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
 The descriptor can represent selection of any admitted value type. The native
@@ -1371,3 +1423,14 @@ scope, then checks actual arm bodies and yields with independent SSA terms.
 Neither a producer association row nor successful export establishes execution
 or independent formal admission. Formal consumers must adopt these exact
 extensions separately; existing single-constructor/Local proofs do not do so.
+
+### Closed mathematical selection
+
+A Math `data_branch` stores both arms with explicit capture signatures, no
+implicit outer references, and exact yields. It carries no protocol site and
+cannot contain Local calls, stops, services, communication or transcript work.
+The formation checker visits every arm. Availability includes the selector in
+both result footprints and every arm requirement, including unused computations.
+Operational meaning uses the existing typed region branch and evaluates only
+the selected arm. This does not relax partial-Math restrictions in multi-role
+protocols or the separate totality requirements of realization/map profiles.

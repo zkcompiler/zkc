@@ -115,10 +115,10 @@ theorem prefix_wrapper (table : Meanings F G) (input0 : List F) (input1 : Nat) (
     .done (.cons (result2.get .here) (.cons (result3.get .here) (.cons (result4.get .here) .nil))) := by
   derive_process
 
-theorem prefix_prefix (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) (input3 : List F) :
-    MapPrefixBodies.prefixBody.denote (meaning F G table)
+theorem prefix_prefix (symbols : MultilinearBodies.FoldNames) (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) (input3 : List F) :
+    (MultilinearPrefixBodies.prefixBody symbols).denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 (.cons input3 .nil)))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"]).get =
-    (invoke table ⟨"zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input0 (.cons input1 (.cons input2 (.cons input3 .nil)))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
+    (invoke table ⟨symbols.wrapper, .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input0 (.cons input1 (.cons input2 (.cons input3 .nil)))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) .nil))) := by
   derive_process
 

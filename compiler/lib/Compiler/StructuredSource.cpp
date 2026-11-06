@@ -30,6 +30,7 @@
 #include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
@@ -361,11 +362,14 @@ Error collectStaticDomains(const json::Value &term, UsedIdentities &used) {
       return error("structured-source-static-domain");
     used.domains.insert(identity);
   }
-  if (tag == "array")
+  // A Sequence extent is null or a Natural, never a domain-bearing child.
+  if (tag == "array" || tag == "descriptor-sequence")
     return collectStaticDomains(tree[1], used);
-  if (tag == "tuple" || tag == "nominal" || tag == "builtin" ||
-      tag == "formal") {
-    auto index = tag == "tuple" ? 1 : tag == "nominal" ? 3 : 2;
+  if (tag == "tuple" || tag == "descriptor-product" || tag == "nominal" ||
+      tag == "builtin" || tag == "formal") {
+    auto index = tag == "tuple" || tag == "descriptor-product" ? 1
+                 : tag == "nominal"                            ? 3
+                                                               : 2;
     for (const auto &argument : *tree[index].getAsArray())
       if (auto e = collectStaticDomains(argument, used))
         return e;
@@ -1383,16 +1387,10 @@ class Exporter {
           if (selected) {
             if (!op.getNumOperands())
               return error("structured-source-region");
-            auto selector = op.getOperand(0).getType();
-            if (!selector.isSignlessInteger(1)) {
-              auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
-              auto payload = data::variantPayloadTypes(
-                  selector,
-                  cast<StringAttr>(alternatives[regions.size()]).getValue());
-              if (!payload)
-                return payload.takeError();
-              llvm::append_range(expectedInputs, *payload);
-            }
+            auto payload = selectedPayloadTypes(&op, regions.size());
+            if (!payload)
+              return payload.takeError();
+            llvm::append_range(expectedInputs, *payload);
             llvm::append_range(expectedInputs,
                                TypeRange(op.getOperandTypes()).drop_front());
           } else

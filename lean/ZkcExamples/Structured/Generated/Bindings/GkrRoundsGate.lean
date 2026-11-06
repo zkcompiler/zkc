@@ -20,28 +20,28 @@ theorem roundsOpen_closed (args : Values (assignment F G) roundsOpenHelper.input
     invoke ((helpers payload).closed) roundsOpenHelper args =
       roundsOpenBody.denote (Evaluation.meaning (.silent (participantInterface F G)) ((helpers payload).closed)) args.get :=
   Evaluation.definitions_invoke_body_view_as (.silent (participantInterface F G)) payload.definitions payload.linked
-    roundsOpenDefinition (List.get_mem _ _) (⟨"zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825", .local, [(.resourceUnit "zkl_resource_dbe13cb2a1fb7bfa08289b9828283a1e44368797e9bca45ea1c33789b9b72beb"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl roundsOpenBody rfl args
+    roundsOpenDefinition (List.get_mem _ _) (⟨"zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825", .local, [(.resourceUnit "zkl_resource_7a6404beff2b3202f4e73aaa336c7f5379ab99d8d6bd07e4f30061716d1ad4d1"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl roundsOpenBody rfl args
 
 abbrev roundsCloseDefinition : CheckedDefinition := payload.definitions.get ⟨26, by decide +kernel⟩
 theorem roundsClose_closed (args : Values (assignment F G) roundsCloseHelper.inputs) :
     invoke ((helpers payload).closed) roundsCloseHelper args =
       roundsCloseBody.denote (Evaluation.meaning (.silent (participantInterface F G)) ((helpers payload).closed)) args.get :=
   Evaluation.definitions_invoke_body_view_as (.silent (participantInterface F G)) payload.definitions payload.linked
-    roundsCloseDefinition (List.get_mem _ _) (⟨"zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_dbe13cb2a1fb7bfa08289b9828283a1e44368797e9bca45ea1c33789b9b72beb"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl roundsCloseBody rfl args
+    roundsCloseDefinition (List.get_mem _ _) (⟨"zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3", .local, [(.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_7a6404beff2b3202f4e73aaa336c7f5379ab99d8d6bd07e4f30061716d1ad4d1"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl roundsCloseBody rfl args
 
 abbrev layerOpenDefinition : CheckedDefinition := payload.definitions.get ⟨12, by decide +kernel⟩
 theorem layerOpen_closed (args : Values (assignment F G) layerOpenHelper.inputs) :
     invoke ((helpers payload).closed) layerOpenHelper args =
       layerOpenBody.denote (Evaluation.meaning (.silent (participantInterface F G)) ((helpers payload).closed)) args.get :=
   Evaluation.definitions_invoke_body_view_as (.silent (participantInterface F G)) payload.definitions payload.linked
-    layerOpenDefinition (List.get_mem _ _) (⟨"zkl_e0f7a4e58ae24eb13e9b2033c42c179b2766ff6cdb4ae1470bf7ef9b1721d646", .local, [(.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl layerOpenBody rfl args
+    layerOpenDefinition (List.get_mem _ _) (⟨"zkl_e0f7a4e58ae24eb13e9b2033c42c179b2766ff6cdb4ae1470bf7ef9b1721d646", .local, [(.resourceUnit "zkl_resource_3e5b7b20b823dd23a44ff31f00bc1157fe46b6c75eff2e990729abf5b47767eb"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_3e5b7b20b823dd23a44ff31f00bc1157fe46b6c75eff2e990729abf5b47767eb"), (.vector "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl layerOpenBody rfl args
 
 abbrev pendingDefinition : CheckedDefinition := payload.definitions.get ⟨20, by decide +kernel⟩
 theorem pending_closed (args : Values (assignment F G) pendingHelper.inputs) :
     invoke ((helpers payload).closed) pendingHelper args =
       pendingBody.denote (Evaluation.meaning (.silent (participantInterface F G)) ((helpers payload).closed)) args.get :=
   Evaluation.definitions_invoke_body_view_as (.silent (participantInterface F G)) payload.definitions payload.linked
-    pendingDefinition (List.get_mem _ _) (⟨"zkl_e1405e1bb4604e60f337203132c746492bf7c31b55302426ae19c2c021c2da1a", .local, [(.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_dbe13cb2a1fb7bfa08289b9828283a1e44368797e9bca45ea1c33789b9b72beb"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl pendingBody rfl args
+    pendingDefinition (List.get_mem _ _) (⟨"zkl_e1405e1bb4604e60f337203132c746492bf7c31b55302426ae19c2c021c2da1a", .local, [(.field "bls12-381.fr")], [(.resourceUnit "zkl_resource_7a6404beff2b3202f4e73aaa336c7f5379ab99d8d6bd07e4f30061716d1ad4d1"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl pendingBody rfl args
 
 abbrev emptyDefinition : CheckedDefinition := payload.definitions.get ⟨5, by decide +kernel⟩
 theorem empty_closed (args : Values (assignment F G) emptyHelper.inputs) :

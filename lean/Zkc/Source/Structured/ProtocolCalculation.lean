@@ -160,11 +160,35 @@ def operation (model : DomainModel) (demand : OracleDataDemandInterpretation mod
     if noRegions : op.regions = [] then strict model demand self ordinary op args noRegions
     else .halt .refused
 
+/-- A Math branch first checks presence of every operand. The Boolean selects a
+single callback, whose captures keep their structural Oracle values. -/
+def selected (model : DomainModel) {captures outputs : List Ty}
+    (args : Values (Component (ProtocolValue model.toCarriers)) (.boolean :: captures))
+    (yes no : RegionFunction (Component (ProtocolValue model.toCarriers)) I (captures, outputs)) :
+    PIR.Process I (Values (Component (ProtocolValue model.toCarriers)) outputs) :=
+  match RoleFamily.sequence args with
+  | none => .done (Values.absent _ outputs)
+  | some (.cons condition values) =>
+    match condition.toConcrete with
+    | none => .halt .refused
+    | some flag => (if flag then yes else no) values.present
+
+def regionOperation (model : DomainModel)
+    (demand : OracleDataDemandInterpretation model.toCarriers I) (self : Nat)
+    (ordinary : Evaluation.ComponentTablesOn model.toCarriers I)
+    (helpers : Tables model.toCarriers I) (op : Op) :
+    Values (Component (ProtocolValue model.toCarriers)) op.arguments →
+    Values (RegionFunction (Component (ProtocolValue model.toCarriers)) I) op.regions →
+    PIR.Process I (Values (Component (ProtocolValue model.toCarriers)) op.results) :=
+  match op with
+  | .branch _ _ => fun args (.cons yes (.cons no .nil)) => selected model args yes no
+  | op => fun args _ => operation model demand self ordinary helpers op args
+
 abbrev meaning (model : DomainModel) (demand : OracleDataDemandInterpretation model.toCarriers I)
     (self : Nat) (ordinary : Evaluation.ComponentTablesOn model.toCarriers I)
     (helpers : Tables model.toCarriers I) : RegionMeaning dialect I where
   Value := Component (ProtocolValue model.toCarriers)
-  operation op args _ := operation model demand self ordinary helpers op args
+  operation := regionOperation model demand self ordinary helpers
 
 /-- Math helpers capture their already checked prefix, never a caller-supplied meaning.
 Entering a helper does not force any optional argument or nested field. -/

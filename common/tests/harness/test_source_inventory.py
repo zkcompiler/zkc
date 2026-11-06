@@ -72,6 +72,25 @@ def test_inventory_keeps_origin_and_occurrence_separate():
     assert inventory.authored("m::Run", statics=[], scoped=[], domains=[]).symbol == "entry"
 
 
+def test_virtual_query_occurrence_is_required_even_without_a_written_node():
+    document, args = fixture()
+    kind = ["table", ["field", "koala-bear"], "16"]
+    symbol = "virtual"
+    document["snapshot"][7].append(["oracle", symbol, [], kind, "admissible", [], [],
+        ["block", [[["oracle_query", None, kind], [0, 1], [["field", "koala-bear"]], [], "low"]],
+         ["return", [0]]]])
+    instance = deepcopy(document["instances"]["instances"][0])
+    instance.update(symbol=symbol)
+    document["instances"]["instances"].append(instance)
+    document["instance_rows"].append({"instance": 2, "rows": [[7, 3]]})
+    document["occurrences"].append({"definition": symbol, "site": "low", "nodes": []})
+    args["original_text"] = json.dumps(document["snapshot"])
+    assert Inventory(document, **args).occurrences[(symbol, "low")] == []
+    document["occurrences"].pop()
+    with pytest.raises(Refused, match="incomplete or reordered"):
+        Inventory(document, **args)
+
+
 def test_distinct_closed_substitutions_are_selected_exactly():
     document, args = fixture()
     instances = document["instances"]["instances"]
@@ -158,6 +177,15 @@ def test_unrelated_binding_never_changes_authored_selection():
     assert inventory.authored("m::Run", statics=[], scoped=[], domains=[]) == before
     assert inventory.row(6, 0).kind == "binding"
     assert inventory.single_target("entry", "protocol_apply").symbol == "callee"
+
+
+def test_catalog_binding_cannot_own_a_generated_instruction():
+    document, args = fixture()
+    document["snapshot"][6].append(["binding", "only-a-binding", "contract", [], []])
+    document["generated"][0]["origins"][0]["definition"] = "only-a-binding"
+    args["original_text"] = json.dumps(document["snapshot"])
+    with pytest.raises(Refused, match="origin outside snapshot bodies"):
+        Inventory(document, **args)
 
 
 def test_target_selection_refuses_ambiguity_instead_of_taking_first():

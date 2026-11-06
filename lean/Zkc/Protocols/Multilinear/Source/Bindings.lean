@@ -18,9 +18,9 @@ def common : MultilinearBodies.Bindings where
   interpolate := "zkl_42fb42b1768a8f815f169ffa0a26ad784504be546e5429d75560cbdb446518b5"
   first := "zkl_3ae183e4974ba027dee61c318edb42bcf3a64a69d220d82168474d3a3169ff4d"
   step := "zkl_195a79478f48dffc2a6917273d8317df0fabae786920a46fa2ac6b2737144299"
-  foldStep := "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body"
-  foldDomain := "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain"
-  foldWrapper := "zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2"
+  foldStep := "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_body"
+  foldDomain := "finite_zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402_s0_domain"
+  foldWrapper := "zkl_c22ca043f56e31ae33fc04b669755c76f6f9db03b95b1cc7733fde9f3c08b402"
   restrictPrefix := "zkl_96cd7ea616c46001ac0fa39e06ab5b8042d6d50ce126ce52a57cd4f1fd0ed9be"
   values := "zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33"
   dimension := "zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94"
@@ -43,5 +43,9 @@ def sumcheck : MultilinearBodies.Bindings :=
     collectionDomain := "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain"
     fold := "_finite_admission_3"
     valuesRealization := "_mathematical_admission_2" }
+
+/-- The round ABI is shared. Restriction follows the actual instantiated fold. -/
+def sumcheckFor (names : MultilinearBodies.FoldNames) : MultilinearBodies.Bindings :=
+  sumcheck.withFoldNames names
 
 end ZkcExamples.Structured.MultilinearSourceBindings

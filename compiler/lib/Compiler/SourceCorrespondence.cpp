@@ -7,6 +7,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <set>
@@ -146,9 +147,12 @@ public:
 };
 // Definition name to the nonempty sites of its block, including nested
 // regions and stop terminators.
-using SnapshotSites = std::map<std::string, std::set<std::string>>;
-Error blockSites(const json::Value &value, std::set<std::string> &sites,
-                 unsigned depth) {
+struct SnapshotSites {
+  std::set<StringRef> definitions;
+  std::vector<std::pair<StringRef, StringRef>> ordered;
+};
+Error blockSites(const json::Value &value, StringRef definition,
+                 SnapshotSites &sites, unsigned depth) {
   const auto *block = value.getAsArray();
   if (depth > 256 || !block || block->size() != 3 ||
       (*block)[0] != json::Value("block") || !(*block)[1].getAsArray())
@@ -160,19 +164,21 @@ Error blockSites(const json::Value &value, std::set<std::string> &sites,
       return error("source.correspondence.export",
                    "snapshot instruction differs");
     if (!(*instruction)[4].getAsString()->empty())
-      sites.insert((*instruction)[4].getAsString()->str());
+      sites.ordered.emplace_back(definition, *(*instruction)[4].getAsString());
     for (const auto &region : *(*instruction)[3].getAsArray()) {
       const auto *parts = region.getAsArray();
       if (!parts || parts->size() != 3)
         return error("source.correspondence.export", "snapshot region differs");
-      if (auto e = blockSites((*parts)[2], sites, depth + 1))
+      if (auto e = blockSites((*parts)[2], definition, sites, depth + 1))
         return e;
     }
   }
   const auto *terminator = (*block)[2].getAsArray();
   if (terminator && terminator->size() == 3 &&
-      (*terminator)[0] == json::Value("stop") && (*terminator)[2].getAsString())
-    sites.insert((*terminator)[2].getAsString()->str());
+      (*terminator)[0] == json::Value("stop") &&
+      (*terminator)[2].getAsString() &&
+      !(*terminator)[2].getAsString()->empty())
+    sites.ordered.emplace_back(definition, *(*terminator)[2].getAsString());
   return Error::success();
 }
 Expected<SnapshotSites> snapshotSites(const json::Value &snapshot) {
@@ -188,12 +194,121 @@ Expected<SnapshotSites> snapshotSites(const json::Value &snapshot) {
       const auto *row = item.getAsArray();
       if (!row || row->size() < 2 || !(*row)[1].getAsString())
         return error("source.correspondence.export", "snapshot row differs");
-      auto &sites = result[(*row)[1].getAsString()->str()];
+      auto definition = *(*row)[1].getAsString();
       const auto *body = row->back().getAsArray();
-      if (body && !body->empty() && (*body)[0] == json::Value("block"))
-        if (auto e = blockSites(row->back(), sites, 0))
+      if (body && !body->empty() && (*body)[0] == json::Value("block")) {
+        result.definitions.insert(definition);
+        if (auto e = blockSites(row->back(), definition, result, 0))
           return std::move(e);
+      }
     }
+  }
+  return result;
+}
+// Complete lexical row coverage, including every dormant mathematical arm.
+// This checks addresses only; the retained original's canonical re-export
+// separately checks the actual operations, signatures, bodies and source spans.
+using RowPath = std::vector<unsigned>;
+Expected<std::set<RowPath>> associationRows(const json::Value &snapshot) {
+  std::set<RowPath> result;
+  uint64_t remaining = 8000000;
+  auto add = [&](const RowPath &path) -> Error {
+    if (path.size() + 1 > remaining)
+      return error("source.limit", "source association inventory work");
+    remaining -= path.size() + 1;
+    if (!result.insert(path).second)
+      return error("source.correspondence.export", "snapshot row repeats");
+    return Error::success();
+  };
+  auto child = [](RowPath path, std::initializer_list<unsigned> suffix) {
+    path.insert(path.end(), suffix.begin(), suffix.end());
+    return path;
+  };
+  std::function<Error(const json::Value &, const RowPath &, unsigned)> block =
+      [&](const json::Value &value, const RowPath &path,
+          unsigned depth) -> Error {
+    auto *parts = value.getAsArray();
+    if (depth > 64 || !parts || parts->size() != 3 ||
+        (*parts)[0] != json::Value("block") || !(*parts)[1].getAsArray() ||
+        !(*parts)[2].getAsArray())
+      return error("source.correspondence.export", "snapshot block differs");
+    const auto &instructions = *(*parts)[1].getAsArray();
+    for (unsigned i = 0; i < instructions.size(); ++i) {
+      auto row = child(path, {1, i});
+      if (auto e = add(row))
+        return e;
+      auto *instruction = instructions[i].getAsArray();
+      if (!instruction || instruction->size() != 5 ||
+          !(*instruction)[3].getAsArray())
+        return error("source.correspondence.export",
+                     "snapshot instruction differs");
+      const auto &regions = *(*instruction)[3].getAsArray();
+      for (unsigned arm = 0; arm < regions.size(); ++arm) {
+        auto nested = child(row, {3, arm});
+        if (auto e = add(nested))
+          return e;
+        auto *region = regions[arm].getAsArray();
+        if (!region || region->size() != 3 || !(*region)[0].getAsArray() ||
+            !(*region)[1].getAsArray())
+          return error("source.correspondence.export",
+                       "snapshot region differs");
+        if (auto e = block((*region)[2], child(nested, {2}), depth + 1))
+          return e;
+      }
+    }
+    return add(child(path, {2}));
+  };
+  auto *tables = snapshot.getAsArray();
+  if (!tables || tables->size() != 11)
+    return error("source.correspondence.export", "snapshot tables differ");
+  for (unsigned table : {4, 5, 6, 7, 8}) {
+    auto *rows = (*tables)[table].getAsArray();
+    if (!rows)
+      return error("source.correspondence.export", "snapshot tables differ");
+    for (unsigned i = 0; i < rows->size(); ++i) {
+      RowPath path{table, i};
+      if (auto e = add(path))
+        return std::move(e);
+      auto *row = (*rows)[i].getAsArray();
+      if (!row || row->size() < 2)
+        return error("source.correspondence.export", "snapshot row differs");
+      if (table == 4) {
+        if (row->size() != 5 || !(*row)[3].getAsArray())
+          return error("source.correspondence.export",
+                       "snapshot domain differs");
+        for (unsigned c = 0; c < (*row)[3].getAsArray()->size(); ++c)
+          if (auto e = add(child(path, {3, c})))
+            return std::move(e);
+        if (auto e = add(child(path, {4})))
+          return std::move(e);
+      } else if (table == 7) {
+        auto kind = (*row)[0].getAsString();
+        if (!kind || !(*row)[1].getAsString())
+          return error("source.correspondence.export",
+                       "snapshot definition differs");
+        if (*kind == "function" || *kind == "oracle") {
+          unsigned body = *kind == "function" ? 9 : 7;
+          if (row->size() != body + 1)
+            return error("source.correspondence.export",
+                         "snapshot definition differs");
+          if (auto e = block((*row)[body], child(path, {body}), 0))
+            return std::move(e);
+        }
+      }
+    }
+  }
+  auto *declarations = (*tables)[10].getAsArray();
+  if (!declarations || declarations->size() != 3)
+    return error("source.correspondence.export",
+                 "snapshot declarations differ");
+  for (unsigned table : {0, 1, 2}) {
+    auto *rows = (*declarations)[table].getAsArray();
+    if (!rows)
+      return error("source.correspondence.export",
+                   "snapshot declarations differ");
+    for (unsigned i = 0; i < rows->size(); ++i)
+      if (auto e = add({10, table, i}))
+        return std::move(e);
   }
   return result;
 }
@@ -215,6 +330,26 @@ Error checkCorrespondenceInventory(const json::Value &value) {
   if (!instances || !generated || !occurrences || !rows || !snapshot ||
       !snapshot->getAsArray() || snapshot->getAsArray()->size() != 11)
     return fail("correspondence inventory members differ");
+  auto expectedRows = associationRows(*snapshot);
+  if (!expectedRows)
+    return expectedRows.takeError();
+  for (const auto &item : *rows) {
+    auto *row = item.getAsObject();
+    auto *coordinate = row ? row->getArray("row") : nullptr;
+    if (!coordinate || coordinate->size() > 512)
+      return fail("row association has no bounded coordinate");
+    RowPath path;
+    for (const auto &part : *coordinate) {
+      auto index = part.getAsUINT64();
+      if (!index || *index > UINT32_MAX)
+        return fail("row association coordinate differs");
+      path.push_back(*index);
+    }
+    if (expectedRows->erase(path) != 1)
+      return fail("row association is dangling or repeated");
+  }
+  if (!expectedRows->empty())
+    return fail("row associations do not cover the complete snapshot");
   auto sites = snapshotSites(*snapshot);
   if (!sites)
     return sites.takeError();
@@ -226,17 +361,18 @@ Error checkCorrespondenceInventory(const json::Value &value) {
       return fail("instance symbol is absent");
     ++owners[symbol->str()];
   }
-  std::set<std::pair<std::string, std::string>> occurred;
-  for (const auto &item : *occurrences) {
+  if (occurrences->size() != sites->ordered.size())
+    return fail("occurrences do not cover every snapshot site");
+  std::set<std::pair<StringRef, StringRef>> occurred;
+  for (auto [ordinal, item] : llvm::enumerate(*occurrences)) {
     const auto *occurrence = item.getAsObject();
     auto definition =
         occurrence ? occurrence->getString("definition") : std::nullopt;
     auto site = occurrence ? occurrence->getString("site") : std::nullopt;
-    auto found = definition ? sites->find(definition->str()) : sites->end();
     if (!definition || !site || !occurrence->getArray("nodes") ||
-        found == sites->end() || !found->second.count(site->str()))
-      return fail("occurrence names no snapshot site");
-    if (!occurred.emplace(definition->str(), site->str()).second)
+        std::pair{*definition, *site} != sites->ordered[ordinal])
+      return fail("occurrence does not match the next snapshot site");
+    if (!occurred.emplace(*definition, *site).second)
       return fail("occurrence repeats a site");
   }
   std::set<std::string> provenance;
@@ -262,7 +398,7 @@ Error checkCorrespondenceInventory(const json::Value &value) {
       // names the definition and the emitter's site there.
       std::pair<std::string, std::string> key{definition->str(), site->str()};
       if ((previous && !(*previous < key)) || site->empty() ||
-          !sites->count(key.first))
+          !sites->definitions.count(key.first))
         return fail("generated origins are unsorted, repeated or outside "
                     "the snapshot");
       previous = std::move(key);

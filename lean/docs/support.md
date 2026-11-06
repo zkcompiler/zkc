@@ -260,6 +260,19 @@ claim.
 
 ## Checked connection certificates
 
+A checked inlined Math application uses the declaration's actual lexical prefix,
+typed present inputs, physical operand references and complete returned tuple.
+The finite region proof covers returns, stops, calculations, sequencing and
+closed Boolean selection. Each arm has an independent connection; only the
+selected one executes. Caller history and external actions are unchanged, while
+internal checkpoints must retain the caller frame. Temporary cells are unnamed;
+return aliases are checked against reachable values. The automatic proposer
+covers the calculation/selection/return spines in the maintained SchnorrAnd and
+Chaum–Pedersen proof entries. A checked Math helper signature in a dormant arm
+is a formation fact, not proof of arbitrary inlining or helper equivalence.
+Neither the byte reader nor arbitrary View/Finite operations inherit this result.
+
+
 The [certificate boundary](spec/participant-projection.md#checked-derivations)
 now has a general proof from a finite typed alignment to a complete simulation
 in the plain profile. Observation-parametric normalization retains actual call

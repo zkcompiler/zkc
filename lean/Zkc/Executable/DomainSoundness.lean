@@ -180,7 +180,7 @@ theorem meteredStep_prunes {R : Type} :
         | .loop site maximum yielded operands declared body =>
             DomainAdapter.runK key initial challenge
               (Domain.step (Structured.ringModel F G) program context
-                ⟨.loop site maximum yielded, operands, declared, Code.instructions body⟩ env) proof next')
+                ⟨.loop site maximum, operands, declared, [⟨(.data .index :: declared), Code.instructions body, yielded⟩]⟩ env) proof next')
   | .charge count, env, proof, used, next, next', continues => by
       simp only [meteredStep]
       split
@@ -227,7 +227,7 @@ theorem meteredStep_prunes {R : Type} :
                       by_cases admitted : value ≤ maximum ∧ Domain.sortsMatch declared carried = true
                       · simp only [admitted, and_self, ite_true]
                         by_cases fits : used + 1 ≤ budget
-                        · simp only [fits, ite_true, Domain.step, countEq, carriedEq, admitted, and_self, ite_true,
+                        · simp only [fits, ite_true, Domain.step, Domain.executeLoop, countEq, carriedEq, admitted, and_self, ite_true,
                             DomainAdapter.runK_bind]
                           apply meteredIterate_prunes key initial challenge budget
                             (Domain.evaluate (Structured.ringModel F G) program context (Code.instructions body))

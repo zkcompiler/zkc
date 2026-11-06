@@ -132,7 +132,7 @@ theorem zero_false (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2) :
       ⟨[0], [0], [1], [1]⟩ 1 = .done false := by
   unfold GkrFiniteGate.verifier
   rw [GkrRoundsBinding.zero ctx distinct]
-  norm_num [GkrFiniteGate.finish, GkrFiniteGate.terminalValue, GkrFiniteGate.restrictList,
+  norm_num [GkrFiniteGate.finish, GkrRoundsBinding.returned, GkrFiniteGate.terminalValue, GkrFiniteGate.restrictList,
     Values.get, PIR.Process.bind, Zkc.Protocols.AlgebraicRounds.Gate.value]
 
 example : ¬ GkrRoundsReference.admissible TestsSecurity.GkrRoundsReference.cubicState :=

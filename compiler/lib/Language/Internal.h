@@ -67,6 +67,9 @@ struct SyntaxOperator {
   bool explicitNotation = false;
   std::vector<std::string> holes;
   std::optional<SyntaxType> filtered;
+  /// A layout template may authorize only the predicate-bearing form.
+  bool filteredOnly = false;
+  std::optional<std::string> reductionBinder;
 };
 struct BoundNotationTarget {
   CallableReference target;
@@ -82,8 +85,27 @@ struct OperatorBinding {
   /// The module whose declaration or body introduces this binding. A use
   /// records it as the provider of its notation route.
   DeclarationId module = {};
+  /// Preserve the written form independently of a legacy paired binding.
+  bool filteredOnly = false;
 };
-using NotationFamilies = std::map<uint32_t, std::vector<OperatorBinding>>;
+/// Independently enumerated lexical bindings and the exact keys made while
+/// validating them. Only Checker can freeze a family; callers borrow immutable
+/// entries, never inference's mutable candidate list. Ownership can extend into
+/// source replay, where every consumer still checks current Type bounds.
+class AuthoredOperatorFamily {
+  friend class Checker;
+  explicit AuthoredOperatorFamily(std::map<std::string, OperatorBinding> &&);
+  std::vector<OperatorBinding> bindings;
+  std::vector<std::string> identities;
+
+public:
+  AuthoredOperatorFamily(const AuthoredOperatorFamily &) = delete;
+  AuthoredOperatorFamily &operator=(const AuthoredOperatorFamily &) = delete;
+  llvm::ArrayRef<OperatorBinding> entries() const { return bindings; }
+  llvm::ArrayRef<std::string> keys() const { return identities; }
+};
+using NotationFamilies =
+    std::map<uint32_t, std::shared_ptr<const AuthoredOperatorFamily>>;
 struct SyntaxSelector {
   bool output = false;
   std::string port;
@@ -366,6 +388,7 @@ struct Import {
   std::optional<std::string> alias;
   bool explicitAlias = false;
   std::vector<std::string> operators, notations, reductions;
+  std::vector<std::string> notationSelectors;
   bool isPublic = false, indexing = false;
   std::optional<ResolvedReference> reference;
   ReferenceSite referenceSite = std::make_shared<ReferenceNode>();
@@ -406,6 +429,7 @@ struct SyntaxDeclaration {
   /// Private link to the frozen authored header, assigned before expansion.
   /// Not serialized and never an artifact or proof identity.
   std::optional<uint32_t> writtenDeclaration;
+  const protocol::FrontendDeclaration *installedDeclaration = nullptr;
   bool layoutSyntax = false;
   bool invalidBody = false;
   /// Authored parameter group, erased before native declaration collection.
@@ -418,13 +442,14 @@ struct SyntaxDeclaration {
   bool assetDomain = false;
   std::optional<std::string> primitive;
   std::optional<std::string> domainConstructor, finiteDefinition;
-  std::optional<SyntaxType> domainResult;
+  std::optional<SyntaxType> descriptorResult;
   bool isPublic = false;
   bool explicitPublic = false;
   bool completes = false;
   Span span;
   std::vector<std::string> roles;
-  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs, domainInputs;
+  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs,
+      descriptorInputs;
   std::vector<SyntaxOracleShape> oracleShapes;
   std::optional<SyntaxOracleDefinition> oracleDefinition;
   bool oraclePredicate = false;
@@ -439,7 +464,7 @@ struct SyntaxDeclaration {
   // Resolved lexical identities are private elaboration data, never serialized.
   std::vector<Binding> bindings;
   std::vector<BindingId> inputBindings, serviceBindings, scopedBindings,
-      domainBindings;
+      descriptorBindings;
   bool resolved = false;
   bool elaborated = false;
   std::vector<SyntaxParameter> parameters;
@@ -490,6 +515,10 @@ staticSubscriptIndex(const SyntaxDeclaration &syntax, const Expression &expr) {
   return index.text;
 }
 
+/// Each actual operator key construction needs this debit, even for memo hits.
+class Semantics;
+bool chargeOperatorBindingKeys(const OperatorBinding &, Semantics &, Span);
+bool chargeOperatorBindingCopies(const OperatorBinding &, Semantics &, Span);
 std::string operatorBindingKey(const OperatorBinding &,
                                llvm::ArrayRef<Declaration>);
 llvm::StringRef operatorSymbol(const Expression &);

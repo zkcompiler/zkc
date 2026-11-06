@@ -24,5 +24,10 @@ llvm::Expected<OracleQuerySchedule> planOracleQuerySchedule(
     mlir::ModuleOp prepared, llvm::StringRef entry,
     const OracleCommonRequirements &, llvm::ArrayRef<OracleCommonController>,
     llvm::ArrayRef<OracleMerkleFunctions>, OracleAuthentication);
+llvm::Expected<OracleQuerySchedule> planOracleQueryScheduleWithWork(
+    mlir::ModuleOp, llvm::StringRef, const OracleCommonRequirements &,
+    llvm::ArrayRef<OracleCommonController>,
+    llvm::ArrayRef<OracleMerkleFunctions>, OracleAuthentication,
+    OracleNativeWork &, const OracleNativeSourcePreflight &);
 } // namespace zkc::protocol
 #endif

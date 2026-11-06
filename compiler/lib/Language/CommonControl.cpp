@@ -1,6 +1,8 @@
 #include "zkc/Language/CommonControl.h"
 #include "CommonRequirements.h"
 #include "CommonSummary.h"
+#include "DescriptorClosure.h"
+#include "FormationCursor.h"
 #include "Semantics.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -32,6 +34,9 @@ struct LoopSubject {
 // Checked static actuals retain the environment in which they were written.
 struct StaticEnvironment {
   detail::Substitution bindings;
+  // Keys point to this object's immutable map values. Moving std::map retains
+  // node addresses; the reference sets and their Types share this lifetime.
+  std::map<const Type *, std::set<std::string>> references;
   std::shared_ptr<const StaticEnvironment> parent;
 };
 struct LexicalStatics {
@@ -105,8 +110,8 @@ struct CommonInstance {
   std::vector<CommonLoop> loops;
   std::vector<CommonDemand> demands;
   unsigned operands = 0, callHeight = 1, regionHeight = 1;
-  // Recurrence subjects and newly produced unknown values belong to a call
-  // occurrence. Propagate this conservatively through every retained edge,
+  // Recurrence subjects, exchanges and newly produced unknown values belong
+  // to a call occurrence. Propagate this through every retained edge,
   // including unused results and dormant regions.
   bool fresh = false;
 };
@@ -133,6 +138,8 @@ class Requirements {
   std::map<InstanceKey, std::shared_ptr<const CommonInstance>> instances;
   std::set<InstanceKey> constructing;
   std::map<std::string, std::shared_ptr<const StaticEnvironment>> staticFrames;
+  std::map<unsigned, std::pair<Node, unsigned>> closedCallables;
+  std::set<unsigned> activeClosedCallables;
   CommonInstance *building = nullptr;
   struct Evaluated {
     Node value;
@@ -204,6 +211,7 @@ class Requirements {
     std::vector<Components> captures;
     std::string identity;
     std::shared_ptr<const LexicalStatics> statics;
+    std::shared_ptr<const SelectedCallable> named = {};
   };
   Error failure = Error::success();
   bool charge(uint64_t count, Span span) {
@@ -252,7 +260,7 @@ class Requirements {
                    constantCount, std::move(statics)});
   }
   Node unknown(const Type &type) {
-    // Unknown is not a total expression: Local, received and service results
+    // Unknown is not a total expression: Local and service results
     // must not acquire a shared identity merely because their inputs match.
     // Forwarding an existing unknown formal does not mint a new occurrence.
     if (building)
@@ -277,8 +285,9 @@ class Requirements {
     auto found = components.find(role);
     return found == components.end() ? unknown(type) : found->second;
   }
-  bool chargeStaticType(const Type &type, Span span) {
-    if (types.chargeType(type, span))
+  bool chargeStaticType(const Type &type, Span span, bool identity = false) {
+    if (identity ? types.chargeIdentity(type, span)
+                 : types.chargeType(type, span))
       return true;
     if (types.diagnostic && !failure)
       failure = make_error<DiagnosticError>(*types.diagnostic);
@@ -286,12 +295,24 @@ class Requirements {
   }
   bool staticReferences(const Type &type, std::set<std::string> &references,
                         Span span, unsigned depth = 1) {
-    if (!charge(type.domain.size() + type.arguments.size() + 1, span))
+    if (!charge(type.arguments.size() + 1, span))
       return false;
     if (depth > work.limits.typeDepth)
       return capacity(span, "common static type depth exceeded");
-    if (type.symbolic && !type.domain.empty())
+    if (type.symbolic && !type.domain.empty()) {
+      if (!charge(type.domain.size(), span))
+        return false;
       references.insert(type.domain);
+    }
+    // Closed dimensions have no references. A closed ordinary leaf does not
+    // inspect or copy its nominal domain text; complete Type/key preflight is
+    // a separate operation and still bounds that metadata.
+    if (type.dimension.isClosed()) {
+      for (const auto &argument : type.arguments)
+        if (!staticReferences(argument, references, span, depth + 1))
+          return false;
+      return true;
+    }
     for (const auto &[factors, coefficient] : type.dimension.terms()) {
       (void)coefficient;
       if (!charge(factors.size() + 1, span))
@@ -309,7 +330,8 @@ class Requirements {
   }
   struct StaticBinding {
     const Type *value;
-    std::shared_ptr<const StaticEnvironment> parent;
+    std::shared_ptr<const StaticEnvironment> owner, parent;
+    const std::set<std::string> *references;
     unsigned depth;
   };
   std::optional<StaticBinding>
@@ -325,13 +347,15 @@ class Requirements {
       }
       auto found = frame->bindings.find(name.str());
       if (found != frame->bindings.end())
-        return StaticBinding{&found->second, frame->parent, depth};
+        return StaticBinding{&found->second, frame, frame->parent,
+                             &frame->references.at(&found->second), depth};
     }
     return {};
   }
   Type substitute(const Type &type,
                   std::shared_ptr<const StaticEnvironment> environment,
-                  Span span, unsigned depth = 0) {
+                  Span span, unsigned depth = 0,
+                  const std::set<std::string> *knownReferences = nullptr) {
     if (!environment || failure)
       return type;
     // A whole symbolic term is replaced before inspecting its formal arguments,
@@ -342,13 +366,16 @@ class Requirements {
         return type;
       if (binding)
         return substitute(*binding->value, binding->parent, span,
-                          binding->depth);
+                          binding->depth, binding->references);
     }
-    std::set<std::string> references;
-    if (!staticReferences(type, references, span))
-      return type;
+    std::set<std::string> computed;
+    if (!knownReferences) {
+      if (!staticReferences(type, computed, span))
+        return type;
+      knownReferences = &computed;
+    }
     detail::Substitution bindings;
-    for (const auto &name : references) {
+    for (const auto &name : *knownReferences) {
       auto binding = staticBinding(name, environment, span, depth);
       if (failure)
         return type;
@@ -356,8 +383,8 @@ class Requirements {
         continue;
       // Close an actual in its defining caller before normalizing the
       // containing observation: pow2(N), N := pow2(M), M := 5 becomes pow2(32).
-      auto actual =
-          substitute(*binding->value, binding->parent, span, binding->depth);
+      auto actual = substitute(*binding->value, binding->parent, span,
+                               binding->depth, binding->references);
       if (failure)
         return type;
       bindings.emplace(name, std::move(actual));
@@ -407,19 +434,23 @@ class Requirements {
     // even though each declaration and its eventual specialization are valid.
     if (!bindings.empty()) {
       std::string key;
+      std::map<const Type *, std::set<std::string>> retainedReferences;
       bool closed = true;
       for (const auto &[name, type] : bindings)
         if (!charge(name.size() + 1, callee.span) ||
-            !types.chargeType(type, callee.span)) {
+            !types.chargeIdentity(type, callee.span)) {
           if (types.diagnostic && !failure)
             failure = make_error<DiagnosticError>(*types.diagnostic);
           break;
         } else {
           std::set<std::string> references;
-          staticReferences(type, references, callee.span);
+          if (!staticReferences(type, references, callee.span) ||
+              !charge(1, callee.span))
+            break;
           closed &= references.empty();
+          retainedReferences.emplace(&type, std::move(references));
           detail::frame(key, name);
-          detail::frame(key, typeIdentity(type));
+          frameTypeIdentity(key, type);
         }
       if (failure)
         return {};
@@ -432,8 +463,9 @@ class Requirements {
       if (found != staticFrames.end())
         parent = found->second;
       else {
-        parent = std::make_shared<StaticEnvironment>(
-            StaticEnvironment{std::move(bindings), std::move(parent)});
+        parent = std::make_shared<StaticEnvironment>(StaticEnvironment{
+            std::move(bindings), std::move(retainedReferences),
+            std::move(parent)});
         staticFrames.emplace(std::move(key), parent);
       }
     }
@@ -608,22 +640,26 @@ class Requirements {
   }
   bool closedStatic(const Type &type,
                     std::shared_ptr<const StaticEnvironment> environment,
-                    Span span, unsigned depth = 0) {
+                    Span span, unsigned depth = 0,
+                    const std::set<std::string> *knownReferences = nullptr) {
     if (auto alias = staticAlias(type)) {
       auto binding = staticBinding(*alias, environment, span, depth);
       if (failure)
         return false;
       if (binding)
         return closedStatic(*binding->value, binding->parent, span,
-                            binding->depth);
+                            binding->depth, binding->references);
     }
-    std::set<std::string> references;
-    if (!staticReferences(type, references, span))
-      return false;
-    for (const auto &name : references) {
+    std::set<std::string> computed;
+    if (!knownReferences) {
+      if (!staticReferences(type, computed, span))
+        return false;
+      knownReferences = &computed;
+    }
+    for (const auto &name : *knownReferences) {
       auto binding = staticBinding(name, environment, span, depth);
-      if (!binding ||
-          !closedStatic(*binding->value, binding->parent, span, binding->depth))
+      if (!binding || !closedStatic(*binding->value, binding->parent, span,
+                                    binding->depth, binding->references))
         return false;
     }
     return true;
@@ -653,7 +689,9 @@ class Requirements {
   std::shared_ptr<const LexicalStatics>
   lexicalStatics(ArrayRef<Type> parameters, const Environment &context,
                  Span span, const std::optional<Type> &module = {}) {
-    if (!charge(parameters.size() + 1, span))
+    if (!charge(sizeof(LexicalStatics) + 2 * sizeof(void *) +
+                    2 * (parameters.size() + bool(module)) * sizeof(Type),
+                span))
       return {};
     auto result = std::make_shared<LexicalStatics>();
     result->environment = context.statics;
@@ -744,10 +782,167 @@ class Requirements {
     return node(Provenance::Kind::Selection, type, identity,
                 std::move(children));
   }
-  Type componentType(const Components &values) {
-    return values.empty() ? Type{} : values.begin()->second->type;
+  const Type &componentType(const Components &values) {
+    static const Type empty;
+    return values.empty() ? empty : values.begin()->second->type;
   }
-  Components domain(ArrayRef<DomainBinding> bindings, unsigned index,
+  // Source-sensitive closure instances can have different native symbols for
+  // the same callable subject. Read its checked source association and actual
+  // environments; formation keys and AVL storage are not semantic subjects.
+  Node closedCallable(DeclarationId id, unsigned depth = 0) {
+    auto propagate = llvm::scope_exit([&] {
+      if (types.diagnostic && !failure)
+        failure = make_error<DiagnosticError>(*types.diagnostic);
+    });
+    if (!charge(1, {}) || depth > work.limits.callDepth ||
+        id.index >= declarations.size()) {
+      capacity({}, "closed callable provenance exceeds its bound");
+      return {};
+    }
+    if (activeClosedCallables.count(id.index)) {
+      refuse({}, "cyclic closed callable environment");
+      return {};
+    }
+    if (auto found = closedCallables.find(id.index);
+        found != closedCallables.end()) {
+      if (depth + found->second.second > work.limits.callDepth) {
+        capacity({}, "cached closed callable environment exceeds its bound");
+        return {};
+      }
+      return found->second.first;
+    }
+    const auto &helper = declarations[id.index];
+    if (!helper.origin || helper.origin->index >= declarations.size() ||
+        helper.outputs.size() != 1) {
+      refuse(helper.span, "closed callable source association differs");
+      return {};
+    }
+    if (!charge(sizeof(std::pair<const unsigned, std::pair<Node, unsigned>>) +
+                    sizeof(unsigned) + 8 * sizeof(void *),
+                helper.span))
+      return {};
+    activeClosedCallables.insert(id.index);
+    auto leave =
+        llvm::scope_exit([&] { activeClosedCallables.erase(id.index); });
+    const auto &source = declarations[helper.origin->index];
+    auto ownedNode = [&](const Type &type, StringRef identity,
+                         std::vector<Node> inputs = {},
+                         ArrayRef<Type> arguments = {}) -> Node {
+      if (!charge(sizeof(Provenance) + 2 * sizeof(void *), helper.span) ||
+          !chargeStaticType(type, helper.span))
+        return {};
+      Environment empty{};
+      auto statics = lexicalStatics(arguments, empty, helper.span);
+      if (failure)
+        return {};
+      return node(Provenance::Kind::Total, type, identity, std::move(inputs),
+                  {}, {}, false, {}, {}, std::move(statics));
+    };
+    if (!charge(2 * (source.qualifiedName.size() + 80) +
+                    2 *
+                        (helper.closureLayout.inputs.size() +
+                         helper.closureLayout.captures.size()) *
+                        32,
+                helper.span))
+      return {};
+    std::string identity = source.qualifiedName;
+    for (auto input : helper.closureLayout.inputs)
+      detail::frame(identity, std::to_string(input));
+    detail::frame(identity, "captures");
+    for (auto input : helper.closureLayout.captures)
+      detail::frame(identity, std::to_string(input));
+    std::vector<Node> inputs;
+    if (!charge((helper.scopedArguments.size() +
+                 helper.descriptorArguments.size()) *
+                        sizeof(Node) +
+                    sizeof(std::vector<Node>) + 2 * sizeof(void *),
+                helper.span))
+      return {};
+    inputs.reserve(helper.scopedArguments.size() +
+                   helper.descriptorArguments.size());
+    unsigned height = 0;
+    for (auto selected : helper.scopedArguments) {
+      auto subject = closedCallable(selected, depth + 1);
+      if (!subject)
+        return {};
+      height = std::max(height, closedCallables.at(selected.index).second + 1);
+      inputs.push_back(std::move(subject));
+    }
+    for (const auto &shape : helper.descriptorArguments) {
+      if (!shape || !shape->arena) {
+        refuse(helper.span, "closed callable descriptor is absent");
+        return {};
+      }
+      auto leaf = [&](const DescriptorBinding &binding, ArrayRef<unsigned> data,
+                      ArrayRef<Node> children) -> std::optional<Node> {
+        if (!charge((data.size() + children.size()) * sizeof(Node) + 128,
+                    helper.span))
+          return {};
+        std::vector<Node> values;
+        values.reserve(children.size() + data.size());
+        values.insert(values.end(), children.begin(), children.end());
+        for (auto port : data) {
+          if (port >= shape->inputs.size()) {
+            refuse(helper.span, "closed callable descriptor port differs");
+            return {};
+          }
+          auto value = ownedNode(shape->inputs[port],
+                                 "descriptor-port:" + std::to_string(port));
+          if (!value)
+            return {};
+          values.push_back(std::move(value));
+        }
+        auto result =
+            ownedNode(descriptorType(binding.contract),
+                      "domain:" + std::to_string(unsigned(binding.kind)) + ":" +
+                          std::to_string(binding.axis),
+                      std::move(values));
+        return result ? std::optional(result) : std::nullopt;
+      };
+      auto compose = [&](DescriptorBinding::Kind kind,
+                         const DescriptorContract &contract,
+                         ArrayRef<Type> arguments,
+                         ArrayRef<Node> children) -> std::optional<Node> {
+        if (!charge(children.size() * sizeof(Node) + 128, helper.span))
+          return {};
+        auto result =
+            ownedNode(descriptorType(contract),
+                      "descriptor-container:" + std::to_string(unsigned(kind)),
+                      children.vec(), arguments);
+        return result ? std::optional(result) : std::nullopt;
+      };
+      auto read = detail::readFormation<Node, unsigned>(
+          types, *shape,
+          [&](unsigned port, Span) -> std::optional<unsigned> { return port; },
+          [&](std::optional<unsigned>, const DescriptorContract &) -> Node {
+            refuse(helper.span, "residual in a closed callable descriptor");
+            return {};
+          },
+          leaf, compose);
+      if (!read || !read->selected ||
+          !charge((read->retained.size() + 1) * sizeof(Node), helper.span))
+        return {};
+      std::vector<Node> retained;
+      retained.reserve(read->retained.size() + 1);
+      retained.push_back(read->selected);
+      for (const auto &guard : read->retained)
+        if (guard != read->selected)
+          retained.push_back(guard);
+      auto subject = ownedNode(
+          descriptorType(shape->arena->payloads[shape->payload].contract),
+          "descriptor-formation", std::move(retained));
+      if (!subject)
+        return {};
+      inputs.push_back(std::move(subject));
+    }
+    auto result = ownedNode(helper.outputs.front().type, identity,
+                            std::move(inputs), helper.staticArguments);
+    if (!result)
+      return {};
+    closedCallables.emplace(id.index, std::make_pair(result, height));
+    return result;
+  }
+  Components domain(const Body &source, unsigned index,
                     ArrayRef<Components> data, const Environment &context,
                     ArrayRef<unsigned> roles, unsigned depth) {
     if (building)
@@ -756,102 +951,221 @@ class Requirements {
       capacity({}, "common domain environment depth exceeded");
       return {};
     }
-    if (index >= bindings.size()) {
-      refuse({}, "common domain edge is outside its checked body");
+    detail::Substitution statics;
+    std::vector<const StaticEnvironment *> environments;
+    for (auto p = context.statics.get(); p; p = p->parent.get()) {
+      if (!charge(2 * sizeof(const StaticEnvironment *), {}))
+        return {};
+      environments.push_back(p);
+    }
+    for (auto p = environments.rbegin(); p != environments.rend(); ++p)
+      for (const auto &[name, type] : (*p)->bindings) {
+        // Each layer is copied, including an entry shadowed by a later layer.
+        // Query/index traversal does not pay for this owned snapshot.
+        if (!charge(2 * (name.size() +
+                         sizeof(detail::Substitution::value_type) +
+                         4 * sizeof(void *)),
+                    {}) ||
+            !chargeStaticType(type, {}))
+          return {};
+        statics.insert_or_assign(name, type);
+      }
+    auto formation =
+        detail::formDescriptor(types, declarations, source, index, statics);
+    auto propagate = [&] {
+      if (types.diagnostic && !failure)
+        failure = make_error<DiagnosticError>(*types.diagnostic);
+    };
+    if (!formation) {
+      propagate();
       return {};
     }
-    const auto &binding = bindings[index];
-    if (binding.parameter) {
-      if (*binding.parameter < context.domains.size())
-        return context.domains[*binding.parameter];
-      Components result;
-      for (auto role : roles)
-        result[role] = unknown(substitute(binding.item, context, binding.span));
-      return result;
-    }
-    std::vector<Components> operands;
-    for (auto value : binding.operands)
-      operands.push_back(data[value.index]);
-    std::vector<Components> children;
-    for (auto child : binding.children)
-      children.push_back(
-          domain(bindings, child, data, context, roles, depth + 1));
-    auto kind = binding.kind;
-    auto axis = binding.axis;
-    auto type = substitute(binding.item, context, binding.span);
-    if (binding.factory) {
-      auto statics = binding.arguments;
-      std::optional<Type> module;
-      if (binding.factory->module)
-        module = substitute(*binding.factory->module, context, binding.span);
-      auto selected = target(binding.factory->declaration, statics, module,
-                             context, binding.span);
-      if (!selected)
+    using DescriptorComponents = std::shared_ptr<const Components>;
+    auto retain = [&](Components value) -> DescriptorComponents {
+      if (!charge(sizeof(Components) + 2 * sizeof(void *), {}))
         return {};
-      const auto &callee = declarations[selected->index];
-      if (!callee.domainDefinition) {
-        if (callee.kind != Declaration::Kind::DomainFunction ||
-            !callee.abstract) {
-          refuse(binding.span,
-                 "common domain factory has no checked definition");
+      return std::make_shared<const Components>(std::move(value));
+    };
+    auto resultOwner = [&](const DescriptorContract &contract, Span span) {
+      return charge(sizeof(Provenance) + 2 * sizeof(void *), span) &&
+             chargeStaticType(descriptorType(contract), span);
+    };
+    auto parameter =
+        [&](std::optional<unsigned> port,
+            const DescriptorContract &contract) -> DescriptorComponents {
+      if (port && *port < context.domains.size()) {
+        const auto &value = context.domains[*port];
+        if (!charge(value.size() *
+                        (sizeof(Components::value_type) + 4 * sizeof(void *)),
+                    {}))
           return {};
-        }
-        // An abstract factory has the same total, static selection contract
-        // as an abstract Math helper. Preserve its complete actual arguments;
-        // its implementation is resolved again at closed specialization.
-        std::string identity = "domain-call:" + callee.qualifiedName;
-        auto payload = lexicalStatics(statics, context, binding.span, module);
-        llvm::append_range(operands, children);
-        Components result;
-        for (auto role : roles) {
-          std::vector<Node> inputs;
-          for (const auto &part : operands)
-            inputs.push_back(at(part, role, componentType(part)));
-          result[role] =
-              node(Provenance::Kind::Total, type, identity, std::move(inputs),
-                   {}, {}, false, {}, {}, payload);
-        }
-        return result;
+        return retain(value);
       }
-      const auto &definition = *callee.domainDefinition;
-      if (!definition.constructor) {
-        auto nested = environment(callee, statics, module, context.statics);
-        nested.domains = std::move(children);
-        std::vector<Components> history;
-        for (unsigned i = 0; i < definition.bindings.size(); ++i)
-          history.push_back(domain(definition.bindings, i, operands, nested,
-                                   roles, depth + 1));
-        if (definition.result >= history.size()) {
-          refuse(binding.span, "common domain factory result differs");
+      if (!charge(roles.size() *
+                      (sizeof(Components::value_type) + 4 * sizeof(void *)),
+                  {}))
+        return {};
+      Components result;
+      for (auto role : roles) {
+        if (!resultOwner(contract, {}))
           return {};
-        }
-        // Preserve eager admission dependencies of every retained constructor,
-        // including constructors not used by the factory's final result.
-        Components result;
-        for (auto role : roles) {
-          std::vector<Node> inputs;
-          for (const auto &part : history)
-            inputs.push_back(at(part, role, componentType(part)));
-          result[role] =
-              node(Provenance::Kind::Total, type,
-                   "domain-factory:" + std::to_string(definition.result),
-                   std::move(inputs));
-        }
-        return result;
+        result[role] = unknown(descriptorType(contract));
       }
-      kind = *definition.constructor;
-      axis = definition.axis;
+      return retain(std::move(result));
+    };
+    auto leaf = [&](const DescriptorBinding &binding,
+                    ArrayRef<ValueId> operands,
+                    ArrayRef<DescriptorComponents> children)
+        -> std::optional<DescriptorComponents> {
+      if (!charge(roles.size() * (operands.size() + children.size()) *
+                      sizeof(Node),
+                  binding.span))
+        return {};
+      if (!charge(roles.size() *
+                      (sizeof(Components::value_type) + 4 * sizeof(void *)),
+                  {}))
+        return {};
+      Components result;
+      for (auto role : roles) {
+        std::vector<Node> inputs;
+        for (auto input : operands) {
+          if (input.index >= data.size()) {
+            refuse(binding.span, "common formation data selector differs");
+            return {};
+          }
+          inputs.push_back(
+              at(data[input.index], role, componentType(data[input.index])));
+        }
+        for (const auto &child : children)
+          if (child)
+            inputs.push_back(at(*child, role, componentType(*child)));
+          else
+            return {};
+        const std::optional<Type> noModule;
+        const auto &module =
+            binding.factory ? binding.factory->module : noModule;
+        auto payload =
+            lexicalStatics(binding.arguments, context, binding.span, module);
+        if (!charge(2 * (100 +
+                         (binding.factory
+                              ? declarations[binding.factory->declaration.index]
+                                    .qualifiedName.size()
+                              : 0)),
+                    binding.span))
+          return {};
+        auto identity =
+            binding.factory
+                ? "domain-call:" +
+                      declarations[binding.factory->declaration.index]
+                          .qualifiedName
+                : "domain:" + std::to_string(unsigned(binding.kind)) + ":" +
+                      std::to_string(binding.axis);
+        if (binding.selectedView) {
+          const auto &selection = *binding.selectedView;
+          if (!charge(2 * (12 + declarations[selection.target.declaration.index]
+                                    .qualifiedName.size()),
+                      binding.span))
+            return {};
+          identity +=
+              ":selected:" +
+              declarations[selection.target.declaration.index].qualifiedName;
+          auto selectedStatics =
+              lexicalStatics(selection.arguments, context, binding.span,
+                             selection.target.module);
+          if (!selectedStatics || !payload)
+            return {};
+          if (!charge(sizeof(LexicalStatics) + 2 * sizeof(void *) +
+                          2 *
+                              (payload->parameters.size() +
+                               selectedStatics->parameters.size()) *
+                              sizeof(Type),
+                      binding.span))
+            return {};
+          for (const auto &argument : payload->parameters)
+            if (!chargeStaticType(argument, binding.span))
+              return {};
+          auto combined = std::make_shared<LexicalStatics>(*payload);
+          for (const auto &argument : selectedStatics->parameters) {
+            if (!chargeStaticType(argument, binding.span))
+              return {};
+            combined->parameters.push_back(argument);
+          }
+          payload = std::move(combined);
+        }
+        if (!resultOwner(binding.contract, binding.span))
+          return {};
+        result[role] =
+            node(Provenance::Kind::Total, descriptorType(binding.contract),
+                 identity, std::move(inputs), {}, {}, false, {}, {}, payload);
+      }
+      return failure ? std::nullopt : std::optional(retain(std::move(result)));
+    };
+    auto compose =
+        [&](DescriptorBinding::Kind kind, const DescriptorContract &contract,
+            ArrayRef<Type> arguments, ArrayRef<DescriptorComponents> children)
+        -> std::optional<DescriptorComponents> {
+      if (!charge(roles.size() *
+                      (sizeof(Components::value_type) + 4 * sizeof(void *) +
+                       children.size() * sizeof(Node) + 128),
+                  {}))
+        return {};
+      Components result;
+      for (auto role : roles) {
+        std::vector<Node> inputs;
+        for (const auto &child : children) {
+          if (!child)
+            return {};
+          inputs.push_back(at(*child, role, componentType(*child)));
+        }
+        if (!resultOwner(contract, {}))
+          return {};
+        result[role] =
+            node(Provenance::Kind::Total, descriptorType(contract),
+                 "descriptor-container:" + std::to_string(unsigned(kind)),
+                 std::move(inputs), {}, {}, false, {}, {},
+                 lexicalStatics(arguments, context, {}));
+      }
+      return failure ? std::nullopt : std::optional(retain(std::move(result)));
+    };
+    auto read = detail::readFormation<DescriptorComponents>(
+        types, *formation, parameter, leaf, compose);
+    if (!read || !read->selected) {
+      propagate();
+      return {};
     }
-    llvm::append_range(operands, children);
+    // Admission depends on every entered leaf, including guard-only siblings.
+    if (!charge(roles.size() *
+                        (sizeof(Components::value_type) + 4 * sizeof(void *)) +
+                    roles.size() * (read->retained.size() + 1) * sizeof(Node),
+                {}))
+      return {};
+    if (llvm::all_of(read->retained, [&](const auto &retained) {
+          return retained == read->selected;
+        }))
+      return *read->selected;
     Components result;
     for (auto role : roles) {
       std::vector<Node> inputs;
-      for (const auto &part : operands)
-        inputs.push_back(at(part, role, componentType(part)));
-      result[role] = node(Provenance::Kind::Total, type,
-                          "domain:" + std::to_string(unsigned(kind)) + ":" +
-                              std::to_string(axis),
-                          std::move(inputs));
+      inputs.push_back(
+          at(*read->selected, role, componentType(*read->selected)));
+      for (const auto &retained : read->retained) {
+        if (retained == read->selected)
+          continue;
+        if (!retained)
+          return {};
+        inputs.push_back(at(*retained, role, componentType(*retained)));
+      }
+      if (!resultOwner(
+              formation->shape->arena->payloads[formation->shape->payload]
+                  .contract,
+              {}))
+        return {};
+      result[role] =
+          node(Provenance::Kind::Total,
+               descriptorType(
+                   formation->shape->arena->payloads[formation->shape->payload]
+                       .contract),
+               "domain-formation", std::move(inputs));
     }
     return result;
   }
@@ -874,9 +1188,9 @@ class Requirements {
     for (auto capture : binding.scopedCaptures)
       nested.scoped.push_back(
           scoped(source, capture, values, context, roles, depth + 1));
-    for (auto capture : binding.domainCaptures)
-      nested.domains.push_back(domain(source.domainBindings, capture, values,
-                                      context, roles, depth + 1));
+    for (auto capture : binding.descriptorCaptures)
+      nested.domains.push_back(
+          domain(source, capture, values, context, roles, depth + 1));
     std::string identity =
         context.identity + ":scoped:" + std::to_string(index);
     if (binding.computation)
@@ -915,7 +1229,8 @@ class Requirements {
     signature.result = substitute(signature.result, context, binding.span);
     return std::make_shared<ScopedEnvironment>(ScopedEnvironment{
         binding.computation.get(), std::move(signature), std::move(nested),
-        std::move(captures), std::move(identity), std::move(statics)});
+        std::move(captures), std::move(identity), std::move(statics),
+        binding.named});
   }
   Node scopedValue(const Scoped &binding, unsigned role, unsigned depth) {
     if (building)
@@ -925,9 +1240,24 @@ class Requirements {
         capacity({}, "common scoped observation depth exceeded");
       return unknown(Type{});
     }
-    if (!binding->computation ||
+    if ((!binding->computation && !binding->named) ||
         binding->signature.mode != ScopedSignature::Mode::Math)
       return unknown(binding->signature.result);
+    if (binding->named) {
+      const auto &selection = *binding->named;
+      auto module = selection.target.module;
+      if (module)
+        module = substitute(*module, binding->environment, {});
+      auto statics = arguments(selection.arguments, binding->environment, {});
+      auto selected = target(selection.target.declaration, statics, module,
+                             binding->environment, {});
+      if (!selected)
+        return unknown(binding->signature.result);
+      return node(Provenance::Kind::Total, binding->signature.result,
+                  declarations[selected->index].qualifiedName, {}, {}, {},
+                  false, {}, {},
+                  lexicalStatics(statics, binding->environment, {}, module));
+    }
     std::vector<Node> operands;
     for (const auto &capture : binding->captures)
       operands.push_back(at(capture, role, componentType(capture)));
@@ -953,10 +1283,10 @@ class Requirements {
       if (found == actual.end())
         continue;
       const auto &type = found->second->type;
-      if (!chargeStaticType(type, span))
+      if (!chargeStaticType(type, span, /*identity=*/true))
         return {};
       detail::frame(key, std::to_string(r));
-      detail::frame(key, typeIdentity(type));
+      frameTypeIdentity(key, type);
       result[r] = recipe(Provenance::Kind::Formal, type, {}, slot, r);
     }
     detail::frame(key, "end");
@@ -984,26 +1314,28 @@ class Requirements {
         continue;
       }
       identity(key, binding->computation);
+      // Retain the exact selection and its lexical frame across summary reuse.
+      identity(key, binding->named.get());
       detail::frame(key, std::to_string(unsigned(binding->signature.mode)));
       detail::frame(key, std::to_string(binding->signature.allowance.mayStop));
       detail::frame(key, std::to_string(binding->signature.allowance.opaque));
       detail::frame(key, std::to_string(binding->signature.inputs.size()));
       for (const auto &type : binding->signature.inputs) {
-        if (!chargeStaticType(type, span))
+        if (!chargeStaticType(type, span, /*identity=*/true))
           return result;
-        detail::frame(key, typeIdentity(type));
+        frameTypeIdentity(key, type);
       }
-      if (!chargeStaticType(binding->signature.result, span))
+      if (!chargeStaticType(binding->signature.result, span, /*identity=*/true))
         return result;
-      detail::frame(key, typeIdentity(binding->signature.result));
+      frameTypeIdentity(key, binding->signature.result);
       detail::frame(key, binding->statics ? "statics" : "no-statics");
       if (binding->statics) {
         identity(key, binding->statics->environment.get());
         detail::frame(key, std::to_string(binding->statics->parameters.size()));
         for (const auto &type : binding->statics->parameters) {
-          if (!chargeStaticType(type, span))
+          if (!chargeStaticType(type, span, /*identity=*/true))
             return result;
-          detail::frame(key, typeIdentity(type));
+          frameTypeIdentity(key, type);
         }
       }
       auto nested = formalEnvironment(binding->environment, operands, roles,
@@ -1015,7 +1347,8 @@ class Requirements {
       result.scoped.push_back(std::make_shared<ScopedEnvironment>(
           ScopedEnvironment{binding->computation, binding->signature,
                             std::move(nested), std::move(captures),
-                            binding->identity, binding->statics}));
+                            binding->identity, binding->statics,
+                            binding->named}));
     }
     return result;
   }
@@ -1479,8 +1812,6 @@ class Requirements {
     }
     if (value->kind == Provenance::Kind::Inactive)
       return node(value->kind, type, value->identity);
-    if (value->kind == Provenance::Kind::Unknown)
-      return unknown(type);
     return node(Provenance::Kind::Total, type, "field:" + std::to_string(index),
                 {value});
   }
@@ -1525,8 +1856,6 @@ class Requirements {
     }
     if (value->kind == Provenance::Kind::Inactive)
       return node(value->kind, type, value->identity);
-    if (value->kind == Provenance::Kind::Unknown)
-      return unknown(type);
     return node(Provenance::Kind::Total, type,
                 "payload:" + std::to_string(alternative) + ":" +
                     std::to_string(index),
@@ -1559,8 +1888,7 @@ class Requirements {
       return selection(value->type, value->identity, std::move(children), span,
                        depth);
     }
-    if (value->kind == Provenance::Kind::Unknown ||
-        value->kind == Provenance::Kind::Inactive)
+    if (value->kind == Provenance::Kind::Inactive)
       return value;
     return node(Provenance::Kind::Total, value->type,
                 tagOnly ? "tag" : "extent:" + std::to_string(*axis), {value});
@@ -1637,13 +1965,21 @@ class Requirements {
       return capacity(span, "common derivation depth exceeded");
     if (values.size() < 2)
       return true;
+    // An exchange forwards the actual sender's immutable subject. This can
+    // include an opaque Local/service result, but never equates two different
+    // opaque occurrences by their dependencies. Missing components are fresh
+    // unknowns and cannot satisfy this identity check.
+    if (llvm::all_of(
+            values, [&](const Node &value) { return value == values.front(); }))
+      return true;
     const auto &first = *values.front();
     for (const auto &value : values)
       if (value->kind == Provenance::Kind::Unknown ||
           value->type != first.type || value->tagOnly != first.tagOnly ||
           value->extentAxis != first.extentAxis)
-        return refuse(span, "shared control depends on Local, received, or "
-                            "otherwise unknown provenance");
+        return refuse(span,
+                      "shared control depends on Local, uncommunicated, or "
+                      "otherwise unknown provenance");
     if (llvm::all_of(values, [](const Node &value) {
           return value->kind == Provenance::Kind::Input;
         })) {
@@ -1684,7 +2020,7 @@ class Requirements {
           componentKeys.push_back(std::move(key));
         }
       }
-      if (!chargeStaticType(first.type, span))
+      if (!chargeStaticType(first.type, span, /*identity=*/true))
         return false;
       auto type = typeIdentity(first.type);
       for (unsigned i = 1; i < requirement.components.size(); ++i) {
@@ -1719,10 +2055,12 @@ class Requirements {
       // Compared by lookup keys; local to this one requirement.
       std::string path;
       for (const auto &step : first.loop->path) {
+        if (!chargeStaticType(step.type, span, /*identity=*/true))
+          return false;
         detail::frame(path, step.payload ? "payload" : "field");
         detail::frame(path, std::to_string(step.alternative));
         detail::frame(path, std::to_string(step.index));
-        detail::frame(path, typeIdentity(step.type));
+        frameTypeIdentity(path, step.type);
       }
       if (!charge(path.size() + 1, span))
         return false;
@@ -1882,6 +2220,17 @@ class Requirements {
           results.front()[role] = at(values[assembly->operands[i].index], role,
                                      valueTypes[op.results.front().index]);
         }
+      } else if (const auto *exchange = std::get_if<Exchange>(&op.action)) {
+        // Only the continuing result of this actual delivery gains the
+        // sender's subject. Do not rewrite the input's other components or
+        // grant a fact to a nonreceiver. Multicast is a sequence of these
+        // checked exchanges, with its existing partial-failure behavior.
+        if (building)
+          building->fresh = true;
+        auto sent = at(values[exchange->payload.index], roles[exchange->sender],
+                       valueTypes[exchange->payload.index]);
+        results.front()[roles[exchange->sender]] = sent;
+        results.front()[roles[exchange->receiver]] = std::move(sent);
       } else if (const auto *math = std::get_if<MathValue>(&op.action)) {
         std::string identity =
             "math:" + std::to_string(unsigned(math->identity)) + ":" +
@@ -1929,8 +2278,39 @@ class Requirements {
       } else if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
         auto binding =
             scoped(source, invoke->binding, values, context, roles, callDepth);
-        if (!binding || !binding->computation || !binding->computation->body ||
-            binding->signature.mode != ScopedSignature::Mode::Math) {
+        if (binding && binding->named &&
+            binding->signature.mode == ScopedSignature::Mode::Math) {
+          const auto &selection = *binding->named;
+          auto module = selection.target.module;
+          if (module)
+            module = substitute(*module, binding->environment, op.span);
+          auto statics = selection.arguments;
+          auto selected = target(selection.target.declaration, statics, module,
+                                 binding->environment, op.span);
+          if (!selected)
+            return {};
+          const auto &callee = declarations[selected->index];
+          if (callee.body) {
+            auto nested = environment(callee, statics, module,
+                                      binding->environment.statics);
+            results =
+                delayed(summarize(*callee.body, gather(invoke->operands), roles,
+                                  nested, op.span, callDepth, &callee));
+          } else {
+            auto payload =
+                lexicalStatics(statics, binding->environment, op.span, module);
+            each([&](unsigned, unsigned role, const Type &type) {
+              std::vector<Node> inputs;
+              for (auto input : invoke->operands)
+                inputs.push_back(
+                    at(values[input.index], role, valueTypes[input.index]));
+              return node(Provenance::Kind::Total, type, callee.qualifiedName,
+                          std::move(inputs), {}, {}, false, {}, {}, payload);
+            });
+          }
+        } else if (!binding || !binding->computation ||
+                   !binding->computation->body ||
+                   binding->signature.mode != ScopedSignature::Mode::Math) {
           each([&](unsigned, unsigned, const Type &type) {
             return unknown(type);
           });
@@ -1943,8 +2323,8 @@ class Requirements {
         }
       } else if (const auto *finite =
                      std::get_if<FiniteApplication>(&op.action)) {
-        auto descriptor = domain(source.domainBindings, finite->domain, values,
-                                 context, roles, callDepth);
+        auto descriptor =
+            domain(source, finite->domain, values, context, roles, callDepth);
         auto callback =
             scoped(source, finite->body, values, context, roles, callDepth);
         Scoped predicate;
@@ -1971,7 +2351,7 @@ class Requirements {
         each([&](unsigned, unsigned role, const Type &type) {
           if (source.mode != Body::Mode::Math)
             return unknown(type);
-          std::vector<ValueId> inputs = finite->domainOperands;
+          std::vector<ValueId> inputs = finite->descriptorOperands;
           llvm::append_range(inputs, finite->operands);
           llvm::append_range(inputs, finite->body.captures);
           if (finite->predicate)
@@ -1981,11 +2361,19 @@ class Requirements {
             operands.push_back(
                 at(values[input.index], role, valueTypes[input.index]));
           std::string identity = finite->domain->identity;
-          detail::frame(identity,
-                        declarations[finite->body.helper.index].symbol);
-          if (finite->predicate)
-            detail::frame(identity,
-                          declarations[finite->predicate->helper.index].symbol);
+          if (!charge(2 * (operands.size() + 2) * sizeof(Node), op.span))
+            return Node{};
+          operands.reserve(operands.size() + 2);
+          auto callback = closedCallable(finite->body.helper);
+          if (!callback)
+            return Node{};
+          operands.push_back(std::move(callback));
+          if (finite->predicate) {
+            auto predicate = closedCallable(finite->predicate->helper);
+            if (!predicate)
+              return Node{};
+            operands.push_back(std::move(predicate));
+          }
           return node(Provenance::Kind::Total, type, identity,
                       std::move(operands));
         });
@@ -2002,9 +2390,9 @@ class Requirements {
         for (auto index : call->scopedArguments)
           nested.scoped.push_back(
               scoped(source, index, values, context, roles, callDepth));
-        for (auto index : call->domainArguments)
-          nested.domains.push_back(domain(source.domainBindings, index, values,
-                                          context, roles, callDepth));
+        for (auto index : call->descriptorArguments)
+          nested.domains.push_back(
+              domain(source, index, values, context, roles, callDepth));
         if (callee.kind == Declaration::Kind::Math && callee.body) {
           callSites.push_back(op.span);
           auto restore = llvm::scope_exit([&] { callSites.pop_back(); });
@@ -2298,7 +2686,7 @@ Error checkCommonSummaryRequirements(
       continue;
     // Descriptor/callback specialization supplies a concrete immutable input
     // environment. Its required invariants are replayed at closure below.
-    if (!decl.domainInputs.empty() || decl.body->parameterizedSummary)
+    if (!decl.descriptorInputs.empty() || decl.body->parameterizedSummary)
       continue;
     if (!derivation) {
       if (auto e = chargeSemanticIndex(declarations, work))
@@ -2347,7 +2735,7 @@ deriveCommonControlRequirements(const CheckedProject &project,
 bool isClosedConcreteProtocol(const Declaration &decl) {
   return decl.kind == Declaration::Kind::Protocol && decl.body &&
          !decl.abstract && decl.parameters.empty() &&
-         decl.scopedInputs.empty() && decl.domainInputs.empty();
+         decl.scopedInputs.empty() && decl.descriptorInputs.empty();
 }
 
 } // namespace zkc::language

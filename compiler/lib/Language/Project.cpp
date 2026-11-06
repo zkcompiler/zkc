@@ -29,6 +29,15 @@ std::error_code DiagnosticError::convertToErrorCode() const {
 }
 
 namespace {
+llvm::Error chargeProjectSnapshot(llvm::ArrayRef<Declaration> declarations,
+                                  detail::Work &work) {
+  if (auto error = work.charge(declarations.size()))
+    return error;
+  for (const auto &declaration : declarations)
+    if (auto error = detail::chargeRequirementSnapshot(declaration, work))
+      return error;
+  return Error::success();
+}
 std::optional<StringRef> exceededLimit(const Limits &limits,
                                        const Limits &ceiling) {
 #define CHECK_LIMIT(name)                                                      \
@@ -159,6 +168,59 @@ Error Work::charge(uint64_t amount, std::optional<Span> span) {
     *allowance -= amount;
   return Error::success();
 }
+Error Work::contextualize(Error error, std::optional<Span> span) {
+  auto diagnostic = diagnose(std::move(error), span);
+  if (auto cancelled = charge(0, diagnostic ? diagnostic->primary : span))
+    return cancelled;
+  if (!diagnostic)
+    return Error::success();
+  if (diagnostic->code == "source.limit") {
+    const auto context = (" in " + sourceWorkPhaseName(phase)).str();
+    if (!StringRef(diagnostic->message).ends_with(context))
+      diagnostic->message += context;
+  }
+  return make_error<DiagnosticError>(std::move(*diagnostic));
+}
+Error chargeConsumerRequirement(const ConsumerRequirement &requirement,
+                                Work &work) {
+  if (auto error = work.charge(requirement.reference.path.size() +
+                               requirement.arguments.size() + 1))
+    return error;
+  for (const auto &step : requirement.reference.path)
+    if (auto error = work.charge(step.name.size() + 1))
+      return error;
+  auto type = [&](const Type &value) -> Error {
+    auto cost =
+        typeComplexity(value, work.limits.typeNodes, work.limits.typeDepth,
+                       work.remaining(), nullptr, true, TypeWork::Copy);
+    if (!cost)
+      return work.contextualize(cost.takeError());
+    return work.charge(*cost);
+  };
+  for (const auto &argument : requirement.arguments)
+    if (auto error = type(argument))
+      return error;
+  if (requirement.reference.abstract)
+    return type(requirement.reference.abstract->module);
+  return Error::success();
+}
+Error chargeRequirementSnapshot(const Declaration &declaration, Work &work) {
+  for (const auto &requirement : declaration.consumerRequirements)
+    if (auto error = chargeConsumerRequirement(requirement, work))
+      return error;
+  for (const auto &admission : declaration.admissions) {
+    auto cost = typeComplexity(admission.type, work.limits.typeNodes,
+                               work.limits.typeDepth, work.remaining(), nullptr,
+                               true, TypeWork::Copy);
+    if (!cost)
+      return work.contextualize(cost.takeError());
+    if (auto error = work.charge(*cost, admission.span))
+      return error;
+    if (auto error = work.charge(admission.calls.size() + 1, admission.span))
+      return error;
+  }
+  return Error::success();
+}
 Error chargeSemanticIndex(const std::vector<Declaration> &declarations,
                           Work &work) {
   if (auto e = work.charge(declarations.size() + 1))
@@ -170,6 +232,8 @@ Error chargeSemanticIndex(const std::vector<Declaration> &declarations,
     for (const auto &parameter : decl.parameters)
       if (auto e = work.charge(parameter.atom.size() + 1, parameter.span))
         return e;
+    if (auto error = chargeRequirementSnapshot(decl, work))
+      return error;
   }
   return Error::success();
 }
@@ -190,12 +254,12 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
     return failure("source.limit", "file count limit exceeded");
   uint64_t total = 0;
   std::set<StringRef> names;
+  const auto installed = installedModules();
   for (const auto &source : sources) {
-    if (source.origin != SourceOrigin::Captured ||
-        (source.module == "zkc" || source.module == "zkc::prelude" ||
-         source.module == "zkc::records"))
-      return failure("source.module", "zkc, zkc::prelude and zkc::records are "
-                                      "reserved for installation sources");
+    if (source.origin != SourceOrigin::Captured || source.module == "zkc" ||
+        llvm::is_contained(installed, source.module))
+      return failure("source.module",
+                     "installed modules are reserved for installation sources");
     if (source.diagnosticPath.size() > 4096)
       return failure("source.limit", "diagnostic path byte limit exceeded");
     if (source.text.size() > limits.fileBytes ||
@@ -550,7 +614,7 @@ resolveEntry(const CheckedProject &project, StringRef name,
     // Template bodies and source buffers remain shared and immutable.
     detail::CheckedStorage scope(project.capture(),
                                  project.installationIdentity().str());
-    if (auto error = work.charge(project.declarations().size()))
+    if (auto error = chargeProjectSnapshot(project.declarations(), work))
       return std::move(error);
     scope.declarations.assign(project.declarations().begin(),
                               project.declarations().end());
@@ -796,7 +860,7 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
   // Metadata is bounded by definition checking. Immutable template bodies
   // are shared; specialization starts with its own phase budget.
   detail::Work::Scope phase(work, SourceWorkPhase::Specialization);
-  if (auto error = work.charge(project.declarations().size()))
+  if (auto error = chargeProjectSnapshot(project.declarations(), work))
     return error;
   storage->declarations.assign(project.declarations().begin(),
                                project.declarations().end());
@@ -837,8 +901,15 @@ ClosedEntry::closeSelected(const CheckedProject &project, StringRef name,
         // Counted by lookup key; local to this one traversal.
         std::string key = std::to_string(unsigned(call->kind)) + ":" +
                           std::to_string(call->target.index);
-        for (const auto &argument : call->arguments)
-          detail::frame(key, typeIdentity(argument));
+        for (const auto &argument : call->arguments) {
+          auto cost = typeComplexity(argument, limits.typeNodes,
+                                     limits.typeDepth, work.remaining());
+          if (!cost)
+            return cost.takeError();
+          if (auto e = work.charge(*cost, op.span))
+            return e;
+          frameTypeIdentity(key, argument);
+        }
         if (invoked.insert(key).second) {
           if (invoked.size() > limits.instances)
             return detail::failure("source.limit",
@@ -908,7 +979,7 @@ Expected<ClosedEntry> ClosedEntry::closeProtocol(
                            "run invocation requires a protocol", target.span);
   detail::Work work{limits};
   detail::Work::Scope phase(work, SourceWorkPhase::Specialization);
-  if (auto error = work.charge(project.declarations().size()))
+  if (auto error = chargeProjectSnapshot(project.declarations(), work))
     return error;
   storage->declarations.assign(project.declarations().begin(),
                                project.declarations().end());
@@ -1045,21 +1116,91 @@ std::string installedCatalogIdentity() {
                ? "static:" + std::to_string(*value.index) + ":" + value.member
                : "constructor:" + value.constructor;
   };
+  std::function<std::string(const protocol::PatternRef &)> pattern;
+  pattern = [&](const protocol::PatternRef &p) {
+    std::string value;
+    if (auto *v = std::get_if<protocol::ContractVariable>(&p->value)) {
+      detail::frame(value, "contract");
+      detail::frame(value, std::to_string(v->variable));
+    } else if (auto *v = std::get_if<protocol::ProductPattern>(&p->value)) {
+      detail::frame(value, "product");
+      detail::frame(value, std::to_string(v->elements.size()));
+      for (auto &element : v->elements)
+        detail::frame(value, pattern(element));
+    } else {
+      const auto &sequence = std::get<protocol::SequencePattern>(p->value);
+      detail::frame(value, "sequence");
+      detail::frame(value, pattern(sequence.element));
+      if (std::holds_alternative<protocol::UnsizedExtent>(sequence.extent))
+        detail::frame(value, "unsized");
+      else if (auto *e =
+                   std::get_if<protocol::ExtentVariable>(&sequence.extent)) {
+        detail::frame(value, "extent");
+        detail::frame(value, std::to_string(e->variable));
+      } else {
+        detail::frame(value, "static");
+        detail::frame(
+            value, std::to_string(
+                       std::get<protocol::NatStatic>(sequence.extent).index));
+      }
+    }
+    return value;
+  };
+  auto port = [&](const protocol::SchemePort &p) {
+    std::string value;
+    if (auto *v = std::get_if<protocol::DescriptorPort>(&p)) {
+      detail::frame(value, "descriptor");
+      detail::frame(value, pattern(v->contract));
+    } else {
+      auto &selected = std::get<protocol::SelectedViewPort>(p);
+      detail::frame(value, "selectedView");
+      detail::frame(value, pattern(selected.context));
+      detail::frame(value, pattern(selected.state));
+    }
+    return value;
+  };
+  for (const auto &scheme : protocol::frontendSchemes()) {
+    row({"frontend-scheme", scheme.name,
+         std::to_string(static_cast<unsigned>(scheme.form)),
+         pattern(scheme.output)});
+    for (auto [position, sort] : llvm::enumerate(scheme.variables))
+      row({"scheme-variable", scheme.name, std::to_string(position),
+           std::to_string(static_cast<unsigned>(sort))});
+    for (auto [position, value] : llvm::enumerate(scheme.statics))
+      row({"scheme-static", scheme.name, std::to_string(position),
+           std::to_string(static_cast<unsigned>(value.kind)), value.sort});
+    for (auto [position, value] : llvm::enumerate(scheme.inputs))
+      row({"scheme-input", scheme.name, std::to_string(position), port(value)});
+  }
   for (const auto &declaration : protocol::frontendDeclarations()) {
     row({"frontend-declaration", declaration.identity, declaration.module,
          declaration.name,
          std::to_string(static_cast<unsigned>(declaration.kind)),
-         declaration.rule ? "rule:" + std::to_string(static_cast<unsigned>(
-                                          *declaration.rule))
-                          : "primitive:" + declaration.primitive,
-         declaration.output ? term(*declaration.output) : "none",
          declaration.prelude ? "prelude" : "explicit"});
-    for (const auto &[position, value] : llvm::enumerate(declaration.statics))
+    if (auto *head = declaration.contractHead())
+      row({"contract-head-association", declaration.identity,
+           head->constructor});
+    else if (auto *scheme = declaration.viewScheme()) {
+      row({"scheme-association", declaration.identity,
+           protocol::frontendScheme(scheme->scheme)->name,
+           pattern(scheme->output)});
+      for (auto [position, value] : llvm::enumerate(scheme->inputs))
+        row({"scheme-named-input", declaration.identity,
+             std::to_string(position), value.name, port(value.port)});
+    } else {
+      const auto &concrete = *declaration.concrete();
+      row({"concrete-association", declaration.identity,
+           concrete.rule
+               ? "rule:" + std::to_string(static_cast<unsigned>(*concrete.rule))
+               : "primitive:" + concrete.primitive,
+           concrete.output ? term(*concrete.output) : "none"});
+      for (auto [position, value] : llvm::enumerate(concrete.inputs))
+        row({"frontend-input", declaration.identity, std::to_string(position),
+             value.name, term(value.type)});
+    }
+    for (const auto &[position, value] : llvm::enumerate(declaration.statics()))
       row({"frontend-static", declaration.identity, std::to_string(position),
            value.name, value.kind, value.sort});
-    for (const auto &[position, value] : llvm::enumerate(declaration.inputs))
-      row({"frontend-input", declaration.identity, std::to_string(position),
-           value.name, term(value.type)});
   }
   for (const auto &notation : protocol::frontendNotations())
     row({"frontend-notation", notation.module, notation.symbol, notation.fixity,

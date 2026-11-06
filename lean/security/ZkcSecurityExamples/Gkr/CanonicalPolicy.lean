@@ -56,7 +56,7 @@ theorem nonvacuous : Nonvacuous subject := by
   rw [honestInput_iff]
   constructor
   · decide +kernel
-  · change (CircuitEncoding.mk ([0] : List Scalar) [0] [0] 0 0 0).Admitted 4 4 [0]
+  · rw [Relations.shape_exact]
     simp [CircuitEncoding.Admitted, CircuitEncoding.Shape]
 
 end ZkcSecurity.Realizations.Gkr.CanonicalPolicy

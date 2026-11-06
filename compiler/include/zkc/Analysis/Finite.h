@@ -69,7 +69,6 @@ mlir::FailureOr<CallbackView> readCallback(const Computation &computation,
 mlir::FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
                                               CallbackValues actuals,
                                               mlir::Value scope = {});
-mlir::FailureOr<mlir::StringAttr> closureKey(mlir::Operation *op);
 bool isComputation(mlir::Operation *op);
 mlir::Type elementType(mlir::Type container, bool matrix = false);
 mlir::LogicalResult describe(mlir::Operation *op, Computation &result,

@@ -63,7 +63,7 @@ theorem reduce_verifier_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate]
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
@@ -80,7 +80,7 @@ theorem reduce_prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 �
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate]
 
 /-- The typed body's process at one participant, with this unit's tables. -/
 def runFn (ctx : ProtocolContext) (self : Nat) :
@@ -125,7 +125,7 @@ theorem reduce_verifierReduce_returned (ctx : ProtocolContext) (separate : ctx.r
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes,
-                  Participant.restrict, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate]
 
 /-- The `reduce` callee at role 1: its invocation in this unit at any child context. -/
 theorem reduce_verifierReduce_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckReduceViews.unit.definitions) (claims : SumcheckPendingLaws.Bodies SumcheckReduceViews.unit.definitions) (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -239,7 +239,7 @@ theorem verifier_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx
           cases values with | cons value4 values =>
             cases values
             simp [SumcheckReduceBodies.runSignature, maskValues, ProtocolContext.mapScopes,
-              Participant.restrict, Ne.symm separate, Values.get]
+              Participant.restrict, Ne.symm separate]
 
 /-- The verifier's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
@@ -294,7 +294,7 @@ theorem reduce_proverReduce_returned (ctx : ProtocolContext) (separate : ctx.rol
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes,
-                  Participant.restrict, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate]
 
 /-- The `reduce` callee at role 0: its invocation in this unit at any child context. -/
 theorem reduce_proverReduce_invoke (bodies : SumcheckUnitContracts.Bodies SumcheckReduceViews.unit.definitions) (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -418,7 +418,7 @@ theorem prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.r
           cases values with | cons value4 values =>
             cases values
             simp [SumcheckReduceBodies.runSignature, maskValues, ProtocolContext.mapScopes,
-              Participant.restrict, Ne.symm separate, Values.get]
+              Participant.restrict, Ne.symm separate]
 
 /-- The prover's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/

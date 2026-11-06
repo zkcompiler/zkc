@@ -43,14 +43,14 @@ public:
                   syntax.scopedBindings.size());
       syntax.scopedBindings.push_back(*id);
     }
-    for (auto &port : decl.domainInputs) {
+    for (auto &port : decl.descriptorInputs) {
       auto id = bind(port.name, port.span, false, false, true);
       if (!id)
         return false;
       syntax.bindings[id->index].domain = true;
       inputOrigin(*id, Declaration::InputSlot::Kind::Domain,
-                  syntax.domainBindings.size());
-      syntax.domainBindings.push_back(*id);
+                  syntax.descriptorBindings.size());
+      syntax.descriptorBindings.push_back(*id);
     }
     if (syntax.oracleDefinition) {
       const auto &port = syntax.oracleDefinition->queryParameter;
@@ -247,7 +247,17 @@ private:
     if (!bounded(depth, expr.span))
       return false;
     if (expr.kind == Expression::Kind::Name) {
-      expr.binding = lookup(expr.text, expr.span);
+      auto found = names.find(expr.text);
+      // Unbound names can be exact declaration references only when the
+      // expected argument category admits them. Runtime checking still refuses
+      // them; lexical names always retain precedence and their read inventory.
+      if (found == names.end())
+        return true;
+      expr.binding = found->second;
+      if (!expr.arguments.empty() || !expr.staticLabels.empty())
+        return fail("source.static-argument",
+                    "lexical bindings do not accept static arguments",
+                    expr.span);
       return expr.binding &&
              use(LexicalReference::Access::Read,
                  {LexicalNode::Kind::Expression, id}, *expr.binding, expr.span);
@@ -341,13 +351,18 @@ private:
                       "service aliases are immutable unannotated names",
                       s.span);
         bool domain = checker.domainExpression(decl, syntax, s.expression);
+        if (syntax.layoutSyntax && s.type) {
+          auto annotation = checker.placedType(decl, *s.type);
+          if (!annotation)
+            return false;
+          domain |= isDescriptor(annotation->type);
+        }
         if (checker.types.diagnostic)
           return false;
-        if (domain && (s.mutableBinding || s.roles || s.type || s.exchange ||
+        if (domain && (s.mutableBinding || s.roles || s.exchange ||
                        s.pattern.kind != Pattern::Kind::Name))
           return fail("source.finite-domain",
-                      "domain aliases require one immutable unannotated name",
-                      s.span);
+                      "descriptor aliases require one immutable name", s.span);
         std::set<std::string> seen;
         SaveAndRestore bindingVisibility(visibleAfter, s.span.end);
         if (!pattern(s.pattern, s.mutableBinding, service, seen, depth))

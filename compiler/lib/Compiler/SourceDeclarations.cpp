@@ -129,14 +129,16 @@ DeclarationValue::key(uint64_t &remaining) const {
 } // namespace
 Expected<mlir::Attribute> canonicalDeclarationTerm(mlir::Attribute attribute,
                                                    uint64_t &remaining) {
-  // Static terms contain arrays and strings. A StringAttr's optional type is
-  // not part of the declaration semantics. Intern the normalized native tree
+  // Static terms contain arrays, strings and null. A StringAttr's optional type
+  // is not part of the declaration semantics. Intern the normalized native tree
   // so keys agree with textual equality without a publication round trip.
   std::function<mlir::Attribute(mlir::Attribute, unsigned)> canonical =
       [&](mlir::Attribute value, unsigned depth) -> mlir::Attribute {
     if (!remaining || depth >= 128)
       return {};
     --remaining;
+    if (mlir::isa_and_nonnull<mlir::UnitAttr>(value))
+      return value;
     if (auto text = mlir::dyn_cast<mlir::StringAttr>(value)) {
       if (text.getValue().size() > remaining)
         return {};
@@ -165,7 +167,9 @@ namespace {
 // The semantic static-term grammar has no table, text or arity ceiling. Its
 // native caller has already charged all retained metadata, and recursive work
 // shares the subject allowance. The public wire checker keeps its own limits.
-bool nativeStaticTerm(const J &value, uint64_t &remaining, unsigned depth = 0) {
+enum class StaticTermCategory { Term, Descriptor, Natural };
+bool nativeStaticTerm(const J &value, uint64_t &remaining, unsigned depth = 0,
+                      StaticTermCategory category = StaticTermCategory::Term) {
   if (!remaining || depth >= 64)
     return false;
   --remaining;
@@ -174,6 +178,12 @@ bool nativeStaticTerm(const J &value, uint64_t &remaining, unsigned depth = 0) {
     return false;
   auto tag = (*node)[0].getAsString();
   if (!tag)
+    return false;
+  if (category == StaticTermCategory::Natural && *tag != "nat")
+    return false;
+  if (category == StaticTermCategory::Descriptor &&
+      *tag != "descriptor-product" && *tag != "descriptor-sequence" &&
+      *tag != "builtin")
     return false;
   auto text = [](const J &value) {
     auto s = value.getAsString();
@@ -184,15 +194,29 @@ bool nativeStaticTerm(const J &value, uint64_t &remaining, unsigned depth = 0) {
     return text(value) && (s->size() == 1 || s->front() != '0') &&
            all_of(*s, [](char c) { return c >= '0' && c <= '9'; });
   };
-  auto arguments = [&](unsigned index) {
+  auto arguments = [&](unsigned index, StaticTermCategory childrenCategory =
+                                           StaticTermCategory::Term) {
     auto children = (*node)[index].getAsArray();
     if (!children || children->size() > remaining)
       return false;
     for (const auto &child : *children)
-      if (!nativeStaticTerm(child, remaining, depth + 1))
+      if (!nativeStaticTerm(child, remaining, depth + 1, childrenCategory))
         return false;
     return true;
   };
+  if (*tag == "descriptor-product")
+    return node->size() == 2 && arguments(1, StaticTermCategory::Descriptor);
+  if (*tag == "descriptor-sequence")
+    return node->size() == 3 &&
+           nativeStaticTerm((*node)[1], remaining, depth + 1,
+                            StaticTermCategory::Descriptor) &&
+           ((*node)[2].isNull() ||
+            nativeStaticTerm((*node)[2], remaining, depth + 1,
+                             StaticTermCategory::Natural));
+  if (category == StaticTermCategory::Descriptor)
+    return node->size() == 3 && (*node)[1].getAsString() == "finite" &&
+           (*node)[2].getAsArray() && (*node)[2].getAsArray()->size() == 1 &&
+           arguments(2);
   if (*tag == "nat")
     return node->size() == 2 && decimal((*node)[1]);
   if (*tag == "field" || *tag == "group")
@@ -438,9 +462,9 @@ Error declarations(const J &value, uint64_t &remaining, bool wire,
           return error("component-declaration-record");
       }
       arguments = array(term[3]);
-    } else if (tag == "array")
+    } else if (tag == "array" || tag == "descriptor-sequence")
       return referenced(term[1], depth + 1);
-    else if (tag == "tuple")
+    else if (tag == "tuple" || tag == "descriptor-product")
       arguments = array(term[1]);
     else if (tag == "builtin" || tag == "formal")
       arguments = array(term[2]);
@@ -475,6 +499,8 @@ Error declarations(const J &value, uint64_t &remaining, bool wire,
     const auto &term = array(value);
     auto tag = string(term[0]);
     std::optional<A> arguments;
+    if (tag == "descriptor-product" || tag == "descriptor-sequence")
+      return error("component-declaration-record");
     if (tag == "nominal") {
       auto kind = string(term[1]);
       if (kind == "logical_record")
@@ -587,9 +613,9 @@ Error declarations(const J &value, uint64_t &remaining, bool wire,
           kind == "module")
         paths.insert(string(term[2]).str());
       arguments = array(term[3]);
-    } else if (tag == "array")
+    } else if (tag == "array" || tag == "descriptor-sequence")
       return nominal(term[1], depth + 1);
-    else if (tag == "tuple")
+    else if (tag == "tuple" || tag == "descriptor-product")
       arguments = array(term[1]);
     else if (tag == "builtin" || tag == "formal")
       arguments = array(term[2]);

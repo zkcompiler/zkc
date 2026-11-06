@@ -429,7 +429,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .booleanNotEqual | .select .. | .call .. | .fold .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind == .math || kind == .protocol
   | .makeProduct .. | .getProduct .. => kind == .math || kind == .protocol
-  | .boundedAt .. => kind == .math
+  | .boundedAt .. | .mathBranch => kind == .math
   | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .sampleIndex .. | .sampleIndices .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
@@ -600,7 +600,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .fold domain step predicate =>
     let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
     return .fold spec
-  | .branch => return .branch (argumentTypes.drop 1) results
+  | .branch | .mathBranch => return .branch (argumentTypes.drop 1) results
   | .loop | .loopCondition =>
     if argumentTypes.length < 2 + results.length then throw "structured-loop-arguments"
     let captures := argumentTypes.drop (2 + results.length)
@@ -658,8 +658,15 @@ def lowerInstructions (snapshot : Snapshot) (domains : List DomainSpec)
     let bodies ← regions.mapM fun (.region inputs outputs body) => do
       if !validTypes inputs || !validTypes outputs then throw "structured-region-signature"
       let (bodyFacts, bodyExit) ← match op with
-        -- Only Local control has regions, and Local has no bound premises.
-        | .branch .. => pure ([], ExitKind.yield)
+        | .branch .. =>
+          -- Closed captures retain proven index/container relations. A
+          -- duplicate capture is an alias, not a fresh independent value.
+          let captures := operands.drop 1 |>.map fun index => identities[index]?.getD index
+          let nestedFacts := captures.zipIdx.flatMap fun (index, position) =>
+            captures.zipIdx.filterMap fun (container, containerPosition) =>
+              if facts.contains (index, container) then some (position, containerPosition)
+              else none
+          pure (if kind == .math then nestedFacts else [], ExitKind.yield)
         | .loop state captures | .loopCondition state captures => do
           let conditional := match op with | .loopCondition .. => true | _ => false
           if !forwardsCaptures state.length captures.length conditional body then

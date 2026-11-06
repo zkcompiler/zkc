@@ -30,22 +30,38 @@ Expected<SyntaxType> term(const protocol::SourceTerm &value,
 }
 Expected<SyntaxDeclaration>
 declaration(const protocol::FrontendDeclaration &row, Span span, Work &work) {
+  bool head = row.kind == protocol::SourceDeclarationKind::ContractConstructor;
+  bool scheme = row.kind == protocol::SourceDeclarationKind::View;
+  if (head != bool(row.contractHead()) || scheme != bool(row.viewScheme()) ||
+      (!head && !scheme && !row.concrete()))
+    return refuse("installed declaration kind and signature differ", span);
   if (auto error = work.count(work.declarations, work.limits.declarations,
                               "declaration count", span))
     return std::move(error);
   if (auto error =
-          work.charge(1 + row.statics.size() + row.inputs.size(), span))
+          work.charge(1 + row.statics().size() +
+                          (row.concrete()     ? row.concrete()->inputs.size()
+                           : row.viewScheme() ? row.viewScheme()->inputs.size()
+                                              : 0),
+                      span))
     return std::move(error);
   SyntaxDeclaration result;
   result.kind = row.kind == protocol::SourceDeclarationKind::Math
                     ? Declaration::Kind::Math
                 : row.kind == protocol::SourceDeclarationKind::Local
                     ? Declaration::Kind::Local
+                : row.kind == protocol::SourceDeclarationKind::Requirement
+                    ? Declaration::Kind::Requirement
                     : Declaration::Kind::Interface;
+  if (row.contractHead())
+    result.kind = Declaration::Kind::InstalledContractConstructor;
+  if (row.viewScheme())
+    result.kind = Declaration::Kind::InstalledViewScheme;
+  result.installedDeclaration = &row;
   result.name = row.name;
   result.isPublic = result.explicitPublic = true;
   result.span = span;
-  for (const auto &value : row.statics) {
+  for (const auto &value : row.statics()) {
     SyntaxParameter parameter;
     parameter.name = value.name;
     parameter.span = span;
@@ -53,11 +69,18 @@ declaration(const protocol::FrontendDeclaration &row, Span span, Work &work) {
       parameter.constraint = named(value.sort, span);
     else if (value.kind == "Type")
       parameter.constraint = named("Type", span);
+    else if (value.kind == "Nat")
+      parameter.constraint = named("nat", span);
     else
       return refuse("installed static parameter kind has no source form", span);
     result.parameters.push_back(std::move(parameter));
   }
-  for (const auto &value : row.inputs) {
+  // Installed shells expose their typed slots through the index association;
+  // no ordinary Type telescope, concrete ports, result, or body is invented.
+  if (!row.concrete())
+    return result;
+  const auto &concrete = *row.concrete();
+  for (const auto &value : concrete.inputs) {
     auto type = term(value.type, result.parameters, span);
     if (!type)
       return type.takeError();
@@ -69,8 +92,8 @@ declaration(const protocol::FrontendDeclaration &row, Span span, Work &work) {
     port.span = span;
     result.inputs.push_back(std::move(port));
   }
-  if (row.output) {
-    auto type = term(*row.output, result.parameters, span);
+  if (concrete.output) {
+    auto type = term(*concrete.output, result.parameters, span);
     if (!type)
       return type.takeError();
     SyntaxPort port;
@@ -81,8 +104,8 @@ declaration(const protocol::FrontendDeclaration &row, Span span, Work &work) {
   }
   // A primitive declaration keeps the primitive path and its agreement checks;
   // a rule association has no body.
-  if (!row.rule)
-    result.primitive = row.primitive;
+  if (!concrete.rule)
+    result.primitive = concrete.primitive;
   return result;
 }
 Expected<SyntaxOperator> notation(const protocol::FrontendNotation &row,
@@ -152,8 +175,8 @@ readInstalledModule(const SourceBuffer &source, SourceId id, Work &work,
     for (const auto &method : protocol::serviceMethodDeclarations()) {
       if (method.constructor != row.identity)
         continue;
-      if (row.rule != protocol::FrontendSignature::RandomConstructor ||
-          row.statics.size() != 1)
+      if (row.rule() != protocol::FrontendSignature::RandomConstructor ||
+          row.statics().size() != 1)
         return refuse("managed method requires a service constructor", span);
       if (auto error = work.count(work.declarations, work.limits.declarations,
                                   "declaration count", span))
@@ -177,7 +200,7 @@ readInstalledModule(const SourceBuffer &source, SourceId id, Work &work,
       output.span = span;
       output.type =
           named(method.signature == protocol::ServiceSignature::RandomDraw
-                    ? row.statics.front().name
+                    ? row.statics().front().name
                     : "index",
                 span);
       if (method.signature == protocol::ServiceSignature::RandomIndices) {

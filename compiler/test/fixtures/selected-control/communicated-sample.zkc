@@ -1,0 +1,10 @@
+domain F = field("bls12-381.fr")
+pub protocol Run roles(P,V)(coins: Random<F> @P) -> (bool, F) @(P,V):
+    sample <- coins.draw()
+    received <- send sample from P to V
+    common = @(P = sample, V = received)
+    result = if common == common:
+        true
+    else:
+        false
+    return (result, common)

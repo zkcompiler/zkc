@@ -37,14 +37,17 @@ def analyze (definitions : List CheckedDefinition) : Except String Selection := 
   let spec ← one "collection-operation" (collection.raw.operations.filterMap fun op =>
     match op with | .collect spec => some spec | _ => none)
   let computation ← one "collection-callback" (← children definitions spec.bodyHelper)
-  let wrapper ← children definitions MapPrefixBodies.foldWrapperHelper
+  let wrapperDefinition ← one "restriction-wrapper" (← children definitions MapPrefixBodies.prefixHelper)
+  let wrapper ← children definitions wrapperDefinition.helper
   let fold ← one "prefix-fold" (wrapper.filter fun definition =>
     definition.raw.operations.any fun op => match op with | .fold _ => true | _ => false)
+  let foldSpec ← one "restriction-operation" (fold.raw.operations.filterMap fun op =>
+    match op with | .fold spec => some spec | _ => none)
   let terminal ← children definitions SumcheckHelperBodies.checkTableHelper
   let values ← one "values-realization" (terminal.filter fun definition =>
     definition.helpers.contains MapPrefixBodies.valuesHelper)
   return ⟨⟨collection.name, spec.domain.name, spec.body, computation.name⟩,
-    ⟨fold.name, values.name⟩⟩
+    ⟨fold.name, values.name, ⟨wrapperDefinition.name, foldSpec.domain.name, foldSpec.step⟩⟩⟩
 
 def source (definitions : List CheckedDefinition) (table : String) : Except String String := do
   let selected ← analyze definitions
@@ -53,7 +56,8 @@ def source (definitions : List CheckedDefinition) (table : String) : Except Stri
   return "abbrev collectBindings : MultilinearCollectBodies.Bindings :=\n  ⟨" ++
     ", ".intercalate ([c.collection, c.domain, c.callback, c.computation].map quoted) ++ "⟩\n\n" ++
     "abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=\n  ⟨" ++
-    ", ".intercalate ([p.fold, p.values].map quoted) ++ "⟩\n\n" ++
+    ", ".intercalate ([p.fold, p.values].map quoted) ++ ", ⟨" ++
+    ", ".intercalate ([p.symbols.wrapper, p.symbols.domain, p.symbols.step].map quoted) ++ "⟩⟩\n\n" ++
     "theorem first_bodies : MapFirstContracts.Bodies " ++ table ++ " collectBindings := by\n  bind_structured_bodies\n\n" ++
     "theorem prefix_bodies : MapPrefixContracts.Bodies " ++ table ++ " prefixBindings := by\n  bind_structured_bodies\n\n" ++
     "theorem producer_bodies : SumcheckUnitContracts.Bodies " ++ table ++ " where\n" ++

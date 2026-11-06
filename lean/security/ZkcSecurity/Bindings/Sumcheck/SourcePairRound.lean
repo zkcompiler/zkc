@@ -17,6 +17,7 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured SumcheckReferenceInstallation TableComponent
 open ZkcSecurity.Source
 
+variable {foldNames : MultilinearBodies.FoldNames}
 variable (model : DomainModel) [fieldLaw : Fact (IsField (model.Field field))]
 local instance : Field (model.Field field) := fieldLaw.out.toField
 variable {Frame : Type}
@@ -38,7 +39,7 @@ theorem advance_honest {n : Nat} (state : PrefixState (model.Field field) Frame 
 shape and producer arithmetic bounds. No validator handler is postulated. -/
 theorem round {n : Nat} (definitions : List CheckedDefinition)
     (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (ctx : ProtocolContext) (distinctP : NormalForm.RosterDistinct ctx 0 2)
     (distinctV : NormalForm.RosterDistinct ctx 1 2)

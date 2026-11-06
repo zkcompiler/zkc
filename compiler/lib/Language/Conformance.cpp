@@ -13,7 +13,8 @@ bool memberInputs(Semantics &types, const Declaration &required,
                       "member input or result contract differs from interface",
                       provided.span);
   };
-  if (!types.charge(required.inputOrder.size() + required.domainInputs.size() +
+  if (!types.charge(required.inputOrder.size() +
+                        required.descriptorInputs.size() +
                         required.scopedInputs.size() + required.inputs.size() +
                         required.outputs.size() + required.services.size() + 1,
                     provided.span))
@@ -23,9 +24,9 @@ bool memberInputs(Semantics &types, const Declaration &required,
       required.inputs.size() != provided.inputs.size() ||
       required.outputs.size() != provided.outputs.size() ||
       required.services.size() != provided.services.size() ||
-      bool(required.domainResult) != bool(provided.domainResult) ||
+      bool(required.descriptorResult) != bool(provided.descriptorResult) ||
       required.inputOrder.size() != provided.inputOrder.size() ||
-      required.domainInputs.size() != provided.domainInputs.size() ||
+      required.descriptorInputs.size() != provided.descriptorInputs.size() ||
       required.scopedInputs.size() != provided.scopedInputs.size())
     return refuse();
   for (unsigned i = 0; i < required.inputOrder.size(); ++i)
@@ -33,6 +34,13 @@ bool memberInputs(Semantics &types, const Declaration &required,
         required.inputOrder[i].index != provided.inputOrder[i].index)
       return refuse();
   auto sameType = [&](const Type &expected, const Type &actual) {
+    auto resolved = types.substitute(expected, bindings, provided.span);
+    return resolved && (*resolved == actual || refuse());
+  };
+  auto sameContract = [&](const DescriptorContract &expected,
+                          const DescriptorContract &actual) {
+    if (!types.chargeContract(actual, provided.span))
+      return false;
     auto resolved = types.substitute(expected, bindings, provided.span);
     return resolved && (*resolved == actual || refuse());
   };
@@ -68,11 +76,12 @@ bool memberInputs(Semantics &types, const Declaration &required,
     if (!sameType(a.field, b.field))
       return false;
   }
-  if (required.domainResult &&
-      !sameType(*required.domainResult, *provided.domainResult))
+  if (required.descriptorResult &&
+      !sameContract(*required.descriptorResult, *provided.descriptorResult))
     return false;
-  for (unsigned i = 0; i < required.domainInputs.size(); ++i)
-    if (!sameType(required.domainInputs[i].item, provided.domainInputs[i].item))
+  for (unsigned i = 0; i < required.descriptorInputs.size(); ++i)
+    if (!sameContract(required.descriptorInputs[i].contract,
+                      provided.descriptorInputs[i].contract))
       return false;
   for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
     const auto &expected = required.scopedInputs[i];
@@ -138,7 +147,7 @@ bool memberContract(Semantics &types, const Declaration &module,
           provided.parameters.size() - providedOwner ||
       required.inputs.size() != provided.inputs.size() ||
       required.outputs.size() != provided.outputs.size() ||
-      bool(required.domainResult) != bool(provided.domainResult))
+      bool(required.descriptorResult) != bool(provided.descriptorResult))
     return refuse("implementation signature arity differs");
   if (!types.charge(required.parameters.size() + provided.parameters.size() + 1,
                     provided.span))
@@ -193,6 +202,8 @@ bool memberContract(Semantics &types, const Declaration &module,
       if (!actual || !types.chargeType(*actual, provided.span))
         return false;
       clearPermissionAssumptions(*actual);
+      if (!types.chargeIdentity(*actual, provided.span))
+        return false;
       admissions.emplace(obligation.boundary, typeIdentity(*actual));
     }
   }
@@ -208,8 +219,12 @@ bool memberContract(Semantics &types, const Declaration &module,
       return false;
     if (*admitted == Semantics::Admission::Accepted)
       continue;
-    if (*admitted == Semantics::Admission::Rejected ||
-        !admissions.count({obligation.boundary, typeIdentity(requirement)}))
+    if (*admitted == Semantics::Admission::Rejected)
+      return refuse(
+          "implementation strengthens boundary admission requirements");
+    if (!types.chargeIdentity(requirement, provided.span))
+      return false;
+    if (!admissions.count({obligation.boundary, typeIdentity(requirement)}))
       return refuse(
           "implementation strengthens boundary admission requirements");
   }
@@ -265,7 +280,10 @@ bool memberContract(Semantics &types, const Declaration &module,
     if (!types.entails(&available, bound, diagnostic))
       return false;
   for (const auto &bound : provided.bounds)
-    if (!types.assumptions(available, bound, {}, provided.span))
+    if (!(provided.kind == Declaration::Kind::View && provided.descriptorResult
+              ? types.structuralAssumptions(available, bound, {}, provided.span,
+                                            diagnostic)
+              : types.assumptions(available, bound, {}, provided.span)))
       return false;
   for (const auto &bound : provided.permissionBounds) {
     if (!types.chargeType(bound.type, provided.span))
@@ -292,8 +310,8 @@ bool memberContract(Semantics &types, const Declaration &module,
                   !refuse("implementation strengthens parameter permissions")))
       return false;
   }
-  if (required.kind == Declaration::Kind::DomainFunction)
-    return bool(provided.domainDefinition) ||
+  if (required.kind == Declaration::Kind::View && required.descriptorResult)
+    return bool(provided.descriptorDefinition) ||
            refuse("implementation domain recipe missing");
   if (!provided.body || required.completes != provided.completes)
     return refuse("implementation outcome contract differs");

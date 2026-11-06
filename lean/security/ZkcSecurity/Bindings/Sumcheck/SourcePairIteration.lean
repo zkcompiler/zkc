@@ -18,6 +18,7 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured SumcheckReferenceInstallation TableComponent
 open ZkcSecurity.Source
 
+variable {foldNames : MultilinearBodies.FoldNames}
 variable (model : DomainModel) [fieldLaw : Fact (IsField (model.Field field))]
 local instance : Field (model.Field field) := fieldLaw.out.toField
 variable {Frame : Type}
@@ -68,7 +69,7 @@ def validatorStep (definitions : List CheckedDefinition)
     (site := SumcheckVerifierBodies.repeatSite)
 
 theorem step (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (ctx : ProtocolContext) (distinctP : NormalForm.RosterDistinct ctx 0 2)
     (distinctV : NormalForm.RosterDistinct ctx 1 2)
@@ -98,7 +99,7 @@ theorem step (definitions : List CheckedDefinition) (linked : DeclarationsLinked
     · exact SourceIteration.mask_state model ctx maximum _ _)
 
 theorem loop (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
-    (bodies : Bodies definitions MultilinearSourceBindings.sumcheck)
+    (bodies : Bodies definitions (MultilinearSourceBindings.sumcheckFor foldNames))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
     (ctx : ProtocolContext) (distinctP : NormalForm.RosterDistinct ctx 0 2)
     (distinctV : NormalForm.RosterDistinct ctx 1 2)

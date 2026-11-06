@@ -1,6 +1,8 @@
 module
 
 public import ZkcSecurityTools.SubjectABI
+public import ZkcSecurityTools.SourceInputReadback
+public import Zkc.Semantics.ExactRefinement
 public meta import Lean.Elab.Tactic
 
 @[expose] public section
@@ -44,6 +46,14 @@ def clauseCoordinates {model : DomainModel} {original : Snapshot} {imported : Im
     if selector.direction == .input then some selector.port else none).eraseDups
   else []
 
+/-- A selected callback receives the same captured tuple in either arm. -/
+theorem selected_apply {A B : Type} (p : Prop) [Decidable p] (yes no : A → B) (a : A) :
+    (if p then yes else no) a = if p then yes a else no a := by split <;> rfl
+
+theorem selected_equal {A : Type} (p : Prop) [Decidable p] (yes no value : A) :
+    ((if p then yes else no) = value) = (if p then yes = value else no = value) := by
+  split <;> rfl
+
 end ZkcSecurity.Tools.SourceInputClauses
 
 @[expose] public meta section
@@ -64,15 +74,38 @@ when the value expressions have already reduced to mathematical leaves. -/
 def exposeRowType (type : Expr) : MetaM Expr :=
   withTransparency .all <| reduce type (skipTypes := false)
 
+/-- Reduce completed process steps without opening a symbolic selection or the
+continuation of an unreached step. Each replacement is definitionally equal
+to the original expression. -/
+partial def exposeSemantics (expression : Expr) (mathematical : Bool) : MetaM Expr := do
+  if expression.isAppOf ``ite then return expression
+  let head ← withCanUnfoldPred (fun _ declaration => pure
+      (declaration.name != ``OpaqueInstance.holds && declaration.name != ``Evaluation.invokeCallbackOn &&
+       declaration.name != ``Evaluation.invokeCallback && declaration.name != ``PIR.Process.bind &&
+        !(mathematical && protectedConstants.contains declaration.name))) <|
+    withTransparency .all <| whnf expression
+  if head.isAppOf ``Evaluation.invokeCallbackOn || head.isAppOf ``Evaluation.invokeCallback then
+    let args := head.getAppArgs
+    let callback := args[args.size - 2]!
+    if callback.isAppOf ``ite then return mkApp callback args.back!
+    return ← exposeSemantics (mkApp callback args.back!) mathematical
+  unless head.isAppOfArity ``PIR.Process.bind 5 do return head
+  let arguments := head.getAppArgs
+  let source ← exposeSemantics arguments[3]! false
+  if source.isAppOf ``PIR.Process.done then
+    return ← exposeSemantics (mkApp arguments[4]! source.getAppArgs.back!) mathematical
+  if source.isAppOf ``PIR.Process.halt then
+    return mkAppN (mkConst ``PIR.Process.halt) #[arguments[0]!, arguments[2]!, source.getAppArgs.back!]
+  return mkAppN head.getAppFn (arguments.set! 3 source)
+
 partial def reduceSemantics (expression : Expr) : MetaM Expr := do
   if expression.isAppOf ``OfNat.ofNat then return expression
   if (← isProof expression) then return expression
   if (← isType expression) && !(← isProp expression) then return ← exposeRowType expression
   let type ← whnf (← inferType expression)
-  let expression ← if type.isConstOf ``Bool || type.isConstOf ``Nat || (← isProp expression) then
-    withCanUnfoldPred (fun _ declaration => pure (!protectedConstants.contains declaration.name)) <|
-      withTransparency .all <| whnf expression
-    else withTransparency .all <| whnf expression
+  let mathematical := type.isConstOf ``Bool || type.isConstOf ``Nat || (← isProp expression)
+  let expression ← exposeSemantics expression mathematical
+  if expression.isAppOf ``OpaqueInstance.holds then return expression
   match expression with
   | .app .. =>
       let mut arguments := expression.getAppArgs
@@ -125,9 +158,30 @@ def normalizationContext : MetaM Simp.Context := do
   for name in [``Fin.forall_fin_succ,
       ``naturalPowerOfTwo_eq_true, ``Option.some.injEq, ``Values.cons.injEq,
       ``PIR.Process.done.injEq, ``decide_eq_true_eq, ``Bool.and_eq_true,
-      ``option_elim_constant, ``option_elim_eq_some] do
+      ``option_elim_constant, ``option_elim_eq_some, ``selected_equal,
+      ``PIR.Process.bind_ite, ``PIR.Process.bind.eq_1, ``PIR.Process.bind.eq_2,
+      ``ite_false_right, ``ite_false_left] do
     theorems ← theorems.addConst name
   Simp.mkContext { maxSteps := 100000 } #[theorems] (← getSimpCongrTheorems)
+
+/-- Push application through an actual conditional callback. The callback
+type and decision instance come directly from the term. The kernel checks
+the resulting equality even when the row type has a source-specific alias. -/
+def simplifySemantics (expression : Expr) (context : Simp.Context) : MetaM Simp.Result := do
+  let methods := Simp.mkDefaultMethodsCore (← normalizationSimprocs)
+  let (result, _) ← Simp.main expression context (methods := { methods with pre := fun term => do
+    if term.isAppOf ``OpaqueInstance.holds then return .done { expr := term }
+    if term.isAppOfArity ``ite 6 then
+      let args := term.getAppArgs
+      let type ← whnf args[0]!
+      if type.isForall && !type.bindingBody!.hasLooseBVars then
+        let law := mkAppN (mkConst ``selected_apply)
+          #[type.bindingDomain!, type.bindingBody!, args[1]!, args[2]!, args[3]!, args[4]!, args[5]!]
+        let some (_, _, right) := (← inferType law).eq?
+          | throwError "source-input-clauses: invalid conditional application law"
+        return .visit { expr := right, proof? := some law }
+    methods.pre term })
+  return result
 
 partial def normalize (expression : Expr) : MetaM Simp.Result := do
   let context ← normalizationContext
@@ -151,10 +205,15 @@ partial def normalize (expression : Expr) : MetaM Simp.Result := do
         return .continue (some (.forallE name domain body info))
     return .continue)
   let (prunedResult, _) ← simp pruned context (← normalizationSimprocs)
-  let mut result ← initial.mkEqTrans prunedResult
+  let reads ← Simp.mkContext {} #[{}] (← getSimpCongrTheorems)
+  let methods := Simp.mkDefaultMethodsCore #[]
+  let (readback, _) ← Simp.main prunedResult.expr reads (methods := { methods with pre := fun term => do
+    if term.isAppOf ``Subject.inputClause then return .done (← SourceInputReadback.expandInput term)
+    return .continue })
+  let mut result ← (← initial.mkEqTrans prunedResult).mkEqTrans readback
   for _ in [:8] do
     let reduced ← reduceSemantics result.expr
-    let (next, _) ← simp reduced context (← normalizationSimprocs)
+    let next ← simplifySemantics reduced context
     let changed := next.expr != result.expr
     result ← result.mkEqTrans next
     unless changed do return result
@@ -173,6 +232,7 @@ presentation would conceal a missing mathematical interpretation. -/
 partial def checkFinished (expression : Expr) : MetaM Unit := do
   if (← isProof expression) then return
   if (← isType expression) && !(← isProp expression) then return
+  if expression.isAppOf ``OpaqueInstance.holds then return ← checkFinished expression.getAppArgs.back!
   if let .const name _ := expression.getAppFn then
     if name == ``FormulaBinding.invokeRelationOn || name == ``invoke ||
         name == ``Evaluation.operationOn || name == ``Region.denote ||
@@ -238,34 +298,47 @@ partial def clauseIndex (expression : Expr) : Option Expr :=
   | .forallE _ _ b _ | .lam _ _ b _ => clauseIndex b
   | _ => none
 
-/-- Every optional branch carries an equality proved from the same clause. -/
-partial def splitPresentation (positions : List Nat) (row : Expr)
-    (source : Expr → TermElabM Expr) (offset : Nat := 0) : TermElabM Simp.Result := do
+/-- Focus one coordinate of the actual typed input row without splitting the
+other options. Replacing it reconstructs the original constructor spine. -/
+def rowCoordinate (row : Expr) (position : Nat) : MetaM (Expr × (Expr → Expr)) := do
   let row ← whnf row
-  if row.isAppOf ``Values.nil then
-    let result ← normalize (← source row)
+  unless row.isAppOf ``Values.cons do
+    throwError "source-input-clauses: selector is outside the input row"
+  let arguments := row.getAppArgs
+  match position with
+  | 0 => return (arguments[4]!, fun value => mkAppN row.getAppFn (arguments.set! 4 value))
+  | n + 1 =>
+    let (value, put) ← rowCoordinate arguments[5]! n
+    return (value, fun newValue => mkAppN row.getAppFn (arguments.set! 5 (put newValue)))
+termination_by position
+
+/-- Visit input coordinates in the retained selector order. A missing argument
+makes the ordered read fail, independently of every later coordinate. The proof
+for that arm checks the original clause with the remaining values symbolic. -/
+def splitPresentation (positions : List Nat) (row : Expr)
+    (source : Expr → TermElabM Expr) : TermElabM Simp.Result := do
+  let finish (value : Expr) := do
+    let result ← normalize (← source value)
     checkFinished result.expr
     return result
-  unless row.isAppOf ``Values.cons do throwError "source-input-clauses: expected constructor row"
-  let arguments := row.getAppArgs
-  let head := arguments[4]!
-  let tail := arguments[5]!
-  let advance (value : Expr) := splitPresentation positions tail (fun rest =>
-    source (mkAppN row.getAppFn ((arguments.set! 4 value).set! 5 rest))) (offset + 1)
-  let present ← whnf head
-  if !positions.contains offset || present.isAppOf ``Option.none || present.isAppOf ``Option.some then
-    return ← advance head
-  let optionType ← whnf (← inferType head)
-  let valueType := optionType.getAppArgs[0]!
-  let absent ← advance (← mkAppOptM ``Option.none #[some valueType])
-  let (present, presentProof) ← withLocalDeclD `value valueType fun value => do
-    let result ← advance (← mkAppM ``Option.some #[value])
-    return (← mkLambdaFVars #[value] result.expr, ← mkLambdaFVars #[value] (← result.getProof))
-  let predicate ← withLocalDeclD `input optionType fun value => do
-    mkLambdaFVars #[value] (← source (mkAppN row.getAppFn (arguments.set! 4 value)))
-  let proof ← mkAppM ``option_presentation
-    #[head, predicate, absent.expr, present, ← absent.getProof, presentProof]
-  return { expr := ← mkAppM ``Option.elim #[head, absent.expr, present], proof? := some proof }
+  match positions with
+  | [] => finish row
+  | pos :: rest =>
+    let (head, put) ← rowCoordinate row pos
+    let actual ← whnf head
+    if actual.isAppOf ``Option.none then return ← finish row
+    if actual.isAppOf ``Option.some then return ← splitPresentation rest row source
+    let optionType ← whnf (← inferType head)
+    let valueType := optionType.getAppArgs[0]!
+    let absent ← finish (put (← mkAppOptM ``Option.none #[some valueType]))
+    let (present, presentProof) ← withLocalDeclD `value valueType fun value => do
+      let result ← splitPresentation rest (put (← mkAppM ``Option.some #[value])) source
+      return (← mkLambdaFVars #[value] result.expr, ← mkLambdaFVars #[value] (← result.getProof))
+    let predicate ← withLocalDeclD `input optionType fun value => do
+      mkLambdaFVars #[value] (← source (put value))
+    let proof ← mkAppM ``option_presentation
+      #[head, predicate, absent.expr, present, ← absent.getProof, presentProof]
+    return { expr := ← mkAppM ``Option.elim #[head, absent.expr, present], proof? := some proof }
 
 partial def interpretExpanded (subject row inputRow expression : Expr) : TermElabM Simp.Result := do
   if expression.isAppOfArity ``And 2 then

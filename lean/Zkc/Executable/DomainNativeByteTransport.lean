@@ -93,7 +93,7 @@ theorem checked_validate_prunes
     (program : Structured.Program) (context : Context) (initial : History F G)
     (challenge : History F G → m F) (vocabulary : Vocabulary) (participant : Participant) (validator : Validator)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
-    (prepared : ∀ name ∈ Instruction.helperList participant.instructions,
+    (prepared : ∀ name ∈ Instruction.helpers participant.instructions,
       Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)
     (lowered : Lowered) (final : NativeScope)
     (checked : checkNativeLowering program context vocabulary participant validator = .ok (lowered, final))
@@ -127,7 +127,7 @@ theorem checked_execute_sufficient
     (program : Structured.Program) (context : Context) (initial : History F G)
     (challenge : History F G → m F) (vocabulary : Vocabulary) (participant : Participant) (validator : Validator)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
-    (prepared : ∀ name ∈ Instruction.helperList participant.instructions,
+    (prepared : ∀ name ∈ Instruction.helpers participant.instructions,
       Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)
     (lowered : Lowered) (final : NativeScope)
     (checked : checkNativeLowering program context vocabulary participant validator = .ok (lowered, final))
@@ -150,7 +150,7 @@ theorem checked_execute_static
     (program : Structured.Program) (context : Context) (initial : History F G)
     (challenge : History F G → m F) (vocabulary : Vocabulary) (participant : Participant) (validator : Validator)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
-    (prepared : ∀ name ∈ Instruction.helperList participant.instructions,
+    (prepared : ∀ name ∈ Instruction.helpers participant.instructions,
       Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)
     (lowered : Lowered) (final : NativeScope)
     (checked : checkNativeLowering program context vocabulary participant validator = .ok (lowered, final))
@@ -174,7 +174,7 @@ theorem checked_validate_sufficient
     (program : Structured.Program) (context : Context) (initial : History F G)
     (challenge : History F G → m F) (vocabulary : Vocabulary) (participant : Participant) (validator : Validator)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
-    (prepared : ∀ name ∈ Instruction.helperList participant.instructions,
+    (prepared : ∀ name ∈ Instruction.helpers participant.instructions,
       Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)
     (lowered : Lowered) (final : NativeScope)
     (checked : checkNativeLowering program context vocabulary participant validator = .ok (lowered, final))

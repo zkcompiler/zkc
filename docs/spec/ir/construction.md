@@ -5,6 +5,81 @@ This is a native contract. [Compilation](../../compiler/construction.md),
 and [attempts](../runtime/attempts.md) define separate boundaries.
 [Proof usage](../../runtime/proofs.md) explains their application.
 
+## Common preparation and selected control
+
+Construction and physical layout are prepared together over the admitted,
+immutable source and actual selected callable bodies. Dependencies include
+recipe state, captures, guards, raw byte ranges and order, decoded values,
+generated slots, omissions, and root/child initialization and completion.
+Independent acyclicity of recipe and layout dependencies is insufficient: their
+union must satisfy the selected execution order before materialization. A
+prepared analysis borrows its exact source lifetime and consumes a bounded
+allowance; it is neither an executable replacement program nor a serialized
+certificate. Exhaustion cannot establish a partial preparation result and is
+terminal for that analysis across subsequent stages.
+
+A declarative polynomial realization call retains all actual call inputs and
+the referenced finite-ring recipe body before materialization. Its symbolic
+slot dependencies do not assert equality with caller values. The analysis
+remains incomplete until the independent polynomial recipe checker checks the
+actual expansion and the retained checked realization supplies the actual
+scoped bodies. Reading those bodies extends the original dependency relation
+under the same remaining allowance, with both source owners kept alive.
+
+Interface, public-input and service selections are validated before joint
+preparation. Selected queries must deliver their actual SSA result at the next
+communication frontier; malformed deliveries and intervening producer messages
+retain the native proof reverse-message and prefix refusals.
+
+A materialized candidate is checked independently against that source. Actual
+operations, operands, callbacks, state successors, observations and failure
+prefixes must satisfy the selected contract. The candidate's metadata or the
+producer's selected recipe cannot stand in for those checks. Raw-byte and
+decoded-value observations remain distinct. Private generation state and
+setup/key/session reuse scopes do not become public structural values; copying
+a wrapper cannot renew one-use authority.
+
+Selected construction obeys the following rules. Their native and target
+coverage is recorded separately in [status](../../status.md); a structural
+branch interface alone does not establish construction support.
+
+- Static inventories include every arm once in declaration order. A reached
+  execution follows only its selected arm; frames, effects and work follow that
+  execution. Dormant-arm formation remains required.
+- Every paired branch requires checked selector correspondence at its entry
+  frontier, including event-free branches. Full selector-value correspondence
+  can justify paired variant payloads; tag equality alone cannot. A relation
+  learned in an arm or after the branch cannot justify entry.
+- Each arm begins with its own capture and payload environment. Results are
+  related only when the corresponding yields are related in every arm; result
+  positions need not coincide across participants. Arm-local facts do not leak
+  into siblings or become unconditional facts after the join.
+- Affected transcript, codec and replica state enters through actual captures
+  and exits through actual continuing yields. Stopped executions have no normal
+  successor and retain reached work and effects. Conditional participant
+  completion runs its finalizer only on completion, not at every arm boundary.
+- Conditional obligations and counts use bounded shared summaries rather than
+  enumerating combinations of independent branches. Source order, current
+  allowance and the actual substitution remain part of each query.
+- Logical origins preserve typed application, repeat and branch frames. A
+  branch names its alternative but introduces no repeat coordinate. Static
+  metadata and actual participant arm/site correspondence are both checked.
+- Oracle stores, reconstructed requests and batch windows remain local to their
+  selected arm. Moving a later failing request before an earlier reached
+  request requires the selected observation law; storage disjointness alone
+  cannot justify it.
+- Unsupported explicit-input binding, loop-carried selector correspondence,
+  tag-only payload reasoning and target completion retain named refusals until
+  their actual rules and consumers are implemented. EVM support for selected
+  arms does not by itself support `protocol.finish_if`.
+
+Source stop, completed false, conditional participant completion, decode or
+authentication failure, and resource exhaustion remain distinct outcomes.
+Preservation and honest completeness state the selected observation and
+resource relation; arbitrary early rejection cannot satisfy completeness.
+Neither these checks nor a successful honest witness establishes a
+cryptographic security or privacy theorem.
+
 ## Ordered construction
 
 A selected challenge construction declares which owner-local entropy operations

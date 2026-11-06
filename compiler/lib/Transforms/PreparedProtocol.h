@@ -23,6 +23,10 @@ class PreparedProtocol {
   static mlir::OwningOpRef<mlir::ModuleOp>
   projectOwned(mlir::OwningOpRef<mlir::ModuleOp>, bool simplify,
                MathematicalSelectionPolicy);
+  // Only the immutable realized owner may use this route. Project its exact
+  // associated common subject before any optional Participant simplification.
+  static mlir::OwningOpRef<mlir::ModuleOp>
+  projectAssociated(mlir::ModuleOp, bool simplify, MathematicalSelectionPolicy);
 
 public:
   static std::optional<PreparedProtocol>

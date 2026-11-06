@@ -1,5 +1,8 @@
 #include "HelperResults.h"
+#include "DescriptorClosure.h"
+#include "DescriptorFrames.h"
 #include "FiniteCardinality.h"
+#include "FormationCursor.h"
 #include "MathematicalFacts.h"
 #include "llvm/ADT/ScopeExit.h"
 
@@ -18,9 +21,6 @@ class HelperResults::Extraction {
   facts::Work work;
   std::vector<ResultShape> shapes{ResultShape{}};
   std::map<unsigned, unsigned> bodyDomains;
-  using FactoryKey =
-      std::tuple<unsigned, std::vector<unsigned>, std::vector<unsigned>>;
-  std::map<FactoryKey, unsigned> factories;
 
   bool enter(unsigned depth) {
     if (depth > types.work.limits.expressionDepth)
@@ -70,32 +70,18 @@ class HelperResults::Extraction {
               false};
     return axis == 0 ? result.shape : ResultShape{};
   }
-  unsigned domain(const DomainBinding &node, ArrayRef<ValueId> operands,
+  unsigned domain(const DescriptorBinding &node, ArrayRef<ValueId> operands,
                   ArrayRef<unsigned> children, unsigned depth) {
     if (pending || !enter(depth))
       return 0;
-    if (node.kind == DomainBinding::Kind::Application) {
-      if (!node.factory ||
-          node.factory->declaration.index >= reader.declarations.size())
-        return remember({});
-      unsigned index = node.factory->declaration.index;
-      std::vector<unsigned> inputs;
-      for (auto operand : operands)
-        inputs.push_back(operand.index);
-      FactoryKey key{index, std::move(inputs), children.vec()};
-      if (auto found = factories.find(key); found != factories.end())
-        return found->second;
-      const auto &callee = reader.declarations[index];
-      if (callee.abstract || !callee.domainDefinition)
-        return remember({});
-      const auto &recipe = *callee.domainDefinition;
-      auto result = domains(recipe.bindings, recipe.result, operands, children,
-                            depth + 1);
-      if (!pending && !types.diagnostic)
-        factories.emplace(std::move(key), result);
-      return result;
+    if (!finiteDescriptorItem(node.contract)) {
+      types.fail("source.descriptor", "finite summary requires a Finite leaf",
+                 span);
+      return 0;
     }
-    DomainBinding mapped = node;
+    if (!chargeDescriptorBindingCopy(types, node))
+      return 0;
+    DescriptorBinding mapped = node;
     mapped.operands = operands.vec();
     auto view = cardinalityNode(mapped);
     if (view.kind == facts::DomainKind::Zip)
@@ -130,7 +116,7 @@ class HelperResults::Extraction {
     }
     return remember(std::move(result));
   }
-  unsigned domains(ArrayRef<DomainBinding> nodes, unsigned selected,
+  unsigned domains(ArrayRef<DescriptorBinding> nodes, unsigned selected,
                    ArrayRef<ValueId> data, ArrayRef<unsigned> parameters,
                    unsigned depth) {
     if (!enter(depth) || !types.charge(nodes.size(), span))
@@ -161,12 +147,12 @@ class HelperResults::Extraction {
         operands.push_back(data[operand.index]);
       }
       for (auto child : node.children) {
-        if (child >= nested.size()) {
+        if (child.node >= nested.size()) {
           types.fail("source.scoped-domain",
                      "helper domain child coverage differs", span);
           return 0;
         }
-        children.push_back(nested[child]);
+        children.push_back(nested[child.node]);
       }
       nested.push_back(domain(node, operands, children, depth + 1));
     }
@@ -177,24 +163,45 @@ class HelperResults::Extraction {
       return 0;
     if (auto found = bodyDomains.find(selected); found != bodyDomains.end())
       return found->second;
-    if (selected >= body.domainBindings.size()) {
+    if (selected >= body.descriptorBindings.size()) {
       types.fail("source.scoped-domain", "helper domain is outside its body",
                  span);
       return 0;
     }
-    const auto &node = body.domainBindings[selected];
-    unsigned result;
-    if (node.parameter) {
-      result = remember({{}, 0, *node.parameter, {}, false});
-    } else {
-      SmallVector<unsigned> children;
-      for (auto child : node.children) {
-        if (pending || types.diagnostic)
-          return 0;
-        children.push_back(bodyDomain(child, depth + 1));
-      }
-      result = domain(node, node.operands, children, depth + 1);
+    auto formation = formDescriptor(types, reader.declarations, body, selected,
+                                    {}, &origins);
+    if (!formation) {
+      if (!types.diagnostic)
+        types.fail("source.scoped-domain",
+                   "helper descriptor formation differs", span);
+      else if (types.diagnostic->code != "source.limit" &&
+               types.diagnostic->code != "source.cancelled")
+        types.diagnostic->code = "source.scoped-domain";
+      return 0;
     }
+    auto parameter = [&](std::optional<unsigned> port,
+                         const DescriptorContract &) {
+      return remember({{}, 0, port, {}, false});
+    };
+    auto leaf = [&](const DescriptorBinding &node, ArrayRef<ValueId> operands,
+                    ArrayRef<unsigned> children) -> std::optional<unsigned> {
+      // An open structural application has no Finite cardinality theorem.
+      // Retain its typed dependencies in formation without inventing a fact.
+      if (!finiteDescriptorItem(node.contract))
+        return remember({});
+      auto result = domain(node, operands, children, depth + 1);
+      return pending || types.diagnostic ? std::nullopt : std::optional(result);
+    };
+    auto compose = [&](DescriptorBinding::Kind, const DescriptorContract &,
+                       ArrayRef<Type>,
+                       ArrayRef<unsigned>) -> std::optional<unsigned> {
+      return remember({});
+    };
+    auto read =
+        readFormation<unsigned>(types, *formation, parameter, leaf, compose);
+    if (!read)
+      return 0;
+    unsigned result = read->selected;
     if (!pending && !types.diagnostic)
       bodyDomains.emplace(selected, result);
     return result;
@@ -239,13 +246,13 @@ class HelperResults::Extraction {
                      : nested->shape.axis == 0 ? actual.shape
                                                : ResultShape{};
     } else if (nested->shape.domain) {
-      if (*nested->shape.domain >= call.domainArguments.size()) {
+      if (*nested->shape.domain >= call.descriptorArguments.size()) {
         types.fail("source.scoped-domain",
                    "helper result domain coverage differs", span);
         return {};
       }
       result.shape =
-          shapes[bodyDomain(call.domainArguments[*nested->shape.domain])];
+          shapes[bodyDomain(call.descriptorArguments[*nested->shape.domain])];
     } else {
       result.shape = nested->shape;
     }
@@ -278,7 +285,7 @@ class HelperResults::Extraction {
                finite->domain) {
       result.shape =
           shapes[domains(finite->domain->nodes, finite->domain->result,
-                         finite->domainOperands, {}, 0)];
+                         finite->descriptorOperands, {}, 0)];
       if (finite->predicate)
         filter(result.shape);
     }

@@ -274,12 +274,12 @@ namespace Tests.IndexServices.Repeated.Source
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:a50e235729dc2e89575ad9abf831d1b8b95a6e012e8c2fa7225eb3e025a0671b"
+  source := "sha256:133a7b929ba2eb8e76c66597974a50ee4b83b94e80ec2b098cfc48b08b3f0376"
   entry := "s14h696e6465785f73657276696365738h5265706561746564"
   domains := []
   relations := []
   bindings := []
-  definitions := [.function ⟨"s14h696e6465785f73657276696365738h5265706561746564", .protocol, .publicDef, [.service "random.koala-bear.ext4-binomial3/0"], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000001"]], [["role00000001"]]⟩, [], some (.protocol ⟨"index_services::Repeated", []⟩), (.block [.instruction (.booleanConstant true) [] [.boolean] [] "", .instruction (.restrict ["role00000001"]) [0] [.boolean] [] "", .instruction (.indexConstant "3") [] [.index] [] "", .instruction (.protocolRepeat 1 3 ["role00000000", "role00000001"] [["role00000001"]]) [0, 1, 3] [.boolean] [.region [.index, .boolean, .service "random.koala-bear.ext4-binomial3/0"] [.boolean] (.block [.instruction (.indexConstant "8") [] [.index] [] "", .instruction (.sampleIndex "role00000001" "random.koala-bear.ext4-binomial3/0") [3, 0] [.index] [] "label_706f736974696f6e", .instruction (.exchange "role00000001" "role00000000") [0] [.index] [] "label_64656c6976657279_0", .instruction (.restrict ["role00000000"]) [0] [.index] [] "", .instruction (.indexEqual) [2, 2] [.boolean] [] "", .instruction (.booleanAnd) [6, 0] [.boolean] [] ""] (.yield [0]))] "s4"] (.ret [0]))⟩]
+  definitions := [.function ⟨"s14h696e6465785f73657276696365738h5265706561746564", .protocol, .publicDef, [.service "random.koala-bear.ext4-binomial3/0"], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000001"]], [["role00000001"]]⟩, [], some (.protocol ⟨"index_services::Repeated", []⟩), (.block [.instruction (.booleanConstant true) [] [.boolean] [] "", .instruction (.restrict ["role00000001"]) [0] [.boolean] [] "", .instruction (.indexConstant "3") [] [.index] [] "", .instruction (.protocolRepeat 1 3 ["role00000000", "role00000001"] [["role00000001"]]) [0, 1, 3] [.boolean] [.region [.index, .boolean, .service "random.koala-bear.ext4-binomial3/0"] [.boolean] (.block [.instruction (.indexConstant "8") [] [.index] [] "", .instruction (.sampleIndex "role00000001" "random.koala-bear.ext4-binomial3/0") [3, 0] [.index] [] "label_706f736974696f6e", .instruction (.exchange "role00000001" "role00000000") [0] [.index] [] "label_64656c6976657279_0", .instruction (.restrict ["role00000000"]) [0] [.index] [] "", .instruction (.call "zks_392204dc39f87acfad882f141c168cae20c93f8b0cb6444f3dfdbb3d25434d33") [5, 2] [.boolean] [] ""] (.yield [0]))] "s4"] (.ret [0]))⟩, .function ⟨"zks_392204dc39f87acfad882f141c168cae20c93f8b0cb6444f3dfdbb3d25434d33", .math, .privateDef, [.boolean, .index], [.boolean], none, [], none, (.block [.instruction (.mathBranch) [0, 1] [.boolean] [.region [.index] [.boolean] (.block [.instruction (.indexEqual) [0, 0] [.boolean] [] ""] (.yield [0])), .region [.index] [.boolean] (.block [.instruction (.booleanConstant false) [] [.boolean] [] ""] (.yield [0]))] ""] (.ret [0]))⟩]
   contracts := [⟨"s14h696e6465785f73657276696365738h5265706561746564", []⟩]
   catalogue := { nominals := [⟨"koala-bear", .field, [], ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "PrimeField"], (some 2130706433)⟩, ⟨"koala-bear.ext4-binomial3", .field, [("BaseField", "koala-bear")], ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "ExtensionField", "IndexRandomness", "IndexBlockRandomness"], (some 2130706433)⟩], services := [⟨"random.koala-bear.ext4-binomial3/0", "koala-bear.ext4-binomial3", ["draw", "index", "indices"]⟩] }
   sourceDeclarations := { records := [], protocols := [], authorities := [] }
@@ -292,22 +292,22 @@ namespace Tests.IndexServices.Repeated.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:a50e235729dc2e89575ad9abf831d1b8b95a6e012e8c2fa7225eb3e025a0671b"
-  candidate := "sha256:59e531f346797ada9f5958f110c90a8b613b46fb1809df8e9a5d73ad87ce7bb2"
+  source := "sha256:133a7b929ba2eb8e76c66597974a50ee4b83b94e80ec2b098cfc48b08b3f0376"
+  candidate := "sha256:535e453a57d7c48b1dfebdd630ee80583544be60c4d15f0af1652fc6a698af58"
   policy := ⟨"s14h696e6465785f73657276696365738h5265706561746564", "role00000000", "role00000001", 0, "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", [0], [], [("label_706f736974696f6e", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"]
   outputs := [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"]
   instructions := [
     ⟨.calculate (.indexConstant 3), [], [.data .index], []⟩,
-    ⟨.loop "s4" 3 [11], [1, 0], [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], [
+    ⟨.loop "s4" 3, [1, 0], [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], [⟨[.data .index, .transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], [
         ⟨.calculate (.indexConstant 8), [], [.data .index], []⟩,
         ⟨.indicesEmpty, [], [.indices], []⟩,
         ⟨.indicesAppend, [5, 2], [.indices], []⟩,
         ⟨.indexChallenge "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0" 8 ⟨"s14h696e6465785f73657276696365738h5265706561746564", [.repeat "s14h696e6465785f73657276696365738h5265706561746564" "s4"], ["query", "s14h696e6465785f73657276696365738h5265706561746564", "label_706f736974696f6e", "input_0", "random.koala-bear.ext4-binomial3/0", "index", "role00000001"]⟩, [3, 4, 6], [.data .index, .transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], []⟩,
         ⟨.indicesEmpty, [], [.indices], []⟩,
         ⟨.indicesAppend, [9, 2], [.indices], []⟩,
-        ⟨.observe "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0" ⟨"s14h696e6465785f73657276696365738h5265706561746564", [.repeat "s14h696e6465785f73657276696365738h5265706561746564" "s4"], ["message", "s14h696e6465785f73657276696365738h5265706561746564", "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"]⟩, [8, 7, 10], [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], []⟩]⟩]
+        ⟨.observe "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0" ⟨"s14h696e6465785f73657276696365738h5265706561746564", [.repeat "s14h696e6465785f73657276696365738h5265706561746564" "s4"], ["message", "s14h696e6465785f73657276696365738h5265706561746564", "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"]⟩, [8, 7, 10], [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], []⟩], [11]⟩]⟩]
   returned := [2]
 
 /-- The exported catalogue rows of the identities the participant names, for
@@ -321,8 +321,8 @@ namespace Tests.IndexServices.Repeated.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:a50e235729dc2e89575ad9abf831d1b8b95a6e012e8c2fa7225eb3e025a0671b"
-  candidate := "sha256:59e531f346797ada9f5958f110c90a8b613b46fb1809df8e9a5d73ad87ce7bb2"
+  source := "sha256:133a7b929ba2eb8e76c66597974a50ee4b83b94e80ec2b098cfc48b08b3f0376"
+  candidate := "sha256:535e453a57d7c48b1dfebdd630ee80583544be60c4d15f0af1652fc6a698af58"
   policy := ⟨"s14h696e6465785f73657276696365738h5265706561746564", "role00000000", "role00000001", 0, "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", [0], [], [("label_706f736974696f6e", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"]
@@ -330,7 +330,7 @@ def participant : Participant where
   instructions := [
     ⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩,
     ⟨.calculate (.indexConstant 3), [], [.data .index], []⟩,
-    ⟨.loop "s4" 3 [16, 14], [2, 1, 0], [.data .boolean, .transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], [
+    ⟨.loop "s4" 3, [2, 1, 0], [.data .boolean, .transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], [⟨[.data .index, .data .boolean, .transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], [
         ⟨.calculate (.indexConstant 8), [], [.data .index], []⟩,
         ⟨.calculate (.indexConstant 8), [], [.data .index], []⟩,
         ⟨.indicesEmpty, [], [.indices], []⟩,
@@ -339,8 +339,9 @@ def participant : Participant where
         ⟨.indicesEmpty, [], [.indices], []⟩,
         ⟨.indicesAppend, [12, 3], [.indices], []⟩,
         ⟨.observe "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0" ⟨"s14h696e6465785f73657276696365738h5265706561746564", [.repeat "s14h696e6465785f73657276696365738h5265706561746564" "s4"], ["message", "s14h696e6465785f73657276696365738h5265706561746564", "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"]⟩, [11, 10, 13], [.transcript "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"], []⟩,
-        ⟨.calculate .indexEqual, [10, 10], [.data .boolean], []⟩,
-        ⟨.calculate .booleanAnd, [4, 15], [.data .boolean], []⟩]⟩]
+        ⟨.mathBranch, [4, 10], [.data .boolean], [⟨[.data .index], [
+            ⟨.calculate .indexEqual, [0, 0], [.data .boolean], []⟩], [1]⟩, ⟨[.data .index], [
+            ⟨.calculate (.booleanConstant false), [], [.data .boolean], []⟩], [1]⟩]⟩], [15, 14]⟩]⟩]
   returned := [3, 4]
 
 /-- The exported catalogue rows of the identities the participant names, for

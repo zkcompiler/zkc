@@ -91,6 +91,7 @@ add_zkc_component(Language
   lib/Language/Syntax.cpp
   lib/Language/LayoutSyntax.cpp
   lib/Language/LayoutReader.cpp
+  lib/Language/LayoutScoped.cpp
   lib/Language/FormalSourceWriter.cpp
   lib/Language/FormalSource.cpp
   lib/Language/LayoutDeclarations.cpp
@@ -143,7 +144,8 @@ add_zkc_component(Language
   lib/Language/SignatureWitness.cpp
   lib/Language/ScopedValues.cpp
   lib/Language/Scoped.cpp
-  lib/Language/FiniteDomains.cpp
+  lib/Language/DescriptorFactories.cpp
+  lib/Language/DescriptorSequence.cpp
   lib/Language/FiniteDefinitions.cpp
   lib/Language/FiniteContracts.cpp
   lib/Language/HelperResults.cpp
@@ -151,8 +153,8 @@ add_zkc_component(Language
   lib/Language/FiniteFormation.cpp
   lib/Language/DataRequirements.cpp
   lib/Language/FiniteDomainArguments.cpp
-  lib/Language/DomainClosure.cpp
-  lib/Language/DomainWitness.cpp
+  lib/Language/DescriptorClosure.cpp
+  lib/Language/DescriptorWitness.cpp
   lib/Language/ValueOrigins.cpp
   lib/Language/ClosureInputs.cpp
   lib/Language/FreePlaces.cpp
@@ -244,6 +246,7 @@ add_zkc_component(IR
   lib/Analysis/ResidueTile.cpp
   lib/Analysis/ComputationUnit.cpp
   lib/Analysis/Finite.cpp
+  lib/Analysis/FiniteClosure.cpp
   lib/Analysis/Computation.cpp
   lib/Analysis/ComputationMeaning.cpp
   lib/Analysis/MathematicalFacts.cpp
@@ -372,9 +375,11 @@ add_zkc_component(Transforms
   lib/Transforms/OracleObservations.cpp
   lib/Transforms/OracleCommonPlan.cpp
   lib/Transforms/OracleCommonRealization.cpp
+  lib/Transforms/OraclePrivateComposite.cpp
   lib/Transforms/RealizedProtocol.cpp
   lib/Transforms/OracleCommonVerification.cpp
   lib/Transforms/OracleRealizationRecord.cpp
+  lib/Transforms/OracleRecordJson.cpp
   lib/Transforms/OracleQueryCapacity.cpp
   lib/Transforms/OracleQueryController.cpp
   lib/Transforms/OracleQueryControllerVerification.cpp
@@ -453,6 +458,7 @@ add_zkc_component(Compiler
   lib/Compiler/PolynomialReduction.cpp
   lib/Compiler/PublicCoin.cpp
   lib/Compiler/PublicCoinGraph.cpp
+  lib/Compiler/NativeConstructionPreparation.cpp
   lib/Compiler/NativeCodec.cpp
   lib/Compiler/NativeCodecVerification.cpp
   lib/Compiler/ConstructionBinding.cpp

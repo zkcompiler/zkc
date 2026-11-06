@@ -76,6 +76,7 @@ bool Checker::retainNotations() {
     record.targetSpan = source.target.span;
     record.isPublic = source.isPublic && !local;
     record.local = local;
+    record.filteredOnly = binding.filteredOnly;
     if (binding.target.module) {
       record.module = printType(*binding.target.module, source.span);
       if (!record.module)
@@ -93,15 +94,18 @@ bool Checker::retainNotations() {
     for (const auto &argument : source.target.arguments)
       record.authoredArguments.push_back(argument.span);
     if (binding.filtered) {
-      if (!source.filtered ||
+      const auto *filteredSource = source.filteredOnly ? &source.target
+                                   : source.filtered   ? &*source.filtered
+                                                       : nullptr;
+      if (!filteredSource ||
           !types.charge(binding.filtered->arguments.size() +
-                            source.filtered->arguments.size() + 1,
+                            filteredSource->arguments.size() + 1,
                         source.span))
         return {};
       NotationTargetRecord target{binding.filtered->target.declaration,
                                   {},
                                   {},
-                                  source.filtered->span,
+                                  filteredSource->span,
                                   {}};
       if (binding.filtered->target.module) {
         target.module =
@@ -118,7 +122,7 @@ bool Checker::retainNotations() {
         }
         target.arguments.push_back(std::move(printed));
       }
-      for (const auto &argument : source.filtered->arguments)
+      for (const auto &argument : filteredSource->arguments)
         target.authoredArguments.push_back(argument.span);
       record.filtered = std::move(target);
     }
@@ -140,6 +144,8 @@ bool Checker::retainNotations() {
     for (const auto &argument : binding.arguments)
       if (argument && !types.chargeType(*argument, source.span))
         return {};
+    if (!chargeOperatorBindingKeys(binding, types, source.span))
+      return {};
     record.identity = operatorBindingKey(binding, output.declarations);
     if (!types.charge(record.identity.size(), source.span))
       return {};
@@ -192,19 +198,25 @@ bool Checker::retainNotations() {
     auto &record = records.scopes[scope];
     for (const auto &import : module.imports) {
       if (!types.charge(import.names.size() + import.operators.size() +
-                            import.notations.size() + import.reductions.size() +
+                            import.notations.size() +
+                            import.notationSelectors.size() +
+                            import.reductions.size() +
                             (import.alias ? import.alias->size() : 0) + 1,
                         import.span))
         return false;
-      for (const auto *names : {&import.names, &import.operators,
-                                &import.notations, &import.reductions})
+      for (const auto *names :
+           {&import.names, &import.operators, &import.notations,
+            &import.notationSelectors, &import.reductions})
         for (const auto &name : *names)
           if (!types.charge(name.size(), import.span))
             return false;
+      auto notations = import.notations;
+      notations.insert(notations.end(), import.notationSelectors.begin(),
+                       import.notationSelectors.end());
       record.imports.push_back({*import.target, import.span, import.alias,
-                                import.names, import.operators,
-                                import.notations, import.reductions,
-                                import.isPublic, import.indexing});
+                                import.names, import.operators, notations,
+                                import.reductions, import.isPublic,
+                                import.indexing});
     }
     for (auto original : visibleOperators[id.index]) {
       if (!types.charge(1, record.span))

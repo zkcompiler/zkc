@@ -65,7 +65,7 @@ def Code.instructions : List Code → List Instruction
   | .step instruction _ :: rest => instruction :: Code.instructions rest
   | .helper instruction :: rest => instruction :: Code.instructions rest
   | .loop site maximum yielded operands results body :: rest =>
-      ⟨.loop site maximum yielded, operands, results, Code.instructions body⟩ :: Code.instructions rest
+      ⟨.loop site maximum, operands, results, [⟨(.data .index :: results), Code.instructions body, yielded⟩]⟩ :: Code.instructions rest
 
 mutual
 /-- `Code.instructions` by structural recursion, which the kernel evaluates. -/
@@ -79,7 +79,7 @@ def Code.instructionsOf : Code → List Instruction
   | .step instruction _ => [instruction]
   | .helper instruction => [instruction]
   | .loop site maximum yielded operands results body =>
-      [⟨.loop site maximum yielded, operands, results, Code.instructionList body⟩]
+      [⟨.loop site maximum, operands, results, [⟨(.data .index :: results), Code.instructionList body, yielded⟩]⟩]
 end
 
 theorem Code.instructionList_eq : ∀ code : List Code, Code.instructionList code = Code.instructions code

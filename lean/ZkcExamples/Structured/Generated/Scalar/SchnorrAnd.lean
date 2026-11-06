@@ -54,9 +54,9 @@ def bodyFn (ctx : ProtocolContext) (self : Nat) : RegionFunction (Component (ass
 def proverSignature : Signature := ⟨[], true, false, [], calleeKeys⟩
 def proverPattern : InputPattern [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.service "random.bls12-381.fr/0"), (.service "random.bls12-381.fr/0")] := (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .absent .nil))))))))
 noncomputable def proverForm : Form proverSignature.laws proverSignature.callees proverPattern.scope [.boolean] :=
-  (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.query "s0" (.draw "bls12-381.fr") (.cons (.var .here) .nil) (.query "s2" (.draw "bls12-381.fr") (.cons (.var (.there .here)) .nil) (.split (.input (.there (.there (.there .here)))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.receive (.field "bls12-381.fr") "label_64656c6976657279_0" 1 (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var .here) .nil)) .here) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there (.there .here))) (.cons (.var .here) .nil)) .here) .nil)) .here) (.done (.cons .absent .nil))))))))))))))
+  (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.query "s0" (.draw "bls12-381.fr") (.cons (.var .here) .nil) (.query "s2" (.draw "bls12-381.fr") (.cons (.var (.there .here)) .nil) (.split (.input (.there (.there (.there .here)))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.receive (.field "bls12-381.fr") "label_64656c6976657279_0" 1 (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var .here) .nil)) .here) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there (.there .here))) (.cons (.var .here) .nil)) .here) .nil)) .here) (.math (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (.present (.var (.there (.there (.there (.there .here)))))) (.cons .absent (.cons .absent (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons .absent (.cons (.present (.var (.there (.there (.there .here))))) (.cons .absent (.cons .absent (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) .nil))))))))) (.done (.cons (.read .here .here) .nil)))))))))))))))
 
-noncomputable def proverProcess (ctx : ProtocolContext) (firstBase : (Option (G))) (secondBase : (Option (G))) (firstWitness : (Option (F))) (secondWitness : (Option (F))) (nonces : (Option (Nat))) : (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
+noncomputable def proverProcess (ctx : ProtocolContext) (firstBase : (Option (G))) (firstKey : (Option (G))) (secondBase : (Option (G))) (secondKey : (Option (G))) (firstWitness : (Option (F))) (secondWitness : (Option (F))) (nonces : (Option (Nat))) : (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
   match nonces with
   | none =>
     .halt .incomplete
@@ -84,17 +84,18 @@ noncomputable def proverProcess (ctx : ProtocolContext) (firstBase : (Option (G)
             .halt .incomplete
           | some b14 =>
             .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f726573706f6e7365_0") ((ctx).roles 1) (((b9) + (((b12) * (b14)))))) fun _ =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
+            (invoke ((plainHelpers (F := F) (G := G) payload).toOn).components (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons ((some (b10))) (.cons (none) (.cons (none) (.cons (firstKey) (.cons (none) (.cons ((some (b11))) (.cons (none) (.cons (none) (.cons (secondKey) .nil)))))))))).bind fun (b15 : (Values (Component (assignment F G)) [.boolean])) =>
+            .done ((.cons ((b15).get .here) .nil) : (Values (Component (assignment F G)) [.boolean]))
 
 theorem prover_normalized : normalize proverSignature bodyBody 0 2 proverPattern = .ok proverForm := by kernel_rfl
 theorem prover_calls : proverForm.CallsMatch := by apply Prod.ext <;> kernel_rfl
 
 theorem prover_presentation (ctx : ProtocolContext) (firstBase : (Option (G))) (firstKey : (Option (G))) (secondBase : (Option (G))) (secondKey : (Option (G))) (firstWitness : (Option (F))) (secondWitness : (Option (F))) (nonces : (Option (Nat))) :
-  ((proverForm).denote (ringModel F G) ((plainHelpers (F := F) (G := G) payload).toOn) (emptyResults (ringModel F G)) (ctx) (Runs.uniform (plainHelpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)) (actualCallees payload calleeKeys) (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons firstWitness (.cons secondWitness (.cons nonces .nil)))))))) = (proverProcess (F := F) (G := G) ctx firstBase secondBase firstWitness secondWitness nonces) := by kernel_rfl
+  ((proverForm).denote (ringModel F G) ((plainHelpers (F := F) (G := G) payload).toOn) (emptyResults (ringModel F G)) (ctx) (Runs.uniform (plainHelpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)) (actualCallees payload calleeKeys) (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons firstWitness (.cons secondWitness (.cons nonces .nil)))))))) = (proverProcess (F := F) (G := G) ctx firstBase firstKey secondBase secondKey firstWitness secondWitness nonces) := by kernel_rfl
 
 theorem prover_process (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
   (distinct : RosterDistinct ctx 0 2) (firstBase : (Option (G))) (firstKey : (Option (G))) (secondBase : (Option (G))) (secondKey : (Option (G))) (firstWitness : (Option (F))) (secondWitness : (Option (F))) (nonces : (Option (Nat))) :
-  bodyFn (F := F) (G := G) ctx self ((proverPattern.environment (ringModel F G) (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons firstWitness (.cons secondWitness (.cons nonces .nil))))))))) = (proverProcess (F := F) (G := G) ctx firstBase secondBase firstWitness secondWitness nonces) := by
+  bodyFn (F := F) (G := G) ctx self ((proverPattern.environment (ringModel F G) (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons firstWitness (.cons secondWitness (.cons nonces .nil))))))))) = (proverProcess (F := F) (G := G) ctx firstBase firstKey secondBase secondKey firstWitness secondWitness nonces) := by
   subst self
   exact (sound_uniform proverSignature bodyBody 0 2 proverPattern proverForm
     prover_normalized prover_calls ctx distinct
@@ -118,7 +119,7 @@ theorem prover_observed (ctx : ProtocolContext) (distinct : RosterDistinct ctx 0
 
 noncomputable def proverView (ctx : ProtocolContext) (input : Values (Component (assignment F G)) [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.service "random.bls12-381.fr/0"), (.service "random.bls12-381.fr/0")]) :
     PIR.Process (participantInterface F G) (Values (Component (assignment F G)) [.boolean]) :=
-  ((proverProcess (F := F) (G := G) ctx (input.get .here) (input.get (.there (.there .here))) (input.get (.there (.there (.there (.there .here))))) (input.get (.there (.there (.there (.there (.there .here)))))) (input.get (.there (.there (.there (.there (.there (.there .here))))))))).bind fun out => .done (.cons none .nil)
+  ((proverProcess (F := F) (G := G) ctx (input.get .here) (input.get (.there .here)) (input.get (.there (.there .here))) (input.get (.there (.there (.there .here)))) (input.get (.there (.there (.there (.there .here))))) (input.get (.there (.there (.there (.there (.there .here)))))) (input.get (.there (.there (.there (.there (.there (.there .here))))))))).bind fun out => .done (.cons none .nil)
 
 theorem prover_invocation (ctx : ProtocolContext) (distinct : RosterDistinct ctx 0 2)
   (input : Values (Component (assignment F G)) [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.service "random.bls12-381.fr/0"), (.service "random.bls12-381.fr/0")]) :
@@ -157,7 +158,7 @@ namespace Root
 def verifierSignature : Signature := ⟨[], true, false, [], calleeKeys⟩
 def verifierPattern : InputPattern [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.field "bls12-381.fr"), (.service "random.bls12-381.fr/0"), (.service "random.bls12-381.fr/0")] := (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .absent (.cons .absent (.cons .absent (.cons .optional .nil))))))))
 noncomputable def verifierForm : Form verifierSignature.laws verifierSignature.callees verifierPattern.scope [.boolean] :=
-  (.receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 (.receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.query "label_6368616c6c656e6765" (.draw "bls12-381.fr") (.cons (.var .here) .nil) (.send (.field "bls12-381.fr") "label_64656c6976657279_0" 0 (.var .here) (.receive (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 0 (.receive (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 0 (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil)))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil)))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.done (.cons .absent .nil)) (.done (.cons (.present (.calc .booleanAnd rfl (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.var (.there (.there (.there (.there (.there .here)))))) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there .here))) (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .here) .nil)) .here) .nil)) .here) (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var (.there (.there (.there (.there .here))))) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .here) .nil)) .here) .nil)) .here) .nil)) .here)) .nil)))))))))))))
+  (.receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 (.receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.query "label_6368616c6c656e6765" (.draw "bls12-381.fr") (.cons (.var .here) .nil) (.send (.field "bls12-381.fr") "label_64656c6976657279_0" 0 (.var .here) (.receive (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 0 (.receive (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 0 (.math (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (.input (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.present (.var (.there .here))) (.cons (.present (.var (.there (.there (.there (.there (.there .here))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.present (.var (.there (.there .here)))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.present (.var .here)) (.cons (.present (.var (.there (.there (.there (.there .here)))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil))))))))) (.done (.cons (.read .here .here) .nil))))))))))
 
 noncomputable def verifierProcess (ctx : ProtocolContext) (firstBase : (Option (G))) (firstKey : (Option (G))) (secondBase : (Option (G))) (secondKey : (Option (G))) (challenges : (Option (Nat))) : (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
   .call (.receive (.group "bls12-381.g1") (qualifyProtocolSite (ctx).applicationPrefix "label_66697273745f636f6d6d69746d656e74_0") ((ctx).roles 0)) fun (b5 : G) =>
@@ -170,67 +171,8 @@ noncomputable def verifierProcess (ctx : ProtocolContext) (firstBase : (Option (
     .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_64656c6976657279_0") ((ctx).roles 0) (b8)) fun _ =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_66697273745f726573706f6e7365_0") ((ctx).roles 0)) fun (b9 : F) =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f726573706f6e7365_0") ((ctx).roles 0)) fun (b10 : F) =>
-    match firstBase with
-    | none =>
-      match firstKey with
-      | none =>
-        match secondBase with
-        | none =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b14 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b13 =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b15 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-      | some _b12 =>
-        match secondBase with
-        | none =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b17 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b16 =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b18 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-    | some b11 =>
-      match firstKey with
-      | none =>
-        match secondBase with
-        | none =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b21 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b20 =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b22 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-      | some b19 =>
-        match secondBase with
-        | none =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b24 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some b23 =>
-          match secondKey with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some b25 =>
-            .done ((.cons ((some (((((Op.evalTotal (ringModel F G) (.groupEqual "bls12-381.g1") rfl (.cons (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b9) (b11))) (.cons (((b5) + (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b8) (b19))))) .nil))).get .here)) && (((Op.evalTotal (ringModel F G) (.groupEqual "bls12-381.g1") rfl (.cons (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b10) (b23))) (.cons (((b6) + (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b8) (b25))))) .nil))).get .here)))))) .nil) : (Values (Component (assignment F G)) [.boolean]))
+    (invoke ((plainHelpers (F := F) (G := G) payload).toOn).components (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (firstBase) (.cons ((some (b9))) (.cons ((some (b5))) (.cons (firstKey) (.cons ((some (b8))) (.cons (secondBase) (.cons ((some (b10))) (.cons ((some (b6))) (.cons (secondKey) .nil)))))))))).bind fun (b11 : (Values (Component (assignment F G)) [.boolean])) =>
+    .done ((.cons ((b11).get .here) .nil) : (Values (Component (assignment F G)) [.boolean]))
 
 theorem verifier_normalized : normalize verifierSignature bodyBody 1 2 verifierPattern = .ok verifierForm := by kernel_rfl
 theorem verifier_calls : verifierForm.CallsMatch := by apply Prod.ext <;> kernel_rfl

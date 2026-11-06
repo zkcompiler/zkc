@@ -1,0 +1,263 @@
+{
+  "format": "zkc.source-term-fixtures/0",
+  "terms": [
+    {
+      "name": "finite-bool",
+      "term": [
+        "builtin",
+        "finite",
+        [
+          [
+            "bool"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "finite-field",
+      "term": [
+        "builtin",
+        "finite",
+        [
+          [
+            "field",
+            "bls12-381.fr"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "empty-product",
+      "term": [
+        "descriptor-product",
+        []
+      ]
+    },
+    {
+      "name": "ordered-product",
+      "term": [
+        "descriptor-product",
+        [
+          [
+            "builtin",
+            "finite",
+            [
+              [
+                "bool"
+              ]
+            ]
+          ],
+          [
+            "builtin",
+            "finite",
+            [
+              [
+                "field",
+                "bls12-381.fr"
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "reversed-product",
+      "term": [
+        "descriptor-product",
+        [
+          [
+            "builtin",
+            "finite",
+            [
+              [
+                "field",
+                "bls12-381.fr"
+              ]
+            ]
+          ],
+          [
+            "builtin",
+            "finite",
+            [
+              [
+                "bool"
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "unsized",
+      "term": [
+        "descriptor-sequence",
+        [
+          "builtin",
+          "finite",
+          [
+            [
+              "bool"
+            ]
+          ]
+        ],
+        null
+      ]
+    },
+    {
+      "name": "zero",
+      "term": [
+        "descriptor-sequence",
+        [
+          "builtin",
+          "finite",
+          [
+            [
+              "bool"
+            ]
+          ]
+        ],
+        [
+          "nat",
+          "0"
+        ]
+      ]
+    },
+    {
+      "name": "positive",
+      "term": [
+        "descriptor-sequence",
+        [
+          "builtin",
+          "finite",
+          [
+            [
+              "field",
+              "bls12-381.fr"
+            ]
+          ]
+        ],
+        [
+          "nat",
+          "7"
+        ]
+      ]
+    },
+    {
+      "name": "nested",
+      "term": [
+        "descriptor-product",
+        [
+          [
+            "descriptor-sequence",
+            [
+              "descriptor-product",
+              [
+                [
+                  "builtin",
+                  "finite",
+                  [
+                    [
+                      "field",
+                      "bls12-381.fr"
+                    ]
+                  ]
+                ],
+                [
+                  "builtin",
+                  "finite",
+                  [
+                    [
+                      "bool"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            [
+              "nat",
+              "2"
+            ]
+          ],
+          [
+            "descriptor-sequence",
+            [
+              "descriptor-product",
+              []
+            ],
+            null
+          ],
+          [
+            "descriptor-product",
+            [
+              [
+                "builtin",
+                "finite",
+                [
+                  [
+                    "bool"
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "boolean",
+      "term": [
+        "bool"
+      ]
+    },
+    {
+      "name": "tuple",
+      "term": [
+        "tuple",
+        [
+          [
+            "bool"
+          ],
+          [
+            "index"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "array-zero",
+      "term": [
+        "array",
+        [
+          "bool"
+        ],
+        "0"
+      ]
+    },
+    {
+      "name": "formal",
+      "term": [
+        "formal",
+        "vendor.Family",
+        [
+          [
+            "field",
+            "koala-bear"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "logical-record",
+      "term": [
+        "nominal",
+        "logical_record",
+        "sample::Logical",
+        [
+          [
+            "bool"
+          ]
+        ]
+      ]
+    }
+  ]
+}

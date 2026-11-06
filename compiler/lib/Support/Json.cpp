@@ -52,38 +52,91 @@ namespace {
 // These formats must agree with typed JSON consumers. Check numeric spellings
 // and surrogate escapes, and count authored keys. json::parse owns the
 // remaining JSON grammar and decodes accepted strings.
-std::optional<size_t> scanNaturalJsonKeys(StringRef text) {
+std::optional<size_t> scanNaturalJsonKeys(StringRef text, unsigned depthLimit,
+                                          bool &depthExceeded) {
   size_t keys = 0;
+  unsigned depth = 0;
+  bool valid = true;
+  depthExceeded = false;
   for (size_t i = 0; i < text.size(); ++i) {
-    if (text[i] == '"') {
-      size_t start = i;
-      while (++i < text.size() && text[i] != '"')
-        if (text[i] == '\\' && i + 1 < text.size())
-          ++i;
-      if (i == text.size() || !validStringEncoding(text.slice(start, i + 1)))
-        return std::nullopt;
+    char ch = text[i];
+    if (ch == '"') {
+      while (++i < text.size() && text[i] != '"') {
+        if (text[i] != '\\' || i + 1 == text.size())
+          continue;
+        if (text[++i] != 'u')
+          continue;
+        unsigned unit = 0;
+        if (i + 4 >= text.size() ||
+            text.substr(i + 1, 4).getAsInteger(16, unit)) {
+          valid = false;
+          continue;
+        }
+        i += 4;
+        if (unit >= 0xdc00 && unit <= 0xdfff)
+          valid = false;
+        if (unit < 0xd800 || unit > 0xdbff)
+          continue;
+        if (i + 6 >= text.size() || !text.substr(i + 1).starts_with("\\u") ||
+            text.substr(i + 3, 4).getAsInteger(16, unit) || unit < 0xdc00 ||
+            unit > 0xdfff) {
+          valid = false;
+          continue;
+        }
+        i += 6;
+      }
+      if (i == text.size()) {
+        valid = false;
+        break;
+      }
+      // json::parse rejects invalid UTF-8 across the complete input before
+      // decoding. Only surrogate-escape validation is additional here.
       size_t next = i + 1;
       while (next < text.size() && isSpace(text[next]))
         ++next;
       if (next < text.size() && text[next] == ':')
         ++keys;
-    } else if (text[i] == '-' || text[i] == '+' || text[i] == '.') {
-      return std::nullopt;
-    } else if (isDigit(text[i])) {
-      size_t start = i;
-      if (text[i] == '0' && i + 1 < text.size() && isDigit(text[i + 1]))
-        return std::nullopt;
-      while (i + 1 < text.size() && isDigit(text[i + 1]))
-        ++i;
-      uint64_t number;
-      if (text.slice(start, i + 1).getAsInteger(10, number))
-        return std::nullopt;
-      if (i + 1 < text.size() &&
-          (text[i + 1] == '.' || text[i + 1] == 'e' || text[i + 1] == 'E'))
-        return std::nullopt;
+    } else {
+      // Preserve the existing nesting preflight's delimiter/comment treatment
+      // even for malformed input. Continue after lexical failures so a later
+      // depth refusal retains its precedence over the syntax refusal.
+      if (ch == '/' && i + 1 < text.size() && text[i + 1] == '/') {
+        valid = false;
+        while (i + 1 < text.size() && text[i + 1] != '\n')
+          ++i;
+        continue;
+      }
+      bool comparison = (ch == '<' || ch == '>') &&
+                        ((i + 1 < text.size() && text[i + 1] == '=') ||
+                         (ch == '>' && i && text[i - 1] == '-'));
+      if (!comparison && (ch == '(' || ch == '[' || ch == '{' || ch == '<')) {
+        if (++depth > depthLimit) {
+          depthExceeded = true;
+          return std::nullopt;
+        }
+      } else if (!comparison &&
+                 (ch == ')' || ch == ']' || ch == '}' || ch == '>')) {
+        if (depth)
+          --depth;
+      }
+      if (ch == '-' || ch == '+' || ch == '.')
+        valid = false;
+      else if (isDigit(ch)) {
+        size_t start = i;
+        if (ch == '0' && i + 1 < text.size() && isDigit(text[i + 1]))
+          valid = false;
+        while (i + 1 < text.size() && isDigit(text[i + 1]))
+          ++i;
+        uint64_t number;
+        if (text.slice(start, i + 1).getAsInteger(10, number))
+          valid = false;
+        if (i + 1 < text.size() &&
+            (text[i + 1] == '.' || text[i + 1] == 'e' || text[i + 1] == 'E'))
+          valid = false;
+      }
     }
   }
-  return keys;
+  return valid ? std::optional<size_t>(keys) : std::nullopt;
 }
 size_t countNaturalJsonKeys(const json::Value &value) {
   size_t keys = 0;
@@ -102,9 +155,12 @@ Expected<json::Value> parseNaturalJson(StringRef text, size_t byteLimit,
                                        unsigned depthLimit,
                                        StringRef invalidCode,
                                        StringRef limitCode) {
-  if (text.size() > byteLimit || !mlirNestingWithinLimit(text, depthLimit))
+  if (text.size() > byteLimit)
     return error(limitCode);
-  auto keys = scanNaturalJsonKeys(text);
+  bool depthExceeded = false;
+  auto keys = scanNaturalJsonKeys(text, depthLimit, depthExceeded);
+  if (depthExceeded)
+    return error(limitCode);
   if (!keys)
     return error(invalidCode);
   auto parsed = json::parse(text);

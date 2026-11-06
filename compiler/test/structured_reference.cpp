@@ -80,7 +80,7 @@ Expected<APInt> fieldLiteral(algebra::ConstantFieldOp op) {
   return value;
 }
 
-bool valueType(Type type) {
+bool leafValueType(Type type) {
   if (type.isSignlessInteger(1) || type.isUnsignedInteger(64))
     return true;
   if (auto field = dyn_cast<algebra::FieldType>(type))
@@ -95,6 +95,34 @@ bool valueType(Type type) {
     return capability.getKind() == runtime::CapabilityKind::ResourceUnit &&
            protocol::resourceUnitDomain(capability.getIdentity());
   return false;
+}
+
+bool valueType(Type type) {
+  SmallVector<std::pair<Type, unsigned>> pending{{type, 0}};
+  llvm::DenseSet<Type> checked;
+  unsigned visits = 0;
+  while (!pending.empty()) {
+    auto [current, depth] = pending.pop_back_val();
+    if (++visits > maxOperations || depth > maxDepth)
+      return false;
+    if (!checked.insert(current).second)
+      continue;
+    if (auto variant = dyn_cast<data::VariantType>(current)) {
+      if (variant.getAlternatives().size() > maxSignature)
+        return false;
+      for (auto alternative : variant.getAlternatives()) {
+        if (alternative.getPayload().size() > maxSignature ||
+            visits + pending.size() + alternative.getPayload().size() >
+                maxOperations)
+          return false;
+        for (Type payload : alternative.getPayload())
+          pending.emplace_back(payload, depth + 1);
+      }
+    } else if (!leafValueType(current)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 enum class Kind {
@@ -125,6 +153,10 @@ enum class Kind {
   Xor,
   Compare,
   Select,
+  MathematicalBranch,
+  Make,
+  Get,
+  Is,
   At,
   Call,
   ProtocolApply,
@@ -268,6 +300,10 @@ Kind kind(Operation &op) {
       .Case("arith.xori", Kind::Xor)
       .Case("arith.cmpi", Kind::Compare)
       .Case("arith.select", Kind::Select)
+      .Case("data.branch", Kind::MathematicalBranch)
+      .Case("data.make", Kind::Make)
+      .Case("data.get", Kind::Get)
+      .Case("data.is", Kind::Is)
       .Case("data.bounded_at", Kind::At)
       .Case("func.call", Kind::Call)
       .Case("protocol.apply", Kind::ProtocolApply)
@@ -276,7 +312,7 @@ Kind kind(Operation &op) {
       .Case("data.finite_fold", Kind::Fold)
       .Case("protocol.guard", Kind::Guard)
       .Cases({"func.return", "protocol.return"}, Kind::Return)
-      .Case("protocol.yield", Kind::Yield)
+      .Cases({"protocol.yield", "data.yield"}, Kind::Yield)
       .Case("exec.reject", Kind::Stop)
       .Case("exec.apply", Kind::Exec)
       .Case("exec.compute", Kind::Compute)
@@ -533,7 +569,8 @@ class Admission {
         code == Kind::Indices || code == Kind::DomainYield)
       return error("structured-reference-unsupported",
                    op.getName().getStringRef());
-    if (op.getNumRegions() != (code == Kind::ProtocolRepeat ? 1u : 0u))
+    if (code != Kind::MathematicalBranch &&
+        op.getNumRegions() != (code == Kind::ProtocolRepeat ? 1u : 0u))
       return error("structured-reference-unsupported", "region count");
     for (Type type : op.getOperandTypes())
       if (!referenceType(type, isScoped(owner)) ||
@@ -545,6 +582,46 @@ class Admission {
           isa<protocol_ir::ServiceReferenceType>(type))
         return error("structured-reference-unsupported", "result type");
     switch (code) {
+    case Kind::MathematicalBranch: {
+      if (auto failure = attributes(op, {"alternatives"}))
+        return failure;
+      auto alternatives = cast<data::BranchOp>(op).getAlternatives();
+      if (!op.getNumOperands() || alternatives.empty() ||
+          alternatives.size() > maxSignature ||
+          alternatives.size() != op.getNumRegions())
+        return error("structured-reference-signature", "mathematical branch");
+      SmallVector<data::AlternativeAttr> variants;
+      Type selector = op.getOperand(0).getType();
+      if (auto variant = dyn_cast<data::VariantType>(selector))
+        llvm::append_range(variants, variant.getAlternatives());
+      else if (!selector.isSignlessInteger(1))
+        return error("structured-reference-unsupported", "branch selector");
+      if (alternatives.size() != (variants.empty() ? 2 : variants.size()))
+        return error("structured-reference-signature", "branch alternatives");
+      for (auto [index, alternative] : llvm::enumerate(alternatives)) {
+        StringRef label = variants.empty()
+                              ? (index == 0 ? "then" : "else")
+                              : variants[index].getLabel().getValue();
+        if (cast<StringAttr>(alternative).getValue() != label)
+          return error("structured-reference-signature", "branch order");
+        SmallVector<Type> arguments;
+        if (!variants.empty())
+          llvm::append_range(arguments, variants[index].getPayload());
+        llvm::append_range(arguments, op.getOperands().drop_front().getTypes());
+        Region &arm = op.getRegion(index);
+        if (!llvm::hasSingleElement(arm) || arm.front().empty() ||
+            arm.front().getArgumentTypes() != TypeRange(arguments) ||
+            !isa<data::YieldOp>(arm.front().back()) ||
+            arm.front().back().getOperandTypes() != op.getResultTypes())
+          return error("structured-reference-signature", "branch arm");
+      }
+      break;
+    }
+    case Kind::Make:
+    case Kind::Is:
+      return attributes(op, {"alternative"});
+    case Kind::Get:
+      return attributes(op, {"index"});
     case Kind::ProtocolRepeat: {
       if (auto failure = attributes(
               op, {"site", "carried", "maximum", "roles", "carried_roles"}))
@@ -1126,10 +1203,12 @@ struct DomainRows;
 struct Outcome;
 struct ScopeState;
 struct HeldValues;
+struct VariantValue;
 using Domain = std::shared_ptr<const DomainRows>;
 using Result = std::shared_ptr<const Outcome>;
 using Scope = std::shared_ptr<ScopeState>;
 using Transfer = std::shared_ptr<HeldValues>;
+using Variant = std::shared_ptr<const VariantValue>;
 struct Stop {
   std::string reason, site;
 };
@@ -1143,9 +1222,35 @@ struct Unit {
   uint64_t generation;
 };
 // monostate is an absent participant component, never a missing SSA binding.
-using Datum = std::variant<std::monostate, bool, uint64_t, APInt, Vector,
-                           Domain, Result, Scope, Transfer, Stop, Unit>;
+using Datum =
+    std::variant<std::monostate, bool, uint64_t, APInt, Vector, Domain, Result,
+                 Scope, Transfer, Stop, Unit, Variant>;
 using Values = std::vector<Datum>;
+struct VariantValue {
+  data::VariantType type;
+  unsigned alternative;
+  Values payload;
+  uint64_t encodingWork;
+
+  VariantValue(data::VariantType type, unsigned alternative, Values payload)
+      : type(type), alternative(alternative), payload(std::move(payload)),
+        encodingWork(std::min<uint64_t>(maxSteps + 1,
+                                        1 + type.getAlternatives()[alternative]
+                                                .getLabel()
+                                                .getValue()
+                                                .size())) {
+    // Immutable payloads may share a DAG. Bound its expanded output before
+    // serialization, without recursively revisiting shared children here.
+    for (const Datum &value : this->payload) {
+      uint64_t work = 1;
+      if (auto nested = std::get_if<Variant>(&value))
+        work = (*nested)->encodingWork;
+      else if (auto vector = std::get_if<Vector>(&value))
+        work += (*vector)->size();
+      encodingWork = std::min(maxSteps + 1, encodingWork + work);
+    }
+  }
+};
 struct DomainRows {
   std::vector<Values> rows;
 };
@@ -1173,6 +1278,30 @@ struct Outcome {
 };
 
 Expected<Datum> decode(Type type, const json::Value &input) {
+  if (auto variant = dyn_cast<data::VariantType>(type)) {
+    auto row = input.getAsArray();
+    if (!row || row->size() != 2 || !(*row)[0].getAsString() ||
+        !(*row)[1].getAsArray())
+      return error("structured-reference-input", "expected variant");
+    for (auto [index, alternative] :
+         llvm::enumerate(variant.getAlternatives())) {
+      if (alternative.getLabel().getValue() != *(*row)[0].getAsString())
+        continue;
+      const auto &items = *(*row)[1].getAsArray();
+      if (items.size() != alternative.getPayload().size())
+        return error("structured-reference-input", "variant payload arity");
+      Values payload;
+      for (auto [port, item] : llvm::zip(alternative.getPayload(), items)) {
+        auto value = decode(port, item);
+        if (!value)
+          return value.takeError();
+        payload.push_back(std::move(*value));
+      }
+      return Datum(Variant(std::make_shared<VariantValue>(
+          VariantValue{variant, unsigned(index), std::move(payload)})));
+    }
+    return error("structured-reference-input", "unknown variant alternative");
+  }
   if (type.isSignlessInteger(1)) {
     auto value = input.getAsBoolean();
     if (!value)
@@ -1222,6 +1351,19 @@ std::string digits(const APInt &value) {
 Expected<json::Value> encode(const Datum &value) {
   if (!present(value))
     return json::Value(nullptr);
+  if (auto variant = std::get_if<Variant>(&value)) {
+    json::Array payload;
+    for (const Datum &item : (*variant)->payload) {
+      auto encoded = encode(item);
+      if (!encoded)
+        return encoded.takeError();
+      payload.push_back(std::move(*encoded));
+    }
+    auto alternative =
+        (*variant)->type.getAlternatives()[(*variant)->alternative];
+    return json::Value(
+        json::Array{alternative.getLabel().getValue(), std::move(payload)});
+  }
   if (auto boolean = std::get_if<bool>(&value))
     return json::Value(*boolean);
   if (auto index = std::get_if<uint64_t>(&value))
@@ -1241,6 +1383,17 @@ Expected<json::Value> encode(const Datum &value) {
 bool matches(Type type, const Datum &value) {
   if (!present(value))
     return true;
+  if (auto variant = dyn_cast<data::VariantType>(type)) {
+    auto data = std::get_if<Variant>(&value);
+    if (!data || (*data)->type != variant ||
+        (*data)->alternative >= variant.getAlternatives().size())
+      return false;
+    auto ports = variant.getAlternatives()[(*data)->alternative].getPayload();
+    // decode checks each leaf, and data.make receives checked SSA operands.
+    // The immutable nominal carrier preserves that invariant across copies;
+    // recursively rechecking a shared payload DAG could take exponential work.
+    return ports.size() == (*data)->payload.size();
+  }
   if (type.isSignlessInteger(1))
     return std::holds_alternative<bool>(value);
   if (type.isUnsignedInteger(64) || type.isSignlessInteger(64) ||
@@ -1352,6 +1505,13 @@ class Reference {
       return error("structured-reference-capacity", "map argument work");
     steps += count;
     return Error::success();
+  }
+
+  Expected<json::Value> encodeValue(const Datum &value) {
+    if (auto variant = std::get_if<Variant>(&value))
+      if (auto failure = argumentWork((*variant)->encodingWork))
+        return std::move(failure);
+    return encode(value);
   }
 
   Expected<Outcome> execute(Operation &op, ArrayRef<Datum> args) {
@@ -1792,7 +1952,7 @@ class Reference {
       if (self == sender) {
         if (!present(args[0]))
           return stopped(op, "incomplete", context);
-        auto value = encode(args[0]);
+        auto value = encodeValue(args[0]);
         if (!value)
           return value.takeError();
         auto described = messageType(type);
@@ -1846,6 +2006,29 @@ class Reference {
     case Kind::Yield:
     case Kind::DomainYield:
       return Outcome{code, Values(args.begin(), args.end()), {}};
+    case Kind::MathematicalBranch: {
+      // Only the selector must be present before entry. A missing capture can
+      // be irrelevant in the selected arm, just as in an ordinary helper.
+      if (!present(args[0]))
+        return absent(op);
+      unsigned arm;
+      Values inputs;
+      if (auto boolean = std::get_if<bool>(&args[0])) {
+        arm = *boolean ? 0 : 1;
+      } else {
+        const auto &variant = *std::get<Variant>(args[0]);
+        arm = variant.alternative;
+        if (auto failure = argumentWork(variant.payload.size()))
+          return failure;
+        inputs = variant.payload;
+      }
+      if (auto failure = argumentWork(args.size() - 1))
+        return failure;
+      llvm::append_range(inputs, args.drop_front());
+      // Reuse the single SSA evaluator: entry, instructions, calls and yields
+      // retain their existing charges, typing and immediate failure behavior.
+      return block(op.getRegion(arm).front(), inputs, depth + 1, context);
+    }
     case Kind::Stop: {
       auto stop = stopped(op, cast<exec::RejectOp>(op).getReason(), context);
       return Outcome{Kind::Return, {Stop{stop.reason, stop.site}}, {}};
@@ -2081,6 +2264,32 @@ class Reference {
     }
     Outcome result;
     switch (code) {
+    case Kind::Make: {
+      auto make = cast<data::MakeOp>(op);
+      auto type = make.getOutput().getType();
+      auto alternatives = type.getAlternatives();
+      auto alternative = llvm::find_if(alternatives, [&](auto item) {
+        return item.getLabel().getValue() == make.getAlternative();
+      });
+      if (auto failure = argumentWork(args.size()))
+        return failure;
+      result.values.emplace_back(Variant(std::make_shared<VariantValue>(
+          VariantValue{type, unsigned(alternative - alternatives.begin()),
+                       Values(args.begin(), args.end())})));
+      break;
+    }
+    case Kind::Get:
+      result.values.push_back(std::get<Variant>(args[0])
+                                  ->payload[cast<data::GetOp>(op).getIndex()]);
+      break;
+    case Kind::Is: {
+      const auto &variant = *std::get<Variant>(args[0]);
+      result.values.emplace_back(
+          variant.type.getAlternatives()[variant.alternative]
+              .getLabel()
+              .getValue() == cast<data::IsOp>(op).getAlternative());
+      break;
+    }
     case Kind::IndexConstant: {
       result.values.emplace_back(cast<data::IndexOp>(op).getValue());
       break;
@@ -2355,9 +2564,10 @@ public:
     }
     json::Array outputs;
     for (auto [i, value] : llvm::enumerate(result->values)) {
-      auto output = encode(inScope(cast<ArrayAttr>(source.getOutputRoles()[i]))
-                               ? value
-                               : Datum(std::monostate{}));
+      auto output =
+          encodeValue(inScope(cast<ArrayAttr>(source.getOutputRoles()[i]))
+                          ? value
+                          : Datum(std::monostate{}));
       if (!output)
         return output.takeError();
       outputs.push_back(std::move(*output));

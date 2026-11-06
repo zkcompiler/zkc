@@ -26,6 +26,7 @@ open ZkcSecurity.Families.Sumcheck ZkcSecurity.Realizations.Sumcheck
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured SumcheckSourceSelections
 
 def small : SourceFamily.Installation (source .small) where
+  foldNames := foldNames .small
   maximum := maximum .small
   maximum_small := by decide +kernel
   reductionName := Generated.Bindings.SmallSumcheckInputs.protocol0Signature.name
@@ -37,6 +38,7 @@ def small : SourceFamily.Installation (source .small) where
   initial := fun model => (wrappers model .small).initial
 
 def twoSums : SourceFamily.Installation (source .twoSums) where
+  foldNames := foldNames .twoSums
   maximum := maximum .twoSums
   maximum_small := by decide +kernel
   reductionName := Generated.Bindings.TwoSumsInputs.protocol0Signature.name
@@ -50,6 +52,7 @@ def twoSums : SourceFamily.Installation (source .twoSums) where
 /-- Compatibility is a selector of checked installation data. All component
 and root correctness arguments are independent of this selector. -/
 def installed (selection : Selection) : SourceFamily.Installation (source selection) where
+  foldNames := foldNames selection
   maximum := maximum selection
   maximum_small := match selection with
     | .small => small.maximum_small

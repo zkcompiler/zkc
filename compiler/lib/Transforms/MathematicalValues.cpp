@@ -1,6 +1,7 @@
 #include "MathematicalValues.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Analysis/FiniteClosure.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
@@ -25,6 +26,7 @@ struct ValueCorrespondence::Implementation {
   Operation *diagnostic;
   Builder builder;
   SymbolTableCollection symbols;
+  finite::ClosureClasses finiteClosures;
   SmallVector<Node> nodes{Node{}}; // Zero denotes an unsupported term.
   llvm::DenseMap<size_t, SmallVector<Term>> interned;
   PolynomialValueCache polynomialNormalForms, polynomialFixings;
@@ -467,10 +469,10 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
       NamedAttrList renamed(op->getAttrDictionary());
       protocol_ir::renameRoleUses(op->getName(), renamed, rename);
       if (finite::isComputation(op)) {
-        auto closure = finite::closureKey(op);
-        if (failed(closure))
+        if (failed(p.finiteClosures.resolveEdges(
+                op, renamed, p.symbols,
+                [&](uint64_t n) { return p.charge(n); })))
           return 0;
-        renamed.set("finite.closure", *closure);
       }
       auto attributes = renamed.getDictionary(op->getContext());
       if (auto restriction = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {

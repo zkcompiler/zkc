@@ -24,11 +24,14 @@ abbrev context := TestsSecurity.DomainSourceBridge.context
 abbrev field := TestsSecurity.DomainSourceBridge.field
 noncomputable abbrev program := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported.program
 
+abbrev roundRegion : InstructionRegion :=
+  let loop := artifact.instructions[2]'(by decide +kernel)
+  loop.regions[0]'(by decide +kernel)
+
 def roundInstruction (index : Fin 23) : Zkc.Construction.Instruction :=
-  ((artifact.instructions[2]'(by decide +kernel)).body[index.val]'(by
-    have bound := index.isLt
+  roundRegion.instructions[index.val]'(by
     change index.val < 23
-    exact bound))
+    exact index.isLt)
 
 def occurrence (index : Fin 23) : Template :=
   match (roundInstruction index).operation with
@@ -48,7 +51,7 @@ def plan : CompiledRound.Plan where
 /-- The actual block, with every checkpoint and result slot, has this view. -/
 theorem actual_block (F G : Type) [Field F] [AddCommGroup G] [Module F G]
     [DecidableEq F] [DecidableEq G] :
-    Domain.evaluate (ringModel F G) program context (artifact.instructions[2]'(by decide +kernel)).body =
+    Domain.evaluate (ringModel F G) program context roundRegion.instructions =
       CompiledRound.block plan program context field capturedCount := by
   funext env
   rw [ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.bodyStep2Body_eq]
@@ -131,7 +134,7 @@ theorem actual_round
         (CompiledRound.output field context.suite captured index point claim history
           (lowOrigin index) (highOrigin index) (queryOrigin index) (deliveryOrigin index) low high challenge)) :
     Bridge (NominalField.interface (F := F) (G := G) field) Post history
-      (Domain.evaluate (ringModel F G) program context (artifact.instructions[2]'(by decide +kernel)).body
+      (Domain.evaluate (ringModel F G) program context roundRegion.instructions
         (CompiledRound.input field context.suite captured index point claim history))
       (CompiledRound.presented field context.suite captured index point claim history
         (lowOrigin index) (highOrigin index) (queryOrigin index) (deliveryOrigin index) (query_request index)) := by

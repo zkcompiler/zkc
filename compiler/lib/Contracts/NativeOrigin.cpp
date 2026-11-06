@@ -143,8 +143,20 @@ Error checkNativeOrigin(StringRef hex, StringRef kind, StringRef method) {
     return Error::success();
   return error("interactive-native-origin");
 }
-Expected<std::string>
-encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
+Expected<NativeOriginLayout>
+layoutNativeOrigin(const NativeOriginTemplate &origin,
+                   NativeOriginFormat format) {
+  StringRef tag;
+  switch (format) {
+  case NativeOriginFormat::Template:
+    tag = "zkc.native-origin-template/0";
+    break;
+  case NativeOriginFormat::Dynamic:
+    tag = "zkc.native-origin/0";
+    break;
+  default:
+    return error("interactive-native-origin");
+  }
   if (!identifier(origin.entry) || origin.path.size() > 64)
     return error("interactive-native-origin");
   std::vector<std::string> event;
@@ -177,6 +189,8 @@ encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
   }
   if (event.empty() || !all_of(event, identifier))
     return error("interactive-native-origin");
+  // Admission is bounded by the template even when emitting the shorter
+  // dynamic tag. Every name and the path count are bounded before sizing.
   size_t size = 9 + 9 + StringRef("zkc.native-origin-template/0").size() + 9 +
                 origin.entry.size() + 9 + 9 + 9;
   for (const auto &step : origin.path) {
@@ -197,13 +211,15 @@ encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
     size += 9 + part.size();
   if (size > 2048)
     return error("interactive-native-origin");
-  std::string bytes;
+  NativeOriginLayout result;
+  auto &bytes = result.prefix;
   bytes.reserve(size);
   header(bytes, 1, 5);
-  string(bytes, "zkc.native-origin-template/0");
+  string(bytes, tag);
   string(bytes, origin.entry);
   header(bytes, 1, origin.path.size());
   for (const auto &step : origin.path) {
+    result.coordinates += step.kind == NativeOriginStep::Kind::Repeat;
     header(bytes, 1, step.kind == NativeOriginStep::Kind::Branch ? 4 : 3);
     string(bytes, step.kind == NativeOriginStep::Kind::Apply    ? "apply"
                   : step.kind == NativeOriginStep::Kind::Repeat ? "repeat"
@@ -213,10 +229,19 @@ encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
     if (step.kind == NativeOriginStep::Kind::Branch)
       string(bytes, step.alternative);
   }
-  header(bytes, 1, 0);
-  header(bytes, 1, event.size());
+  header(result.suffix, 1, event.size());
   for (const auto &part : event)
-    string(bytes, part);
+    string(result.suffix, part);
+  return result;
+}
+Expected<std::string>
+encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
+  auto layout = layoutNativeOrigin(origin, NativeOriginFormat::Template);
+  if (!layout)
+    return layout.takeError();
+  std::string bytes = std::move(layout->prefix);
+  header(bytes, 1, 0);
+  bytes += layout->suffix;
   constexpr char digits[] = "0123456789abcdef";
   std::string hex;
   hex.reserve(bytes.size() * 2);
@@ -225,39 +250,5 @@ encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
     hex.push_back(digits[byte & 15]);
   }
   return hex;
-}
-Expected<std::string>
-encodeNativeOriginTemplate(StringRef entry,
-                           ArrayRef<std::array<std::string, 3>> path,
-                           ArrayRef<std::string> event) {
-  NativeOriginTemplate origin;
-  if (!identifier(entry) || path.size() > 64 || event.empty() ||
-      event.size() > 7 || !all_of(event, identifier))
-    return error("interactive-native-origin");
-  origin.entry = entry.str();
-  for (const auto &step : path) {
-    if ((step[0] != "apply" && step[0] != "repeat") ||
-        !all_of(step, identifier))
-      return error("interactive-native-origin");
-    origin.path.push_back({step[0] == "apply" ? NativeOriginStep::Kind::Apply
-                                              : NativeOriginStep::Kind::Repeat,
-                           step[1],
-                           step[2],
-                           {}});
-  }
-  if (event[0] == "query" && event.size() == 7) {
-    auto input = inputPort(event[3]);
-    if (!input)
-      return error("interactive-native-origin");
-    origin.event = NativeQueryOrigin{event[1], event[2], *input,
-                                     event[4], event[5], event[6]};
-  } else if (event[0] == "message" && event.size() == 6)
-    origin.event =
-        NativeMessageOrigin{event[1], event[2], event[3], event[4], event[5]};
-  else if (event[0] == "start" && event.size() == 3)
-    origin.event = NativeStartOrigin{event[1], event[2]};
-  else
-    return error("interactive-native-origin");
-  return encodeNativeOriginTemplate(origin);
 }
 } // namespace zkc::protocol

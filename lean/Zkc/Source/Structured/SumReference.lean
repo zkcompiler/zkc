@@ -133,11 +133,13 @@ def scalarRelation : ReferenceLaw model [.vector field, .field field] [.boolean]
 def inputShape (maximum : Nat) : ReferenceLaw model [.vector field, .index] [.boolean] where
   body := .letOp (.vectorLength field) (.cons .here .nil) .nil <|
     .letOp .indexPowerOfTwo (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
-    .letOp (.indexConstant maximum) .nil .nil <|
-    .letOp .indexLess (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-    .letOp (.booleanConstant false) .nil .nil <|
-    .letOp .booleanEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
-    .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+    .letOp (.branch [.index] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) .nil))
+      (.cons (.letOp (.indexConstant maximum) .nil .nil <|
+        .letOp .indexLess (.cons .here (.cons (.there .here) .nil)) .nil <|
+        .letOp (.booleanConstant false) .nil .nil <|
+        .letOp .booleanEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
+        .ret (.cons .here .nil))
+        (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
     .ret (.cons .here .nil)
   Requires _ _ := True
   reference args := .returned (.cons
@@ -146,14 +148,19 @@ def inputShape (maximum : Nat) : ReferenceLaw model [.vector field, .index] [.bo
   valid _ args _ := by
     match args with
     | .cons xs (.cons count .nil) =>
-      change (PIR.Process.done (.cons
-        (naturalPowerOfTwo xs.length count && (decide (maximum < count) == false)) .nil) :
-        Closed (Values model.Value [.boolean])) = _
-      rw [naturalPowerOfTwo_eq_decide]
-      by_cases bound : count ≤ maximum
-      · simp [bound, Nat.not_lt.mpr bound, primitiveOutcome]
-      · simp [bound, Nat.lt_of_not_ge bound, primitiveOutcome]
-
+      by_cases bound : (count : Nat) ≤ maximum
+      · have comparison := Nat.not_lt.mpr bound
+        by_cases size : xs.length = 2 ^ count <;>
+          simp [Region.denote, Evaluation.meaningOn, Evaluation.operationOn, Operands.eval,
+            Regions.denote, Values.get, Environment.prepend, Environment.push,
+            Evaluation.invokeCallbackOn, PIR.Process.bind, primitiveOutcome,
+            naturalPowerOfTwo_eq_decide, size, comparison, bound]
+      · have comparison := Nat.lt_of_not_ge bound
+        by_cases size : xs.length = 2 ^ count <;>
+          simp [Region.denote, Evaluation.meaningOn, Evaluation.operationOn, Operands.eval,
+            Regions.denote, Values.get, Environment.prepend, Environment.push,
+            Evaluation.invokeCallbackOn, PIR.Process.bind, primitiveOutcome,
+            naturalPowerOfTwo_eq_decide, size, comparison, bound]
 
 /- The continuation tests the restricted original table for an arbitrary scalar.
 Only the complete projection and finite-sum dependencies are required. -/
@@ -200,12 +207,12 @@ def pendingRelation (valuesName : String) : ReferenceLaw model
 
 /-- Conjunction is ordinary relation composition; no independence premise is used. -/
 def both : ReferenceLaw model [.boolean, .boolean] [.boolean] where
-  body := .letOp .booleanAnd (.cons .here (.cons (.there .here) .nil)) .nil
-    (.ret (.cons .here .nil))
+  body := .letOp (.branch [.boolean] [.boolean]) (.cons .here (.cons (.there .here) .nil))
+    (.cons (.ret (.cons .here .nil)) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) (.ret (.cons .here .nil))
   Requires _ _ := True
   reference args := .returned (.cons (args.get .here && args.get (.there .here)) .nil)
   valid _ args _ := by
-    match args with | .cons a (.cons c .nil) => rfl
+    match args with | .cons a (.cons c .nil) => cases a <;> rfl
 
 /- The outer two-table relation uses the same finite-sum installation twice. -/
 set_option backward.isDefEq.respectTransparency false in
@@ -213,54 +220,64 @@ def pairRelation : ReferenceLaw model
     [.vector field, .vector field, .field field, .field field] [.boolean] where
   body := .letOp (.invoke (totalHelper field b)) (.cons .here .nil) .nil <|
     .letOp (.fieldEqual field) (.cons (.there (.there (.there .here))) (.cons .here .nil)) .nil <|
-    .letOp (.invoke (totalHelper field b)) (.cons (.there (.there (.there .here))) .nil) .nil <|
-    .letOp (.fieldEqual field) (.cons (.there (.there (.there (.there (.there (.there .here))))))
-      (.cons .here .nil)) .nil <|
-    .letOp .booleanAnd (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
+    .letOp (.branch [.vector field, .field field] [.boolean])
+      (.cons .here (.cons (.there (.there (.there .here)))
+        (.cons (.there (.there (.there (.there (.there .here))))) .nil)))
+      (.cons (.letOp (.invoke (totalHelper field b)) (.cons .here .nil) .nil <|
+        .letOp (.fieldEqual field) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
+        .ret (.cons .here .nil)) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
     .ret (.cons .here .nil)
   Requires table args :=
     invoke table (totalHelper field b) (.cons (args.get .here) .nil) =
       primitiveOutcome (totalOutcome model field (args.get .here)) ∧
-    invoke table (totalHelper field b) (.cons (args.get (.there .here)) .nil) =
-      primitiveOutcome (totalOutcome model field (args.get (.there .here)))
+    ((args.get .here).length < indexLimit → args.get (.there (.there .here)) = (args.get .here).sum →
+      invoke table (totalHelper field b) (.cons (args.get (.there .here)) .nil) =
+        primitiveOutcome (totalOutcome model field (args.get (.there .here))))
   reference args :=
     if (args.get .here).length < indexLimit then
-      if (args.get (.there .here)).length < indexLimit then
-        .returned (.cons (decide (args.get (.there (.there .here)) = (args.get .here).sum ∧
-          args.get (.there (.there (.there .here))) = (args.get (.there .here)).sum)) .nil)
-      else .stopped .exhausted
+      if args.get (.there (.there .here)) = (args.get .here).sum then
+        if (args.get (.there .here)).length < indexLimit then
+          .returned (.cons (decide (args.get (.there (.there (.there .here))) = (args.get (.there .here)).sum)) .nil)
+        else .stopped .exhausted
+      else .returned (.cons false .nil)
     else .stopped .exhausted
   valid table args dependencies := by
     match args with
     | .cons xs (.cons ys (.cons a (.cons c .nil))) =>
       obtain ⟨left, right⟩ := dependencies
-      change (invoke table (totalHelper field b) (.cons xs .nil)).bind _ = _
       change invoke table (totalHelper field b) (.cons xs .nil) = _ at left
-      change invoke table (totalHelper field b) (.cons ys .nil) = _ at right
+      change (invoke table (totalHelper field b) (.cons xs .nil)).bind _ = _
       rw [left]
       by_cases bx : xs.length < indexLimit
-      · simp only [totalOutcome, Values.get, bx, ↓reduceIte, primitiveOutcome, PIR.Process.bind]
-        change (invoke table (totalHelper field b) (.cons ys .nil)).bind _ = _
-        rw [right]
-        by_cases bys : ys.length < indexLimit <;>
-          simp [totalOutcome, Values.get, bys, primitiveOutcome, PIR.Process.bind]
-        rfl
+      · by_cases matchesLeft : a = xs.sum
+        · have next := right bx matchesLeft
+          change invoke table (totalHelper field b) (.cons ys .nil) = _ at next
+          by_cases bys : ys.length < indexLimit <;>
+            simp [Region.denote, Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
+        Values.get, Environment.prepend, Environment.push, Evaluation.invokeCallbackOn, PIR.Process.bind, primitiveOutcome, totalOutcome, bx, matchesLeft, next, bys]
+        · simp [Region.denote, Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
+        Values.get, Environment.prepend, Environment.push, Evaluation.invokeCallbackOn, PIR.Process.bind, primitiveOutcome, totalOutcome, bx, matchesLeft]
       · simp [totalOutcome, Values.get, bx, primitiveOutcome, PIR.Process.bind]
-
 
 set_option backward.isDefEq.respectTransparency false in
 /-- Table shape is independent of scalar truth and helper admission. -/
 def tableShape (metadata : MultilinearBodies.Bindings) : ReferenceLaw model
     [.vector field, .index, .index] [.boolean] where
-  body := .letOp (.invoke (⟨ metadata.width, .math, [(.vector field), .index, .index], [.index] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .letOp (.indexConstant 1) .nil .nil <|
-  .letOp .indexEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp (.invoke (⟨ metadata.values, .math, [(.vector field), .index, .index], [(.vector field)] ⟩ : Helper)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil <|
-  .letOp (.vectorLength field) (.cons .here .nil) .nil <|
-  .letOp (.invoke (⟨ metadata.dimension, .math, [(.vector field), .index, .index], [.index] ⟩ : Helper)) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil))) .nil <|
-  .letOp .indexPowerOfTwo (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
-  .ret (.cons .here .nil)
+  body := .letOp (.invoke ⟨metadata.width, .math, [.vector field, .index, .index], [.index]⟩)
+    (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+    .letOp (.indexConstant 1) .nil .nil <|
+    .letOp .indexEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
+    .letOp (.branch [.vector field, .index, .index] [.boolean])
+      (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here))))
+        (.cons (.there (.there (.there (.there (.there .here))))) .nil))))
+      (.cons (.letOp (.invoke ⟨metadata.values, .math, [.vector field, .index, .index], [.vector field]⟩)
+        (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+        .letOp (.vectorLength field) (.cons .here .nil) .nil <|
+        .letOp (.invoke ⟨metadata.dimension, .math, [.vector field, .index, .index], [.index]⟩)
+          (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))) .nil <|
+        .letOp .indexPowerOfTwo (.cons (.there .here) (.cons .here .nil)) .nil <|
+        .ret (.cons .here .nil)) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
+    .ret (.cons .here .nil)
   Requires table args :=
     invoke table ⟨metadata.width, .math, [.vector field, .index, .index], [.index]⟩ args =
       .done (.cons (args.get (.there (.there .here))) .nil) ∧
@@ -277,15 +294,13 @@ def tableShape (metadata : MultilinearBodies.Bindings) : ReferenceLaw model
       change (invoke table ⟨metadata.width, .math, [.vector field, .index, .index], [.index]⟩
         (.cons xs (.cons n (.cons w .nil)))).bind _ = _
       rw [width]
-      change (invoke table ⟨metadata.values, .math, [.vector field, .index, .index], [.vector field]⟩
-        (.cons xs (.cons n (.cons w .nil)))).bind _ = _
-      rw [values]
-      change (invoke table ⟨metadata.dimension, .math, [.vector field, .index, .index], [.index]⟩
-        (.cons xs (.cons n (.cons w .nil)))).bind _ = _
-      rw [dimension]
-      change (PIR.Process.done (.cons (decide (w = 1) && naturalPowerOfTwo xs.length n) .nil) :
-        Closed (Values model.Value [.boolean])) = _
-      rw [naturalPowerOfTwo_eq_decide]
-      simp [primitiveOutcome]
+      by_cases one : w = 1
+      · subst w
+        simp only [Values.get] at values dimension
+        simp [Region.denote, Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
+        Values.get, Environment.prepend, Environment.push, Evaluation.invokeCallbackOn, PIR.Process.bind, primitiveOutcome, values, dimension, naturalPowerOfTwo_eq_decide]
+      · simp [Region.denote, Evaluation.meaningOn, Evaluation.operationOn, Operands.eval, Regions.denote,
+          Values.get, Environment.prepend, Environment.push, Evaluation.invokeCallbackOn, PIR.Process.bind,
+          primitiveOutcome, one]
 
 end Zkc.Source.Structured.ReferenceLibrary.Sum

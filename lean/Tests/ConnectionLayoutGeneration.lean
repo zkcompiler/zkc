@@ -21,7 +21,8 @@ private def checkShift (before after : Participant) : Except String Unit := do
     let replace (yielded : List Nat) :=
       { after with instructions := after.instructions.mapIdx fun index instruction =>
         if right.path == [index] then
-          { instruction with operation := .loop right.site right.maximum yielded }
+          { instruction with regions := instruction.regions.map fun region =>
+            { region with yielded := yielded } }
         else instruction }
     for yielded in [right.yielded.tail, [1000000]] do
       match Frames.analyze (replace yielded) with

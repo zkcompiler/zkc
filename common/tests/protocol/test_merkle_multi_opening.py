@@ -74,7 +74,7 @@ class Case:
         self.package = directory / 'opening.zkpkg'
         report = journal.json([toolchain.runtime, '--json', 'compile', '--source-format=zkc', f'--compiler={toolchain.compiler}',
                                f'--module=sample={source}', 'sample::Demo',
-                               f'--output={self.package}', *library_modules(*core_packages())])
+                               f'--output={self.package}', *library_modules(*core_packages('zkc'))])
         self.pin = report['package_sha256']
         assert self.pin == hashlib.sha256(self.package.read_bytes()).hexdigest()
         self.runs = 0

@@ -103,14 +103,70 @@ Source/candidate and original-acceptance correspondence are checked facts, not
 external premises. Native history separately names installed host invocation
 initialization among its premises; local profiles do not inherit that binding.
 
-All three profiles report `terminal_outside_query`: non-delivery event templates
-following the final query template. Absorption into a final history state is
-not coverage by a subsequent query or an external authentication of that final
-state. For repeats this is a syntactic template suffix, not a claim that every
-template executes or an enumeration of dynamic last occurrences; the repeat
-coordinates and actual continuing trace determine those. History profiles check
-all reached transition templates, including that suffix. The explicit-input
-profile supports only a nonrepeated event sequence.
+All three profiles report `terminal_outside_query`. For a branch-free entry it
+is the ordered non-delivery message templates following the final selected
+query template. The native-history and canonical-hash-history analyses derive
+the structured generalization directly from the admitted immutable prepared
+protocol function:
+
+- Read each block sequentially, adding each non-delivery message to its pending
+  set. A selected transcript query clears that set. Its exact draw delivery adds
+  nothing. Unselected private service queries are outside the transcript
+  inventory and do not clear it.
+- Read every branch arm from the same incoming pending set. At the join take
+  the union of the arms' outgoing sets, deduplicating shared incoming messages.
+  A query clears only its current arm. Emit the result in static source event
+  order, including arms in declaration order, never pointer or site-name order.
+- Read each repeat body once as a syntactic template, regardless of the runtime
+  trip count. Do not enumerate branch combinations or dynamic occurrences.
+- A child construction start must match its admitted start event, including its
+  input types. It is an invocation boundary, not a message or a query: it neither
+  adds to nor clears the pending set. This structural treatment does not admit
+  child resets into a binding profile that otherwise refuses them. Root
+  initialization is handled by the profile, not as a source message event.
+
+Thus `m0; if {q; delivery} else {m1}; m2` reports `m0,m1,m2`. If both arms query,
+neither retains `m0`. A later unconditional query clears the entire joined set.
+Branch-free report bytes retain the existing suffix meaning.
+
+The private helper `summarizeConstructionTerminal` borrows the prepared
+`protocol.func`, actual admitted events and selected query/delivery pairs.
+The caller retains the source owner through analysis, separately from any
+replaced or mutated candidate. Source formation and independent event/draw
+admission remain prerequisites: a producer report is never a source of control
+structure or authority. The helper checks complete one-to-one coverage in
+static order of source exchanges, selected queries and starts, with matching
+site, event kind, payload or start inputs, and repeat depth. Missing, extra,
+duplicate, reordered or mismatched events refuse with
+`construction-binding-coverage`. Missing, duplicate or wrong-kind draw endpoints
+also refuse. Exact query/delivery value and control association remains part of
+independent admission. Unexpanded protocol applications also refuse.
+
+This summary has its own ceiling of 100,000 charged work units and 64 nested
+regions. The private budget argument can reduce that ceiling for callers and
+capacity controls; it cannot raise it. Work includes event/draw ingestion,
+site comparisons, index insertion and movement, operation/region traversal,
+pending-set growth and copying, clearing, unions and terminal materialization.
+Exhaustion returns `construction-binding-capacity`, with no partial summary or
+report. The analysis holds only borrowed native references and transient event
+indices; it does not create another AST or execute selectors.
+
+The explicit-input profile still requires a nonrepeated sequence and refuses
+prepared Protocol branches with `construction-binding-selected-control`,
+including event-free arms. There is no explicit-state encoding join rule.
+This internal history-summary support does not enable the public selected-proof
+pipeline: its global selected-control refusal guards remain until the other
+construction consumers migrate.
+
+Absorption into a final history state is not coverage by a subsequent query or
+external authentication of that final state. The report is not path-complete
+for early completion, a zero-trip execution theorem, or a statement that all
+listed templates execute. A syntactically later query can clear a message even
+when runtime completion would prevent reaching that query. Actual repeat
+coordinates and the continuing trace determine dynamic occurrences. History
+profiles separately check transition templates, including terminal messages;
+this report adds no runtime acceptance, formal correspondence or security
+theorem.
 
 Local coverage contains `hash`, ordered `transitions`, `encoding_graph` and
 `terminal_outside_query`. Transitions identify the actual digest expression,

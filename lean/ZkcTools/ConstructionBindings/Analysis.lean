@@ -78,12 +78,17 @@ templates, never by its instruction count, name, or position in a fixed layout. 
 def analyzeWithContext (program : Program) (context : Zkc.Construction.Context)
     (artifact : Participant) : Except String Layout := do
   let calls ← sourceCalls program context
+  let mut slots := artifact.inputs
   let mut offset := artifact.inputs.length
   let mut loops := []
   for (instruction, index) in artifact.instructions.zipIdx do
     match instruction.operation with
-    | .loop site maximum yielded =>
-        let retained := templates instruction.body
+    | .loop site maximum =>
+        let [region] := instruction.regions | throw "construction-binding-loop-region"
+        unless region.inputs == .data .index :: instruction.results do
+          throw "construction-binding-loop-signature"
+        let yielded := region.yielded
+        let retained := templates region.instructions
         let call ← unique "loop-source-association" (calls.filter fun call =>
           retained.contains call.query && retained.contains call.delivery &&
           call.messages.all retained.contains)
@@ -91,11 +96,15 @@ def analyzeWithContext (program : Program) (context : Zkc.Construction.Context)
           throw "construction-binding-unclaimed-template"
         let count :: initial := instruction.operands | throw "construction-binding-loop-operands"
         unless (count :: initial).all (· < offset) do throw "construction-binding-forward-reference"
-        loops := loops ++ [⟨index, offset, site, maximum, count, initial, yielded, instruction.body, call⟩]
+        loops := loops ++ [⟨index, offset, site, maximum, count, initial, yielded, region.instructions, call⟩]
+    | .mathBranch =>
+        unless (checkMathStep (fun _ _ _ => true) slots instruction).isOk do
+          throw "construction-binding-math-region"
     | _ =>
-        unless instruction.body.isEmpty do throw "construction-binding-unclaimed-region"
+        unless instruction.regions.isEmpty do throw "construction-binding-unclaimed-region"
         unless instruction.operands.all (· < offset) do throw "construction-binding-forward-reference"
     offset := offset + instruction.results.length
+    slots := slots ++ instruction.results
   unless loops.map (·.call.application) == calls.map (·.application) do
     throw "construction-binding-call-order"
   unless artifact.returned.all (· < offset) do throw "construction-binding-return-reference"

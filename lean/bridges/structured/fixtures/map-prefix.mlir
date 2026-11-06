@@ -400,7 +400,7 @@
     }) {runtime.region} : () -> ()
     "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>, no_inline, sym_name = "zkl_96cd7ea616c46001ac0fa39e06ab5b8042d6d50ce126ce52a57cd4f1fd0ed9be", sym_visibility = "private"}> ({
     ^bb0(%arg48: !runtime.scope, %arg49: !data.field_vector<"bls12-381.fr">, %arg50: ui64, %arg51: ui64, %arg52: !data.field_vector<"bls12-381.fr">):
-      %73 = "func.call"(%arg48, %arg49, %arg50, %arg51, %arg52) <{callee = @zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2}> {runtime.site = "s0"} : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
+      %73 = "func.call"(%arg48, %arg49, %arg50, %arg51, %arg52) <{callee = @zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c}> {runtime.site = "s0"} : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
       "exec.dispatch"(%73)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
     ^bb1(%74: !data.field_vector<"bls12-381.fr">, %75: ui64, %76: ui64):  // pred: ^bb0
       %77 = "exec.returned"(%74, %75, %76) : (!data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
@@ -524,9 +524,9 @@
       %17 = "algebra.field_add"(%arg21, %16) : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       "func.return"(%17) : (!algebra.field<"bls12-381.fr">) -> ()
     }) : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>, no_inline, sym_name = "zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", sym_visibility = "private"}> ({
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>, no_inline, sym_name = "zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c", sym_visibility = "private"}> ({
     ^bb0(%arg16: !runtime.scope, %arg17: !data.field_vector<"bls12-381.fr">, %arg18: ui64, %arg19: ui64, %arg20: !data.field_vector<"bls12-381.fr">):
-      %8 = "exec.fold"(%arg16, %arg20, %arg17, %arg18, %arg19) <{domain = @finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain, site = "s0", step = @finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
+      %8 = "exec.fold"(%arg16, %arg20, %arg17, %arg18, %arg19) <{domain = @finite_zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c_s0_domain, site = "s0", step = @finite_zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c_s0_body}> : (!runtime.scope, !data.field_vector<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
       "exec.dispatch"(%8)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
     ^bb1(%9: !data.field_vector<"bls12-381.fr">, %10: ui64, %11: ui64):  // pred: ^bb0
       %12 = "exec.returned"(%9, %10, %11) : (!data.field_vector<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
@@ -535,12 +535,12 @@
       %14 = "exec.failed"(%13) : (!exec.stop) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
       "func.return"(%14) : (!exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
     }) {runtime.origin = ["s3h7a6b636h66696e6974654h666f6c64", []]} : () -> ()
-    "data.domain"() <{function_type = (!data.field_vector<"bls12-381.fr">) -> !data.domain<!algebra.field<"bls12-381.fr">>, sym_name = "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain", sym_visibility = "private"}> ({
+    "data.domain"() <{function_type = (!data.field_vector<"bls12-381.fr">) -> !data.domain<!algebra.field<"bls12-381.fr">>, sym_name = "finite_zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c_s0_domain", sym_visibility = "private"}> ({
     ^bb0(%arg15: !data.field_vector<"bls12-381.fr">):
       %7 = "data.domain_elements"(%arg15) : (!data.field_vector<"bls12-381.fr">) -> !data.domain<!algebra.field<"bls12-381.fr">>
       "data.domain_yield"(%7) : (!data.domain<!algebra.field<"bls12-381.fr">>) -> ()
     }) : () -> ()
-    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !algebra.field<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>, no_inline, sym_name = "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", sym_visibility = "private"}> ({
+    "func.func"() <{function_type = (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !algebra.field<"bls12-381.fr">, !data.field_vector<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>, no_inline, sym_name = "finite_zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c_s0_body", sym_visibility = "private"}> ({
     ^bb0(%arg9: !runtime.scope, %arg10: !data.field_vector<"bls12-381.fr">, %arg11: ui64, %arg12: ui64, %arg13: !algebra.field<"bls12-381.fr">, %arg14: !data.field_vector<"bls12-381.fr">):
       %0 = "func.call"(%arg9, %arg10, %arg11, %arg12, %arg13) <{callee = @zkl_195a79478f48dffc2a6917273d8317df0fabae786920a46fa2ac6b2737144299}> {runtime.site = "body"} : (!runtime.scope, !data.field_vector<"bls12-381.fr">, ui64, ui64, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
@@ -550,7 +550,7 @@
     ^bb2(%5: !exec.stop):  // pred: ^bb0
       %6 = "exec.failed"(%5) : (!exec.stop) -> !exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>
       "func.return"(%6) : (!exec.outcome<(!data.field_vector<"bls12-381.fr">, ui64, ui64)>) -> ()
-    }) {runtime.origin = ["finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", []]} : () -> ()
+    }) {runtime.origin = ["finite_zkl_996952b039ad24d4f2c66174445e8074e4a329781c30c069ccc851c3fe38567c_s0_body", []]} : () -> ()
     "func.func"() <{function_type = (!data.field_vector<"bls12-381.fr">, ui64, ui64) -> !data.field_vector<"bls12-381.fr">, sym_name = "zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", sym_visibility = "private"}> ({
     ^bb0(%arg6: !data.field_vector<"bls12-381.fr">, %arg7: ui64, %arg8: ui64):
       "func.return"(%arg6) : (!data.field_vector<"bls12-381.fr">) -> ()

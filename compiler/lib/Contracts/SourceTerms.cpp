@@ -48,8 +48,10 @@ bool decimal(const json::Value &value) {
          all_of(*s, [](char c) { return c >= '0' && c <= '9'; });
 }
 struct Reader {
+  enum class Category { Term, Descriptor, Natural };
   unsigned remaining = 4096;
-  bool term(const json::Value &value, unsigned depth = 0) {
+  bool term(const json::Value &value, unsigned depth = 0,
+            Category category = Category::Term) {
     if (!remaining || depth >= 64)
       return false;
     --remaining;
@@ -59,14 +61,32 @@ struct Reader {
     auto tag = (*a)[0].getAsString();
     if (!tag)
       return false;
-    auto arguments = [&](unsigned index) {
+    if (category == Category::Natural && *tag != "nat")
+      return false;
+    if (category == Category::Descriptor && *tag != "descriptor-product" &&
+        *tag != "descriptor-sequence" && *tag != "builtin")
+      return false;
+    auto arguments = [&](unsigned index,
+                         Category childrenCategory = Category::Term) {
       auto children = (*a)[index].getAsArray();
       return children && children->size() <= 512 &&
              children->size() <= remaining &&
              all_of(*children, [&](const json::Value &child) {
-               return term(child, depth + 1);
+               return term(child, depth + 1, childrenCategory);
              });
     };
+    if (*tag == "descriptor-product")
+      return a->size() == 2 && arguments(1, Category::Descriptor);
+    if (*tag == "descriptor-sequence")
+      return a->size() == 3 && term((*a)[1], depth + 1, Category::Descriptor) &&
+             ((*a)[2].kind() == json::Value::Null ||
+              term((*a)[2], depth + 1, Category::Natural));
+    // An exact wire leaf schema, not authority derived from a builtin name.
+    // Its payload remains a general term; source formation checks eligibility.
+    if (category == Category::Descriptor)
+      return a->size() == 3 && (*a)[1].getAsString() == "finite" &&
+             (*a)[2].getAsArray() && (*a)[2].getAsArray()->size() == 1 &&
+             arguments(2);
     if (*tag == "nat")
       return a->size() == 2 && decimal((*a)[1]);
     if (*tag == "field" || *tag == "group")

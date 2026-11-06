@@ -88,7 +88,7 @@ Checker::associated(const Declaration &context, const Type &base,
       if (current.symbolic) {
         if (auto *parameter = types.parameter(current.domain);
             parameter && parameter->interface) {
-          owner = &output.declarations[parameter->interface->index];
+          owner = &declarations[parameter->interface->index];
           auto selected = moduleParameterReferences.find(parameter->atom);
           if (selected != moduleParameterReferences.end()) {
             reference = selected->second.reference;
@@ -98,7 +98,7 @@ Checker::associated(const Declaration &context, const Type &base,
         } else if (StringRef(current.domain).starts_with("self:")) {
           if (auto id =
                   index().canonical(StringRef(current.domain).drop_front(5)))
-            owner = &output.declarations[id->index];
+            owner = &declarations[id->index];
         }
       } else
         owner = types.typeDeclaration(current);
@@ -140,17 +140,19 @@ std::optional<Type> Checker::type(const Declaration &context,
                                   const SyntaxType &s, unsigned depth,
                                   bool allowPlacement) {
   SaveAndRestore site(referenceSite, s.referenceSite);
-  auto result = elaborateType(context, s, depth, allowPlacement);
-  if (result && !types.chargeType(*result, s.span))
+  auto elaborated = elaborateType(context, s, depth, allowPlacement);
+  auto result = std::move(elaborated.value);
+  if (result && !elaborated.complete && !types.chargeType(*result, s.span))
     return {};
   if (result && result->kind == Type::Kind::LogicalRecord &&
       !types.logicalRecord(*result, s.span))
     return {};
   return result;
 }
-std::optional<Type> Checker::elaborateType(const Declaration &context,
-                                           const SyntaxType &s, unsigned depth,
-                                           bool allowPlacement) {
+Checker::ElaboratedType Checker::elaborateType(const Declaration &context,
+                                               const SyntaxType &s,
+                                               unsigned depth,
+                                               bool allowPlacement) {
   if (depth > work.limits.typeDepth || !types.charge(1, s.span)) {
     if (!types.diagnostic)
       types.fail("source.limit", "source type complexity limit exceeded",
@@ -273,8 +275,8 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       return {};
     }
     Type result(K::Array);
-    result.arguments = {*element};
-    result.dimension = count->dimension;
+    result.arguments.push_back(std::move(*element));
+    result.dimension = std::move(count->dimension);
     return result;
   }
   if (s.kind == S::Tuple) {
@@ -348,7 +350,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
           return {};
         continue;
       }
-      const auto &decl = output.declarations[id->index];
+      const auto &decl = declarations[id->index];
       if (decl.kind != Declaration::Kind::Domain &&
           decl.kind != Declaration::Kind::Associated &&
           decl.kind != Declaration::Kind::Alias)
@@ -376,14 +378,14 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
   if (!signature(*id, depth + 1))
     return {};
   if (auto *row = index().association(*id);
-      row && row->rule == protocol::FrontendSignature::RandomConstructor) {
+      row && row->rule() == protocol::FrontendSignature::RandomConstructor) {
     types.fail("source.service",
                "managed constructor requires a protocol service port", s.span);
     return {};
   }
-  auto &decl = output.declarations[id->index];
+  auto &decl = declarations[id->index];
   if (decl.kind == Declaration::Kind::Associated) {
-    auto &parent = output.declarations[decl.parent->index];
+    auto &parent = declarations[decl.parent->index];
     Type base(K::Module, parent.kind == Declaration::Kind::Interface
                              ? "self:" + parent.qualifiedName
                              : parent.qualifiedName);
@@ -429,6 +431,47 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                        s.span))
     return {};
   typeReferences.insert_or_assign(s.referenceSite, *reference);
+  if (const auto *head = index().constructorAssociation(*id)) {
+    const auto *constructor = protocol::frontendConstructor(head->constructor);
+    if (!constructor || decl.installedDeclaration != index().association(*id)) {
+      types.fail("source.installation", "contract head installation differs",
+                 s.span);
+      return {};
+    }
+    bool product = constructor->form ==
+                   protocol::FrontendConstructorForm::DescriptorProduct;
+    if (!s.labels.empty() ||
+        (!product && s.arguments.size() != 1 && s.arguments.size() != 2) ||
+        s.arguments.size() > work.limits.aggregateLeaves) {
+      types.fail("source.descriptor", "contract head argument shape differs",
+                 s.span);
+      return {};
+    }
+    if (!types.charge(s.arguments.size(), s.span))
+      return {};
+    Type result(product ? K::DescriptorProduct : K::DescriptorSequence);
+    for (auto [position, child] : llvm::enumerate(s.arguments)) {
+      auto argument = type(context, child, depth + 1);
+      if (!argument)
+        return {};
+      bool extent = !product && position == 1;
+      if (extent ? argument->kind != K::Natural : !isDescriptor(*argument)) {
+        types.fail("source.descriptor",
+                   extent
+                       ? "Sequence extent requires a natural"
+                       : "contract head child requires a concrete descriptor",
+                   child.span);
+        return {};
+      }
+      result.arguments.push_back(std::move(*argument));
+    }
+    return result;
+  }
+  if (index().schemeAssociation(*id)) {
+    types.fail("source.descriptor-scheme", "View scheme is not a contract head",
+               s.span);
+    return {};
+  }
   auto args = arguments(context, decl, s.arguments, s.span, s.labels);
   if (!args)
     return {};
@@ -442,8 +485,9 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  "a placed alias is not an ordinary data type", s.span);
       return {};
     }
-    return types.substitute(decl.domain, types.substitution(decl, *args),
-                            s.span);
+    return ElaboratedType(
+        types.substitute(decl.domain, types.substitution(decl, *args), s.span),
+        /*complete=*/true);
   }
   Type result;
   if (decl.kind == Declaration::Kind::Record)

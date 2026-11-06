@@ -23,6 +23,8 @@ struct Permissions {
 /// sorts and cannot form runtime values. Parameters carry
 /// declaration-qualified atom identities. Nominal arguments include phantom
 /// parameters; representation is not identity.
+enum class DescriptorFamily { Finite };
+
 struct Type {
   enum class Kind {
     Boolean,
@@ -54,9 +56,17 @@ struct Type {
     /// constructor.
     OracleProjection,
     /// A nominal protocol product whose fields have independent placements.
-    LogicalRecord
+    LogicalRecord,
+    /// Installed structural family; never an ordinary Type argument or value.
+    Descriptor,
+    /// Ordered concrete descriptor contracts, including zero or one child.
+    DescriptorProduct,
+    /// One concrete descriptor child, then an optional typed natural extent.
+    /// Absence denotes a bounded finite payload whose length is not identity.
+    DescriptorSequence
   };
   Kind kind = Kind::Boolean;
+  DescriptorFamily family = DescriptorFamily::Finite;
   std::string domain;
   /// Catalog sort for static-only domains and asset sort for assets; Field and
   /// Group use their own kinds.
@@ -68,12 +78,16 @@ struct Type {
   Type() = default;
   Type(Kind kind, std::string domain = {})
       : kind(kind), domain(std::move(domain)) {}
-  bool operator==(const Type &b) const {
+  bool sameHead(const Type &b) const {
     if (kind == Kind::Natural && b.kind == Kind::Natural)
       return dimension == b.dimension;
-    return kind == b.kind && domain == b.domain && sort == b.sort &&
-           arguments == b.arguments && dimension == b.dimension &&
+    return kind == b.kind && (kind != Kind::Descriptor || family == b.family) &&
+           domain == b.domain && sort == b.sort &&
+           arguments.size() == b.arguments.size() && dimension == b.dimension &&
            symbolic == b.symbolic;
+  }
+  bool operator==(const Type &b) const {
+    return sameHead(b) && (kind == Kind::Natural || arguments == b.arguments);
   }
   bool operator!=(const Type &b) const { return !(*this == b); }
 };
@@ -99,6 +113,34 @@ Type assetType(llvm::StringRef sort, llvm::StringRef identity);
 /// The asset sort of an asset term; empty for every other kind.
 llvm::StringRef assetSort(const Type &);
 bool isStaticOnly(const Type &);
+bool isDescriptor(const Type &);
+/// Typed signature contract, independent of the callable mode.
+struct DescriptorContract {
+  /// Candidate representation, not admission evidence. Structural forms use
+  /// dedicated kinds, never installed leaf-family identities or data kinds.
+  Type type = Type(Type::Kind::Descriptor);
+  DescriptorContract() = default;
+  DescriptorContract(DescriptorFamily family, std::vector<Type> parameters)
+      : type(Type::Kind::Descriptor) {
+    type.family = family;
+    type.arguments = std::move(parameters);
+  }
+  explicit DescriptorContract(Type type) : type(std::move(type)) {}
+  bool operator==(const DescriptorContract &other) const {
+    return type == other.type;
+  }
+  bool operator!=(const DescriptorContract &other) const {
+    return !(*this == other);
+  }
+};
+/// Candidate projection only. Admission/replay must bound and validate before
+/// copying an untrusted term; a successful projection grants no authority.
+std::optional<DescriptorContract> descriptorContract(const Type &);
+/// Borrow the sole representation; no recursive copy or parallel walk engine.
+const Type &descriptorType(const DescriptorContract &);
+/// Finite interpretation only: reject every other family and incorrect arity.
+const Type *finiteDescriptorItem(const DescriptorContract &);
+const Type *finiteDescriptorItem(const Type &);
 /// Direct logical handle values; aggregate formation has its own recursive
 /// check.
 bool isOracleHandle(const Type &);
@@ -110,12 +152,20 @@ bool isLogicalValue(const Type &);
 bool isLogicalValue(const PlacedType &);
 /// Library constructor spelling, distinct from native-data eligibility.
 llvm::StringRef oracleConstructor(const Type &);
+/// Exact installed form's spelling for a logical head or descriptor family.
+llvm::StringRef frontendTypeConstructor(const Type &);
 llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);
 /// Injective lookup key within one checked snapshot; source-facing spelling is
 /// deliberately separate. It binds no source revision, so it never decides
 /// nominal equality across captures.
+/// Callers precharge TypeWork::Identity against their current cumulative
+/// ledger; this unchecked snapshot helper itself never establishes admission.
 std::string typeIdentity(const Type &);
+/// Append one snapshot key with the enclosing key's u64 little-endian length
+/// frame, avoiding a temporary full key and another copy. The Type key's own
+/// nested frames remain decimal. Same Identity precharge requirement.
+void frameTypeIdentity(std::string &, const Type &);
 /// The defining authority of a nominal declaration path: 64 lowercase hex
 /// for an authored or installed declaration, none for a generated one.
 using NominalAuthority =
@@ -127,9 +177,38 @@ using NominalAuthority =
 /// frame for a generated declaration. A symbolic module parameter names no
 /// declaration and adds no frame. Associated nodes are bound through their
 /// module argument.
+/// Enforces default candidate depth/node/identity-work ceilings itself;
+/// ledger-owning callers additionally precharge their remaining allowance.
 llvm::Expected<std::string> canonicalTypeKey(const Type &, NominalAuthority);
-/// Bound traversal and expanded identity material before copying a term.
-llvm::Expected<uint64_t> typeComplexity(const Type &, uint64_t nodes,
-                                        uint64_t depth);
+/// Budgeted key construction performs its sole preflight and debit before any
+/// key allocation or authority callback. Each invocation (including a cache
+/// lookup) must use the caller's actual remaining allowance. No admission or
+/// validated-handle authority is exported by this API.
+struct Limits;
+using TypeWorkCharge = llvm::function_ref<llvm::Error(uint64_t)>;
+llvm::Expected<std::string> canonicalTypeKey(const Type &, NominalAuthority,
+                                             const Limits &, uint64_t remaining,
+                                             TypeWorkCharge);
+/// Bound traversal, candidate descriptor shapes and the selected operation
+/// before copying a term or constructing its expanded identity. An optional
+/// ordinary static replacement borrows a
+/// complete selected term; its contents are not substituted a second time.
+using TypeReplacement = llvm::function_ref<const Type *(const Type &)>;
+/// Snapshot keys carry no nominal authority frames. Only canonical keys pay
+/// for authority resolution/text; neither is an ordinary Type copy.
+enum class TypeWork { Copy, Identity, CanonicalIdentity, StaticExport };
+/// Optional exact snapshot comparison fused into the bounded traversal. Every
+/// retained field (including assumptions and Natural metadata) participates,
+/// recursively. This is deliberately stricter than nominal Type equality.
+/// Only a comparison result, never validation or source admission authority.
+struct TypeComparison {
+  const Type &expected;
+  bool equal = true;
+};
+llvm::Expected<uint64_t>
+typeComplexity(const Type &, uint64_t nodes, uint64_t depth,
+               uint64_t work = UINT64_MAX, TypeReplacement = nullptr,
+               bool complete = true, TypeWork = TypeWork::Identity,
+               TypeComparison * = nullptr);
 } // namespace zkc::language
 #endif

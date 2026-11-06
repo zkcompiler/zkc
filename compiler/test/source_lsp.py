@@ -193,8 +193,8 @@ with case("whole project invalidation matches fresh checks after dependency edit
     root = records("dependencies")
     provider = root / "ops.zkc"
     consumer = root / "m.zkc"
-    provider_text = "def hidden(a: bool) -> bool:\n    a\npub def first(a: bool, b: bool) -> bool:\n    hidden(a)\npub operator infixl(60) ⊕ = first\n"
-    consumer_text = "use ops::{operator ⊕}\n" + SOURCE.replace("result = value", "result = value ⊕ false ⊕ true")
+    provider_text = "def hidden(a: bool) -> bool:\n    a\npub def first(a: bool, b: bool) -> bool:\n    hidden(a)\npub notation infixl(60) a ⊕ b = first(a,b)\n"
+    consumer_text = "use ops::{⊕}\n" + SOURCE.replace("result = value", "result = value ⊕ false ⊕ true")
     provider.write_text(provider_text)
     consumer.write_text(consumer_text)
     modules = [{"module": "ops", "uri": provider.as_uri()}, {"module": "m", "uri": consumer.as_uri()}]

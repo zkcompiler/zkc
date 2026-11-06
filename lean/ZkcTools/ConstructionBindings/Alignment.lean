@@ -4,6 +4,7 @@ public import Zkc.Construction.ConnectionCertificate
 public import Zkc.Construction.ConnectionInstallation
 public import ZkcTools.ConstructionBindings.Readback
 public meta import ZkcTools.ConstructionBindings.TargetPlacement
+public meta import ZkcTools.ConstructionBindings.MathRegion
 public meta import ZkcTools.ConstructionBindings.Family
 public meta import ZkcTools.ConstructionBindings.TargetEquality
 public meta import ZkcTools.ConstructionBindings.StructuralFacts
@@ -1114,6 +1115,48 @@ private def discoverReturn (discovery : CutDiscovery) (expected : Expr) : Tactic
       discovery.found.set (some index)
       throw (.internal discoveredCutException)
 
+/-- Discover an inlined Math slice from the checked declaration, the caller's
+physical readback and actual target syntax. Every proposed field is an input
+to the ordinary finite core certificate. -/
+private def inlineMath (goal : MVarId) (args : Array Expr) (source target definition body before after : Expr) :
+    TacticM (List MVarId) := do
+  let definitions := args[2]!
+  let layout := args[12]!
+  let sourceParts := source.getAppArgs
+  let arguments := sourceParts[sourceParts.size - 2]!
+  let beforeSyntax ← Term.exprToSyntax before
+  let afterSyntax ← Term.exprToSyntax after
+  let association ← Term.elabTerm (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel⟩))
+    (← mkAppM ``ConnectionMathRegion.Declaration #[definitions, definition])
+  let types ← listEntries (← mkAppM ``CheckedDefinition.inputs #[definition])
+  let indices ← types.mapM fun _ => mkFreshExprMVar (mkConst ``Nat)
+  let references ← mkListLit (mkConst ``Nat) indices.toList
+  let locations ← mkListLit (mkConst ``Original.Location)
+    (← indices.toList.mapM fun index => mkAppM ``Original.Location.data #[index])
+  let readback ← mkFreshExprMVar (← mkAppM ``ConnectionFrame.Readback #[layout, arguments, locations])
+  staticGoal readback.mvarId!
+  let references ← instantiateMVars references
+  let locations ← instantiateMVars locations
+  if references.hasExprMVar then throwError "alignment-computation-unresolved-input-location"
+  let extent ← mkAppM ``List.length #[layout]
+  let (slice, rest) ← withLocalDeclD `model (mkConst ``DomainModel) fun model => do
+    let slice ← MathRegion.propose before model locations extent body (mkApp target model)
+    return (slice, ← mkLambdaFVars #[model] slice.suffixBlock)
+  let yes ← mkEqRefl (mkConst ``Bool.true)
+  tracePhase "Math inline slice checked"
+  -- All indices, body evidence and the suffix are fixed. Applying the rule by
+  -- unification asks Lean to compare the denotations of physical blocks inside
+  -- a repeat. Build the single remaining premise directly; the kernel still
+  -- checks every supplied argument and the original goal's exact result type.
+  let rule := mkAppN (mkConst ``ConnectionCertificate.Alignment.inlineMath)
+    (args.extract 0 13 ++ #[definition, association, arguments, references, yes, yes,
+      readback, slice.spine, slice.extent, slice.yielded, slice.certificate, sourceParts.back!, rest])
+  let .forallE _ suffixType _ _ ← inferType rule | throwError "alignment-inline-suffix-expected"
+  let suffix ← mkFreshExprSyntheticOpaqueMVar suffixType
+  goal.assign (mkApp rule suffix)
+  tracePhase "Math inline suffix assigned"
+  return [suffix.mvarId!]
+
 private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscovery) (goal : MVarId) : TacticM Unit := goal.withContext <| withTransparency .all <|
     Term.withoutErrToSorry <| withoutRecover do
   let expected ← whnf (← instantiateMVars (← goal.getType))
@@ -1417,6 +1460,63 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
             (← `(($definitionsSyntax).get ⟨$(quote index), by decide +kernel⟩)) (mkConst ``CheckedDefinition)
           let beforeSyntax ← Term.exprToSyntax before
           let afterSyntax ← Term.exprToSyntax after
+          -- The source helper can run with optional inputs on another role.
+          -- For a strict step with a missing operand, read its actual return row
+          -- without proposing an instruction on that role's physical target.
+          if body.isAppOf ``Region.letOp then
+            let bp := body.getAppArgs
+            let op ← whnf bp[bp.size - 4]!
+            let returned ← whnf bp.back!
+            let total ← whnf (← mkAppM ``Op.total #[op])
+            if returned.isAppOf ``Region.ret && (op.isAppOf ``Op.branch || total.isConstOf ``Bool.true) then
+              let arguments := sourceParts[sourceParts.size - 2]!
+              let inputs := bp[bp.size - 3]!
+              let selectedInputs ← mkAppM ``NormalForm.lookup #[arguments, inputs]
+              let absent ← whnf (← mkAppM ``NormalForm.anyAbsent #[selectedInputs])
+              if absent.isConstOf ``Bool.true then
+                let opSyntax ← Term.exprToSyntax op
+                let inputsSyntax ← Term.exprToSyntax inputs
+                let regionsSyntax ← Term.exprToSyntax bp[bp.size - 2]!
+                let returnedSyntax ← Term.exprToSyntax returned.getAppArgs.back!
+                let strict ← if op.isAppOf ``Op.branch then
+                  `(ConnectionHelpers.StrictStep.branch _ _)
+                else `(ConnectionHelpers.StrictStep.total (by decide +kernel))
+                let certificate ← Term.elabTerm
+                  (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel, $opSyntax, $strict,
+                    $inputsSyntax, $regionsSyntax, $returnedSyntax, rfl⟩))
+                  (← mkAppM ``ConnectionHelpers.StrictBody #[args[2]!, selected])
+                Term.synthesizeSyntheticMVarsNoPostponing
+                let certificate ← instantiateMVars certificate
+                let missing ← mkAppM ``NormalForm.anyAbsent #[selectedInputs]
+                let rule ← finiteApplication ``ConnectionCertificate.Alignment.inlineMissingStrict
+                  ((args.extract 0 13).map some ++ #[some selected, some certificate, some arguments,
+                    some (← mkEqRefl missing), some sourceParts.back!, some target])
+                for pending in ← goal.apply rule do
+                  if (← whnf (← instantiateMVars (← pending.getType))).isAppOf ``ConnectionCertificate.Alignment then
+                    derive cache discovery pending
+                  else staticGoal pending
+                return
+          let single ← (do
+            unless body.isAppOf ``Region.letOp do return false
+            let tail ← whnf body.getAppArgs.back!
+            unless tail.isAppOf ``Region.ret do return false
+            let op := body.getAppArgs[body.getAppArgs.size - 4]!
+            let found ← whnf (← mkAppM ``Calculation.ofOp? #[op])
+            unless found.isAppOf ``Option.some do return false
+            return (← whnf (← mkAppM ``Op.total #[op])).isConstOf ``Bool.true : MetaM Bool)
+          unless body.isAppOf ``Region.ret || single do
+            -- A real helper instruction with a different key is a retained-call
+            -- mismatch. Do not diagnose it as an unsupported inlined calculation.
+            let startsWithHelper ← withLocalDeclD `model (mkConst ``DomainModel) fun model => do
+              let block ← viewHead (mkApp target model)
+              if block.isAppOf ``Domain.View.sequence then
+                return (← viewHead block.getAppArgs[1]!).isAppOf ``Domain.View.helper
+              return false
+            if startsWithHelper then break
+            tracePhase "Math inline proposal"
+            let pending ← inlineMath goal args source target selected body before after
+            for tail in pending do derive cache discovery tail
+            return
           let (rule, certificate, suppliedArguments, extra) ← if body.isAppOf ``Region.ret then do
               let projectionType ← mkAppM ``ConnectionHelpers.Projection #[args[2]!, selected]
               let positionsSyntax ← Term.exprToSyntax body.getAppArgs.back!
@@ -1439,14 +1539,8 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
                 (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel,
                   $operationSyntax, by decide +kernel, $inputsSyntax, $outputsSyntax, rfl⟩)) certificateType
               let arguments := sourceParts[sourceParts.size - 2]!
-              let selected ← mkAppM ``NormalForm.lookup #[arguments, bodyParts[bodyParts.size - 3]!]
-              let absent ← whnf (← mkAppM ``NormalForm.anyAbsent #[selected])
-              if absent.isConstOf ``Bool.true then
-                pure (``ConnectionCertificate.Alignment.inlineMissingCalculation, certificate,
-                  arguments, #[← mkEqRefl (mkConst ``Bool.true)])
-              else
-                pure (``ConnectionCertificate.Alignment.inlineCalculation, certificate,
-                  ← presentTerms scope arguments, #[])
+              pure (``ConnectionCertificate.Alignment.inlineCalculation, certificate,
+                ← presentTerms scope arguments, #[])
           Term.synthesizeSyntheticMVarsNoPostponing
           let constructor ← finiteApplication rule
             ((args.extract 0 13).map some ++ #[some selected, some certificate,

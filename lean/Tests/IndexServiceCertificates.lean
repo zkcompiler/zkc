@@ -7,6 +7,9 @@ public import ZkcTools.ConstructionBindings.Admission
 
 /-! Whole-root typed service certificates for the retained tiny source roots.
 All proposals are checked through the existing public connection boundary. -/
+-- Whole-root connection proposals retain large kernel terms. Check the roots
+-- in source order so independent proofs do not compete for memory.
+set_option Elab.async false
 set_option autoImplicit false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 12000000

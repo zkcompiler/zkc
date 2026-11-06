@@ -10,18 +10,27 @@ records implementation coverage.
 ## Declarations and descriptors
 
 ```text
-[pub] operator SYMBOL = CALLABLE;
-[pub] operator FIXITY(PRECEDENCE) SYMBOL = CALLABLE;
-[pub] notation OPENER HOLE ("," HOLE)* CLOSER = CALLABLE(HOLE, ...);
-[pub] reduction SYMBOL = CALLABLE ["," FILTERED_CALLABLE];
-[pub] indexing RECEIVER[INDEX ("," INDEX)*] = CALLABLE(RECEIVER, INDEX, ...);
+[pub] notation infixl(PRECEDENCE) LEFT SYMBOL RIGHT = CALLABLE(LEFT, RIGHT)
+[pub] notation infixr(PRECEDENCE) LEFT SYMBOL RIGHT = CALLABLE(LEFT, RIGHT)
+[pub] notation infix(PRECEDENCE) LEFT SYMBOL RIGHT = CALLABLE(LEFT, RIGHT)
+[pub] notation prefix(PRECEDENCE) SYMBOL HOLE = CALLABLE(HOLE)
+[pub] notation postfix(PRECEDENCE) HOLE SYMBOL = CALLABLE(HOLE)
+[pub] notation OPENER HOLE ("," HOLE)* CLOSER = CALLABLE(HOLE, ...)
+[pub] notation RECEIVER[INDEX ("," INDEX)*] = CALLABLE(RECEIVER, INDEX, ...)
+[pub] notation SYMBOL BINDER ∈ DOMAIN, BODY = CALLABLE(DOMAIN, fn(BINDER) => BODY)
+[pub] notation SYMBOL BINDER ∈ DOMAIN with PREDICATE, BODY = CALLABLE(DOMAIN, fn(BINDER) => PREDICATE, fn(BINDER) => BODY)
 ```
 
-`FIXITY` is `infixl`, `infixr`, `infix`, `prefix` or `postfix`. The first three
-mean left-associative, right-associative and nonassociative infix respectively.
-Custom precedence is an ASCII integer from 1 through 99. Infix calls have two
-data operands; prefix and postfix calls have one. A delimited call has one or
-more comma-separated expression holes.
+The 4.1 layout surface has one `notation` declaration head. `operator`,
+`indexing` and `reduction` declaration heads are retired in this surface.
+Legacy brace-format sources retain their existing parser until the enclosing
+library migration; they are not aliases in the layout grammar.
+
+`infixl`, `infixr` and `infix` mean left-associative, right-associative and
+nonassociative infix. Custom precedence is an ASCII integer from 1 through 99.
+ASCII syntax has fixed precedence and association even in an explicit binding.
+Infix calls have two data operands; prefix and postfix calls have one.
+A delimited call has one or more comma-separated expression holes.
 
 An operator descriptor is keyed by symbol and position: prefix, infix or
 postfix. Precedence, association and arity are properties of that descriptor,
@@ -29,18 +38,15 @@ not overload selectors. A delimiter descriptor is keyed by its opener; its
 closer and hole count must agree wherever that key is visible. Matching
 descriptors can carry multiple callable targets. Conflicting shapes refuse
 before type inference, regardless of whether any expression uses them.
-
-The short form `operator ⊙ = hadamard;` requires exactly one visible descriptor
-for `⊙`. It binds a target to that descriptor; callable arity and operand types
-never choose syntax. An explicit declaration creates a descriptor or repeats
-an identical visible shape. Prefix and infix may share a symbol. Postfix and
-infix may not share one symbol in the same environment.
+Prefix and infix may share a symbol. Postfix and infix may not share a symbol
+in one environment. Every declaration writes its holes and exact target call;
+there is no short operator declaration in 4.1.
 
 A reduction descriptor has its own position, a domain and a scoped body, with
 an optional scoped predicate. Its non-ASCII mathematical symbol has fixed body
 binding power 67. ASCII operators and `∈` cannot name a reduction. Prefix and
-reduction descriptors cannot share a token. An `operator` declaration or selector
-does not bind or import a reduction descriptor.
+reduction descriptors cannot share a token. An operator-position selector does
+not import a reduction descriptor.
 
 The fixed grammar is:
 
@@ -51,14 +57,19 @@ The fixed grammar is:
 | `==` | Nonassociative infix | 50 | Yes |
 | `+`, `-` | Left infix | 65 | Yes |
 | `*` | Left infix | 70 | Yes |
+| `^` | Right infix | 72 | Yes |
 | `!` | Prefix | 75 | No |
 | Projection and method suffixes | Suffix | 100 | Fixed syntax |
 
-The four overloadable ASCII positions can only repeat these descriptors.
+The five overloadable ASCII positions can only repeat these descriptors.
 New positions require admitted non-ASCII symbols; ASCII unary minus is not
 introduced. Boolean control/formula syntax cannot acquire library bindings.
 Calls and grouping retain their fixed syntax. Natural expressions in type and
 static arguments retain their separate arithmetic grammar.
+
+The fixed `^` descriptor has no installed exponentiation binding in the current
+catalog. An ordinary source callable can bind that descriptor; syntax alone
+provides no exponentiation semantics.
 
 ## Expression association
 
@@ -86,7 +97,7 @@ backtracking or declaration order to choose a grammar.
 ## Delimiter calls and targets
 
 ```zkc
-pub notation ⟪ left, right ⟫ = dot(left, right);
+pub notation ⟪ left, right ⟫ = dot(left, right)
 ```
 
 Each hole name is distinct. The right-hand side is exactly one callable
@@ -128,27 +139,32 @@ Parentheses or an expression block include an addition in the body. A binder can
 begin an operand expression, including the right operand of multiplication.
 
 ```zkc
-pub reduction ∑ = sum, sum_where;
-pub reduction ∏ = product, product_where;
+pub notation ∑ x ∈ D, body = sum(D, fn(x) => body)
+pub notation ∑ x ∈ D with p, body = sum_where(D, fn(x) => p, fn(x) => body)
+pub notation ∏ x ∈ D, body = product(D, fn(x) => body)
 ```
 
-Each occurrence requires one canonical visible binding before inferring the
-body or result. Its unfiltered target has a domain input followed by one unary
-scoped callback. The optional filtered target has the same domain and body
-shape, with a Boolean predicate callback between them. Targets are ordinary
-Math or Local functions with one written result and no data or service inputs.
-Generic parameter sorts, permissions, interfaces, partial static arguments,
-item/result/output types, callback modes, allowances and normalized origin maps must correspond after
-parameter renaming. Each target retains its own independently checked input
-conditions and module identity; the pair asserts no equivalence law.
+Each occurrence requires one canonical visible binding for its filtered or
+unfiltered form before inferring the body or result. The unfiltered target has
+a domain input followed by one unary scoped callback. A filtered target takes
+the domain, a Boolean predicate callback and the body callback in that order.
+The binder and all ordinary holes have distinct names. The right-hand side must
+use the same binder in each callback and forward the domain, predicate and body
+holes exactly once in written order. Ambient captures and arbitrary expansions
+in a declaration template refuse. Either reduction form can be declared alone;
+neither declaration creates the other target.
 
-`with` requires the companion from that binding. A local unfiltered declaration
-replaces the entire inherited pair; it does not retain an outer predicate target.
-`finite` exports Local bindings and `finite_math` exports total Math bindings.
-`vector` reexports the Local bindings. Importing both families requires an
-explicit local binding or selective imports; mode and effects never choose one.
-For example, a mathematical function can declare
-`reduction ∑ = finite_math::sum, finite_math::sum_where;` in its declaration prefix.
+Targets are ordinary Math or Local finite consumers with one written result and
+no data or service inputs. Their callback item types, mode/effect ceilings and
+origin maps must pass the existing finite-consumer contract. Mode and effects
+never choose between multiple visible targets for one form. Each target keeps
+its own independently checked conditions and module identity. A View target
+requires the parent computation package's View admission; notation does not
+grant that permission.
+
+The legacy brace parser retains its paired `reduction` bindings and their
+cross-signature checks until library migration. Existing installed source
+closures are not rewritten by the layout notation change.
 
 Expansion creates an ordinary call with unary `fn(...) => ...` callbacks and structural
 domain products. Product construction never looks up a generated textual
@@ -161,21 +177,28 @@ without notation imports; the old `reduce callable [...] {...}` syntax is remove
 
 ## Imports and lexical scope
 
-`use zkc::vector as vec;` activates the module's public notation and imports a
-module alias. `use zkc::vector::{Vector, dot};` imports only those named exports.
-Selectors `operator ⊙`, `notation ⟪` and `reduction ∑` explicitly import their
-respective bindings; an operator selector imports all exported operator fixities
-for its token. For example:
+`use ops as selected` activates the module's public notation and imports a
+module alias. `use ops::{Vector, dot}` imports only those named declarations.
+Bare selectors `{⊙, ⟪ ⟫, [], ∑}` select unique exported descriptors, including all
+callable targets with that exact shape. The delimiter selector includes its
+closer. A glyph exported at both prefix and infix positions, or `[]` exported
+at several arities, refuses with `source.notation-ambiguous` even if unused.
+
+Explicit selectors `notation prefix ⊙`, `notation infix ⊙`,
+`notation postfix ⊙`, and `notation index(2)` select an existing descriptor key.
+The index arity counts the receiver. These are import selectors, not declaration
+heads. A named export mechanism is unnecessary in this bounded profile: distinct
+positions/arities have explicit keys, and different shapes at one key already
+conflict in the exporting module. Import order, callable types, modes and effects
+never resolve descriptor ambiguity.
 
 ```zkc
-use zkc::vector::{Vector, operator ⊙, notation ⟪, reduction ∑};
+use ops::{Vector, ⊙, ⟪ ⟫, [], ∑}
 ```
 
-These selectors require the corresponding public exports. A qualified named
-call alone activates no notation. `pub use` reexports original identities and
-resolved descriptors; duplicate paths to the same declaration deduplicate.
-An exported short binding carries the descriptor resolved in its original
-definition environment, not a descriptor chosen by its importer. Capturing a
+Missing exports refuse with `source.import`. A qualified named call alone
+activates no notation. `pub use` reexports original identities and resolved
+descriptors; duplicate paths to the same declaration deduplicate. Capturing a
 module remains separate from importing it; imports never discover source files.
 
 Module declarations have whole-module scope, including uses in earlier bodies.
@@ -183,10 +206,9 @@ Children inherit their parent's notation. Syntax environments are ordered by
 lexical containment and the original sites of imported notation; name-only
 imports add no notation dependency. A parent importing a child's notation while
 that child inherits the parent environment forms a cycle and refuses.
-A body or nested block first collects its entire declaration prefix, adds its
-explicit descriptors, resolves short bindings and freezes the environment before
-parsing statements. A short binding can therefore refer to an explicit descriptor
-later in that prefix. Bindings after executable statements refuse.
+Legacy brace bodies collect their declaration prefix and freeze its environment
+before parsing statements. Layout body-local declarations remain outside this
+projection; the module syntax environment is fixed before body parsing.
 
 A local binding replaces the inherited callable family for its descriptor key.
 Nested blocks inherit that replacement; unsuitable local targets never trigger
@@ -195,12 +217,12 @@ replacement cannot change an inherited shape or repair conflicting module
 imports. Module dictionaries remain explicit.
 
 Reduction bindings follow the same module, reexport and declaration-prefix
-rules. `reduction ∑ = my_sum;` in a block replaces that descriptor's inherited
+rules. A legacy body-local reduction declaration replaces its descriptor's inherited
 family; an unsuitable target never selects the outer library sum instead.
 
 ## Indexing
 
-`indexing values[position] = at(values, position);` binds `values[position]`
+`notation values[position] = at(values, position)` binds `values[position]`
 to an ordinary callable. Multiple indices, as in `matrix[row, column]`, are
 separate operands. Receiver and indices evaluate once from left to right;
 the declaration must forward every hole once in that order. The descriptor has
@@ -208,11 +230,13 @@ fixed suffix binding power 100, and its key includes operand count. Different
 index counts can coexist. Ordinary operand types choose among targets of the
 same count; result types, effects and bounds cannot resolve an overlap.
 
-`use module::{indexing []};` imports all exported indexing arities. Module aliases
-and `pub use` follow the ordinary notation rules. Body-local indexing declarations
+`use ops::{[]}` requires one exported indexing arity;
+`use ops::{notation index(2)}` selects the receiver-plus-one-index shape. Module aliases
+and `pub use` follow the ordinary notation rules. Legacy body-local indexing declarations
 replace the inherited family for the matching arity. Standard collection modules
 bind their total `at` accessors, whose conditions must be established in a total
-context. A Local function can explicitly bind its checked `get` accessor instead.
+context. Legacy Local bindings can select a checked `get` accessor; 4.1 notation
+requires a total target for indexing, with any bounds established at its call site.
 Selecting `at` never falls back to `get` when bounds are unavailable.
 
 Fixed source arrays `[T; N]` retain numeric literal projection without an import.
@@ -275,7 +299,8 @@ original UTF-8 byte spans. Default public inventory omits private/local data,
 including descriptors confined to private module scopes;
 installation data is independently opt-in. Descriptor views explain spelling,
 fixity, power or delimiter shape; bindings explain targets, statics, visibility
-and definition locations; occurrences explain authored operand order and checked
+and definition locations. A filtered-only declaration carries
+`filtered_only: true`; occurrences explain authored operand order and checked
 selection. Record identities are local to the retained checked project, not
 persistent cross-build identifiers.
 
@@ -285,14 +310,15 @@ Binder renderings show `fn(...) => ...` callbacks and use `×` to display struct
 that diagnostic product spelling is not an implicit source name lookup.
 Syntax metadata does not enter the native Entry interface or grant execution
 authority. Retained inventories survive the temporary parser and checker without
-requiring either to run again. Compiler spans and inspection support do not
-constitute an LSP server or source formatter.
+requiring either to run again. The independent [authoring surface](authoring.md) provides checked-syntax
+formatting in the retained notation environment. Formatting preserves notation
+declarations and occurrences instead of replacing them with canonical calls.
 
 ## Bounds
 
 `Limits.notationDescriptors` is 4096 distinct active descriptor keys per module
 or block environment, including the fixed arithmetic and Boolean descriptors.
-`Limits.notationHoles` is 64 holes per delimited descriptor.
+`Limits.notationHoles` is 64 holes per delimited or indexing descriptor.
 `Limits.notationInspectionBytes` is 8 MiB for inspection output. Callers may
 lower these ceilings; the CLI uses defaults.
 

@@ -48,7 +48,8 @@ def checkProducerStep (program : Program) (context : Context) (state : CheckStat
               definition.helper.outputs.all (fun ty => !(ty matches .service _)) then
             checkStep context state instruction
           else .error "construction-producer-helper-ports"
-  | ⟨.loop _ _ yielded, count :: initial, results, body⟩ =>
+  | ⟨.loop _ _, count :: initial, results, [⟨regionInputs, body, yielded⟩]⟩ =>
+      if regionInputs != .data .index :: results then .error "construction-loop-region-inputs" else
       match state.pending, initial.idxOf? state.current with
       | .none, some position =>
           let fresh := state.sorts.length

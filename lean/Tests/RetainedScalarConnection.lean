@@ -41,7 +41,8 @@ example : ¬ ScalarSupport.Message (.service "private") := ScalarSupport.service
 example : ¬ ScalarSupport.Message .index := ScalarSupport.index_not_message
 
 example : SchnorrAnd.validatorArtifact = SchnorrAndProofParticipant.participant := by rfl
-example : ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedValidator.artifact =
-    SchnorrAnd.validatorArtifact := by rfl
+-- The randomized sibling has a different instruction schedule.
+example : ZkcExamples.Structured.Generated.Constructed.SchnorrAndRandomizedValidator.artifact ≠
+    SchnorrAnd.validatorArtifact := by decide +kernel
 
 end Tests.RetainedScalarConnection

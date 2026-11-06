@@ -11,6 +11,7 @@ public import Zkc.Construction.ConnectionComputation
 public import Zkc.Construction.ConnectionPresence
 public import Zkc.Construction.ConnectionHelpers
 public import Zkc.Construction.ConnectionHelperProjection
+public import Zkc.Construction.ConnectionMathApplication
 public import Zkc.Construction.ConnectionHelperCalculation
 public import Zkc.Construction.ConnectionObservationPrefix
 public import Zkc.Construction.ConnectionServiceRoutes
@@ -317,6 +318,26 @@ inductive Alignment (routing : Original.Routing) :
       Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.math helper arguments next)
         (fun model => Domain.View.sequence
           (Domain.View.helper model program helper.name references (helper.outputs.map ValueSort.data)) (rest model))
+  | inlineMath {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees}
+      {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
+      {frames : ScopedFrames scope} {layout : Layout scope}
+      (definition : CheckedDefinition)
+      (association : ConnectionMathRegion.Declaration definitions definition)
+      (arguments : Values (Comp [] scope) definition.inputs)
+      (references : List Nat)
+      (inputsData : definition.inputs.all Domain.localType = true)
+      (outputsData : definition.outputs.all Domain.localType = true)
+      (readback : Readback layout arguments (references.map Original.Location.data))
+      {spine : ConnectionTargetPrefix.Prefix} {extent : Nat} {yielded : List Nat}
+      (body : ConnectionMathRegion.Alignment association.before definition.body
+        (references.map Original.Location.data) layout.length spine.block yielded extent)
+      {next : Form [] callees (.tuple definition.outputs :: scope) out} {rest : Block}
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history
+        (frames.rename .there) (ConnectionMathApplication.layout layout extent definition.outputs yielded) next rest) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
+        (.math definition.helper arguments next) (spine.plug rest)
   | projectionHelper {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
@@ -341,12 +362,12 @@ inductive Alignment (routing : Original.Routing) :
         (ConnectionSubstitution.form next (ConnectionSubstitution.tupleHead (calculation.result arguments))) target) :
       Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.math definition.helper (components arguments) next) target
-  | inlineMissingCalculation {context : ProtocolContext} {definitions : List CheckedDefinition}
+  | inlineMissingStrict {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees}
       {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
       {frames : ScopedFrames scope} {layout : Layout scope}
-      (definition : CheckedDefinition) (calculation : ConnectionHelpers.CalculationBody definitions definition)
+      (definition : CheckedDefinition) (calculation : ConnectionHelpers.StrictBody definitions definition)
       (arguments : Values (Comp [] scope) definition.inputs)
       (missing : anyAbsent (lookup arguments calculation.inputs) = true)
       {next : Form [] callees (.tuple definition.outputs :: scope) out} {target : Block}
@@ -739,9 +760,10 @@ abbrev compute := @Alignment.compute
 abbrev strictHelper := @Alignment.strictHelper
 abbrev ownedHelper := @Alignment.ownedHelper
 abbrev mathHelper := @Alignment.mathHelper
+abbrev inlineMath := @Alignment.inlineMath
 abbrev projectionHelper := @Alignment.projectionHelper
 abbrev inlineCalculation := @Alignment.inlineCalculation
-abbrev inlineMissingCalculation := @Alignment.inlineMissingCalculation
+abbrev inlineMissingStrict := @Alignment.inlineMissingStrict
 abbrev calculation := @Alignment.calculation
 abbrev receive := @Alignment.receive
 abbrev send := @Alignment.send
@@ -776,9 +798,10 @@ def Alignment.size {routing : Original.Routing} {context : ProtocolContext} {def
   | .strictHelper _ _ _ _ _ _ _ _ tail => 1 + tail.size
   | .ownedHelper _ _ _ _ _ _ _ _ _ tail => 1 + tail.size
   | .mathHelper _ _ _ _ _ _ _ _ _ tail => 1 + tail.size
+  | .inlineMath (tail := tail) .. => 1 + tail.size
   | .projectionHelper _ _ _ _ tail => 1 + tail.size
   | .inlineCalculation _ _ _ _ tail => 1 + tail.size
-  | .inlineMissingCalculation _ _ _ _ _ tail => 1 + tail.size
+  | .inlineMissingStrict _ _ _ _ _ tail => 1 + tail.size
   | .calculation _ _ _ _ _ _ _ tail => 1 + tail.size
   | .receive _ _ _ _ _ _ _ tail => 1 + tail.size
   | .send (tail := tail) .. => 1 + tail.size
@@ -984,6 +1007,39 @@ private noncomputable def sound
         environment (Original.encodeHelperResult values))
       exact ⟨.checkpoint _ kept
         (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons values.present binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) _ (tuple_frame model outputsData values binders related) kept)⟩
+  | @inlineMath context definitions callees selection out role scopes outputs history scope frames layout
+      definition association arguments references inputsData outputsData readback
+      spine extent yielded body next rest tail ih =>
+    apply Classical.choice
+    obtain ⟨values, present, read⟩ := read_components readback binders related
+    have tableEquality := bindings association.index
+    have sourceEq := ConnectionCalculations.form_math_present_closed model Occurrence.actions
+      (LawResults.empty model) context runs processes definitions definition.helper arguments values next binders present
+    rw [← tableEquality] at sourceEq
+    rw [sourceEq, Original.fold_bind, spine.plug_eq_bind]
+    rw [association.invoke model values]
+    have inputEncoding := Original.encodeHelperResult_eq inputsData values
+    obtain ⟨inputRelation, inputBound⟩ := ConnectionMathFrames.read_encoded values environment references
+      inputEncoding (read.trans inputEncoding)
+    have aligned := body.sound model values environment outputsData related.length.symm
+      (by simpa only [related.length] using inputBound) inputRelation
+    have folded := aligned.closedState routing state _
+    refine ⟨folded.bind ?_ ?_⟩
+    · intro _ frame kept
+      exact ArtifactBinding.captures_trans retained kept
+    · intro ⟨value, reached⟩ frame returned
+      obtain ⟨resultRead, size, capturedFrame⟩ := returned.1
+      have unchanged : reached = state := returned.2
+      subst reached
+      obtain ⟨resultRelation, _⟩ := ConnectionMathFrames.read_encoded value frame yielded
+        (Original.encodeHelperResult_eq outputsData value) resultRead
+      have nextRelated := ConnectionMathApplication.exit binders related capturedFrame extent size
+        value yielded resultRelation
+      have kept := ArtifactBinding.captures_trans retained capturedFrame
+      exact ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning
+          expectedFrames state stack captured (.cons value.present binders)
+          (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm)
+          frame nextRelated kept
   | @projectionHelper context definitions callees selection out role scopes outputs history scope frames layout definition projection arguments next target nextMatched tail ih =>
     have tableEquality := bindings ⟨projection.before.length, by
       have length := congrArg List.length projection.declarations
@@ -1031,7 +1087,7 @@ private noncomputable def sound
       Occurrence.actions tables context runs processes next binders]
     exact ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning
       expectedFrames state stack captured binders reachedStack environment related retained
-  | @inlineMissingCalculation context definitions callees selection out role scopes outputs history scope frames layout
+  | @inlineMissingStrict context definitions callees selection out role scopes outputs history scope frames layout
       definition calculation arguments missing next target nextMatched tail ih =>
     have tableEquality := bindings ⟨calculation.before.length, by
       have length := congrArg List.length calculation.declarations

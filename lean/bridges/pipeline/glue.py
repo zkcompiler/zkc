@@ -612,7 +612,6 @@ theorem accepted : checkLowering installed {glue}.participant validator = .ok lo
 set_option maxRecDepth 20000 in
 /-- The helpers the constructed validator calls. -/
 theorem helpers : Instruction.helpers {glue}.participant.instructions = {facts['helpers']} := by
-  rw [← Instruction.helperList_eq]
   decide +kernel
 """)
     if facts.get("calls") == 0:

@@ -27,9 +27,27 @@ check helper expansion, arm-local normalization, demand extraction and actual
 scoped recipe bodies. Native fixtures cover nested helpers, enum payloads,
 structural products and installed finite work. Program/CPU execution coverage is
 recorded by the [selected Math integration tests](../common/tests/protocol/test_selected_math.py).
+Native mathematical facts follow immutable selected-arm captures to their
+actual outer operands, retaining payload offsets and consumed dependency depth.
+Enclosing index bounds and captured constructor cardinalities remain available;
+selected payloads, results and equal types create no new premise. The
+[native transport controls](../compiler/test/mathematical_fact_transport.cpp) and
+[source transport controls](../compiler/test/language_index_fact_transport.cpp)
+cover this boundary and capacity exhaustion.
 Selected polynomial observations retain their existing admission restriction.
 Checked source-selected Math emission, actual native comparison and CPU
 execution are covered by the [selected source tests](../common/tests/protocol/test_selected_source.py).
+The independent [formal connection](../lean/docs/support.md#checked-connection-certificates)
+also retains both Boolean Math arms. The Schnorr conjunction and Chaum–Pedersen
+proof entries use this rule on actual generated participants. Their scalar
+presentations connect the admitted source to the existing mathematical verifiers;
+the connection checks physical operations and results separately. This does not
+extend the independent program-byte lowering profile.
+The maintained full FRI and multi-round Sumcheck proof entries export and pass
+independent structured-source admission, including selected Math helpers. FRI
+selects the logical oracle execution contract; Sumcheck selects the ordinary
+one. Admission alone supplies neither a compiled FRI connection nor a security
+or terminal-discharge theorem for either entry.
 Common-input requirements remain obligations on entry admission; no public bit,
 availability set or native formation result supplies input agreement.
 [Native control fixtures](../compiler/test/protocol_control.cpp) exercise this
@@ -39,25 +57,53 @@ exercise demanded base/transition induction, separate tag/payload/extent
 requirements, nested invocation identity, zero/one paths and exact work
 exhaustion. The [source recurrence tests](../compiler/test/language_common_recurrence.cpp)
 independently derive source requirements and compare complete inventories with
-the emitted native original. Recursive schema/component mapping and actual
+the emitted native original. Actual completed send components now forward their
+sender's immutable subject on the normal continuing path, including private
+configuration, helper results and delivered opaque Local/service results.
+Congruent total computations and typed projections preserve that agreement
+without inventing external common inputs. Nonreceivers, changed values and
+distinct opaque occurrences retain their separate subjects; selected joins and
+initial/step/zero-trip checks remain in force. This native control coverage adds
+no formal correspondence, statement authority or adversarial-honesty result.
+The selected-source Host tests also exercise fresh service draws and delivery
+inside zero- and multiple-iteration loops, including exact service transitions,
+wire counts, carried-result agreement and cleanup.
+Recursive schema/component mapping and actual
 SDK input admission are covered separately below.
 
 Oracle capacity, observation and storage inventories retain alternative arm
-coordinates. The existing oracle realization recipe refuses selected Protocol
-or participant control with `oracle-realization-control-profile`; native transcript construction,
-reverse requests and codecs likewise refuse their unsupported selected Protocol
-profiles before mutation. Total Data selections remain mathematical values:
-proof event readers preserve them and the existing checked projection and
-computation recipes preserve lazy execution. Reverse-request dependency
-reconstruction and formal export retain their separate support profiles.
-Checked source syntax, emission, structured-source and
-application-map carriers retain selected arms. Common-input derivation,
-publication and native SDK admission are integrated for the supported profile.
-The integrated Program and Rust runtime execute the selected native forms;
-independent formal interpretation remains separately owned. This boundary does
-not establish complete 4.1 control support through oracle/security realization.
-The [contract](spec/ir/control.md#selected-protocol-and-mathematical-regions)
-keeps the intended semantics separate from these limitations.
+coordinates. Native Oracle realization materializes selected common bodies and
+independently compares their actual operations and retained helpers. Total Data
+selections retain lazy native MLIR regions; emission remaps external operands,
+and the independent reader recursively compares actual SSA, captures, yields
+and dormant arms. All nested operations remain charged to the same allowance.
+Its private
+[paired count rule](spec/ir/control.md#paired-oracle-repeat-counts) preserves the
+original common-input requirements and checks the actual local count recipes;
+ordinary raw-module admission gains no opaque-result congruence. The checked
+realization owner retains both subjects through participant projection, request
+counts and CPU run-bundle checking. The
+[selected Oracle controls](../compiler/test/selected_oracle_common.cpp) and
+[count controls](../compiler/test/selected_oracle_counts.cpp) cover both
+policies, selected/loop nesting, exact helper mutations, detached subjects,
+owner lifetime and cumulative capacity.
+
+Native proof construction prepares actual transcript callbacks and codec layout
+jointly before materialization. Selected projection, reverse requests, codecs,
+transcript checking, native occurrence origins and construction delegation
+retain every arm and actual state successors. Rust executes reached branches,
+completion and stops; SDK message matching retains the exact branch/repeat
+frame. [Preparation controls](../compiler/test/construction_preparation.cpp),
+[native proof controls](../compiler/test/selected_proof.cpp) and
+[source-to-Host controls](../common/tests/protocol/test_selected_native_proofs.py)
+cover these boundaries. The Host matrix includes arm-local custom codecs and
+managed Keccak continuation, conditional completion, dormancy and rejection.
+Source repeat labels retain their exact construction call environment. Complete
+affected target adaptation and the independent Lean selected
+constructed-participant interpretation remain migration obligations. This support does not establish a security realization
+or whole-compiler correspondence. The
+[control contract](spec/ir/control.md#selected-protocol-and-mathematical-regions)
+retains the intended semantics.
 
 ## Current public interfaces
 
@@ -590,11 +636,44 @@ method eligibility. Protocol methods derive their complete role substitution
 from an exact fixed-roster receiver map; legacy direct logical families still
 require a unique complete roster. Managed service constructors and methods
 resolve through installed catalog declarations in the same index.
+Named Math and Local references are accepted at expected static callback
+arguments, including inferred/explicit statics, imported/reexported providers and
+generic module members. One selected-callable record feeds existing summaries,
+effects, finite obligations and declaration specialization, with immutable source
+and independent closure witnesses. Runtime function values and callable
+descriptor families remain outside this support; no formal correspondence is
+claimed for this native unit.
 Invocation checking now reconstructs source child values, named destinations,
 protocol roles and exact managed-service roots from immutable source occurrences
 in every body and callback. Coordinated action/binding swaps and balanced
 equal-type record-inspection swaps are rejected; specialization rechecks the
 source and preserves its lexical authority and value mapping.
+Source replay now inventories reachable control and data binding occurrences
+before accepting candidate representations. Missing, duplicate or misplaced
+controls and erased or relocated alias definitions refuse, including coordinated
+Oracle/Protocol query redirection. Native controls cover one and two aliases,
+position aliases, ordinary calls and returns, unused bindings, selected helper
+regions and exact reachable stop outcomes. The inventory shares lexical region
+mapping and bounded work with existing replay; it adds no formal correspondence.
+That relation also checks ordinary control headers, retained repetition maxima,
+mandatory continuing control/block result maps and exact root/arm/callback tails,
+including Math/Local result inference, named Protocol ports, tuple/Unit/placed
+results and mutable carry. Native mutation controls cover omitted maps, redirected
+selectors/bounds/counts/returns/yields, omitted joins, stale state and equally
+typed captures; selected Host controls exercise distinct branches and
+zero/nonzero-trip loops.
+Expected snapshots now use authored evaluation events independently of candidate
+operation order, including header assignments and eager callback captures.
+Scalar decimal replay retains the resolved type and canonical payload, including
+unused constants and erased hints/maps. Administrative carriers validate tuple
+arity, field and projection types through the same indexed relation for explicit
+results, state tuples, direct state and Unit. Native controls cover coordinated
+stale-state reordering and malformed literal/carrier mutations. Resolved finite
+recipe snapshots retain their eager operand identities separately from ordinary
+entry-generation captures, including across nested protocol repetition. Frozen
+usage results authenticate exact live state membership even for unused joins,
+while consumed states can be restored by continuing source assignments.
+These are bounded native checks, not full source-language or formal verification.
 The maintained new-syntax Schnorr fixture executes valid and
 invalid witnesses, extra unused random draws and reached guards. Optional specs
 retain their authored source and resolved protocol attachment, with assurance
@@ -682,7 +761,8 @@ static arguments with positional or named binding, named value/service arguments
 Unicode 17 NFC names, scoped mathematical operators and paired-delimiter calls
 with import activation, explicit fixity and local module bindings, catalog-checked
 primitive definitions and a scalar prelude read from catalog declaration rows,
-local short-circuit Boolean operators and total Boolean formulas, inferred usage, catalog
+selected Boolean operators in Math, Local and pointwise total Protocol expressions,
+total ordinary enum construction with payload availability, inferred usage, catalog
 and natural preconditions with explicit contract checking, derived boundary admission, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
 pointwise `map` of scalar helpers over vectors, general finite reductions,
@@ -691,6 +771,15 @@ module wrappers, local control,
 messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
+
+Selected Math arms preserve source domain and whole-item origins. Native
+mathematical fact extraction forwards immutable `data.branch` captures to their
+actual outer operands, so enclosing index-bound premises reach helper calls and
+direct reads in either arm and nested selections. Captured constructor results
+retain their derived cardinality. Payloads, selected results, branch conditions
+and another same-typed container or index supply no implicit bound premise.
+Oracle query plans still refuse authored Boolean selection; explicit total
+`bool.and`/`bool.or` intrinsics remain eager.
 
 Source checking and closure retain diagnostic work ledgers with exclusive
 subphase counters, separately bounded scoped checks and selector work, and
@@ -778,6 +867,71 @@ immutable operand aliases and independent witnesses check closed recipes and
 capture layouts. Source checking and native tests cover forwarding, zero trips,
 participant availability and specialization mutations. Registered finite folds
 and collects now reach retained finite IR through independently checked adapters.
+The layout frontend also supports fixed `view def` mode with independently
+checked ordinary forwarding and installed Finite descriptor results. Family
+identity and complete ordered typed parameter contracts remain separate from
+callable mode. The source graph, child edges, sole declaration result,
+inference/conformance, specialization, identity and independent replay retain
+full contracts. Finite native conversions check the family and one-parameter
+arity before extracting an item; native finite semantics are unchanged. Descriptor
+aliases cannot enter ordinary types or placed/service ports, including through
+zero-length arrays. Authored View replay checks exact constructor graphs,
+operands, statics and argument order. The layout finite client reaches actual
+Math and Local native consumers; packaged Host controls cover shared/unused
+constructors, zero cardinality and repeated admission. Ordinary abstract View
+members retain an implicit empty effect contract through generic owner/member
+dispatch from Math, Local and scoped bodies. Source replay, exact conformance,
+native comparison and packaged Host truth tables cover ordinary View calls in
+both operand positions of Protocol `and` and `or`, including methods and Math
+callbacks; Local and descriptor operand refusals remain checked. The maintained
+library still uses the legacy source adapter until the parent source cutover.
+Construction descriptor families, Constraint Views and independent Lean readers
+remain separate integration work.
+An internal installed structural declaration slice adds exact Product/Sequence
+head and six bounded View scheme rows, independent Python/TableGen/Rust catalog
+validation and typed projections. Installed shells enter the ordinary frozen
+declaration index without a concrete data signature or body. Focused native
+checks cover constructor formation, association identity, aliases, visibility,
+foreign homonyms, Nat parameters and installation drift. This is not complete
+public package or Constraint View support. The internal
+[structural formation implementation](spec/language/descriptor-formation.md)
+adds strict ordered products, homogeneous sequences with optional exact extents,
+bidirectional fresh aggregate checking, typed locals and static projections.
+The six installed schemes use their indexed associations and ordinary binder;
+Fold selects a bare View member with fixed context and invariant old state.
+Zero Count retains selection, requirements, context and seed admission without
+a fabricated step. Immutable payloads and persistent chunked AVL sequences
+retain ordered statement/invocation/frame blocks separately from result
+reachability. Independent source and closed-shape witnesses check those records;
+common analyses use one read-only formation cursor. Existing Finite consumers
+receive every activated Finite occurrence, including heterogeneous sibling
+guards, under their unchanged native caps and primitive identities. The
+enclosing ordinary Body's unrelated descriptors stay inactive. Native and Host
+controls exercise selected sibling zip/row guards at empty results, zero Fold
+context admission, and both native consumer settings. These are native receipts,
+not package acceptance or formal completion. Combined owner integration,
+independent review and strict Lean readers remain publication requirements.
+Direct installed schemes inside protocol Boolean Math still need joint
+classifier integration; a wrapper View is a different route. Native common
+analysis also distinguishes some custody-specific Finite symbols for the same
+checked lexical callback, so the exact source/native interface check refuses
+those cases. The checked computation identity carrier remains a joint owner
+gate; no common-input or mathematical guard is relaxed.
+The public checked-Type source-term encoder and strict C++/Rust wire readers
+support exact structural descriptor products and sequences, including empty
+products and distinct unsized/zero extents. Shared producer fixtures and bounded
+reader controls cover this codec boundary with unchanged Finite/ordinary bytes
+and limits. Native origin transport preserves null as MLIR UnitAttr through
+textual parsing and strict decoding. Native declaration admission and canonical
+keys recognize structural terms without importing wire widths; declaration and
+structured-export inventories follow structural children. Focused controls
+cover native protocol origins and opaque relation statics. The additional
+formation envelope is internal transport pending joint source-address and
+strict-reader review; private expression ordinals, AVL metadata and cache keys
+are not independent source authority. No full protocol acceptance, native
+Constraint leaf construction/materialization or formal support is claimed.
+Runtime callable payloads and future native descriptor families remain outside
+this slice; heterogeneous sequence element contracts refuse.
 Native source tests cover ordered and Unit state, mixed state dependencies,
 filtered stops, strict zip admission, packed record sequences, repeated calls,
 dependent inner ranges and mutable capture snapshots. Fixed source arrays now
@@ -786,6 +940,11 @@ empty arrays and Unit items. Source item-provenance checks
 now cover callback-local `where item_from(input, domain)`, optional input labels,
 arbitrary slots, multiple independent origins, generic restricted forwarding,
 named argument order, nested captures and invariant local-region inputs. Native
+named callback formation also substitutes selected generic and inherited module
+statics throughout the body, including nested callbacks and fixed collection
+cardinality. Concrete and abstract selections retain unused/zero-trip formation
+and exact data conditions. Both source syntaxes reject bare static arguments on
+lexical data, domain and callback bindings with `source.static-argument`. Native
 controls include exact normalized module conformance, independent authored
 selector reconstruction and mutation refusal. Inner conditions preserve outer
 catalog/natural inference. Labels and canonical maps are exposed separately in
@@ -831,6 +990,15 @@ scoped witnesses replace the old ring-only extraction checker. Library-owned ind
 binding checks. Standard vector, matrix, group, sequence, index and field-array
 modules expose total access; checked Local access requires explicit rebinding.
 Static source-array projections retain their existing capture paths.
+The layout surface uses one `notation` declaration head for all bounded forms,
+with each ordinary hole used once in written order. Bare descriptor imports
+refuse ambiguous positions or index arities; explicit position/arity selectors
+resolve those cases. Filtered and unfiltered reduction forms select independent
+ordinary finite consumers. Layout reduction projection uses the existing scoped
+callback and ordered product machinery. The public capture format still applies
+to every source: scoped layout consumer declarations and View target admission
+remain computation-package integration work. Legacy library closures retain the
+brace reader. The catalog has no installed scalar exponentiation target for `^`.
 The staged parser resolves
 notation environments after imports and before bodies. Callable notation uses
 ordinary signature constraints and authored evaluation order, with descriptor
@@ -1670,3 +1838,31 @@ checks cover collection and pass dependencies; the installed IR client consumes
 a word candidate without the lowering or target libraries. The admitted storage
 profile is static, rank-one and pointwise. These native readers do not add Lean
 correspondence or object-code/AOT coverage.
+
+
+## Installed native message source requirements
+
+The installed `zkc::transport::NativeMessage(T)` requirement supports abstract
+Relay contracts and generic Forward clients through existing `where` syntax,
+normal indexed imports, alpha-renamed implementations and selected dispatch.
+It demands executable data, external construction, native message support and
+a nonempty complete source carrier. Source replay authenticates explicit
+requirements independently, including standalone and unused declarations,
+inherited module/section telescopes, erased requirements and erased admission
+expansions. Anonymous Construction handlers replay inherited clauses through
+frozen ownership links, including grouped rules with shared spans. Universal
+conformance refuses hidden strengthening, and generated Host selections check
+unused protocol demands. Repeated concrete clauses and
+distinct static specializations exercise exact, insufficient and intermediate
+work allowances at real callable and generated helper snapshot boundaries.
+Admission types and call origins are metered before project, header, callable
+and cached helper copies, with unused-declaration and structural-limit controls;
+discharged metadata releases its allocation. Copy/Drop, Participants, descriptor
+categories, physical codec selection and native/runtime admission remain
+separate. No Lean semantic or connector implementation is included. The
+[native consumer controls](../compiler/test/language_consumer_requirements.cpp)
+and [Host controls](../common/tests/protocol/test_consumer_requirements.py)
+record the maintained scope, including manifest dependencies and default Host
+execution. Transport-library API inspection also passes through a separately
+built SDK CLI with the strict assurance reader repair. That reader's integration
+is independently owned; these source checks change no SDK decoding contract.

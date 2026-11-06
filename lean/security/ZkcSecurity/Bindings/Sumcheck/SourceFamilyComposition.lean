@@ -80,6 +80,8 @@ theorem conjunction_equation
   apply ZkcSecurity.Source.HelperComponents.invoke model program.payload.definitions
     program.payload.linked conjunctionHelper (Sum.both model).body body
   intro tables
-  cases a <;> cases b <;> rfl
+  cases a with
+  | none => cases b <;> rfl
+  | some left => cases b <;> cases left <;> rfl
 
 end ZkcSecurity.Realizations.Sumcheck.SourceFamily

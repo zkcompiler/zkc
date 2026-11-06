@@ -61,18 +61,19 @@ class Kind:
     property: str
     expected: str
     construction_accepts: bool = False
+    refusal_prefix: str | None = None
 
     @property
     def refusing_rule(self):
-        return self.expected.split("-", 1)[0] + "-"
+        return self.refusal_prefix or self.expected.split("-", 1)[0] + "-"
 
 
 KINDS = {}
 
 
-def kind(name, stage, property_, expected, construction_accepts=False):
+def kind(name, stage, property_, expected, construction_accepts=False, refusal_prefix=None):
     def register(function):
-        KINDS[name] = (Kind(name, stage, property_, expected, construction_accepts), function)
+        KINDS[name] = (Kind(name, stage, property_, expected, construction_accepts, refusal_prefix), function)
         return function
     return register
 
@@ -127,8 +128,9 @@ def environments(exported, identities=False):
         for item in instructions:
             scopes[id(item)] = list(environment)
             for region in item[5]:
-                arguments, body, _ = region
-                visit(body, environment + slots(region, arguments))
+                arguments, body = region[:2]
+                frame = slots(region, arguments)
+                visit(body, frame if item[0] == "data.branch" else environment + frame)
             environment = environment + slots(item, item[4])
     visit(exported[7], slots(exported, exported[5]))
     return scopes
@@ -284,6 +286,20 @@ def equality_self(exported):
       construction_accepts=True)
 def conjunction_self(exported):
     return mutated(exported, first_only(lambda value: self_operand(lambda item: item[0] == "arith.andi", value)))
+
+
+@kind("selection-arm-swap", "connection", "selection retains its ordered branch meanings",
+      "alignment-computation", construction_accepts=True, refusal_prefix="alignment-computation-operation-mismatch")
+def selection_arm_swap(exported):
+    def change(value, site):
+        branches = [item for item in nested(value[7]) if item[0] == "data.branch"
+                    and len(item[5]) == 2 and item[5][0][1:3] != item[5][1][1:3]]
+        if site >= len(branches):
+            return False
+        yes, no = branches[site][5]
+        yes[1:3], no[1:3] = no[1:3], yes[1:3]
+        return True
+    return mutated(exported, change)
 
 
 @kind("update-self", "connection", "a loop's update reads the values the original reads",

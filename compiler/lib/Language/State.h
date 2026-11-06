@@ -25,6 +25,27 @@ struct SourceCall;
 using IntrinsicCallSource = SourceCall;
 struct AuthoringStorage;
 struct ConstructionSource;
+/// Source-check inference product, frozen before candidate witness checking.
+/// Authored premises are reconstructed separately from immutable syntax.
+struct InferredHeaderPremises {
+  std::vector<NaturalBound> naturals;
+  std::vector<PermissionBound> permissions;
+  std::vector<CapabilityBound> capabilities;
+};
+/// Independently reconstructed static header product. Body results and
+/// admission-origin lists are deliberately absent from this immutable cache.
+struct AuthoredHeaderPremises {
+  DeclarationId id, module;
+  std::optional<DeclarationId> parent;
+  std::string qualifiedName;
+  Span span;
+  std::vector<Parameter> parameters;
+  std::vector<NaturalBound> bounds;
+  std::vector<PermissionBound> permissionBounds;
+  std::vector<CapabilityBound> capabilityBounds;
+  std::optional<EffectSummary> effectAllowance;
+  bool abstract = false, permitsInference = false;
+};
 /// Defining source authorities, computed once after the last checking step.
 /// A unit is one captured file, named by its module path. Installation
 /// sources are not units: installed declarations enter through the
@@ -82,6 +103,10 @@ struct CheckedStorage {
   std::vector<std::shared_ptr<const IntrinsicCallSource>> intrinsicCalls;
   std::map<uint32_t, std::shared_ptr<const ScopedSource>> bodySources;
   SourceAuthorities authorities;
+  std::shared_ptr<const std::map<uint32_t, InferredHeaderPremises>>
+      inferredHeaderPremises;
+  std::shared_ptr<const std::map<uint32_t, AuthoredHeaderPremises>>
+      authoredHeaderPremises;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;
@@ -186,12 +211,52 @@ struct Work {
     return allowance ? std::min(local, *allowance) : local;
   }
   llvm::Error charge(uint64_t amount = 1, std::optional<Span> span = {});
+  /// Attach this caller's phase to helper limit refusals and preserve terminal
+  /// cancellation priority. No numeric work is transferred by this boundary.
+  llvm::Error contextualize(llvm::Error, std::optional<Span> span = {});
+  /// A synchronous helper admits work against `remaining` before performing
+  /// it. Retain its debit even if allocation throws or cancellation arrives
+  /// before return. No other operation may debit `work` before finish().
+  class Budget {
+    Work &work;
+    const uint64_t available;
+    bool committed = false;
+    void commit() noexcept {
+      if (committed)
+        return;
+      assert(remaining <= available);
+      const auto performed = available - remaining;
+      assert(performed <= work.remaining());
+      work.used += performed;
+      work.ledger.total += performed;
+      work.ledger.phases[static_cast<size_t>(work.phase)] += performed;
+      if (work.allowance)
+        *work.allowance -= performed;
+      committed = true;
+    }
+
+  public:
+    uint64_t remaining;
+    explicit Budget(Work &work)
+        : work(work), available(work.remaining()), remaining(available) {}
+    Budget(const Budget &) = delete;
+    Budget &operator=(const Budget &) = delete;
+    ~Budget() { commit(); }
+    llvm::Error finish(std::optional<Span> span = {}) {
+      commit();
+      return work.charge(0, span);
+    }
+  };
   llvm::Error count(uint64_t &counter, uint64_t limit, llvm::StringRef what,
                     std::optional<Span> span = {});
 };
 
 /// Bound all index setup before Semantics allocates names and parameter keys.
 llvm::Error chargeSemanticIndex(const std::vector<Declaration> &, Work &);
+/// Bound retained consumer indices and resolution routes before copying them.
+llvm::Error chargeConsumerRequirement(const ConsumerRequirement &, Work &);
+/// Bound consumer metadata and admission types/provenance before a deep copy.
+llvm::Error chargeRequirementSnapshot(const Declaration &, Work &);
 
 llvm::Error closeAssets(const CheckedProject &, ClosedStorage &, Work &);
 

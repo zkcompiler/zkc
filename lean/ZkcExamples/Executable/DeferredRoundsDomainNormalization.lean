@@ -57,11 +57,11 @@ def readingInstructions : List Instruction :=
                   (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
    operands := [],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.indicesEmpty,
    operands := [],
    results := [Zkc.Construction.ValueSort.indices],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.observe
                   "merlin3.bls12-381.fr64be/0"
                   { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
@@ -70,11 +70,11 @@ def readingInstructions : List Instruction :=
                               "label_6d30_0", "label_6d30_0", "role00000000", "role00000001"] },
    operands := [1, 2, 3],
    results := [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.indicesEmpty,
    operands := [],
    results := [Zkc.Construction.ValueSort.indices],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.challenge
                   "merlin3.bls12-381.fr64be/0"
                   "bls12-381.fr"
@@ -85,11 +85,11 @@ def readingInstructions : List Instruction :=
    operands := [4, 5],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
                Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.indicesEmpty,
    operands := [],
    results := [Zkc.Construction.ValueSort.indices],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.observe
                   "merlin3.bls12-381.fr64be/0"
                   { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
@@ -98,7 +98,7 @@ def readingInstructions : List Instruction :=
                               "label_6430_0", "label_6430_0", "role00000001", "role00000000"] },
    operands := [7, 6, 8],
    results := [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.receive
                   "label_6d31_0"
                   "label_6d31_0"
@@ -106,11 +106,11 @@ def readingInstructions : List Instruction :=
                   (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
    operands := [],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.indicesEmpty,
    operands := [],
    results := [Zkc.Construction.ValueSort.indices],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.observe
                   "merlin3.bls12-381.fr64be/0"
                   { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
@@ -119,11 +119,11 @@ def readingInstructions : List Instruction :=
                               "label_6d31_0", "label_6d31_0", "role00000000", "role00000001"] },
    operands := [9, 10, 11],
    results := [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.indicesEmpty,
    operands := [],
    results := [Zkc.Construction.ValueSort.indices],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.challenge
                   "merlin3.bls12-381.fr64be/0"
                   "bls12-381.fr"
@@ -134,11 +134,11 @@ def readingInstructions : List Instruction :=
    operands := [12, 13],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
                Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.indicesEmpty,
    operands := [],
    results := [Zkc.Construction.ValueSort.indices],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.observe
                   "merlin3.bls12-381.fr64be/0"
                   { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
@@ -147,31 +147,31 @@ def readingInstructions : List Instruction :=
                               "label_6431_0", "label_6431_0", "role00000001", "role00000000"] },
    operands := [15, 14, 16],
    results := [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.calculate (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr"),
    operands := [2, 6],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.calculate (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr"),
    operands := [18, 14],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.calculate (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr"),
    operands := [19, 0],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.calculate (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr"),
    operands := [10, 14],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.calculate (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr"),
    operands := [21, 0],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],
-   body := [] },
+   regions := [] },
  { operation := Zkc.Construction.Operation.calculate (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr"),
    operands := [20, 22],
    results := [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],
-   body := [] }]
+   regions := [] }]
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 4000000 in

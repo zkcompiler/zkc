@@ -1,4 +1,5 @@
 #include "zkc/Analysis/NativeTypes.h"
+#include "../Dialect/NativeTypeWork.h"
 #include "zkc/Contracts/TypePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -18,6 +19,7 @@ struct PolicyInspection {
   bool &limited;
 
   bool charge(size_t bytes = 0) {
+    zkc::detail::NativeTypeWorkScope::charge(1 + bytes);
     if (!remaining || bytes > remainingBytes) {
       limited = true;
       return false;
@@ -114,11 +116,42 @@ std::optional<protocol::TypePolicyFacts> nativeTypeFacts(Type type,
                                                          unsigned &remaining,
                                                          size_t &remainingBytes,
                                                          bool &limited) {
-  if (limited || !formed(type))
+  zkc::detail::NativeTypeWorkScope::charge();
+  if (limited)
     return std::nullopt;
-  return PolicyInspection{remaining, remainingBytes, limited}.inspect(type);
+  auto *work = zkc::detail::NativeTypeWorkScope::current();
+  if (work) {
+    auto found = work->policies.find(type);
+    if (found != work->policies.end()) {
+      // Keep the primitive expanded node/byte ceilings even when exact
+      // immutable policy work has already been performed by this allowance.
+      if (found->second.nodes > remaining ||
+          found->second.bytes > remainingBytes) {
+        limited = true;
+        return std::nullopt;
+      }
+      remaining -= found->second.nodes;
+      remainingBytes -= found->second.bytes;
+      return *found->second.facts;
+    }
+  }
+  if (!formed(type))
+    return std::nullopt;
+  unsigned beforeNodes = remaining;
+  size_t beforeBytes = remainingBytes;
+  auto result =
+      PolicyInspection{remaining, remainingBytes, limited}.inspect(type);
+  if (work && result) {
+    zkc::detail::NativeTypeWorkScope::charge();
+    work->policies.try_emplace(
+        type, zkc::detail::NativeTypeWork::Policy{
+                  std::make_shared<const protocol::TypePolicyFacts>(*result),
+                  beforeNodes - remaining, beforeBytes - remainingBytes});
+  }
+  return result;
 }
 std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
+  zkc::detail::NativeTypeWorkScope::charge();
   if (isFormalType(type))
     return NativeTypePolicy{true, false, false, false, false, false};
   unsigned remaining = 200000;
@@ -128,6 +161,7 @@ std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
   return facts ? facts->native : std::nullopt;
 }
 std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
+  zkc::detail::NativeTypeWorkScope::charge();
   if (isFormalType(type))
     return NativeTypePolicy{true, false, false, false, false, false};
   if (auto found = cache.find(type); found != cache.end())

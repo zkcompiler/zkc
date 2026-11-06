@@ -362,7 +362,7 @@ theorem observation_passes (shape : Shape) (occurrences : Occurrences shape) (he
       (Success shape) := by
   unfold DomainVM.observation DomainVM.outcome
   normalize_artifact_operations [helpers.pending, helpers.openClaim, helpers.atPrefix, shape.suite, admitted]
-    unfolding [instructions, pendingCall, openClaimCall, atPrefixCall, ProgramShape.inputs, Domain.evaluate, Domain.step,
+    unfolding [instructions, pendingCall, openClaimCall, atPrefixCall, ProgramShape.inputs, Domain.evaluate, Domain.step, Domain.executeLoop,
       carriedSorts, PIR.Process.interpret, Original.forgetCheckpoints]
   rw [PIR.Process.interpret_bind]
   have loopEq := loop_projection shape occurrences helpers

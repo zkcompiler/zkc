@@ -1,3 +1,7 @@
+#include "../lib/Language/DescriptorSourceWitness.h"
+#include "../lib/Language/Internal.h"
+#include "../lib/Language/ScopedWitness.h"
+#include "../lib/Language/WrittenSource.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Language/Inspection.h"
@@ -6,6 +10,7 @@
 using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;
+namespace source_detail = zkc::language::detail;
 namespace {
 const std::string definitions = R"(
 pub type Vector<F:Field>=builtin("vector",F);
@@ -26,6 +31,85 @@ Expected<CheckedProject> check(StringRef text, const Limits &limits = {}) {
     return captured.takeError();
   return analyze(*captured, limits).checkedProject();
 }
+// Consumer headers still use the legacy reader until the parent callback
+// migration. Join the existing readers at their actual checker seam; do not
+// manufacture a CheckedProject or bypass scoped-source replay.
+Expected<std::shared_ptr<source_detail::CheckedStorage>>
+checkLayout(StringRef source, StringRef extraConsumers = "",
+            const Limits &limits = {}, StringRef notationExports = "") {
+  const std::string consumers = "module consumers;" + definitions + R"(
+pub fn fold_where<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,
+ keep:fn(item:I)->bool effects(stop) where item_from(item,rows),
+ step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop)=finite("local.fold_where");
+pub fn sum_where<I:Type+Copy+Drop,F:Field>(rows:domain<I>,keep:fn(item:I)->bool effects(stop) where item_from(item,rows),
+ term:fn(item:I)->F effects(stop) where item_from(item,rows))->F effects(stop){return fold_where(rows,0,keep,fn(state,item)=>state+term(item));}
+pub math fn total_fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,
+ step:math fn(S,item:I)->S where item_from(item,rows))->S=finite("math.fold");
+pub math fn total_sum<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:math fn(item:I)->F where item_from(item,rows))->F{return total_fold(rows,0,fn(state,item)=>state+term(item));}
+)" + extraConsumers.str();
+  std::vector<SourceBuffer> captured{{"consumers", consumers, "consumers.zkc"},
+                                     {"m", source.str(), "layout.zkc"}};
+  if (!notationExports.empty())
+    captured.push_back({"ops", notationExports.str(), "ops.zkc"});
+  auto input = capture(std::move(captured));
+  if (!input)
+    return input.takeError();
+  auto output = std::make_shared<source_detail::CheckedStorage>(
+      *input, installedCatalogIdentity());
+  auto sources = std::make_shared<std::vector<SourceBuffer>>(
+      input->sources().begin(), input->sources().end());
+  for (const auto &module : source_detail::installedModules())
+    sources->push_back({module, "", "<installation>/catalog/" + module,
+                        SourceOrigin::Installation});
+  output->sources = sources;
+  output->tokens.resize(sources->size());
+  output->layoutHeaders.resize(sources->size());
+  output->layoutBodies.resize(sources->size());
+  source_detail::Work work{limits};
+  std::vector<source_detail::SyntaxDeclaration> modules;
+  for (unsigned i = 0; i < sources->size(); ++i) {
+    const auto &buffer = (*sources)[i];
+    if (buffer.origin == SourceOrigin::Installation) {
+      auto module = source_detail::readInstalledModule(buffer, {i}, work);
+      if (!module)
+        return module.takeError();
+      modules.push_back(std::move(*module));
+    } else if (buffer.module != "consumers") {
+      auto module =
+          source_detail::parseLayoutHeaders(buffer, {i}, *output, work);
+      if (!module)
+        return module.takeError();
+      modules.push_back(std::move(*module));
+    } else {
+      if (auto error = source_detail::lex(buffer, {i}, work, output->tokens[i]))
+        return error;
+      auto module = source_detail::parse(buffer, {i}, output->tokens[i], work);
+      if (!module)
+        return module.takeError();
+      modules.push_back(std::move(*module));
+    }
+  }
+  if (auto error = source_detail::check(std::move(modules), *output, work))
+    return error;
+  source_detail::Work replay{limits};
+  if (auto error = source_detail::checkScopedSources(*output, replay))
+    return error;
+  return output;
+}
+const Declaration &
+layoutDeclaration(const source_detail::CheckedStorage &project,
+                  StringRef name) {
+  for (const auto &decl : project.declarations)
+    if (decl.qualifiedName == name)
+      return decl;
+  throw std::runtime_error("missing layout declaration " + name.str());
+}
+const std::string layoutPrelude = R"(use consumers::{Vector}
+domain F = field("koala-bear")
+notation ∑ x ∈ D, body = consumers::sum(D, fn(x) => body)
+notation ∑ x ∈ D with p, body = consumers::sum_where(D, fn(x) => p, fn(x) => body)
+notation ∏ x ∈ D, body = consumers::total_sum<F = F>(D, fn(x) => body)
+)";
 const Declaration &declaration(const CheckedProject &project, StringRef name) {
   for (const auto &declaration : project.declarations())
     if (declaration.qualifiedName == name)
@@ -54,6 +138,307 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
 } // namespace
 int main() {
   Cases cases;
+  cases.run(
+      "layout reductions dispatch each form to its ordinary consumer and "
+      "replay",
+      [] {
+        auto project = take(checkLayout(
+            layoutPrelude + R"(local def compute(xs: Vector<F>,a: F) -> F:
+    plain <- ∑ x ∈ xs, x * a
+    filtered <- ∑ x ∈ xs with x == a, x * a
+    total = ∏ x ∈ xs, x * a
+    return plain + filtered + total
+)"));
+        const auto &body = *layoutDeclaration(*project, "m::compute").body;
+        require(body.scopedBindings.size() == 4,
+                "reduction callback count differs");
+        std::vector<std::string> selected;
+        for (const auto &operation : body.operations)
+          if (operation.binding && operation.binding->notation &&
+              operation.binding->notation->position ==
+                  NotationDescriptor::Position::Reduction)
+            selected.push_back(
+                project
+                    ->declarations[operation.binding->target.declaration.index]
+                    .qualifiedName);
+        require(selected == std::vector<std::string>{"consumers::sum",
+                                                     "consumers::sum_where",
+                                                     "consumers::total_sum"},
+                "filtered/plain or Math/Local selection changed");
+        unsigned filtered = 0;
+        for (const auto &binding : project->notations.bindings)
+          filtered += binding.filteredOnly;
+        require(filtered == 1, "filtered-only authored binding lost");
+        const auto &modules = project->writtenSources->modules;
+        auto written = llvm::find_if(
+            modules, [](const auto &module) { return module.name == "m"; });
+        require(written != modules.end() && written->operators.size() == 3 &&
+                    written->operators[0].reductionBinder == "x" &&
+                    written->operators[1].filteredOnly &&
+                    written->operators[1].holes ==
+                        std::vector<std::string>{"D", "p", "body"},
+                "written reduction templates lost their binder or authored "
+                "hole order");
+      });
+  cases.run(
+      "layout reductions keep independent product order, tuple binders and "
+      "captures",
+      [] {
+        auto project = take(checkLayout(
+            layoutPrelude + R"(def first(xs: Vector<F>) -> Vector<F>:
+    xs
+def second(xs: Vector<F>) -> Vector<F>:
+    xs
+local def compute(xs: Vector<F>,ys: Vector<F>,a: F) -> F:
+    result <- ∑ (x ∈ first(xs)) (y ∈ second(ys)), (x * y + a)
+    return result
+)"));
+        const auto &body = *layoutDeclaration(*project, "m::compute").body;
+        require(body.scopedBindings.size() == 1 &&
+                    body.scopedBindings.front().captures.size() == 1,
+                "product callback or capture count changed");
+        require(body.operations.size() >= 3 && body.operations[0].binding &&
+                    body.operations[1].binding,
+                "domain operands were discarded");
+        for (unsigned i = 0; i < 2; ++i)
+          require(project->declarations[body.operations[i]
+                                            .binding->target.declaration.index]
+                          .qualifiedName == (i == 0 ? "m::first" : "m::second"),
+                  "domain operands did not evaluate once in written order");
+      });
+  cases.run(
+      "layout three-binder products and inline arrays replay source order", [] {
+        for (bool arrays : {false, true}) {
+          const std::string inputs =
+              arrays ? "(x ∈ [a, a]) (y ∈ [b, b])"
+                     : "(x ∈ first(xs)) (y ∈ second(ys)) (z ∈ third(xs))";
+          auto project =
+              take(checkLayout(layoutPrelude +
+                               R"(def first(xs: Vector<F>) -> Vector<F>:
+    xs
+def second(xs: Vector<F>) -> Vector<F>:
+    xs
+def third(xs: Vector<F>) -> Vector<F>:
+    xs
+local def compute(xs: Vector<F>,ys: Vector<F>,a: F,b: F) -> F:
+    result <- ∑ )" + inputs + (arrays ? ", x * y\n" : ", x * y * z\n") +
+                               "    return result\n"));
+          auto found =
+              llvm::find_if(project->declarations, [](const auto &decl) {
+                return decl.qualifiedName == "m::compute";
+              });
+          require(found != project->declarations.end() && found->body,
+                  "reduction source body missing");
+          auto original = found->body;
+          const auto &syntax =
+              *project->bodySources.at(found->id.index)->syntax;
+          auto productSource =
+              llvm::find_if(syntax.expressions, [](const auto &expr) {
+                return expr.kind ==
+                       source_detail::Expression::Kind::DomainProduct;
+              });
+          require(productSource != syntax.expressions.end(),
+                  "reduction product source missing");
+          Limits depthLimits;
+          depthLimits.expressionDepth = 1;
+          source_detail::Work depthWork{depthLimits};
+          source_detail::CheckedStorage scratch(project->capture, "");
+          auto reader = take(source_detail::Checker::observe(
+              scratch, *project, depthWork, SourceAccess{found->id}));
+          source_detail::DescriptorSourceWitness relation(
+              *reader, *found, syntax, original->descriptorBindings, {}, {}, 0,
+              original.get(), true);
+          require(!relation.expression(productSource -
+                                       syntax.expressions.begin()) &&
+                      reader->types.diagnostic &&
+                      reader->types.diagnostic->code == "source.limit",
+                  "rigid reduction depth exhaustion lost its limit diagnostic");
+          if (!arrays) {
+            std::vector<std::string> calls;
+            for (const auto &operation : original->operations)
+              if (operation.binding) {
+                const auto &name = project
+                                       ->declarations[operation.binding->target
+                                                          .declaration.index]
+                                       .qualifiedName;
+                if (name == "m::first" || name == "m::second" ||
+                    name == "m::third")
+                  calls.push_back(name);
+              }
+            require(calls == std::vector<std::string>{"m::first", "m::second",
+                                                      "m::third"},
+                    "nested product changed source evaluation order");
+          }
+          for (unsigned mutation = 0; mutation < 3; ++mutation) {
+            if (mutation == 2 && !arrays)
+              continue;
+            auto changed = std::make_shared<Body>(*original);
+            auto &bindings = changed->descriptorBindings;
+            if (mutation) {
+              std::vector<unsigned> leaves;
+              for (unsigned i = 0; i < bindings.size(); ++i)
+                if (bindings[i].kind == DescriptorBinding::Kind::Elements ||
+                    bindings[i].kind == DescriptorBinding::Kind::SourceArray)
+                  leaves.push_back(i);
+              require(leaves.size() >= 2, "reduction data origins missing");
+              bindings[leaves[0]].operands = bindings[leaves[1]].operands;
+              if (mutation == 2) {
+                require(bindings[leaves[0]].expression.has_value(),
+                        "array source expression missing");
+                changed->expressionValues[*bindings[leaves[0]].expression] =
+                    bindings[leaves[1]].operands.front();
+              }
+            } else {
+              auto product = llvm::find_if(bindings, [](const auto &binding) {
+                return binding.kind == DescriptorBinding::Kind::Product;
+              });
+              require(product != bindings.end() &&
+                          product->children.size() == 2,
+                      "reduction product missing");
+              std::swap(product->children[0], product->children[1]);
+            }
+            found->body = changed;
+            Limits limits;
+            source_detail::Work work{limits};
+            auto error = source_detail::checkScopedSources(*project, work);
+            require(bool(error),
+                    "changed reduction order/origin passed replay");
+            auto diagnostic = toString(std::move(error));
+            if (mutation == 2) {
+              errs() << "coordinated array map/leaf: " << diagnostic << '\n';
+              require(StringRef(diagnostic)
+                          .contains("expression producer occurrence differs"),
+                      "coordinated array map escaped independent data replay");
+            }
+          }
+          found->body = original;
+        }
+      });
+  cases.run(
+      "layout filtered-only binding does not create an unfiltered consumer",
+      [] {
+        const std::string prefix = R"(use consumers::{Vector}
+domain F = field("koala-bear")
+notation ∑ x ∈ D with p, body = consumers::sum_where(D, fn(x) => p, fn(x) => body)
+local def compute(xs: Vector<F>) -> F:
+)";
+        take(checkLayout(
+            prefix +
+            "    result <- ∑ x ∈ xs with true, x\n    return result\n"));
+        refuses(checkLayout(prefix +
+                            "    result <- ∑ x ∈ xs, x\n    return result\n"),
+                "source.reduction-target");
+      });
+  cases.run(
+      "layout reduction callback origins are checked at the declaration", [] {
+        const std::string consumer = R"(
+pub fn bad<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop) where item_from(item,missing))->F effects(stop){return 0;}
+)";
+        refuses(
+            checkLayout(
+                "notation ∑ x ∈ D, body = consumers::bad(D, fn(x) => body)\n",
+                consumer),
+            "source.finite-domain");
+      });
+  cases.run("layout reduction refuses a Local consumer in Math", [] {
+    refuses(checkLayout(layoutPrelude + R"(def compute(xs: Vector<F>) -> F:
+    ∑ x ∈ xs, x
+)"),
+            "source.action");
+  });
+  cases.run(
+      "layout reduction independent replay refuses changed callback mode", [] {
+        auto project =
+            take(checkLayout(layoutPrelude + R"(def compute(xs: Vector<F>) -> F:
+    ∏ x ∈ xs, x
+)"));
+        auto found = llvm::find_if(project->declarations, [](const auto &decl) {
+          return decl.qualifiedName == "m::compute";
+        });
+        require(found != project->declarations.end() && found->body,
+                "missing reduction body");
+        auto body = std::make_shared<Body>(*found->body);
+        body->scopedBindings.front().signature.mode =
+            ScopedSignature::Mode::Local;
+        found->body = std::move(body);
+        Limits limits;
+        source_detail::Work work{limits};
+        auto error = source_detail::checkScopedSources(*project, work);
+        require(bool(error), "forged callback mode passed independent replay");
+        require(StringRef(toString(std::move(error)))
+                    .contains("source.scoped-witness"),
+                "changed callback mode lost its independent diagnostic");
+      });
+  cases.run(
+      "nested layout Math reductions retain their authored syntax and scopes",
+      [] {
+        auto project = take(checkLayout(
+            layoutPrelude + R"(def compute(xs: Vector<F>, a: F) -> F:
+    ∏ x ∈ xs, (∏ y ∈ xs, x * y * a)
+)"));
+        unsigned count = 0;
+        for (const auto &tree : project->layoutBodies) {
+          if (!tree)
+            continue;
+          auto formatted = zkc::syntax::format(*tree);
+          require(formatted.complete &&
+                      StringRef(formatted.text).contains("∏ x ∈ xs") &&
+                      StringRef(formatted.text).contains("∏ y ∈ xs"),
+                  "reduction formatting expanded authored binders");
+          for (const auto &node : tree->nodes())
+            count += node.kind == zkc::syntax::Kind::Reduction;
+        }
+        require(count == 2,
+                "nested authored reduction nodes were replaced by callbacks");
+      });
+  cases.run(
+      "layout bare reduction import selects both independent exported forms",
+      [] {
+        const std::string exported =
+            R"(pub notation ∑ x ∈ D, body = consumers::sum(D, fn(x) => body)
+pub notation ∑ x ∈ D with p, body = consumers::sum_where(D, fn(x) => p, fn(x) => body)
+)";
+        take(checkLayout(R"(use consumers::{Vector}
+use ops::{∑}
+domain F = field("koala-bear")
+local def compute(xs: Vector<F>) -> F:
+    plain <- ∑ x ∈ xs, x
+    filtered <- ∑ x ∈ xs with true, x
+    return plain + filtered
+)",
+                         "", {}, exported));
+      });
+  cases.run(
+      "layout reduction import consumes an existing legacy export unchanged",
+      [] {
+        take(checkLayout(R"(use consumers::{Vector, ∑}
+domain F = field("koala-bear")
+local def compute(xs: Vector<F>) -> F:
+    result <- ∑ x ∈ xs with true, x
+    return result
+)",
+                         "pub reduction ∑=sum,sum_where;"));
+      });
+  cases.run("layout reduction binder cannot escape its callback", [] {
+    refuses(
+        checkLayout(layoutPrelude + R"(local def compute(xs: Vector<F>) -> F:
+    result <- ∑ x ∈ xs, x
+    return x
+)"),
+        "source.name");
+  });
+  cases.run(
+      "layout reduction generated products obey the semantic depth budget", [] {
+        Limits limits;
+        limits.expressionDepth = 4;
+        refuses(checkLayout(layoutPrelude +
+                                R"(local def compute(xs: Vector<F>) -> F:
+    result <- ∑ (a ∈ xs) (b ∈ xs) (c ∈ xs) (d ∈ xs) (e ∈ xs), a
+    return result
+)",
+                            "", limits),
+                "source.limit");
+      });
   cases.run("named and symbolic reductions retain ordinary scoped computations",
             [] {
               auto project = take(check(program));
@@ -144,7 +529,7 @@ int main() {
     require(std::get<Projection>(first.action).input.index == 3 &&
                 std::get<Projection>(second.action).input.index == 2,
             "capture reads lost first-use order");
-    const auto &domain = body.domainBindings.back();
+    const auto &domain = body.descriptorBindings.back();
     require(domain.children.size() == 2, "ignored row removed from strict zip");
     success(checkScopedElaboration(project));
   });

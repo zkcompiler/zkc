@@ -452,8 +452,12 @@ math fn caller(x:bool)->bool { return relay(x); }
     BodySummaryCache cache;
     auto body = inputs(1);
     body->parameterizedSummary = true;
-    body->domainBindings.push_back(
-        {DomainBinding::Kind::Parameter, boolean, {}, {}, 0, 0});
+    body->descriptorBindings.push_back({DescriptorBinding::Kind::Parameter,
+                                        {DescriptorFamily::Finite, {boolean}},
+                                        {},
+                                        {},
+                                        0,
+                                        0});
     body->scopedBindings.push_back({signature(2), 0, {}, {}, {}, {}, {}});
     body->results = {operation(
         *body,
@@ -481,8 +485,12 @@ math fn caller(x:bool)->bool { return relay(x); }
     BodySummaryCache cache;
     auto body = inputs(2);
     body->parameterizedSummary = true;
-    body->domainBindings.push_back(
-        {DomainBinding::Kind::Range, boolean, {{0}, {1}}, {}, 0, {}});
+    body->descriptorBindings.push_back({DescriptorBinding::Kind::Range,
+                                        {DescriptorFamily::Finite, {boolean}},
+                                        {{0}, {1}},
+                                        {},
+                                        0,
+                                        {}});
     body->scopedBindings.push_back({signature(), 0, {}, {}, {}, {}, {}});
     body->scopedBindings.push_back({signature(), 1, {}, {}, {}, {}, {}});
     body->results = {operation(
@@ -505,6 +513,63 @@ math fn caller(x:bool)->bool { return relay(x); }
           contains(result.formation, {10 + offset, 20 + offset, 30 + offset}),
           "unused predicate intermediate or eager domain operand vanished");
     }
+  });
+  cases.run("completed scratch roots retain their immutable lifetime", [] {
+    const std::vector<Declaration> declarations;
+    Limits limits;
+    Work work{limits};
+    Semantics types(declarations, {}, work);
+    std::weak_ptr<const ScopedComputation> root;
+    std::weak_ptr<const Body> nested;
+    {
+      BodySummaryCache cache;
+      {
+        auto body = inputs(2);
+        Control control;
+        control.kind = Control::Kind::If;
+        control.operands = {{0}, {1}};
+        auto arm = identityBody();
+        nested = arm;
+        control.regions = {arm, constant()};
+        body->results = {operation(*body, std::move(control), {0, 1})};
+        auto selected = computation(body);
+        root = selected;
+        auto result = cache.apply(types, declarations, *body, {},
+                                  {{{10}, false}, {{20}, false}}, {}, 1, {}, {},
+                                  0, selected);
+        require(bool(result), "owned root summary failed");
+        dependency(result->results.front(), {10, 20});
+      }
+      require(!root.expired() && !nested.expired(),
+              "discarded scratch root invalidated retained body keys");
+      // Independent roots must retain separate dependency slots even after
+      // their callers discard all external ownership.
+      auto selected = computation(identityBody());
+      auto result = cache.apply(types, declarations, *selected->body, {},
+                                {{{31}, false}}, {}, 1, {}, {}, 0, selected);
+      require(bool(result), "second owned root summary failed");
+      dependency(result->results.front(), {31});
+    }
+    require(root.expired() && nested.expired(),
+            "root or nested body lifetime escaped its summary owner");
+  });
+  cases.run("retained roots refuse a different computation owner", [] {
+    const std::vector<Declaration> declarations;
+    Limits limits;
+    Work work{limits};
+    Semantics types(declarations, {}, work);
+    BodySummaryCache cache;
+    auto body = identityBody();
+    auto foreign = computation(identityBody());
+    require(!cache.apply(types, declarations, *body, {}, {{{17}, false}}, {}, 1,
+                         {}, {}, 0, foreign),
+            "foreign root owner was accepted");
+    refused(types, "source.scoped-summary");
+    auto own = computation(body);
+    auto result = cache.apply(types, declarations, *body, {}, {{{17}, false}},
+                              {}, 1, {}, {}, 0, own);
+    require(bool(result), "correct root owner failed after refusal");
+    dependency(result->results.front(), {17});
   });
   cases.run("completed scratch callback lifetimes belong to the summary owner",
             [] {
@@ -539,8 +604,13 @@ math fn caller(x:bool)->bool { return relay(x); }
         BodySummaryCache cache;
         auto outerBody = inputs(2);
         outerBody->parameterizedSummary = true;
-        outerBody->domainBindings.push_back(
-            {DomainBinding::Kind::Parameter, boolean, {}, {}, 0, 0});
+        outerBody->descriptorBindings.push_back(
+            {DescriptorBinding::Kind::Parameter,
+             {DescriptorFamily::Finite, {boolean}},
+             {},
+             {},
+             0,
+             0});
         outerBody->scopedBindings.push_back(
             {signature(2), 0, {}, {}, {}, {}, {}});
         outerBody->results = {operation(
@@ -549,7 +619,7 @@ math fn caller(x:bool)->bool { return relay(x); }
             {})};
         auto outer = computation(outerBody);
         outer->scopedCaptures = {0};
-        outer->domainCaptures = {0};
+        outer->descriptorCaptures = {0};
         auto stepBody = inputs(3);
         stepBody->results = {operation(
             *stepBody,

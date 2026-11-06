@@ -8,7 +8,7 @@ public import Zkc.Construction.ScalarConnection
 public import Zkc.Construction.Uniform.ScalarSupportProposer
 public import Zkc.Construction.Uniform.ScalarHandles
 public import ZkcExamples.Structured.Generated.Connections.ChaumPedersen
-public import ZkcExamples.Construction.ChaumPedersenArtifact
+public import ZkcExamples.Construction.ChaumPedersenProofPresentation
 public import Zkc.Source.Structured.UnitViews
 
 @[expose] public section
@@ -52,7 +52,8 @@ def sourceVerifier (firstBase firstPoint secondBase secondPoint : G) (handle : N
 
 /-- The actual source Process has this finite normal form for every reply. -/
 theorem source_equation (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
-    sourceVerifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.equality ChaumPedersenProof.wiring firstBase firstPoint secondBase secondPoint handle := by kernel_rfl
+    sourceVerifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.equality ChaumPedersenProof.wiring firstBase firstPoint secondBase secondPoint handle :=
+  ChaumPedersenProof.verifier_correspondence firstBase firstPoint secondBase secondPoint handle
 
 def sourceDecision (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) : PIR.Process (Actions F G) Bool :=
   (sourceVerifier firstBase firstPoint secondBase secondPoint handle).bind fun decision => .done (decision.getD false)
@@ -110,7 +111,15 @@ theorem domain_transform (challenge : History F G → m F)
   have relabel := Uniform.ScalarHandles.transform context canonical challenge
     (sourceVerifier (F := F) firstBase firstPoint secondBase secondPoint handle) initial proof
   rw [source_handle] at relabel
-  exact law.trans relabel
+  have position : scopePosition 1 program.payload.entry.outputScopes
+      (Var.here : Var program.payload.entry.outputs .boolean) = 0 := rfl
+  have actualContext : ZkcExamples.Structured.Generated.Connections.ChaumPedersen.validatorRouting.context = context := by
+    kernel_rfl
+  have actualOrigin : ScalarVerifier.origin artifact = legacyOrigin := by
+    funext origin
+    rfl
+  simpa only [position, actualContext, actualOrigin, ScalarConnection.acceptance_first]
+    using law.trans relabel
 
 /-- The installed Domain runtime has the same complete outcome and unread
 proof after selecting Uniform.SourceProcess.acceptance. Physical frames remain with Domain.run.

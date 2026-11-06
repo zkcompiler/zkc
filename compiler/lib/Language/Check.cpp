@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "CommonRequirements.h"
 #include "ScopedWitness.h"
+#include "SignatureWitness.h"
 #include "WrittenSource.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
@@ -12,7 +13,7 @@ using namespace llvm;
 namespace zkc::language::detail {
 Checker::Checker(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
                  Work &work)
-    : output(output), work(work),
+    : output(output), declarations(output.declarations), work(work),
       types(output.declarations, output.assets, work,
             [this](DeclarationId id) { return signature(id); }),
       syntax(std::move(syntax)) {
@@ -38,6 +39,30 @@ Checker::Checker(CheckedStorage &output, Work &work, AccessContext policy)
   access = std::move(policy);
   types.completeDispatchBody = {};
 }
+Expected<std::unique_ptr<Checker>>
+Checker::observe(CheckedStorage &scratch, const CheckedStorage &source,
+                 Work &work, AccessContext policy) {
+  if (&scratch == &source || !scratch.declarations.empty() ||
+      !scratch.assets.empty() || !source.declarationIndex)
+    return failure("source.binding-witness", "invalid static reader context");
+  // This pays for the semantic lookup indices, not a Declaration snapshot.
+  // Recursive contracts and asset payloads remain borrowed and are charged by
+  // the existing semantic queries when observed. No signature/body producer or
+  // inference hook is installed on this view.
+  if (auto error = work.charge(sizeof(Checker) + sizeof(DeclarationIndex)))
+    return std::move(error);
+  if (auto error = chargeSemanticIndex(source.declarations, work))
+    return std::move(error);
+  scratch.sources = source.sources;
+  scratch.declarationIndex = source.declarationIndex;
+  return std::unique_ptr<Checker>(
+      new Checker(scratch, source, work, std::move(policy)));
+}
+Checker::Checker(CheckedStorage &scratch, const CheckedStorage &source,
+                 Work &work, AccessContext policy)
+    : output(scratch), declarations(source.declarations), work(work),
+      types(source.declarations, source.assets, work), observing(true),
+      access(std::move(policy)) {}
 void Checker::registerContractInference(Declaration &decl,
                                         const SyntaxDeclaration &source) {
   // Rule associations have catalog contracts; installed primitives infer
@@ -49,7 +74,7 @@ void Checker::registerContractInference(Declaration &decl,
        source.kind == Declaration::Kind::Math ||
        source.kind == Declaration::Kind::Local ||
        source.kind == Declaration::Kind::EntryFunction ||
-       source.kind == Declaration::Kind::DomainFunction ||
+       source.kind == Declaration::Kind::View ||
        source.kind == Declaration::Kind::Protocol ||
        source.kind == Declaration::Kind::Construction))
     inferredContracts.insert(&decl);
@@ -94,7 +119,7 @@ void Checker::installAdmissionCollection(bool signaturesOnly) {
                                            AdmissionObligation obligation) {
     if (signaturesOnly && signatureState[scope.id.index] != 1)
       return false;
-    if (!types.chargeType(obligation.type, obligation.span) ||
+    if (!types.chargeIdentity(obligation.type, obligation.span) ||
         !types.charge(obligation.calls.size() + 1, obligation.span))
       return false;
     auto &admissions = output.declarations[scope.id.index].admissions;
@@ -121,6 +146,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   decl.bounds.clear();
   decl.permissionBounds.clear();
   decl.capabilityBounds.clear();
+  decl.consumerRequirements.clear();
   decl.dataPreconditions.clear();
   for (const auto &obligation : decl.admissions)
     if (!types.chargeType(obligation.type, obligation.span) ||
@@ -130,8 +156,8 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   decl.inputs.clear();
   decl.outputs.clear();
   decl.scopedInputs.clear();
-  decl.domainInputs.clear();
-  decl.domainResult.reset();
+  decl.descriptorInputs.clear();
+  decl.descriptorResult.reset();
   decl.services.clear();
   decl.fields.clear();
   decl.alternatives.clear();
@@ -185,6 +211,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   auto &written = reconstructedSources[id.index];
   // Body trees and nested declarations are not part of a signature replay.
   written.kind = source.kind;
+  written.installedDeclaration = source.installedDeclaration;
   written.name = source.name;
   written.span = source.span;
   written.roles = source.roles;
@@ -197,8 +224,9 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   written.inputs = source.inputs;
   written.outputs = source.outputs;
   written.scopedInputs = source.scopedInputs;
-  written.domainInputs = source.domainInputs;
-  written.domainResult = source.domainResult;
+  written.descriptorInputs = source.descriptorInputs;
+  written.descriptorResult = source.descriptorResult;
+  written.domainConstructor = source.domainConstructor;
   written.services = source.services;
   written.effects = source.effects;
   written.effectDependencies = source.effectDependencies;
@@ -209,6 +237,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   written.sealed = source.sealed;
   written.abstract = source.abstract;
   written.completes = source.completes;
+  written.inputOrder = source.inputOrder;
   sources.resize(output.declarations.size());
   sources[id.index] = &written;
   signatureState[id.index] = 0;
@@ -343,7 +372,7 @@ Error Checker::run() {
          decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
          decl.kind == Declaration::Kind::EntryFunction ||
-         decl.kind == Declaration::Kind::DomainFunction ||
+         decl.kind == Declaration::Kind::View ||
          decl.kind == Declaration::Kind::Protocol ||
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
@@ -376,6 +405,8 @@ Error Checker::run() {
   output.authoredReferences =
       std::make_shared<const std::vector<ReferenceRecord>>(
           output.api.references);
+  if (auto error = retainHeaderPremises(output, work))
+    return error;
   phase.enter(SourceWorkPhase::ScopedSources);
   if (auto error = checkScopedSources(output, work))
     return error;
@@ -518,6 +549,7 @@ bool Checker::collect() {
     decl.id = {uint32_t(output.declarations.size())};
     decl.module = source.kind == Declaration::Kind::Module ? decl.id : module;
     decl.kind = source.kind;
+    decl.installedDeclaration = source.installedDeclaration;
     if (source.generated) {
       auto target = *parent;
       if (output.declarations[target.index].generated)

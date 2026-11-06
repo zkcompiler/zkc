@@ -19,7 +19,7 @@ private theorem step_loop (program : Structured.Program) (context : Context)
     (site : String) (maximum : Nat) (yielded operands : List Nat)
     (declared : List ValueSort) (body : List Instruction) (env : Environment F G) :
     Domain.step (Structured.ringModel F G) program context
-      ⟨.loop site maximum yielded, operands, declared, body⟩ env =
+      ⟨.loop site maximum, operands, declared, [⟨(.data .index :: declared), body, yielded⟩]⟩ env =
     (match operands with
     | [] => .halt .refused
     | count :: refs => match env[count]?, Domain.read env refs with
@@ -33,7 +33,7 @@ private theorem step_loop (program : Structured.Program) (context : Context)
   cases operands with
   | nil => simp only [Domain.step]
   | cons count refs =>
-      simp only [Domain.step]
+      simp only [Domain.step, Domain.executeLoop, true_and]
       cases env[count]? with
       | none => rfl
       | some value =>
@@ -179,7 +179,7 @@ theorem meteredStep_fits {R : Type} :
         | .loop site maximum yielded operands declared body =>
             DomainAdapter.runK key initial challenge
               (Domain.step (Structured.ringModel F G) program context
-                ⟨.loop site maximum yielded, operands, declared, Code.instructions body⟩ env) proof next')
+                ⟨.loop site maximum, operands, declared, [⟨(.data .index :: declared), Code.instructions body, yielded⟩]⟩ env) proof next')
   | .charge count, env, proof, used, post, next, next', fits, continues => by
       simp only [FitsStep] at fits
       simp only [meteredStep, fits.1, ite_true]

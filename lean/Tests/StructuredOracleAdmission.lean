@@ -27,6 +27,17 @@ private def run : IO Unit := do
   let test (name : String) (ok : Bool) : IO Unit := do
     count.modify (· + 1)
     unless ok do throw (IO.userError name)
+  let arm (body : RawRegion Ty Op) := RawRegions.cons [] [] body
+  let plain := RawRegion.ret (Ty := Ty) (Op := Op) []
+  let selected (yes no : RawRegion Ty Op) : RawRegion Ty Op :=
+    .letOp (.branch [] []) [0] [] (arm yes (arm no .nil)) plain
+  test "pure selection admitted in an oracle Math helper"
+    (oracleMathBody (selected plain plain))
+  let hidden := RawRegion.letOp (Op.invoke ⟨"local", .local, [], []⟩) [] [] .nil plain
+  test "unselected local call cannot enter an oracle Math helper"
+    (!(oracleMathBody (selected plain hidden)))
+  test "unselected stop cannot enter an oracle Math helper"
+    (!(oracleMathBody (selected (.stop .refused) plain)))
   test "oracle descriptor decodes independently"
     ((Format.descriptor (.arr #[.str "oracle_sequence_length",
       ZkcTools.StructuredSource.wireOracleKind kind, .str "4"])).isOk)

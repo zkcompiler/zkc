@@ -23,6 +23,8 @@ def Op.oraclePure (op : Op) : Bool :=
 
 def oracleMathBody : RawRegion Ty Op → Bool
   | .ret _ => true
+  | .letOp (.branch ..) _ _ (.cons _ _ yes (.cons _ _ no .nil)) next =>
+      oracleMathBody yes && oracleMathBody no && oracleMathBody next
   | .letOp op _ _ .nil next => op.oraclePure && oracleMathBody next
   | .bind _ body next => oracleMathBody body && oracleMathBody next
   | _ => false

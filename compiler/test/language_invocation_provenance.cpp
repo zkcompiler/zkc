@@ -88,7 +88,10 @@ fn observe(x:Ticket)->(Ticket,bool){let pair=inspect_record(x);return(pair.0,pai
               require(!storage.scopedSources.empty(),
                       "missing callback source");
               remove(storage.scopedSources.front());
-              diagnostic = "source.scoped-witness";
+              // Whole-body lexical coverage observes a missing callback
+              // syntax before the separate scoped signature check.
+              diagnostic =
+                  syntax ? "source.binding-witness" : "source.scoped-witness";
             } else {
               require(!storage.bodySources.empty(), "missing body source");
               remove(storage.bodySources.begin()->second);

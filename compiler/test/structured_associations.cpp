@@ -114,10 +114,66 @@ std::string simple() {
 } // namespace
 int main() {
   Cases cases;
+  auto opaqueSource = [](StringRef term) {
+    auto source = simple();
+    source.insert(source.find("\"protocol.func\""),
+                  "relation.declare @predicate {kind=\"external\", "
+                  "key=\"example/descriptor\", revision=\"0\", "
+                  "signature=(i1)->i1, purposes=[\"statement\"], "
+                  "static_arguments=[" +
+                      term.str() + "]}\n");
+    return source;
+  };
+  auto ordinary = take(json::parse(
+      exportSource(
+          opaqueSource(
+              R"(["tuple", [["field", "bls12-381.fr"], ["field", "koala-bear"]]])"))
+          .bytes));
+  auto expectedCatalogue = (*ordinary.getAsArray())[9];
+  for (
+      StringRef term :
+      {R"(["descriptor-product", [["builtin", "finite", [["field", "bls12-381.fr"]]], ["descriptor-sequence", ["builtin", "finite", [["field", "koala-bear"]]], unit]]])",
+       R"(["descriptor-sequence", ["descriptor-product", [["builtin", "finite", [["field", "bls12-381.fr"]]], ["builtin", "finite", [["field", "koala-bear"]]]]], ["nat", "0"]])"})
+    cases.run("structural opaque export retains exact recursive catalogue " +
+                  term,
+              [&] {
+                auto bytes = opaqueSource(term);
+                auto source = exportSource(bytes);
+                auto snapshot = take(json::parse(source.bytes));
+                require((*snapshot.getAsArray())[9] == expectedCatalogue,
+                        "structural static domains differ from ordinary "
+                        "reference inventory");
+                auto relations = (*snapshot.getAsArray())[5].getAsArray();
+                require(relations && relations->size() == 1,
+                        "opaque relation was not retained");
+                coverage(bytes, source);
+              });
+  cases.run("empty Product and unsized extent add no catalogue identities", [&] {
+    auto snapshot = take(json::parse(
+        exportSource(
+            opaqueSource(
+                R"(["descriptor-sequence", ["descriptor-product", []], unit])"))
+            .bytes));
+    require((*snapshot.getAsArray())[9] ==
+                json::Value(json::Array{json::Array{}, json::Array{}}),
+            "null acquired a domain identity");
+  });
+  cases.run("structural opaque export validates nested domain identities", [&] {
+    mlir::DialectRegistry registry;
+    zkc::registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    refuses(
+        exportStructuredSource(
+            opaqueSource(
+                R"(["descriptor-product", [["descriptor-sequence", ["builtin", "finite", [["field", "unknown.field"]]], unit]]])"),
+            "main", context),
+        "structured-source-static-domain");
+  });
   for (StringRef fixture : {"finite/total-state.mlir", "finite/unit-state.mlir",
                             "structured-source/loops-and-captures.mlir",
                             "structured-source/nested-controls.mlir",
                             "structured-source/math-operations.mlir",
+                            "structured-source/math-selected.mlir",
                             "structured-source/shared-fold.mlir",
                             "structured-source/open-components.mlir",
                             "structured-source/realization-finite.mlir",

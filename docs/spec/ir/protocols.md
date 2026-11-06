@@ -1049,7 +1049,10 @@ expressions into each role, preserves all advertised ports, and creates
 `protocol.send`, `protocol.receive`, service queries, authored `protocol.local_call`, and `protocol.guard`
 occurrences. It creates no new executable calculation functions or bindings.
 Receive results are actual environment replies. The sender's exchange result
-aliases its sent component; that fact grants no equality at the receiver.
+aliases its sent component. The [common-control analysis](control.md#selected-protocol-and-mathematical-regions)
+uses the completed exchange's actual sender and receiver components to derive
+agreement on normal continuing paths. This supplies no assertion about an
+adversary's message, successful delivery on other paths or peer completion.
 
 `zkc-simplify-participant` applies the selected total-operation patterns and
 CSE only within participant bodies. It can share expressions that become equal

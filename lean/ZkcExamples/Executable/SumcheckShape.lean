@@ -95,7 +95,7 @@ def checkCall (n : Names) : Instruction := ⟨.call n.checkHelper, [0, 12, 13, 1
 /-- The current five-step constructed validator, including both consuming wrappers. -/
 def instructions (n : Names) (maximum : Nat) : List Instruction :=
   [pendingCall n, openClaimCall n,
-    ⟨.loop n.loopSite maximum yielded, [2, 7, 8, 3], carriedSorts n, roundBody n⟩,
+    ⟨.loop n.loopSite maximum, [2, 7, 8, 3], carriedSorts n, [⟨(.data .index :: carriedSorts n), roundBody n, yielded⟩]⟩,
     atPrefixCall n, checkCall n]
 
 /-- The executable's reading of a round: each constructed instruction with what
@@ -127,12 +127,14 @@ def operationAt (instructions : List Instruction) (index : Nat) : Operation :=
 
 /-- The round body of a loop at position two. -/
 def loopBody (instructions : List Instruction) : List Instruction :=
-  (instructions.getD 2 ⟨.unsupported "", [], [], []⟩).body
+  match (instructions.getD 2 ⟨.unsupported "", [], [], []⟩).regions with
+  | [.mk _ body _] => body
+  | _ => []
 
 /-- The loop's static maximum. -/
 def maximumOf (instructions : List Instruction) : Nat :=
   match operationAt instructions 2 with
-  | .loop _ maximum _ => maximum
+  | .loop _ maximum => maximum
   | _ => 0
 
 /-- The names of a validator of this shape, read off its instructions. -/
@@ -155,7 +157,7 @@ def Names.of (instructions : List Instruction) : Names :=
     atPrefixHelper := match operationAt instructions 3 with | .call name => name | _ => ""
     appendHelper := match operationAt body 17 with | .call name => name | _ => ""
     checkHelper := match operationAt instructions 4 with | .call name => name | _ => ""
-    loopSite := match operationAt instructions 2 with | .loop site _ _ => site | _ => ""
+    loopSite := match operationAt instructions 2 with | .loop site _ => site | _ => ""
     firstReceive := receiveAt 0
     secondReceive := receiveAt 4
     guardSite := match operationAt body 10 with | .guard site => site | _ => ""
