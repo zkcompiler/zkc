@@ -379,24 +379,27 @@ SSA environment onto the loop's actual operands. Its input is the receiver's
 argument tuple and visible registry. `VerifierCheck.installed` combines
 this projection with the loop theorem, including both input and output
 scope masks. A successful retained call returns the eight ordered cells
-and charges 96 reads. The enclosing commitment protocol still has to
-establish the base-word and virtual-view associations.
+and charges 96 reads. The retained `Commit` loop supplies
+those registrations from its own sends, draws, and virtual constructions.
 
-For immutable base tables, `PublishedWords.RegisteredWord` connects a
-participant's visible logical registry entry to the provider's entire finite
-word at the same dynamic anchor. A successful FRI send establishes the
-connection for the word actually selected by the chooser.
-`RegisteredWord.extend` transports it when later publications preserve
-old provider entries and add fresh logical entries. For a single interpreter step,
-`RegisteredWord.afterExtension` uses its existing registry-extension
-theorem. The reached FRI virtual construction uses it to keep the original
-base handle readable after installing the new view. An in-range source
-query then returns the original cell and charges one read, subject to the
-original cursor check. This law applies to any nominal row type and finite
-length. The FRI companion separately identifies the virtual parent in its
-captured registry, the challenge used to fold it, and the next word.
-Publication fixes what can be read. Whether a prover published a *correct*
-fold is the verifier's mathematical question.
+For a clear base table, `PublishedWords.RegisteredWord` ties a visible
+logical anchor to the entire finite word selected at its publication. An
+in-range read returns the original cell and charges one read. The source
+cursor still checks the occurrence. `processPublicationFrame` proves that
+every later returned or stopped execution record preserves the logical
+anchor and the physical word. It covers arbitrary row types, effectful
+network actions, and adaptive choosers. The proof combines logical and
+physical preservation on the same record using the monad's exact support.
+
+FRI supplies the virtual table's captured parent, challenge and coset
+geometry. `CommitLoop.installed` follows all three iterations of the
+original repeat, including its private state masks. Each later send may
+publish a different word. `CommitReadback.fromCommit` derives the
+associations needed by the installed checker from those actual handles.
+Given the later call's one coefficient, positions, and preserved registry,
+a successful return satisfies the ArkLib path check with the eight cells
+in order. The distribution of the draws and the probability of accepting
+a far first word are separate security obligations.
 
 For a publication followed by a virtual construction, `Region.cutFirst`
 selects a reached operation on the continuation spine. A bind still executes
