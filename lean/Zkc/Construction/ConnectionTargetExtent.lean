@@ -33,6 +33,14 @@ inductive Extent : Nat → Nat → TargetBlock → Type 1 where
   | challenge (size : Nat) (context : Context) (suite field : String) (template : Template)
       (state coordinates : Nat) (declared : List ValueSort) :
       Extent size (size + declared.length) (fun _ => Domain.View.challenge context suite field template state coordinates declared)
+  | indexChallenge (size : Nat) (context : Context) (suite : String) (bound : Nat)
+      (template : Template) (state reference coordinates : Nat) (declared : List ValueSort) :
+      Extent size (size + declared.length)
+        (fun _ => Domain.View.indexChallenge context suite bound template state reference coordinates declared)
+  | blockChallenge (size : Nat) (context : Context) (suite : String) (bound count : Nat)
+      (template : Template) (state coordinates : Nat) (declared : List ValueSort) :
+      Extent size (size + declared.length)
+        (fun _ => Domain.View.blockChallenge context suite bound count template state coordinates declared)
   | localService (size : Nat) (context : Context) (port : ServicePort) (request : Request)
       (template : Template) (coordinates references : List Nat) (declared : List ValueSort) :
       Extent size (size + declared.length) (fun _ => Domain.View.localService context port request template coordinates references declared)
@@ -82,10 +90,11 @@ theorem Extent.yields {input output : Nat} {target : TargetBlock} (certificate :
       · exact (append_any _).bind fun frame _ => by simpa only [size] using append_yields declared environment frame
       · trivial
     · trivial
-  | receive | send | indicesEmpty | indicesAppend | calculation | helper | guard | observe | challenge | localService =>
+  | receive | send | indicesEmpty | indicesAppend | calculation | helper | guard | observe | challenge | indexChallenge | blockChallenge | localService =>
     simp only [Domain.View.receive, Domain.View.send, Domain.View.indicesEmpty,
       Domain.View.indicesAppend, Domain.View.calculation, Domain.View.helper, Domain.View.guard,
-      Domain.View.observe, Domain.View.challenge, Domain.View.localService]
+      Domain.View.observe, Domain.View.challenge, Domain.View.indexChallenge,
+      Domain.View.blockChallenge, Domain.challengeRequest, Domain.View.localService, Domain.localRequest]
     all_goals repeat' first
       | exact size
       | exact trivial
@@ -93,6 +102,8 @@ theorem Extent.yields {input output : Nat} {target : TargetBlock} (certificate :
       | dsimp only [PIR.Yields]
       | split
       | intro _
+      | (apply (append_any _).bind; intro value ignored)
+      | simp_all
 
 end Zkc.Construction.ConnectionTargetExtent
 

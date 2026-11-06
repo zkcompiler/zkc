@@ -43,7 +43,7 @@ def classification (price : ENNReal) (code : Nat) (safe : ¬ relation.No code)
 def source (field site : String) (handle captured : Nat)
     (left right : carriers.Field field → Nat) :
     PIR.Process (Occurrence.signature carriers) (Nat × Nat × Nat) :=
-  .call (.action (.query site field (.cons handle .nil))) fun reply =>
+  .call (.action (.query site (.draw field) (.cons handle .nil))) fun reply =>
     (classify (left reply)).bind fun a =>
     (classify (right reply)).bind fun b => .done (a, b, captured)
 

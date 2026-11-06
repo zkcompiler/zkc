@@ -13,6 +13,7 @@ public import Zkc.Construction.Uniform.ScalarSupportProposer
 The generated root supplies all-input correspondence; source-only capability
 naturality preserves both captured calls, arbitrary replies and exact stops. -/
 set_option autoImplicit false
+set_option maxRecDepth 50000
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcExamples.Construction.ComposedSumcheckScalarConnection

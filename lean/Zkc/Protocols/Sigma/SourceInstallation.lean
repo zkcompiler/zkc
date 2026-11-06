@@ -88,7 +88,7 @@ variable (model : DomainModel) (d : Domains) (sites : Sites)
 def draw (owner : Nat) (site : String) (service : Option Nat) :
     PIR.Process I (Option (model.Field d.scalar)) :=
   (Participant.query (services := services) (Value := model.Value) self (ctx.roles owner) (qualifyProtocolSite ctx.applicationPrefix site)
-    d.scalar (.cons service .nil)).interpret actions
+    (.draw d.scalar) (.cons service .nil)).interpret actions
 
 def exchange {ty : Ty} (sender receiver : Nat) (site : String)
     (value : Option (model.Value ty)) : PIR.Process I (Option (model.Value ty)) :=

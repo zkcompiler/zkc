@@ -82,7 +82,7 @@ theorem verifier_execution (firstBase firstKey secondBase secondKey : G) (servic
          decide (responses.2 • secondBase = commitments.2 + challenge • secondKey))) .nil), (),
         [.receive (.group groupDomain) wiring.firstCommitmentSite 0,
          .receive (.group groupDomain) wiring.secondCommitmentSite 0,
-         .query wiring.challengeSite scalarDomain (.cons service .nil),
+         .query wiring.challengeSite (.draw scalarDomain) (.cons service .nil),
          .send (ty := .field scalarDomain) wiring.deliverySite 0 challenge,
          .receive (.field scalarDomain) wiring.firstResponseSite 0,
          .receive (.field scalarDomain) wiring.secondResponseSite 0]⟩ := by
@@ -142,8 +142,8 @@ the one shared receive. Distributional independence is a separate sampling law. 
 theorem prover_equation (firstBase firstKey secondBase secondKey : G) (secrets : F × F)
     (service : Nat) :
     proverProcess firstBase firstKey secondBase secondKey secrets service =
-      .call (.query "s0" scalarDomain (.cons service .nil)) (fun (firstNonce : F) ↦
-      .call (.query "s2" scalarDomain (.cons service .nil)) (fun (secondNonce : F) ↦
+      .call (.query "s0" (.draw scalarDomain) (.cons service .nil)) (fun (firstNonce : F) ↦
+      .call (.query "s2" (.draw scalarDomain) (.cons service .nil)) (fun (secondNonce : F) ↦
       .call (.send (ty := .group groupDomain) wiring.firstCommitmentSite 1
         (firstNonce • firstBase)) (fun _ ↦
       .call (.send (ty := .group groupDomain) wiring.secondCommitmentSite 1
@@ -183,8 +183,8 @@ theorem prover_execution (firstBase firstKey secondBase secondKey : G)
       (proverInputs firstBase firstKey secondBase secondKey secrets service)).run
         (proverReplies nonces challenge).handler () =
       ⟨.returned (.cons none .nil), (),
-        [.query "s0" scalarDomain (.cons service .nil),
-         .query "s2" scalarDomain (.cons service .nil),
+        [.query "s0" (.draw scalarDomain) (.cons service .nil),
+         .query "s2" (.draw scalarDomain) (.cons service .nil),
          .send (ty := .group groupDomain) wiring.firstCommitmentSite 1 (nonces.1 • firstBase),
          .send (ty := .group groupDomain) wiring.secondCommitmentSite 1 (nonces.2 • secondBase),
          .receive (.field scalarDomain) wiring.deliverySite 1,

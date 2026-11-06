@@ -1461,9 +1461,10 @@ def record (env : Environment) (registered : Std.HashSet Name) (properties : Std
   return Json.mkObj fields
 
 def runMeta {α : Type} (env : Environment) (action : MetaM α) : IO α := do
-  -- Keep Core's finite metadata budget stable when pretty printing uses
-  -- `withOptions`: empty options would reset the context's 1000 limit to 512.
-  let options := Lean.maxRecDepth.set {} 1000
+  -- Nested generated requests need more depth than the elaborator's default.
+  -- Keep this finite metadata budget in both options and Core.Context so
+  -- pretty printing through `withOptions` does not reset it to 512.
+  let options := Lean.maxRecDepth.set {} 4096
   let context : Core.Context :=
     { fileName := "<declaration records>", fileMap := default, maxHeartbeats := 0,
       options, maxRecDepth := Lean.maxRecDepth.get options }

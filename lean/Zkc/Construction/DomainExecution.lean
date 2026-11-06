@@ -168,11 +168,84 @@ def localOrigin (context : Context) (port : ServicePort) (request : Request)
       (Origin.query context.entry (template.qualify site) ("input_" ++ decimal port.root)
         port.contract port.owner request) coordinates)
 
+/-- The full typed request, including its values, determines the finite reply
+carrier. Invalid requests cannot issue effects. -/
+def requestValue (origin : Origin) (request : Request)
+    (effect : Effect carriers := .query [] origin) :
+    PIR.Process (effects carriers) (carriers.Value request.sort) :=
+  if request.valid then
+    if same : origin.request = some request then
+      match effect with
+      | .query history _ =>
+        .call (.query history origin) fun answer =>
+          match request.decode (by simpa only [Raw, same, Request.Raw] using answer) with
+          | some value => .done value
+          | none => .halt .refused
+      | .localService port _ =>
+        .call (.localService port origin) fun answer =>
+          match request.decode (by simpa only [Raw, same, Request.Raw] using answer) with
+          | some value => .done value
+          | none => .halt .refused
+      | _ => .halt .refused
+    else .halt .refused
+  else .halt .refused
+
+/-- Runtime references must evaluate to the exact request values. The values
+are not interpreted as environment positions. -/
+def requestOperands (env : Environment carriers) (references : List Nat) (request : Request) : Bool :=
+  (references.mapM fun reference => match env[reference]? with
+    | some (.data (.index value)) => some value | _ => none) == some request.operands
+
+/-- A typed challenge retains one event and one reply, also for an entire block.
+The scalar native operation has a dynamic bound operand. The block native
+operation fixes bound/count in its static parameters and has no data operands. -/
+def challengeRequest (context : Context) (suite : String) (request : Request)
+    (template : Template) (state coordinates : Nat) (references : List Nat)
+    (declared : List ValueSort) (env : Environment carriers) :
+    PIR.Process (effects carriers) (Environment carriers) :=
+  match env[state]?, env[coordinates]? with
+  | some (.transcript actual history), some (.indices path) =>
+    let dynamic := if request.method = "index" then requestOperands env references request
+      else references.isEmpty
+    if actual = suite ∧ suite = context.suite ∧ context.service.isSome ∧
+        request.valid ∧ request.nativeSupported ∧ (request.operation context.contract).isSome ∧ dynamic ∧
+        declared = [.data request.sort, .transcript suite] then
+      match templateOrigin
+          (context.mapReplacement fun replacement => { replacement with request := some request })
+          template path with
+      | some origin =>
+        (requestValue origin request (.query history origin)).bind fun value =>
+          match Value.encode request.sort value with
+          | some encoded => .done (env ++ [encoded,
+              .transcript suite (history ++ [.challenge origin])])
+          | none => .halt .refused
+      | none => .halt .refused
+    else .halt .refused
+  | _, _ => .halt .refused
+
 /-- Coordinates are the actual reached loop indices, not a static call label. -/
 def localCoordinates (env : Environment carriers) (references : List Nat) : Option (List Nat) :=
   references.mapM fun (index : Nat) => match (env[index]? : Option (Value carriers)) with
     | some (.data (.index value)) => some value
     | _ => none
+
+/-- Local requests read ordinary operand references and never touch history. -/
+def localRequest (context : Context) (port : ServicePort) (request : Request)
+    (template : Template) (coordinates references : List Nat) (declared : List ValueSort)
+    (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
+  if request.valid ∧ (request.operation port.contract).isSome ∧
+      requestOperands env references request ∧ declared = [.data request.sort] then
+    match localCoordinates env coordinates with
+    | some path =>
+      match localOrigin context port request template path with
+      | some origin =>
+        (requestValue origin request (.localService port origin)).bind fun value =>
+          match Value.encode request.sort value with
+          | some encoded => .done (env ++ [encoded])
+          | none => .halt .refused
+      | none => .halt .refused
+    | none => .halt .refused
+  else .halt .refused
 
 /-- Types allowed on the wire. Local custody never satisfies this predicate. -/
 def dataType (ty : Structured.Ty) : Bool := !ty.isHandle
@@ -284,22 +357,12 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
               | none => .halt .refused
             else .halt .refused
         | _, _ => .halt .refused
+    | .indexChallenge suite bound template, [state, reference, coordinates], [] =>
+        challengeRequest context suite (.sampleIndex bound) template state coordinates [reference] declared env
+    | .blockChallenge suite bound count template, [state, coordinates], [] =>
+        challengeRequest context suite (.sampleIndices bound count) template state coordinates [] declared env
     | .localService port request template coordinates, references, [] =>
-        match request, localCoordinates env coordinates with
-        | ⟨"draw", [], .field field⟩, some path =>
-            if references = [] ∧ declared = [.data (.field field)] ∧
-                port.contract = "random." ++ field ++ "/0" then
-              match localOrigin context port (.draw field) template path with
-              | some origin =>
-                  if request : origin.request = some (.draw field) then
-                    .call (.localService port origin) fun answer =>
-                      let value : model.Field field := by
-                        simpa only [Raw, request, Request.draw] using answer
-                      append [.data (.field field value)]
-                  else .halt .refused
-              | none => .halt .refused
-            else .halt .refused
-        | _, _ => .halt .refused
+        localRequest context port request template coordinates references declared env
     | .calculate calculation, references, [] =>
         match read env references with
         | some arguments =>

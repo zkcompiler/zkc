@@ -41,7 +41,8 @@ example (xs : List F) :
 example (xs : List F) (overlarge : indexLimit ≤ xs.length) :
     Evaluation.operation (F := F) (G := F) SiteObservations.closed [] (.exec (.vectorLength scalarDomain))
       (.cons xs .nil) .nil = .halt .exhausted := by
-  simp only [Evaluation.operation, Primitive.evaluate, not_lt.mpr overlarge, ↓reduceIte, primitiveOutcome]
+  simp only [Evaluation.operation, Primitive.evaluate, Primitive.evaluateOn,
+    not_lt.mpr overlarge, ↓reduceIte, primitiveOutcome]
 example (xs : List F) (overlarge : indexLimit ≤ xs.length) :
     Evaluation.operationOn (ringModel F F) SiteObservations.closed [] (.exec (.vectorLength scalarDomain))
       (.cons xs .nil) .nil = .halt .exhausted := by

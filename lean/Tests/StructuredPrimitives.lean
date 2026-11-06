@@ -101,7 +101,7 @@ private def run : IO Unit := do
     unless ok do failures.modify (name :: ·)
   for (contract, domains, primitive) in catalogue do
     let b := binding contract domains
-    let parameters := if contract == "index.constant" then ["0"] else []
+    let parameters := if contract == "index.constant" then [PrimitiveParameter.natural "0"] else []
     let descriptor := Descriptor.exec "exec.apply" b.name parameters
     let helper := localHelper descriptor primitive.arguments primitive.results
     test (contract ++ ":unused") (admits [b])
@@ -112,7 +112,7 @@ private def run : IO Unit := do
     test (contract ++ ":math-owner") (!admits [b] [root,
       localHelper descriptor primitive.arguments primitive.results "" [] .math])
     test (contract ++ ":extra-parameter") (!(resolvePrimitive (snapshot [b])
-      "exec.apply" b.name (parameters ++ ["0"])).isOk)
+      "exec.apply" b.name (parameters ++ [.natural "0"])).isOk)
     test (contract ++ ":wrong-signature") (!admits [b] [root,
       localHelper descriptor primitive.arguments (primitive.results ++ [.boolean])])
   for name in ["", "1bad", "a/b", "é", "a b", String.ofList (List.replicate 257 'a')] do
@@ -171,7 +171,7 @@ private def run : IO Unit := do
   for text in ["00", "+1", "-1", "1 ", " 1", "18446744073709551616", "١", ""] do
     test ("index-decimal:" ++ text) (!(Format.indexDecimal text).isOk &&
       !(resolvePrimitive (snapshot [binding "index.constant"])
-        "exec.apply" "primitive" [text]).isOk)
+        "exec.apply" "primitive" [.natural text]).isOk)
   for text in ["0", "1", "9223372036854775808", "18446744073709551615"] do
     test ("index-valid:" ++ text) ((Format.indexDecimal text).isOk)
   test "pure-local-owner" (!admits [] [root, localHelper (.indexConstant "1") [] [.index]])

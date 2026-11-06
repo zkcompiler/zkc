@@ -13,6 +13,7 @@ public import Zkc.Construction.Uniform.ScalarSourceCost
 /-! The retained round's full return invariant from its stored root connection.
 The symbolic frame and source callback are projections of that same root. -/
 set_option autoImplicit false
+set_option maxRecDepth 50000
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcExamples.Executable.SumcheckCheckedRound

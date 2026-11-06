@@ -44,7 +44,8 @@ example (base key : G) (secret challenge : F) (service : Nat) (why : PIR.Stop) :
     (SchnorrInteractive.program.participant F G 0
       (SchnorrInteractive.proverInputs base key secret service)).run
         (SchnorrHonestProver.replyHandler service (.stopped why) (.returned challenge)) () =
-      ⟨.stopped why, (), [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)]⟩ := by
+      ⟨.stopped why, (), [.query SchnorrInteractive.nonceSite (.draw scalarDomain)
+        (.cons service .nil)]⟩ := by
   rw [SchnorrHonestProver.full_execution_eq, SchnorrHonestProver.nonce_stopped]
   rfl
 
@@ -53,7 +54,7 @@ example (base key : G) (secret nonce : F) (service : Nat) (why : PIR.Stop) :
       (SchnorrInteractive.proverInputs base key secret service)).run
         (SchnorrHonestProver.replyHandler service (.returned nonce) (.stopped why)) () =
       ⟨.stopped why, (),
-        [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil),
+        [.query SchnorrInteractive.nonceSite (.draw scalarDomain) (.cons service .nil),
          .send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base),
          .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1]⟩ := by
   rw [SchnorrHonestProver.full_execution_eq, SchnorrHonestProver.challenge_stopped]

@@ -38,7 +38,7 @@ theorem prover_run (firstBase firstKey secondBase secondKey : G) (witness : F) (
     (nonces nonce challenge).run (program.participant F G 0
         (proverInputs firstBase firstKey secondBase secondKey witness nonceService)) =
       ⟨.returned (.cons none .nil), (),
-        [.query nonceSite scalarDomain (.cons nonceService .nil),
+        [.query nonceSite (.draw scalarDomain) (.cons nonceService .nil),
          .send (ty := .group groupDomain) firstCommitmentSite 1 (nonce • firstBase),
          .send (ty := .group groupDomain) secondCommitmentSite 1 (nonce • secondBase),
          .receive (.field scalarDomain) deliverySite 1,

@@ -21,6 +21,8 @@ Iteration boundaries require the policy selected from the actual artifact. -/
 def operation (iterations : Bool) : ProtocolOp → Bool
   | .exchange .boolean .. | .exchange (.field _) .. | .exchange (.group _) .. => true
   | .exchange .. => false
+  | .query _ (.draw _) _ => true
+  | .query .. => false
   | .repeat .. => iterations
   | _ => true
 
@@ -32,6 +34,7 @@ def sourceOperation {carriers : Carriers} (iterations : Bool) :
     (Occurrence.signature carriers).Op → Prop
   | .enter _ => iterations = true
   | .action (.receive ty ..) | .action (.send (ty := ty) ..) => ScalarSupport.Message ty
+  | .action (.query _ (.sampleIndex _) _) | .action (.query _ (.sampleIndices _) _) => False
   | _ => True
 
 variable {iterations : Bool}
@@ -113,6 +116,7 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
         (helperTables model (Occurrence.signature model.toCarriers) definitions)
         self op args callbacks table context Occurrence.iterations) := by
   cases op with
+  | oracle => trivial
   | calculate op allowed =>
     exact calculation model definitions op allowed args
   | localCall helper kind owner site =>
@@ -164,6 +168,21 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
         | none => trivial
         | some values => exact ⟨trivial, fun _ => trivial⟩
       · trivial
+  | query owner operation site =>
+    cases operation <;> try exact Bool.noConfusion checked
+    cases callbacks
+    simp only [protocolOperationWithOn, Participant.query]
+    split
+    · cases RoleFamily.sequence args with
+      | none => trivial
+      | some values =>
+        simp only [PIR.Process.interpret_bind, PIR.Process.interpret, serviceAction]
+        split
+        · refine ⟨trivial, fun reply => ?_⟩
+          dsimp only [PIR.Process.bind]
+          split <;> trivial
+        · trivial
+    · trivial
   | statement => trivial
   | mark => cases args; trivial
   | protocolApply signature roles site =>
@@ -241,7 +260,9 @@ theorem supported {F G A : Type}
     | leave frame => exact .leave frame (ih () (law.2 ()))
     | action op =>
       apply ScalarSupport.Supported.action op
-      · cases op <;> exact law.1
+      · cases op with
+        | receive | send => exact law.1
+        | query site operation args => cases operation <;> exact law.1
       · intro reply; exact ih reply (law.2 reply)
 
 /-- One finite checked source fragment supplies all structural bridge evidence. -/

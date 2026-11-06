@@ -75,6 +75,16 @@ private def syntaxType (type : Expr) : Bool :=
     ``ProtocolSignature, ``NormalForm.CalleeKey, ``NormalForm.Slot,
     ``NormalForm.State].any type.isAppOf
 
+/-- Closed checked-source projections need no unification. Kernel reduction
+avoids replaying admission in the elaborator while leaving open family
+interfaces to the ordinary metavariable-aware reducer. Every frozen result
+and its use are still checked as ordinary declarations. -/
+def head (expression : Expr) : MetaM Expr := do
+  if expression.hasMVar || expression.hasFVar then return ← whnf expression
+  match Kernel.whnf (← getEnv) {} expression with
+  | .ok result => return result
+  | .error error => throwError (error.toMessageData (← getOptions))
+
 /-- A single memoized reduction builds a DAG of checked syntax constants.
 Unlike repeated whole-residual reduction, visiting a cached continuation or
 operand stops at its declaration. Renaming/substitution unfolds it only when
@@ -86,10 +96,20 @@ partial def normalize (cache : Cache) (expression : Expr) : TermElabM Expr := do
   if let some name := (← cache.reductions.get)[expression]? then
     if (← getEnv).contains name then return mkConst name
   if (← isType expression) || (← isProof expression) then return expression
-  let type ← whnf (← inferType expression)
+  let type ← head (← inferType expression)
   -- Callback regions remain source-owned templates. Their role normalization
   -- is staged when the repeat constructor requests its body certificate.
   if type.isAppOf ``Region || type.isForall then return expression
+  -- Source metadata includes the checked payload and its admission proof.
+  -- Share its head once instead of recursively revisiting every projection
+  -- through Program.payload. Only the syntax vocabulary below needs a deep
+  -- traversal; all other closed data stays an ordinary checked definition.
+  if !syntaxType type && !expression.hasFVar && !expression.hasMVar then
+    let result ← freeze cache (← head expression)
+    if let .const name _ := result then
+      if (← cache.declarations.get).contains name then
+        cache.reductions.modify (·.insert expression name)
+    return result
   -- Normalize data operands before reducing a transformation. In particular,
   -- stacked state projections, renamings and substitutions must not expand
   -- their common input independently at each use.
@@ -108,7 +128,7 @@ partial def normalize (cache : Cache) (expression : Expr) : TermElabM Expr := do
     else if let .proj name index record := expression then
       prepared := mkProj name index (← normalize cache record)
   let start ← IO.monoMsNow
-  let head ← whnf prepared
+  let head ← head prepared
   let elapsed := (← IO.monoMsNow) - start
   if elapsed > 1000 && (← getOptions).getBool `zkc.connection.trace false then
     let destination := (← getOptions).get `zkc.connection.traceFile ("" : String)

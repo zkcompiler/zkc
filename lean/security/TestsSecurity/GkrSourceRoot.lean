@@ -12,7 +12,7 @@ open TestsSecurity.GkrRootEncoding
 
 def handler : PIR.Handler (Occurrence.signature (uniformCarriers ℚ ℚ)) (List ℚ) String
   | .action (.receive (.field _) site _), value :: rest => ⟨.returned value, rest, [site]⟩
-  | .action (.query site _ _), proof => by
+  | .action (.query site (.draw _) _), proof => by
       change PIR.Execution (List ℚ) String ℚ
       exact ⟨.returned 0, proof, [site]⟩
   | .action (.send site _ _), proof => ⟨.returned (), proof, [site]⟩

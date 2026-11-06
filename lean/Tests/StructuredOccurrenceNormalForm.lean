@@ -273,7 +273,7 @@ def handler : PIR.Handler (occurrenceInterface traceModel) State Event
       ⟨.returned (), (stack ++ [frame], counter), [.enter frame]⟩
   | .leave frame, (stack, counter) =>
       ⟨.returned (), (stack.dropLast, counter), [.leave frame]⟩
-  | .action (.query site _ (.cons handle .nil)), (stack, counter) =>
+  | .action (.query site (.draw _) (.cons handle .nil)), (stack, counter) =>
       ⟨.returned (counter : ℚ), (stack, counter + 1), [.query stack site handle]⟩
   | .action _, state => ⟨.stopped .refused, state, []⟩
 

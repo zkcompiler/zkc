@@ -46,8 +46,9 @@ theorem escape_empty (history : List (PublicProperties.Event model.toCarriers))
     (event : PublicProperties.Event model.toCarriers) :
     PublicProperties.escape price history event (fun _ => False) := by
   cases event <;> try trivial
-  intro origin request
-  simp
+  all_goals
+    intro origin request
+    simp
 
 variable (sampling : ∀ (origin : Zkc.Construction.Origin)
     (request : origin.request = some (.draw field)) (p q : Polynomial (model.Field field)),

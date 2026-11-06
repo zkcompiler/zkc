@@ -132,7 +132,8 @@ set_option maxRecDepth 20000 in
 /-- Changed arithmetic is observed from another admitted constructor subject. -/
 theorem response_equation (base key : G) (secret : F) (service : Nat) :
     responseProcess base key secret service =
-      .call (.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)) (fun (nonce : F) =>
+      .call (.query SchnorrInteractive.nonceSite (.draw scalarDomain)
+        (.cons service .nil)) (fun (nonce : F) =>
       .call (.send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base)) (fun _ =>
       .call (.receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1) (fun (challenge : F) =>
       .call (.send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1 (nonce - challenge * secret))
@@ -141,7 +142,8 @@ theorem response_equation (base key : G) (secret : F) (service : Nat) :
 set_option maxRecDepth 20000 in
 theorem site_equation (base key : G) (secret : F) (service : Nat) :
     siteProcess base key secret service =
-      .call (.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)) (fun (nonce : F) =>
+      .call (.query SchnorrInteractive.nonceSite (.draw scalarDomain)
+        (.cons service .nil)) (fun (nonce : F) =>
       .call (.send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base)) (fun _ =>
       .call (.receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1) (fun (challenge : F) =>
       .call (.send (ty := .field scalarDomain) "changed_response" 1 (nonce + challenge * secret))
@@ -154,14 +156,13 @@ theorem response_execution (base key : G) (secret nonce challenge : F) (service 
     (responseProcess base key secret service).run
       (replyHandler service (.returned nonce) (.returned challenge)) () =
       (⟨.returned none, (),
-        [.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil),
+        [.query SchnorrInteractive.nonceSite (.draw scalarDomain) (.cons service .nil),
          .send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base),
          .receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1,
          .send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1
            (nonce - challenge * secret)]⟩ : Execution F G) := by
   rw [response_equation]
   simp [PIR.Process.run, PIR.Execution.follow, replyHandler, services, Values.get]
-  rfl
 
 set_option maxRecDepth 20000 in
 theorem response_extracted (base key : G) (secret nonce challenge : F) (service : Nat) :

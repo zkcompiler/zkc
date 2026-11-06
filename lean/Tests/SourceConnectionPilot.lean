@@ -1228,13 +1228,13 @@ def occurrenceView (mode : Domain.Mode) (accept : Bool) :
     PIR.Process (Occurrence.signature model.toCarriers) (Values (Component model.Value) outputs) :=
   match mode with
   | .producer =>
-    .call (.action (.query "private" field (.cons 91 .nil))) fun first =>
+    .call (.action (.query "private" (.draw field) (.cons 91 .nil))) fun first =>
     .call (.action (.send "m" 1 first)) fun _ =>
     .call (.action (.receive (.field field) "d" 1)) fun last =>
       .done (.cons none (.cons (some first) (.cons (some last) .nil)))
   | .validator =>
     .call (.action (.receive (.field field) "m" 0)) fun first =>
-    .call (.action (.query "q" field (.cons 73 .nil))) fun last =>
+    .call (.action (.query "q" (.draw field) (.cons 73 .nil))) fun last =>
     .call (.action (.send "d" 0 last)) fun _ =>
       .done (.cons (some accept) (.cons (some first) (.cons (some last) .nil)))
 

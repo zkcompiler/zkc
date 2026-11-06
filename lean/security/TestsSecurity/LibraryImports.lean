@@ -124,10 +124,12 @@ import ZkcSecurity.Bindings.Transcript.HonestReadbackLoops
 import ZkcSecurity.Bindings.Transcript.HonestReadbackTransport
 import ZkcSecurity.Bindings.Transcript.HonestSampledReadback
 import ZkcSecurity.Bindings.Transcript.HonestSamplingTransport
+import ZkcSecurity.Bindings.Transcript.LosslessOperations
 import ZkcSecurity.Bindings.Transcript.LosslessPresentation
 import ZkcSecurity.Bindings.Transcript.NominalDomain
 import ZkcSecurity.Bindings.Transcript.NominalField
 import ZkcSecurity.Bindings.Transcript.OccurrenceReading
+import ZkcSecurity.Bindings.Transcript.OccurrenceSampling
 import ZkcSecurity.Bindings.Transcript.OriginalReadback
 import ZkcSecurity.Bindings.Transcript.OriginalSampledReadback
 import ZkcSecurity.Bindings.Transcript.OriginalTransport
@@ -140,6 +142,9 @@ import ZkcSecurity.Bindings.Transcript.RootConnectionReading
 import ZkcSecurity.Bindings.Transcript.RootConnectionSampledReadback
 import ZkcSecurity.Bindings.Transcript.SampledCompiled
 import ZkcSecurity.Bindings.Transcript.SamplingControl
+import ZkcSecurity.Bindings.Transcript.ServiceProperties
+import ZkcSecurity.Bindings.Transcript.ServiceReading
+import ZkcSecurity.Bindings.Transcript.ServiceSampling
 import ZkcSecurity.Bindings.Transcript.SourceReading
 import ZkcSecurity.Claims.Admission
 import ZkcSecurity.Claims.Arithmetic
@@ -235,6 +240,7 @@ import ZkcSecurity.ProgramLogic.Oracle.Execution
 import ZkcSecurity.ProgramLogic.Oracle.PermutationExposure.Adaptive
 import ZkcSecurity.ProgramLogic.Oracle.PermutationExposure.Sampling
 import ZkcSecurity.ProgramLogic.Oracle.PermutationExposure.State
+import ZkcSecurity.ProgramLogic.Oracle.SourceExecution
 import ZkcSecurity.ProgramLogic.Oracle.StructuredUniform
 import ZkcSecurity.ProgramLogic.RepeatedComponent
 import ZkcSecurity.ProgramLogic.Transcript.Budget
@@ -433,6 +439,7 @@ import TestsSecurity.HonestInput
 import TestsSecurity.HonestOracle
 import TestsSecurity.HonestSampling
 import TestsSecurity.HonestWeakestPrecondition
+import TestsSecurity.IndexServices
 import TestsSecurity.InputFormulaBindings
 import TestsSecurity.InputLaws
 import TestsSecurity.InterfaceAxioms
@@ -463,6 +470,7 @@ import TestsSecurity.ObservedCountedInstallation
 import TestsSecurity.OccurrenceReading
 import TestsSecurity.OracleBoundaries
 import TestsSecurity.OraclePermutation
+import TestsSecurity.OracleSourceExecution
 import TestsSecurity.OriginalEndpointGeneration
 import TestsSecurity.OriginalEndpointRequests
 import TestsSecurity.OriginalHonestCompleteness
@@ -557,6 +565,11 @@ import TestsSecurity.SumcheckSourceAdmissionControls
 import TestsSecurity.SumcheckSourceProperties
 import TestsSecurity.SumcheckSubjectInputs
 import TestsSecurity.TableMembershipClaims
+import TestsSecurity.TypedSourceAxioms
+import TestsSecurity.TypedSourceControls
+import TestsSecurity.TypedSourceExecution
+import TestsSecurity.TypedSourceReading
+import TestsSecurity.TypedSourceRepeated
 import TestsSecurity.WeakestPrecondition
 import ZkcSecurityExamples.CausalSumcheck.UniformService
 import ZkcSecurityExamples.ChaumPedersenSigma

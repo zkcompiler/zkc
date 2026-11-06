@@ -43,7 +43,7 @@ theorem index_add_all (a b : Nat) :
       simp [GkrSourceBodies.helper3Body, Region.denote, meaning,
         Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
         Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
-        SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+        SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
         checkedIndices, aBound, bBound, sumBound]
 
 theorem comparison_all : LessAllLaw (helpers (F := F) (G := G)) := by
@@ -76,7 +76,7 @@ theorem shape_dimension_refused (table : Meanings F G) (less : LessAllLaw table)
   simp only [show 0 < indexLimit by decide, show 1 < indexLimit by decide,
     show 64 < indexLimit by decide, and_true, outside, ite_false, ite_true] at first second
   simp [meaning, Evaluation.meaning, SiteObservations.closed,
-    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
     first, second, boolResult, show 0 < indexLimit by decide, show 64 < indexLimit by decide]
 
 /-- This equation covers arbitrary lists and arbitrary mathematical naturals;

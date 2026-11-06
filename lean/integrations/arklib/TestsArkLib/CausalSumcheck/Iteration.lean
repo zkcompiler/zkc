@@ -43,7 +43,7 @@ private theorem query_handler {G : Type} [SampleableType F]
     (context : ProtocolContext) (handle : Nat) (s : S) :
     withUniformQueries net [queryKey context handle] pre post
       (.query (challengeSite context)
-        "bls12-381.fr" (.cons handle .nil)) s =
+        (.draw "bls12-381.fr") (.cons handle .nil)) s =
       freshQuery (F := F) (pre (queryKey context handle))
         (post (queryKey context handle)) s := by
   have law := withUniformQueries_queryKey net pre post context handle s
@@ -96,9 +96,11 @@ def network (low : Phase (State F) (Event F) F) :
           [.sent site peer r]⟩
       else pure ⟨.stopped .refused, s, []⟩
   | .send .., s => pure ⟨.stopped .refused, s, []⟩
-  | .query site field (.cons handle .nil), s =>
+  | .query site (.draw field) args, s =>
+      let .cons handle _ := args
       pure ⟨.returned s.cached, record (.oldQuery (site, field, handle) s.cached) s,
         [.oldQuery (site, field, handle) s.cached]⟩
+  | .query .., s => pure ⟨.stopped .refused, s, []⟩
 
 def handler [SampleableType F] (low : Phase (State F) (Event F) F) :=
   withUniformQueries (network low) [serviceKey] before after

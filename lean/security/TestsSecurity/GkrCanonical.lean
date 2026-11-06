@@ -49,21 +49,10 @@ computes the proof, and its actual oracle state is passed to validation. The
 constant oracle is only a deterministic test interpretation. -/
 private def zeroOracle : Domain.Oracle Id model.toCarriers Nat
   | _, .challenge ⟨_, _, some ⟨_, _, .field _⟩⟩, state => (.returned 0, state + 1)
-  | _, .challenge ⟨_, _, some ⟨_, _, .boolean⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .group _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .groups _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .indices⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .oracle _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .oracleSequence _ _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .service _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .index⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .vector _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .sequence _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .product _ _ _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, some ⟨_, _, .resourceUnit _⟩⟩, state => (.returned (), state)
-  | _, .challenge ⟨_, _, none⟩, state => (.returned (), state)
+  | _, .challenge _, state => (.stopped .refused, state)
   | _, .message _ _, state => (.returned (), state)
   | _, .publicBinding _, state => (.returned (), state)
+
 private def pairedExecution :=
   let env := ((Canonical.subject model).runtimeInputs
     (Canonical.sourceInputs model oneLayer)).getD ([], [])

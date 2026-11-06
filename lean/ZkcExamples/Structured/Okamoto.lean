@@ -104,8 +104,8 @@ theorem honest_accepts (firstBase secondBase point : G) (firstScalar secondScala
           (program.participant F G 0 (OkamotoNormalForms.proverInputs firstBase secondBase point
             firstScalar secondScalar nonces)) =
         ⟨.returned (.cons none .nil), (),
-          [.query OkamotoNormalForms.firstNonceSite scalarDomain (.cons nonces .nil),
-           .query OkamotoNormalForms.secondNonceSite scalarDomain (.cons nonces .nil),
+          [.query OkamotoNormalForms.firstNonceSite (.draw scalarDomain) (.cons nonces .nil),
+           .query OkamotoNormalForms.secondNonceSite (.draw scalarDomain) (.cons nonces .nil),
            .send (ty := .group groupDomain) OkamotoNormalForms.commitmentSite 1 commitment,
            .receive (.field scalarDomain) OkamotoNormalForms.deliverySite 1,
            .send (ty := .field scalarDomain) OkamotoNormalForms.firstResponseSite 1 firstResponse,

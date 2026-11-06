@@ -309,6 +309,12 @@ a time, through a closed table of recipes (`Zkc.Executable.Helpers`):
 | Branch | A conditional on the same condition and captures, each region read as the corresponding callback |
 | Stop, return | An explicit stop for the same reason; the function's return of the returned names |
 
+Primitive recipes additionally require both their argument and result types
+to satisfy the selected scalar codec profile (`primitiveDataProfile`). Source
+support alone does not admit polynomial or indices values to this codec;
+unsupported profiles refuse as a `primitive` recipe. Scalar and vector
+recipes retain the same evaluator outcomes, including refusal and exhaustion.
+
 Every name an executable step binds must be fresh, so that a name keeps the
 value it denotes; index names produced by checked index primitives and by index
 constants below the limit are tracked as bounded. A body outside the table is

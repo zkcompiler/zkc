@@ -28,6 +28,7 @@ def ProtocolInterface.resolve (interface : ProtocolInterface) (inputs outputs : 
     if type.isService && scope.length != 1 then throw "structured-service-owner"
   for (type, scope) in inputs.zip inputScopes ++ outputs.zip outputScopes do
     if type.isCustody && scope.length != 1 then throw "structured-custody-holder"
+    if type.containsPolynomial && scope.length != 1 then throw "structured-polynomial-local"
   return (inputScopes, outputScopes)
 
 /-- Resolve every original protocol header before any body is lowered. -/

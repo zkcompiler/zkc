@@ -21,6 +21,7 @@ mutual
       Component carriers.Value type → Prop
     | .index, some value => value < indexLimit
     | .vector _, some values | .groups _, some values => values.length < indexLimit
+    | .polynomial _, some p => p.coefficients.length < indexLimit
     | .indices, some values => values.length < indexLimit ∧ ∀ value ∈ values, value < indexLimit
     | .oracleSequence _ maximum, some values => values.length ≤ maximum
     | .sequence element, some values => values.length < indexLimit ∧

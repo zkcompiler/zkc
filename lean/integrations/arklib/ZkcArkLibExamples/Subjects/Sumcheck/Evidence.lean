@@ -45,6 +45,8 @@ open ZkcSecurity.Examples.SumcheckFiatShamir
 open Zkc.Polynomial.Multilinear
 open scoped ENNReal
 
+-- The generated source connection contains nested occurrence certificates.
+set_option maxRecDepth 4096
 set_option smartUnfolding false
 
 section Rejection

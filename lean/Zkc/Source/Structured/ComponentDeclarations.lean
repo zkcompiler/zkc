@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.ContractAdmission
+public import Zkc.Source.Structured.SourcePlacementShape
 
 @[expose] public section
 
@@ -11,60 +11,53 @@ namespace Zkc.Source.Structured
 
 namespace SourceDeclarations
 
-def record? (source : SourceDeclarations) (type : OriginTerm) : Option SourceRecord :=
-  source.records.find? (·.type == type)
+/-- The exact native type selected by one retained leaf, including custody identity. -/
+def Leaf.nativeType (source : SourceDeclarations) (leaf : Leaf) : Except String Ty := do
+  match leaf.kind with
+  | .data type | .holderData type | .receiverHandle type => return type
+  | .custody owner =>
+    let record ← requireSome (source.record? owner) "component-declaration-record"
+    let slot ← requireSome record.slot "component-declaration-custody-identity"
+    return .resourceUnit slot
 
-def isLinear (source : SourceDeclarations) (type : OriginTerm) : Bool :=
-  (source.record? type).any (·.resource == "linear")
-
-/-- What one native leaf of a source port holds: data of an exact type, or the
-custody permission of a closed resource record. -/
-inductive LeafKind where
-  | data (type : Ty)
-  | custody (owner : OriginTerm)
-  deriving BEq, Repr
-
-/-- One ordered native leaf of a source port: what it holds, its effective
-placement and its path of field names, array positions and tuple positions
-below the port. An ordinary record places every leaf, private fields included,
-at the port's roles. -/
-structure Leaf where
-  kind : LeafKind
-  path : List String
-  deriving BEq, Repr
-
-/-- Reconstruct ordered leaves with each resource record's custody prefix.
-Zero-length arrays retain their element's declaration obligations. Distributed
-and variant semantics require separate admission beyond reading their metadata. -/
-def leaves (source : SourceDeclarations) : Nat → OriginTerm → List String → Except String (List Leaf)
-  | 0, _, _ => .error "component-declaration-depth"
-  | depth + 1, term, path => do
-    match term with
-    | .boolean => return [⟨.data .boolean, path⟩]
-    | .index => return [⟨.data .index, path⟩]
-    | .field name => return [⟨.data (.field name), path⟩]
-    | .group name => return [⟨.data (.group name), path⟩]
-    | .unit => return []
-    | .tuple fields =>
-      return (← fields.zipIdx.mapM fun (field, position) =>
-        leaves source depth field (path ++ [toString position])).flatten
-    | .array element count =>
-      let some count := count.toNat? | throw "component-declaration-type"
-      if count > 512 then throw "component-declaration-limit"
-      let template ← leaves source depth element path
-      if template.length * count > 512 then throw "component-declaration-limit"
-      return (← (List.range count).mapM fun position =>
-        leaves source depth element (path ++ [toString position])).flatten
-    | .builtin "vector" [.field name] | .builtin "field_array" [.field name, _] =>
-      return [⟨.data (.vector name), path⟩]
-    | .nominal .record _ _ =>
-      let record ← requireSome (source.record? term) "component-declaration-record"
-      let .fields fields := record.members | throw "component-declaration-record"
-      let custody := if record.slot.isSome then [⟨LeafKind.custody term, path⟩] else []
-      return custody ++ (← fields.mapM fun field =>
-        leaves source depth field.type (path ++ [field.name])).flatten
-    | .nominal .logicalRecord _ _ => throw "component-declaration-distributed"
+/-- A single checked association, shared by every placement and source category. -/
+def associateLeaf (source : SourceDeclarations) (roster : List String) (leaf : PlacedLeaf)
+    (native : Ty) (scope : List Nat) : Except String Unit := do
+  let expected ← leaf.leaf.nativeType source
+  if native != expected then
+    match leaf.leaf.kind with
+    | .custody _ => throw "component-declaration-custody-identity"
     | _ => throw "component-declaration-type"
+  let roles ← leaf.roles.mapM (resolveRole roster)
+  if roles != scope then throw "component-declaration-role"
+
+/-- Successful association reads back the exact type and oriented role scope.
+This structural fact asserts neither frontend correctness nor custody conservation. -/
+theorem associateLeaf_readback {source : SourceDeclarations} {roster : List String}
+    {leaf : PlacedLeaf} {native : Ty} {scope : List Nat}
+    (accepted : associateLeaf source roster leaf native scope = .ok ()) :
+    leaf.leaf.nativeType source = .ok native ∧
+      leaf.roles.mapM (resolveRole roster) = .ok scope := by
+  unfold associateLeaf at accepted
+  cases typeEq : leaf.leaf.nativeType source with
+  | error code => simp [typeEq, bind, Except.bind] at accepted
+  | ok expected =>
+    simp only [typeEq, bind, Except.bind] at accepted
+    split at accepted
+    · cases kindEq : leaf.leaf.kind <;> simp [kindEq, throw] at accepted
+    · rename_i same
+      have equality : native = expected := by simpa using same
+      subst expected
+      cases roleEq : leaf.roles.mapM (resolveRole roster) with
+      | error code => simp [roleEq] at accepted
+      | ok roles =>
+        simp only [roleEq] at accepted
+        split at accepted
+        · contradiction
+        · rename_i sameRoles
+          have equality : roles = scope := by simpa using sameRoles
+          subst roles
+          exact ⟨rfl, rfl⟩
 
 /-- Check one port list against the native signature and scopes, returning the
 custody slots its leaves exhibit for their owners. A custody leaf is a native
@@ -76,26 +69,20 @@ def checkPorts (source : SourceDeclarations) (signature : ProtocolSignature)
   let mut slots : List (OriginTerm × String) := []
   let names := ports.map (·.name)
   if names.eraseDups.length != names.length then throw "component-declaration-duplicate"
+  if scopes.length != types.length then throw "component-declaration-role"
   for port in ports do
     if port.offset != offset then throw "component-declaration-port"
-    let .data placed := port.placement | throw "component-declaration-distributed"
-    if placed != port.roles || signature.roles.filter port.roles.contains != port.roles then
-      throw "component-declaration-placement"
-    let described ← source.leaves Limits.nesting port.type [port.name]
+    let summary := rosterSet signature.roles port.placement.roles
+    if summary != port.roles then throw "component-declaration-placement"
+    let described ← source.placedLeaves signature.roles port
     if described.length != port.count then throw "component-declaration-type"
-    let roles ← port.roles.mapM (resolveRole signature.roles)
-    if roles.eraseDups.length != roles.length then throw "component-declaration-role"
     for (leaf, index) in described.zipIdx do
       let some native := types[offset + index]? | throw "component-declaration-type"
-      match leaf.kind with
-      | .data type => if native != type then throw "component-declaration-type"
-      | .custody owner =>
+      let some scope := scopes[offset + index]? | throw "component-declaration-role"
+      source.associateLeaf signature.roles leaf native scope
+      if let .custody owner := leaf.leaf.kind then
         let .resourceUnit slot := native | throw "component-declaration-custody"
-        let record ← requireSome (source.record? owner) "component-declaration-record"
-        if record.slot != some slot then throw "component-declaration-custody-identity"
-        if roles.length != 1 then throw "component-declaration-custody-holder"
         slots := (owner, slot) :: slots
-      if scopes[offset + index]? != some roles then throw "component-declaration-role"
     offset := offset + port.count
   if services then
     if !(types.drop offset).all Ty.isService then throw "component-declaration-port"
@@ -118,6 +105,17 @@ association, separate from layout and placement admission. -/
 def checkLinearHolders (source : SourceDeclarations) (ports : List SourcePort) :
     Except String Unit := do
   for port in ports do
+    -- The current CLAIM relation has a single holder, whereas a distributed
+    -- linear record has one custody fragment per telescope role. Keep this
+    -- claim boundary explicit even inside structural products.
+    for leaf in ← source.leaves Limits.nesting port.type [] do
+      if let .custody owner := leaf.kind then
+        if let some row := source.record? owner then
+          if row.resource == "linear" then
+            if !row.roles.isEmpty then
+              throw "component-claim-distributed-custody-profile"
+            if port.roles.length != 1 && !source.isLinear port.type then
+              throw "component-claim-fragmented-custody-profile"
     if source.isLinear port.type && (port.roles.length != 1 || port.count == 0) then
       throw "component-claim-role"
 
@@ -145,14 +143,14 @@ def check (source : SourceDeclarations) (snapshot : Snapshot)
   for record in source.records do
     match record.type with
     | .nominal .record _ _ => pure ()
-    | .nominal .logicalRecord _ _ => throw "component-declaration-distributed"
+    | .nominal .logicalRecord _ _ => pure ()
     | .nominal .variant _ _ => throw "component-declaration-variant"
     | _ => throw "component-declaration-record"
     -- Sealing restricts source access; it is independent of the resource tag.
     unless ["ordinary", "affine", "linear"].contains record.resource do throw "component-declaration"
     let names := record.members.allFields.map (·.name)
     if names.eraseDups.length != names.length then throw "component-declaration-duplicate"
-    let _ ← source.leaves Limits.nesting record.type []
+    source.checkRecordPlacement record
   let owners := source.protocols.map (·.name)
   if owners.eraseDups.length != owners.length || owners.length != headers.length then
     throw "component-declaration-owner"
@@ -160,6 +158,8 @@ def check (source : SourceDeclarations) (snapshot : Snapshot)
   let slots := source.records.filterMap fun record => record.slot.map (record.type, ·)
   for protocol in source.protocols do
     let header ← requireSome (headers.find? (·.name == protocol.name)) "component-declaration-owner"
+    if protocol.name == snapshot.entry && header.inputs.any (fun type => match type with
+        | .oracleSequence .. => true | _ => false) then throw "oracle-root-sequence-ingress"
     discard <| source.checkPorts header protocol.inputs header.inputs header.inputScopes true
     discard <| source.checkPorts header protocol.outputs header.outputs header.outputScopes false
     source.checkLinearHolders protocol.inputs

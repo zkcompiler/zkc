@@ -29,7 +29,8 @@ theorem empty (price : ENNReal)
     (event : PublicProperties.Event (uniformCarriers F G)) :
     PublicProperties.escape price history event (fun _ => False) := by
   cases event <;> try trivial
-  intro origin request
-  simp
+  all_goals
+    intro origin request
+    simp
 
 end ZkcSecurity.Source.PublicUniform

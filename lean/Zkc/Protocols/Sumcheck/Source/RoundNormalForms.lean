@@ -81,7 +81,7 @@ def verifierProcess (ctx : ProtocolContext) (service : Option Nat) (point : Opti
       | none =>
         .halt .incomplete
       | some service =>
-        .call (.query (challengeSite ctx) scalarDomain (.cons service .nil)) fun (challenge : F) =>
+        .call (.query (challengeSite ctx) (.draw scalarDomain) (.cons service .nil)) fun (challenge : F) =>
         .call (.send (ty := .field scalarDomain) (deliverySite ctx) (ctx.roles 0) challenge) fun _ =>
         match point with
         | none =>

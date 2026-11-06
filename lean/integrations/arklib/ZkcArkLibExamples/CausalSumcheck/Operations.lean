@@ -20,7 +20,7 @@ abbrev scalar : Ty := .field scalarDomain
 abbrev randomService : Ty := .service ("random." ++ scalarDomain ++ "/0")
 
 abbrev queryAction (site : String) (service : Nat) : (participantInterface F G).Op :=
-  .query site scalarDomain (.cons service .nil)
+  .query site (.draw scalarDomain) (.cons service .nil)
 
 abbrev lowAction (site : String) : (participantInterface F G).Op := .receive scalar site 0
 
@@ -146,7 +146,6 @@ theorem scalarRound_eq (names : Sites) (service : Nat) (claim : F)
   · have cond : decide (claim = lo + hi) = true := decide_eq_true passed.symm
     simp [protocolOperationWith, Participant.guard, PIR.Process.interpret,
       PIR.Process.bind, PIR.Process.bind_assoc, boundary, cond, ite_eq_left passed]
-    rfl
   · have cond : decide (claim = lo + hi) = false := decide_eq_false (Ne.symm passed)
     simp [protocolOperationWith, Participant.guard, PIR.Process.interpret,
       PIR.Process.bind, PIR.Process.bind_assoc, boundary, cond, ite_eq_right passed]

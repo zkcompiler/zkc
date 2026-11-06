@@ -179,15 +179,21 @@ structured-source normal-form SNAPSHOT.json REQUEST.json
 ```
 
 A `normal-form` request is an array `[protocol, repeat, role, roster, pattern,
-laws, strict]`: the protocol's retained name, the site of the repeat whose
+laws, strict, kept, callees]`: the protocol's retained name, the site of the repeat whose
 callback is normalized (or `null` for the body), the role and roster size as
 decimal strings, one input pattern entry per input (`"absent"`, `"present"`,
 `"optional"`, or a fixed `["index", "0"]`, `["field", "1"]` or `["bool", true]`),
 the laws (`[helper, "returns" | ["stops", reason], pins]`, a pin being `null` or
-an input position) and whether owned calls without a law are kept. It prints
+an input position), whether owned calls without a law remain strict invocations,
+the names of helpers retained on optional components, and the callee selections
+`[name, role, input pattern, pins]`. It prints
 the compiled normalizer's form as JSON for inspection, with `names` set
 when laws had to be chosen by helper name as well as by signature; the run is
-not trusted, since the kernel checks every printed form.
+not trusted, since the kernel checks every printed form. Query nodes retain a
+structured request: `["draw", field]`, `["index", contract]`, or
+`["indices", contract]`. The service capability, bound and block count stay in
+the query's ordered operand list; index and block requests are never printed
+as field draws.
 
 Closed runs take and return typed input/output arrays. Open requests and
 results follow the native schema: optional ordered inputs, selected role,

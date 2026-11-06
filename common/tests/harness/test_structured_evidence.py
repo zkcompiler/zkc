@@ -499,6 +499,8 @@ def test_live_repeat_inventory_covers_main_lean_imports_and_python_owners(repeat
 @pytest.mark.parametrize("driver", ["shared", "repeat"])
 def test_captured_tool_changes_fail_in_shared_setup(
         bridge, repeats, source_tree, repeat_tree, tmp_path, monkeypatch, driver):
+    # This mutation requires a cache miss, even when the outer runner shares tools.
+    monkeypatch.setenv("ZKC_TOOL_STORE", str(tmp_path / "tool-store"))
     args = arguments(tmp_path)
     if driver == "shared":
         monkeypatch.setattr(bridge, "ROOT", source_tree)

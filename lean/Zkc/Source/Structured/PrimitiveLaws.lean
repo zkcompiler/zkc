@@ -9,6 +9,7 @@ reduction or wrapping. Native allocation and observer capacity remain separate. 
 
 namespace Zkc.Source.Structured
 namespace Primitive
+attribute [local simp] evaluateOn
 variable {F G : Type} [CommRing F] [DecidableEq F]
 
 @[simp] theorem constant (n : Nat) (bound : n < indexLimit) :
@@ -59,17 +60,17 @@ variable {F G : Type} [CommRing F] [DecidableEq F]
 
 theorem add_overflow (a b : Nat) (overflow : indexLimit ≤ a + b) :
     evaluate (F := F) (G := G) .indexAdd (.cons a (.cons b .nil)) = .stopped .refused := by
-  simp only [evaluate, checkedIndices]
+  simp only [evaluate, evaluateOn, checkedIndices]
   split <;> simp_all [Nat.not_lt.mpr overflow]
 
 theorem mul_overflow (a b : Nat) (overflow : indexLimit ≤ a * b) :
     evaluate (F := F) (G := G) .indexMul (.cons a (.cons b .nil)) = .stopped .refused := by
-  simp only [evaluate, checkedIndices]
+  simp only [evaluate, evaluateOn, checkedIndices]
   split <;> simp_all [Nat.not_lt.mpr overflow]
 
 theorem sub_underflow (a b : Nat) (underflow : a < b) :
     evaluate (F := F) (G := G) .indexSub (.cons a (.cons b .nil)) = .stopped .refused := by
-  simp only [evaluate, checkedIndices]
+  simp only [evaluate, evaluateOn, checkedIndices]
   split <;> simp_all [Nat.not_le.mpr underflow]
 
 @[simp] theorem div_zero (a : Nat) :

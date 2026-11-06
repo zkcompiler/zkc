@@ -397,9 +397,6 @@ end Tables
 section Operations
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-theorem Primitive.arguments_data (primitive : Primitive) : primitive.arguments.all dataType = true := by
-  cases primitive <;> rfl
-
 theorem calculate_encode (calculation : Calculation) (data : calculation.op.arguments.all dataType = true)
     (arguments : Values (assignment F G) calculation.op.arguments) :
     (Resolved.calculate calculation).evaluate (encodeValues arguments) =
@@ -414,7 +411,7 @@ theorem sound_indexConstant (table : Structured.Meanings F G) (value : Nat) (bel
         (Evaluation.operation SiteObservations.closed table (.exec (.indexConstant value)) .nil callbacks)) := by
   refine (calculate_encode (.indexConstant value) rfl Values.nil).trans ?_
   cases callbacks
-  simp [Evaluation.operation, Primitive.evaluate, primitiveOutcome, below, Construction.closedOutcome,
+  simp [Evaluation.operation, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, below, Construction.closedOutcome,
     Calculation.evaluate]
   rfl
 
@@ -427,7 +424,7 @@ theorem sound_indexEqual (table : Structured.Meanings F G) (a b : Nat) (aBound :
           (Values.cons a (Values.cons b Values.nil)) callbacks)) := by
   refine (calculate_encode .indexEqual rfl (Values.cons a (Values.cons b Values.nil))).trans ?_
   cases callbacks
-  simp [Evaluation.operation, Primitive.evaluate, primitiveOutcome, checkedIndices, aBound, bBound,
+  simp [Evaluation.operation, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, checkedIndices, aBound, bBound,
     Construction.closedOutcome, Calculation.evaluate]
   rfl
 
@@ -441,18 +438,22 @@ theorem sound_fieldEqual (table : Structured.Meanings F G) (domain : String) (a 
           (Values.cons a (Values.cons b Values.nil)) callbacks)) := by
   refine (calculate_encode (.fieldEqual domain) rfl (Values.cons a (Values.cons b Values.nil))).trans ?_
   cases callbacks
-  simp [Evaluation.operation, Primitive.evaluate, primitiveOutcome, Construction.closedOutcome,
+  simp [Evaluation.operation, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, Construction.closedOutcome,
     Calculation.evaluate]
   rfl
 
 theorem sound_primitive (table : Structured.Meanings F G) (primitive : Primitive)
+    (data : primitiveDataProfile primitive = true)
     (arguments : Values (assignment F G) primitive.arguments)
     (callbacks : Values (RegionFunction (assignment F G) closedInterface) []) :
     (Resolved.compute (.primitive primitive)).evaluate (encodeValues arguments) =
       mapOutcome encodeValues (Construction.closedOutcome
         (Evaluation.operation SiteObservations.closed table (.exec primitive) arguments callbacks)) := by
   cases callbacks
-  simp only [Resolved.evaluate, Computation.apply, decodeValues_encodeValues arguments (Primitive.arguments_data _)]
+  simp only [primitiveDataProfile, Bool.and_eq_true] at data
+  have argumentsData := data.1
+  simp only [Resolved.evaluate, Computation.apply,
+    decodeValues_encodeValues arguments argumentsData]
   change _ = mapOutcome encodeValues (Construction.closedOutcome (primitiveOutcome (primitive.evaluate arguments)))
   cases primitive.evaluate arguments <;> rfl
 
@@ -496,9 +497,9 @@ theorem implements_sound (table : Structured.Meanings F G) {op : Structured.Op} 
       | compute computation =>
           cases computation with
           | primitive primitive' =>
-              simp [implements] at implemented
-              subst implemented
-              exact sound_primitive table _ arguments callbacks
+              simp only [implements, Bool.and_eq_true, beq_iff_eq] at implemented
+              obtain ⟨rfl, data⟩ := implemented
+              exact sound_primitive table _ data arguments callbacks
           | _ => simp [implements] at implemented
       | _ => simp [implements] at implemented
   | createUnit slot | passUnit slot | consumeUnit slot =>
@@ -685,6 +686,73 @@ theorem lookupAll_of_agrees {env : Env F G} : ∀ {tys : List Ty} {names : List 
 
 end WalkLemmas
 
+private theorem numerical_checkValues_head (model : FieldModel) {ty : Ty} {types : List Ty}
+    (value : model.Value ty) (rest : Values model.Value types)
+    (checked : Numerical.checkValues model (.cons value rest) = .ok ()) :
+    Numerical.checkValue model ty value = .ok () := by
+  simp only [Numerical.checkValues] at checked
+  cases head : Numerical.checkValue model ty value with
+  | error reason =>
+    rw [head] at checked
+    change Except.error reason = Except.ok () at checked
+    cases checked
+  | ok result => cases result; rfl
+
+private theorem numerical_indices_checks (model : FieldModel) (xs : List Nat)
+    (checked : Numerical.checkValue model .indices xs = .ok ()) :
+    xs.length < indexLimit ∧ xs.all (· < indexLimit) = true := by
+  by_cases length : xs.length < indexLimit
+  · refine ⟨length, ?_⟩
+    by_cases elements : xs.all (· < indexLimit) = true
+    · exact elements
+    · simp only [Numerical.checkValue, Numerical.size, Numerical.require, length, elements,
+        ite_true] at checked
+      change Except.error PIR.Stop.refused = Except.ok () at checked
+      cases checked
+  · simp only [Numerical.checkValue, Numerical.size, length, ite_false] at checked
+    change Except.error PIR.Stop.exhausted = Except.ok () at checked
+    cases checked
+
+private theorem numerical_indicesAt_bounded (model : FieldModel) (domain base : String)
+    (xs : List Nat) (position n : Nat)
+    (returned : Numerical.checkedEvaluateOn model domain base .indicesAt
+      (.cons xs (.cons position .nil)) = .returned (.cons n .nil)) : n < indexLimit := by
+  simp only [Numerical.checkedEvaluateOn, Numerical.arguments] at returned
+  cases checked : Numerical.checkValues model
+      (.cons xs (.cons position .nil) : Values model.Value [.indices, .index]) with
+  | error reason => simp [checked] at returned
+  | ok result =>
+    cases result
+    have elements := (numerical_indices_checks model xs
+      (numerical_checkValues_head model (ty := .indices) (types := [.index])
+        xs (.cons position .nil) checked)).2
+    simp only [checked, Numerical.evaluateOn] at returned
+    cases found : xs[position]? with
+    | none => simp [found, Numerical.finish] at returned
+    | some value =>
+      simp only [found] at returned
+      change (PIR.Outcome.returned (.cons value .nil) :
+        PIR.Outcome (Values model.Value [.index])) = .returned (.cons n .nil) at returned
+      cases returned
+      exact of_decide_eq_true (List.all_eq_true.mp elements n (List.mem_of_getElem? found))
+
+private theorem numerical_indicesLength_bounded (model : FieldModel) (domain base : String)
+    (xs : List Nat) (n : Nat)
+    (returned : Numerical.checkedEvaluateOn model domain base .indicesLength
+      (.cons xs .nil) = .returned (.cons n .nil)) : n < indexLimit := by
+  simp only [Numerical.checkedEvaluateOn, Numerical.arguments] at returned
+  cases checked : Numerical.checkValues model (.cons xs .nil : Values model.Value [.indices]) with
+  | error reason => simp [checked] at returned
+  | ok result =>
+    cases result
+    have length := (numerical_indices_checks model xs
+      (numerical_checkValues_head model (ty := .indices) (types := []) xs .nil checked)).1
+    simp only [checked, Numerical.evaluateOn, Numerical.size, length, ite_true] at returned
+    change (PIR.Outcome.returned (.cons xs.length .nil) :
+      PIR.Outcome (Values model.Value [.index])) = .returned (.cons n .nil) at returned
+    cases returned
+    exact length
+
 section Operation
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 variable (vocabulary : Vocabulary) (validator : Validator)
@@ -707,17 +775,37 @@ theorem primitive_bounded {primitive : Primitive}
     (returned : primitive.evaluate arguments = .returned outs) :
     ∀ value ∈ encodeValues outs, ∀ index, value = .index index → index < indexLimit := by
   cases primitive with
+  | numerical operation domain base =>
+      cases operation with
+      | indicesAt =>
+        rcases arguments with _ | ⟨xs, _ | ⟨position, _ | _⟩⟩
+        rcases outs with _ | ⟨n, _ | _⟩
+        exact single_bounded (numerical_indicesAt_bounded _ domain base xs position n returned)
+      | indicesLength =>
+        rcases arguments with _ | ⟨xs, _ | _⟩
+        rcases outs with _ | ⟨n, _ | _⟩
+        exact single_bounded (numerical_indicesLength_bounded _ domain base xs n returned)
+      | _ =>
+        intro value member index same
+        subst same
+        rcases outs with _ | ⟨x, _ | _⟩
+        simp [encodeValues, Primitive.results, Numerical.results, Value.encode] at member
+  | binaryConstant domain bits | booleanNot =>
+      intro value member index same
+      subst same
+      rcases outs with _ | ⟨x, _ | _⟩
+      simp [encodeValues, Primitive.results, Value.encode] at member
   | indexConstant n =>
       cases arguments
       by_cases below : n < indexLimit
-      · simp only [Primitive.evaluate, below, ite_true] at returned
+      · simp only [Primitive.evaluate, Primitive.evaluateOn, below, ite_true] at returned
         injection returned with returned
         subst returned
         exact single_bounded below
-      · simp [Primitive.evaluate, below] at returned
+      · simp [Primitive.evaluate, Primitive.evaluateOn, below] at returned
   | indexAdd | indexMul | indexSub | indexDiv | indexMod =>
       rcases arguments with _ | ⟨a, _ | ⟨b, _ | _⟩⟩
-      simp only [Primitive.evaluate, checkedIndices] at returned
+      simp only [Primitive.evaluate, Primitive.evaluateOn, checkedIndices] at returned
       by_cases inRange : a < indexLimit ∧ b < indexLimit
       · simp only [inRange, and_self, ite_true] at returned
         split at returned
@@ -737,11 +825,11 @@ theorem primitive_bounded {primitive : Primitive}
   | vectorLength domain =>
       rcases arguments with _ | ⟨xs, _ | _⟩
       by_cases below : xs.length < indexLimit
-      · simp only [Primitive.evaluate, below, ite_true] at returned
+      · simp only [Primitive.evaluate, Primitive.evaluateOn, below, ite_true] at returned
         injection returned with returned
         subst returned
         exact single_bounded below
-      · simp [Primitive.evaluate, below] at returned
+      · simp [Primitive.evaluate, Primitive.evaluateOn, below] at returned
   | indexEqual | indexLess | vectorEqual _ | fieldEqual _ =>
       intro value member index same
       subst same

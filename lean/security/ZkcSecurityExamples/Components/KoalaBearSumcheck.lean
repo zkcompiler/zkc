@@ -35,7 +35,8 @@ noncomputable def program : Program I Nat (State Frame) (Message.endpoints Octic
     .call (.receive (.field octicIdentity) (KoalaBearSumcheckSource.site "label_6c6f77_0") 0) fun low =>
     .call (.receive (.field octicIdentity) (KoalaBearSumcheckSource.site "label_68696768_0") 0) fun high =>
     .done (some (low, high))
-  query handle _ _ := .query (KoalaBearSumcheckSource.site "label_6368616c6c656e6765") octicIdentity (.cons handle .nil)
+  query handle _ _ := .query (KoalaBearSumcheckSource.site "label_6368616c6c656e6765") (.draw octicIdentity)
+    (.cons handle .nil)
   challenge _ _ _ reply := reply
   deliver _ _ _ challenge :=
     .call (.send (ty := .field octicIdentity) (KoalaBearSumcheckSource.site "label_64656c6976657279_0") 0 challenge) fun _ => .done ()
@@ -80,12 +81,14 @@ theorem binding {n : Nat} (runtime : Nat × State Frame (n + 1)) :
   change Octic at high
   apply (PIR.Process.bind_ite _ _ _ _).trans
   change ((if low + high = runtime.2.scalar then
-    .call (.query (KoalaBearSumcheckSource.site "label_6368616c6c656e6765") octicIdentity (.cons runtime.1 .nil)) (fun (r : Octic) =>
+    .call (.query (KoalaBearSumcheckSource.site "label_6368616c6c656e6765") (.draw octicIdentity)
+      (.cons runtime.1 .nil)) (fun (r : Octic) =>
     .call (.send (ty := .field octicIdentity) (KoalaBearSumcheckSource.site "label_64656c6976657279_0") 0 r) (fun _ =>
     readback runtime.2 (.cons (some (low + (high - low) * r)) (.cons (some r) .nil))))
     else .halt .reject) : PIR.Process I (State Frame n)) =
     ((if low + high = runtime.2.scalar then
-    .call (.query (KoalaBearSumcheckSource.site "label_6368616c6c656e6765") octicIdentity (.cons runtime.1 .nil)) (fun (r : Octic) =>
+    .call (.query (KoalaBearSumcheckSource.site "label_6368616c6c656e6765") (.draw octicIdentity)
+      (.cons runtime.1 .nil)) (fun (r : Octic) =>
     .call (.send (ty := .field octicIdentity) (KoalaBearSumcheckSource.site "label_64656c6976657279_0") 0 r) (fun _ =>
     .done (runtime.2.advance (low, high) r))) else .halt .reject) : PIR.Process I (State Frame n))
   by_cases boundary : low + high = runtime.2.scalar

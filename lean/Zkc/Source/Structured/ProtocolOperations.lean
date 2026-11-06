@@ -2,6 +2,11 @@ module
 
 public import Zkc.Source.Structured.Operations
 public import Zkc.Source.Structured.ProtocolSignature
+public import Zkc.Source.Structured.OracleOperations
+public import Zkc.Source.Structured.ServiceOperations
+
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
 
 @[expose] public section
 
@@ -48,12 +53,14 @@ def assembleComponent {V : Ty → Type} {ty : Ty} (selected : Nat → Bool) (abs
 /-- Protocol roots have their own operation family, on the same Region carrier.
 Role indices are resolved against the containing root's roster, never global. -/
 inductive ProtocolOp where
+  | oracle (operation : OracleOp) (location : OracleLocation)
   | calculate (op : Op) (allowed : op.isCalculation = true)
   | localCall (helper : Helper) (localKind : helper.kind = .local) (owner : Nat) (site : String)
   | guard (owner : Nat) (site : String)
   | exchange (type : Ty) (sender receiver : Nat) (site : String)
   | restrict (type : Ty) (roles : List Nat)
   | assemble (type : Ty) (roles : List Nat)
+  | query (owner : Nat) (operation : ServiceOp) (site : String)
   | draw (owner : Nat) (field site : String)
   | statement (relation : String) (types : List Ty) (selectors : List String) (acceptance : Nat)
   | mark (site : String)
@@ -61,6 +68,7 @@ inductive ProtocolOp where
   | repeat (spec : RepeatSpec) (site : String)
 
 def ProtocolOp.arguments : ProtocolOp → List Ty
+  | .oracle operation _ => operation.arguments
   | .calculate op _ => op.arguments
   | .localCall helper .. => helper.inputs
   | .protocolApply callee .. => callee.inputs
@@ -68,17 +76,20 @@ def ProtocolOp.arguments : ProtocolOp → List Ty
   | .guard .. => [.boolean]
   | .exchange ty .. | .restrict ty .. => [ty]
   | .assemble ty roles => roles.map (fun _ => ty)
+  | .query _ operation _ => operation.arguments
   | .draw _ field _ => [.service ("random." ++ field ++ "/0")]
   | .statement _ types .. => types
   | .mark _ => []
 
 def ProtocolOp.results : ProtocolOp → List Ty
+  | .oracle operation _ => operation.results
   | .calculate op _ => op.results
   | .localCall helper .. => helper.outputs
   | .protocolApply callee .. => callee.outputs
   | .repeat spec _ => spec.state
   | .guard .. | .statement .. | .mark _ => []
   | .exchange ty .. | .restrict ty .. | .assemble ty .. => [ty]
+  | .query _ operation _ => [operation.result]
   | .draw _ field _ => [.field field]
 
 def ProtocolOp.helpers : ProtocolOp → List Helper
@@ -99,3 +110,8 @@ abbrev protocolDialect : Dialect :=
   ⟨Ty, ProtocolOp, ProtocolOp.arguments, ProtocolOp.results, ProtocolOp.regions⟩
 
 end Zkc.Source.Structured
+
+-- Realize shared equations here so every client imports the same stored proof.
+-- Independent lazy generation can attach different private helpers to one public name.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getUnfoldEqnFor? ``Zkc.Source.Structured.assembleComponent

@@ -106,7 +106,8 @@ def verifierView (claim : Octic) (handle : Nat) :
   .call (.receive extension (site "label_6c6f77_0") 0) fun (low : Octic) =>
   .call (.receive extension (site "label_68696768_0") 0) fun (high : Octic) =>
   if low + high = claim then
-    .call (.query (site "label_6368616c6c656e6765") octicIdentity (.cons handle .nil)) fun (challenge : Octic) =>
+    .call (.query (site "label_6368616c6c656e6765") (.draw octicIdentity)
+      (.cons handle .nil)) fun (challenge : Octic) =>
     .call (.send (ty := extension) (site "label_64656c6976657279_0") 0 challenge) fun _ =>
     .done (.cons (some (low + (high - low) * challenge)) (.cons (some challenge) .nil))
   else .halt .reject
@@ -117,7 +118,8 @@ def rawVerifierView (priorPoint : List Octic) (claim : Octic) (handle : Nat) :
   .call (.receive extension (site "label_6c6f77_0") 0) fun (low : Octic) =>
   .call (.receive extension (site "label_68696768_0") 0) fun (high : Octic) =>
   if low + high = claim then
-    .call (.query (site "label_6368616c6c656e6765") octicIdentity (.cons handle .nil)) fun (r : Octic) =>
+    .call (.query (site "label_6368616c6c656e6765") (.draw octicIdentity)
+      (.cons handle .nil)) fun (r : Octic) =>
     .call (.send (ty := extension) (site "label_64656c6976657279_0") 0 r) fun _ =>
     .done (.cons (some 0) (.cons (some (priorPoint ++ [r])) (.cons (some (low + (high - low) * r)) .nil)))
   else .halt .reject

@@ -31,8 +31,8 @@ theorem uniformInterface_receive (context : Context) (ty : Structured.Ty)
 requests the named field under the uniform carrier specialization. -/
 theorem uniformInterface_query (context : Context) (replacement : Replacement)
     (profile : context.profile = .fiatShamir replacement) (site field : String)
-    (arguments : Values (Structured.assignment F G) (Structured.services.arguments field)) :
-    uniformInterface context (.query site field arguments) =
+    (arguments : Values (Structured.assignment F G) (Structured.services.arguments (.draw field))) :
+    uniformInterface context (.query site (.draw field) arguments) =
       .query (.challenge (context.query site (.draw field))) some := by
   simp only [uniformInterface, Domain.interface, profile]
 

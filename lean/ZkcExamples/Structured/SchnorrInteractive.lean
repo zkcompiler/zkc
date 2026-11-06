@@ -100,7 +100,7 @@ def proverProcess (base key : G) (secret : F) (nonceService : Nat) :
 output. Its local key copy is not identified with the verifier's key. -/
 theorem prover_equation (base key : G) (secret : F) (nonceService : Nat) :
     proverProcess base key secret nonceService =
-      .call (.query nonceSite scalarDomain (.cons nonceService .nil)) (fun (nonce : F) =>
+      .call (.query nonceSite (.draw scalarDomain) (.cons nonceService .nil)) (fun (nonce : F) =>
       .call (.send (ty := .group groupDomain) wiring.commitmentSite 1 (nonce • base)) (fun _ =>
       .call (.receive (.field scalarDomain) wiring.deliverySite 1) (fun (challenge : F) =>
       .call (.send (ty := .field scalarDomain) wiring.responseSite 1 (nonce + challenge * secret))

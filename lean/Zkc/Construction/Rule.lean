@@ -62,6 +62,45 @@ def coordinatesValid (state : CheckState) (template : Template) (coordinates : N
   state.sorts[coordinates]? == some .indices && state.path coordinates == some state.inductions &&
     template.repeats == state.inductions.length
 
+/-- Shared scalar/block challenge rule. Source association independently checks
+that request values are the constants denoted by the original SSA operands. -/
+def checkRequestChallenge (context : Context) (state : CheckState) (suite : String)
+    (request : Request) (template : Template) (current coordinates : Nat)
+    (operands : List Nat) (results : List ValueSort) : Except String CheckState :=
+  match state.pending, template.querySite? with
+  | .none, some site =>
+    match context.draws.lookup site with
+    | some delivery =>
+      if suite = context.suite ∧ current = state.current ∧ template.entry = context.entry ∧
+          context.service.isSome ∧ request.valid ∧ request.nativeSupported ∧
+          (request.operation context.contract).isSome ∧
+          template.originFor context request = some (context.query site request) ∧
+          site ∉ state.seen ∧ coordinatesValid state template coordinates = true ∧
+          operands.all (fun reference => state.sorts[reference]? == some (.data .index)) ∧
+          results = [.data request.sort, .transcript context.suite] then
+        .ok { state with
+          sorts := state.sorts ++ results
+          current := state.sorts.length + 1
+          pending := .deliver state.sorts.length delivery
+          seen := site :: state.seen }
+      else .error "construction-index-challenge"
+    | none => .error "construction-challenge-site"
+  | .none, none => .error "construction-challenge-template"
+  | _, _ => .error "construction-pending"
+
+/-- Local service formation is independent of public transcript replacement.
+Only the owning participant can use the port, with the exact active ancestry. -/
+def localServiceValid (context : Context) (self : Nat) (sorts : List ValueSort) (inductions : List Nat)
+    (port : ServicePort) (request : Request) (template : Template)
+    (coordinates operands : List Nat) (results : List ValueSort) : Bool :=
+  request.valid && (request.operation port.contract).isSome &&
+    operands.length == request.operands.length &&
+    operands.all (fun reference => sorts[reference]? == some (.data .index)) &&
+    port.owner == context.role self && results == [.data request.sort] &&
+    template.entry == context.entry && coordinates == inductions &&
+    coordinates.all (fun reference => sorts[reference]? == some (.data .index)) &&
+    template.repeats == coordinates.length
+
 mutual
 def checkFrom (context : Context) : CheckState → List Instruction → Except String CheckState
   | state, [] => .ok state
@@ -77,6 +116,13 @@ custody. These steps may separate a challenge from its delivery. A loop carries 
 starts and ends its body with nothing pending, and yields its final state.
 Every other operation refuses. -/
 def checkStep (context : Context) (state : CheckState) : Instruction → Except String CheckState
+  | ⟨.localService port request template coordinates, operands, results, []⟩ =>
+      match state.pending with
+      | .none =>
+          if localServiceValid context context.validator state.sorts state.inductions port request template coordinates operands results then
+            .ok { state with sorts := state.sorts ++ results }
+          else .error "construction-local-service"
+      | _ => .error "construction-pending"
   | ⟨.receive site schema peer ty, [], results, []⟩ =>
       match state.pending with
       | .none =>
@@ -137,6 +183,12 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
           | none => .error "construction-challenge-site"
       | .none, none => .error "construction-challenge-template"
       | _, _ => .error "construction-pending"
+  | ⟨.indexChallenge suite bound template, [current, boundReference, coordinates], results, []⟩ =>
+      checkRequestChallenge context state suite (.sampleIndex bound) template current coordinates
+        [boundReference] results
+  | ⟨.blockChallenge suite bound count template, [current, coordinates], results, []⟩ =>
+      checkRequestChallenge context state suite (.sampleIndices bound count) template current coordinates
+        [] results
   | ⟨.calculate calculation, operands, results, []⟩ =>
       match state.pending with
       | .observe _ _ => .error "construction-pending"
@@ -254,15 +306,12 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
   | ⟨.guard _, [condition], [], []⟩ =>
       if state.sorts[condition]? = some (.data .boolean) then .ok state
       else .error "construction-plain-guard"
-  | ⟨.localService port request template coordinates, [], results, []⟩ =>
-      match request with
-      | ⟨"draw", [], .field field⟩ =>
-          if port.owner = context.role self ∧ port.contract = "random." ++ field ++ "/0" ∧
-              results = [.data (.field field)] ∧ template.entry = context.entry ∧
-              coordinates = state.inductions ∧ template.repeats = coordinates.length then
-            .ok { state with sorts := state.sorts ++ results }
-          else .error "construction-plain-local-service"
-      | _ => .error "construction-plain-local-service-request"
+  | ⟨.localService port request template coordinates, operands, results, []⟩ =>
+      if !request.valid then .error "construction-plain-local-service-request" else
+      if localServiceValid context self state.sorts state.inductions port request template
+          coordinates operands results then
+        .ok { state with sorts := state.sorts ++ results }
+      else .error "construction-plain-local-service"
   | ⟨.loop _ _ yielded, count :: initial, results, body⟩ =>
       let fresh := state.sorts.length
       if state.sorts[count]? = some (.data .index) ∧
@@ -276,7 +325,8 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
             else .error "construction-plain-loop-yield"
         | .error error => .error error
       else .error "construction-plain-loop"
-  | ⟨.challenge .., _, _, _⟩ => .error "construction-plain-challenge"
+  | ⟨.challenge .., _, _, _⟩ | ⟨.indexChallenge .., _, _, _⟩
+  | ⟨.blockChallenge .., _, _, _⟩ => .error "construction-plain-challenge"
   | ⟨.observe .., _, _, _⟩ => .error "construction-plain-transcript"
   | _ => .error "construction-plain-shape"
 end

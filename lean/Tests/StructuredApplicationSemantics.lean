@@ -264,7 +264,7 @@ private def emptyAfterQuery : CheckedProtocol := checked zeroQuerySignature
     (.letOp (.mark "") .nil .nil (.stop .abort)))
 private def recordingProvider : PIR.Handler (observedInterface F G) Nat String
   | .mark site, state => ⟨.returned (), state, [site]⟩
-  | .action (.query site _ _), state => ⟨.returned (show F from 11), state + 1, [site]⟩
+  | .action (.query site (.draw _) _), state => ⟨.returned (show F from 11), state + 1, [site]⟩
   | .action _, state => ⟨.stopped .refused, state, []⟩
 
 theorem empty_mark_after_request_keeps_state :

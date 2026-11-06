@@ -157,19 +157,19 @@ private def run : IO Unit := do
   -- different here, although the native frontend refuses the non-NFC key.
   let exact : ProtocolOrigin := ⟨"test::Exact", [("é", .unit), ("é", .unit)]⟩
   test "exact UTF8 keys without normalization" (OriginFormat.protocol exact.toJson).isOk
-  let alias := fun term => SourceAlias.mk (.protocol ⟨"test::Alias", [("T", term)]⟩) "symbol" 0
-  test "nominal sorts do not collide" (sourceAliasName (alias (.nominal .record "test::T" [])) !=
-    sourceAliasName (alias (.nominal .variant "test::T" [])))
+  let makeAlias := fun term => SourceAlias.mk (.protocol ⟨"test::Alias", [("T", term)]⟩) "symbol" 0
+  test "nominal sorts do not collide" (sourceAliasName (makeAlias (.nominal .record "test::T" [])) !=
+    sourceAliasName (makeAlias (.nominal .variant "test::T" [])))
   test "logical and ordinary record identities do not collide"
-    (sourceAliasName (alias (.nominal .record "test::T" [])) !=
-      sourceAliasName (alias (.nominal .logicalRecord "test::T" [])))
-  test "formal and builtin do not collide" (sourceAliasName (alias (.formal "T" [])) !=
-    sourceAliasName (alias (.builtin "T" [])))
+    (sourceAliasName (makeAlias (.nominal .record "test::T" [])) !=
+      sourceAliasName (makeAlias (.nominal .logicalRecord "test::T" [])))
+  test "formal and builtin do not collide" (sourceAliasName (makeAlias (.formal "T" [])) !=
+    sourceAliasName (makeAlias (.builtin "T" [])))
   let .ok aliases := sourceAliases snapshot ["helper"] | throw (IO.userError "valid aliases refused")
   test "Local retained alongside protocols" (aliases.length == 3)
-  test "actual protocol index" (aliases.any fun alias => alias.symbol == "main" && alias.index == 1)
+  test "actual protocol index" (aliases.any fun entry => entry.symbol == "main" && entry.index == 1)
   test "protocol ignores helper positions" (match sourceAliases snapshot ["main", "helper", "leaf"] with
-    | .ok values => values.any fun alias => alias.symbol == "main" && alias.index == 1 | _ => false)
+    | .ok values => values.any fun entry => entry.symbol == "main" && entry.index == 1 | _ => false)
   test "helper association required" (!(sourceAliases snapshot []).isOk)
   let duplicateOrigin := { snapshot with definitions := [.function leaf,
     .function { leaf with name := "other" }], entry := "leaf", contracts := [⟨"leaf", []⟩, ⟨"other", []⟩] }

@@ -51,7 +51,7 @@ theorem both_return (a b : Bool) :
       .done (.cons (some (a && b)) .nil) := by
   have adequate := Evaluation.ComponentTablesOn.adequate_fold model
     (.silent (Occurrence.signature model.toCarriers)) ⟨[],[]⟩
-    (Evaluation.ComponentTablesOn.adequate_empty model) (source .twoSums).payload.definitions
+    Evaluation.ComponentTablesOn.adequate_empty (source .twoSums).payload.definitions
   have invoked := adequate Generated.Bindings.TwoSumsInputs.helper25Helper (.cons a (.cons b .nil))
   change invoke (tables model (source .twoSums).payload.definitions).components
     Generated.Bindings.TwoSumsInputs.helper25Helper (.cons (some a) (.cons (some b) .nil)) = _ at invoked

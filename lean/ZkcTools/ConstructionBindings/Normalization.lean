@@ -42,8 +42,9 @@ unsafe def propose (cache : Syntax.Cache) (computation : Expr) : TermElabM Expr 
   let mut arguments := computation.getAppArgs
   for index in [:arguments.size] do
     phase s!"normalization literal argument {index}/{arguments.size}: {arguments[index]!.getAppFn.constName?}"
+    let head ← Syntax.head arguments[index]!
     arguments := arguments.set! index (← withTransparency .all <|
-      reduce arguments[index]! (explicitOnly := false) (skipTypes := false))
+      reduce head (explicitOnly := false) (skipTypes := false))
   phase "normalization literal inputs reflected"
   let proposal := mkAppN (mkConst ``normalizationLiteral) arguments
   let text ← evalExpr (Except String String)

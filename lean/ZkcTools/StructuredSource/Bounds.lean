@@ -180,6 +180,7 @@ mutual
     | .boolean, b => .boolean (some b)
     | .index, n => .index (exact n)
     | .vector _, xs | .groups _, xs => .vector (exact xs.length)
+    | .polynomial _, p => .vector (exact p.coefficients.length)
     | .indices, xs => .sequence (xs.map fun n => .index (exact n))
     | .oracleSequence .., xs => .sequence (xs.map fun _ => .atom)
     | .sequence element, xs => .sequence (xs.map (value element))
@@ -241,11 +242,91 @@ def compareIndices (less : Bool) (a b : Interval) : Value :=
     else if a.lower == a.upper && b.lower == b.upper then some (a.lower == b.lower)
     else none)
 
+/-- Conservative tool capacity for the direct numerical equations. Polynomial
+coefficients share the length envelope; their nominal type stays in the typed
+region. These are this observer's limits, not CPU allocation or FFT adequacy. -/
+def numerical (op : Numerical) (args : Env) : Analysis Result := do
+  outputWorks args
+  match op, args with
+  | .indicesEmpty, [] => return some [.sequence []]
+  | .indicesAppend, [.sequence xs, .index i] =>
+    vectorWork (exact (xs.length + 1))
+    return some [.sequence (xs ++ [.index i])]
+  | .indicesAt, [.sequence xs, .index i] =>
+    if i.lower ≥ xs.length then return none
+    let candidates := (xs.drop i.lower).take (min i.upper (xs.length - 1) - i.lower + 1)
+    let mut result := .index (exact 0)
+    if let first :: rest := candidates then
+      result := first
+      for candidate in rest do
+        match result, candidate with
+        | .index a, .index b => result := .index (a.join b)
+        | _, _ => throw .unknown
+    return some [result]
+  | .indicesLength, [.sequence xs] => return some [.index (exact xs.length)]
+  | .fieldInverse, [.atom] | .polyRoot, [.index _] => return some [.atom]
+  | .polyPoint, [.atom, .index _, .index _] => return some [.atom]
+  | .polyPoints, [.atom, .index n] =>
+    vectorWork n
+    return some [← length n]
+  | .polyCoefficients, [.vector n] => return some [.vector n]
+  | .polyFromCoefficients, [.vector n] => return some [.vector ⟨0, n.upper⟩]
+  | .polyEvaluate, [.vector _, .atom] => return some [.atom]
+  | .polyInterpolate, [.vector n, .atom] =>
+    charge (32 * (n.upper + 1) ^ 4)
+    return some [.vector ⟨0, n.upper⟩]
+  | .polyFold, [.vector n, .atom, .atom] =>
+    charge (32 * (n.upper + 1) ^ 2)
+    return some [.vector ⟨n.lower / 2, n.upper / 2⟩]
+  | .vectorFill, [.atom, .index n] | .vectorGeometric, [.atom, .index n] =>
+    vectorWork n
+    charge (8 * (n.upper + 1) ^ 2)
+    return some [← length n]
+  | .vectorConcat, [.vector a, .vector b] =>
+    return some [← length ⟨a.lower + b.lower, a.upper + b.upper⟩]
+  | .vectorGet, [.vector _, .index _] => return some [.atom]
+  | .vectorAdd, [.vector a, .vector b] | .vectorSub, [.vector a, .vector b]
+  | .vectorMul, [.vector a, .vector b] =>
+    if a.upper < b.lower || b.upper < a.lower then return none
+    return some [.vector ⟨max a.lower b.lower, min a.upper b.upper⟩]
+  | .vectorScale, [.vector n, .atom] | .vectorRotate, [.vector n, .index _]
+  | .vectorTranspose, [.vector n, .index _, .index _]
+  | .vectorBitReverseRows, [.vector n, .index _] =>
+    charge (16 * (n.upper + 1) ^ 2)
+    return some [.vector n]
+  | .vectorInverse, [.vector n] | .vectorEmbed, [.vector n]
+  | .vectorPrefixSum, [.vector n] | .vectorPrefixProduct, [.vector n] =>
+    return some [.vector n]
+  | .vectorSlice, [.vector _, .index _, .index count] =>
+    return some [← length count]
+  | .polyEvaluateBatch, [.vector _, .index w, .index h, .atom, .index n] =>
+    let result ← length ⟨w.lower * n.lower, w.upper * n.upper⟩
+    if w.upper != 0 then
+      charge (32 * (w.upper + 1) * (n.upper + 1) ^ 2 * (h.upper + 1))
+    return some [result]
+  | .polyEvaluateAt, [.vector _, .index w, .index h, .atom, .atom] =>
+    let result ← length w
+    if w.upper != 0 then charge (64 * (w.upper + 1) * (h.upper + 1) ^ 4)
+    return some [result]
+  | .polyExtend, [.vector _, .index w, .index h, .atom, .atom, .index n] =>
+    let result ← length ⟨w.lower * n.lower, w.upper * n.upper⟩
+    if w.upper != 0 then
+      charge (64 * (w.upper + 1) * ((h.upper + 1) ^ 4 + (n.upper + 1) ^ 2 * (h.upper + 1)))
+    return some [result]
+  | .polyOpeningSum, [.vector _, .index _, .index _, .atom, .sequence columns,
+      .vector _, .vector _, .vector _, .vector initial] =>
+    charge (64 * (columns.length + 1) * (initial.upper + 1) ^ 2)
+    return some [.vector initial]
+  | _, _ => throw .unknown
+
 /-- Bounds describe successful results. Proven arithmetic failure ends only
 this abstract path; the admitted concrete program still produces its own stop. -/
 def primitive (op : Primitive) (args : Env) : Analysis Result := do
   visit
   match op, args with
+  | .numerical op _ _, args => numerical op args
+  | .binaryConstant .., [] => return some [.atom]
+  | .booleanNot, [.boolean known] => return some [.boolean (known.map (!·))]
   | .indexConstant n, [] => checkedRange n n
   | .indexEqual, [.index a, .index b] => return some [compareIndices false a b]
   | .indexLess, [.index a, .index b] => return some [compareIndices true a b]
@@ -306,7 +387,7 @@ abbrev Helpers := Std.HashMap String CheckedDefinition
 
 mutual
   def typeWork : Ty → Nat
-    | .field name | .vector name | .group name | .groups name | .service name => 1 + name.utf8ByteSize
+    | .field name | .vector name | .polynomial name | .group name | .groups name | .service name => 1 + name.utf8ByteSize
     | .oracle kind => 1 + oracleKindWork kind
     | .oracleSequence kind _ => 2 + oracleKindWork kind
     | .sequence element => 1 + typeWork element

@@ -16,7 +16,7 @@ open scoped ENNReal
 variable {F G S E : Type}
 
 def query (key : Key) : PIR.Process (participantInterface F G) F :=
-  participantActions F G (.query key.1 key.2.1 (.cons key.2.2 .nil))
+  participantActions F G (.query key.1 (.draw key.2.1) (.cons key.2.2 .nil))
 
 /-- An arbitrary query branch, including cached replies or stops. -/
 def replaceNetworkQueries
@@ -25,7 +25,11 @@ def replaceNetworkQueries
     PIR.MonadHandler ProbComp (participantInterface F G) S E
   | .receive ty site peer, s => network (.receive ty site peer) s
   | .send site peer value, s => network (.send site peer value) s
-  | .query site field (.cons handle .nil), s => replacement (site, field, handle) s
+  | .query site (.draw field) (.cons handle .nil), s => replacement (site, field, handle) s
+  | .query site (.sampleIndex contract) args, s =>
+      network (.query site (.sampleIndex contract) args) s
+  | .query site (.sampleIndices contract) args, s =>
+      network (.query site (.sampleIndices contract) args) s
 
 section General
 
@@ -41,8 +45,11 @@ theorem network_query_branch_irrelevant (replacement : Key → Phase S E F) :
   cases action with
   | receive => rfl
   | send => rfl
-  | query site field args =>
-    cases args with | cons handle tail => cases tail; rfl
+  | query site operation args =>
+    cases operation with
+    | sampleIndex | sampleIndices => rfl
+    | draw field =>
+      cases args with | cons handle tail => cases tail; rfl
 
 theorem ports_extensional (other : List Key)
     (same : ∀ key, key ∈ ports ↔ key ∈ other) :
@@ -52,10 +59,13 @@ theorem ports_extensional (other : List Key)
   cases action with
   | receive => rfl
   | send => rfl
-  | query site field args =>
-    cases args with | cons handle tail =>
-      cases tail
-      simp only [withUniformQueries, same]
+  | query site operation args =>
+    cases operation with
+    | sampleIndex | sampleIndices => rfl
+    | draw field =>
+      cases args with | cons handle tail =>
+        cases tail
+        simp only [withUniformQueries, same]
 
 theorem ports_reorder_duplicate (first second : Key) :
     withUniformQueries network [first, second, first] before after =
@@ -297,7 +307,9 @@ def cachedNetwork : PIR.MonadHandler ProbComp (participantInterface F2 Unit)
     (Option F2) Unit
   | .receive .., s => pure ⟨.stopped .refused, s, []⟩
   | .send .., s => pure ⟨.stopped .refused, s, []⟩
-  | .query _ _ (.cons _ .nil), s => cachedDraw s
+  | .query _ (.draw _) (.cons _ .nil), s => cachedDraw s
+  | .query _ (.sampleIndex _) _, s
+  | .query _ (.sampleIndices _) _, s => pure ⟨.stopped .refused, s, []⟩
 
 theorem cached_pair_exact (key : Key) :
     (twoQueries (F := F2) (G := Unit) key key).runM cachedNetwork none = (do

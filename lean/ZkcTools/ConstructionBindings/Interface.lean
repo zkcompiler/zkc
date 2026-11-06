@@ -26,7 +26,7 @@ initialize registerTraceClass `zkc.connection.interface
 /-- Fixed typed syntax owners already admitted by the family interface. -/
 private def syntaxType (type : Expr) : Bool :=
   -- Request contains only a method name, finite operand references and Ty.
-  [``Ty, ``Slot, ``Template, ``Request, ``Original.Location, ``ValueSort, ``Helper, ``ProtocolSignature,
+  [``ConnectionServiceRequests.Service, ``Ty, ``Slot, ``Template, ``Request, ``Original.Location, ``ValueSort, ``Helper, ``ProtocolSignature,
     ``NormalForm.LawKey, ``NormalForm.InputPattern, ``NormalForm.CalleeKey,
     ``NormalForm.Term, ``NormalForm.Terms, ``NormalForm.Comp, ``NormalForm.Subject,
     ``NormalForm.Form, ``ConnectionFrame.Cell, ``ConnectionFrame.ScopedFrame].any type.isAppOf
@@ -139,7 +139,10 @@ def structural (type : Expr) : MetaM Bool := do
   return [``ConnectionFrame.Readback, ``ConnectionCertificate.GuardReadback,
     ``ConnectionCertificate.HistoryReadback, ``ConnectionFrame.IndexReadback,
     ``ConnectionStaticRoutes.Local, ``ConnectionStaticRoutes.Delivery,
-    ``ConnectionStaticRoutes.LocalMode].any type.isAppOf
+    ``ConnectionStaticRoutes.LocalMode, ``ConnectionServiceRequests.Public,
+    ``ConnectionServiceRequests.Local, ``ConnectionServiceRequests.Delivery,
+    ``ConnectionServiceRequests.LocalMode, ``ConnectionServiceRequests.Operands,
+    ``ConnectionServiceRequests.Challenge].any type.isAppOf
 
 private def auditedStructural (state : IO.Ref ReflectionState) (type : Expr) : MetaM Bool := do
   unless ← structural type do return false

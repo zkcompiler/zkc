@@ -60,10 +60,10 @@ theorem unreadable_suffix (low high : F) (proof : Proof F G) :
     query, readbackHistory, readbackEvent, Domain.drawRequest, Request.draw]
   rfl
 
-/-- Mere origin presence from the old interface admits a non-draw request. -/
+/-- A matching method can identify an origin while its reply type is not the scalar draw. -/
 def malformedContext : Context :=
   Tests.SumcheckFamilyControls.actual.description.context.mapReplacement fun replacement =>
-    { replacement with request := some ⟨"unsupported", [], .field "bls12-381.fr"⟩ }
+    { replacement with request := some ⟨"draw", [], .boolean⟩ }
 
 def malformedDescription : SumcheckFamily.ProgramShape.Description :=
   { Tests.SumcheckFamilyControls.actual.description with context := malformedContext, suite := rfl }

@@ -338,12 +338,13 @@ for indirect in (False, True):
         assert outsider[5:7] == [[outside_input[1]], [['return', [outside_input[0]]]]]
 
 
-with case('partial-math-directly-in-two-role-protocol-is-refused'):
+with case('partial-math-directly-in-two-role-protocol-preserves-absence'):
     source = finite_source.replace('roles=["P"]', 'roles=["P","Q"]', 1)
-    (commands.directory / 'two-role-math-refused.mlir').write_text(source)
     commands.verified(source)
-    export(source, refusal='structured-source-multirole-math')
-    run(source, [[], '1', '2'], refusal='structured-reference-unsupported')
+    export(source)
+    assert run(source, [[], '1', '2']) == returned(['1', '2'])
+    assert run(source, [['3', '5', '7'], '1', '2']) == returned(['5', '7'])
+    assert run(source, [None, None, None], 'Q') == returned([None, None])
 
 
 with case('input-and-output-boundary-masks'):

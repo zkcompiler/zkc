@@ -50,7 +50,7 @@ theorem shape_zero_columns (table : Meanings F G) (less : LessLaw table)
   simp [meaning, Evaluation.meaning,
     Values.get,
     SiteObservations.closed,
-    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
     first, boolResult, show 0 < indexLimit by decide +kernel]
 
 /-- The high-dimension guard also precedes every length, division and loop. -/
@@ -67,7 +67,7 @@ theorem shape_large_dimension (table : Meanings F G) (less : LessLaw table)
   simp [meaning, Evaluation.meaning,
     Values.get,
     SiteObservations.closed,
-    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
     first, second, boolResult, positive, large, show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
 /-- An unrepresentable vector length exhausts only after both initial guards. -/
@@ -83,7 +83,7 @@ theorem shape_length_exhausted (table : Meanings F G) (less : LessLaw table)
   simp [meaning, Evaluation.meaning,
     Values.get,
     SiteObservations.closed,
-    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome,
     first, second, boolResult, positive, dimensionSmall, lengthInvalid, show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
 /-- The table constructor returns the original ordered tuple or rejects. -/
@@ -116,12 +116,12 @@ theorem halves_body (table : Meanings F G) (less : LessLaw table)
   · by_cases divisible : 0 < xs.length ∧ xs.length % 2 = 0 <;>
       simp [meaning,
         Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-        Primitive.evaluate, primitiveOutcome, comparison, boolResult, positive, divisible,
+        Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, comparison, boolResult, positive, divisible,
         show 0 < indexLimit by decide +kernel]
     all_goals rfl
   · simp [meaning,
       Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-      Primitive.evaluate, primitiveOutcome, comparison, boolResult, positive,
+      Primitive.evaluate, Primitive.evaluateOn, primitiveOutcome, comparison, boolResult, positive,
       show 0 < indexLimit by decide +kernel]
 
 
@@ -133,7 +133,7 @@ theorem halves_dimension_refused (table : Meanings F G) (less : LessAllLaw table
   rw [PrimitiveExpansions.halves_body]
   have comparison := less 0 dimension
   simp only [show 0 < indexLimit by decide +kernel, true_and, invalid, ite_false] at comparison
-  simp only [Primitive.evaluate, show 0 < indexLimit by decide +kernel, ite_true,
+  simp only [Primitive.evaluate, Primitive.evaluateOn, show 0 < indexLimit by decide +kernel, ite_true,
     primitiveOutcome, PIR.Process.bind, Values.get, comparison]
 
 /-- No raw table triple is excluded; width is unused and vector split has its own guard. -/

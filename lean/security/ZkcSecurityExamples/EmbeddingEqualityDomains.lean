@@ -4,6 +4,7 @@ public import ZkcExamples.Construction.EmbeddingEqualityData
 public import Zkc.Construction.DomainTranscript
 public import ZkcSecurity.Bindings.Models.KoalaBearModel
 public import ZkcSecurity.Claims.Model
+public import ZkcSecurity.Bindings.Transcript.ServiceSampling
 
 @[expose] public section
 
@@ -28,19 +29,8 @@ noncomputable abbrev sampleable (identity : String) : SampleableType (model.Fiel
   exact SampleableType.ofFintype _
 
 noncomputable abbrev rawSampleable : (event : Zkc.Construction.Domain.Event model.toCarriers) →
-    SampleableType (Zkc.Construction.Domain.Raw event)
-  | .challenge origin => by
-      cases origin with
-      | mk entry event request =>
-        cases request with
-        | none => exact inferInstanceAs (SampleableType Unit)
-        | some request =>
-          cases request with
-          | mk method parameters sort =>
-            cases sort
-            case field identity => exact sampleable identity
-            all_goals exact inferInstanceAs (SampleableType Unit)
-  | .message .. | .publicBinding .. => inferInstanceAs (SampleableType Unit)
+    SampleableType (Zkc.Construction.Domain.Raw event) :=
+  ZkcSecurity.FiatShamir.ServiceSampling.raw model.toCarriers sampleable
 
 def cardinality := Claims.Numeric.cardinalityOn model.toCarriers finite snapshot
 

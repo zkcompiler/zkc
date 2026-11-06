@@ -40,7 +40,7 @@ theorem round_equation (bodies : RoundsHelperInstallation.Bodies definitions) (a
   simp only [roundMessageBody, Region.denote, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
     prepend_one, prepend_two, Environment.push,
-    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, Primitive.evaluateOn,
     ← List.sum_eq_foldl, map_values_left linked bodies, map_values_right linked bodies, map_quadratics linked bodies, linear linked bodies]
   rfl
 
@@ -135,7 +135,7 @@ theorem fix_all (xs : List F) (r : F) :
   · have even : xs.length = 2 * (xs.length / 2) := by omega
     obtain ⟨low, high⟩ := restrictValues_halves_length xs even
     unfold fix split
-    simp only [Primitive.evaluate, shape, and_self, ite_true, primitiveOutcome, PIR.Process.bind]
+    simp only [Primitive.evaluate, Primitive.evaluateOn, shape, and_self, ite_true, primitiveOutcome, PIR.Process.bind]
     change invoke (table definitions) interpolationsHelper
       (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil))) = _
     by_cases capacity : xs.length / 2 < indexLimit
@@ -143,7 +143,7 @@ theorem fix_all (xs : List F) (r : F) :
       exact map_interpolate linked bodies _ _ r (by omega) (by omega)
     · rw [ite_eq_right capacity]
       exact map_interpolate_exhausted linked bodies _ _ r (by omega)
-  · simp only [fix, split, Primitive.evaluate, shape, ite_false, primitiveOutcome, PIR.Process.bind]
+  · simp only [fix, split, Primitive.evaluate, Primitive.evaluateOn, shape, ite_false, primitiveOutcome, PIR.Process.bind]
 
 /-- Complete optional-input behavior of the installed local restriction call.
 An inactive owner preserves an absent result without forcing any input. -/

@@ -22,6 +22,17 @@ The interpretation by one commutative ring `F` for every field identity and one
 module `G` over it for every group identity is `uniformCarriers F G` with
 `ringModel F G`; its values are `assignment F G`. -/
 
+/-- Ordered base-field roots, including the size-one root at coordinate zero.
+The list is data; catalog laws separately pin its actual installed values. -/
+structure TwoAdicData (Field : String → Type) where
+  base : String
+  roots : List (Field base)
+
+/-- A binary polynomial basis, in ascending bit order. Bit interpretation is
+the fixed sum of selected basis elements, never a natural-number cast. -/
+structure BinaryData (F : Type) where
+  basis : List F
+
 /-- The structures field operations use, on top of the carriers. The inverse
 is data, so that inversion stays computable; a model built from a commutative
 ring alone leaves it absent. `embed extension base` maps the elements of a base
@@ -31,6 +42,8 @@ structure FieldModel extends Carriers where
   fieldDecEq : ∀ d, DecidableEq (Field d)
   inverse : ∀ d, Option (Field d → Field d)
   embed : (extension base : String) → Field base → Field extension
+  twoAdic : ∀ _d : String, Option (TwoAdicData Field) := fun _ ↦ none
+  binary : ∀ d, Option (BinaryData (Field d)) := fun _ ↦ none
 
 /-- The structures group operations use, on top of a field model. `smul g f`
 is the action of the elements of the field identity `f` on those of the group

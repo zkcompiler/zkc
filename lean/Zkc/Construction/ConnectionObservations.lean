@@ -2,6 +2,7 @@ module
 
 public import Zkc.Construction.ConnectionActions
 public import Zkc.Construction.OriginalEffects
+public import Zkc.Construction.ServiceConnection
 
 @[expose] public section
 
@@ -92,19 +93,16 @@ def Simulation.localQuery (routing : Routing) (state : State carriers)
     · exact private_query_producer routing state site field handle port origin producer route request
     · exact private_query_validator routing state site field handle port origin validator notPublic route request
   rw [source]
-  unfold Domain.View.localService
-  dsimp only [Request.draw]
-  simp only [readPath, contract, and_self, ↓reduceIte]
-  change Domain.localOrigin routing.context port
-    { method := "draw", operands := [], sort := .field field } template path = some origin at resolved
-  change origin.request = some
-    { method := "draw", operands := [], sort := .field field } at request
-  rw [resolved]
-  simp only [request, ↓reduceDIte]
+  have target := Domain.localRequest_of_checks routing.context port (.draw field)
+    template coordinates [] environment path origin
+    ⟨rfl, by simp [Request.operation, Request.draw, contract], rfl⟩ readPath resolved
+  change Domain.View.localService routing.context port (.draw field) template coordinates []
+    [.data (.field field)] environment = _ at target
+  rw [target]
+  simp only [Domain.requestValue, show (Request.draw field).valid = true from rfl,
+    ite_true, request, ↓reduceDIte, PIR.Process.bind]
   apply Simulation.call
   intro reply
-  simp only [Domain.View.append, Domain.sortsMatch, List.map_cons, Domain.Value.sort,
-    List.map_nil, beq_self_eq_true, ↓reduceIte]
   exact .done ⟨rfl, rfl⟩
 
 /-- Scope weakening and history advancement are separate: an old transcript

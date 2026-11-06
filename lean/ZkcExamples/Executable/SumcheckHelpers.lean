@@ -135,14 +135,14 @@ theorem length_returns {xs : List F} (bound : xs.length < indexLimit) :
     (Resolved.compute (.primitive (.vectorLength "bls12-381.fr"))).evaluate
       [(.vector "bls12-381.fr" xs : Value F G)] = .returned [.index xs.length] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, bound]
+    Primitive.evaluate, Primitive.evaluateOn, bound]
   rfl
 
 theorem length_stops {xs : List F} (bound : ¬ xs.length < indexLimit) :
     (Resolved.compute (.primitive (.vectorLength "bls12-381.fr"))).evaluate
       [(.vector "bls12-381.fr" xs : Value F G)] = .stopped .exhausted := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, bound]
+    Primitive.evaluate, Primitive.evaluateOn, bound]
 
 theorem constant_returns (value : Nat) :
     (Resolved.calculate (.indexConstant value)).evaluate ([] : List (Value F G)) =
@@ -152,28 +152,28 @@ theorem less_true {a b : Nat} (first : a < indexLimit) (second : b < indexLimit)
     (Resolved.compute (.primitive .indexLess)).evaluate [(.index a : Value F G), .index b] =
       .returned [.data (.boolean true)] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, checkedIndices, first, second, less]
+    Primitive.evaluate, Primitive.evaluateOn, checkedIndices, first, second, less]
   rfl
 
 theorem less_false {a b : Nat} (first : a < indexLimit) (second : b < indexLimit) (notLess : ¬ a < b) :
     (Resolved.compute (.primitive .indexLess)).evaluate [(.index a : Value F G), .index b] =
       .returned [.data (.boolean false)] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, checkedIndices, first, second, notLess]
+    Primitive.evaluate, Primitive.evaluateOn, checkedIndices, first, second, notLess]
   rfl
 
 theorem mod_returns {a b : Nat} (first : a < indexLimit) (second : b < indexLimit) (positive : b ≠ 0) :
     (Resolved.compute (.primitive .indexMod)).evaluate [(.index a : Value F G), .index b] =
       .returned [.index (a % b)] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, checkedIndices, first, second, positive]
+    Primitive.evaluate, Primitive.evaluateOn, checkedIndices, first, second, positive]
   rfl
 
 theorem div_returns {a b : Nat} (first : a < indexLimit) (second : b < indexLimit) (positive : b ≠ 0) :
     (Resolved.compute (.primitive .indexDiv)).evaluate [(.index a : Value F G), .index b] =
       .returned [.index (a / b)] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, checkedIndices, first, second, positive]
+    Primitive.evaluate, Primitive.evaluateOn, checkedIndices, first, second, positive]
   rfl
 
 theorem mul_returns {a b : Nat} (first : a < indexLimit) (second : b < indexLimit)
@@ -181,14 +181,14 @@ theorem mul_returns {a b : Nat} (first : a < indexLimit) (second : b < indexLimi
     (Resolved.compute (.primitive .indexMul)).evaluate [(.index a : Value F G), .index b] =
       .returned [.index (a * b)] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, checkedIndices, first, second, product]
+    Primitive.evaluate, Primitive.evaluateOn, checkedIndices, first, second, product]
   rfl
 
 theorem sub_returns {a b : Nat} (first : a < indexLimit) (second : b < indexLimit) (le : b ≤ a) :
     (Resolved.compute (.primitive .indexSub)).evaluate [(.index a : Value F G), .index b] =
       .returned [.index (a - b)] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, checkedIndices, first, second, le]
+    Primitive.evaluate, Primitive.evaluateOn, checkedIndices, first, second, le]
   rfl
 
 theorem equal_true {a b : Nat} (same : a = b) :
@@ -220,7 +220,7 @@ theorem split_returns {xs : List F} (positive : 0 < xs.length) (even : xs.length
       .returned [.vector "bls12-381.fr" (xs.take (xs.length / 2)),
         .vector "bls12-381.fr" (xs.drop (xs.length / 2))] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate, positive, even]
+    Primitive.evaluate, Primitive.evaluateOn, positive, even]
   rfl
 
 theorem require_returns :
@@ -275,7 +275,7 @@ theorem sum_returns {xs : List F} :
       [(.vector "bls12-381.fr" xs : Value F G)] =
       .returned [.data (.field "bls12-381.fr" (xs.foldl (· + ·) 0))] := by
   simp [Resolved.evaluate, Computation.apply, decodeValues, Value.decode, Primitive.arguments,
-    Primitive.evaluate]
+    Primitive.evaluate, Primitive.evaluateOn]
   rfl
 
 theorem fieldEqual_returns {a b : F} :

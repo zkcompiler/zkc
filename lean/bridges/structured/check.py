@@ -630,11 +630,11 @@ def installed_rows_cases(suite):
 
     unknown = "structured-catalogue-unknown"
     subjects = [(identity, dead("field", identity), unknown) for identity in [
-        "ristretto255.scalar", "bn254.fr", "gf2-64.pentanomial-4-3-1",
-        "gf2-64.pentanomial-4-3-1.ext3-trinomial1"]]
+        "ristretto255.scalar", "bn254.fr"]]
     subjects += [(identity, dead("field", identity), None)
                  for identity in ["koala-bear", "koala-bear.ext8-binomial3",
-                                  "koala-bear.ext4-binomial3"]]
+                                  "koala-bear.ext4-binomial3", "gf2-64.pentanomial-4-3-1",
+                                  "gf2-64.pentanomial-4-3-1.ext3-trinomial1"]]
     subjects += [(identity, dead("group", identity), unknown) for identity in [
         "bn254.g1", "bn254.g2", "bn254.gt", "ristretto255.group", "edwards25519.prime"]]
     # Rows the environment lists, at sort instances it does not admit.

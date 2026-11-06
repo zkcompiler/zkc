@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurityExamples.Components.KoalaBearSumcheck
+public import ZkcSecurity.Bindings.Transcript.ServiceSampling
 
 @[expose] public section
 
@@ -27,19 +28,8 @@ abbrev sampleable (identity : String) : SampleableType (model.Field identity) :=
   letI := model.fieldRing identity
   exact SampleableType.ofFintype _
 
-abbrev rawSampleable : (event : Domain.Event model.toCarriers) → SampleableType (Domain.Raw event)
-  | .challenge origin => by
-    cases origin with
-    | mk entry event request =>
-      cases request with
-      | none => exact inferInstanceAs (SampleableType Unit)
-      | some request =>
-        cases request with
-        | mk method parameters sort =>
-          cases sort
-          case field identity => exact sampleable identity
-          all_goals exact inferInstanceAs (SampleableType Unit)
-  | .message .. | .publicBinding .. => inferInstanceAs (SampleableType Unit)
+abbrev rawSampleable : (event : Domain.Event model.toCarriers) → SampleableType (Domain.Raw event) :=
+  ZkcSecurity.FiatShamir.ServiceSampling.raw model.toCarriers sampleable
 
 local instance : ∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event) := rawSampleable
 local instance : SampleableType Octic := sampleable octicIdentity

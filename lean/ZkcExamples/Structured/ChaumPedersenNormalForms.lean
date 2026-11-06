@@ -46,7 +46,7 @@ def proverReplies (nonce delivery : F) : ReplyScript F G where
 theorem prover_run (firstBase firstKey secondBase secondKey : G) (witness : F) (nonces : Nat) (nonce delivery : F) :
     (proverReplies nonce delivery).run (program.participant F G 0 (proverInputs firstBase firstKey secondBase secondKey witness nonces)) =
       ⟨.returned (.cons none .nil), (),
-        [.query nonceSite scalarDomain (.cons nonces .nil),
+        [.query nonceSite (.draw scalarDomain) (.cons nonces .nil),
          .send (ty := .group groupDomain) firstCommitmentSite 1 (nonce • firstBase),
          .send (ty := .group groupDomain) secondCommitmentSite 1 (nonce • secondBase),
          .receive (.field scalarDomain) deliverySite 1,
@@ -74,7 +74,7 @@ theorem verifier_run (firstBase firstKey secondBase secondKey : G) (challenges :
       ⟨.returned (.cons (some ((decide (response • firstBase = firstCommitment + (challenge • firstKey))) && (decide (response • secondBase = secondCommitment + (challenge • secondKey))))) .nil), (),
         [.receive (.group groupDomain) firstCommitmentSite 0,
          .receive (.group groupDomain) secondCommitmentSite 0,
-         .query challengeSite scalarDomain (.cons challenges .nil),
+         .query challengeSite (.draw scalarDomain) (.cons challenges .nil),
          .send (ty := .field scalarDomain) deliverySite 0 challenge,
          .receive (.field scalarDomain) responseSite 0]⟩ := by
   rw [Generated.Scalar.ChaumPedersen.Root.verifier_participant]

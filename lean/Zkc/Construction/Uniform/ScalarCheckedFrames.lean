@@ -105,7 +105,7 @@ def loops {routing : Original.Routing} {context : ProtocolContext} {definitions 
   | .indicesEmpty tail => loops tail
   | .indicesAppend _ _ _ _ _ _ tail => loops tail
   | .publicQuery (tail := tail) .. => loops tail
-  | .localQuery _ _ _ _ _ _ _ _ _ _ tail => loops tail
+  | .localQuery (tail := tail) .. => loops tail
   | .repeat (roster := roster) (distinct := distinct) (callback := callback)
       (normalized := normalized) (bodyCertificate := body) (tail := tail) .. =>
       ofRegion body roster distinct callback _ normalized :: (loops body ++ loops tail)

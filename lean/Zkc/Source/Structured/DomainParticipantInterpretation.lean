@@ -62,6 +62,7 @@ theorem protocolOperationWithOn_interpret {I J : PIR.Signature}
       (process.interpret leftActions).interpret operations = process.interpret rightActions :=
     PIR.Process.interpret_interchange leftActions operations rightActions actions process
   cases op with
+  | oracle => rfl
   | «repeat» spec site =>
     cases args with
     | cons count values =>
@@ -105,7 +106,7 @@ theorem protocolOperationWithOn_interpret {I J : PIR.Signature}
   | assemble => cases callbacks; rfl
   | restrict => cases callbacks; cases args with
     | cons value rest => cases rest; rfl
-  | draw =>
+  | draw | query =>
     cases callbacks
     simp only [protocolOperationWithOn, PIR.Process.interpret_bind, actionProcess, PIR.Process.interpret]
   | statement => cases callbacks; rfl

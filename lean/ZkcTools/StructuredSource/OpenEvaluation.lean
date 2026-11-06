@@ -47,9 +47,15 @@ def actionRequest (roles : List String) (self : Nat) : OpenAction → Except Str
     if type.isHandle then throw "structured-open-message-handle"
     return .arr #[.str "receive", .str site, .str (roles[sender]?.getD ""),
       .str (roles[self]?.getD ""), wireType type]
-  | .query site field (.cons handle .nil) =>
+  | .query site (.draw field) (.cons handle .nil) =>
     return .arr #[.str "draw", .str site, .str (roles[self]?.getD ""),
       .str ("random." ++ (show String from field) ++ "/0"), .str (toString handle), .str field]
+  | .query site (.sampleIndex contract) (.cons handle (.cons bound .nil)) =>
+    return .arr #[.str "index", .str site, .str (roles[self]?.getD ""),
+      .str contract, .str (toString handle), .str (toString bound)]
+  | .query site (.sampleIndices contract) (.cons handle (.cons bound (.cons count .nil))) =>
+    return .arr #[.str "indices", .str site, .str (roles[self]?.getD ""),
+      .str contract, .str (toString handle), .str (toString bound), .str (toString count)]
 
 def actionSite : OpenAction → String
   | .send site .. | .receive _ site .. | .query site .. => site
@@ -64,9 +70,12 @@ def decodeActionValue : (action : OpenAction) → Json →
     match wireInput type value with
     | .error "structured-list-limit" => throw "structured-open-value-limit"
     | result => result
-  | .query _ field _, json => do
+  | .query _ operation args, json => do
     let [.str "value", value] ← Structured.Format.array json | throw "structured-open-response"
-    wireInput (.field field) value
+    let reply ← wireInput operation.result value
+    if !operation.validInputs args || !operation.validReply args reply then
+      throw "structured-open-service-reply"
+    return reply
 
 structure ReplayState where
   remaining : List ScriptReply

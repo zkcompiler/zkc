@@ -5,6 +5,8 @@ public import Zkc.Source.Participant
 public import Zkc.Source.Structured.ProtocolTable
 public import Zkc.Source.Structured.Repeat
 
+public import Zkc.Source.Structured.ServiceExecution
+
 @[expose] public section
 
 namespace Zkc.Source.Participant
@@ -28,13 +30,6 @@ theorem owned_interpret {Role Ty : Type} [DecidableEq Role] {Value : Ty → Type
 end Zkc.Source.Participant
 
 namespace Zkc.Source.Structured
-
-/-- Draw uses the actual service operand. No sampling distribution is part of
-this signature, and admission checks its exact nominal field/contract. -/
-def services : Participant.Services Ty where
-  Op := String
-  arguments field := [.service ("random." ++ field ++ "/0")]
-  result field := .field field
 
 abbrev participantInterface (F G : Type) : PIR.Signature :=
   Participant.interface Nat Ty services (assignment F G)
@@ -102,6 +97,7 @@ def protocolOperationWith {I : PIR.Signature} (observations : SiteObservations I
     (context : ProtocolContext := {}) :
     PIR.Process I (Values (Component (assignment F G)) op.results) :=
   match op, args with
+  | .oracle .., _ => .halt .refused
   | .repeat spec _, .cons count values =>
     let parts := Values.split spec.state values
     denoteRepeat spec context self count parts.1 parts.2 (callbacks.get .here)
@@ -120,9 +116,13 @@ def protocolOperationWith {I : PIR.Signature} (observations : SiteObservations I
     .done (.cons (Participant.restrict ((roles.map context.roles).contains self) value) .nil)
   | .assemble _ roles, values =>
     .done (.cons (assembleComponent (fun role => context.roles role == self) none roles values) .nil)
+  | .query owner operation site, args =>
+    ((Participant.query (services := services) self (context.roles owner)
+      (qualifyProtocolSite context.applicationPrefix site) operation args).interpret serviceAction |>.interpret
+      actions).bind fun result => .done (.cons result .nil)
   | .draw owner field site, args =>
     ((Participant.query (services := services) self (context.roles owner)
-      (qualifyProtocolSite context.applicationPrefix site) field args).interpret
+      (qualifyProtocolSite context.applicationPrefix site) (.draw field) args).interpret
       actions).bind fun result => .done (.cons result .nil)
   | .statement .., _ => .done .nil
   | .mark site, .nil =>
@@ -176,6 +176,7 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
       (process.interpret leftActions).interpret operations = process.interpret rightActions :=
     PIR.Process.interpret_interchange leftActions operations rightActions actions process
   cases op with
+  | oracle => rfl
   | «repeat» spec site =>
     cases args with
     | cons count values =>
@@ -219,7 +220,7 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
   | assemble => cases callbacks; rfl
   | restrict => cases callbacks; cases args with
     | cons value rest => cases rest; rfl
-  | draw =>
+  | draw | query =>
     cases callbacks
     simp only [protocolOperationWith, PIR.Process.interpret_bind, actionProcess, PIR.Process.interpret]
   | statement => cases callbacks; rfl

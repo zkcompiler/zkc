@@ -47,16 +47,6 @@ theorem linked_lookupOn (observations : SiteObservations interface)
     (meaningOn model observations (before.foldl (extendMeaningsOn model observations) [])) args.get⟩,
     by simp [extendMeaningsOn], rfl⟩
 
-/-- The component table's closed half is the same captured declaration fold,
-not an independently supplied helper implementation. -/
-theorem ComponentTablesOn.closed_fold (observations : SiteObservations interface)
-    (definitions : List CheckedDefinition) (tables : ComponentTablesOn model.toCarriers interface) :
-    (definitions.foldl (ComponentTablesOn.extend model observations) tables).closed =
-      definitions.foldl (extendMeaningsOn model observations) tables.closed := by
-  induction definitions generalizing tables with
-  | nil => rfl
-  | cons definition rest ih => exact ih _
-
 /-- A silent helper in an occurrence or other effect interface is precisely
 its actual closed computation lifted into that interface. -/
 theorem closed_invoke_componentTablesOn (definitions : List CheckedDefinition)

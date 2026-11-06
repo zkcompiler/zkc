@@ -63,7 +63,8 @@ def verifierStep (parent : Option String) (go : Bool) (coins : Nat) (b : F) :
   if go then
     .call (.mark (site "s5")) <| fun _ =>
     .call (.mark (child "s0")) <| fun _ =>
-    .call (.action (.query (child "s0") "bls12-381.fr" (.cons coins .nil))) <| fun (drawn : F) =>
+    .call (.action (.query (child "s0") (.draw "bls12-381.fr")
+      (.cons coins .nil))) <| fun (drawn : F) =>
     .call (.mark (child "s2_0")) <| fun _ =>
     .call (.action (.send (ty := .field "bls12-381.fr") (child "s2_0") 0 drawn)) <| fun _ =>
     .call (.mark "") <| fun _ =>

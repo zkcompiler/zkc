@@ -54,18 +54,26 @@ not re-run availability or preparation normalization. -/
 theorem linkUnitPayload_of_payload (snapshot : Snapshot) (ordered : List OrderedDefinition)
     (payload : UnitPayload)
     (definitionsEq : ordered.map (·.definition) = payload.definitions)
-    (entryEq : payload.protocols.findIdx (·.name == snapshot.entry) = payload.entryIndex.val) :
+    (entryEq : payload.protocols.findIdx (·.name == snapshot.entry) = payload.entryIndex.val)
+    (oracleChecked : (if snapshot.requiresOracleRuntime then
+      (checkOracleUnit snapshot ((payload.definitions.filter (·.kind == .math)).map (·.name))).map some
+      else pure none) = .ok payload.oracleUnit) :
     linkUnitPayload snapshot ordered payload.protocols = .ok payload := by
   unfold linkUnitPayload
   rw [definitionsEq]
-  simp only [payload.realizationClosed, payload.mapClosed, payload.linked,
-    payload.protocolsLinked, entryEq, payload.entryIndex.isLt, ↓reduceDIte]
-  split
-  · rename_i code unavailable
-    have available := payload.available
-    rw [unavailable] at available
-    cases available
-  · rfl
+  dsimp only
+  by_cases uses : snapshot.requiresOracleRuntime = true
+  all_goals
+    simp only [uses, Bool.false_eq_true, ↓reduceIte] at oracleChecked ⊢
+    rw [oracleChecked]
+    simp only [bind, Except.bind, payload.realizationClosed, payload.mapClosed, payload.linked,
+      payload.protocolsLinked, entryEq, payload.entryIndex.isLt, ↓reduceDIte]
+    split
+    · rename_i code unavailable
+      have available := payload.available
+      rw [unavailable] at available
+      cases available
+    · rfl
 
 /-- Compose separately checked protocol trees with the dependency orderer. -/
 theorem checkUnitProtocols_of_checked {snapshot : Snapshot} {domains : List DomainSpec}
@@ -327,7 +335,7 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   let (helperOrder, protocolOrder, snapshotProtocols, entryIndex, domains, summaries) ←
       tryCatch (liftTermElabM do
     let retainedTerm ← `(List.map Definition.name (List.filter
-      (fun definition => definition.kind != .protocol) (Snapshot.definitions $snapshot)))
+      (fun definition => definition.kind != .protocol && definition.kind != .oracle) (Snapshot.definitions $snapshot)))
     let retained ← (← listValues (← normalizeTerm retainedTerm)).mapM fun value => stringValue value
     let helpers ← matchEntries retained helperEntries "helper"
     let retainedNames ← `(([$((retained.map Syntax.mkStrLit).toArray),*] : List String))
@@ -417,7 +425,10 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
     protocolsLinked := by decide +kernel
     available := checkUnitAvailability_ok_of_isOk (by decide +kernel)
     realizationClosed := by decide +kernel
-    mapClosed := by decide +kernel))
+    mapClosed := by decide +kernel
+    oracleUnit := if ($snapshot).requiresOracleRuntime then
+      (checkOracleUnit $snapshot ((($definitionsId).filter (·.kind == .math)).map (·.name))).toOption
+      else none))
   emit naming (← `(def $programId : Program := ⟨$snapshot, $unitId⟩))
   -- Admission phases, each checked by the kernel.
   emit naming (← `(theorem $(mkIdent `headers_checked) : checkUnitHeaders $snapshot =
@@ -453,7 +464,7 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
       checkApplicationMetadata_of_checks $(mkIdent `native_metadata_checked) $(mkIdent `effective_sites_checked)))
   emit naming (← `(theorem $(mkIdent `payload_linked) :
       linkUnitPayload $snapshot $orderedId ($unitId).protocols = .ok $unitId :=
-      linkUnitPayload_of_payload _ _ _ rfl rfl))
+      linkUnitPayload_of_payload _ _ _ rfl rfl (by kernel_rfl)))
   emit naming (← `(/-- All declarations, callback trees and metadata phases of the original unit. -/
     theorem $(mkIdent naming.admission) : check $snapshot = .ok $programId :=
       check_parts _ $unitId (check_payload_of_phases $(mkIdent `headers_checked) $(mkIdent `helpers_checked)

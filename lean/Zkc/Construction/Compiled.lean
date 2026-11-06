@@ -62,6 +62,7 @@ structure Selection (outputs : List Structured.Ty) where
 open Structured in
 def select {original : Snapshot} (imported : Imported original) (participant : Participant) :
     Option (Selection imported.program.payload.entry.outputs) :=
+  if original.requiresOracleRuntime then none else
   match exportContext original participant, exportAcceptance original participant,
       Var.decode imported.program.payload.entry.outputs .boolean participant.policy.acceptance with
   | some context, some position, some output =>
@@ -69,6 +70,14 @@ def select {original : Snapshot} (imported : Imported original) (participant : P
         participant.policy.publicInputs.filterMap (imported.program.payload.entry.inputs[·]?),
         inputSlots context participant.policy imported.program.payload.entry.inputs, output⟩
   | _, _, _ => none
+
+/-- Ordinary property selection cannot silently use a refusing interpretation of an
+Oracle-bearing source. Structural construction admission remains a separate check. -/
+theorem select_oracle_refused {original : Structured.Snapshot}
+    (imported : Structured.Imported original) (participant : Participant)
+    (required : original.requiresOracleRuntime = true) :
+    select imported participant = none := by
+  simp [select, required]
 
 def Selection.check {original : Structured.Snapshot} (imported : Structured.Imported original)
     (selection : Selection imported.program.payload.entry.outputs) (participant : Participant) : Bool :=
@@ -86,6 +95,8 @@ theorem select_sound {original : Structured.Snapshot} (imported : Structured.Imp
       exportAcceptance original participant = some selection.position ∧
       selection.slots = inputSlots selection.context participant.policy imported.program.payload.entry.inputs := by
   unfold select at selected
+  split at selected
+  · contradiction
   split at selected
   · rename_i context position output foundContext foundPosition _
     cases selected

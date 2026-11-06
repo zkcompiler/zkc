@@ -351,9 +351,9 @@ def records (records : List SourceRecord) : SourceDeclarations := { records := r
 def ticket : OriginTerm := .nominal .record "probe::Ticket" []
 def holder : OriginTerm := .nominal .record "probe::Holder" []
 
--- Reading distributed metadata does not yet admit its layout semantics.
+-- A logical record needs its retained declaration even when it has no leaves.
 #guard errorOf ((records []).leaves 8 (.nominal .logicalRecord "probe::State" []) []) ==
-  some "component-declaration-distributed"
+  some "component-declaration-record"
 -- Nested records expand in place with their paths; a zero-length array of a
 -- record contributes no leaf but still requires the record.
 #guard match (records [⟨ticket, "ordinary", false, .fields [⟨"value", .field "f", none⟩], [], none⟩,

@@ -41,7 +41,7 @@ private def checkedCaller : CheckedProtocol :=
     callerBody.erase, callerBody, callerBody.elaborate_erase⟩
 private def payload : UnitPayload :=
   ⟨[], [checkedLeaf, checkedCaller], ⟨1, by decide⟩, by decide +kernel, by decide +kernel,
-    by rfl, by decide +kernel, by decide +kernel⟩
+    by rfl, by decide +kernel, by decide +kernel, none⟩
 private def imported : Imported snapshot := ⟨⟨snapshot, payload⟩, by rfl⟩
 private def owner : ContractBinding imported := ⟨⟨0, by decide⟩, ⟨0, by decide⟩, rfl⟩
 private def callerOwner : ContractBinding imported := ⟨⟨1, by decide⟩, ⟨1, by decide⟩, rfl⟩

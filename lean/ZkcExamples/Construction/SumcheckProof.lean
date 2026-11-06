@@ -8,6 +8,7 @@ public import Zkc.Construction.ScalarVerifier
 /-! Maintained actual Domain endpoint. Historical Instruction comparisons are
 outside this module's dependencies. All raw typed public inputs are retained. -/
 set_option autoImplicit false
+set_option maxRecDepth 50000
 set_option backward.isDefEq.respectTransparency false
 namespace ZkcExamples.Construction.SumcheckProof
 open Zkc Zkc.Source Zkc.Source.Structured Zkc.Construction

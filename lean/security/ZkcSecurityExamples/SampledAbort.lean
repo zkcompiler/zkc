@@ -81,7 +81,7 @@ theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat)
     simp [zero, Subject.Success, Domain.PairExecution.Success]
   · normalize_domain_process [zero] unfolding []
     normalize_domain_execution [] unfolding []
-    simp [zero, SampledCompiled.oracle, HonestCompiled.oracle,
+    simp [zero, Request.valid, SampledCompiled.oracle, HonestCompiled.oracle,
       Subject.Success, Domain.PairExecution.Success, Domain.acceptanceAt, acceptance_position,
       simulateQ_map, StateT.run_map]
     rw [← map_bind, prEvent_false]

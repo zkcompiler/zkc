@@ -40,7 +40,7 @@ def presentedRound (state : State) : PIR.Process (Domain.Actions carriers) State
   .call (.receive (.field "scalar") "high" 0) fun high =>
   if low = high then
     let history := (state.1 ++ [message "low" low]) ++ [message "high" high]
-    .call (.query "draw" "scalar" (.cons 0 .nil)) fun answer =>
+    .call (.query "draw" (.draw "scalar") (.cons 0 .nil)) fun answer =>
     .call (.send (ty := .field "scalar") "delivery" 0 answer) fun _ =>
       .done (((history ++ [.challenge origin]) ++ [delivery answer]), answer)
   else .halt .reject
@@ -70,7 +70,8 @@ theorem read_round (history : Domain.History carriers) (state : State) (same : s
   apply ReadingTo.observe
   change ReadingTo _ _ _ (if low = high then _ else _) (if low = high then _ else _)
   split
-  · apply ReadingTo.query (I := Domain.Actions carriers) _ origin _ (.query "draw" "scalar" (.cons 0 .nil)) _ id rfl
+  · apply ReadingTo.query (I := Domain.Actions carriers) _ origin _ (.query "draw" (.draw "scalar")
+    (.cons 0 .nil)) _ id rfl
       (by rfl)
     intro answer
     apply ReadingTo.absorbSend (I := Domain.Actions carriers) (.send (ty := .field "scalar") "delivery" 0 answer) _

@@ -20,6 +20,8 @@ attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results Pro
 def operation : ProtocolOp → Bool
   | .exchange (.field _) .. => true
   | .exchange .. => false
+  | .query _ (.draw _) _ => true
+  | .query .. => false
   | _ => true
 
 /-- The actual stored bodies and all nested callbacks are inspected once. -/
@@ -30,6 +32,7 @@ def check (program : Program) : Bool :=
 def sourceOperation {carriers : Carriers} : (Occurrence.signature carriers).Op → Prop
   | .action (.receive (.field _) ..) | .action (.send (ty := .field _) ..) => True
   | .action (.receive ..) | .action (.send ..) => False
+  | .action (.query _ (.sampleIndex _) _) | .action (.query _ (.sampleIndices _) _) => False
   | _ => True
 
 private def fromClosed {I : PIR.Signature} : PIR.OperationInterpretation closedInterface I :=
@@ -108,6 +111,7 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
         (helperTables model (Occurrence.signature model.toCarriers) definitions)
         self op args callbacks table context Occurrence.iterations) := by
   cases op with
+  | oracle => trivial
   | calculate op allowed =>
     exact calculation model definitions op allowed args
   | localCall helper kind owner site =>
@@ -159,6 +163,21 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
         | none => trivial
         | some values => exact ⟨trivial, fun _ => trivial⟩
       · trivial
+  | query owner operation site =>
+    cases operation <;> try exact Bool.noConfusion checked
+    cases callbacks
+    simp only [protocolOperationWithOn, Participant.query]
+    split
+    · cases RoleFamily.sequence args with
+      | none => trivial
+      | some values =>
+        simp only [PIR.Process.interpret_bind, PIR.Process.interpret, serviceAction]
+        split
+        · refine ⟨trivial, fun reply => ?_⟩
+          dsimp only [PIR.Process.bind]
+          split <;> trivial
+        · trivial
+    · trivial
   | statement => trivial
   | mark => cases args; trivial
   | protocolApply signature roles site =>

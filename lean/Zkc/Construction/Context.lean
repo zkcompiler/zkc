@@ -150,8 +150,15 @@ def origin (context : Context) (template : Template) : Option Origin :=
   | ["message", _, site, schema, sender, receiver] =>
       if schema = site then some (Origin.message context.entry (template.qualify site) sender receiver)
       else none
-  | ["query", _, site, _, _, "draw", _] => context.request.map (context.query (template.qualify site))
+  | ["query", _, site, _, _, method, _] =>
+      context.request >>= fun request =>
+        if request.method = method then some (context.query (template.qualify site) request) else none
   | _ => none
+
+/-- Dynamic request values select an occurrence without inferring them from
+the annotation. Source request admission separately authenticates these values. -/
+def originFor (context : Context) (request : Request) (template : Template) : Option Origin :=
+  template.origin (context.mapReplacement fun replacement => { replacement with request := some request })
 
 end Template
 

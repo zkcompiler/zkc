@@ -67,7 +67,7 @@ def encode : (ty : Structured.Ty) → Structured.assignment F G ty → Value F G
   | .vector domain, values => .vector domain values
   | .service _, handle => .index handle
   | .resourceUnit slot, token => .custody slot token
-  | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
+  | .polynomial _, _ | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => .unsupported
 
 /-- Read a local scalar value at its exact structured type; services never decode. -/

@@ -26,7 +26,7 @@ def resolveRepeatSpec (interface : ProtocolInterface) (arguments results : List 
     throw "structured-protocol-signature"
   let state := (arguments.drop 1).take carried
   let captures := arguments.drop (1 + carried)
-  if results != state || state.any Ty.isForeignHandle then throw "structured-protocol-signature"
+  if results != state || state.any (fun type => type.isForeignHandle && !type.isOracleFamily) then throw "structured-protocol-signature"
   -- A repeated callback receives its captures at every iteration: an affine
   -- custody permission can only be carried as state.
   if captures.any Ty.isCustody then throw "structured-custody-capture"
@@ -75,7 +75,13 @@ Source lowering and direct typed-carrier analysis are separate public inputs,
 so both intentionally validate this condition. -/
 def checkProtocolRoles (active : List Nat) (op : ProtocolOp) : Except String Unit := do
   let selected := match op with
-    | .localCall _ _ owner _ | .guard owner _ | .draw owner .. => [owner]
+    | .oracle operation _ => match operation with
+      | .input _ holder receivers _ | .send _ holder receivers _ |
+        .components _ holder receivers | .virtual _ holder receivers => holder :: receivers
+      | .query _ (some owner) | .contents _ owner => [owner]
+      | .sequenceAppend _ _ roles | .sequenceAt _ _ roles => roles
+      | _ => []
+    | .localCall _ _ owner _ | .guard owner _ | .draw owner .. | .query owner .. => [owner]
     | .exchange _ sender receiver _ => [sender, receiver]
     | .restrict _ roles | .assemble _ roles | .protocolApply _ roles _ => roles
     | .repeat spec _ => spec.roles
@@ -132,7 +138,7 @@ theorem resolveRepeatSpec_fields {interface : ProtocolInterface} {arguments resu
     spec.maximum = maximum ∧ maximum ≤ 1048576 ∧ carried < arguments.length ∧
       arguments.head? = some .index ∧ spec.state = (arguments.drop 1).take carried ∧
       spec.captures = arguments.drop (1 + carried) ∧ results = spec.state ∧
-      spec.state.any Ty.isForeignHandle = false ∧
+      spec.state.any (fun type => type.isForeignHandle && !type.isOracleFamily) = false ∧
       resolveScope interface.roles roles = .ok spec.roles ∧
       scopes.mapM (resolveScope interface.roles) = .ok spec.stateScopes ∧
       spec.stateScopes.length = carried ∧

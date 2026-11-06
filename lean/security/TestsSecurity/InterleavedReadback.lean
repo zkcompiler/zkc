@@ -1,5 +1,6 @@
 import ZkcSecurityExamples.Components.SequentialSigma
 import ZkcSecurity.Bindings.Models.PrimeField
+import ZkcSecurity.Bindings.Transcript.ServiceSampling
 import Mathlib.Algebra.Field.ZMod
 import TestsSecurity.SampledReadback
 
@@ -20,18 +21,9 @@ abbrev Execution := PIR.Execution (Domain.RuntimeState C Nat) (Domain.Event C) (
 
 noncomputable instance : SampleableType F := SampleableType.ofFintype F
 noncomputable instance : DecidableEq (Domain.Event C) := Classical.decEq _
-noncomputable instance rawSamples : (event : Domain.Event C) → SampleableType (Domain.Raw event) := fun event => by
-  cases event with
-  | challenge origin =>
-      rcases origin with ⟨entry, event, request⟩
-      cases request with
-      | none => exact inferInstanceAs (SampleableType Unit)
-      | some request =>
-          rcases request with ⟨method, parameters, sort⟩
-          cases sort
-          case field identity => exact SampleableType.ofFintype F
-          all_goals exact inferInstanceAs (SampleableType Unit)
-  | message | publicBinding => exact inferInstanceAs (SampleableType Unit)
+noncomputable instance rawSamples :
+    (event : Domain.Event C) → SampleableType (Domain.Raw event) :=
+  ServiceSampling.raw C (fun _ ↦ SampleableType.ofFintype F)
 
 noncomputable def coins : Domain.LocalServices ProbComp C Nat := fun mode actualPort origin state =>
   if mode = .producer ∧ actualPort = port ∧ origin = privateOrigin then
@@ -70,7 +62,7 @@ theorem stage_execution (answers : QueryImpl (TranscriptOracle.DomainSpec C) Id)
             .message (messageOrigin "response") (.field "scalar" response)]⟩) := by
   simp [producerStage, Domain.run, PIR.Process.runM, Domain.handler, coins,
     PIR.Execution.followM, ReadbackTransport.tableOracle, List.append_assoc,
-    privateOrigin, Origin.query, Domain.Raw, Request.draw, publicOrigin, Domain.drawRequest]
+    privateOrigin, Origin.query, Domain.Raw, Request.draw, Request.valid, publicOrigin, Domain.drawRequest]
 
 /-- The second stage performs another draw after the first challenge. The
 actual producer state records both calls, rather than resetting at bind. -/

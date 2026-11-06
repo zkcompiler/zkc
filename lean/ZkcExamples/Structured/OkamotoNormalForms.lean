@@ -47,8 +47,8 @@ def proverReplies (firstNonce secondNonce delivery : F) : ReplyScript F G where
 theorem prover_run (firstBase secondBase point : G) (firstScalar secondScalar : F) (nonces : Nat) (firstNonce secondNonce delivery : F) :
     (proverReplies firstNonce secondNonce delivery).run (program.participant F G 0 (proverInputs firstBase secondBase point firstScalar secondScalar nonces)) =
       ⟨.returned (.cons none .nil), (),
-        [.query firstNonceSite scalarDomain (.cons nonces .nil),
-         .query secondNonceSite scalarDomain (.cons nonces .nil),
+        [.query firstNonceSite (.draw scalarDomain) (.cons nonces .nil),
+         .query secondNonceSite (.draw scalarDomain) (.cons nonces .nil),
          .send (ty := .group groupDomain) commitmentSite 1 ((firstNonce • firstBase) + (secondNonce • secondBase)),
          .receive (.field scalarDomain) deliverySite 1,
          .send (ty := .field scalarDomain) firstResponseSite 1 (firstNonce + (delivery * firstScalar)),
@@ -75,7 +75,7 @@ theorem verifier_run (firstBase secondBase point : G) (challenges : Nat) (commit
     (verifierReplies commitment challenge firstResponse secondResponse).run (program.participant F G 1 (verifierInputs firstBase secondBase point challenges)) =
       ⟨.returned (.cons (some (decide ((firstResponse • firstBase) + (secondResponse • secondBase) = commitment + (challenge • point)))) .nil), (),
         [.receive (.group groupDomain) commitmentSite 0,
-         .query challengeSite scalarDomain (.cons challenges .nil),
+         .query challengeSite (.draw scalarDomain) (.cons challenges .nil),
          .send (ty := .field scalarDomain) deliverySite 0 challenge,
          .receive (.field scalarDomain) firstResponseSite 0,
          .receive (.field scalarDomain) secondResponseSite 0]⟩ := by

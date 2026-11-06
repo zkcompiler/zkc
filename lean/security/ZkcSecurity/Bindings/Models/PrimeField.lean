@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Bindings.Models.Capabilities
+public import ZkcSecurity.Bindings.Transcript.ServiceSampling
 public import Zkc.Source.Structured.CatalogueJustification
 public import Mathlib.Data.ZMod.Basic
 public import Mathlib.Algebra.Field.ZMod
@@ -52,19 +53,9 @@ theorem characteristic (catalogue : Catalogue) (modulus : Nat)
 
 noncomputable abbrev rawSampleable (modulus : Nat) [NeZero modulus] :
     (event : Zkc.Construction.Domain.Event (model modulus).toCarriers) →
-      SampleableType (Zkc.Construction.Domain.Raw event)
-  | .challenge origin => by
-      cases origin with
-      | mk entry event request =>
-        cases request with
-        | none => exact inferInstanceAs (SampleableType Unit)
-        | some request =>
-          cases request with
-          | mk method parameters sort =>
-            cases sort
-            case field identity => exact SampleableType.ofFintype (ZMod modulus)
-            all_goals exact inferInstanceAs (SampleableType Unit)
-  | .message .. | .publicBinding .. => inferInstanceAs (SampleableType Unit)
+      SampleableType (Zkc.Construction.Domain.Raw event) :=
+  FiatShamir.ServiceSampling.raw (model modulus).toCarriers
+    (fun _ ↦ SampleableType.ofFintype (ZMod modulus))
 
 noncomputable def capabilities (snapshot : Snapshot) (modulus : Nat)
     [Fact modulus.Prime] (checked : compatible snapshot.catalogue modulus = true) :

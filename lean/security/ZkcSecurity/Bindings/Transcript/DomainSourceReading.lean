@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Bindings.Transcript.SourceReading
 public import ZkcSecurity.Bindings.Transcript.NominalDomain
+public import ZkcSecurity.Bindings.Transcript.ServiceReading
 public import Zkc.Construction.OriginalEffects
 
 public section
@@ -38,6 +39,48 @@ theorem draw_supported {origin : Origin} {field : String}
         { state with history := state.history ++ [.challenge origin] })
   else .halt .refused
 
+/-- One nominal request kernel retains the exact finite reply family and every
+decoder refusal. Its single query advances history only after a reply. -/
+@[expose] def queryRequest (state : Original.State carriers) (origin : Origin) (request : Request) :
+    PIR.Process (NominalDomain.signature carriers)
+      (carriers.Value request.sort × Original.State carriers) :=
+  if valid : request.valid = true then
+    if same : origin.request = some request then
+      .call (.query origin (Service.supported origin request valid same)) fun raw =>
+        match request.decode (by simpa only [Domain.Raw, same] using raw) with
+        | none => .halt .refused
+        | some value =>
+          .done (value, { state with history := state.history ++ [.challenge origin] })
+    else .halt .refused
+  else .halt .refused
+
+/-- The old field presentation is the exact specialization at every origin,
+including origins with a missing or different request. -/
+theorem queryRequest_draw (state : Original.State carriers) (origin : Origin) (field : String) :
+    queryRequest state origin (.draw field) = queryField state origin field := by
+  unfold queryRequest queryField
+  simp only [Request.valid, Request.draw, ↓reduceDIte]
+  by_cases same : origin.request = some ⟨"draw", [], .field field⟩
+  · simp only [same, ↓reduceDIte]
+    rfl
+  · simp only [same, ↓reduceDIte]
+
+/-- Producer delivery reuses the source-owned typed def-use route. The scalar
+or block query and its delivered message remain separate observations. -/
+@[expose] def receiveRequest (routing : Original.Routing) (state : Original.State carriers)
+    (ty : Ty) (site : String) (sender : Nat) :
+    PIR.Process (NominalDomain.signature carriers) (carriers.Value ty × Original.State carriers) :=
+  match routing.typedDelivery state.frames site ty sender with
+  | none => .halt .refused
+  | some (request, query, message) =>
+    if same : request.sort = ty then
+      (queryRequest state query request).bind fun (value, final) =>
+        match Domain.Payload.ofValue ty (same ▸ value) with
+        | none => .halt .refused
+        | some payload =>
+          (record final message payload).bind fun (_, observed) => .done (same ▸ value, observed)
+    else .halt .refused
+
 @[expose] def receive (routing : Original.Routing) (state : Original.State carriers) (ty : Ty)
     (site : String) (sender : Nat) :
     PIR.Process (NominalDomain.signature carriers) (carriers.Value ty × Original.State carriers) :=
@@ -50,6 +93,8 @@ theorem draw_supported {origin : Origin} {field : String}
       | some (draw, message) =>
         (queryField state draw field).bind fun (value, final) =>
           (record final message (.field field value)).bind fun (_, observed) => .done (value, observed)
+    | .index => receiveRequest routing state .index site sender
+    | .indices => receiveRequest routing state .indices site sender
     | _ => .halt .refused
   | .validator =>
     match routing.message state.frames site sender routing.context.validator with
@@ -68,6 +113,18 @@ theorem draw_supported {origin : Origin} {field : String}
     | .producer => routing.context.producer | .validator => routing.context.validator
   match routing.message state.frames site sender receiver, Domain.Payload.ofValue ty value with
   | some origin, some payload => record state origin payload
+  | _, _ => .halt .refused
+
+/-- Private service capabilities are refused by this public presentation. The
+reading installation retains the independent empty-local-route premise. -/
+@[expose] def service (routing : Original.Routing) (state : Original.State carriers)
+    (site contract : String) (request : Request) (handle : Nat) :
+    PIR.Process (NominalDomain.signature carriers)
+      (carriers.Value request.sort × Original.State carriers) :=
+  match routing.mode,
+      (if contract = routing.context.contract then
+        routing.serviceRequest state.frames site request handle else none) with
+  | .validator, some origin => queryRequest state origin request
   | _, _ => .halt .refused
 
 /-- No local-service effect is silently reclassified as a public query. The
@@ -91,7 +148,12 @@ that the actual routing has no local routes. -/
   | .action (.receive ty site sender), state => receive routing state ty site sender
   | .action (@Participant.Action.send _ _ _ _ ty site receiver value), state =>
       send routing state ty site receiver value
-  | .action (.query site field (.cons handle .nil)), state => query routing state site field handle
+  | .action (.query site (.draw field) (.cons handle .nil)), state =>
+      query routing state site field handle
+  | .action (.query site (.sampleIndex contract) (.cons handle (.cons bound .nil))), state =>
+      service routing state site contract (.sampleIndex bound) handle
+  | .action (.query site (.sampleIndices contract) (.cons handle (.cons bound (.cons count .nil)))), state =>
+      service routing state site contract (.sampleIndices bound count) handle
 
 theorem record_reading (state : Original.State carriers) (origin : Origin)
     (payload : Domain.Payload carriers) :
@@ -114,6 +176,59 @@ theorem queryField_reading (state : Original.State carriers) (origin : Origin) (
   · simp only [request, ↓reduceDIte]
     exact .halt _ _
 
+/-- All request replies, complete returned values, reached frames and exact
+history are retained, including invalid requests and decoder failures. -/
+theorem queryRequest_reading (state : Original.State carriers) (origin : Origin)
+    (request : Request) :
+    Bridge NominalDomain.interface SourceReading.Post state.history
+      (Original.queryRequest state origin request) (queryRequest state origin request) := by
+  unfold Original.queryRequest Domain.requestValue queryRequest
+  by_cases valid : request.valid = true
+  · simp only [valid, ↓reduceIte, ↓reduceDIte]
+    by_cases same : origin.request = some request
+    · simp only [same, ↓reduceDIte]
+      constructor
+      · apply ReadingTo.query (absorb := NominalDomain.interface (carriers := carriers))
+          _ _ _ (.query origin (Service.supported origin request valid same)) _ id
+          (Service.supported origin request valid same) rfl
+        intro raw
+        dsimp only [id]
+        cases decoded : request.decode (by simpa only [Domain.Raw, same] using raw) <;>
+          simp only [PIR.Process.bind]
+        · exact .halt _ _
+        · exact .done _ _ rfl
+      · simpa only [Original.queryRequest, Domain.requestValue, valid, same, ↓reduceIte, ↓reduceDIte]
+          using (Service.original state origin request valid same).coherent.weaken
+            (Next := SourceReading.Post) (fun _ _ returned => returned.1.symm)
+    · simp only [same, ↓reduceDIte, PIR.Process.bind]
+      exact .halt _ _
+  · simp only [valid]
+    exact .halt _ _
+
+theorem receiveRequest_reading (routing : Original.Routing) (state : Original.State carriers)
+    (ty : Ty) (site : String) (sender : Nat) :
+    Bridge NominalDomain.interface SourceReading.Post state.history
+      (Original.receiveRequest routing state ty site sender)
+      (receiveRequest routing state ty site sender) := by
+  unfold Original.receiveRequest receiveRequest
+  cases routing.typedDelivery state.frames site ty sender with
+  | none => exact .halt _ _
+  | some route =>
+    rcases route with ⟨request, query, message⟩
+    dsimp only
+    split
+    · rename_i same
+      apply (queryRequest_reading state query request).bind
+      intro reached result agrees
+      simp only [SourceReading.Post] at agrees
+      subst reached
+      cases Domain.Payload.ofValue ty (same ▸ result.1)
+      · exact .halt _ _
+      · apply (record_reading result.2 message _).bind
+        intro reached final agrees
+        exact .done _ _ agrees
+    · exact .halt _ _
+
 theorem receive_reading (routing : Original.Routing) (state : Original.State carriers)
     (ty : Ty) (site : String) (sender : Nat) :
     Bridge NominalDomain.interface SourceReading.Post state.history
@@ -122,9 +237,10 @@ theorem receive_reading (routing : Original.Routing) (state : Original.State car
   cases routing.mode with
   | producer =>
     dsimp only
-    cases ty <;> try exact .halt _ _
+    cases ty <;> dsimp only
+    all_goals try exact .halt _ _
+    all_goals try exact receiveRequest_reading routing state _ site sender
     rename_i field
-    dsimp only
     cases routing.delivery state.frames site field sender with
     | none => exact .halt _ _
     | some origins =>
@@ -188,6 +304,23 @@ theorem query_reading (routing : Original.Routing) (noLocal : routing.locals = [
   cases routing.mode <;> cases routing.draw state.frames site field handle
   all_goals first | exact .halt _ _ | exact queryField_reading state _ field
 
+theorem localRequest_none (routing : Original.Routing) (noLocal : routing.locals = [])
+    (frames : Original.Frames) (site : String) (request : Request) (handle : Nat) :
+    routing.localRequest frames site request handle = none := by
+  simp only [Original.Routing.localRequest, noLocal, List.filter_nil]
+
+theorem service_reading (routing : Original.Routing) (noLocal : routing.locals = [])
+    (state : Original.State carriers) (site contract : String) (request : Request) (handle : Nat) :
+    Bridge NominalDomain.interface SourceReading.Post state.history
+      (Original.service routing state site contract request handle)
+      (service routing state site contract request handle) := by
+  unfold Original.service service
+  rw [localRequest_none routing noLocal]
+  cases routing.mode <;>
+    cases (if contract = routing.context.contract then
+      routing.serviceRequest state.frames site request handle else none)
+  all_goals first | exact .halt _ _ | exact queryRequest_reading state _ request
+
 /-- This is the only installation premise for the public adapter: an actual
 Fiat-Shamir profile with no private service routes. Both folded roles are
 covered under readExecution; this is not a producer completeness theorem. -/
@@ -212,11 +345,30 @@ covered under readExecution; this is not a producer completeness theorem. -/
       | send site receiver value =>
         simpa only [Original.operations, operations, profile] using
           send_reading routing state _ site receiver value
-      | query site field arguments =>
-        cases arguments with
-        | cons handle tail =>
-          cases tail
-          exact query_reading routing noLocal state site field handle
+      | query site operation arguments =>
+        cases operation with
+        | draw field =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail
+            exact query_reading routing noLocal state site field handle
+        | sampleIndex contract =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail with
+            | cons bound tail =>
+              cases tail
+              exact service_reading routing noLocal state site contract (.sampleIndex bound) handle
+        | sampleIndices contract =>
+          cases arguments with
+          | cons handle tail =>
+            cases tail with
+            | cons bound tail =>
+              cases tail with
+              | cons count tail =>
+                cases tail
+                exact service_reading routing noLocal state site contract
+                  (.sampleIndices bound count) handle
 
 @[expose] def presentation {A : Type} (routing : Original.Routing)
     (source : PIR.Process (Occurrence.signature carriers) A) (state : Original.State carriers) :
@@ -234,6 +386,24 @@ theorem reading {A : Type} (routing : Original.Routing) (replacement : Replaceme
       (Original.fold routing source state) (presentation routing source state) :=
   (interpretation routing replacement profile noLocal).reading source state
 
+/-- The existing public endpoint and nominal transform return the identical
+complete source result, reached state and unread proof, for every provider. -/
+theorem endpoint {A : Type} (routing : Original.Routing) (replacement : Replacement)
+    (profile : routing.context.profile = .fiatShamir replacement) (noLocal : routing.locals = [])
+    (source : PIR.Process (Occurrence.signature carriers) A) (state : Original.State carriers)
+    {m : Type → Type} [Monad m]
+    (query : Domain.History carriers → (event : Domain.Event carriers) → m (Domain.Raw event))
+    (proof : Domain.Proof carriers) :
+    ZkcSecurity.Endpoint.Domain.readExecution (carriers := carriers) query
+      (Original.fold routing source state) proof =
+    transform (NominalDomain.interface (carriers := carriers)) query
+      (presentation routing source state) state.history proof :=
+  ReadingTo.run (carriers := carriers) (I := NominalDomain.signature carriers)
+    (A := A × Original.State carriers) (absorb := NominalDomain.interface)
+    (Post := SourceReading.Post) (history := state.history)
+    (left := Original.fold routing source state) (right := presentation routing source state)
+    (reading routing replacement profile noLocal source state).reading (m := m) query proof
+
 /-- The source effect condition needed by the public lossless adapter. Service
 queries retain handles; proof receives must exclude capabilities and logical
 oracle handles recursively. -/
@@ -248,6 +418,36 @@ private theorem queryField_data (state : Original.State carriers) (origin : Orig
   · exact ⟨trivial, fun _ => trivial⟩
   · trivial
 
+private theorem queryRequest_data (state : Original.State carriers) (origin : Origin)
+    (request : Request) :
+    OperationSupport NominalDomain.DataOperation (queryRequest state origin request) := by
+  unfold queryRequest
+  split
+  · split
+    · refine ⟨trivial, fun _ => ?_⟩
+      dsimp only
+      split <;> trivial
+    · trivial
+  · trivial
+
+private theorem receiveRequest_data (routing : Original.Routing) (state : Original.State carriers)
+    (ty : Ty) (site : String) (sender : Nat) :
+    OperationSupport NominalDomain.DataOperation (receiveRequest routing state ty site sender) := by
+  unfold receiveRequest
+  cases routing.typedDelivery state.frames site ty sender with
+  | none => trivial
+  | some route =>
+    rcases route with ⟨request, query, message⟩
+    dsimp only
+    split
+    · apply (queryRequest_data state query request).bind
+      intro result
+      split
+      · trivial
+      · exact (show OperationSupport NominalDomain.DataOperation (record result.2 message _)
+          from ⟨trivial, fun _ => trivial⟩).bind _ (fun _ => trivial)
+    · trivial
+
 private theorem receive_data (routing : Original.Routing) (state : Original.State carriers)
     (ty : Ty) (site : String) (sender : Nat) (data : ty.isHandle = false) :
     OperationSupport NominalDomain.DataOperation (receive routing state ty site sender) := by
@@ -255,9 +455,10 @@ private theorem receive_data (routing : Original.Routing) (state : Original.Stat
   cases routing.mode with
   | producer =>
     dsimp only
-    cases ty <;> try trivial
+    cases ty <;> dsimp only
+    all_goals try trivial
+    all_goals try exact receiveRequest_data routing state _ site sender
     rename_i field
-    dsimp only
     cases routing.delivery state.frames site field sender with
     | none => trivial
     | some origins =>
@@ -293,14 +494,44 @@ theorem operations_data (routing : Original.Routing)
         cases routing.message state.frames site _ receiver <;>
           cases Domain.Payload.ofValue ty value
         all_goals first | trivial | exact ⟨trivial, fun _ => trivial⟩
-    | query site field arguments =>
-      cases arguments with
-      | cons handle rest =>
-        cases rest
-        change OperationSupport NominalDomain.DataOperation (query routing state site field handle)
-        unfold query
-        cases routing.mode <;> cases routing.draw state.frames site field handle
-        all_goals first | trivial | exact queryField_data state _ field
+    | query site operation arguments =>
+      cases operation with
+      | draw field =>
+        cases arguments with
+        | cons handle rest =>
+          cases rest
+          change OperationSupport NominalDomain.DataOperation (query routing state site field handle)
+          unfold query
+          cases routing.mode <;> cases routing.draw state.frames site field handle
+          all_goals first | trivial | exact queryField_data state _ field
+      | sampleIndex contract =>
+        cases arguments with
+        | cons handle rest =>
+          cases rest with
+          | cons bound rest =>
+            cases rest
+            change OperationSupport NominalDomain.DataOperation
+              (service routing state site contract (.sampleIndex bound) handle)
+            unfold service
+            cases routing.mode <;>
+              cases (if contract = routing.context.contract then
+                routing.serviceRequest state.frames site (.sampleIndex bound) handle else none)
+            all_goals first | trivial | exact queryRequest_data state _ _
+      | sampleIndices contract =>
+        cases arguments with
+        | cons handle rest =>
+          cases rest with
+          | cons bound rest =>
+            cases rest with
+            | cons count rest =>
+              cases rest
+              change OperationSupport NominalDomain.DataOperation
+                (service routing state site contract (.sampleIndices bound count) handle)
+              unfold service
+              cases routing.mode <;>
+                cases (if contract = routing.context.contract then
+                  routing.serviceRequest state.frames site (.sampleIndices bound count) handle else none)
+              all_goals first | trivial | exact queryRequest_data state _ _
 
 /-- Every receive in the source support certificate gets its exact nominal
 lossless law; every typed continuation of the actual interpretation is covered. -/

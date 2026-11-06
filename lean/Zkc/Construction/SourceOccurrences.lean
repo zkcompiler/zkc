@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.Structured
+public import Zkc.Source.Structured.ServiceAdmission
 
 @[expose] public section
 
@@ -103,7 +104,63 @@ def event (context : Context) (frame : Frame) (site : String) : Option (List Str
           context.request ≠ some (.draw field) ∨ owner ≠ context.role context.validator then none
       else some ["query", frame.definition.name, site, "input_" ++ decimal port.localInput,
         contract, "draw", owner]
+  | .instruction (.sampleIndex owner contract) _ [.index] [] _
+  | .instruction (.sampleIndices owner contract) _ [.indices] [] _ => do
+      let some port ← arguments.head? | none
+      let some (.service actual) := frame.definition.inputs[port.localInput]? | none
+      let owner ← frame.roles.lookup owner
+      let method := match instruction with
+        | .instruction (.sampleIndex ..) .. => "index" | _ => "indices"
+      if some port.rootInput ≠ context.service ∨ actual ≠ contract ∨ contract ≠ context.contract ∨
+          owner ≠ context.role context.validator then none
+      else some ["query", frame.definition.name, site, "input_" ++ decimal port.localInput,
+        contract, method, owner]
   | _ => none
+
+/-- Constant arguments at an original source occurrence. These are source
+values, independent of constructed operand references and query annotations. -/
+def constantArguments (site : String) : List Structured.Instruction →
+    Structured.ServiceConstants → Option Structured.ServiceConstants
+  | [], _ => none
+  | .instruction descriptor references types _ ownSite :: rest, constants => do
+    let arguments ← references.mapM (constants[·]?)
+    if ownSite = site then some arguments
+    else constantArguments site rest (Structured.serviceConstants descriptor types ++ constants)
+
+/-- Follow source applications and repeat captures while retaining literal
+provenance. Mutable carried state and induction coordinates are not constants. -/
+def constantFrame (snapshot : Structured.Snapshot) : List Step →
+    Frame → Structured.ServiceConstants → Option (Frame × Structured.ServiceConstants)
+  | [], frame, constants => some (frame, constants)
+  | step :: rest, frame, constants => do
+    let arguments ← constantArguments step.site frame.body.topLevelInstructions constants
+    let (instruction, _) ← frameAt frame step.site
+    let child ← descend snapshot frame step
+    let next ← match step, instruction with
+      | .apply .., .instruction (.protocolApply ..) _ _ [] _ => some arguments
+      | .repeat .., .instruction (.protocolRepeat carried ..) _ _ [_] _ =>
+          some (none :: (List.replicate carried none ++ arguments.drop (1 + carried)))
+      | _, _ => none
+    constantFrame snapshot rest child next
+
+/-- The exact request is recovered from the source descriptor and its constant
+SSA operands. Annotation fields do not provide any bound or count authority. -/
+def requestAt (snapshot : Structured.Snapshot) (context : Context) (template : Template) : Option Request := do
+  let initial ← root snapshot context
+  let (frame, constants) ← constantFrame snapshot template.steps initial
+    (List.replicate initial.definition.inputs.length none)
+  let site ← template.event[2]?
+  let (instruction, _) ← frameAt frame site
+  let arguments ← constantArguments site frame.body.topLevelInstructions constants
+  let request ← match instruction, arguments with
+    | .instruction (.draw _ field) _ [.field result] [] _, [_] =>
+        if field = result then some (Request.draw field) else none
+    | .instruction (.sampleIndex ..) _ [.index] [] _, [_, some bound] =>
+        some (Request.sampleIndex bound)
+    | .instruction (.sampleIndices ..) _ [.indices] [] _, [_, some bound, some count] =>
+        some (Request.sampleIndices bound count)
+    | _, _ => none
+  if request.valid then some request else none
 
 def expected (snapshot : Structured.Snapshot) (context : Context) (template : Template) : Option (List String) := do
   if template.entry ≠ context.entry then none else do
@@ -141,22 +198,27 @@ def servicePorts (snapshot : Structured.Snapshot) (policy : Policy) (owner : Str
 same root survives restrictions, application substitution and repeat captures. -/
 def localEvent (snapshot : Structured.Snapshot) (context : Context) (port : ServicePort)
     (request : Request) (template : Template) : Option (List String) := do
-  if template.entry ≠ context.entry ∨ port.owner ≠ context.role context.producer then none else do
+  if template.entry ≠ context.entry ∨ port.owner ∉ context.roles then none else do
     let initial ← root snapshot context
     let frame ← follow snapshot template.steps initial
     let site ← template.event[2]?
     let (instruction, arguments) ← frameAt frame site
-    let .instruction (.draw owner field) _ [.field result] [] _ := instruction | none
-    let [some source] := arguments | none
+    let requestSource ← requestAt snapshot context template
+    let (owner, operation) ← match instruction with
+      | .instruction (.draw owner field) .. => some (owner, Structured.ServiceOp.draw field)
+      | .instruction (.sampleIndex owner contract) .. => some (owner, .sampleIndex contract)
+      | .instruction (.sampleIndices owner contract) .. => some (owner, .sampleIndices contract)
+      | _ => none
+    let some source ← arguments.head? | none
     let some (.service contract) := frame.definition.inputs[source.localInput]? | none
     let owner ← frame.roles.lookup owner
     let some (.service rootContract) := initial.definition.inputs[source.rootInput]? | none
     let interface ← initial.definition.interface
     if source.rootInput ≠ port.root ∨ contract ≠ port.contract ∨ rootContract ≠ contract ∨
         interface.inputScopes[source.rootInput]? ≠ some [owner] ∨ owner ≠ port.owner ∨
-        request ≠ .draw field ∨ result ≠ field ∨ contract ≠ "random." ++ field ++ "/0" then none
+        request ≠ requestSource ∨ request.operation contract ≠ some operation then none
     else some ["query", frame.definition.name, site, "input_" ++ decimal source.localInput,
-      contract, "draw", owner]
+      contract, request.method, owner]
 
 def localValid (snapshot : Structured.Snapshot) (context : Context) (port : ServicePort)
     (request : Request) (template : Template) : Bool :=
@@ -187,6 +249,10 @@ def instruction (snapshot : Structured.Snapshot) (context : Context) (ports : Li
   | ⟨operation, _, _, body⟩ =>
       (match operation with
        | .observe _ template | .challenge _ _ template => valid snapshot context template
+       | .indexChallenge _ bound template =>
+           valid snapshot context template && requestAt snapshot context template == some (.sampleIndex bound)
+       | .blockChallenge _ bound count template =>
+           valid snapshot context template && requestAt snapshot context template == some (.sampleIndices bound count)
        | .localService port request template _ =>
            ports.contains port && localValid snapshot context port request template &&
              repeatSites template == loops

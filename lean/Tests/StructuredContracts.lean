@@ -180,7 +180,7 @@ private def checkedCaller : CheckedProtocol :=
     callerBody.erase, callerBody, callerBody.elaborate_erase⟩
 private def payload : UnitPayload :=
   ⟨[checkedFormula], [checkedRoot, checkedCaller], ⟨0, by decide⟩, by decide +kernel,
-    by decide +kernel, by rfl, by decide +kernel, by decide +kernel⟩
+    by decide +kernel, by rfl, by decide +kernel, by decide +kernel, none⟩
 set_option smartUnfolding false in
 private def imported : Imported snapshot := ⟨⟨snapshot, payload⟩, by rfl⟩
 private def owner : ContractBinding imported := ⟨⟨0, by decide⟩, ⟨0, by decide +kernel⟩, rfl⟩
@@ -581,7 +581,7 @@ private def checkedLookup : CheckedDefinition :=
     lookupBody.erase, lookupBody, lookupBody.elaborate_erase⟩
 private def partialPayload : UnitPayload :=
   ⟨[checkedFormula, checkedLookup], [checkedRoot, checkedCaller], ⟨0, by decide⟩,
-    by decide +kernel, by decide +kernel, by rfl, by decide +kernel, by decide +kernel⟩
+    by decide +kernel, by decide +kernel, by rfl, by decide +kernel, by decide +kernel, none⟩
 private def partialImported : Imported partialSnapshot := ⟨⟨partialSnapshot, partialPayload⟩, by rfl⟩
 private def lookupApplication : RelationApplication := ⟨"Lookup", []⟩
 private def lookupSelected : RelationBinding partialSnapshot lookupApplication := ⟨⟨1, by decide⟩, rfl⟩
@@ -621,7 +621,7 @@ private def changedChecked : CheckedDefinition :=
     changedBody.elaborate_erase⟩
 private def changedPayload : UnitPayload :=
   ⟨[changedChecked], [checkedRoot, checkedCaller], ⟨0, by decide⟩,
-    by decide +kernel, by decide +kernel, by rfl, by decide +kernel, by decide +kernel⟩
+    by decide +kernel, by decide +kernel, by rfl, by decide +kernel, by decide +kernel, none⟩
 private def changedImported : Imported changedSnapshot := ⟨⟨changedSnapshot, changedPayload⟩, by rfl⟩
 private def changedRelation : RelationBinding changedSnapshot subject := ⟨⟨0, by decide⟩, rfl⟩
 private def changedFormula : FormulaBinding changedImported changedRelation :=

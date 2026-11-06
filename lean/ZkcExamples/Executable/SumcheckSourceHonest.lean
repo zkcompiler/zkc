@@ -11,6 +11,7 @@ public import Zkc.Executable.DomainSuccessRules
 /-! Honest success is a property of the admitted source and its existing scalar
 handler. The compiler connection below remains unrestricted on all inputs. -/
 set_option autoImplicit false
+set_option maxRecDepth 50000
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcExamples.Executable.SumcheckSourceHonest

@@ -279,7 +279,7 @@ theorem layer_reads (encoding : CircuitEncoding F) («outputs» : List F)
     rw [ite_eq_left check]
     change @PIR.Process.call (Occurrence.signature (uniformCarriers F G))
       (Values (Component (assignment F G)) layerSpec.state)
-      (.action (.query (GkrVerifier.lineChallengeSite {}) scalarDomain ((SourceRows.RoundCaptures.pack { service := handle })))) _ = _
+      (.action (.query (GkrVerifier.lineChallengeSite {}) (.draw scalarDomain) ((SourceRows.RoundCaptures.pack { service := handle })))) _ = _
     simp only [PIR.Process.interpret, CommonAdapter.embed, Occurrence.actions, PIR.Process.bind]
     apply congrArg (PIR.Process.call _)
     funext challenge
