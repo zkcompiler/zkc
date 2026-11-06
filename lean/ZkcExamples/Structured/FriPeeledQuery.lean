@@ -60,7 +60,7 @@ private theorem append (values : List (model.Field extension)) (value : model.Fi
     (.cons values (.cons value .nil)) trivial]
   rfl
 
-private theorem sizeProjection (shift : model.Field extension) (rows : Nat) :
+theorem sizeProjection (shift : model.Field extension) (rows : Nat) :
     invoke (unit.oracleCalculations model 1) helper28Helper
       (.cons (concrete model (.field extension) shift) (.cons (concrete model .index rows) .nil)) =
       .done (.cons (concrete model .index rows) .nil) := by

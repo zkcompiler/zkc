@@ -43,6 +43,22 @@ private theorem metadataReply (request : OracleRequest model.toCarriers)
     · rename_i valid
       exact False.elim (aligned (by simpa using valid))
 
+/-- Length reads the concrete handle sequence without inspecting its cells.
+Its declared capacity and the index limit are still enforced. -/
+theorem sequenceLength (kind : OracleKind) (maximum : Nat) (roles : Nat → Nat) (site : OracleLocation)
+    (state : OracleProtocol.State model snapshot domains math S) (self : Nat) (atSelf : self = state.oracle.self)
+    (anchors : List OracleAnchor) (fits : anchors.length ≤ maximum) (limit : maximum < indexLimit) :
+    let op : OracleProtocolAction model.toCarriers := .oracle ⟨.sequenceLength kind maximum, site, self, roles,
+      .cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) anchors)) .nil⟩
+    let reply := Values.cons (some (ProtocolValue.ofConcrete .index anchors.length)) .nil
+    actionM model oracles ordinary base publish op state = pure (cursorReply site state reply state.oracle []) := by
+  subst self
+  dsimp only
+  apply metadataReply _ _ _ _ _ rfl
+  intro loc
+  simp [OracleExecution.operation, ProtocolValue.toConcrete_ofConcrete, Nat.not_lt.mpr fits,
+    Nat.not_le.mpr limit, OracleExecution.returned]
+
 /-- Append the newly visible anchor to the actual registered prefix. Like
 selection, the instruction can still refuse at a misaligned source cursor. -/
 theorem sequenceAppend (kind : OracleKind) (maximum : Nat) (owners : List Nat)

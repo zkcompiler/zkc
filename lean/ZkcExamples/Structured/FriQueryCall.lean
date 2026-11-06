@@ -32,14 +32,14 @@ def program (model : DomainModel) (state : Committed model) (xs : FriScalarLoop.
   let checked ← caller.call FriSourceCalls.check (checkArgs model projected state xs)
   return .cons (checked.get .here) (.cons (checked.get (.there .here)) .nil)
 
-private theorem emptyStep (model : DomainModel) {location : String} :
-    ((verifierAlgebra model).meaning (verifierTable model) caller.context 1).OperationLaw
+theorem emptyStep (model : DomainModel) (context : ProtocolContext) (receiver : context.roles 1 = 1) {location : String} :
+    ((verifierAlgebra model).meaning (verifierTable model) context 1).OperationLaw
       (fun op ↦ .call op .done) (.localCall helper26Helper rfl 1 location) .nil .nil
       (.done (.cons (concrete model (.vector extension) []) .nil)) := by
   apply RegionMeaning.OperationLaw.identity
-  change OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper26Helper
+  change OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper26Helper
       (ProtocolValue.embedComponents (Values.nil (Value := model.Value)).present) = _
-  rw [OracleProtocol.owned_present,
+  rw [receiver, OracleProtocol.owned_present,
       (ReferenceLibrary.emptyVector model extension "s0").invokeOn (helper := helper26Helper)
         unit.definitions unit.linked (by exact_body helper26Definition) .nil trivial]
   rfl
@@ -51,7 +51,7 @@ theorem body (model : DomainModel) (state : Committed model) (xs : FriScalarLoop
   trans ?generated
   · derive_process using
       (first
-       | apply emptyStep model
+       | apply emptyStep model _ rfl
        | apply (verifierAlgebra model).applyActive (verifierTable model) protocol3Signature
            caller.context 1 FriSourceCalls.check.site FriSourceCalls.check.roles _ (by decide +kernel))
   · simp only [program, Caller.inputs, Caller.projections, Caller.input, Caller.project, Caller.marks,

@@ -1,6 +1,6 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
-import ZkcArkLibExamples.Fri.VerifierQueries
+import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
@@ -328,7 +328,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `Zkc.Source.Structured.Bindings.Continuation, `Zkc.Source.Structured.Bindings.RepeatPrefix,
    `ZkcArkLibExamples.Fri.VerifierTerminalGuard, `ZkcArkLibExamples.Fri.VerifierPath,
    `Zkc.Source.Structured.MarkedReturn, `ZkcExamples.Structured.FriPeeledQuery, `ZkcArkLibExamples.Fri.VerifierQuery,
-   `ZkcArkLibExamples.Fri.VerifierQueries]
+   `ZkcArkLibExamples.Fri.VerifierQueries, `Zkc.Source.RegionReturnProjection, `Zkc.Source.Structured.ReceiverMetadata,
+   `ZkcExamples.Structured.FriCheckAdmission, `ZkcArkLibExamples.Fri.VerifierCheck]
   "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check

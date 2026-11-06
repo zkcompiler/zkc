@@ -368,7 +368,14 @@ captures from its typed operands, and the terminal continuation identifies
 both the coefficient operand and the returned vector. The companion proves
 which registered word and virtual view the handles refer to. Reusing that
 association at another sampled position preserves the immutable words and
-accounts for each read, including repeated positions.
+accounts for each read, including repeated positions. At the installed
+`Check` declaration, `FriCheckAdmission.installed` projects the returned
+SSA environment onto the loop's actual operands. Its input is the receiver's
+argument tuple and visible registry. `VerifierCheck.installed` combines
+this projection with the loop theorem, including both input and output
+scope masks. A successful retained call returns the eight ordered cells
+and charges 96 reads. The enclosing commitment protocol still has to
+establish the base-word and virtual-view associations.
 
 For immutable base tables, `PublishedWords.RegisteredWord` connects a
 participant's visible logical registry entry to the provider's entire finite
