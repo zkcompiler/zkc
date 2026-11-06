@@ -39,24 +39,18 @@ end Tests.DeriveRegionSources
 
 namespace Tests.DeriveRegionSources
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
-set_option maxRecDepth 20000 in
-private theorem sumBodies :
-    SumcheckRelationContract.Bodies SumcheckSourceViews.program.payload.definitions where
-  add := by exact_body SumcheckSourceViews.sumAddDefinition
-  step := by exact_body SumcheckSourceViews.sumStepDefinition
-  total := by exact_body SumcheckSourceViews.sumTotalDefinition
-
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
 /-- The bounded fold is supplied as an explicit local call law. -/
 private theorem sumTotal_law (xs : List F) (bounded : xs.length < indexLimit) :
     (meaning F G (closedMeanings SumcheckSourceViews.program.payload.definitions)).OperationLaw
-      (fun op => .call op .done) (.invoke SumcheckRelationContract.totalHelper)
+      (fun op => .call op .done) (.invoke SumcheckSourceBodies.sumTotalHelper)
       (.cons xs .nil) .nil (.done (.cons xs.sum .nil)) := by
   apply RegionMeaning.OperationLaw.identity
   exact SumcheckRelationContract.total_equation
-    SumcheckSourceViews.program.payload.linked sumBodies xs bounded
+    SumcheckSourceViews.program.payload.linked
+    (SumcheckSourceSelections.scalarInstallation.property (ringModel F G)).toBodies xs bounded
 
 /-- A mathematical callee law summarizes the fold. The caller spine is derived
 from the actual checked formula; neither it nor the fold is copied. -/
