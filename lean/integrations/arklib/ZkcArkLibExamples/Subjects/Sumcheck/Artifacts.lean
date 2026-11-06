@@ -59,11 +59,6 @@ def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
     | .compiledIdeal => [⟨"constructed-participant", "sha256:2443672f4de15c8fbc2cde0400ef343ff08637c40b14fded6d6d716ee8cad54b"⟩]
     | .executableBytes => [⟨"constructed-participant", "sha256:2443672f4de15c8fbc2cde0400ef343ff08637c40b14fded6d6d716ee8cad54b"⟩, ⟨"verifier-program", "sha256:0eac8edf476a57ed06ef1ce4f3ed6fa18e90a85e4aac3c83ef7e3e5f5a275762"⟩]⟩
 
-/-- Independently bound bytes for the separately admitted interactive protocol subject. -/
-def interactiveReference : Zkc.Claims.SubjectRef :=
-  ⟨"sha256:76491dbfe0d0d4ce888fe45e0b7bfe329ae6446201a1bca31ad864304035c97f",
-    "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071", .interactive, []⟩
-
 /-- Actual full construction occurrences selected by native source paths. -/
 def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=
   [{ label := "reduce.challenge", native := "apply_18_label_726564756365_label_6368616c6c656e6765",
