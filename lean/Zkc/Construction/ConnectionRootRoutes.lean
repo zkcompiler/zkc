@@ -23,14 +23,19 @@ def localRoutes (capabilities : List (Nat × Nat)) :
 
 def instructionRoutes (capabilities : List (Nat × Nat)) :
     Zkc.Construction.Instruction → Except String (List Original.LocalRoute)
-  | ⟨operation, _, _, body⟩ => do
-      let nested ← localRoutes capabilities body
+  | ⟨operation, _, _, regions⟩ => do
+      let nested ← regionRoutes capabilities regions
       match operation with
       | .localService port _ template _ =>
           let some handle := capabilities.lookup port.root | throw "connection-missing-local-capability"
           return ⟨handle, port, template⟩ :: nested
       | _ => return nested
 
+def regionRoutes (capabilities : List (Nat × Nat)) :
+    List InstructionRegion → Except String (List Original.LocalRoute)
+  | [] => .ok []
+  | ⟨_, body, _⟩ :: rest => do
+      return (← localRoutes capabilities body) ++ (← regionRoutes capabilities rest)
 end
 
 /-- Discovery data carries no source/context identity authority. -/

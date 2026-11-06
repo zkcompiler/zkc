@@ -4,6 +4,7 @@ public import Zkc.Construction.ConnectionCertificate
 public import Zkc.Construction.ConnectionInstallation
 public import ZkcTools.ConstructionBindings.Readback
 public meta import ZkcTools.ConstructionBindings.TargetPlacement
+public meta import ZkcTools.ConstructionBindings.MathRegion
 public meta import ZkcTools.ConstructionBindings.Family
 public meta import ZkcTools.ConstructionBindings.TargetEquality
 public meta import ZkcTools.ConstructionBindings.StructuralFacts
@@ -947,6 +948,40 @@ private def discoverReturn (discovery : CutDiscovery) (expected : Expr) : Tactic
       discovery.found.set (some index)
       throw (.internal discoveredCutException)
 
+/-- Discover an inlined Math slice from the checked declaration, the caller's
+physical readback and actual target syntax. Every proposed field is an input
+to the ordinary finite core certificate. -/
+private def inlineMath (goal : MVarId) (args : Array Expr) (source target definition body before after : Expr) :
+    TacticM (List MVarId) := do
+  let definitions := args[2]!
+  let layout := args[12]!
+  let sourceParts := source.getAppArgs
+  let arguments := sourceParts[sourceParts.size - 2]!
+  let beforeSyntax ← Term.exprToSyntax before
+  let afterSyntax ← Term.exprToSyntax after
+  let association ← Term.elabTerm (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel⟩))
+    (← mkAppM ``ConnectionMathRegion.Declaration #[definitions, definition])
+  let types ← listEntries (← mkAppM ``CheckedDefinition.inputs #[definition])
+  let indices ← types.mapM fun _ => mkFreshExprMVar (mkConst ``Nat)
+  let references ← mkListLit (mkConst ``Nat) indices.toList
+  let locations ← mkListLit (mkConst ``Original.Location)
+    (← indices.toList.mapM fun index => mkAppM ``Original.Location.data #[index])
+  let readback ← mkFreshExprMVar (← mkAppM ``ConnectionFrame.Readback #[layout, arguments, locations])
+  staticGoal readback.mvarId!
+  let references ← instantiateMVars references
+  let locations ← instantiateMVars locations
+  if references.hasExprMVar then throwError "alignment-computation-unresolved-input-location"
+  let extent ← mkAppM ``List.length #[layout]
+  let (slice, rest) ← withLocalDeclD `model (mkConst ``DomainModel) fun model => do
+    let slice ← MathRegion.propose before model locations extent body (mkApp target model)
+    return (slice, ← mkLambdaFVars #[model] slice.suffixBlock)
+  let yes ← mkEqRefl (mkConst ``Bool.true)
+  let rule ← mkAppOptM ``ConnectionCertificate.Alignment.inlineMath
+    ((args.extract 0 13).map some ++ #[some definition, some association, some arguments,
+      some references, some yes, some yes, some readback, some slice.spine,
+      some slice.extent, some slice.yielded, some slice.certificate, some sourceParts.back!, some rest])
+  goal.apply rule
+
 private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscovery) (goal : MVarId) : TacticM Unit := goal.withContext <| withTransparency .all <|
     Term.withoutErrToSorry <| withoutRecover do
   let expected ← whnf (← instantiateMVars (← goal.getType))
@@ -1249,6 +1284,18 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
             (← `(($definitionsSyntax).get ⟨$(quote index), by decide +kernel⟩)) (mkConst ``CheckedDefinition)
           let beforeSyntax ← Term.exprToSyntax before
           let afterSyntax ← Term.exprToSyntax after
+          let single ← (do
+            unless body.isAppOf ``Region.letOp do return false
+            let tail ← whnf body.getAppArgs.back!
+            unless tail.isAppOf ``Region.ret do return false
+            let op := body.getAppArgs[body.getAppArgs.size - 4]!
+            let found ← whnf (← mkAppM ``Calculation.ofOp? #[op])
+            unless found.isAppOf ``Option.some do return false
+            return (← whnf (← mkAppM ``Op.total #[op])).isConstOf ``Bool.true : MetaM Bool)
+          unless body.isAppOf ``Region.ret || single do
+            let pending ← inlineMath goal args source target selected body before after
+            for tail in pending do derive cache discovery tail
+            return
           let (rule, certificate, suppliedArguments, extra) ← if body.isAppOf ``Region.ret then do
               let projectionType ← mkAppM ``ConnectionHelpers.Projection #[args[2]!, selected]
               let positionsSyntax ← Term.exprToSyntax body.getAppArgs.back!

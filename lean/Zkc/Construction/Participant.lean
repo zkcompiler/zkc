@@ -13,8 +13,7 @@ participants with no transcript capability.
 
 The bridge decodes the compiler's `zkc.constructed-participant/0` export into
 this carrier. Every exported operation keeps its operand references and result
-sorts; transcript operations keep their decoded occurrence templates; a loop
-keeps its body. References are absolute positions in a scoped environment:
+sorts; transcript operations keep their decoded occurrence templates; every region keeps its inputs, body and yielded references. References are absolute positions in a scoped environment:
 inputs first, then every result in execution order; a loop body extends the
 environment at the loop with the induction index and the carried values, and
 after the loop its results take the place of the body's values. Calculations use
@@ -264,27 +263,41 @@ inductive Operation where
   | calculate (calculation : Calculation)
   | call (helper : String)
   | guard (site : String)
-  /-- A loop of at most `maximum` iterations; its operands are the count and the
-  initial carried values, and `yielded` names the body's yielded references. -/
-  | loop (site : String) (maximum : Nat) (yielded : List Nat)
+  /-- A loop of at most `maximum` iterations. Its single region owns the
+  induction/carried arguments, body and yielded references. -/
+  | loop (site : String) (maximum : Nat)
+  /-- Pure Boolean selection. Both closed arms are retained and checked; only
+  the selected arm executes. It does not select protocol interactions. -/
+  | mathBranch
   | unsupported (name : String)
   deriving DecidableEq, Repr
 
-/-- An exported instruction. Only a loop has a nonempty body. -/
+mutual
+/-- An exported instruction with the ordered regions its operation owns. -/
 structure Instruction where
   operation : Operation
   operands : List Nat
   results : List ValueSort
-  body : List Instruction
+  regions : List InstructionRegion
   deriving Repr
+
+/-- Region arguments and exact yields belong to the body. Math arms use closed
+argument frames; loop bodies extend the surrounding frame. The operation fixes
+that scoping rule, so a body cannot choose its own ambient environment. -/
+structure InstructionRegion where
+  inputs : List ValueSort
+  instructions : List Instruction
+  yielded : List Nat
+  deriving Repr
+end
 
 mutual
 /-- Equality decisions expose Boolean computation to kernel admission checks. -/
 def Instruction.decide : (left right : Instruction) → Decidable (left = right)
-  | ⟨operation, operands, results, body⟩, ⟨operation', operands', results', body'⟩ =>
-      letI : Decidable (body = body') := Instruction.decideList body body'
+  | ⟨operation, operands, results, regions⟩, ⟨operation', operands', results', regions'⟩ =>
+      letI := InstructionRegion.decideList regions regions'
       decidable_of_iff (operation = operation' ∧ operands = operands' ∧
-        results = results' ∧ body = body') (by simp only [Instruction.mk.injEq])
+        results = results' ∧ regions = regions') (by simp only [Instruction.mk.injEq])
 
 def Instruction.decideList : (left right : List Instruction) → Decidable (left = right)
   | [], [] => isTrue rfl
@@ -294,23 +307,42 @@ def Instruction.decideList : (left right : List Instruction) → Decidable (left
       letI := Instruction.decide head head'
       letI := Instruction.decideList tail tail'
       decidable_of_iff (head = head' ∧ tail = tail') (by simp only [List.cons.injEq])
+
+def InstructionRegion.decide : (left right : InstructionRegion) → Decidable (left = right)
+  | ⟨inputs, instructions, yielded⟩, ⟨inputs', instructions', yielded'⟩ =>
+      letI := Instruction.decideList instructions instructions'
+      decidable_of_iff (inputs = inputs' ∧ instructions = instructions' ∧ yielded = yielded')
+        (by simp only [InstructionRegion.mk.injEq])
+
+def InstructionRegion.decideList :
+    (left right : List InstructionRegion) → Decidable (left = right)
+  | [], [] => isTrue rfl
+  | [], _ :: _ => isFalse (by simp)
+  | _ :: _, [] => isFalse (by simp)
+  | head :: tail, head' :: tail' =>
+      letI := InstructionRegion.decide head head'
+      letI := InstructionRegion.decideList tail tail'
+      decidable_of_iff (head = head' ∧ tail = tail') (by simp only [List.cons.injEq])
 end
 
 instance : DecidableEq Instruction := Instruction.decide
+instance : DecidableEq InstructionRegion := InstructionRegion.decide
 
 mutual
-/-- The helper calls of instructions, with their declared result sorts, those of
-loop bodies included. -/
+/-- Helper calls in every stored region, including dormant Math arms. -/
 def Instruction.callList : List Instruction → List (String × List ValueSort)
   | [] => []
   | instruction :: rest => Instruction.callsOf instruction ++ Instruction.callList rest
 
 def Instruction.callsOf : Instruction → List (String × List ValueSort)
-  | ⟨.call name, _, results, _⟩ => [(name, results)]
-  | ⟨.loop _ _ _, _, _, body⟩ => Instruction.callList body
-  | _ => []
-end
+  | ⟨operation, _, results, regions⟩ =>
+      (match operation with | .call name => [(name, results)] | _ => []) ++
+        InstructionRegion.calls regions
 
+def InstructionRegion.calls : List InstructionRegion → List (String × List ValueSort)
+  | [] => []
+  | ⟨_, body, _⟩ :: rest => Instruction.callList body ++ InstructionRegion.calls rest
+end
 
 /-- The supported projection of a native deployment policy: entry, producer and
 validator roles, acceptance index, suite, replaced services, public inputs,
@@ -344,19 +376,20 @@ structure Participant where
   deriving DecidableEq, Repr
 
 mutual
-/-- The field of the first challenge operation of an instruction, searching loop
-bodies. -/
+/-- The first stored challenge field, including nested regions. -/
 def Instruction.challengeField : Instruction → Option String
   | ⟨.challenge _ field _, _, _, _⟩ => some field
-  | ⟨_, _, _, body⟩ => Instruction.challengeFieldList body
+  | ⟨_, _, _, regions⟩ => InstructionRegion.challengeField regions
 
-/-- The field of the first challenge operation of an instruction list. -/
 def Instruction.challengeFieldList : List Instruction → Option String
   | [] => none
   | instruction :: rest =>
-      match Instruction.challengeField instruction with
-      | some field => some field
-      | none => Instruction.challengeFieldList rest
+      instruction.challengeField.orElse fun _ => Instruction.challengeFieldList rest
+
+def InstructionRegion.challengeField : List InstructionRegion → Option String
+  | [] => none
+  | ⟨_, body, _⟩ :: rest =>
+      (Instruction.challengeFieldList body).orElse fun _ => InstructionRegion.challengeField rest
 end
 
 end Zkc.Construction

@@ -533,6 +533,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["product.make", constructor]` | ordered components to the exact declared product |
 | `["product.get", index]` | total projection of a component at its checked type |
 | `["call", name]` | ordinary Math helper call |
+| `["data_branch", ["then", "else"]]` | closed Boolean Math selection; ordered capture-only arms, exact result yields |
 | `["apply", name]` | Local function, finite, collect, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
 | `["protocol_apply", name, role-names]` | Retained static protocol application with positional role substitution |
@@ -568,7 +569,7 @@ Ownership is checked independently of operand types:
 | Body kind | Admitted instructions |
 |---|---|
 | Protocol | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, assemble, exchange, draw, entry statement |
-| Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
+| Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, closed Boolean branch, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
 The descriptor can represent selection of any admitted value type. The native
@@ -1289,3 +1290,14 @@ scope, then checks actual arm bodies and yields with independent SSA terms.
 Neither a producer association row nor successful export establishes execution
 or independent formal admission. Formal consumers must adopt these exact
 extensions separately; existing single-constructor/Local proofs do not do so.
+
+### Closed mathematical selection
+
+A Math `data_branch` stores both arms with explicit capture signatures, no
+implicit outer references, and exact yields. It carries no protocol site and
+cannot contain Local calls, stops, services, communication or transcript work.
+The formation checker visits every arm. Availability includes the selector in
+both result footprints and every arm requirement, including unused computations.
+Operational meaning uses the existing typed region branch and evaluates only
+the selected arm. This does not relax partial-Math restrictions in multi-role
+protocols or the separate totality requirements of realization/map profiles.

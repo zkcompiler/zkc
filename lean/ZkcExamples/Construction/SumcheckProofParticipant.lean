@@ -21,7 +21,7 @@ def participant : Participant where
   instructions := [
     ⟨.call "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", [1], [.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.call "zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", [4, 5, 6], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
-    ⟨.loop "apply_18_label_726564756365_s18" 2 [30, 35, 29], [2, 7, 8, 3], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
+    ⟨.loop "apply_18_label_726564756365_s18" 2, [2, 7, 8, 3], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [⟨(.data .index :: [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]), [
         ⟨.receive "apply_18_label_726564756365_label_726f756e64_0" "apply_18_label_726564756365_label_726f756e64_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.indicesEmpty, [], [.indices], []⟩,
         ⟨.indicesAppend, [14, 9], [.indices], []⟩,
@@ -44,7 +44,7 @@ def participant : Participant where
         ⟨.calculate (.fieldSubtract "bls12-381.fr"), [31, 25], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.calculate (.fieldMultiply "bls12-381.fr"), [32, 13], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.calculate (.fieldMultiply "bls12-381.fr"), [25, 17], [.data (.field "bls12-381.fr")], []⟩,
-        ⟨.calculate (.fieldAdd "bls12-381.fr"), [33, 34], [.data (.field "bls12-381.fr")], []⟩]⟩,
+        ⟨.calculate (.fieldAdd "bls12-381.fr"), [33, 34], [.data (.field "bls12-381.fr")], []⟩], [30, 35, 29]⟩]⟩,
     ⟨.call "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", [9, 10], [.data (.resourceUnit "zkl_resource_ffb12022d1744b21a0eaa30d6e54a4e9cc3eccef3dac292b2daea526136bf495"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
     ⟨.call "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", [0, 12, 13, 14], [.data .boolean], []⟩]
   returned := [15, 11]

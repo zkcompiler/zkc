@@ -34,10 +34,11 @@ requested = ["exporter.structured-denotation", "exporter.checked-candidate",
 
 [mutations]
 kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
-         "challenge-names-delivery", "equality-self", "conjunction-self",
+         "challenge-names-delivery", "equality-self", "selection-arm-swap",
          "native-challenge-reads-host", "native-domain-separator"]
 
 [construction]
+omit = ["process_equation", "verifier_correspondence"]
 namespace = "ZkcExamples.Construction.SchnorrAndProof"
 connection = "ZkcExamples.Construction.SchnorrAndProof"
 admission = "views"

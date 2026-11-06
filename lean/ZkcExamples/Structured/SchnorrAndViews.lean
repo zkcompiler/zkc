@@ -15,7 +15,7 @@ set_option smartUnfolding false
 
 open ZkcExamples.Structured.SchnorrAndBodies in
 structured_views SchnorrAndData.snapshot
-  helpers [formula]
+  helpers [formula, helper1]
   protocols [interactive]
 
 theorem admitted : check SchnorrAndData.snapshot = .ok program := kernel_admission

@@ -119,9 +119,9 @@ def innerInstructions : List Zkc.Construction.Instruction :=
 -- outer capture: five inputs; outer index at 5, outer carried state at 6.
 -- inner capture: those seven slots; inner index at 7, inner carried state at 8.
 def outerInstructions : List Zkc.Construction.Instruction := [
-  ⟨.loop "inner" 4 [12], [1,6], [.data .index], innerInstructions⟩]
+  ⟨.loop "inner" 4, [1,6], [.data .index], [⟨(.data .index :: [.data .index]), innerInstructions, [12]⟩]⟩]
 def instructions : List Zkc.Construction.Instruction := [
-  ⟨.loop "outer" 3 [7], [0,4], [.data .index], outerInstructions⟩]
+  ⟨.loop "outer" 3, [0,4], [.data .index], [⟨(.data .index :: [.data .index]), outerInstructions, [7]⟩]⟩]
 def artifact : Zkc.Construction.Participant :=
   ⟨snapshot.source, snapshot.source, policy, "main.V", rootInputs.map ValueSort.data,
     rootOutputs.map ValueSort.data, instructions, [2,5], []⟩

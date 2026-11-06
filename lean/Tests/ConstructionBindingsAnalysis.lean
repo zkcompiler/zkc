@@ -39,26 +39,30 @@ def run (program : Program) (validator producer : Participant) : IO Unit := do
   let some first := validator.instructions.head? | throw (IO.userError "empty artifact")
   refusal "unclaimed region" "construction-binding-unclaimed-region"
     (analyzeWithContext program layout.context
-      { validator with instructions := { first with body := [first] } :: validator.instructions.tail })
+      { validator with instructions := { first with regions := [⟨[], [first], []⟩] } :: validator.instructions.tail })
   refusal "forward operand" "construction-binding-forward-reference"
     (analyzeWithContext program layout.context
       { validator with instructions := { first with operands := [validator.inputs.length] } :: validator.instructions.tail })
   let some loop := layout.loops.head? | throw (IO.userError "no source loop")
   let rewritten := validator.instructions.mapIdx fun index instruction =>
-    if index == loop.instruction then { instruction with body := [] } else instruction
+    if index == loop.instruction then { instruction with regions := instruction.regions.map fun region =>
+      { region with instructions := [] } } else instruction
   refusal "erased nominal path" "construction-binding-loop-source-association"
     (analyzeWithContext program layout.context { validator with instructions := rewritten })
   -- Instruction count is deliberately not an analysis authority. This proposal
   -- is still obliged to pass the full generated callback equation/simulation.
   let longer := validator.instructions.mapIdx fun index instruction =>
     if index == loop.instruction then
-      { instruction with body := instruction.body ++ [⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩] }
+      { instruction with regions := instruction.regions.map fun region =>
+        { region with instructions := region.instructions ++ [⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩] } }
     else instruction
   let _ ← accepted (analyzeWithContext program layout.context { validator with instructions := longer })
   if let [left, right] := layout.loops then
     let swapped := validator.instructions.mapIdx fun index instruction =>
-      if index == left.instruction then { instruction with body := right.body }
-      else if index == right.instruction then { instruction with body := left.body }
+      if index == left.instruction then { instruction with regions := instruction.regions.map fun region =>
+        { region with instructions := right.body } }
+      else if index == right.instruction then { instruction with regions := instruction.regions.map fun region =>
+        { region with instructions := left.body } }
       else instruction
     refusal "source call order" "construction-binding-call-order"
       (analyzeWithContext program layout.context { validator with instructions := swapped })

@@ -25,7 +25,7 @@ abbrev field := TestsSecurity.DomainSourceBridge.field
 noncomputable abbrev program := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported.program
 
 def roundInstruction (index : Fin 23) : Zkc.Construction.Instruction :=
-  ((artifact.instructions[2]'(by decide +kernel)).body[index.val]'(by
+  ((artifact.instructions[2]'(by decide +kernel)).regions[0]'(by decide +kernel).instructions[index.val]'(by
     have bound := index.isLt
     change index.val < 23
     exact bound))

@@ -28,7 +28,7 @@ instance (input extent : Nat) (outputs : List Original.Location) (history : Opti
   unfold applicationAdmitted
   cases history <;> infer_instance
 
-private theorem unused_frame {model : DomainModel} {scope : Scope} (binders : Binders model scope)
+theorem Holds.unused {model : DomainModel} {scope : Scope} (binders : Binders model scope)
     (history : Domain.History model.toCarriers) (frame : Domain.Environment model.toCarriers) :
     Holds model binders history (List.replicate frame.length .unused) frame := by
   induction frame with
@@ -101,7 +101,7 @@ theorem Holds.applicationExit {model : DomainModel} {scope : Scope}
     calc
       frame = frame.take before.length ++ frame.drop before.length := (List.take_append_drop before.length frame).symm
       _ = before ++ frame.drop before.length := by rw [retained]
-  have rest := unused_frame (show Binders model (.tuple types :: scope) from .cons values binders)
+  have rest := Holds.unused (show Binders model (.tuple types :: scope) from .cons values binders)
     nextHistory (frame.drop before.length)
   have base := ((related.retireHistory nextHistory).rename (target := .tuple types :: scope) .there
     (next := .cons values binders) (fun _ => rfl)).append rest

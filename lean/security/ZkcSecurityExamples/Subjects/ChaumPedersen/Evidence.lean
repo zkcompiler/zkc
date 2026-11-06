@@ -10,7 +10,7 @@ public import ZkcSecurity.Bindings.Sigma.SchnorrVariants
 
 The Chaum–Pedersen family package at the checked context and the example's
 wiring, for the bases and the points of a policy statement (`parts`). The model
-equation is the generated `ChaumPedersenProof.verifier_correspondence`: the
+equation is the checked `ChaumPedersenProof.verifier_correspondence`: the
 admitted original validator is the common Chaum–Pedersen verifier, by
 computation. The contract's witness relation is the family's relation
 (`relation`), by the formula's process. -/

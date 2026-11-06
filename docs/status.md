@@ -30,6 +30,12 @@ recorded by the [selected Math integration tests](../common/tests/protocol/test_
 Selected polynomial observations retain their existing admission restriction.
 Checked source-selected Math emission, actual native comparison and CPU
 execution are covered by the [selected source tests](../common/tests/protocol/test_selected_source.py).
+The independent [formal connection](../lean/docs/support.md#checked-connection-certificates)
+also retains both Boolean Math arms. The Schnorr conjunction and Chaum–Pedersen
+proof entries use this rule on actual generated participants. Their scalar
+presentations connect the admitted source to the existing mathematical verifiers;
+the connection checks physical operations and results separately. This does not
+extend the independent program-byte lowering profile.
 Common-input requirements remain obligations on entry admission; no public bit,
 availability set or native formation result supplies input agreement.
 [Native control fixtures](../compiler/test/protocol_control.cpp) exercise this

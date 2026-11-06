@@ -159,7 +159,26 @@ def sharedSignature (d : Domains) (metadata : Metadata) : ProtocolSignature wher
   inputScopes := [[0, 1], [0, 1], [0, 1], [0, 1], [0], [0], [1]]
   outputScopes := [[1]]
 
-def sharedBody (d : Domains) (metadata : Metadata) (sites : Sites) :
+def sharedVerifier (d : Domains) (name : String) : Helper :=
+  ⟨name, .math, [.group d.group, .field d.scalar, .group d.group, .group d.group,
+    .field d.scalar, .group d.group, .group d.group, .group d.group], [.boolean]⟩
+
+abbrev sharedVerifierCaptures (d : Domains) : List Ty :=
+  [.group d.group, .group d.group, .group d.group, .field d.scalar, .field d.scalar]
+
+def sharedVerifierArms (d : Domains) : Regions dialect
+    [(sharedVerifierCaptures d, [.boolean]), (sharedVerifierCaptures d, [.boolean])] :=
+  .cons (.letOp (.groupScale d.group d.scalar) (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil (.letOp (.groupScale d.group d.scalar) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil (.letOp (.groupAdd d.group) (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil (.letOp (.groupEqual d.group) (.cons (.there (.there .here)) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)
+
+def sharedVerifierBody (d : Domains) : Region dialect (sharedVerifier d "").inputs [.boolean] :=
+  .letOp (.groupScale d.group d.scalar) (.cons .here (.cons (.there .here) .nil)) .nil <|
+  .letOp (.groupScale d.group d.scalar) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)) .nil <|
+  .letOp (.groupAdd d.group) (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .letOp (.groupEqual d.group) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
+  .letOp (.branch (sharedVerifierCaptures d) [.boolean]) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)))))) (sharedVerifierArms d) <|
+  .ret (.cons .here .nil)
+
+def sharedBody (d : Domains) (metadata : Metadata) (sites : Sites) (name : String) :
     Region protocolDialect (sharedSignature d metadata).inputs [.boolean] :=
   annotate metadata [.group d.group, .group d.group, .group d.group, .group d.group, .field d.scalar]
     [metadata.validator, metadata.validator, metadata.validator, metadata.validator, metadata.prover] (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))))) <|
@@ -192,23 +211,7 @@ def sharedBody (d : Domains) (metadata : Metadata) (sites : Sites) :
   .letOp (.mark "") .nil .nil <|
   .letOp (.restrict (.field d.scalar) [1]) (.cons .here .nil) .nil <|
   .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale d.group d.scalar) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale d.group d.scalar) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupAdd d.group) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupEqual d.group) rfl) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale d.group d.scalar) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale d.group d.scalar) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupAdd d.group) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupEqual d.group) rfl) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate .booleanAnd rfl) (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .letOp (.calculate (.invoke (sharedVerifier d name)) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) .nil)))))))) .nil <|
   .ret (.cons .here .nil)
 
 end Zkc.Protocols.Sigma.Source

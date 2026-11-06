@@ -28,6 +28,7 @@
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Dialect/SemanticFields.h"
 #include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
@@ -1363,16 +1364,10 @@ class Exporter {
           if (selected) {
             if (!op.getNumOperands())
               return error("structured-source-region");
-            auto selector = op.getOperand(0).getType();
-            if (!selector.isSignlessInteger(1)) {
-              auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
-              auto payload = data::variantPayloadTypes(
-                  selector,
-                  cast<StringAttr>(alternatives[regions.size()]).getValue());
-              if (!payload)
-                return payload.takeError();
-              llvm::append_range(expectedInputs, *payload);
-            }
+            auto payload = selectedPayloadTypes(&op, regions.size());
+            if (!payload)
+              return payload.takeError();
+            llvm::append_range(expectedInputs, *payload);
             llvm::append_range(expectedInputs,
                                TypeRange(op.getOperandTypes()).drop_front());
           } else

@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.SchnorrAndProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:bf6d9b48ccaac3830770ced3165477e8e579d638ff19d2a5892997977c2cd89d"
-  candidate := "sha256:a74d0d28851415150534887e2021d9a6b1e66b3bc85dc5655a1e582bdf0d4a5b"
+  source := "sha256:db6fdc225157205104af19e55a512184b12f1291dad2091b66d7c10251d723c4"
+  candidate := "sha256:46dc5a2a43868e82e6d400e3bcf99227fe0a82ea6770e4fe9c53cabfc32eadaa"
   policy := ⟨"zkl_ca4d47255ab472c390dbc54e901ce9c73b3e2fdf3d860ea5dd1ae37ae3995c1c", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [7], [0, 1, 2, 3], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -39,12 +39,13 @@ def participant : Participant where
     ⟨.calculate (.groupScale "bls12-381.g1" "bls12-381.fr"), [1, 12], [.data (.group "bls12-381.g1")], []⟩,
     ⟨.calculate (.groupAdd "bls12-381.g1"), [5, 23], [.data (.group "bls12-381.g1")], []⟩,
     ⟨.calculate (.groupEqual "bls12-381.g1"), [22, 24], [.data .boolean], []⟩,
-    ⟨.calculate (.groupScale "bls12-381.g1" "bls12-381.fr"), [2, 19], [.data (.group "bls12-381.g1")], []⟩,
-    ⟨.calculate (.groupScale "bls12-381.g1" "bls12-381.fr"), [3, 12], [.data (.group "bls12-381.g1")], []⟩,
-    ⟨.calculate (.groupAdd "bls12-381.g1"), [8, 27], [.data (.group "bls12-381.g1")], []⟩,
-    ⟨.calculate (.groupEqual "bls12-381.g1"), [26, 28], [.data .boolean], []⟩,
-    ⟨.calculate .booleanAnd, [25, 29], [.data .boolean], []⟩]
-  returned := [30, 21]
+    ⟨.mathBranch, [25, 2, 3, 8, 12, 19], [.data .boolean], [⟨[.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.field "bls12-381.fr"), .data (.field "bls12-381.fr")], [
+        ⟨.calculate (.groupScale "bls12-381.g1" "bls12-381.fr"), [0, 4], [.data (.group "bls12-381.g1")], []⟩,
+        ⟨.calculate (.groupScale "bls12-381.g1" "bls12-381.fr"), [1, 3], [.data (.group "bls12-381.g1")], []⟩,
+        ⟨.calculate (.groupAdd "bls12-381.g1"), [2, 6], [.data (.group "bls12-381.g1")], []⟩,
+        ⟨.calculate (.groupEqual "bls12-381.g1"), [5, 7], [.data .boolean], []⟩], [8]⟩, ⟨[.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.field "bls12-381.fr"), .data (.field "bls12-381.fr")], [
+        ⟨.calculate (.booleanConstant false), [], [.data .boolean], []⟩], [5]⟩]⟩]
+  returned := [26, 21]
 
 /-- The exported catalogue rows of the identities the participant names, for
 `Participant.checkCatalogue` to admit. -/

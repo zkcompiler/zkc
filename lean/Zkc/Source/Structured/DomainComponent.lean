@@ -48,6 +48,23 @@ def componentOperationOn (observations : SiteObservations interface)
       else strictComponent (meaningOn model observations tables.closed) (.invoke helper) args .nil
   | op, args, bodies => strictComponent (meaningOn model observations tables.closed) op args bodies
 
+/-- Present branch captures run only the selected closed callback. The complete
+result tuple and every stop survive the optional-component lifting. -/
+theorem componentOperationOn_branch (observations : SiteObservations interface)
+    (tables : ComponentTablesOn model.toCarriers interface) (captures outputs : List Ty)
+    (condition : Bool) (args : Values (model.Value) captures)
+    (yes no : RegionFunction (model.Value) interface (captures, outputs)) :
+    componentOperationOn model observations tables (.branch captures outputs)
+        (.cons (some condition) args.present) (.cons yes (.cons no .nil)) =
+      (if condition then yes args else no args).bind
+        (fun results => .done results.present) := by
+  change strictComponent (meaningOn model observations tables.closed)
+    (.branch captures outputs) (Values.cons condition args).present
+    (.cons yes (.cons no .nil)) = _
+  exact (strictComponent_adequate (meaningOn model observations tables.closed)
+    (.branch captures outputs) (Values.cons condition args)
+    (.cons yes (.cons no .nil))).trans (by cases condition <;> rfl)
+
 -- Materialize generated equations in their defining module so all consumers
 -- share the same stored declarations without exporting a global simp rule.
 section

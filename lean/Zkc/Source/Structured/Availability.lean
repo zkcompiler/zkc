@@ -176,6 +176,16 @@ def calculation (summaries : List DependencySummary) (op : Op)
     chargeDependencies op.results.length
     return List.replicate op.results.length footprint
 
+/-- A selected arm's work depends on the selector as well as its data.
+Dormant arms are admitted too, without treating distinct requirements as one
+operation or discarding a requirement merely because no result escapes. -/
+def selectedWork (condition : Footprint) (work : HelperWork) : Summarizing Unit := do
+  for footprint in work.requirements.reverse do
+    require (← union condition footprint)
+  modify fun state => { state with
+    depth := max state.depth work.depth
+    «partial» := state.partial || work.partial }
+
 /-- Traverse the formed carrier directly, including lexical binds. There is no
 source-level identity approximation or re-elaboration of an erased body. -/
 def mathRegion (summaries : List DependencySummary) {context outputs : List Ty} :
@@ -186,6 +196,24 @@ def mathRegion (summaries : List DependencySummary) {context outputs : List Ty} 
   | .stop _, _ => throw "structured-availability-math-stop"
   | .letOp (.mark _) _ _ next, environment =>
     mathRegion summaries next environment
+  | .letOp (.branch captures outputs) arguments (.cons yes (.cons no .nil)) next, environment => do
+    visit
+    noHandles captures
+    noHandles outputs
+    let arguments ← operands environment arguments
+    let condition ← argument arguments 0
+    require condition
+    let captured := extendEnvironment #[] (arguments.drop 1)
+    let (left, leftWork) ← (mathRegion summaries yes captured).run {}
+    let (right, rightWork) ← (mathRegion summaries no captured).run {}
+    selectedWork condition leftWork
+    selectedWork condition rightWork
+    unless left.length == outputs.length && right.length == outputs.length do
+      throw "structured-availability-math-results"
+    chargeDependencies (2 * outputs.length)
+    let results ← (left.zip right).mapM fun (left, right) => do
+      union condition (← union left right)
+    mathRegion summaries next (extendEnvironment environment results)
   | .letOp op arguments _ next, environment => do
     visit
     let results ← calculation summaries op (← operands environment arguments)

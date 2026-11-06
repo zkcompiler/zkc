@@ -118,7 +118,7 @@ removing any challenge computation that precedes exhaustion. -/
 theorem checked_validate_rejects_static
     (vocabulary : Vocabulary) (participant : Participant) (validator : Validator)
     (decode : PhysicalType → List UInt8 → Option (Payload F G))
-    (prepared : ∀ name ∈ Instruction.helperList participant.instructions,
+    (prepared : ∀ name ∈ Instruction.helpers participant.instructions,
       Prepared vocabulary validator (Domain.helperTable (Structured.ringModel F G) program) name)
     (lowered : Lowered) (final : NativeScope)
     (checked : checkNativeLowering program context vocabulary participant validator = .ok (lowered, final))

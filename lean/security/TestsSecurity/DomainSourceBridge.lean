@@ -20,7 +20,7 @@ def context : Context :=
   Context.fiatShamir (ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.artifact.policy.entry) ([ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.artifact.policy.producer, ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.artifact.policy.validator]) 0 1 3 "random.bls12-381.fr/0" (some (.draw field)) (suite) (ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.artifact.policy.draws)
 
 abbrev instruction : Instruction :=
-  ((ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.artifact.instructions[2]'(by decide +kernel)).body[13]'(by decide +kernel))
+  ((ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.artifact.instructions[2]'(by decide +kernel)).regions[0]'(by decide +kernel).instructions[13]'(by decide +kernel))
 
 def template : Template :=
   match instruction.operation with

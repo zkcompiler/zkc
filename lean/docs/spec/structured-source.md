@@ -1342,3 +1342,23 @@ The current connection route and return machinery consumes that normal form;
 internal checked partial return selection and complete root returns are unchanged.
 Product construction and projection follow the native Math/Protocol profile and
 retain ordinary availability checks. No deleted projection walker is involved.
+
+### Mathematical region admission and constructed regions
+
+The Math descriptor `data_branch` lowers to the existing typed Boolean branch.
+Both closed arms are formed; bound facts travel through their explicit captures.
+Availability summarizes both arms and adds selector dependencies to intermediate
+requirements and results. The region interpreter evaluates only the chosen arm.
+Realization totality is derived recursively from both arm totality premises;
+finite computations with possible stops remain a distinct admission profile.
+
+Constructed `Instruction` stores ordered `InstructionRegion` records containing
+input sorts, instructions and yielded references. There is no loop-only body
+field or yield list on `Operation.loop`. Loops extend their outer frame with an
+index and carried values. Math selection starts a fresh capture-only frame.
+The structural rule checks every Math arm and rejects protocol operations or
+non-data values. The Domain evaluator also checks actual helper kinds against
+the admitted source and returns the complete declared tuple from the selected
+arm. Correspondence requires both arm equations; neither static admission nor
+a digest establishes the source connection. Helper, catalogue and occurrence
+inventories traverse all stored regions, including dormant ones.

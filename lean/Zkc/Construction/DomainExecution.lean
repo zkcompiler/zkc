@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.DomainTranscript
+public import Zkc.Construction.Rule
 public import Zkc.Source.Structured.DomainEvaluation
 public import Zkc.Semantics.MonadExecution
 
@@ -218,6 +219,79 @@ def iterate
             else .halt .refused
         | none => .halt .refused
 
+/-- A loop's region adds its induction and carried arguments to the outer
+frame. Its signature is checked even when the iteration count is zero. -/
+def executeLoop (inputs : List ValueSort) (maximum : Nat) (yielded : List Nat)
+    (count : Nat) (initial : List Nat) (declared : List ValueSort)
+    (body : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
+    (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
+  match env[count]?, read env initial with
+  | some (.data (.index bound)), some carried =>
+      if inputs = .data .index :: declared ∧ bound ≤ maximum ∧ sortsMatch declared carried then
+        (iterate body env yielded declared (List.range bound) carried).bind fun results =>
+          if sortsMatch declared results then .done (env ++ results) else .halt .refused
+      else .halt .refused
+  | _, _ => .halt .refused
+
+/-- A closed lexical frame has local operand numbering but retains its caller
+in diagnostic checkpoints. Nested frames compose by prefixing their parents;
+returns, stops and all non-checkpoint operations keep their original meaning. -/
+def withCallerFrame (caller : Environment carriers) :
+    PIR.OperationInterpretation (effects carriers) (effects carriers)
+  | .checkpoint frame => .call (.checkpoint (caller ++ frame)) .done
+  | operation => .call operation .done
+
+theorem withCallerFrame_nil {A : Type} (process : PIR.Process (effects carriers) A) :
+    process.interpret (withCallerFrame []) = process := by
+  have same : withCallerFrame (carriers := carriers) [] =
+      (fun operation => PIR.Process.call operation .done) := by
+    funext operation
+    cases operation <;> rfl
+  rw [same, PIR.Process.interpret_identity]
+
+/-- Entering two closed frames preserves their lexical order in every checkpoint. -/
+theorem withCallerFrame_nested {A : Type} (outer inner : Environment carriers)
+    (process : PIR.Process (effects carriers) A) :
+    (process.interpret (withCallerFrame inner)).interpret (withCallerFrame outer) =
+      process.interpret (withCallerFrame (outer ++ inner)) := by
+  rw [PIR.Process.interpret_comp]
+  congr 1
+  funext operation
+  cases operation <;> try rfl
+  rename_i frame
+  exact congrArg (fun frame => PIR.Process.call (I := effects carriers) (.checkpoint frame) PIR.Process.done)
+    (List.append_assoc outer inner frame).symm
+
+/-- A closed arm can call only an actual Math declaration with this full ABI. -/
+def mathCallMatches (program : Structured.Program) (name : String)
+    (inputs outputs : List ValueSort) : Bool :=
+  program.payload.definitions.any fun definition =>
+    definition.name == name && definition.kind == .math &&
+    definition.inputs.map ValueSort.data == inputs &&
+    definition.outputs.map ValueSort.data == outputs
+
+/-- Closed mathematical selection keeps formation separate from execution.
+Both stored arms must form, and every call must match an actual Math helper
+including its input and output ABI, even in a dormant arm.
+Only the selected callback receives the explicit capture frame. -/
+def selectMath (program : Structured.Program) (selector : Nat) (captures : List Nat)
+    (declared : List ValueSort) (yes no : InstructionRegion)
+    (runYes runNo : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
+    (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
+  match env[selector]?, read env captures with
+  | some (.data (.boolean condition)), some arguments =>
+      if yes.inputs = no.inputs ∧ sortsMatch yes.inputs arguments ∧
+          (checkMathArms (mathCallMatches program) declared yes no).isOk then
+        let run := if condition then runYes else runNo
+        let yielded := if condition then yes.yielded else no.yielded
+        ((run arguments).interpret (withCallerFrame env)).bind fun final =>
+          match read final yielded with
+          | some values =>
+              if sortsMatch declared values then .done (env ++ values) else .halt .refused
+          | none => .halt .refused
+      else .halt .refused
+  | _, _ => .halt .refused
+
 mutual
 /-- Structural evaluation of the retained constructed instruction tree. -/
 def evaluate (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
@@ -232,10 +306,10 @@ def evaluate (model : Structured.DomainModel) (program : Structured.Program) (co
 def step (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Instruction → Environment model.toCarriers →
       PIR.Process (effects model.toCarriers) (Environment model.toCarriers)
-  | ⟨operation, operands, declared, body⟩, env =>
+  | ⟨operation, operands, declared, regions⟩, env =>
     let append := fun results =>
       if sortsMatch declared results then .done (env ++ results) else .halt .refused
-    match operation, operands, body with
+    match operation, operands, regions with
     | .receive site schema peer ty, [], [] =>
         if schema = site ∧ dataType ty = true ∧ declared = [.data ty] then
           .call (.receive ty site schema peer) fun value =>
@@ -321,14 +395,13 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
           | some (.data (.boolean false)) => .halt .reject
           | _ => .halt .refused
         else .halt .refused
-    | .loop _ maximum yielded, count :: initial, body =>
-        match env[count]?, read env initial with
-        | some (.data (.index bound)), some carried =>
-            if bound ≤ maximum ∧ sortsMatch declared carried then
-              (iterate (evaluate model program context body) env yielded declared
-                (List.range bound) carried).bind append
-            else .halt .refused
-        | _, _ => .halt .refused
+    | .mathBranch, selector :: captures,
+        [yes@⟨_, yesBody, _⟩, no@⟨_, noBody, _⟩] =>
+        selectMath program selector captures declared yes no
+          (evaluate model program context yesBody) (evaluate model program context noBody) env
+    | .loop _ maximum, count :: initial, [⟨inputs, body, yielded⟩] =>
+        executeLoop inputs maximum yielded count initial declared
+          (evaluate model program context body) env
     | _, _, _ => .halt .refused
 end
 

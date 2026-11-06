@@ -78,6 +78,35 @@ noncomputable def Covered.closedBind {routing : Original.Routing} {post : B → 
   | halt reason => exact .halt _ _ _
   | call operation _ => exact nomatch operation
 
+/-- A physical simulation of a returned closed source supplies an actual
+related result, even when the target introduces administrative checkpoints. -/
+theorem relatedResult {C : Type} {returns : A → C → Prop} {live : PIR.Process (Domain.effects carriers) A → Domain.Environment carriers → Prop}
+    {source : PIR.Process (Domain.effects carriers) A} {target : PIR.Process (Domain.effects carriers) C}
+    (simulation : Original.Simulation returns live source target) (value : A)
+    (returned : source = .done value) : ∃ frame, returns value frame := by
+  induction simulation with
+  | done related => cases returned; exact ⟨_, related⟩
+  | halt => cases returned
+  | call => cases returned
+  | checkpoint _ _ _ ih => exact ih returned
+
+/-- Coverage of an inlined closed prefix needs only its reachable continuations.
+Read the returned frame from the same structural simulation used for execution. -/
+noncomputable def Covered.closedSimulationBind {C : Type} {routing : Original.Routing}
+    {post : B → Prop} {frames final : Original.Frames} {returns : A → C → Prop} {live : PIR.Process (Domain.effects carriers) A → Domain.Environment carriers → Prop}
+    (source : PIR.Process closedInterface A) {target : PIR.Process (Domain.effects carriers) C}
+    (simulation : Original.Simulation returns live (source.interpret (closedLift (I := Domain.effects carriers))) target)
+    (next : A → PIR.Process (Occurrence.signature carriers) B)
+    (tail : ∀ value frame, returns value frame → Covered routing post frames final (next value)) :
+    Covered routing post frames final ((source.interpret (closedLift (I := Occurrence.signature carriers))).bind next) := by
+  cases source with
+  | done value =>
+    apply Classical.choice
+    obtain ⟨frame, related⟩ := relatedResult simulation value rfl
+    exact ⟨tail value frame related⟩
+  | halt reason => exact .halt _ _ _
+  | call operation _ => exact nomatch operation
+
 noncomputable def Covered.finite {routing : Original.Routing} {post : A → Prop}
     {frames : Original.Frames} {Item : Type}
     (step : A → Item → PIR.Process (Occurrence.signature carriers) A)

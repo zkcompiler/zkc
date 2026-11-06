@@ -7,10 +7,10 @@ public import Zkc.Protocols.Schnorr.Variants
 /-! The model of the compiled Schnorr AND proof Entry's original validator.
 
 The wiring names the export's prover role, domains and the commitment,
-challenge, delivery and response sites of `sigma::SchnorrAnd`. The generated
+challenge, delivery and response sites of `sigma::SchnorrAnd`. The source presentation
 `SchnorrAndProof.process_equation` states that the admitted original validator
 is the common verifier of two Schnorr proofs under one challenge, by
-computation.
+a checked helper-body equation.
 -/
 
 namespace ZkcExamples.Construction.SchnorrAndProof

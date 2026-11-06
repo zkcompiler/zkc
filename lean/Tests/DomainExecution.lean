@@ -163,7 +163,7 @@ private def loopBody : List Instruction :=
 private def loopProgram (bound : Nat) : PIR.Process (effects model.toCarriers)
     (Environment model.toCarriers) :=
   evaluate model (program false) context
-    [⟨.loop "loop" 3 [4], [0, 1], [.data (.field "base")], loopBody⟩]
+    [⟨.loop "loop" 3, [0, 1], [.data (.field "base")], [⟨(.data .index :: [.data (.field "base")]), loopBody, [4]⟩]⟩]
     [.data (.index bound), base 2]
 example : (run .validator oracle (loopProgram 3) (state [] [])).outcome =
     .returned [.data (.index 3), base 2, base 8] := by rfl

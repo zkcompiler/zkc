@@ -48,6 +48,11 @@ import Zkc.Construction.ConnectionLibrary
 import Zkc.Construction.ConnectionLoopFrames
 import Zkc.Construction.ConnectionLoops
 import Zkc.Construction.ConnectionMasking
+import Zkc.Construction.ConnectionMathApplication
+import Zkc.Construction.ConnectionMathFrames
+import Zkc.Construction.ConnectionMathRegion
+import Zkc.Construction.ConnectionMathRegionSoundness
+import Zkc.Construction.ConnectionMathSimulation
 import Zkc.Construction.ConnectionObservationPrefix
 import Zkc.Construction.ConnectionObservations
 import Zkc.Construction.ConnectionOrigins
@@ -424,6 +429,7 @@ import Zkc.Source.Structured.ComponentClosure
 import Zkc.Source.Structured.ComponentDeclarations
 import Zkc.Source.Structured.ComponentExport
 import Zkc.Source.Structured.ComponentLinking
+import Zkc.Source.Structured.ComponentReference
 import Zkc.Source.Structured.ComponentRoutes
 import Zkc.Source.Structured.ContractAdmission
 import Zkc.Source.Structured.ContractApplication
@@ -711,6 +717,7 @@ import Tests.HelperCallbacks
 import Tests.HelperPresentation
 import Tests.HelperReferenceLaws
 import Tests.Machine
+import Tests.MathRegions
 import Tests.MathematicalCompanionBatches
 import Tests.MathematicalCompanionControls
 import Tests.MathematicalCompanionFresh
@@ -921,6 +928,7 @@ import ZkcExamples.Construction.ChaumPedersenProofBodies
 import ZkcExamples.Construction.ChaumPedersenProofData
 import ZkcExamples.Construction.ChaumPedersenProofModel
 import ZkcExamples.Construction.ChaumPedersenProofParticipant
+import ZkcExamples.Construction.ChaumPedersenProofPresentation
 import ZkcExamples.Construction.ComposedSumcheckArtifact
 import ZkcExamples.Construction.ComposedSumcheckProof
 import ZkcExamples.Construction.ComposedSumcheckProofBodies
@@ -975,6 +983,7 @@ import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData
 import ZkcExamples.Construction.SchnorrAndProofModel
 import ZkcExamples.Construction.SchnorrAndProofParticipant
+import ZkcExamples.Construction.SchnorrAndProofPresentation
 import ZkcExamples.Construction.SchnorrArtifact
 import ZkcExamples.Construction.SchnorrDomainConnection
 import ZkcExamples.Construction.SchnorrProof
@@ -1413,6 +1422,7 @@ import ZkcTools.ConstructionBindings.Interface
 import ZkcTools.ConstructionBindings.LayoutLookup
 import ZkcTools.ConstructionBindings.LibraryBuilder
 import ZkcTools.ConstructionBindings.LibraryPlan
+import ZkcTools.ConstructionBindings.MathRegion
 import ZkcTools.ConstructionBindings.Normalization
 import ZkcTools.ConstructionBindings.ProcessViewTactic
 import ZkcTools.ConstructionBindings.Readback

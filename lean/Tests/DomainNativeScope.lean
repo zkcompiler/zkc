@@ -96,15 +96,15 @@ theorem sumcheck_all_replies (data : List (Value F G)) (initial : History F G)
 
 variable {m : Type → Type} [Monad m] [LawfulMonad m]
 
-private theorem schnorrPrepared : ∀ name ∈ Instruction.helperList ZkcExamples.Construction.SchnorrProof.participant.instructions,
+private theorem schnorrPrepared : ∀ name ∈ Instruction.helpers ZkcExamples.Construction.SchnorrProof.participant.instructions,
     Prepared installed schnorrValidator (Domain.helperTable (Structured.ringModel F G) ZkcExamples.Construction.SchnorrProof.program) name := by
-  have empty : Instruction.helperList ZkcExamples.Construction.SchnorrProof.participant.instructions = [] := by decide +kernel
+  have empty : Instruction.helpers ZkcExamples.Construction.SchnorrProof.participant.instructions = [] := by decide +kernel
   simp [empty]
 
-private theorem sumcheckPrepared : ∀ name ∈ Instruction.helperList ZkcExamples.Construction.SumcheckProof.participant.instructions,
+private theorem sumcheckPrepared : ∀ name ∈ Instruction.helpers ZkcExamples.Construction.SumcheckProof.participant.instructions,
     Prepared installed sumcheckValidator (Domain.helperTable (Structured.ringModel F G) ZkcExamples.Construction.SumcheckProof.program) name := by
   rw [Uniform.DomainAdapter.helperTable_eq]
-  have names : Instruction.helperList ZkcExamples.Construction.SumcheckProof.participant.instructions =
+  have names : Instruction.helpers ZkcExamples.Construction.SumcheckProof.participant.instructions =
       [ZkcExamples.Structured.SumcheckPendingBodies.pendingHelper.name,
         ZkcExamples.Structured.SumcheckPendingBodies.openClaimHelper.name,
         ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.name,

@@ -18,7 +18,7 @@ mutual
     | [] => 0
     | instruction :: rest => instructionCharges instruction + maximumCharges rest
   def instructionCharges : Zkc.Construction.Instruction → Nat
-    | ⟨.loop _ maximum _, _, _, body⟩ => maximum * maximumCharges body
+    | ⟨.loop _ maximum, _, _, [⟨regionInputs, body, _⟩]⟩ => maximum * maximumCharges body
     | ⟨.challenge _ _ _, _, _, body⟩ => 1 + maximumCharges body
     | ⟨_, _, _, body⟩ => maximumCharges body
 end

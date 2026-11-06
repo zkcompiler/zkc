@@ -175,13 +175,13 @@ def advance (anchor : Nat) : Terms → List Nat → List Instruction →
 
 /-- Local service operations contain references outside the explicit operands. -/
 def plainAnchor (instruction : Instruction) : Bool :=
-  instruction.body.isEmpty && match instruction.operation with
+  instruction.regions.isEmpty && match instruction.operation with
   | .localService .. => false
   | _ => true
 
 /-- Whether an operation is a loop. -/
 def loopOperation : Operation → Bool
-  | .loop _ _ _ => true
+  | .loop _ _ => true
   | _ => false
 
 /-- The parts of a loop instruction with a count operand. -/
@@ -196,18 +196,36 @@ structure LoopParts where
 
 /-- The parts of a loop instruction with a count operand, if it is one. -/
 def Instruction.loopParts : Instruction → Option LoopParts
-  | ⟨.loop site maximum yielded, count :: initial, results, body⟩ =>
-      some ⟨site, maximum, yielded, count, initial, results, body⟩
+  | ⟨.loop site maximum, count :: initial, results, [⟨regionInputs, body, yielded⟩]⟩ =>
+      if regionInputs = .data .index :: results then
+        some ⟨site, maximum, yielded, count, initial, results, body⟩ else none
   | _ => none
 
 theorem Instruction.loopParts_some {instruction : Instruction} {loop : LoopParts}
     (found : Instruction.loopParts instruction = some loop) :
-    instruction = ⟨.loop loop.site loop.maximum loop.yielded, loop.count :: loop.initial, loop.results,
-      loop.body⟩ := by
-  rcases instruction with ⟨operation, operands, results, body⟩
-  cases operation <;> rcases operands with _ | ⟨count, initial⟩ <;> simp [Instruction.loopParts] at found
-  subst found
-  rfl
+    instruction = ⟨.loop loop.site loop.maximum, loop.count :: loop.initial, loop.results, [⟨(.data .index :: loop.results), loop.body, loop.yielded⟩]⟩ := by
+  rcases instruction with ⟨operation, operands, results, regions⟩
+  cases operation <;> try { cases found }
+  case loop site maximum =>
+    cases operands with
+    | nil => cases found
+    | cons count initial =>
+      cases regions with
+      | nil => cases found
+      | cons region rest =>
+        cases rest with
+        | cons other rest =>
+          cases region
+          cases found
+        | nil =>
+          rcases region with ⟨inputs, body, yielded⟩
+          simp only [Instruction.loopParts] at found
+          split at found
+          · rename_i inputsMatch
+            cases found
+            subst inputs
+            rfl
+          · contradiction
 
 /-- The position of the first difference of two lists. -/
 def firstDifferenceOf : List Nat → List Nat → Nat
@@ -297,13 +315,17 @@ def checkAnchor : Nat → Terms → List Nat → Instruction → List Nat → In
 end
 
 mutual
-/-- The number of instructions, those of loop bodies included. -/
+/-- The number of instructions, including every nested region. -/
 def Instruction.sizeList : List Instruction → Nat
   | [] => 0
   | instruction :: rest => Instruction.sizeOne instruction + Instruction.sizeList rest
 
 def Instruction.sizeOne : Instruction → Nat
-  | ⟨_, _, _, body⟩ => 1 + Instruction.sizeList body
+  | ⟨_, _, _, regions⟩ => 1 + InstructionRegion.sizeList regions
+
+def InstructionRegion.sizeList : List InstructionRegion → Nat
+  | [] => 0
+  | ⟨_, body, _⟩ :: rest => Instruction.sizeList body + InstructionRegion.sizeList rest
 end
 
 /-- The normalization check: both programs, on inputs of the given sorts, have

@@ -65,9 +65,9 @@ def protocol0Role0Signature : Signature := ⟨projectionKeys, false, false, prog
 def protocol0Role0Pattern : InputPattern definition0.inputs := (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil))))))))
 
 noncomputable def protocol0Role0Form : Form protocol0Role0Signature.laws calleeKeys protocol0Role0Pattern.scope [.boolean] :=
-  (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.query "s0" "bls12-381.fr" (.cons (.var .here) .nil) (.query "s2" "bls12-381.fr" (.cons (.var (.there .here)) .nil) (.split (.input (.there (.there (.there .here)))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.receive (.field "bls12-381.fr") "label_64656c6976657279_0" 1 (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var .here) .nil)) .here) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there (.there .here))) (.cons (.var .here) .nil)) .here) .nil)) .here) (.done (.cons .absent .nil))))))))))))))
+  (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.query "s0" "bls12-381.fr" (.cons (.var .here) .nil) (.query "s2" "bls12-381.fr" (.cons (.var (.there .here)) .nil) (.split (.input (.there (.there (.there .here)))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.halt .incomplete) (.send (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there .here))) .nil)) .here) (.receive (.field "bls12-381.fr") "label_64656c6976657279_0" 1 (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var .here) .nil)) .here) .nil)) .here) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.halt .incomplete) (.send (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var (.there (.there .here))) (.cons (.var .here) .nil)) .here) .nil)) .here) (.math (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (.present (.var (.there (.there (.there (.there .here)))))) (.cons .absent (.cons .absent (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons .absent (.cons (.present (.var (.there (.there (.there .here))))) (.cons .absent (.cons .absent (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) .nil))))))))) (.done (.cons (.read .here .here) .nil)))))))))))))))
 
-noncomputable def protocol0Role0Process (ctx : ProtocolContext) (b0 : (Option (G))) (_b1 : (Option (G))) (b2 : (Option (G))) (_b3 : (Option (G))) (b4 : (Option (F))) (b5 : (Option (F))) (b6 : (Option (Nat))) (_b7 : (Option (Nat))) :
+noncomputable def protocol0Role0Process (ctx : ProtocolContext) (b0 : (Option (G))) (b1 : (Option (G))) (b2 : (Option (G))) (b3 : (Option (G))) (b4 : (Option (F))) (b5 : (Option (F))) (b6 : (Option (Nat))) (_b7 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
   match b6 with
   | none =>
@@ -96,7 +96,8 @@ noncomputable def protocol0Role0Process (ctx : ProtocolContext) (b0 : (Option (G
             .halt .incomplete
           | some b15 =>
             .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f726573706f6e7365_0") ((ctx).roles 1) (((b10) + (((b13) * (b15)))))) fun _ =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
+            (invoke ((helpers (F := F) (G := G) payload).toOn).components (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons ((some (b11))) (.cons (none) (.cons (none) (.cons (b1) (.cons (none) (.cons ((some (b12))) (.cons (none) (.cons (none) (.cons (b3) .nil)))))))))).bind fun (b16 : (Values (Component (assignment F G)) [.boolean])) =>
+            .done ((.cons ((b16).get .here) .nil) : (Values (Component (assignment F G)) [.boolean]))
 
 theorem protocol0Role0_calls : protocol0Role0Form.CallsMatch := by
   kernel_rfl
@@ -170,7 +171,7 @@ def protocol0Role1Signature : Signature := ⟨projectionKeys, false, false, prog
 def protocol0Role1Pattern : InputPattern definition0.inputs := (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil))))))))
 
 noncomputable def protocol0Role1Form : Form protocol0Role1Signature.laws calleeKeys protocol0Role1Pattern.scope [.boolean] :=
-  (.receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 (.receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.halt .incomplete) (.query "label_6368616c6c656e6765" "bls12-381.fr" (.cons (.var .here) .nil) (.send (.field "bls12-381.fr") "label_64656c6976657279_0" 0 (.var .here) (.receive (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 0 (.receive (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 0 (.split (.input (.there (.there (.there (.there (.there (.there .here))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil)))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil)))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.done (.cons .absent .nil)) (.done (.cons .absent .nil))) (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.done (.cons .absent .nil)) (.done (.cons (.present (.calc .booleanAnd rfl (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.var (.there (.there (.there (.there (.there .here)))))) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there .here))) (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .here) .nil)) .here) .nil)) .here) (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var (.there (.there (.there (.there .here))))) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .here) .nil)) .here) .nil)) .here) .nil)) .here)) .nil)))))))))))))
+  (.receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 (.receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 (.split (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.halt .incomplete) (.query "label_6368616c6c656e6765" "bls12-381.fr" (.cons (.var .here) .nil) (.send (.field "bls12-381.fr") "label_64656c6976657279_0" 0 (.var .here) (.receive (.field "bls12-381.fr") "label_66697273745f726573706f6e7365_0" 0 (.receive (.field "bls12-381.fr") "label_7365636f6e645f726573706f6e7365_0" 0 (.math (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (.input (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.present (.var (.there .here))) (.cons (.present (.var (.there (.there (.there (.there (.there .here))))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.present (.var (.there (.there .here)))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.present (.var .here)) (.cons (.present (.var (.there (.there (.there (.there .here)))))) (.cons (.input (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil))))))))) (.done (.cons (.read .here .here) .nil))))))))))
 
 noncomputable def protocol0Role1Process (ctx : ProtocolContext) (b0 : (Option (G))) (b1 : (Option (G))) (b2 : (Option (G))) (b3 : (Option (G))) (_b4 : (Option (F))) (_b5 : (Option (F))) (_b6 : (Option (Nat))) (b7 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
@@ -184,67 +185,8 @@ noncomputable def protocol0Role1Process (ctx : ProtocolContext) (b0 : (Option (G
     .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_64656c6976657279_0") ((ctx).roles 0) (b11)) fun _ =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_66697273745f726573706f6e7365_0") ((ctx).roles 0)) fun (b12 : F) =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f726573706f6e7365_0") ((ctx).roles 0)) fun (b13 : F) =>
-    match b0 with
-    | none =>
-      match b1 with
-      | none =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b17 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b16 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b18 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-      | some _b15 =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b20 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b19 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b21 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-    | some b14 =>
-      match b1 with
-      | none =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b24 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b23 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b25 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-      | some b22 =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b27 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some b26 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some b28 =>
-            .done ((.cons ((some (((((Op.evalTotal (ringModel F G) (.groupEqual "bls12-381.g1") rfl (.cons (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b12) (b14))) (.cons (((b8) + (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b11) (b22))))) .nil))).get .here)) && (((Op.evalTotal (ringModel F G) (.groupEqual "bls12-381.g1") rfl (.cons (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b13) (b26))) (.cons (((b9) + (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b11) (b28))))) .nil))).get .here)))))) .nil) : (Values (Component (assignment F G)) [.boolean]))
+    (invoke ((helpers (F := F) (G := G) payload).toOn).components (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (b0) (.cons ((some (b12))) (.cons ((some (b8))) (.cons (b1) (.cons ((some (b11))) (.cons (b2) (.cons ((some (b13))) (.cons ((some (b9))) (.cons (b3) .nil)))))))))).bind fun (b14 : (Values (Component (assignment F G)) [.boolean])) =>
+    .done ((.cons ((b14).get .here) .nil) : (Values (Component (assignment F G)) [.boolean]))
 
 theorem protocol0Role1_calls : protocol0Role1Form.CallsMatch := by
   kernel_rfl

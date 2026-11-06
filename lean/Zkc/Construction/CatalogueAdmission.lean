@@ -32,13 +32,30 @@ open Zkc.Source
 mutual
 /-- Each operation of an instruction with its result sorts, loop bodies included. -/
 def Instruction.storedOf : Instruction → List (Operation × List ValueSort)
-  | ⟨operation, _, results, body⟩ => (operation, results) :: Instruction.storedList body
+  | ⟨operation, _, results, regions⟩ =>
+      (operation, results) :: InstructionRegion.storedList regions
 
 /-- Each operation of an instruction list with its result sorts, in order,
 loop bodies included. -/
 def Instruction.storedList : List Instruction → List (Operation × List ValueSort)
   | [] => []
   | instruction :: rest => Instruction.storedOf instruction ++ Instruction.storedList rest
+
+def InstructionRegion.storedList : List InstructionRegion → List (Operation × List ValueSort)
+  | [] => []
+  | ⟨_, body, _⟩ :: rest => Instruction.storedList body ++ InstructionRegion.storedList rest
+end
+
+mutual
+def Instruction.regionInputs : List Instruction → List ValueSort
+  | [] => []
+  | ⟨_, _, _, regions⟩ :: rest =>
+      InstructionRegion.inputSorts regions ++ Instruction.regionInputs rest
+
+def InstructionRegion.inputSorts : List InstructionRegion → List ValueSort
+  | [] => []
+  | ⟨inputs, body, _⟩ :: rest =>
+      inputs ++ Instruction.regionInputs body ++ InstructionRegion.inputSorts rest
 end
 
 /-- A transcript suite row with the capability an operation requires. -/
@@ -76,7 +93,8 @@ def Participant.checkCatalogue (participant : Participant)
   catalogue.check
   catalogue.agrees environment
   let stored := Instruction.storedList participant.instructions
-  (participant.inputs ++ participant.outputs ++ stored.flatMap (·.2)).forM
+  (participant.inputs ++ participant.outputs ++ stored.flatMap (·.2) ++
+      Instruction.regionInputs participant.instructions).forM
     (checkValueSort catalogue environment)
   if participant.policy.suite != "" then
     discard <| requireSuite catalogue participant.policy.suite "Transcript"

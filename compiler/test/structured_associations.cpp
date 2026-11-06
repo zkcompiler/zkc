@@ -118,6 +118,7 @@ int main() {
                             "structured-source/loops-and-captures.mlir",
                             "structured-source/nested-controls.mlir",
                             "structured-source/math-operations.mlir",
+                            "structured-source/math-selected.mlir",
                             "structured-source/shared-fold.mlir",
                             "structured-source/open-components.mlir",
                             "structured-source/realization-finite.mlir",

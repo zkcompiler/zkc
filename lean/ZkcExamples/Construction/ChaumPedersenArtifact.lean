@@ -26,7 +26,7 @@ set_option smartUnfolding false
 
 open ZkcExamples.Construction.ChaumPedersenProofBodies in
 structured_views ZkcExamples.Construction.ChaumPedersenProofData.snapshot
-  helpers [formula]
+  helpers [formula, helper1]
   protocols [proof]
 
 theorem admitted : Structured.check ZkcExamples.Construction.ChaumPedersenProofData.snapshot = .ok program := kernel_admission
@@ -146,15 +146,6 @@ def verifier (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) : 
 
 
 /-! ## The model the original validator is, by computation -/
-
-/-- The admitted root's validator process is the model, by computation. -/
-theorem process_equation (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
-    process (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = (Zkc.Protocols.Schnorr.Variants.equality wiring firstBase firstPoint secondBase secondPoint handle).interpret CommonAdapter.embed := by
-  rfl
-
-theorem verifier_correspondence (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
-    verifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.equality wiring firstBase firstPoint secondBase secondPoint handle := by
-  rw [verifier, process_equation, CommonAdapter.project_embed]
 
 
 end ZkcExamples.Construction.ChaumPedersenProof

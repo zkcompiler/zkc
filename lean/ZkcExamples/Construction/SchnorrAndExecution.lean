@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Construction.SchnorrAndArtifact
+public import ZkcExamples.Construction.SchnorrAndProofPresentation
 public import Zkc.Source.Structured.ReplyScript
 public import Zkc.Semantics.ReturnView
 

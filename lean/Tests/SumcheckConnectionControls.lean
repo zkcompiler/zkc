@@ -37,7 +37,8 @@ def editList (instructions : List Instruction) (index : Nat) (edit : Instruction
 
 /-- Change one instruction of the round loop's body. -/
 def changeBody (participant : Participant) (index : Nat) (edit : Instruction → Instruction) : Participant :=
-  changeAt participant 2 fun loop => { loop with body := editList loop.body index edit }
+  changeAt participant 2 fun loop => { loop with regions := loop.regions.map fun region =>
+    { region with instructions := editList region.instructions index edit } }
 
 /-! The first two instructions construct and open Pending at slots 4--8.
 The loop at instruction 2 captures nine values, carries point/claim/transcript,
@@ -45,7 +46,8 @@ and yields [30,35,29]. The suffix repacks custody/point/claim through atPrefix;
 the terminal check at instruction 4 then reads [0,12,13,14]. -/
 
 /-- The round check is dropped. -/
-def roundCheckDropped : Participant := (changeAt actual 2 fun loop => { loop with body := loop.body.eraseIdx 10 })
+def roundCheckDropped : Participant := (changeAt actual 2 fun loop => { loop with regions := loop.regions.map fun region =>
+    { region with instructions := region.instructions.eraseIdx 10 } })
 
 example : checkExport original roundCheckDropped = .ok () := by decide +kernel
 example : True := by

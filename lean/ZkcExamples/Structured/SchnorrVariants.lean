@@ -319,9 +319,14 @@ def chaumPedersenRelation : {name : String //
       (sharedHelper domains name) (sharedRelationBody domains)} := by
   infer_reference_installation
 
+def chaumPedersenVerifier : {name : String //
+    BodyIn ChaumPedersenViews.program.payload.definitions
+      (sharedVerifier domains name) (sharedVerifierBody domains)} := by
+  infer_reference_installation
+
 /-- Exact source identity and the full typed tree authorize this installation. -/
 def chaumPedersenAssociation : Template.Association ChaumPedersenViews.program.payload
-    (sharedSignature domains chaumPedersenMetadata) (sharedBody domains chaumPedersenMetadata sharedSites) :=
+    (sharedSignature domains chaumPedersenMetadata) (sharedBody domains chaumPedersenMetadata sharedSites chaumPedersenVerifier.val) :=
   ⟨ChaumPedersenViews.interactiveDefinition, by structured_mem, rfl, rfl⟩
 
 /-- The same source equation serves arbitrary optional inputs and every reply.
@@ -339,8 +344,8 @@ theorem chaumPedersen_installed (model : DomainModel) (role : Nat) (ctx : Protoc
     (sharedView model domains chaumPedersenMetadata sharedSites Occurrence.actions ctx (ctx.roles role)
       (pattern.environment model arguments)).bind fun out =>
         .done (NormalForm.staticMask role out [[1]] (Operands.identity [Ty.boolean])) := by
-  exact shared_install model domains chaumPedersenMetadata sharedSites chaumPedersenAssociation
-    role ctx distinct pattern visible arguments others
+  exact shared_install model domains chaumPedersenMetadata sharedSites chaumPedersenVerifier.val
+    chaumPedersenVerifier.property chaumPedersenAssociation role ctx distinct pattern visible arguments others
 
 /-- The selected helper computes the separately fixed relation, for any domain
 model. This is a full outcome equation, without a security conclusion. -/

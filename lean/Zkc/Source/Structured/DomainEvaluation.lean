@@ -240,6 +240,15 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
 -- separate public clients can export competing lazily generated declarations.
 attribute [local simp] operationOn
 
+/-- A selected region runs with precisely its captured tuple. -/
+theorem operationOn_branch (model : DomainModel) {interface : PIR.Signature}
+    (observations : SiteObservations interface) (table : MeaningsOn model.toCarriers interface)
+    (inputs outputs : List Ty) (condition : Bool) (captures : Values model.Value inputs)
+    {yes no : RegionFunction model.Value interface (inputs, outputs)} :
+    operationOn model observations table (.branch inputs outputs) (.cons condition captures)
+      (.cons yes (.cons no .nil)) = (if condition then yes captures else no captures) := by
+  cases condition <;> rfl
+
 theorem operationOn_indexLess (model : DomainModel) {interface : PIR.Signature}
     (observations : SiteObservations interface) (table : MeaningsOn model.toCarriers interface)
     (a b : Nat) :

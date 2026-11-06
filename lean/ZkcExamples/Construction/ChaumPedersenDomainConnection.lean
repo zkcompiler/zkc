@@ -8,7 +8,7 @@ public import Zkc.Construction.ScalarConnection
 public import Zkc.Construction.Uniform.ScalarSupportProposer
 public import Zkc.Construction.Uniform.ScalarHandles
 public import ZkcExamples.Structured.Generated.Connections.ChaumPedersen
-public import ZkcExamples.Construction.ChaumPedersenArtifact
+public import ZkcExamples.Construction.ChaumPedersenProofPresentation
 public import Zkc.Source.Structured.UnitViews
 
 @[expose] public section
@@ -110,7 +110,15 @@ theorem domain_transform (challenge : History F G → m F)
   have relabel := Uniform.ScalarHandles.transform context canonical challenge
     (sourceVerifier (F := F) firstBase firstPoint secondBase secondPoint handle) initial proof
   rw [source_handle] at relabel
-  exact law.trans relabel
+  have position : scopePosition 1 program.payload.entry.outputScopes
+      (Var.here : Var program.payload.entry.outputs .boolean) = 0 := rfl
+  have actualContext : ZkcExamples.Structured.Generated.Connections.ChaumPedersen.validatorRouting.context = context := by
+    kernel_rfl
+  have actualOrigin : ScalarVerifier.origin artifact = legacyOrigin := by
+    funext origin
+    rfl
+  simpa only [position, actualContext, actualOrigin, ScalarConnection.acceptance_first]
+    using law.trans relabel
 
 /-- The installed Domain runtime has the same complete outcome and unread
 proof after selecting Uniform.SourceProcess.acceptance. Physical frames remain with Domain.run.

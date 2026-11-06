@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Protocols.Sigma.SourceBodies
+public import Zkc.Source.Structured.ComponentReference
 
 @[expose] public section
 
@@ -76,6 +77,49 @@ variable (model : DomainModel) {I : PIR.Signature}
     Evaluation.componentOperationOn model (.silent I) tables .booleanAnd
       (.cons a (.cons b .nil)) .nil = .done (.cons (optional₂ (· && ·) a b) .nil) := by
   cases a <;> cases b <;> rfl
+
+/-- The optional inputs of one validation equation. All operands are needed
+for a Boolean result; no missing value is replaced with a default. -/
+def verificationEquation (d : Domains) (base commitment point : Option (model.Group d.group))
+    (challenge response : Option (model.Field d.scalar)) : Option Bool :=
+  equal model d.group (scale model d base response)
+    (optional₂ (· + ·) commitment (scale model d point challenge))
+
+private theorem selectedEquation (d : Domains) (first : Option Bool)
+    (base commitment point : Option (model.Group d.group))
+    (challenge response : Option (model.Field d.scalar)) :
+    Evaluation.componentOperationOn model (.silent I) tables
+      (.branch (sharedVerifierCaptures d) [.boolean])
+      (.cons first (.cons base (.cons point (.cons commitment (.cons challenge (.cons response .nil))))))
+      ((sharedVerifierArms d).denote (Evaluation.meaningOn model (.silent I) tables.closed)) =
+      .done (.cons (optional₂ (· && ·) first
+        (verificationEquation model d base commitment point challenge response)) .nil) := by
+  cases first with
+  | none => rfl
+  | some first =>
+    cases base <;> cases point <;> cases commitment <;> cases challenge <;> cases response <;>
+      first | rfl | (cases first <;> rfl)
+
+def sharedVerifierResult (d : Domains) (name : String) :
+    HelperFunction (Component model.Value) I (sharedVerifier d name) :=
+  fun args => match args with
+    | .cons b (.cons z (.cons c (.cons p (.cons e (.cons b' (.cons c' (.cons p' .nil))))))) =>
+      .done (.cons (optional₂ (· && ·) (verificationEquation model d b c p e z)
+        (verificationEquation model d b' c' p' e z)) .nil)
+
+private theorem sharedVerifier_equation (d : Domains) (name : String)
+    (args : Values (Component model.Value) (sharedVerifier d name).inputs) :
+    (sharedVerifierBody d).component (Evaluation.meaningOn model (.silent I) tables.closed)
+      (Evaluation.componentOperationOn model (.silent I) tables) args.get =
+        sharedVerifierResult model d name args := by
+  match args with
+  | .cons b (.cons z (.cons c (.cons p (.cons e (.cons b' (.cons c' (.cons p' .nil))))))) =>
+    simp only [sharedVerifierBody, Region.component, Operands.eval, get_here, get_there,
+      Environment.prepend, push_here, push_there, Regions.denote, calculate_scale model tables d,
+      calculate_add model tables d.group, calculate_equal model tables d.group, PIR.Process.bind,
+      selectedEquation model tables d,
+      sharedVerifierResult, verificationEquation]
+
 end Leaves
 
 section Processes
@@ -214,15 +258,18 @@ def sharedView (arguments : Values (Component model.Value) (sharedSignature d me
   sharedReference model d sites actions ctx self (arguments.get .here) (arguments.get (.there .here)) (arguments.get (.there (.there .here))) (arguments.get (.there (.there (.there .here)))) (arguments.get (.there (.there (.there (.there .here))))) (arguments.get (.there (.there (.there (.there (.there .here)))))) (arguments.get (.there (.there (.there (.there (.there (.there .here)))))))
 
 /-- One complete equation for all optional inputs, roles and replies. -/
-theorem shared_body (arguments : Values (Component model.Value) (sharedSignature d metadata).inputs) :
-    (sharedBody d metadata sites).denote
+theorem shared_body (name : String)
+    (checked : ∀ args, Evaluation.componentOperationOn model (.silent I) tables
+      (.invoke (sharedVerifier d name)) args .nil = sharedVerifierResult model d name args)
+    (arguments : Values (Component model.Value) (sharedSignature d metadata).inputs) :
+    (sharedBody d metadata sites name).denote
       (participantMeaningWithOn model (.silent I) actions tables self protocols ctx iterations)
       arguments.get = sharedView model d metadata sites actions ctx self arguments := by
   match arguments with
   | (.cons firstBase (.cons firstPoint (.cons secondBase (.cons secondPoint (.cons witness (.cons nonceService (.cons challengeService .nil))))))) =>
     cases statement : metadata.statement <;>
       simp only [sharedBody, annotate, statement] <;>
-      simp only [sharedView, sharedReference,
+      simp only [sharedView, sharedReference, checked, sharedVerifierResult, verificationEquation,
         Region.denote, Operands.eval, Regions.denote, get_here, get_there,
         Environment.prepend, push_here, push_there, participantMeaningWithOn,
         protocolOperationWithOn, silent_mark, Op.calculationRegions, id_eq,
@@ -280,8 +327,9 @@ theorem independent_install (model : DomainModel) (d : Domains) (metadata : Meta
 /-- Install the complete shared-witness schedule at any exactly associated
 source declaration. Visibility and role mapping use the shared template API. -/
 theorem shared_install (model : DomainModel) (d : Domains) (metadata : Metadata) (sites : Sites)
-    {payload : UnitPayload}
-    (associated : Template.Association payload (sharedSignature d metadata) (sharedBody d metadata sites))
+    (name : String) {payload : UnitPayload}
+    (verifier : BodyIn payload.definitions (sharedVerifier d name) (sharedVerifierBody d))
+    (associated : Template.Association payload (sharedSignature d metadata) (sharedBody d metadata sites name))
     (role : Nat) (ctx : ProtocolContext) (distinct : NormalForm.RosterDistinct ctx role 2)
     (pattern : NormalForm.InputPattern (sharedSignature d metadata).inputs)
     (visible : InputVisibility.patternVisible role pattern (sharedSignature d metadata).inputScopes = true)
@@ -293,9 +341,12 @@ theorem shared_install (model : DomainModel) (d : Domains) (metadata : Metadata)
       (pattern.environment model arguments)).bind fun out =>
         .done (NormalForm.staticMask role out [[1]] (Operands.identity [Ty.boolean])) := by
   apply associated.invoke role ctx distinct pattern visible arguments others
-  · exact shared_body model d metadata sites Occurrence.actions
+  · apply shared_body model d metadata sites Occurrence.actions
       (Occurrence.helpers model payload) (Occurrence.table model payload) ctx (ctx.roles role)
-      Occurrence.iterations _
+      Occurrence.iterations name
+    intro args
+    exact Evaluation.component_invoke_associated model (.silent _) payload.linked verifier
+      (sharedVerifierResult model d name) (fun tables => sharedVerifier_equation model tables d name) args
   · rfl
   · rfl
 

@@ -25,7 +25,7 @@ theorem callbackLaws_hold {inputs : List Ty} (input : Values (Component (assignm
   intro entry
   exact entry.elim0
 
-noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (Option (G))) (_b1 : (Option (G))) (b2 : (Option (G))) (_b3 : (Option (G))) (b4 : (Option (F))) (b5 : (Option (F))) (b6 : (Option (Nat))) (_b7 : (Option (Nat))) :
+noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (Option (G))) (b1 : (Option (G))) (b2 : (Option (G))) (b3 : (Option (G))) (b4 : (Option (F))) (b5 : (Option (F))) (b6 : (Option (Nat))) (_b7 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.boolean])) :=
   match b6 with
   | none =>
@@ -54,7 +54,8 @@ noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (O
             .halt .incomplete
           | some b15 =>
             .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f726573706f6e7365_0") ((ctx).roles 1) (((b10) + (((b13) * (b15)))))) fun _ =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
+            (invoke ((helpers (F := F) (G := G) payload).toOn).components (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons ((some (b11))) (.cons (none) (.cons (none) (.cons (b1) (.cons (none) (.cons ((some (b12))) (.cons (none) (.cons (none) (.cons (b3) .nil)))))))))).bind fun (b16 : (Values (Component (assignment F G)) [.boolean])) =>
+            .done ((.cons ((b16).get .here) .nil) : (Values (Component (assignment F G)) [.boolean]))
 
 theorem protocol0Role0_readable (ctx : ProtocolContext)
     (_distinct : RosterDistinct ctx 0 2) (b0 : (Option (G))) (b1 : (Option (G))) (b2 : (Option (G))) (b3 : (Option (G))) (b4 : (Option (F))) (b5 : (Option (F))) (b6 : (Option (Nat))) (b7 : (Option (Nat))) :
@@ -89,67 +90,8 @@ noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (O
     .call (.send (ty := (.field "bls12-381.fr")) (qualifyProtocolSite (ctx).applicationPrefix "label_64656c6976657279_0") ((ctx).roles 0) (b11)) fun _ =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_66697273745f726573706f6e7365_0") ((ctx).roles 0)) fun (b12 : F) =>
     .call (.receive (.field "bls12-381.fr") (qualifyProtocolSite (ctx).applicationPrefix "label_7365636f6e645f726573706f6e7365_0") ((ctx).roles 0)) fun (b13 : F) =>
-    match b0 with
-    | none =>
-      match b1 with
-      | none =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b17 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b16 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b18 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-      | some _b15 =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b20 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b19 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b21 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-    | some b14 =>
-      match b1 with
-      | none =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b24 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some _b23 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b25 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-      | some b22 =>
-        match b2 with
-        | none =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some _b27 =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-        | some b26 =>
-          match b3 with
-          | none =>
-            .done ((.cons (none) .nil) : (Values (Component (assignment F G)) [.boolean]))
-          | some b28 =>
-            .done ((.cons ((some (((((Op.evalTotal (ringModel F G) (.groupEqual "bls12-381.g1") rfl (.cons (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b12) (b14))) (.cons (((b8) + (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b11) (b22))))) .nil))).get .here)) && (((Op.evalTotal (ringModel F G) (.groupEqual "bls12-381.g1") rfl (.cons (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b13) (b26))) (.cons (((b9) + (((ringModel F G).smul "bls12-381.g1" "bls12-381.fr" (b11) (b28))))) .nil))).get .here)))))) .nil) : (Values (Component (assignment F G)) [.boolean]))
+    (invoke ((helpers (F := F) (G := G) payload).toOn).components (⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩ : Helper) (.cons (b0) (.cons ((some (b12))) (.cons ((some (b8))) (.cons (b1) (.cons ((some (b11))) (.cons (b2) (.cons ((some (b13))) (.cons ((some (b9))) (.cons (b3) .nil)))))))))).bind fun (b14 : (Values (Component (assignment F G)) [.boolean])) =>
+    .done ((.cons ((b14).get .here) .nil) : (Values (Component (assignment F G)) [.boolean]))
 
 theorem protocol0Role1_readable (ctx : ProtocolContext)
     (_distinct : RosterDistinct ctx 1 2) (b0 : (Option (G))) (b1 : (Option (G))) (b2 : (Option (G))) (b3 : (Option (G))) (b4 : (Option (F))) (b5 : (Option (F))) (b6 : (Option (Nat))) (b7 : (Option (Nat))) :

@@ -6,7 +6,7 @@ public import Zkc.Source.RegionTotality
 
 @[expose] public section
 
-/-! Immediate return for the admitted region-free mathematical fragment.
+/-! Immediate return for the admitted total mathematical fragment.
 The proof interprets the existing checked Region through the existing helper
 closures. Structural admission and exact ABI linking are explicit evidence;
 no operation annotation or name supplies an execution equation. -/
@@ -25,7 +25,7 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
     (allowed : op.preparationAllowed profile = true)
     (helpers : ∀ helper ∈ op.helpers, ∀ args, Returns (invoke table helper args)) :
     (meaning observations table).TotalOperation op := by
-  intro args bodies _
+  intro args bodies callbacksReturn
   cases op with
   | fieldEmbed | vectorLength =>
     cases args with
@@ -52,7 +52,17 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
   | invoke helper =>
     cases bodies
     exact helpers helper (by simp only [Op.helpers, List.mem_singleton]) args
-  | exec | boundedAt | fold | collect | map | branch | loop | loopCondition | guard | mark |
+  | branch captures outputs =>
+    cases args with
+    | cons condition captures =>
+      cases bodies with
+      | cons yes rest => cases rest with
+        | cons no rest =>
+          cases rest
+          cases condition
+          · exact callbacksReturn _ (.there .here) captures
+          · exact callbacksReturn _ .here captures
+  | exec | boundedAt | fold | collect | map | loop | loopCondition | guard | mark |
       createUnit | passUnit | consumeUnit =>
     simp only [Op.preparationAllowed, Bool.false_eq_true] at allowed
 
@@ -63,7 +73,8 @@ private theorem regions_total_of_empty (table : Meanings F G interface) :
   | _, .cons _ _, impossible => by cases impossible
 
 /-- Raw-profile evidence transports through exact erasure to structural totality
-of the one typed carrier. No callback, stop, finite loop or bounded read enters. -/
+of the one typed carrier. Every callback is proved total independently; selection
+invokes only its chosen callback. Stops and bounded reads remain excluded. -/
 theorem region_total_of_preparation (table : Meanings F G interface)
     (profile : PreparationProfile) {Γ out : List Ty} (region : Region dialect Γ out)
     (allowed : region.erase.preparationAllowed profile = true)
@@ -75,41 +86,48 @@ theorem region_total_of_preparation (table : Meanings F G interface)
       (∀ helper ∈ region.erase.operations.flatMap Op.helpers,
         ∀ args, Returns (invoke table helper args)) →
       region.Total (meaning observations table))
-    (motive_2 := fun _ _ => True) ?_ ?_ ?_ ?_ ?_ ?_ region allowed helpers
+    (motive_2 := fun _ bodies => bodies.erase.preparationAllowed profile = true →
+      (∀ helper ∈ bodies.erase.operations.flatMap Op.helpers,
+        ∀ args, Returns (invoke table helper args)) →
+      bodies.Total (meaning observations table)) ?_ ?_ ?_ ?_ ?_ ?_ region allowed helpers
   · intro Γ out values _ _
     trivial
   · intro Γ out reason allowed _
     simp only [Region.erase, RawRegion.preparationAllowed, Bool.false_eq_true] at allowed
-  · intro Γ out op args bodies next _ nextIH allowed helpers
-    have parts : op.preparationAllowed profile = true ∧
-        bodies.erase = .nil ∧ next.erase.preparationAllowed profile = true := by
-      cases erased : bodies.erase with
-      | nil =>
-        simp only [Region.erase, erased, RawRegion.preparationAllowed,
-          Bool.and_eq_true] at allowed
-        exact ⟨allowed.1.1, rfl, allowed.2⟩
-      | cons =>
-        simp only [Region.erase, erased, RawRegion.preparationAllowed,
-          Bool.false_eq_true] at allowed
-    have bodiesTotal : bodies.Total (meaning observations table) :=
-      regions_total_of_empty observations table bodies parts.2.1
-    refine ⟨operation_total_of_preparation observations table profile op parts.1 ?_,
-      bodiesTotal, nextIH parts.2.2 ?_⟩
+  · intro Γ out op args bodies next bodiesIH nextIH allowed helpers
+    simp only [Region.erase, RawRegion.preparationAllowed, Bool.and_eq_true] at allowed
+    refine ⟨operation_total_of_preparation observations table profile op allowed.1.1.1 ?_,
+      bodiesIH allowed.1.2 ?_, nextIH allowed.2 ?_⟩
     · intro helper used args
       exact helpers helper (by
-        simp only [Region.erase, RawRegion.operations, parts.2.1, RawRegions.operations,
-          List.nil_append, List.flatMap_cons, List.mem_append]
+        simp only [Region.erase, RawRegion.operations, List.flatMap_cons,
+          List.flatMap_append, List.mem_append]
         exact Or.inl used) args
     · intro helper used args
       exact helpers helper (by
-        simp only [Region.erase, RawRegion.operations, parts.2.1, RawRegions.operations,
-          List.nil_append, List.flatMap_cons, List.mem_append]
-        exact Or.inr used) args
+        simp only [Region.erase, RawRegion.operations, List.flatMap_cons,
+          List.flatMap_append, List.mem_append]
+        exact Or.inr (Or.inl used)) args
+    · intro helper used args
+      exact helpers helper (by
+        simp only [Region.erase, RawRegion.operations, List.flatMap_cons,
+          List.flatMap_append, List.mem_append]
+        exact Or.inr (Or.inr used)) args
   · intro Γ mid out body next _ _ allowed _
     simp only [Region.erase, RawRegion.preparationAllowed, Bool.false_eq_true] at allowed
-  · trivial
-  · intros
+  · intro _ _
     trivial
+  · intro inputs outputs rest body tail bodyIH tailIH allowed helpers
+    simp only [Regions.erase, RawRegions.preparationAllowed, Bool.and_eq_true] at allowed
+    refine ⟨bodyIH allowed.1.2 ?_, tailIH allowed.2 ?_⟩
+    · intro helper used args
+      exact helpers helper (by
+        simp only [Regions.erase, RawRegions.operations, List.flatMap_append, List.mem_append]
+        exact Or.inl used) args
+    · intro helper used args
+      exact helpers helper (by
+        simp only [Regions.erase, RawRegions.operations, List.flatMap_append, List.mem_append]
+        exact Or.inr used) args
 
 /-- Actual semantic totality, including vector projections and empty result tuples. -/
 theorem region_returns_of_preparation (table : Meanings F G interface)

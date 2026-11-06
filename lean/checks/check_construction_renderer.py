@@ -232,6 +232,36 @@ example : RenderedConjunction.participant.instructions =
     [⟨.calculate .booleanAnd, [0, 1], [.data .boolean], []⟩] := by
   decide +kernel
 '''
+    # Closed frames preserve duplicate captures, arm order and every result.
+    from copy import deepcopy
+    selection = ["data.branch", [["alternatives", ["array", [["string", "then"], ["string", "else"]]]]],
+                 [], [0, 1, 1], [BOOLEAN, BOOLEAN], [
+                     [[BOOLEAN, BOOLEAN], [], ["data.yield", [0, 1]], "then", []],
+                     [[BOOLEAN, BOOLEAN], [], ["data.yield", [1, 0]], "else", []]]]
+    selected = export([BOOLEAN, BOOLEAN, TRANSCRIPT], [selection], [3, 2])
+    source += strip(renderer.render(selected, "RenderedSelection"))
+    source += '''
+open Zkc.Construction in
+example : RenderedSelection.participant.instructions =
+    [⟨.mathBranch, [0, 1, 1], [.data .boolean, .data .boolean],
+      [⟨[.data .boolean, .data .boolean], [], [0, 1]⟩,
+       ⟨[.data .boolean, .data .boolean], [], [1, 0]⟩]⟩] := by decide +kernel
+'''
+    selection_refusals = [
+            (0, [BOOLEAN], "Math branch captures"),
+            (2, ["data.yield", [0, 3]], "Math yielded"),
+            (3, "then", "Math branch arm"),
+            (4, [BOOLEAN], "Math branch arm")]
+    for index, replacement, diagnostic in selection_refusals:
+        invalid = deepcopy(selected)
+        invalid[7][0][5][1][index] = replacement
+        try:
+            renderer.render(invalid, "RejectedSelection")
+        except renderer.Refused as error:
+            if diagnostic not in str(error):
+                raise AssertionError(f"selected arm refused for another reason: {error}")
+        else:
+            raise AssertionError("renderer accepted a malformed dormant selected arm")
     captured = renderer.render(export([FIELD, INDEX, TRANSCRIPT], CAPTURING, [4, 3]), "RenderedCaptures")
     captured = captured.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "")
     source += captured.replace("@[expose] public section\n", "")
@@ -254,12 +284,12 @@ example : RenderedEmbedding.participant.instructions =
     source += '''
 open Zkc.Construction in
 example : RenderedCaptures.participant.instructions =
-    [⟨.loop "s" 4 [6], [1, 2], [.transcript "merlin3.bls12-381.fr64be/0"], [
+    [⟨.loop "s" 4, [1, 2], [.transcript "merlin3.bls12-381.fr64be/0"], [⟨[.data .index, .transcript "merlin3.bls12-381.fr64be/0"], [
       ⟨.calculate (.fieldAdd "bls12-381.fr"), [0, 0], [.data (.field "bls12-381.fr")], []⟩,
-      ⟨.loop "t" 4 [7], [1, 4], [.transcript "merlin3.bls12-381.fr64be/0"], [
+      ⟨.loop "t" 4, [1, 4], [.transcript "merlin3.bls12-381.fr64be/0"], [⟨[.data .index, .transcript "merlin3.bls12-381.fr64be/0"], [
         ⟨.indicesEmpty, [], [.indices], []⟩,
         ⟨.indicesAppend, [8, 3], [.indices], []⟩,
-        ⟨.calculate (.fieldAdd "bls12-381.fr"), [5, 5], [.data (.field "bls12-381.fr")], []⟩]⟩]⟩,
+        ⟨.calculate (.fieldAdd "bls12-381.fr"), [5, 5], [.data (.field "bls12-381.fr")], []⟩], [7]⟩]⟩], [6]⟩]⟩,
      ⟨.calculate (.fieldEqual "bls12-381.fr"), [0, 0], [.data .boolean], []⟩] ∧
     RenderedCaptures.participant.returned = [4, 3] := by
   decide +kernel
@@ -362,9 +392,9 @@ example : RenderedCaptures.participant.instructions =
             export([base, TRANSCRIPT], [changed], [2, 1]), "UnsupportedBinding"):
         raise AssertionError("renderer treated another binding as field embedding")
     member_refusals = renderer_member_refusals()
-    report = {"status": "pass", "kernel_cases": 6, "catalogue_cases": len(catalogue_cases),
+    report = {"status": "pass", "kernel_cases": 7, "catalogue_cases": len(catalogue_cases),
               "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals)
-              + member_refusals, "unsupported_cases": 2,
+              + member_refusals + len(selection_refusals), "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}
     report["kernel_checked"] = lake is not None

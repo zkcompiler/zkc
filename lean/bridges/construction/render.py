@@ -332,9 +332,35 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None):
             yielded = references(yielded, inner_places, "yielded")
             maximum = decimal(integer_attribute(attributes_, "maximum"), 1048577)
             require(maximum is not None, "loop maximum")
-            term = f".loop {text(string_attribute(attributes_, 'site'))} {maximum} {seq(yielded, nat)}"
+            term = f".loop {text(string_attribute(attributes_, 'site'))} {maximum}"
             body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
-            rendered.append(f"{indent}⟨{term}, {seq(mapped[:1 + carried], nat)}, {result_terms}, {body}⟩")
+            inputs = seq(arguments[:1 + carried], lambda v: sort(v)[0])
+            region = f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩"
+            rendered.append(f"{indent}⟨{term}, {seq(mapped[:1 + carried], nat)}, {result_terms}, [{region}]⟩")
+        elif name == "data.branch":
+            decoded = attributes(attrs)
+            require(decoded == {"alternatives": ("array", [["string", "then"], ["string", "else"]])}
+                    and binding == [] and len(regions) == 2 and len(mapped) >= 1,
+                    "Math branch attributes")
+            require(kinds[mapped[0]] == ("boolean", None), "Math branch selector")
+            capture_kinds = [kinds[o] for o in mapped[1:]]
+            require(all(kind[0] in CAPTURED for kind in capture_kinds)
+                    and all(kind[0] in CAPTURED for kind in result_kinds), "Math branch sorts")
+            arms = []
+            for label, region in zip(("then", "else"), regions):
+                arguments, nested, terminal, alternative, payload = record(region, 5)
+                require(alternative == label and payload == [] and record(terminal, 2)[0] == "data.yield",
+                        "Math branch arm")
+                argument_kinds = [sort(value)[1] for value in arguments]
+                require(argument_kinds == capture_kinds, "Math branch captures")
+                inner, inner_kinds, inner_places = block(
+                    nested, argument_kinds, list(range(len(arguments))), indent + "    ", rows, depth + 1, {})
+                yielded = references(terminal[1], inner_places, "Math yielded")
+                require([inner_kinds[o] for o in yielded] == result_kinds, "Math branch yield sorts")
+                body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
+                inputs = seq(arguments, lambda v: sort(v)[0])
+                arms.append(f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩")
+            rendered.append(f"{indent}⟨.mathBranch, {seq(mapped, nat)}, {result_terms}, [{', '.join(arms)}]⟩")
         else:
             require(regions == [], "unexpected operation region")
             if is_service:

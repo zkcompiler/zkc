@@ -456,6 +456,22 @@ class MutationControls(unittest.TestCase):
         self.assertEqual(len(variants), 1)
         self.assertEqual(variants[0][7][3][3][1], 0)
 
+    def test_selected_frames_and_arm_mutations(self):
+        boolean = ["boolean"]
+        arms = [[[boolean], [], ["data.yield", [0]], "then", []],
+                [[boolean], [["arith.constant", [["value", ["bool", False]]], [], [], [boolean], []]],
+                 ["data.yield", [1]], "else", []]]
+        branch = ["data.branch", [], [], [0, 0], [boolean], arms]
+        data = [None] * 9
+        data[5], data[7] = [boolean, boolean], [branch]
+        scopes = mutations.environments(data)
+        self.assertEqual(scopes[id(arms[1][1][0])], [boolean])
+        changed = mutations.selection_arm_swap(data)
+        self.assertEqual(len(changed), 1)
+        self.assertEqual(changed[0][7][0][5][0][1:3], arms[1][1:3])
+        self.assertEqual(changed[0][7][0][5][1][1:3], arms[0][1:3])
+        self.assertEqual([arm[3] for arm in changed[0][7][0][5]], ["then", "else"])
+
     def test_native_origin_edit_preserves_path_and_unrelated_fields(self):
         data = self.fixture()
         tree = mutations.template_tree(data[7][3])

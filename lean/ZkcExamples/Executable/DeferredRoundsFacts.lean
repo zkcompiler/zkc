@@ -29,7 +29,6 @@ theorem accepted : checkLowering installed ZkcExamples.Construction.DeferredRoun
 set_option maxRecDepth 20000 in
 /-- The helpers the constructed validator calls. -/
 theorem helpers : Instruction.helpers ZkcExamples.Construction.DeferredRounds.participant.instructions = [] := by
-  rw [← Instruction.helperList_eq]
   decide +kernel
 
 /-- The constructed validator has no helper call. -/

@@ -40,7 +40,7 @@ def helper (argument : Nat) : Instruction := ⟨.call "helper", [argument], [fie
 
 /-- A loop over `count` with one carried field value. -/
 def loop (count initial : Nat) (yielded : List Nat) (body : List Instruction) : Instruction :=
-  ⟨.loop "rounds" 2 yielded, [count, initial], [field], body⟩
+  ⟨.loop "rounds" 2, [count, initial], [field], [⟨(.data .index :: [field]), body, yielded⟩]⟩
 
 def verdict (inputs : List ValueSort) (exported : List Instruction) (exportedReturned : List Nat)
     (reading : List Instruction) (readingReturned : List Nat) : Option Refusal :=
@@ -165,7 +165,7 @@ theorem illSorted_refused :
 def badEmpty : Instruction := ⟨.indicesEmpty, [], [], []⟩
 def badAppend : Instruction := ⟨.indicesAppend, [0, 0], [.indices], []⟩
 def receive : Instruction := ⟨.receive "message" "message" "prover" .boolean, [], [boolean], []⟩
-def badReceive : Instruction := { receive with body := [coordinates] }
+def badReceive : Instruction := { receive with regions := [⟨[], [coordinates], []⟩] }
 
 theorem badEmpty_refused : verdict [] [badEmpty] [] [] [] = some (.sort 0) := by decide +kernel
 
@@ -208,8 +208,8 @@ theorem nestedLoops_accepted :
 /-- A changed carried/result schema cannot be hidden by an unused loop result. -/
 theorem badLoopResults_refused :
     verdict [.data .index, field]
-      [⟨.loop "rounds" 2 [3], [0, 1], [], []⟩] []
-      [⟨.loop "rounds" 2 [3], [0, 1], [], []⟩] [] = some (.sort 0) := by
+      [⟨.loop "rounds" 2, [0, 1], [], [⟨(.data .index :: []), [], [3]⟩]⟩] []
+      [⟨.loop "rounds" 2, [0, 1], [], [⟨(.data .index :: []), [], [3]⟩]⟩] [] = some (.sort 0) := by
   decide +kernel
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]

@@ -58,6 +58,16 @@ it at version `0`. Independent Lean View/category/recipe readers and
 interpretation remain a parent migration gate. Native checks do not establish
 that gate, typed construction families or Constraint View support.
 
+The [structured source](formats/structured-source.md) and [constructed participant](formats/constructed-participant.md)
+contracts retain both Boolean Math arms, their ordered capture and result rows,
+and their exact lexical identities. The frontend owns the written finite expression;
+IR owns the typed closed regions and their exports. The independent Lean reader
+checks both arm ABIs, while correspondence checks the actual operations and
+returned positions even in a dormant arm. The source and target evaluate only
+the selected arm. Admission, source association, process correspondence and
+mathematical interpretation remain separate checks. The program-byte reader does
+not acquire a Math-branch execution law from this contract.
+
 The [distributed record source contract](language/records.md) extends checked
 Language signatures and written type nodes with ordered role applications and
 recursive field placements. The source producer retains private/empty fields

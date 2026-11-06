@@ -39,6 +39,7 @@
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -2288,6 +2289,54 @@ class ParticipantExporter {
     return Error::success();
   }
 
+  // Selected Math regions are closed frames: only payloads and explicit
+  // captures enter an arm. Keep every arm and its exact terminal, independently
+  // of the selector's runtime value.
+  Expected<json::Array> selectedMath(Operation &op, unsigned depth) {
+    if (failed(verifySelectedControl(&op)))
+      return error("constructed-participant-branch");
+    auto alternatives = op.getAttrOfType<ArrayAttr>("alternatives");
+    json::Array regions;
+    for (auto [i, region] : enumerate(op.getRegions())) {
+      auto payloads = selectedPayloadTypes(&op, i);
+      if (!payloads)
+        return payloads.takeError();
+      Block &arm = region.front();
+      auto outerReferences = references;
+      auto outerCoordinates = coordinates;
+      unsigned outerNext = next;
+      auto restore = llvm::scope_exit([&] {
+        references = std::move(outerReferences);
+        coordinates = std::move(outerCoordinates);
+        next = outerNext;
+      });
+      references.clear();
+      coordinates.clear();
+      next = 0;
+      for (BlockArgument argument : arm.getArguments())
+        references[argument] = next++;
+      json::Array nested;
+      auto yielded = body(arm, "data.yield", depth + 1, nested);
+      if (!yielded)
+        return yielded.takeError();
+      auto arguments = exportLogicalTypesData(arm.getArgumentTypes());
+      if (!arguments)
+        return arguments.takeError();
+      auto payloadTypes = exportLogicalTypesData(*payloads);
+      if (!payloadTypes)
+        return payloadTypes.takeError();
+      json::Array returned;
+      for (unsigned index : *yielded)
+        returned.push_back(index);
+      regions.push_back(json::Array{
+          std::move(*arguments), std::move(nested),
+          json::Array{"data.yield", std::move(returned)},
+          cast<StringAttr>(alternatives[i]).getValue().str(),
+          std::move(*payloadTypes)});
+    }
+    return regions;
+  }
+
   Expected<SmallVector<unsigned>> helper(FlatSymbolRefAttr callee,
                                          ValueRange inputs, unsigned depth,
                                          json::Array &out,
@@ -2407,6 +2456,17 @@ public:
                            std::move(yieldedList)};
         if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
                           json::Array{std::move(region)}))
+          return std::move(e);
+        for (Value result : op.getResults())
+          references[result] = next++;
+        continue;
+      }
+      if (isa<data::BranchOp>(op)) {
+        auto regions = selectedMath(op, depth);
+        if (!regions)
+          return regions.takeError();
+        if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
+                          std::move(*regions)))
           return std::move(e);
         for (Value result : op.getResults())
           references[result] = next++;

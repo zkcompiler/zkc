@@ -53,21 +53,21 @@ def participant : Participant where
     ⟨.calculate .booleanEqual, [31, 32], [.data .boolean], []⟩,
     ⟨.guard "s32", [33], [], []⟩,
     ⟨.call "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", [], [.data (.vector "bls12-381.fr")], []⟩,
-    ⟨.loop "s37" 4 [45, 44], [6, 34, 7], [.data (.vector "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
+    ⟨.loop "s37" 4, [6, 34, 7], [.data (.vector "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [⟨(.data .index :: [.data (.vector "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]), [
         ⟨.indicesEmpty, [], [.indices], []⟩,
         ⟨.indicesAppend, [38, 35], [.indices], []⟩,
         ⟨.challenge "merlin3.bls12-381.fr64be/0" "bls12-381.fr" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [.repeat "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2" "s37"], ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6f7574707574", "input_7", "random.bls12-381.fr/0", "draw", "role00000001"]⟩, [37, 39], [.data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], []⟩,
         ⟨.indicesEmpty, [], [.indices], []⟩,
         ⟨.indicesAppend, [42, 35], [.indices], []⟩,
         ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [.repeat "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2" "s37"], ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6f75747075745f64656c6976657279_0", "label_6f75747075745f64656c6976657279_0", "role00000001", "role00000000"]⟩, [41, 40, 43], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
-        ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [36, 40], [.data (.vector "bls12-381.fr")], []⟩]⟩,
+        ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [36, 40], [.data (.vector "bls12-381.fr")], []⟩], [45, 44]⟩]⟩,
     ⟨.call "zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496", [1, 35], [.data (.field "bls12-381.fr")], []⟩,
     ⟨.call "zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17", [35, 37], [.data (.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
-    ⟨.loop "s57" 4 [102, 103, 104, 99], [4, 38, 39, 40, 36], [.data (.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
+    ⟨.loop "s57" 4, [4, 38, 39, 40, 36], [.data (.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [⟨(.data .index :: [.data (.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]), [
         ⟨.call "zkl_e0f7a4e58ae24eb13e9b2033c42c179b2766ff6cdb4ae1470bf7ef9b1721d646", [42, 43, 44], [.data (.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
         ⟨.call "zkl_e1405e1bb4604e60f337203132c746492bf7c31b55302426ae19c2c021c2da1a", [50], [.data (.resourceUnit "zkl_resource_dbe13cb2a1fb7bfa08289b9828283a1e44368797e9bca45ea1c33789b9b72beb"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
         ⟨.call "zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825", [51, 52, 53], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
-        ⟨.loop "apply_14_label_6c656674_s9" 4 [88, 92, 87], [6, 54, 55, 45], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
+        ⟨.loop "apply_14_label_6c656674_s9" 4, [6, 54, 55, 45], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [⟨(.data .index :: [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]), [
             ⟨.receive "apply_14_label_6c656674_label_726f756e64_0" "apply_14_label_6c656674_label_726f756e64_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
             ⟨.indicesEmpty, [], [.indices], []⟩,
             ⟨.indicesAppend, [61, 41], [.indices], []⟩,
@@ -100,10 +100,10 @@ def participant : Participant where
             ⟨.calculate (.fieldMultiply "bls12-381.fr"), [82, 70], [.data (.field "bls12-381.fr")], []⟩,
             ⟨.calculate (.fieldAdd "bls12-381.fr"), [65, 89], [.data (.field "bls12-381.fr")], []⟩,
             ⟨.calculate (.fieldMultiply "bls12-381.fr"), [82, 90], [.data (.field "bls12-381.fr")], []⟩,
-            ⟨.calculate (.fieldAdd "bls12-381.fr"), [60, 91], [.data (.field "bls12-381.fr")], []⟩]⟩,
+            ⟨.calculate (.fieldAdd "bls12-381.fr"), [60, 91], [.data (.field "bls12-381.fr")], []⟩], [88, 92, 87]⟩]⟩,
         ⟨.call "zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3", [56, 57], [.data (.resourceUnit "zkl_resource_dbe13cb2a1fb7bfa08289b9828283a1e44368797e9bca45ea1c33789b9b72beb"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
         ⟨.call "zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825", [59, 60, 61], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
-        ⟨.loop "apply_16_label_7269676874_s9" 4 [96, 100, 95], [6, 62, 63, 58], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
+        ⟨.loop "apply_16_label_7269676874_s9" 4, [6, 62, 63, 58], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [⟨(.data .index :: [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]), [
             ⟨.receive "apply_16_label_7269676874_label_726f756e64_0" "apply_16_label_7269676874_label_726f756e64_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
             ⟨.indicesEmpty, [], [.indices], []⟩,
             ⟨.indicesAppend, [69, 41], [.indices], []⟩,
@@ -136,7 +136,7 @@ def participant : Participant where
             ⟨.calculate (.fieldMultiply "bls12-381.fr"), [90, 78], [.data (.field "bls12-381.fr")], []⟩,
             ⟨.calculate (.fieldAdd "bls12-381.fr"), [73, 97], [.data (.field "bls12-381.fr")], []⟩,
             ⟨.calculate (.fieldMultiply "bls12-381.fr"), [90, 98], [.data (.field "bls12-381.fr")], []⟩,
-            ⟨.calculate (.fieldAdd "bls12-381.fr"), [68, 99], [.data (.field "bls12-381.fr")], []⟩]⟩,
+            ⟨.calculate (.fieldAdd "bls12-381.fr"), [68, 99], [.data (.field "bls12-381.fr")], []⟩], [96, 100, 95]⟩]⟩,
         ⟨.call "zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3", [64, 65], [.data (.resourceUnit "zkl_resource_dbe13cb2a1fb7bfa08289b9828283a1e44368797e9bca45ea1c33789b9b72beb"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
         ⟨.call "zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825", [67, 68, 69], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩,
         ⟨.call "zkl_cfcf40daaab145a916368cf7a01eccd9ba0e536fbbc30a06c4a25e7ec96ecbe7", [70], [.data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr")], []⟩,
@@ -146,13 +146,13 @@ def participant : Participant where
         ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [.repeat "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2" "s57"], ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6c696e655f636f6e7374616e74_0", "label_6c696e655f636f6e7374616e74_0", "role00000000", "role00000001"]⟩, [66, 74, 76], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
         ⟨.call "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", [], [.data (.vector "bls12-381.fr")], []⟩,
         ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [78, 74], [.data (.vector "bls12-381.fr")], []⟩,
-        ⟨.loop "s93" 4 [88, 87], [6, 79, 77], [.data (.vector "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [
+        ⟨.loop "s93" 4, [6, 79, 77], [.data (.vector "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], [⟨(.data .index :: [.data (.vector "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]), [
             ⟨.receive "label_6c696e655f636f656666696369656e74_0" "label_6c696e655f636f656666696369656e74_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
             ⟨.indicesEmpty, [], [.indices], []⟩,
             ⟨.indicesAppend, [84, 41], [.indices], []⟩,
             ⟨.indicesAppend, [85, 80], [.indices], []⟩,
             ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [.repeat "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2" "s57", .repeat "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2" "s93"], ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6c696e655f636f656666696369656e74_0", "label_6c696e655f636f656666696369656e74_0", "role00000000", "role00000001"]⟩, [82, 83, 86], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
-            ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [81, 83], [.data (.vector "bls12-381.fr")], []⟩]⟩,
+            ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [81, 83], [.data (.vector "bls12-381.fr")], []⟩], [88, 87]⟩]⟩,
         ⟨.call "zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216", [80], [.data (.field "bls12-381.fr")], []⟩,
         ⟨.call "zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e", [2, 41, 5], [.data (.vector "bls12-381.fr")], []⟩,
         ⟨.call "zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f", [83, 49, 72, 73], [.data (.field "bls12-381.fr")], []⟩,
@@ -173,7 +173,7 @@ def participant : Participant where
         ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [.repeat "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2" "s57"], ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6c696e655f64656c6976657279_0", "label_6c696e655f64656c6976657279_0", "role00000001", "role00000000"]⟩, [96, 95, 98], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
         ⟨.call "zkl_1f2e31017a1a0403a56241b1d83eac39d1ecc40b298cd066516f78ae9c5b3434", [72, 73, 95], [.data (.vector "bls12-381.fr")], []⟩,
         ⟨.call "zkl_21465134b1aa848c616c790eff1907b1a442ba76730b77da2be48acd923d6ff7", [80, 95], [.data (.field "bls12-381.fr")], []⟩,
-        ⟨.call "zkl_744f32fd2e4e542d6467fe3f764e183881171708947eb2bd852cea6f32a0407e", [46, 47, 48, 100, 101], [.data (.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩]⟩,
+        ⟨.call "zkl_744f32fd2e4e542d6467fe3f764e183881171708947eb2bd852cea6f32a0407e", [46, 47, 48, 100, 101], [.data (.resourceUnit "zkl_resource_58b8d01538daf350e8922c1ff5eb530b8574005055adf8dd259237e225318f63"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")], []⟩], [102, 103, 104, 99]⟩]⟩,
     ⟨.call "zkl_d74cb9bd9ed782590145b66a573f8104fca0e842c109c7d034296431308fc6b9", [0, 41, 42, 43], [.data .boolean], []⟩]
   returned := [45, 44]
 

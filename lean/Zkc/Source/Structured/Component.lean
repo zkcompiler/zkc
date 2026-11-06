@@ -43,6 +43,23 @@ def componentOperation (observations : SiteObservations interface) (tables : Com
       else strictComponent (meaning observations tables.closed) (.invoke helper) args .nil
   | op, args, bodies => strictComponent (meaning observations tables.closed) op args bodies
 
+/-- Present branch captures run only the selected closed callback. The complete
+result tuple and every stop survive the optional-component lifting. -/
+theorem componentOperation_branch (observations : SiteObservations interface)
+    (tables : ComponentTables F G interface) (captures outputs : List Ty)
+    (condition : Bool) (args : Values (assignment F G) captures)
+    (yes no : RegionFunction (assignment F G) interface (captures, outputs)) :
+    componentOperation observations tables (.branch captures outputs)
+        (.cons (some condition) args.present) (.cons yes (.cons no .nil)) =
+      (if condition then yes args else no args).bind
+        (fun results => .done results.present) := by
+  change strictComponent (meaning observations tables.closed)
+    (.branch captures outputs) (Values.cons condition args).present
+    (.cons yes (.cons no .nil)) = _
+  exact (strictComponent_adequate (meaning observations tables.closed)
+    (.branch captures outputs) (Values.cons condition args)
+    (.cons yes (.cons no .nil))).trans (by cases condition <;> rfl)
+
 theorem componentOperation_map_present (observations : SiteObservations interface)
     (tables : ComponentTables F G interface) (spec : MapSpec)
     (args : Values (assignment F G) spec.arguments) :

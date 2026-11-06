@@ -50,6 +50,14 @@ theorem calculate_fieldAdd_reverse_law (observations : SiteObservations I)
       rw [Evaluation.fieldAdd_reverse]
       rfl
 
+/-- Evaluation commutes with selecting a closed callback, including all stops. -/
+theorem Evaluation.operation_branch (observations : SiteObservations I) (table : Evaluation.Meanings F G I)
+    (inputs outputs : List Ty) (condition : Bool) (captures : Values (assignment F G) inputs)
+    {yes no : RegionFunction (assignment F G) I (inputs, outputs)} :
+    Evaluation.operation observations table (.branch inputs outputs) (.cons condition captures)
+      (.cons yes (.cons no .nil)) = (if condition then yes captures else no captures) := by
+  cases condition <;> rfl
+
 /-- Local control selects its callback by the actual condition; both callbacks
 remain derived processes over the same captured operands. -/
 theorem branch_law (observations : SiteObservations I) (table : Evaluation.Meanings F G I)

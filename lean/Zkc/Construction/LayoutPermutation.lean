@@ -20,12 +20,15 @@ def reindexInstructions (rename : Nat → Nat) : Nat → List Zkc.Construction.I
       { instruction with
         operands := instruction.operands.map rename
         operation := match instruction.operation with
-          | .loop site maximum yielded => .loop site maximum (yielded.map rename)
           | .localService port request template coordinates =>
               .localService port { request with operands := request.operands.map rename }
                 template (coordinates.map rename)
           | operation => operation
-        body := reindexInstructions rename fuel instruction.body }
+        regions := match instruction.operation with
+          | .mathBranch => instruction.regions
+          | _ => instruction.regions.map fun region =>
+              { region with instructions := reindexInstructions rename fuel region.instructions
+                            yielded := region.yielded.map rename } }
 
 /-- Insert a pure index-coordinate allocation before the root. Every allocated
 SSA reference (including nested induction/carry slots) shifts, while input

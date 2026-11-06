@@ -116,7 +116,7 @@ decimal]` (unsigned for unsigned integer types, otherwise signed),
 `binding` is `[]` without an operation binding, otherwise the referenced
 `runtime.binding` declaration as `[contract, [argument, ...], implementation]`.
 `operands` are references and `result-types` are printed MLIR types. `regions`
-is empty except for `protocol.loop`, whose single region is
+is empty for regionless operations. `protocol.loop` has one region:
 `[argument-types, instructions, yielded]`: the printed types of its block
 arguments (the induction index, the carried values, then the captured values),
 its body, and the references its `protocol.yield` returns. A loop's operands are
@@ -126,7 +126,19 @@ attribute counts the carried values. The captured values are the original
 repeat's captures followed, for a loop that carries the transcript, by the
 induction indices of its enclosing loops.
 
-Participant operations retain the regionless mathematical operations of the
+`data.branch` retains every arm in declared label order. Its operands are the
+selector followed by explicit captures. Each arm is
+`[argument-types, instructions, ["data.yield", yielded], label, payload-types]`.
+The arm has a fresh reference frame: payload arguments, captures, then results
+allocated in that arm, starting at zero. Its yields have exactly the enclosing
+operation's result types. Boolean labels are `then`, `else` with no payload;
+variant labels and payloads follow the selector's nominal alternatives. Both
+arms must be formed even when the selector is constant. Execution evaluates
+only the selected arm. The current independent Lean projection admits Boolean
+arms; other selector sorts require their corresponding formal vocabulary and
+are refused by that reader rather than reinterpreted as Boolean control.
+
+Participant operations retain `data.branch` and the regionless mathematical operations of the
 `algebra`, `arith`, `crypto` and `data` dialects, `protocol.receive`,
 `protocol.send`, `protocol.service_query`, `protocol.guard`
 and `protocol.loop`. A guard has exactly `site` and `owner` string attributes;
@@ -193,3 +205,13 @@ applications, restrictions and repeat captures to its original root, and
 checks exact owner, request, nominal result and static/dynamic occurrence.
 Only the installed field `draw` is admitted. Unsupported methods refuse.
 The existing validator construction rule continues to refuse local requests.
+
+### Formal checkpoint frames for closed Math arms
+
+A Math arm indexes only its explicit capture frame. The independent formal
+execution retains the immutable caller frame as a prefix of each checkpoint
+emitted while that arm executes. Nested closed frames add their parents in
+lexical order. This prefix is diagnostic state, not an additional operand scope.
+Successful results extend the caller frame using the declared yield row; a stop
+retains the checkpoint reached before the failure. Both arms remain statically
+admitted even though only the selected arm executes.

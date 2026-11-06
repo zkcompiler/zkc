@@ -130,9 +130,9 @@ example : step ⟨.localService { port with owner := "role00000000" } (.draw "ko
     [], [.data (.field "koala-bear")], []⟩ = .error "construction-plain-local-service" := by kernel_rfl
 example : step ⟨.localService port ⟨"read", [], .boolean⟩ template [], [], [.data .boolean], []⟩ =
     .error "construction-plain-local-service-request" := by kernel_rfl
-example : step ⟨.loop "site" 4 [0], [1, 0], [.data .index], []⟩ =
+example : step ⟨.loop "site" 4, [1, 0], [.data .index], [⟨(.data .index :: [.data .index]), [], [0]⟩]⟩ =
     .error "construction-plain-loop" := by kernel_rfl
-example : step ⟨.loop "site" 4 [99], [0, 1], [.data .boolean], []⟩ =
+example : step ⟨.loop "site" 4, [0, 1], [.data .boolean], [⟨(.data .index :: [.data .boolean]), [], [99]⟩]⟩ =
     .error "construction-plain-loop-yield" := by kernel_rfl
 example : step ⟨.observe "" template, [], [], []⟩ = .error "construction-plain-transcript" := by kernel_rfl
 example : step ⟨.indicesEmpty, [], [.indices], []⟩ = .error "construction-plain-shape" := by kernel_rfl

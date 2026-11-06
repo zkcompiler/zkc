@@ -184,19 +184,25 @@ actual source event. The construction rule separately checks sequencing and
 dynamic coordinate provenance. -/
 def instruction (snapshot : Structured.Snapshot) (context : Context) (ports : List ServicePort)
     (loops : List String) : Instruction → Bool
-  | ⟨operation, _, _, body⟩ =>
+  | ⟨operation, _, _, bodies⟩ =>
       (match operation with
        | .observe _ template | .challenge _ _ template => valid snapshot context template
        | .localService port request template _ =>
            ports.contains port && localValid snapshot context port request template &&
              repeatSites template == loops
-       | _ => true) && instructions snapshot context ports
-         (match operation with | .loop site .. => loops ++ [site] | _ => loops) body
+       | _ => true) && regions snapshot context ports
+         (match operation with | .loop site .. => loops ++ [site] | _ => loops) bodies
 
 def instructions (snapshot : Structured.Snapshot) (context : Context) (ports : List ServicePort)
     (loops : List String) : List Instruction → Bool
   | [] => true
   | first :: rest => instruction snapshot context ports loops first && instructions snapshot context ports loops rest
+
+def regions (snapshot : Structured.Snapshot) (context : Context) (ports : List ServicePort)
+    (loops : List String) : List InstructionRegion → Bool
+  | [] => true
+  | ⟨_, body, _⟩ :: rest =>
+      instructions snapshot context ports loops body && regions snapshot context ports loops rest
 end
 
 def check (snapshot : Structured.Snapshot) (context : Context) (participant : Participant) : Except String Unit :=

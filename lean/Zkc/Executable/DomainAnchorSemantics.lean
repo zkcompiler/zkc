@@ -80,7 +80,7 @@ theorem step_local (program : Structured.Program) (context : Context)
     {R : Type} {operation : Operation} {operands : List Nat} {results : List ValueSort}
     {env arguments : List (Value F G)}
     (next : List (Value F G) → PIR.Process (Domain.effects (Structured.uniformCarriers F G)) R)
-    (notLoop : ∀ site maximum yielded, operation ≠ .loop site maximum yielded)
+    (notLoop : ∀ site maximum, operation ≠ .loop site maximum)
     (notLocal : ∀ port request template coordinates,
       operation ≠ .localService port request template coordinates)
     (found : Domain.read env operands = some arguments) :
@@ -93,7 +93,7 @@ theorem step_local (program : Structured.Program) (context : Context)
       env[reference]? = arguments[position]? := fun position reference entry =>
     (value_at found entry).symm
   cases operation with
-  | loop site maximum yielded => exact absurd rfl (notLoop site maximum yielded)
+  | loop site maximum => exact absurd rfl (notLoop site maximum)
   | localService port request template coordinates => exact absurd rfl (notLocal port request template coordinates)
   | calculate calculation =>
       simp only [Domain.step, found, read_positions]

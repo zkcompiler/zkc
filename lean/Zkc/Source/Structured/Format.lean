@@ -257,6 +257,10 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "local_call", name, role] => return .localCall (← string name) (← string role)
   | [.str "fold", domain, step, predicate] =>
       return .fold (← string domain) (← string step) (← string predicate true)
+  | [.str "data_branch", alternatives] =>
+      if (← strings alternatives) != ["then", "else"] then
+        throw "structured-math-branch-alternatives"
+      return .mathBranch
   | [.str "if"] => return .branch
   | [.str "for"] => return .loop
   | [.str "for_condition"] => return .loopCondition

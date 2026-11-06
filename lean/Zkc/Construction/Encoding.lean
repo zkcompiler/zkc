@@ -193,16 +193,20 @@ mutual
 /-- The templates of an instruction's observations and challenges, its own
 before its body's. -/
 def Instruction.templates : Instruction → List Template
-  | ⟨operation, _, _, body⟩ =>
+  | ⟨operation, _, _, regions⟩ =>
       (match operation with
        | .observe _ template => [template]
        | .challenge _ _ template => [template]
-       | _ => []) ++ Instruction.templatesList body
+       | _ => []) ++ InstructionRegion.templates regions
 
 /-- The templates of a program's instructions, in order. -/
 def Instruction.templatesList : List Instruction → List Template
   | [] => []
   | instruction :: rest => instruction.templates ++ Instruction.templatesList rest
+
+def InstructionRegion.templates : List InstructionRegion → List Template
+  | [] => []
+  | ⟨_, body, _⟩ :: rest => Instruction.templatesList body ++ InstructionRegion.templates rest
 end
 
 end Zkc.Construction

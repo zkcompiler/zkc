@@ -227,12 +227,12 @@ theorem alternateRealization : SumcheckFamily.Realization (F := F) (G := G) alte
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.checkHelper (by simp [helperNames])) _]
       exact (fixtureRealization (F := F) (G := G)).prices.check values point claim small shaped }
   prepared := by
-    have names : Instruction.helperList alternate.participant.instructions = helperNames := by kernel_rfl
+    have names : Instruction.helpers alternate.participant.instructions = helperNames := by kernel_rfl
     rw [names]
     intro name member
     apply prepared_agrees installed (helper_functions_agree name member)
     apply (fixtureRealization (F := F) (G := G)).prepared name
-    have original : Instruction.helperList actual.participant.instructions = helperNames := by kernel_rfl
+    have original : Instruction.helpers actual.participant.instructions = helperNames := by kernel_rfl
     rwa [original]
 
 /-- Three rounds at a different root and different oracle keys, on arbitrary

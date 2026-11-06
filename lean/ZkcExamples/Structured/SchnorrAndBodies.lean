@@ -15,9 +15,18 @@ abbrev formulaHelper : Helper :=
 def formulaBody : Region dialect formulaHelper.inputs formulaHelper.outputs :=
   .letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
   .letOp (.groupEqual "bls12-381.g1") (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .nil <|
-  .letOp (.groupEqual "bls12-381.g1") (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
+  .letOp (.branch [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr")] [.boolean]) (.cons .here (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)))) (.cons (.letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons .here (.cons (.there (.there .here)) .nil)) .nil (.letOp (.groupEqual "bls12-381.g1") (.cons (.there (.there .here)) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
+  .ret (.cons .here .nil)
+
+abbrev helper1Helper : Helper :=
+  ⟨"zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean]⟩
+
+def helper1Body : Region dialect helper1Helper.inputs helper1Helper.outputs :=
+  .letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons .here (.cons (.there .here) .nil)) .nil <|
+  .letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)) .nil <|
+  .letOp (.groupAdd "bls12-381.g1") (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .letOp (.groupEqual "bls12-381.g1") (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
+  .letOp (.branch [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.field "bls12-381.fr")] [.boolean]) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)))))) (.cons (.letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil (.letOp (.groupScale "bls12-381.g1" "bls12-381.fr") (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil (.letOp (.groupAdd "bls12-381.g1") (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil (.letOp (.groupEqual "bls12-381.g1") (.cons (.there (.there .here)) (.cons .here .nil)) .nil (.ret (.cons .here .nil)))))) (.cons (.letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))) .nil)) <|
   .ret (.cons .here .nil)
 
 def interactiveSignature : ProtocolSignature where
@@ -68,23 +77,7 @@ def interactiveBody : Region protocolDialect interactiveSignature.inputs interac
   .letOp (.mark "") .nil .nil <|
   .letOp (.restrict (.field "bls12-381.fr") [1]) (.cons .here .nil) .nil <|
   .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale "bls12-381.g1" "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale "bls12-381.g1" "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupAdd "bls12-381.g1") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupEqual "bls12-381.g1") rfl) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale "bls12-381.g1" "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupScale "bls12-381.g1" "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))) .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupAdd "bls12-381.g1") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.groupEqual "bls12-381.g1") rfl) (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate .booleanAnd rfl) (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .letOp (.calculate (.invoke (⟨ "zkl_58c3e21ec903d97998e4e0fbc53e6da76c0f9a6d09bd13bcd30d778eb1f644b0", .math, [(.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.group "bls12-381.g1"), (.group "bls12-381.g1")], [.boolean] ⟩ : Helper)) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))) .nil))))))))) .nil <|
   .ret (.cons .here .nil)
 
 end ZkcExamples.Structured.SchnorrAndBodies

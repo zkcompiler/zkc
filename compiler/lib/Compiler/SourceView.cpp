@@ -1,12 +1,14 @@
-#include "SourceView.h"
 #include "SourceCoordinates.h"
+#include "SourceView.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/AsmParser/AsmParserState.h"
 #include "mlir/Bytecode/BytecodeReader.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLExtras.h"
@@ -71,6 +73,18 @@ class Reader {
         SmallVector<Value> returned(step.inputs);
         if (scoped)
           append_range(returned, arguments.take_back(forwarded));
+        if (ValueRange(returned).getTypes() != outputs)
+          return error("structured-source-region");
+        if (!scoped) {
+          bool valid =
+              terminator == SourceTerminator::Return
+                  ? isa<func::ReturnOp, protocol_ir::MathematicalReturnOp,
+                        protocol_ir::OracleYieldOp>(op)
+                  : terminator == SourceTerminator::Yield &&
+                        isa<data::YieldOp, protocol_ir::ProtocolYieldOp>(op);
+          if (!valid)
+            return error("structured-source-region");
+        }
         auto actual = indices(returned);
         if (!actual)
           return actual.takeError();
@@ -104,9 +118,18 @@ class Reader {
           instruction.regions.push_back(std::move(*inner));
         }
       } else {
-        for (Region &region : op->getRegions()) {
+        for (auto [arm, region] : llvm::enumerate(op->getRegions())) {
           if (!llvm::hasSingleElement(region) || region.front().empty())
             return error("structured-source-region");
+          if (isSelectedControl(op)) {
+            auto payloads = selectedPayloadTypes(op, arm);
+            if (!payloads)
+              return payloads.takeError();
+            SmallVector<Type> expected(*payloads);
+            append_range(expected, op->getOperands().drop_front().getTypes());
+            if (region.front().getArgumentTypes() != TypeRange(expected))
+              return error("structured-source-region");
+          }
           auto inner = ordinary(region.front(), op->getResultTypes(),
                                 SourceTerminator::Yield, depth + 1);
           if (!inner)

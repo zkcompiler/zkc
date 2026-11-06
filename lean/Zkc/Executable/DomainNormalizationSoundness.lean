@@ -290,7 +290,7 @@ theorem step_local_projected (program : Structured.Program) (context : Context)
     {R : Type} {operation : Operation} {operands : List Nat} {results : List ValueSort}
     {env arguments : List (Value F G)}
     (next : List (Value F G) → PIR.Process (Domain.effects (Structured.uniformCarriers F G)) R)
-    (notLoop : ∀ site maximum yielded, operation ≠ .loop site maximum yielded)
+    (notLoop : ∀ site maximum, operation ≠ .loop site maximum)
     (notLocal : ∀ port request template coordinates,
       operation ≠ .localService port request template coordinates)
     (found : Domain.read env operands = some arguments) :
@@ -334,11 +334,11 @@ theorem loop_projected (program : Structured.Program) (context : Context)
     (found : Domain.read env initial = some carried) (bounded : bound ≤ maximum)
     (sorted : Domain.sortsMatch declared carried = true) {R : Type}
     (next : List (Value F G) → PIR.Process (Domain.effects (Structured.uniformCarriers F G)) R) :
-    step program context ⟨.loop site maximum yielded, count :: initial, declared, body⟩ env next =
+    step program context ⟨.loop site maximum, count :: initial, declared, [⟨(.data .index :: declared), body, yielded⟩]⟩ env next =
       ((Domain.iterate (Domain.evaluate (Structured.ringModel F G) program context body)
         env yielded declared (List.range bound) carried).interpret Original.forgetCheckpoints).bind
         (fun final => next (env ++ final)) := by
-  simp only [step, Domain.step, counted, found, bounded, sorted, and_self, ite_true,
+  simp only [step, Domain.step, Domain.executeLoop, counted, found, bounded, sorted, and_self, ite_true,
     PIR.Process.interpret_bind, PIR.Process.bind_assoc]
   apply (yields_interpret Original.forgetCheckpoints _ _
     (iterate_schema _ env yielded declared (List.range bound) carried sorted)).bind_congr
@@ -495,10 +495,8 @@ theorem loop_step (fuel : Nat) (scope : ScopeSound (F := F) (G := G) program con
       Holds terms' { valuation with results := valuation.results ++ [results] } (anchor + 1)
         (exportedIds ++ resultIds) (exportedEnv ++ results) (readingIds ++ resultIds) (readingEnv ++ results) →
         next (exportedEnv ++ results) = next' (readingEnv ++ results)) :
-    step program context ⟨.loop loop.site loop.maximum loop.yielded, loop.count :: loop.initial,
-        loop.results, loop.body⟩ exportedEnv next =
-      step program context ⟨.loop loop'.site loop'.maximum loop'.yielded,
-        loop'.count :: loop'.initial, loop'.results, loop'.body⟩ readingEnv next'  := by
+    step program context ⟨.loop loop.site loop.maximum, loop.count :: loop.initial, loop.results, [⟨(.data .index :: loop.results), loop.body, loop.yielded⟩]⟩ exportedEnv next =
+      step program context ⟨.loop loop'.site loop'.maximum, loop'.count :: loop'.initial, loop'.results, [⟨(.data .index :: loop'.results), loop'.body, loop'.yielded⟩]⟩ readingEnv next'  := by
   obtain ⟨argumentsE, readE, evalE⟩ := holds.exported.read_some foundE
   obtain ⟨argumentsR, readR, evalR⟩ := holds.reading.read_some foundR
   rw [evalE, Option.some.injEq] at evalR
@@ -560,8 +558,8 @@ theorem loop_step (fuel : Nat) (scope : ScopeSound (F := F) (G := G) program con
   · rw [loop_projected program context _ _ _ _ _ _ _ _ _ bound countE initialE bounded sortedE,
       loop_projected program context _ _ _ _ _ _ _ _ _ bound countR initialR (by rwa [← maximumEq]) sortedR]
     exact iterations _ values valuesSorted
-  · simp only [step, Domain.step, countE, countR, initialE, initialR, ← maximumEq, bounded,
-      false_and, ite_false, PIR.Process.interpret, PIR.Process.bind]
+  · simp only [step, Domain.step, Domain.executeLoop, countE, countR, initialE, initialR, ← maximumEq, bounded,
+      false_and, true_and, ite_false, PIR.Process.interpret, PIR.Process.bind]
 
 theorem anchorSound_succ (fuel : Nat) (scope : ScopeSound (F := F) (G := G) program context fuel) :
     AnchorSound (F := F) (G := G) program context (fuel + 1) := by
@@ -598,8 +596,8 @@ theorem anchorSound_succ (fuel : Nat) (scope : ScopeSound (F := F) (G := G) prog
                         rcases first' with ⟨operation', operandsR, results', bodyR⟩
                         simp only at operationEq resultsEq readE readR checked loopy
                         subst operationEq resultsEq
-                        have notLoop : ∀ site maximum yielded, operation ≠ .loop site maximum yielded := by
-                          intro site maximum yielded equal
+                        have notLoop : ∀ site maximum, operation ≠ .loop site maximum := by
+                          intro site maximum equal
                           subst equal
                           simp [loopOperation] at loopy
                         have emptyE : bodyE = [] := by

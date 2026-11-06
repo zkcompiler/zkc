@@ -35,17 +35,21 @@ def block (fuel : Nat) (instructions : List Instruction) (name path : String)
   for (instruction, index) in instructions.zipIdx do
     let stepName := name ++ "Step" ++ toString index
     let stepPath := "(" ++ path ++ ")[" ++ toString index ++ "]'(by decide +kernel)"
-    match instruction.operation with
-    | .loop .. =>
-        let outerPath := "((" ++ path ++ ").take " ++ toString index ++
-          ").foldl (fun frame instruction => frame ++ instruction.results) (" ++ inputPath ++ ")"
-        let bodyInputPath := "((" ++ outerPath ++ ") ++ ValueSort.data Structured.Ty.index :: (" ++
-          stepPath ++ ").results)"
-        text := text ++ (← block fuel instruction.body (stepName ++ "Body")
-          ("(" ++ stepPath ++ ").body")
-          (sorts ++ .data .index :: instruction.results) bodyInputPath)
-    | _ => pure ()
-    let (view, proof) ← (action instruction (app (stepName ++ "Body") arguments, app (stepName ++ "Body_eq") arguments)).mapError
+    let mut bodies := []
+    for (region, arm) in instruction.regions.zipIdx do
+      let suffix := if instruction.operation matches .loop .. then "Body" else "Arm" ++ toString arm
+      let childName := stepName ++ suffix
+      let regionPath := "(" ++ stepPath ++ ").regions[" ++ toString arm ++ "]'(by decide +kernel)"
+      let (childInputs, childInputPath) :=
+        if instruction.operation matches .loop .. then
+          let outerPath := "((" ++ path ++ ").take " ++ toString index ++
+            ").foldl (fun frame instruction => frame ++ instruction.results) (" ++ inputPath ++ ")"
+          (sorts ++ region.inputs, "((" ++ outerPath ++ ") ++ (" ++ regionPath ++ ").inputs)")
+        else (region.inputs, "(" ++ regionPath ++ ").inputs")
+      text := text ++ (← block fuel region.instructions childName
+        ("(" ++ regionPath ++ ").instructions") childInputs childInputPath)
+      bodies := bodies ++ [(app childName arguments, app (childName ++ "_eq") arguments)]
+    let (view, proof) ← (action instruction bodies).mapError
       (fun error => error ++ "; path=" ++ stepPath)
     let stepBinders := Presentation.explicitParameters binders arguments ("model " ++ view)
     text := text ++ "def " ++ stepName ++ stepBinders ++ " : View.Block model.toCarriers :=\n  " ++
