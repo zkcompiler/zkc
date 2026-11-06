@@ -356,6 +356,8 @@ pub enum SourceDeclarationKind {
     Local,
     Interface,
     Requirement,
+    ContractConstructor,
+    View,
 }
 /// A source declaration type: a static parameter, optionally its associated
 /// member, or a parameterless constructor.
@@ -384,17 +386,98 @@ pub enum FrontendAssociation {
     Primitive(&'static str),
     Rule(&'static str),
 }
-/// One installed source declaration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PatternSort {
+    Contract,
+    OptionalExtent,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExtentPattern {
+    Unsized,
+    Variable(usize),
+    Static(usize),
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContractPattern {
+    Variable(usize),
+    Product(&'static [ContractPattern]),
+    Sequence(&'static ContractPattern, ExtentPattern),
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SchemePort {
+    Descriptor(ContractPattern),
+    SelectedView {
+        context: ContractPattern,
+        state: ContractPattern,
+    },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NamedSchemePort {
+    pub name: &'static str,
+    pub port: SchemePort,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DescriptorForm {
+    Append,
+    Concat,
+    Replace,
+    ForgetExtent,
+    CheckExtent,
+    Fold,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrontendScheme {
+    pub name: &'static str,
+    pub form: DescriptorForm,
+    pub variables: &'static [PatternSort],
+    pub statics: &'static [Kind],
+    pub inputs: &'static [SchemePort],
+    pub output: ContractPattern,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrontendConstructorForm {
+    OracleHandle,
+    OracleHandleSequence,
+    FiniteDescriptor,
+    DescriptorProduct,
+    DescriptorSequence,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrontendConstructor {
+    pub name: &'static str,
+    pub form: FrontendConstructorForm,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConcreteSourceSignature {
+    pub statics: &'static [SourceStatic],
+    pub inputs: &'static [SourceInput],
+    pub output: Option<SourceTerm>,
+    pub association: FrontendAssociation,
+}
+/// Index into this exact catalog's immutable scheme table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SchemeId(pub usize);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrontendSignature {
+    Concrete(ConcreteSourceSignature),
+    ContractHead {
+        constructor: &'static str,
+    },
+    ViewScheme {
+        statics: &'static [SourceStatic],
+        inputs: &'static [NamedSchemePort],
+        output: ContractPattern,
+        scheme: SchemeId,
+    },
+}
+/// The installed declaration's exact tagged signature, with common ownership.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FrontendDeclaration {
     pub identity: &'static str,
     pub owner: &'static str,
     pub name: &'static str,
     pub kind: SourceDeclarationKind,
-    pub statics: &'static [SourceStatic],
-    pub inputs: &'static [SourceInput],
-    pub output: Option<SourceTerm>,
-    pub association: FrontendAssociation,
+    pub signature: FrontendSignature,
     pub prelude: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -440,6 +523,8 @@ pub struct ServiceMethodDeclaration {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Catalog {
+    pub frontend_schemes: &'static [FrontendScheme],
+    pub frontend_constructors: &'static [FrontendConstructor],
     pub frontend_declarations: &'static [FrontendDeclaration],
     pub frontend_notations: &'static [FrontendNotation],
     pub frontend_homes: &'static [FrontendHome],

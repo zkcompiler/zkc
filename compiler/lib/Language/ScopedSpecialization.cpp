@@ -428,6 +428,10 @@ class SpecializationCheck {
                                  subst, domains, *closed.domain, &bodyOrigins);
         if (!operands || !same(closed.descriptorOperands, *operands))
           return refuse(op.span, "expanded finite domain substitution differs");
+        if (closed.domain->result >= closed.domain->nodes.size() ||
+            !finiteDescriptorItem(
+                closed.domain->nodes[closed.domain->result].contract))
+          return refuse(op.span, "expanded finite result is not a Finite leaf");
         if (!typeEqual(
                 descriptorType(
                     definition.descriptorInputs[*domain.parameter].contract),
@@ -1198,10 +1202,12 @@ class SpecializationCheck {
     std::vector<DescriptorEnvironment> domains;
     for (unsigned i = 0; i < actual.descriptorArguments.size(); ++i) {
       const auto &shape = actual.descriptorArguments[i];
-      if (!shape || shape->result >= shape->nodes.size() ||
-          !typeEqual(descriptorTypes[i],
-                     descriptorType(shape->nodes[shape->result].contract),
-                     subst, actual.span))
+      if (!shape || !shape->arena ||
+          shape->payload >= shape->arena->payloads.size() ||
+          !typeEqual(
+              descriptorTypes[i],
+              descriptorType(shape->arena->payloads[shape->payload].contract),
+              subst, actual.span))
         return refuse(actual.span, "domain item mapping differs");
       DescriptorEnvironment domain{shape, {}};
       for (const auto &type : shape->inputs) {

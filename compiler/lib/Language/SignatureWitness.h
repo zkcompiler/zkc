@@ -2,6 +2,11 @@
 #define ZKC_LANGUAGE_SIGNATUREWITNESS_H
 #include "State.h"
 namespace zkc::language::detail {
+class Semantics;
+/// Independent header-witness inclusion, with one cumulative allowance for
+/// both the candidate and authored obligations. Keys confer no authority.
+bool requiredAdmissionsIncluded(Semantics &, const Declaration &actual,
+                                const Declaration &written, bool exact);
 llvm::Error checkViewSources(const CheckedStorage &, Work &);
 /// Recheck callback contracts against independently retained authored syntax.
 llvm::Error checkSignatureSources(const CheckedStorage &, Work &);

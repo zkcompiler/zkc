@@ -41,6 +41,16 @@ inline facts::DomainNode cardinalityNode(const DescriptorBinding &source) {
     break;
   case Kind::Parameter:
   case Kind::Application:
+  case Kind::StructuralProduct:
+  case Kind::Sequence:
+  case Kind::ProductProjection:
+  case Kind::SequenceProjection:
+  case Kind::Append:
+  case Kind::Concat:
+  case Kind::Replace:
+  case Kind::ForgetExtent:
+  case Kind::CheckExtent:
+  case Kind::Fold:
     break;
   }
   return view;

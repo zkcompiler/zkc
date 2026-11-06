@@ -266,21 +266,34 @@ Semantics::entryFamilyFields(const Declaration &generated,
   StringRef member = generated.generated->member;
   bool inputs = member.starts_with("Inputs:") || member == "Public" ||
                 member == "Witness";
-  auto bindings = substitution(generated, arguments);
   // One family walk serves every member: the roster depends only on these.
   // The memo belongs to this view, so lookup keys of the substitution suffice.
   std::string key;
   frame(key, std::to_string(target.index));
   frame(key, std::to_string(walked.index));
   frame(key, inputs ? "inputs" : "outputs");
-  for (const auto &[atom, type] : bindings) {
+  // Preserve the map's atom order without copying argument Types on a hit.
+  std::map<StringRef, const Type *> staticBindings;
+  for (unsigned i = 0; i < arguments.size() && i < generated.parameters.size();
+       ++i) {
+    if (!charge(1, span))
+      return {};
+    staticBindings.emplace(generated.parameters[i].atom, &arguments[i]);
+  }
+  for (const auto &[atom, type] : staticBindings) {
+    if (!chargeIdentity(*type, span) || !charge(atom.size(), span))
+      return {};
     frame(key, atom);
-    frame(key, typeIdentity(type));
+    frameTypeIdentity(key, *type);
   }
   if (!charge(key.size(), span))
     return {};
   auto cached = familyRosters.find(key);
   if (cached == familyRosters.end()) {
+    for (const auto &[atom, type] : staticBindings)
+      if (!chargeType(*type, span) || !charge(atom.size() + 1, span))
+        return {};
+    auto bindings = substitution(generated, arguments);
     auto owner = declared;
     auto protocol = declarations[walked.index];
     if (proof) {

@@ -129,7 +129,7 @@ int main() {
                 "callback selection or caller hidden capture layout differs");
       });
   cases.run(
-      "domain substitutions preserve shared constructor graphs and own input "
+      "domain substitutions preserve ordered repeated assertions and own input "
       "slots",
       [] {
         auto entry = close(R"(
@@ -187,18 +187,21 @@ protocol P roles(A)(lo:index@A,hi:index@A,flag:bool@A)->(ok:bool@A){let ok=aggre
         auto &domain = *aggregate->getArray("domains")->front().getAsObject();
         auto &nodes = *domain.getArray("nodes");
         require(
-            domain.getArray("inputs")->size() == 2 && nodes.size() == 2 &&
+            domain.getArray("inputs")->size() == 2 && nodes.size() == 3 &&
                 nodes[0].getAsObject()->getString("kind") == "range" &&
-                nodes[1].getAsObject()->getString("kind") == "product" &&
+                nodes[1].getAsObject()->getString("kind") == "range" &&
+                nodes[2].getAsObject()->getString("kind") == "product" &&
                 *nodes[0].getAsObject()->get("operands") ==
                     json::Value(json::Array{0, 1}) &&
-                *nodes[1].getAsObject()->get("children") ==
+                *nodes[1].getAsObject()->get("operands") ==
+                    json::Value(json::Array{0, 1}) &&
+                *nodes[2].getAsObject()->get("children") ==
                     json::Value(json::Array{
                         json::Object{{"node", 0},
                                      {"contract", *nodes[0].getAsObject()->get(
                                                       "contract")}},
                         json::Object{{"node", 0},
-                                     {"contract", *nodes[0].getAsObject()->get(
+                                     {"contract", *nodes[1].getAsObject()->get(
                                                       "contract")}}}) &&
                 *aggregate->getObject("layout")->get("captures") ==
                     json::Value(json::Array{1, 2}),

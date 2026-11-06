@@ -42,12 +42,13 @@ with case('diagnostic source indices include installed catalog modules'):
     commands.run([compiler, 'language-check', *options, f'--diagnostics={observation}'])
     sources = json.loads(observation.read_text())['sources']
     assert [s['module'] for s in sources] == ['algebra', 'transfer', 'zkc::prelude',
-                                            'zkc::records', 'zkc::transport']
+                                            'zkc::records', 'zkc::transport', 'zkc::descriptor']
     assert [s['origin'] for s in sources] == ['captured', 'captured', 'installation',
-                                            'installation', 'installation']
-    assert [s['path'] for s in sources[-3:]] == ['<installation>/catalog/zkc::prelude',
+                                            'installation', 'installation', 'installation']
+    assert [s['path'] for s in sources[-4:]] == ['<installation>/catalog/zkc::prelude',
                                                '<installation>/catalog/zkc::records',
-                                               '<installation>/catalog/zkc::transport']
+                                               '<installation>/catalog/zkc::transport',
+                                               '<installation>/catalog/zkc::descriptor']
 
 def exact_source_work(observation):
     charged = observation['charged']

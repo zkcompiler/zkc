@@ -64,13 +64,17 @@ int main() {
         require(project.capture().identity() == captureValue.identity() &&
                     project.capture().sources().size() == 1,
                 "prelude altered capture identity or files");
-        require(project.sources().size() == 3 &&
+        require(project.sources().size() == 5 &&
                     project.sources()[0].module == "m" &&
                     project.sources()[0].origin == SourceOrigin::Captured &&
                     project.sources()[1].module == "zkc::prelude" &&
                     project.sources()[1].origin == SourceOrigin::Installation &&
                     project.sources()[2].module == "zkc::records" &&
-                    project.sources()[2].origin == SourceOrigin::Installation,
+                    project.sources()[2].origin == SourceOrigin::Installation &&
+                    project.sources()[3].module == "zkc::transport" &&
+                    project.sources()[3].origin == SourceOrigin::Installation &&
+                    project.sources()[4].module == "zkc::descriptor" &&
+                    project.sources()[4].origin == SourceOrigin::Installation,
                 "captured and installed source identities differ");
         refuses(capture({{"zkc::prelude", "module zkc::prelude;", {}}}),
                 "source.module");

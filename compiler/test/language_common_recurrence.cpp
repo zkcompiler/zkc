@@ -1295,7 +1295,8 @@ protocol Run<N:nat> roles(P,V)(xs:[Choice;N]@(P,V))->(r:bool@(P,V)){
               "source.common-provenance");
         });
   cases.run(
-      "maximum array observation has bounded dimension-independent work", [&] {
+      "array observation work depends on text width, not unobserved elements",
+      [&] {
         auto cost = [&](unsigned length) {
           auto project =
               take(check(arrayProtocol(std::to_string(length), 1), true));
@@ -1331,9 +1332,13 @@ protocol Run<N:nat> roles(P,V)(xs:[Choice;N]@(P,V))->(r:bool@(P,V)){
                   "source.limit");
           return low;
         };
-        auto small = cost(2), maximum = cost(1024);
-        require(small == maximum,
-                "projection work grows with an unobserved array dimension");
+        auto small = cost(2), sameWidth = cost(9);
+        auto large = cost(1001), maximum = cost(1024);
+        require(small == sameWidth && large == maximum,
+                "projection work grows with unobserved elements at fixed text "
+                "width");
+        require(maximum > small,
+                "key materialization lost the extra Natural text bytes");
         outs() << "array observation exact work boundary: " << maximum << '\n';
         refuses(check(arrayProtocol("1000000", 1), true), "source.limit");
       });

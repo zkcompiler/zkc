@@ -9,11 +9,10 @@ Semantics::remapPlacement(const ValuePlacement &value, ArrayRef<unsigned> map,
                           unsigned participants, Span span) {
   if (!charge(0, span))
     return {};
-  auto remaining = work.remaining();
-  const auto before = remaining;
-  auto result = substitutePlacement(value, map, participants, remaining,
+  Work::Budget budget(work);
+  auto result = substitutePlacement(value, map, participants, budget.remaining,
                                     work.limits.typeDepth);
-  const bool charged = charge(before - remaining, span);
+  const bool charged = accept(budget.finish(span), span);
   if (!result) {
     accept(result.takeError(), span);
     return {};
@@ -32,11 +31,10 @@ std::optional<ValuePlacement> Semantics::placement(const Type &type,
       fail("source.limit", "placed type depth limit exceeded", span);
     return {};
   }
-  auto remaining = work.remaining();
-  const auto before = remaining;
-  auto error =
-      validatePlacement(seed, participants, remaining, work.limits.typeDepth);
-  const bool charged = charge(before - remaining, span);
+  Work::Budget budget(work);
+  auto error = validatePlacement(seed, participants, budget.remaining,
+                                 work.limits.typeDepth);
+  const bool charged = accept(budget.finish(span), span);
   if (error) {
     accept(std::move(error), span);
     return {};
@@ -79,6 +77,8 @@ std::optional<ValuePlacement> Semantics::placement(const Type &type,
            span);
       return {};
     }
+    if (!chargeIdentity(type, span))
+      return {};
     ProductPlacement result{typeIdentity(type), application.arguments, {}};
     std::set<unsigned> roles;
     for (unsigned i = 0; i < type.arguments.size(); ++i) {
@@ -102,6 +102,8 @@ std::optional<ValuePlacement> Semantics::placement(const Type &type,
   }
   auto fields = this->fields(type, span, depth + 1);
   if (!fields)
+    return {};
+  if (!chargeIdentity(type, span))
     return {};
   ProductPlacement result{typeIdentity(type), application.arguments, {}};
   for (const auto &field : *fields) {
@@ -190,6 +192,8 @@ Semantics::projectedPlacement(const Type &input, const ValuePlacement &root,
         return {};
       }
       if (const auto *product = std::get_if<ProductPlacement>(&result->value)) {
+        if (!chargeIdentity(type, span))
+          return {};
         if (product->instance != typeIdentity(type) ||
             product->fields.size() != 1) {
           fail("source.placement",
@@ -206,14 +210,15 @@ Semantics::projectedPlacement(const Type &input, const ValuePlacement &root,
       type = std::move(element);
       continue;
     }
-    std::optional<std::vector<TypeField>> computed;
-    const auto *fields = productFields(type, span, 1, computed);
+    auto fields = this->fields(type, span, 1);
     if (!fields || ordinal >= fields->size()) {
       if (!diagnostic)
         fail("source.placement", "invalid placed field ordinal", span);
       return {};
     }
     if (const auto *product = std::get_if<ProductPlacement>(&result->value)) {
+      if (!chargeIdentity(type, span))
+        return {};
       if (product->instance != typeIdentity(type) ||
           product->fields.size() != fields->size()) {
         fail("source.placement", "placed product disagrees with its schema",
@@ -239,138 +244,158 @@ std::optional<PlacedType> Checker::placedType(const Declaration &context,
   if (!resolved)
     return {};
   // The term above resolved and recorded every written name in it. The
-  // placement pass below resolves parts of the same term again, so it records
-  // no further reference for this owner.
+  // placement pass reuses its children and performs only placement-specific
+  // lookups, so it records no further reference for this owner.
   auto replaying = replayedOwner;
   replayedOwner = context.id.index;
   auto restore = llvm::scope_exit([&] { replayedOwner = replaying; });
-  PlacedType result{*resolved};
-  const Declaration *alias = nullptr;
-  if (syntax.kind == SyntaxType::Kind::Name) {
-    auto id = probe(context, syntax.name, syntax.span, nullptr);
-    if (types.diagnostic)
+  // Only this synchronous closure can consume the owned result of type().
+  // Structural children were already resolved and checked in that same call;
+  // move them through placement elaboration instead of resolving them again.
+  std::function<std::optional<PlacedType>(const SyntaxType &, Type, unsigned)>
+      place = [&](const SyntaxType &syntax, Type resolved,
+                  unsigned depth) -> std::optional<PlacedType> {
+    if (!types.charge(1, syntax.span))
       return {};
-    if (id && output.declarations[id->index].kind == Declaration::Kind::Alias)
-      alias = &output.declarations[id->index];
-  }
-  if (alias && alias->placement && syntax.components) {
-    types.fail("source.placement",
-               "a placed alias cannot have an overriding outer placement",
-               syntax.span);
-    return {};
-  }
-  if (syntax.kind == SyntaxType::Kind::Tuple ||
-      syntax.kind == SyntaxType::Kind::Array) {
-    const unsigned arity =
-        syntax.kind == SyntaxType::Kind::Array ? 1 : syntax.arguments.size();
-    std::vector<PlacedType> children;
-    bool placed = isLogicalValue(*resolved);
-    for (unsigned i = 0; i < arity; ++i) {
-      auto child = placedType(context, syntax.arguments[i], depth + 1);
-      if (!child)
+    PlacedType result{std::move(resolved)};
+    const Declaration *alias = nullptr;
+    if (syntax.kind == SyntaxType::Kind::Name) {
+      auto id = probe(context, syntax.name, syntax.span, nullptr);
+      if (types.diagnostic)
         return {};
-      placed |= child->placement.has_value();
-      children.push_back(std::move(*child));
+      if (id && declarations[id->index].kind == Declaration::Kind::Alias)
+        alias = &declarations[id->index];
     }
-    if (placed) {
-      if (syntax.roles || syntax.components) {
-        types.fail("source.placement",
-                   "structural product placements belong to its children",
-                   syntax.span);
-        return {};
+    if (alias && alias->placement && syntax.components) {
+      types.fail("source.placement",
+                 "a placed alias cannot have an overriding outer placement",
+                 syntax.span);
+      return {};
+    }
+    if (syntax.kind == SyntaxType::Kind::Tuple ||
+        syntax.kind == SyntaxType::Kind::Array) {
+      const unsigned arity =
+          syntax.kind == SyntaxType::Kind::Array ? 1 : syntax.arguments.size();
+      std::vector<std::optional<ValuePlacement>> children;
+      bool placed = isLogicalValue(result.type);
+      for (unsigned i = 0; i < arity; ++i) {
+        auto child = place(syntax.arguments[i],
+                           std::move(result.type.arguments[i]), depth + 1);
+        if (!child)
+          return {};
+        placed |= child->placement.has_value();
+        result.type.arguments[i] = std::move(child->type);
+        children.push_back(std::move(child->placement));
       }
-      ProductPlacement schema{typeIdentity(*resolved), {}, {}};
-      std::set<unsigned> participants;
-      for (const auto &child : children) {
-        if (!child.placement) {
+      if (placed) {
+        if (syntax.roles || syntax.components) {
           types.fail("source.placement",
-                     "distributed product child requires placement",
+                     "structural product placements belong to its children",
                      syntax.span);
           return {};
         }
-        auto roles = placementRoles(*child.placement);
-        participants.insert(roles.begin(), roles.end());
-        schema.fields.push_back(*child.placement);
+        if (!types.chargeIdentity(result.type, syntax.span))
+          return {};
+        ProductPlacement schema{typeIdentity(result.type), {}, {}};
+        std::set<unsigned> participants;
+        for (auto &child : children) {
+          if (!child) {
+            types.fail("source.placement",
+                       "distributed product child requires placement",
+                       syntax.span);
+            return {};
+          }
+          auto roles = placementRoles(*child);
+          participants.insert(roles.begin(), roles.end());
+          schema.fields.push_back(std::move(*child));
+        }
+        schema.arguments.assign(participants.begin(), participants.end());
+        result.placement = types.placement(
+            result.type, schema, context.roles.size(), syntax.span, depth);
+        return result.placement ? std::optional(std::move(result))
+                                : std::nullopt;
       }
-      schema.arguments.assign(participants.begin(), participants.end());
-      result.placement = types.placement(
-          *resolved, schema, context.roles.size(), syntax.span, depth);
-      return result.placement ? std::optional(result) : std::nullopt;
     }
-  }
-  if (syntax.components) {
-    if (syntax.roles) {
-      types.fail("source.placement", "product cannot have an outer placement",
-                 syntax.span);
-      return {};
-    }
-    auto selected = roles(context, *syntax.components, syntax.span);
-    if (!selected)
-      return {};
-    if (syntax.oracleHolder) {
-      auto holder = roleArguments(context, {*syntax.oracleHolder}, syntax.span);
-      if (!holder)
+    if (syntax.components) {
+      if (syntax.roles) {
+        types.fail("source.placement", "product cannot have an outer placement",
+                   syntax.span);
         return {};
-      result.placement = OraclePlacement{holder->front(), *selected};
-    } else
-      result.placement = DataPlacement{*selected};
-    result.placement = types.placement(
-        *resolved, *result.placement, context.roles.size(), syntax.span, depth);
-    return result.placement ? std::optional(result) : std::nullopt;
-  }
-  // Aliases can retain a role abstraction with a reordered target map. Its
-  // ordinary Type remains exactly the target's static/nominal identity.
-  if (alias && alias->placement) {
-    auto args = arguments(context, *alias, syntax.arguments, syntax.span,
-                          syntax.labels);
-    if (!args)
-      return {};
-    auto target = types.substitutePlaced({alias->domain, alias->placement},
-                                         types.substitution(*alias, *args),
-                                         alias->roles.size(), syntax.span);
-    if (!target)
-      return {};
-    if (!syntax.roles) {
-      types.fail("source.roles", "alias requires an explicit role application",
-                 syntax.span);
-      return {};
+      }
+      auto selected = roles(context, *syntax.components, syntax.span);
+      if (!selected)
+        return {};
+      if (syntax.oracleHolder) {
+        auto holder =
+            roleArguments(context, {*syntax.oracleHolder}, syntax.span);
+        if (!holder)
+          return {};
+        result.placement = OraclePlacement{holder->front(), *selected};
+      } else
+        result.placement = DataPlacement{*selected};
+      result.placement =
+          types.placement(result.type, *result.placement, context.roles.size(),
+                          syntax.span, depth);
+      return result.placement ? std::optional(std::move(result)) : std::nullopt;
     }
-    auto mapping = roleArguments(context, *syntax.roles, syntax.span);
-    if (!mapping || mapping->size() != alias->roles.size()) {
-      if (!types.diagnostic)
-        types.fail("source.roles", "alias role application arity differs",
-                   syntax.span);
-      return {};
+    // Aliases can retain a role abstraction with a reordered target map. Its
+    // ordinary Type remains exactly the target's static/nominal identity.
+    if (alias && alias->placement) {
+      auto args = arguments(context, *alias, syntax.arguments, syntax.span,
+                            syntax.labels);
+      if (!args)
+        return {};
+      auto target = types.substitutePlaced({alias->domain, alias->placement},
+                                           types.substitution(*alias, *args),
+                                           alias->roles.size(), syntax.span);
+      if (!target)
+        return {};
+      if (!syntax.roles) {
+        types.fail("source.roles",
+                   "alias requires an explicit role application", syntax.span);
+        return {};
+      }
+      auto mapping = roleArguments(context, *syntax.roles, syntax.span);
+      if (!mapping || mapping->size() != alias->roles.size()) {
+        if (!types.diagnostic)
+          types.fail("source.roles", "alias role application arity differs",
+                     syntax.span);
+        return {};
+      }
+      auto mapped = types.remapPlacement(*target->placement, *mapping,
+                                         context.roles.size(), syntax.span);
+      if (!mapped)
+        return {};
+      result.placement = types.placement(result.type, *mapped,
+                                         context.roles.size(), syntax.span);
+    } else if (syntax.roles) {
+      const auto *definition = types.typeDeclaration(result.type);
+      if (!definition || result.type.kind != Type::Kind::LogicalRecord ||
+          definition->roles.empty()) {
+        types.fail("source.roles",
+                   "role application requires a distributed type", syntax.span);
+        return {};
+      }
+      auto mapping = roleArguments(context, *syntax.roles, syntax.span);
+      if (!mapping || mapping->size() != definition->roles.size()) {
+        if (!types.diagnostic)
+          types.fail("source.roles", "record role application arity differs",
+                     syntax.span);
+        return {};
+      }
+      // The initial seed only supplies the ordered map. Recompute all schema
+      // fields and nominal identity, including statics, in the semantic owner.
+      if (!types.chargeIdentity(result.type, syntax.span))
+        return {};
+      result.placement = types.placement(
+          result.type,
+          ProductPlacement{typeIdentity(result.type), *mapping, {}},
+          context.roles.size(), syntax.span, depth);
     }
-    auto mapped = types.remapPlacement(*target->placement, *mapping,
-                                       context.roles.size(), syntax.span);
-    if (!mapped)
+    if ((syntax.roles || (alias && alias->placement)) && !result.placement)
       return {};
-    result.placement = types.placement(result.type, *mapped,
-                                       context.roles.size(), syntax.span);
-  } else if (syntax.roles) {
-    const auto *definition = types.typeDeclaration(*resolved);
-    if (!definition || resolved->kind != Type::Kind::LogicalRecord ||
-        definition->roles.empty()) {
-      types.fail("source.roles", "role application requires a distributed type",
-                 syntax.span);
-      return {};
-    }
-    auto mapping = roleArguments(context, *syntax.roles, syntax.span);
-    if (!mapping || mapping->size() != definition->roles.size()) {
-      if (!types.diagnostic)
-        types.fail("source.roles", "record role application arity differs",
-                   syntax.span);
-      return {};
-    }
-    // The initial seed only supplies the ordered map. Recompute all schema
-    // fields and nominal identity, including statics, in the semantic owner.
-    result.placement = types.placement(
-        *resolved, ProductPlacement{typeIdentity(*resolved), *mapping, {}},
-        context.roles.size(), syntax.span, depth);
-  }
-  if ((syntax.roles || (alias && alias->placement)) && !result.placement)
-    return {};
-  return result;
+    return result;
+  };
+  return place(syntax, std::move(*resolved), depth);
 }
 } // namespace zkc::language::detail

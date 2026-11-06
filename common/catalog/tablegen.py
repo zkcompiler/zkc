@@ -197,12 +197,41 @@ def project(catalog, installation):
     for i, r in enumerate(catalog["frontendRules"]):
         emit(f"ZKC_FrontendRule<{q(r['name'])}, {q(r['kind'])}, {kinds(r['statics'])}, "
              f"{seq(source_term(t) for t in r['inputs'])}, {source_output(r['output'])}>", [ordinal(i)])
+    def pattern(p):
+        tag = p["kind"]
+        variable, children, extent, position = -1, [], "", -1
+        if tag == "contract":
+            variable = p["variable"]
+        elif tag == "product":
+            children = [pattern(c) for c in p["elements"]]
+        elif tag == "sequence":
+            children = [pattern(p["element"])]
+            extent = p["extent"]["kind"]
+            position = p["extent"].get("variable", p["extent"].get("index", -1))
+        return inst(f"ZKC_ContractPattern<{q(tag)}, {variable}, {seq(children)}, {q(extent)}, {position}>")
+
+    def scheme_port(p):
+        values = [p["contract"]] if p["kind"] == "descriptor" else [p["context"], p["state"]]
+        return inst(f"ZKC_SchemePort<{q(p['kind'])}, {seq(pattern(v) for v in values)}, {q(p.get('name', ''))}>")
+
+    for i, r in enumerate(catalog["frontendSchemes"]):
+        emit(f"ZKC_FrontendScheme<{q(r['name'])}, {q(r['form'])}, {seq(q(v) for v in r['variables'])}, "
+             f"{kinds(r['statics'])}, {seq(scheme_port(p) for p in r['inputs'])}, {pattern(r['output'])}>", [ordinal(i)])
     for i, d in enumerate(catalog["frontendDeclarations"]):
-        statics = seq(inst(f"ZKC_SourceStatic<{q(s['name'])}, {kind(s['parameter'])}>") for s in d["statics"])
-        inputs = seq(inst(f"ZKC_SourceInput<{q(s['name'])}, {source_term(s['type'])}>") for s in d["inputs"])
-        emit(f"ZKC_FrontendDeclaration<{q(d['identity'])}, {q(d['owner'])}, {q(d['name'])}, {q(d['kind'])}, "
-             f"{statics}, {inputs}, {source_output(d['output'])}, {q(d['association']['kind'])}, "
-             f"{q(d['association']['target'])}, {flag(d['prelude'])}>", [ordinal(i)])
+        prefix = f"{q(d['identity'])}, {q(d['owner'])}, {q(d['name'])}"
+        if d["kind"] == "ContractConstructor":
+            emit(f"ZKC_ContractHeadDeclaration<{prefix}, {q(d['association']['target'])}, {int(d['prelude'])}>",
+                 [ordinal(i), f"let association = {q(d['association']['kind'])};"])
+            continue
+        statics = seq(inst(f"ZKC_SourceStatic<{q(v['name'])}, {kind(v['parameter'])}>") for v in d["statics"])
+        if d["kind"] == "View":
+            emit(f"ZKC_ViewSchemeDeclaration<{prefix}, {statics}, {seq(scheme_port(p) for p in d['inputs'])}, "
+                 f"{pattern(d['output'])}, {q(d['association']['target'])}, {int(d['prelude'])}>",
+                 [ordinal(i), f"let association = {q(d['association']['kind'])};"])
+            continue
+        inputs = seq(inst(f"ZKC_SourceInput<{q(v['name'])}, {source_term(v['type'])}>") for v in d["inputs"])
+        emit(f"ZKC_FrontendDeclaration<{prefix}, {q(d['kind'])}, {statics}, {inputs}, {source_output(d['output'])}, "
+             f"{q(d['association']['kind'])}, {q(d['association']['target'])}, {int(d['prelude'])}>", [ordinal(i)])
     for i, n in enumerate(catalog["frontendNotations"]):
         fixity = n["fixity"] or {"associativity": "", "precedence": 0}
         emit(f"ZKC_FrontendNotation<{q(n['owner'])}, {q(n['symbol'])}, {q(fixity['associativity'])}, "

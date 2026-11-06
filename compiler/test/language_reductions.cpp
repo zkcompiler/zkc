@@ -1,3 +1,4 @@
+#include "../lib/Language/DescriptorSourceWitness.h"
 #include "../lib/Language/Internal.h"
 #include "../lib/Language/ScopedWitness.h"
 #include "../lib/Language/WrittenSource.h"
@@ -204,6 +205,114 @@ local def compute(xs: Vector<F>,ys: Vector<F>,a: F) -> F:
                                             .binding->target.declaration.index]
                           .qualifiedName == (i == 0 ? "m::first" : "m::second"),
                   "domain operands did not evaluate once in written order");
+      });
+  cases.run(
+      "layout three-binder products and inline arrays replay source order", [] {
+        for (bool arrays : {false, true}) {
+          const std::string inputs =
+              arrays ? "(x ∈ [a, a]) (y ∈ [b, b])"
+                     : "(x ∈ first(xs)) (y ∈ second(ys)) (z ∈ third(xs))";
+          auto project =
+              take(checkLayout(layoutPrelude +
+                               R"(def first(xs: Vector<F>) -> Vector<F>:
+    xs
+def second(xs: Vector<F>) -> Vector<F>:
+    xs
+def third(xs: Vector<F>) -> Vector<F>:
+    xs
+local def compute(xs: Vector<F>,ys: Vector<F>,a: F,b: F) -> F:
+    result <- ∑ )" + inputs + (arrays ? ", x * y\n" : ", x * y * z\n") +
+                               "    return result\n"));
+          auto found =
+              llvm::find_if(project->declarations, [](const auto &decl) {
+                return decl.qualifiedName == "m::compute";
+              });
+          require(found != project->declarations.end() && found->body,
+                  "reduction source body missing");
+          auto original = found->body;
+          const auto &syntax =
+              *project->bodySources.at(found->id.index)->syntax;
+          auto productSource =
+              llvm::find_if(syntax.expressions, [](const auto &expr) {
+                return expr.kind ==
+                       source_detail::Expression::Kind::DomainProduct;
+              });
+          require(productSource != syntax.expressions.end(),
+                  "reduction product source missing");
+          Limits depthLimits;
+          depthLimits.expressionDepth = 1;
+          source_detail::Work depthWork{depthLimits};
+          source_detail::CheckedStorage scratch(project->capture, "");
+          auto reader = take(source_detail::Checker::observe(
+              scratch, *project, depthWork, SourceAccess{found->id}));
+          source_detail::DescriptorSourceWitness relation(
+              *reader, *found, syntax, original->descriptorBindings, {}, {}, 0,
+              original.get(), true);
+          require(!relation.expression(productSource -
+                                       syntax.expressions.begin()) &&
+                      reader->types.diagnostic &&
+                      reader->types.diagnostic->code == "source.limit",
+                  "rigid reduction depth exhaustion lost its limit diagnostic");
+          if (!arrays) {
+            std::vector<std::string> calls;
+            for (const auto &operation : original->operations)
+              if (operation.binding) {
+                const auto &name = project
+                                       ->declarations[operation.binding->target
+                                                          .declaration.index]
+                                       .qualifiedName;
+                if (name == "m::first" || name == "m::second" ||
+                    name == "m::third")
+                  calls.push_back(name);
+              }
+            require(calls == std::vector<std::string>{"m::first", "m::second",
+                                                      "m::third"},
+                    "nested product changed source evaluation order");
+          }
+          for (unsigned mutation = 0; mutation < 3; ++mutation) {
+            if (mutation == 2 && !arrays)
+              continue;
+            auto changed = std::make_shared<Body>(*original);
+            auto &bindings = changed->descriptorBindings;
+            if (mutation) {
+              std::vector<unsigned> leaves;
+              for (unsigned i = 0; i < bindings.size(); ++i)
+                if (bindings[i].kind == DescriptorBinding::Kind::Elements ||
+                    bindings[i].kind == DescriptorBinding::Kind::SourceArray)
+                  leaves.push_back(i);
+              require(leaves.size() >= 2, "reduction data origins missing");
+              bindings[leaves[0]].operands = bindings[leaves[1]].operands;
+              if (mutation == 2) {
+                require(bindings[leaves[0]].expression.has_value(),
+                        "array source expression missing");
+                changed->expressionValues[*bindings[leaves[0]].expression] =
+                    bindings[leaves[1]].operands.front();
+              }
+            } else {
+              auto product = llvm::find_if(bindings, [](const auto &binding) {
+                return binding.kind == DescriptorBinding::Kind::Product;
+              });
+              require(product != bindings.end() &&
+                          product->children.size() == 2,
+                      "reduction product missing");
+              std::swap(product->children[0], product->children[1]);
+            }
+            found->body = changed;
+            Limits limits;
+            source_detail::Work work{limits};
+            auto error = source_detail::checkScopedSources(*project, work);
+            require(bool(error),
+                    "changed reduction order/origin passed replay");
+            auto diagnostic = toString(std::move(error));
+            if (mutation == 2) {
+              errs() << "coordinated array map/leaf: " << diagnostic << '\n';
+              require(StringRef(diagnostic)
+                          .contains("expression producer occurrence differs"),
+                      "coordinated array map escaped independent data replay");
+            }
+          }
+          found->body = original;
+        }
       });
   cases.run(
       "layout filtered-only binding does not create an unfiltered consumer",

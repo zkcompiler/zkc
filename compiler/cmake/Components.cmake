@@ -145,6 +145,7 @@ add_zkc_component(Language
   lib/Language/ScopedValues.cpp
   lib/Language/Scoped.cpp
   lib/Language/DescriptorFactories.cpp
+  lib/Language/DescriptorSequence.cpp
   lib/Language/FiniteDefinitions.cpp
   lib/Language/FiniteContracts.cpp
   lib/Language/HelperResults.cpp

@@ -9,7 +9,8 @@ set(zkc_catalog_inputs
   "${zkc_catalog_directory}/declarations.json"
   "${zkc_catalog_directory}/installation.json"
   "${zkc_catalog_directory}/generate.py"
-  "${zkc_catalog_directory}/tablegen.py")
+  "${zkc_catalog_directory}/tablegen.py"
+  "${zkc_catalog_directory}/descriptor_schemes.py")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${zkc_catalog_inputs})
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${zkc_catalog_directory}/generate.py"
   --source "${zkc_catalog_directory}/declarations.json"

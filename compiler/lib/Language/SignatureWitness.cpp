@@ -2,6 +2,7 @@
 #include "Checker.h"
 #include "Conformance.h"
 #include "DescriptorFactories.h"
+#include "DescriptorSourceWitness.h"
 #include "Effects.h"
 #include "Internal.h"
 #include "ScopedWitness.h"
@@ -540,10 +541,12 @@ bool viewBindingsAgree(Semantics &types, ArrayRef<DescriptorBinding> actual,
     if (!types.charge(x.operands.size() + x.children.size() +
                           x.arguments.size() + x.argumentOrder.size() + 1,
                       x.span) ||
-        !types.chargeContract(x.contract, x.span))
+        !types.chargeType(descriptorType(x.contract), x.span,
+                          /*complete=*/false))
       return false;
     for (const auto &edge : x.children)
-      if (!types.chargeContract(edge.contract, x.span))
+      if (!types.chargeType(descriptorType(edge.contract), x.span,
+                            /*complete=*/false))
         return false;
     for (const auto &argument : x.arguments)
       if (!types.chargeType(argument, x.span))
@@ -557,10 +560,18 @@ bool viewBindingsAgree(Semantics &types, ArrayRef<DescriptorBinding> actual,
         x.children != y.children || x.axis != y.axis ||
         x.parameter != y.parameter || x.expression != y.expression ||
         x.arguments != y.arguments || x.argumentOrder != y.argumentOrder ||
+        x.selectedView != y.selectedView ||
         x.span.source.index != y.span.source.index ||
         x.span.begin != y.span.begin || x.span.end != y.span.end ||
         bool(x.factory) != bool(y.factory))
       return refuse(x.span);
+    // Authored drift keeps the existing witness diagnostic. Candidates that
+    // agree still undergo complete shape validation before acceptance.
+    if (!types.chargeContract(x.contract, x.span))
+      return false;
+    for (const auto &edge : x.children)
+      if (!types.chargeContract(edge.contract, x.span))
+        return false;
     if (x.factory &&
         (x.factory->declaration.index != y.factory->declaration.index ||
          x.factory->module != y.factory->module ||
@@ -742,6 +753,7 @@ bool consumerRequirementsAgree(Semantics &types, const Declaration &actual,
   }
   return true;
 }
+} // namespace
 bool requiredAdmissionsIncluded(Semantics &types, const Declaration &actual,
                                 const Declaration &written, bool exact) {
   auto refuse = [&] {
@@ -755,7 +767,7 @@ bool requiredAdmissionsIncluded(Semantics &types, const Declaration &actual,
   auto admissionKeys = [&](const Declaration &declaration,
                            std::set<std::pair<Boundary, std::string>> &keys) {
     for (const auto &obligation : declaration.admissions) {
-      if (!types.chargeType(obligation.type, declaration.span) ||
+      if (!types.chargeIdentity(obligation.type, declaration.span) ||
           !types.charge(obligation.calls.size() + 1, declaration.span))
         return false;
       keys.emplace(obligation.boundary, typeIdentity(obligation.type));
@@ -773,6 +785,7 @@ bool requiredAdmissionsIncluded(Semantics &types, const Declaration &actual,
     return refuse();
   return true;
 }
+namespace {
 template <typename Header>
 bool headerPremisesAgree(Semantics &types, const CheckedStorage &storage,
                          const Declaration &actual, const Header &written,
@@ -908,7 +921,8 @@ bool signatureAgrees(Semantics &types, const CheckedStorage &storage,
                     actual.span))
     return false;
   if (actual.descriptorResult &&
-      !types.chargeContract(*actual.descriptorResult, actual.span))
+      !types.chargeType(descriptorType(*actual.descriptorResult), actual.span,
+                        /*complete=*/false))
     return false;
   if (actual.kind != written.kind || actual.abstract != written.abstract ||
       actual.completes != written.completes ||
@@ -922,6 +936,9 @@ bool signatureAgrees(Semantics &types, const CheckedStorage &storage,
       actual.outputs.size() != written.outputs.size() ||
       actual.descriptorResult != written.descriptorResult)
     return refuse();
+  if (actual.descriptorResult &&
+      !types.chargeContract(*actual.descriptorResult, actual.span))
+    return false;
   if (!headerPremisesAgree(types, storage, actual, written, permitsInference) ||
       !dataPreconditionsAgree(types, actual, written) ||
       !consumerRequirementsAgree(types, actual, written))
@@ -1177,8 +1194,9 @@ llvm::Error checkViewSources(const CheckedStorage &storage, Work &work) {
     if (found->second->owner.index != id ||
         found->second->syntax->kind != Declaration::Kind::View)
       return refuse(header->span);
-    reader->prepareViewReconstruction(DeclarationId{id},
-                                      *found->second->syntax);
+    if (!replay.declarations[id].descriptorResult)
+      reader->prepareViewReconstruction(DeclarationId{id},
+                                        *found->second->syntax);
   }
   for (const auto &[id, header] : headers.sources) {
     if (header->kind != Declaration::Kind::View)
@@ -1190,7 +1208,8 @@ llvm::Error checkViewSources(const CheckedStorage &storage, Work &work) {
       return refuse(header->span);
     // Infer ordinary results from a fresh body, for explicit and omitted
     // annotations alike. Lazy View dependencies have all been reset above.
-    if (!header->abstract && !reader->body(DeclarationId{id}, 1))
+    if (!header->abstract && !written.descriptorResult &&
+        !reader->body(DeclarationId{id}, 1))
       return reader->types.takeError();
     if (!signatureAgrees(types, storage, actual, written,
                          reader->permitsContractInference(DeclarationId{id})))
@@ -1211,15 +1230,18 @@ llvm::Error checkViewSources(const CheckedStorage &storage, Work &work) {
         return types.takeError();
       continue;
     }
-    if (!actual.descriptorDefinition || !written.descriptorDefinition)
+    if (!actual.descriptorDefinition)
       return refuse(actual.span);
-    const auto &a = *actual.descriptorDefinition,
-               &b = *written.descriptorDefinition;
-    if (a.constructor != b.constructor || a.axis != b.axis ||
-        a.result != b.result || a.bindings.size() != b.bindings.size())
-      return refuse(actual.span);
-    if (!viewBindingsAgree(types, a.bindings, b.bindings, actual.span))
-      return types.takeError();
+    // Fresh immutable source owns the inventory, including unused statements.
+    // The ordinary resolver is read-only with respect to the candidate graph.
+    auto syntax = *header;
+    if (!resolveBindings(*reader, written, syntax))
+      return reader->types.takeError();
+    if (!DescriptorSourceWitness(*reader, written, syntax,
+                                 actual.descriptorDefinition->bindings)
+             .definition(*actual.descriptorDefinition))
+      return reader->types.diagnostic ? reader->types.takeError()
+                                      : refuse(actual.span);
   }
   return Error::success();
 }

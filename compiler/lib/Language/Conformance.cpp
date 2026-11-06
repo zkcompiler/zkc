@@ -25,8 +25,6 @@ bool memberInputs(Semantics &types, const Declaration &required,
       required.outputs.size() != provided.outputs.size() ||
       required.services.size() != provided.services.size() ||
       bool(required.descriptorResult) != bool(provided.descriptorResult) ||
-      (required.descriptorResult && required.descriptorResult->family !=
-                                        provided.descriptorResult->family) ||
       required.inputOrder.size() != provided.inputOrder.size() ||
       required.descriptorInputs.size() != provided.descriptorInputs.size() ||
       required.scopedInputs.size() != provided.scopedInputs.size())
@@ -204,6 +202,8 @@ bool memberContract(Semantics &types, const Declaration &module,
       if (!actual || !types.chargeType(*actual, provided.span))
         return false;
       clearPermissionAssumptions(*actual);
+      if (!types.chargeIdentity(*actual, provided.span))
+        return false;
       admissions.emplace(obligation.boundary, typeIdentity(*actual));
     }
   }
@@ -219,8 +219,12 @@ bool memberContract(Semantics &types, const Declaration &module,
       return false;
     if (*admitted == Semantics::Admission::Accepted)
       continue;
-    if (*admitted == Semantics::Admission::Rejected ||
-        !admissions.count({obligation.boundary, typeIdentity(requirement)}))
+    if (*admitted == Semantics::Admission::Rejected)
+      return refuse(
+          "implementation strengthens boundary admission requirements");
+    if (!types.chargeIdentity(requirement, provided.span))
+      return false;
+    if (!admissions.count({obligation.boundary, typeIdentity(requirement)}))
       return refuse(
           "implementation strengthens boundary admission requirements");
   }
@@ -276,7 +280,10 @@ bool memberContract(Semantics &types, const Declaration &module,
     if (!types.entails(&available, bound, diagnostic))
       return false;
   for (const auto &bound : provided.bounds)
-    if (!types.assumptions(available, bound, {}, provided.span))
+    if (!(provided.kind == Declaration::Kind::View && provided.descriptorResult
+              ? types.structuralAssumptions(available, bound, {}, provided.span,
+                                            diagnostic)
+              : types.assumptions(available, bound, {}, provided.span)))
       return false;
   for (const auto &bound : provided.permissionBounds) {
     if (!types.chargeType(bound.type, provided.span))

@@ -101,7 +101,7 @@ struct LayoutIdentity {
 struct Layout {
   Type type;
   /// Set once when the layout is built. Custody slots, nominal preimages and
-  /// published schemas use it; in-snapshot lookups keep typeIdentity.
+  /// published schemas use it; private lookups compare complete owned Types.
   LayoutIdentity identity;
   /// Generated nominal identity binds exact source, family and installation.
   std::string generatedIdentity;
@@ -233,18 +233,18 @@ public:
 
 private:
   friend class detail::Semantics;
-  /// A nested observer of a semantic view inherits that view's authorities.
-  Layouts(const std::vector<Declaration> &, const Limits &,
-          detail::AuthorityView);
+  /// Synchronous only: borrow the existing immutable lookup index and current
+  /// Work. Fresh query state retains no completion/inference hooks or caches.
+  explicit Layouts(detail::Semantics &);
   llvm::ArrayRef<Declaration> definitions;
   Limits limits;
   struct State;
   std::unique_ptr<State> state;
   /// Both memos are confined to this observer, which borrows one immutable
-  /// checked project or closed Entry. `cache` is keyed by the lookup key;
+  /// checked project or closed Entry. `cache` routes to immutable owned Types;
   /// `slots` maps each custody slot to the canonical key it digests.
   std::map<std::string, std::string> slots;
-  std::map<std::string, std::shared_ptr<const Layout>> cache;
+  std::map<size_t, std::vector<std::shared_ptr<const Layout>>> cache;
   llvm::Error charge(uint64_t);
   llvm::Error initializeTypes();
   llvm::Expected<ProtocolPortLayout> protocolPort(const Port &,

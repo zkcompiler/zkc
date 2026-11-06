@@ -122,9 +122,13 @@ result node supplies the closed result contract without a duplicate family or
 item field. Ordinary runtime operands remain distinct from these static indices.
 Finite conversion extracts an item only after checking Finite and arity one.
 The native finite Domain representation and its enumeration/admission semantics
-are unchanged. Static natural constructor configuration, callable payloads,
-exact reference families and heterogeneous descriptor lists still require their
-own installed formation and consumer rules.
+are unchanged. Checked contracts also distinguish
+[structural descriptor products and sequences](definitions.md#structural-descriptor-contracts),
+including optional natural extents. Their source aggregates, installed schemes,
+ordered formation and Finite projection follow the
+[structural formation contract](descriptor-formation.md). Static natural
+constructor configuration, callable payloads and new native descriptor families
+still require their own installed formation and consumer rules.
 
 Finite closure retains the entire selected factory recipe, including unused
 constructors and shared dependencies, in dependency order. Each reached consumer

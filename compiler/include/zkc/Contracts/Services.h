@@ -22,14 +22,15 @@ struct SourceService {
 inline const std::vector<SourceService> sourceServices = [] {
   std::vector<SourceService> rows;
   for (const auto &declaration : frontendDeclarations())
-    if (declaration.rule == FrontendSignature::RandomConstructor)
+    if (declaration.rule() == FrontendSignature::RandomConstructor)
       rows.push_back(
           {declaration.module, declaration.name, ServiceFamily::Random, 1});
   return rows;
 }();
 inline const SourceService *sourceService(llvm::StringRef qualifiedName) {
   auto *association = frontendDeclaration(qualifiedName);
-  if (!association || association->rule != FrontendSignature::RandomConstructor)
+  if (!association ||
+      association->rule() != FrontendSignature::RandomConstructor)
     return nullptr;
   for (const auto &row : sourceServices)
     if (row.module == association->module && row.name == association->name)

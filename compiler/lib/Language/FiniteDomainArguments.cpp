@@ -1,5 +1,6 @@
 #include "BodyCheck.h"
 #include "DescriptorFactories.h"
+#include "DescriptorFrames.h"
 using namespace llvm;
 namespace zkc::language::detail {
 std::optional<DescriptorOperands> descriptorOperands(Semantics &types,
@@ -92,20 +93,7 @@ bool BodyChecker::captureDomains(
   // applications, not their runtime results; admission stays at the consumer.
   for (auto index : reachable) {
     const auto &source = body.descriptorBindings[index];
-    if (!checker.types.charge(source.operands.size() + source.children.size() +
-                                  source.arguments.size() +
-                                  source.argumentOrder.size() + 1,
-                              span) ||
-        !checker.types.chargeContract(source.contract, span))
-      return false;
-    for (const auto &edge : source.children)
-      if (!checker.types.chargeContract(edge.contract, span))
-        return false;
-    for (const auto &argument : source.arguments)
-      if (!checker.types.chargeType(argument, span))
-        return false;
-    if (source.factory && source.factory->module &&
-        !checker.types.chargeType(*source.factory->module, span))
+    if (!chargeDescriptorBindingCopy(checker.types, source))
       return false;
     DescriptorBinding copy = source;
     for (auto &operand : copy.operands) {
@@ -139,6 +127,41 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
       !checker.types.charge(1, expr.span)) {
     fail("source.limit", "domain argument depth exceeded", expr.span);
     return {};
+  }
+  if (syntax.layoutSyntax && expr.kind != Expression::Kind::DomainProduct &&
+      !inference->collectionDomains.count(id)) {
+    std::map<BindingId, ValueId> data;
+    for (const auto &[name, state] : bindings)
+      if (state.value)
+        data.emplace(name, *state.value);
+    auto evaluate =
+        [&](uint32_t child,
+            const std::optional<Type> &expected) -> std::optional<ValueId> {
+      if (expected && !checker.types.chargeType(*expected, expr.span))
+        return {};
+      auto value = expression(child, expected, depth + 1);
+      if (!value || product(*value) ||
+          !use(*value, syntax.expressions[child].span))
+        return {};
+      body.expressionValues.insert_or_assign(child, *value);
+      return value;
+    };
+    auto selected = authorDescriptorExpression(
+        checker, decl, syntax, body.descriptorBindings, domains, data,
+        [&](ValueId value) -> const Type * {
+          return &body.values.at(value.index).type;
+        },
+        evaluate, id, callDepth, inference->descriptorTypes.at(id));
+    if (!selected)
+      return {};
+    auto retained =
+        descriptorOperands(checker.types, body, {*selected}, expr.span);
+    if (!retained)
+      return {};
+    for (auto operand : retained->values)
+      if (operand.index >= body.values.size() || !use(operand, expr.span))
+        return {};
+    return selected;
   }
   if (expr.kind == Expression::Kind::DomainProduct) {
     std::vector<DescriptorEdge> children;

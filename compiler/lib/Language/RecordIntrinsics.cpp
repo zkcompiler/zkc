@@ -33,6 +33,8 @@ unpackedPlacement(Semantics &types, const Value &source, const Type &payload,
   auto roles = placementRoles(*exact);
   if (root.fields.empty())
     return DataPlacement{std::move(roles)};
+  if (!types.chargeIdentity(payload, span))
+    return {};
   return types.placement(
       payload,
       ProductPlacement{typeIdentity(payload), std::move(roles), root.fields},
@@ -45,7 +47,7 @@ bool isRecordIntrinsic(protocol::FrontendSignature rule) {
          rule == S::RecordRepack;
 }
 bool isRecordIntrinsic(const protocol::FrontendDeclaration *row) {
-  return row && row->rule && isRecordIntrinsic(*row->rule);
+  return row && row->rule() && isRecordIntrinsic(*row->rule());
 }
 bool Checker::indexDeclarations() {
   for (const auto &decl : output.declarations)
@@ -95,7 +97,8 @@ bool checkDeclarationAssociations(Semantics &types,
           decl.name != method->name ||
           decl.qualifiedName != declarations[decl.parent->index].qualifiedName +
                                     "::" + method->name ||
-          constructor->rule != protocol::FrontendSignature::RandomConstructor ||
+          constructor->rule() !=
+              protocol::FrontendSignature::RandomConstructor ||
           decl.kind != Declaration::Kind::Local || !decl.isPublic ||
           decl.abstract || decl.primitive || decl.body ||
           decl.finiteDefinition || !decl.members.empty() ||
@@ -130,12 +133,65 @@ bool checkDeclarationAssociations(Semantics &types,
                         "installed signature differs from its catalog rule",
                         decl.span);
     };
+    if (!row->concrete()) {
+      bool constructor = row->contractHead();
+      // Installed shells receive ordinary source symbols during formation.
+      // Replay that derivation rather than admitting specialization metadata.
+      if (!types.charge(decl.qualifiedName.size(), decl.span))
+        return false;
+      auto symbol = encodeSymbol(decl.qualifiedName, types.work.limits);
+      if (!symbol)
+        return types.accept(symbol.takeError(), decl.span);
+      if (decl.installedDeclaration != row || !decl.isPublic || decl.abstract ||
+          decl.kind != (constructor
+                            ? Declaration::Kind::InstalledContractConstructor
+                            : Declaration::Kind::InstalledViewScheme) ||
+          decl.parameters.size() != row->statics().size() || decl.primitive ||
+          decl.body || decl.finiteDefinition || !decl.members.empty() ||
+          !decl.inputs.empty() || !decl.outputs.empty() ||
+          !decl.inputOrder.empty() || !decl.roles.empty() ||
+          !decl.services.empty() || !decl.scopedInputs.empty() ||
+          !decl.descriptorInputs.empty() || decl.descriptorResult ||
+          decl.effectAllowance || !decl.permissionBounds.empty() ||
+          !decl.capabilityBounds.empty() ||
+          !decl.consumerRequirements.empty() || !decl.admissions.empty() ||
+          !decl.bounds.empty() || !decl.dataPreconditions.empty() ||
+          decl.domain != Type{} || decl.placement || decl.permissions ||
+          decl.resource || decl.sealed || decl.logical || decl.completes ||
+          !decl.associatedSort.empty() || !decl.fields.empty() ||
+          !decl.alternatives.empty() || decl.implementation ||
+          !decl.conformance.empty() || decl.descriptorDefinition ||
+          !decl.descriptorArguments.empty() || decl.generated || decl.origin ||
+          !decl.staticArguments.empty() || !decl.scopedArguments.empty() ||
+          decl.symbol != *symbol || !decl.closureLayout.inputs.empty() ||
+          !decl.closureLayout.captures.empty() || decl.scopedOrigin ||
+          decl.oracleDefinition || decl.oraclePredicateOwner ||
+          decl.specificationBlock || decl.relation ||
+          !decl.specifications.empty() || !decl.sourceClaims.empty() ||
+          !decl.sourceVerifications.empty() || decl.target ||
+          decl.proofFormat || decl.construction ||
+          !std::holds_alternative<RunEntry>(decl.configuration) ||
+          !decl.setups.empty())
+        return refuse();
+      for (unsigned i = 0; i < decl.parameters.size(); ++i)
+        if (decl.parameters[i].sort != Parameter::Sort::Natural ||
+            decl.parameters[i].name != row->statics()[i].name ||
+            decl.parameters[i].atom != "parameter:" + decl.qualifiedName +
+                                           "::" + row->statics()[i].name ||
+            !(decl.parameters[i].permissions == Permissions{}) ||
+            !decl.parameters[i].domainSort.empty() ||
+            decl.parameters[i].interface ||
+            !decl.parameters[i].arguments.empty())
+          return refuse();
+      continue;
+    }
     // A primitive association keeps the primitive path, whose agreement with
     // its operation or intrinsic is checked with every primitive declaration.
     // Checking completes the definition after this check; a checked
     // declaration must define exactly the associated primitive.
-    if (!row->rule) {
-      if ((decl.primitive && decl.primitive->identity != row->primitive) ||
+    if (!row->rule()) {
+      if ((decl.primitive &&
+           decl.primitive->identity != row->concrete()->primitive) ||
           decl.kind != (row->kind == protocol::SourceDeclarationKind::Math
                             ? Declaration::Kind::Math
                             : Declaration::Kind::Local) ||
@@ -151,7 +207,7 @@ bool checkDeclarationAssociations(Semantics &types,
         !decl.admissions.empty() || !decl.bounds.empty() ||
         !decl.dataPreconditions.empty())
       return refuse();
-    if (row->rule == protocol::FrontendSignature::NativeMessage) {
+    if (row->rule() == protocol::FrontendSignature::NativeMessage) {
       if (row->kind != protocol::SourceDeclarationKind::Requirement ||
           decl.kind != Declaration::Kind::Requirement ||
           decl.parameters.size() != 1 ||
@@ -162,7 +218,7 @@ bool checkDeclarationAssociations(Semantics &types,
         return refuse();
       continue;
     }
-    if (row->rule == protocol::FrontendSignature::RandomConstructor) {
+    if (row->rule() == protocol::FrontendSignature::RandomConstructor) {
       if (decl.kind != Declaration::Kind::Interface ||
           decl.parameters.size() != 1 ||
           decl.parameters.front().sort != Parameter::Sort::Domain ||
@@ -189,7 +245,7 @@ bool checkDeclarationAssociations(Semantics &types,
       continue;
     }
     unsigned count =
-        row->rule == protocol::FrontendSignature::RecordRepack ? 2 : 1;
+        row->rule() == protocol::FrontendSignature::RecordRepack ? 2 : 1;
     if (decl.kind != Declaration::Kind::Local ||
         decl.parameters.size() != count || decl.inputs.size() != count ||
         decl.outputs.size() != 1 || decl.inputOrder.size() != count ||
@@ -311,11 +367,13 @@ std::optional<ValueId> BodyChecker::recordCall(const Expression &expr,
   std::vector<unsigned> roles;
   if (protocol()) {
     const auto &wrapper = *body.values[value->index].placement;
-    if (inspect)
+    if (inspect) {
+      if (!checker.types.chargeIdentity(result, expr.span))
+        return {};
       placed = ProductPlacement{typeIdentity(result),
                                 placementRoles(wrapper),
                                 {wrapper, *payloadPlacement}};
-    else
+    } else
       placed = repack ? wrapper : *payloadPlacement;
     roles = placementRoles(*placed);
   }
@@ -358,12 +416,12 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
   const auto &binding = *operation.binding;
   auto *row = index.association(binding.target.declaration);
   if (!row || !binding.installedSignature ||
-      row->rule != *binding.installedSignature || !isRecordIntrinsic(row) ||
+      row->rule() != *binding.installedSignature || !isRecordIntrinsic(row) ||
       !binding.lexicalOwner || !binding.intrinsicSource ||
       binding.lexicalOwner->index >= declarations.size() ||
       binding.target.module ||
       (body.mode != Body::Mode::Local && body.mode != Body::Mode::Protocol) ||
-      (row->rule != protocol::FrontendSignature::RecordUnpack &&
+      (row->rule() != protocol::FrontendSignature::RecordUnpack &&
        body.stage == Body::Stage::Host) ||
       operation.results.size() != 1 ||
       operation.results.front().index >= body.values.size() ||
@@ -372,7 +430,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
       !binding.roles.empty() || !binding.services.empty() ||
       !binding.scopedArguments.empty() || !binding.descriptorArguments.empty())
     return refuse();
-  bool repack = row->rule == protocol::FrontendSignature::RecordRepack;
+  bool repack = row->rule() == protocol::FrontendSignature::RecordRepack;
   unsigned count = repack ? 2 : 1;
   if (binding.operands.size() != count || binding.arguments.size() != count ||
       binding.argumentOrder.size() != count)
@@ -384,7 +442,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
       return refuse();
   auto source = body.values[binding.operands.front().index].type;
   auto payload = recordPayload(types, declarations[binding.lexicalOwner->index],
-                               source, *row->rule, operation.span);
+                               source, *row->rule(), operation.span);
   if (!payload)
     return false;
   const auto *action = std::get_if<Construct>(&operation.action);
@@ -401,7 +459,7 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
       return refuse();
     kind = Construct::Kind::Repack;
     result = source;
-  } else if (row->rule == protocol::FrontendSignature::RecordInspect) {
+  } else if (row->rule() == protocol::FrontendSignature::RecordInspect) {
     kind = Construct::Kind::Inspect;
     result = Type(Type::Kind::Tuple);
     result.arguments = {source, *payload};
@@ -421,10 +479,13 @@ bool checkRecordInvocation(Semantics &types, ArrayRef<Declaration> declarations,
           replacement.components != placementRoles(*payloadPlacement))
         return refuse();
       placed = *input.placement;
-    } else if (row->rule == protocol::FrontendSignature::RecordInspect)
+    } else if (row->rule() == protocol::FrontendSignature::RecordInspect) {
+      if (!types.chargeIdentity(result, operation.span))
+        return false;
       placed = ProductPlacement{typeIdentity(result),
                                 input.components,
                                 {*input.placement, *payloadPlacement}};
+    }
     if (output.placement != placed ||
         output.components != placementRoles(placed))
       return refuse();

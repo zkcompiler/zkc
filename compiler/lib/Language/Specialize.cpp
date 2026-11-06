@@ -4,6 +4,7 @@
 #include "ClosureInputs.h"
 #include "DataRequirements.h"
 #include "DescriptorClosure.h"
+#include "DescriptorFrames.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "OracleDefinitions.h"
@@ -12,6 +13,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/SourceTerms.h"
+#include "zkc/Support/Refusal.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -195,6 +197,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                        ArrayRef<Asset> assets, Work &work,
                        DeclarationId selected,
                        std::optional<HostInvocation::Kind> operation) {
+  // This owner constructs the lookup maps once. Nested layout observations
+  // borrow them; their work must not pay for repeated index reconstruction.
+  if (auto error = chargeSemanticIndex(declarations, work))
+    return error;
   Semantics types(declarations, assets, work);
   auto close = [&]() -> bool {
     const unsigned templates = declarations.size();
@@ -764,9 +770,13 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             auto domain = resolveDomain(call->descriptorArguments.front());
             if (!domain)
               return false;
-            if (item !=
-                descriptorType(
-                    domain->shape->nodes[domain->shape->result].contract))
+            if (!domain->shape ||
+                domain->shape->result >= domain->shape->nodes.size() ||
+                !finiteDescriptorItem(
+                    domain->shape->nodes[domain->shape->result].contract) ||
+                item !=
+                    descriptorType(
+                        domain->shape->nodes[domain->shape->result].contract))
               return types.fail("source.finite-domain",
                                 "closed domain item type differs", op.span);
             auto step = resolveScoped(call->scopedArguments[finite.body], 1);
@@ -1105,9 +1115,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                      source.span);
           return {};
         }
-        if (!types.chargeType(arg, source.span))
+        if (!types.chargeIdentity(arg, source.span))
           return {};
-        detail::frame(key, typeIdentity(arg));
+        frameTypeIdentity(key, arg);
       }
       if (scoped.size() != source.scopedInputs.size()) {
         types.fail("source.scoped", "specialization scoped arity differs",
@@ -1134,6 +1144,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (!domain || !types.charge(domain->identity.size() + 1, source.span))
           return {};
         frame(key, domain->identity);
+        auto formation = descriptorFormationKey(types, *domain, source.span);
+        if (!formation ||
+            !descriptorIdentityFrame(types, key, *formation, source.span))
+          return {};
       }
       auto layout = providedLayout;
       if (layout.inputs.empty() && source.inputs.size())
@@ -1407,8 +1421,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           const auto &domain = domains[i];
           auto item = types.substitute(result.descriptorInputs[i].contract,
                                        bindings, result.span);
-          if (!item || domain->result >= domain->nodes.size() ||
-              *item != domain->nodes[domain->result].contract) {
+          if (!item || !domain->arena ||
+              domain->payload >= domain->arena->payloads.size() ||
+              *item != domain->arena->payloads[domain->payload].contract) {
             if (!types.diagnostic)
               types.fail("source.finite-domain",
                          "closed domain item type differs", result.span);
@@ -1614,14 +1629,23 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         continue;
       json::Array arguments;
       for (const auto &argument : decl.staticArguments) {
-        if (!types.chargeType(argument, decl.span))
-          return false;
-        auto encoded = encodeStaticTerm(argument);
-        if (!encoded) {
-          consumeError(encoded.takeError());
-          return types.fail("source.relation",
-                            "opaque static argument is not closed", decl.span);
-        }
+        auto encoded =
+            encodeStaticTerm(argument, types.work.limits,
+                             types.work.remaining(), [&](uint64_t amount) {
+                               return types.work.charge(amount, decl.span);
+                             });
+        if (!encoded)
+          return types.accept(
+              handleErrors(
+                  encoded.takeError(),
+                  [&](const Refusal &error) -> Error {
+                    if (error.code == "source.static-term")
+                      return failure("source.relation",
+                                     "opaque static argument is not closed",
+                                     decl.span);
+                    return make_error<Refusal>(error.code, error.detail);
+                  }),
+              decl.span);
         arguments.push_back(std::move(*encoded));
       }
       std::string canonical;

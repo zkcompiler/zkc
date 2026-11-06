@@ -305,13 +305,13 @@ public:
         types.recordAdmission,
         std::function<bool(const Declaration &, AdmissionObligation)>(
             [&](const Declaration &scope, AdmissionObligation obligation) {
-              if (!types.chargeType(obligation.type, obligation.span) ||
+              if (!types.chargeIdentity(obligation.type, obligation.span) ||
                   !types.charge(obligation.calls.size() + 1, obligation.span))
                 return false;
               auto [at, inserted] = pending.try_emplace(scope.id.index);
               if (inserted)
                 for (const auto &required : scope.admissions) {
-                  if (!types.chargeType(required.type, required.span) ||
+                  if (!types.chargeIdentity(required.type, required.span) ||
                       !types.charge(1, required.span))
                     return false;
                   at->second.emplace(required.boundary,

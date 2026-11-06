@@ -8,6 +8,46 @@
 
 using namespace llvm;
 namespace zkc::language {
+Expected<bool> NaturalArithmetic::dominatedBy(const Natural &left,
+                                              const Natural &right) {
+  if (left.terms().size() > termLimit || right.terms().size() > termLimit)
+    return error("source.limit", "natural term limit exceeded");
+  auto cursor = right.terms().begin();
+  auto identity = [&](const Natural::Monomial &monomial) -> Error {
+    if (monomial.size() > factorLimit)
+      return error("source.limit", "natural monomial degree limit exceeded");
+    if (auto e = charge(monomial.size() + 1))
+      return e;
+    for (const auto &factor : monomial)
+      if (auto e = charge(factor.name.size() + factor.member.size() + 1))
+        return e;
+    return Error::success();
+  };
+  for (const auto &[monomial, coefficient] : left.terms()) {
+    while (cursor != right.terms().end()) {
+      // Pay for the exact factor identities before ordered comparison. Each
+      // comparison advances an input cursor; no scaled or chained judgment is
+      // introduced by this accounting change.
+      if (auto e = identity(monomial))
+        return std::move(e);
+      if (auto e = identity(cursor->first))
+        return std::move(e);
+      if (!(cursor->first < monomial))
+        break;
+      ++cursor;
+    }
+    if (cursor == right.terms().end())
+      return false;
+    if (auto e = identity(monomial))
+      return std::move(e);
+    if (auto e = identity(cursor->first))
+      return std::move(e);
+    if (monomial != cursor->first || coefficient > cursor->second)
+      return false;
+    ++cursor;
+  }
+  return true;
+}
 Natural Natural::constant(uint64_t n) {
   Natural value;
   if (n)

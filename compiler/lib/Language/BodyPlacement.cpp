@@ -146,6 +146,8 @@ BodyChecker::inferRecordPlacement(const Type &type, ArrayRef<TypeField> fields,
     if (solutions > 1)
       return true;
     if (assigned == count) {
+      if (!checker.types.chargeIdentity(type, span))
+        return false;
       auto candidate = checker.types.placement(
           type, ProductPlacement{typeIdentity(type), mapping, {}},
           decl.roles.size(), span);

@@ -9,8 +9,13 @@ namespace {
 Attribute encode(MLIRContext *context, const json::Value &value) {
   if (auto s = value.getAsString())
     return StringAttr::get(context, *s);
+  if (value.kind() == json::Value::Null)
+    return UnitAttr::get(context);
+  auto *array = value.getAsArray();
+  if (!array)
+    llvm_unreachable("expected a checked protocol origin tree");
   SmallVector<Attribute> items;
-  for (const auto &item : *value.getAsArray())
+  for (const auto &item : *array)
     items.push_back(encode(context, item));
   return ArrayAttr::get(context, items);
 }
@@ -19,6 +24,8 @@ Expected<json::Value> decode(Attribute attr, unsigned &remaining,
   if (!remaining || depth > 132)
     return error("source.protocol-origin", "origin traversal limit exceeded");
   --remaining;
+  if (isa_and_nonnull<UnitAttr>(attr))
+    return json::Value(nullptr);
   if (auto s = dyn_cast_or_null<StringAttr>(attr)) {
     if (s.getValue().size() > 2048 || !json::isUTF8(s.getValue()))
       return error("source.protocol-origin", "invalid origin string");

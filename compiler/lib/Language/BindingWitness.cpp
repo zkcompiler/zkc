@@ -69,10 +69,18 @@ class GroundMatch {
                         [&](const Type &arg) { return ready(arg); });
   }
   bool match(const Type &pattern, const Type &actual, unsigned depth) {
+    // Validate complete current candidates once before descending. Recursive
+    // comparisons borrow these same heads; they do not copy/revalidate every
+    // subtree at every ancestor. Computed Natural candidates enter here again.
+    if (!types.chargeType(pattern, span) || !types.chargeType(actual, span))
+      return false;
+    return matchChecked(pattern, actual, depth);
+  }
+  bool matchChecked(const Type &pattern, const Type &actual, unsigned depth) {
     if (depth > types.work.limits.typeDepth)
       return types.fail("source.limit", "binding witness type depth exceeded",
                         span);
-    if (!types.chargeType(pattern, span) || !types.chargeType(actual, span))
+    if (!types.charge(1, span))
       return false;
     // Only a bare formal is injective. Composite naturals and associations
     // are compared after their inputs are known.
@@ -130,7 +138,7 @@ class GroundMatch {
         return false;
     }
     for (unsigned i = 0; i < pattern.arguments.size(); ++i)
-      if (!match(pattern.arguments[i], actual.arguments[i], depth + 1))
+      if (!matchChecked(pattern.arguments[i], actual.arguments[i], depth + 1))
         return false;
     return true;
   }
@@ -262,7 +270,23 @@ bool checkNotationOccurrence(Semantics &types, const Expression &expr,
                             expr.filteredReduction);
 }
 
-std::optional<ArrayRef<OperatorBinding>>
+AuthoredOperatorFamily::AuthoredOperatorFamily(
+    std::map<std::string, OperatorBinding> &&family) {
+  bindings.reserve(family.size());
+  identities.reserve(family.size());
+  while (!family.empty()) {
+    auto node = family.extract(family.begin());
+    identities.push_back(std::move(node.key()));
+    auto &binding = node.mapped();
+    // A shared_ptr<const T> can still originate from a mutable shared owner.
+    // Detach this small descriptor so no such alias can alter frozen keys.
+    if (binding.notation)
+      binding.notation =
+          std::make_shared<const NotationDescriptor>(*binding.notation);
+    bindings.push_back(std::move(binding));
+  }
+}
+std::shared_ptr<const AuthoredOperatorFamily>
 Checker::operatorWitnessFamily(const Declaration &decl,
                                const SyntaxDeclaration &source,
                                uint32_t expression) {
@@ -305,19 +329,30 @@ Checker::operatorWitnessFamily(const Declaration &decl,
     if ((binding.filteredOnly && !expr.filteredReduction) ||
         (expr.filteredReduction && !binding.filtered))
       return true;
+    if (!chargeOperatorBindingKeys(binding, types, expr.span))
+      return false;
     auto key = operatorBindingKey(binding, output.declarations);
     if (!types.charge(key.size() + 1, expr.span))
+      return false;
+    if (!chargeOperatorBindingCopies(binding, types, expr.span))
       return false;
     family.try_emplace(std::move(key), binding);
     return true;
   };
-  auto retain = [&](OperatorFamilyKey key) -> ArrayRef<OperatorBinding> {
-    std::vector<OperatorBinding> result;
-    for (auto &[identity, binding] : family)
-      result.push_back(std::move(binding));
-    auto stored =
-        operatorWitnessFamilies.emplace(std::move(key), std::move(result));
-    return stored.first->second;
+  auto retain = [&](OperatorFamilyKey key)
+      -> std::shared_ptr<const AuthoredOperatorFamily> {
+    if (!types.charge(2 * family.size() + 1, expr.span))
+      return {};
+    for (const auto &[identity, binding] : family)
+      if (binding.notation &&
+          !types.charge(binding.notation->symbol.size() +
+                            binding.notation->closing.size() + 1,
+                        expr.span))
+        return {};
+    auto result = std::shared_ptr<const AuthoredOperatorFamily>(
+        new AuthoredOperatorFamily(std::move(family)));
+    return operatorWitnessFamilies.emplace(std::move(key), std::move(result))
+        .first->second;
   };
   auto scope = expr.scope;
   unsigned depth = 0;
@@ -335,7 +370,7 @@ Checker::operatorWitnessFamily(const Declaration &decl,
         descriptorKey + (expr.filteredReduction ? ":filtered" : ":plain")};
     if (auto found = operatorWitnessFamilies.find(key);
         found != operatorWitnessFamilies.end())
-      return ArrayRef<OperatorBinding>(found->second);
+      return found->second;
     for (const auto &binding : region.resolvedOperators)
       if (!include(binding))
         return {};
@@ -350,7 +385,7 @@ Checker::operatorWitnessFamily(const Declaration &decl,
                             (expr.filteredReduction ? ":filtered" : ":plain")};
   if (auto found = operatorWitnessFamilies.find(key);
       found != operatorWitnessFamilies.end())
-    return ArrayRef<OperatorBinding>(found->second);
+    return found->second;
   if (!types.charge(visibleOperators[decl.module.index].size() + 1, expr.span))
     return {};
   for (auto site : visibleOperators[decl.module.index]) {
@@ -431,16 +466,46 @@ bool checkOperatorOperands(Semantics &types, const NotationDescriptor &notation,
   return true;
 }
 
-bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
-                          ArrayRef<OperatorBinding> expected,
-                          const NotationDescriptor &notation,
-                          const CallBinding &witness, ArrayRef<Type> inputs,
-                          const Type &output, Span span) {
+namespace {
+bool checkOperatorWitnessImpl(Semantics &types,
+                              ArrayRef<Declaration> declarations,
+                              ArrayRef<OperatorBinding> expected,
+                              const AuthoredOperatorFamily *frozen,
+                              const NotationDescriptor &notation,
+                              const CallBinding &witness, ArrayRef<Type> inputs,
+                              const Type &output, Span span) {
   auto refuse = [&] {
     return types.fail(
         "source.binding-witness",
         "operator binding evidence differs from its definition environment",
         span);
+  };
+  auto matchesKey = [&](unsigned i) {
+    const auto &binding = expected[i];
+    if (!types.charge(witness.family[i].size() + 1, span))
+      return false;
+    if (!frozen) {
+      return chargeOperatorBindingKeys(binding, types, span) &&
+             witness.family[i] == operatorBindingKey(binding, declarations);
+    }
+    // Immutable source keys are reusable text, not candidate admission. Check
+    // every Type against this consumer's actual limits and remaining Work.
+    auto reference = [&](const CallableReference &target) {
+      return (!target.reference.abstract ||
+              types.chargeType(target.reference.abstract->module, span)) &&
+             (!target.module || types.chargeType(*target.module, span));
+    };
+    auto arguments = [&](const auto &values) {
+      for (const auto &value : values)
+        if (value && !types.chargeType(*value, span))
+          return false;
+      return true;
+    };
+    if (!reference(binding.target) || !arguments(binding.arguments) ||
+        (binding.filtered && (!reference(binding.filtered->target) ||
+                              !arguments(binding.filtered->arguments))))
+      return false;
+    return witness.family[i] == frozen->keys()[i];
   };
   if (witness.target.declaration.index >= declarations.size() ||
       witness.family.size() != expected.size() || !witness.origin ||
@@ -464,8 +529,7 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
                                 ? binding.filtered->arguments
                                 : binding.arguments;
     if (!sameTarget(target, witness.target) ||
-        target.declaration.index >= declarations.size() ||
-        witness.family[0] != operatorBindingKey(binding, declarations))
+        target.declaration.index >= declarations.size() || !matchesKey(0))
       return refuse();
     const auto &selected = declarations[target.declaration.index];
     if (arguments.size() != selected.parameters.size() ||
@@ -517,10 +581,7 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
         (callee.kind != Declaration::Kind::Math &&
          callee.kind != Declaration::Kind::Local))
       return refuse();
-    if (!types.charge(witness.family[i].size() + 1, span))
-      return false;
-    if (witness.family[i] != operatorBindingKey(binding, declarations) ||
-        binding.symbol != witness.symbol)
+    if (!matchesKey(i) || binding.symbol != witness.symbol)
       return refuse();
     bool chosen = sameTarget(binding.target, witness.target) &&
                   sameSpan(binding.span, *witness.origin);
@@ -550,6 +611,25 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
   return result && (*result == output || refuse());
 }
 
+} // namespace
+bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
+                          ArrayRef<OperatorBinding> expected,
+                          const NotationDescriptor &notation,
+                          const CallBinding &witness, ArrayRef<Type> inputs,
+                          const Type &output, Span span) {
+  return checkOperatorWitnessImpl(types, declarations, expected, nullptr,
+                                  notation, witness, inputs, output, span);
+}
+bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
+                          const AuthoredOperatorFamily &expected,
+                          const NotationDescriptor &notation,
+                          const CallBinding &witness, ArrayRef<Type> inputs,
+                          const Type &output, Span span) {
+  return checkOperatorWitnessImpl(types, declarations, expected.entries(),
+                                  &expected, notation, witness, inputs, output,
+                                  span);
+}
+
 bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
                      const Body &body, const Operation &operation,
                      const DeclarationIndex *index) {
@@ -570,7 +650,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
                                           operation)
                  : refuse();
   if (index && index->association(binding.target.declaration) &&
-      index->association(binding.target.declaration)->rule ==
+      index->association(binding.target.declaration)->rule() ==
           protocol::FrontendSignature::RandomConstructor)
     return refuse();
   if (binding.installedSignature || binding.lexicalOwner ||

@@ -1,5 +1,8 @@
 #include "HelperResults.h"
+#include "DescriptorClosure.h"
+#include "DescriptorFrames.h"
 #include "FiniteCardinality.h"
+#include "FormationCursor.h"
 #include "MathematicalFacts.h"
 #include "llvm/ADT/ScopeExit.h"
 
@@ -18,9 +21,6 @@ class HelperResults::Extraction {
   facts::Work work;
   std::vector<ResultShape> shapes{ResultShape{}};
   std::map<unsigned, unsigned> bodyDomains;
-  using FactoryKey =
-      std::tuple<unsigned, std::vector<unsigned>, std::vector<unsigned>>;
-  std::map<FactoryKey, unsigned> factories;
 
   bool enter(unsigned depth) {
     if (depth > types.work.limits.expressionDepth)
@@ -74,31 +74,13 @@ class HelperResults::Extraction {
                   ArrayRef<unsigned> children, unsigned depth) {
     if (pending || !enter(depth))
       return 0;
-    if (!finiteDescriptorItem(node.contract))
-      return remember({});
-    if (!types.chargeContract(node.contract, span))
+    if (!finiteDescriptorItem(node.contract)) {
+      types.fail("source.descriptor", "finite summary requires a Finite leaf",
+                 span);
       return 0;
-    if (node.kind == DescriptorBinding::Kind::Application) {
-      if (!node.factory ||
-          node.factory->declaration.index >= reader.declarations.size())
-        return remember({});
-      unsigned index = node.factory->declaration.index;
-      std::vector<unsigned> inputs;
-      for (auto operand : operands)
-        inputs.push_back(operand.index);
-      FactoryKey key{index, std::move(inputs), children.vec()};
-      if (auto found = factories.find(key); found != factories.end())
-        return found->second;
-      const auto &callee = reader.declarations[index];
-      if (callee.abstract || !callee.descriptorDefinition)
-        return remember({});
-      const auto &recipe = *callee.descriptorDefinition;
-      auto result = domains(recipe.bindings, recipe.result, operands, children,
-                            depth + 1);
-      if (!pending && !types.diagnostic)
-        factories.emplace(std::move(key), result);
-      return result;
     }
+    if (!chargeDescriptorBindingCopy(types, node))
+      return 0;
     DescriptorBinding mapped = node;
     mapped.operands = operands.vec();
     auto view = cardinalityNode(mapped);
@@ -186,19 +168,40 @@ class HelperResults::Extraction {
                  span);
       return 0;
     }
-    const auto &node = body.descriptorBindings[selected];
-    unsigned result;
-    if (node.parameter) {
-      result = remember({{}, 0, *node.parameter, {}, false});
-    } else {
-      SmallVector<unsigned> children;
-      for (auto child : node.children) {
-        if (pending || types.diagnostic)
-          return 0;
-        children.push_back(bodyDomain(child.node, depth + 1));
-      }
-      result = domain(node, node.operands, children, depth + 1);
+    auto formation = formDescriptor(types, reader.declarations, body, selected,
+                                    {}, &origins);
+    if (!formation) {
+      if (!types.diagnostic)
+        types.fail("source.scoped-domain",
+                   "helper descriptor formation differs", span);
+      else if (types.diagnostic->code != "source.limit" &&
+               types.diagnostic->code != "source.cancelled")
+        types.diagnostic->code = "source.scoped-domain";
+      return 0;
     }
+    auto parameter = [&](std::optional<unsigned> port,
+                         const DescriptorContract &) {
+      return remember({{}, 0, port, {}, false});
+    };
+    auto leaf = [&](const DescriptorBinding &node, ArrayRef<ValueId> operands,
+                    ArrayRef<unsigned> children) -> std::optional<unsigned> {
+      // An open structural application has no Finite cardinality theorem.
+      // Retain its typed dependencies in formation without inventing a fact.
+      if (!finiteDescriptorItem(node.contract))
+        return remember({});
+      auto result = domain(node, operands, children, depth + 1);
+      return pending || types.diagnostic ? std::nullopt : std::optional(result);
+    };
+    auto compose = [&](DescriptorBinding::Kind, const DescriptorContract &,
+                       ArrayRef<Type>,
+                       ArrayRef<unsigned>) -> std::optional<unsigned> {
+      return remember({});
+    };
+    auto read =
+        readFormation<unsigned>(types, *formation, parameter, leaf, compose);
+    if (!read)
+      return 0;
+    unsigned result = read->selected;
     if (!pending && !types.diagnostic)
       bodyDomains.emplace(selected, result);
     return result;

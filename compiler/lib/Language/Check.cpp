@@ -13,7 +13,7 @@ using namespace llvm;
 namespace zkc::language::detail {
 Checker::Checker(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
                  Work &work)
-    : output(output), work(work),
+    : output(output), declarations(output.declarations), work(work),
       types(output.declarations, output.assets, work,
             [this](DeclarationId id) { return signature(id); }),
       syntax(std::move(syntax)) {
@@ -39,6 +39,30 @@ Checker::Checker(CheckedStorage &output, Work &work, AccessContext policy)
   access = std::move(policy);
   types.completeDispatchBody = {};
 }
+Expected<std::unique_ptr<Checker>>
+Checker::observe(CheckedStorage &scratch, const CheckedStorage &source,
+                 Work &work, AccessContext policy) {
+  if (&scratch == &source || !scratch.declarations.empty() ||
+      !scratch.assets.empty() || !source.declarationIndex)
+    return failure("source.binding-witness", "invalid static reader context");
+  // This pays for the semantic lookup indices, not a Declaration snapshot.
+  // Recursive contracts and asset payloads remain borrowed and are charged by
+  // the existing semantic queries when observed. No signature/body producer or
+  // inference hook is installed on this view.
+  if (auto error = work.charge(sizeof(Checker) + sizeof(DeclarationIndex)))
+    return std::move(error);
+  if (auto error = chargeSemanticIndex(source.declarations, work))
+    return std::move(error);
+  scratch.sources = source.sources;
+  scratch.declarationIndex = source.declarationIndex;
+  return std::unique_ptr<Checker>(
+      new Checker(scratch, source, work, std::move(policy)));
+}
+Checker::Checker(CheckedStorage &scratch, const CheckedStorage &source,
+                 Work &work, AccessContext policy)
+    : output(scratch), declarations(source.declarations), work(work),
+      types(source.declarations, source.assets, work), observing(true),
+      access(std::move(policy)) {}
 void Checker::registerContractInference(Declaration &decl,
                                         const SyntaxDeclaration &source) {
   // Rule associations have catalog contracts; installed primitives infer
@@ -95,7 +119,7 @@ void Checker::installAdmissionCollection(bool signaturesOnly) {
                                            AdmissionObligation obligation) {
     if (signaturesOnly && signatureState[scope.id.index] != 1)
       return false;
-    if (!types.chargeType(obligation.type, obligation.span) ||
+    if (!types.chargeIdentity(obligation.type, obligation.span) ||
         !types.charge(obligation.calls.size() + 1, obligation.span))
       return false;
     auto &admissions = output.declarations[scope.id.index].admissions;
@@ -187,6 +211,7 @@ bool Checker::prepareSignatureReconstruction(DeclarationId id,
   auto &written = reconstructedSources[id.index];
   // Body trees and nested declarations are not part of a signature replay.
   written.kind = source.kind;
+  written.installedDeclaration = source.installedDeclaration;
   written.name = source.name;
   written.span = source.span;
   written.roles = source.roles;
@@ -524,6 +549,7 @@ bool Checker::collect() {
     decl.id = {uint32_t(output.declarations.size())};
     decl.module = source.kind == Declaration::Kind::Module ? decl.id : module;
     decl.kind = source.kind;
+    decl.installedDeclaration = source.installedDeclaration;
     if (source.generated) {
       auto target = *parent;
       if (output.declarations[target.index].generated)

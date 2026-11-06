@@ -36,7 +36,7 @@ bool Checker::requirements(Declaration &decl) {
         auto *installed = index().ruleAssociation(reference->target);
         if (!installed ||
             installed->kind != protocol::SourceDeclarationKind::Requirement ||
-            installed->rule != protocol::FrontendSignature::NativeMessage ||
+            installed->rule() != protocol::FrontendSignature::NativeMessage ||
             req.arguments.size() != 1)
           return types.fail("source.requirement",
                             "expected one complete native message payload type",
@@ -196,6 +196,8 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
   return true;
 }
 bool Checker::signature(DeclarationId id, unsigned depth) {
+  if (observing)
+    return id.index < declarations.size() && types.charge(1, {});
   auto &decl = output.declarations[id.index];
   if (signatureState[id.index] == 2)
     return true;
@@ -414,6 +416,19 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
   }
   deferredApplications.erase(id.index);
+  if (decl.kind == Declaration::Kind::InstalledContractConstructor ||
+      decl.kind == Declaration::Kind::InstalledViewScheme) {
+    auto *row = index().association(decl.id);
+    if (!row || row != source.installedDeclaration ||
+        row != decl.installedDeclaration ||
+        (decl.kind == Declaration::Kind::InstalledContractConstructor
+             ? !index().constructorAssociation(decl.id)
+             : !index().schemeDefinition(decl.id)))
+      return types.fail("source.installation",
+                        "installed shell association differs", decl.span);
+    signatureState[id.index] = 2;
+    return true;
+  }
   if (decl.kind == Declaration::Kind::Construction) {
     auto target = resolve(decl, source.target, source.span);
     if (!target || !signature(*target, depth + 1))
@@ -658,7 +673,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!decl.descriptorResult)
         decl.descriptorResult =
             DescriptorContract{DescriptorFamily::Finite, {*resolved}};
-      if (decl.descriptorResult->family == DescriptorFamily::Finite) {
+      if (descriptorType(*decl.descriptorResult).kind ==
+          Type::Kind::Descriptor) {
         auto *item = finiteDescriptorItem(*decl.descriptorResult);
         if (!item)
           return types.fail("source.descriptor", "invalid Finite result arity",
@@ -721,7 +737,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                   : types.executableType(*t, src.span)))
           return false;
         if (decl.kind == Declaration::Kind::View && decl.descriptorResult &&
-            decl.descriptorResult->family == DescriptorFamily::Finite &&
+            finiteDescriptorItem(*decl.descriptorResult) &&
             !types.requireUsage(*t, Usage::Copy, src.span, &decl,
                                 "source.finite-domain",
                                 "domain operands require Copy"))
@@ -821,7 +837,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!contract)
         contract = DescriptorContract{DescriptorFamily::Finite, {*resolved}};
       // These are Finite's item rules, not universal descriptor rules.
-      if (contract->family == DescriptorFamily::Finite) {
+      if (descriptorType(*contract).kind == Type::Kind::Descriptor) {
         auto *item = finiteDescriptorItem(*contract);
         if (!item)
           return types.fail("source.descriptor", "invalid Finite input arity",
@@ -1043,6 +1059,8 @@ bool Checker::representations() {
         if (type.kind == Type::Kind::Parameter || type.symbolic)
           return true;
         // Cycle sets are keyed by lookup key; local to this one expansion.
+        if (!types.chargeIdentity(type, span))
+          return false;
         auto key = typeIdentity(type);
         if (complete.count(key))
           return true;

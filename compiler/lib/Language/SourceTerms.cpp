@@ -29,6 +29,20 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
   if (type.kind == K::Domain || type.kind == K::Asset)
     return json::Array{type.kind == K::Domain ? "domain" : "asset", type.sort,
                        type.domain};
+  if (type.kind == K::DescriptorSequence) {
+    auto element = encode(type.arguments.front(), remaining, depth + 1);
+    if (!element)
+      return element.takeError();
+    json::Value extent = nullptr;
+    if (type.arguments.size() == 2) {
+      auto value = encode(type.arguments.back(), remaining, depth + 1);
+      if (!value)
+        return value.takeError();
+      extent = std::move(*value);
+    }
+    return json::Array{"descriptor-sequence", std::move(*element),
+                       std::move(extent)};
+  }
   if (type.kind == K::Array) {
     if (type.arguments.size() != 1 || !type.dimension.isClosed())
       return error("source.static-term", "array is not closed");
@@ -49,6 +63,8 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
   }
   if (type.kind == K::Tuple)
     return json::Array{"tuple", std::move(arguments)};
+  if (type.kind == K::DescriptorProduct)
+    return json::Array{"descriptor-product", std::move(arguments)};
   if (!frontendTypeConstructor(type).empty())
     return json::Array{"builtin", frontendTypeConstructor(type),
                        std::move(arguments)};
@@ -62,8 +78,17 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
                        std::move(arguments)};
   return error("source.static-term", "unsupported static term");
 }
-} // namespace
-Expected<json::Value> encodeStaticTerm(const Type &type) {
+Expected<json::Value> encodeChecked(const Type &type, uint64_t nodes,
+                                    uint64_t depth, uint64_t allowance,
+                                    TypeWorkCharge charge) {
+  // The linear framing bound covers preflight, encoding (including Natural
+  // text) and validation of the output tree. No nested default preflight runs.
+  auto cost = typeComplexity(type, nodes, depth, allowance, nullptr, true,
+                             TypeWork::StaticExport);
+  if (!cost)
+    return cost.takeError();
+  if (auto e = charge(*cost))
+    return std::move(e);
   unsigned remaining = 4096;
   auto value = encode(type, remaining);
   if (!value)
@@ -71,6 +96,21 @@ Expected<json::Value> encodeStaticTerm(const Type &type) {
   if (auto e = checkStaticTerm(*value))
     return std::move(e);
   return std::move(*value);
+}
+} // namespace
+Expected<json::Value> encodeStaticTerm(const Type &type) {
+  // Preserve the public source-tree grammar's existing 4096/64 bounds.
+  return encodeChecked(type, 4096, 64, Limits{}.work,
+                       [](uint64_t) { return Error::success(); });
+}
+Expected<json::Value> encodeStaticTerm(const Type &type, const Limits &limits,
+                                       uint64_t allowance,
+                                       TypeWorkCharge charge) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  return encodeChecked(type, std::min<uint64_t>(4096, limits.typeNodes),
+                       std::min<uint64_t>(64, limits.typeDepth),
+                       std::min(allowance, limits.work), charge);
 }
 Expected<json::Value> encodeProtocolOrigin(const ClosedEntry &entry,
                                            const Declaration &decl) {
@@ -82,7 +122,19 @@ Expected<json::Value> encodeProtocolOrigin(const ClosedEntry &entry,
     return error("source.limit", "protocol origin limit exceeded");
   json::Array bindings;
   unsigned remaining = 4096;
+  uint64_t work = Limits{}.work - source.qualifiedName.size() - 1;
   for (unsigned i = 0; i < source.parameters.size(); ++i) {
+    const auto &name = source.parameters[i].name;
+    if (name.size() > 512)
+      return error("source.limit", "protocol binding name exceeds 512 bytes");
+    if (name.size() + 1 > work)
+      return error("source.limit", "protocol binding work exceeded");
+    work -= name.size() + 1;
+    auto cost = typeComplexity(decl.staticArguments[i], remaining, 64, work,
+                               nullptr, true, TypeWork::StaticExport);
+    if (!cost)
+      return cost.takeError();
+    work -= *cost;
     auto term = encode(decl.staticArguments[i], remaining);
     if (!term)
       return term.takeError();

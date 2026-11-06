@@ -44,7 +44,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   if (const auto *association =
           checker.output.declarationIndex->association(target.declaration);
       isRecordIntrinsic(association))
-    return recordCall(expr, target, *association->rule, depth);
+    return recordCall(expr, target, *association->rule(), depth);
   if (callee.generated && !callee.generated->constructible &&
       (callee.kind == Declaration::Kind::Record ||
        callee.kind == Declaration::Kind::Variant)) {
@@ -379,6 +379,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                         argument.span);
           if (!checker.types.charge(1, argument.span))
             return false;
+          // Layout descriptor sources are independently related to the actual
+          // recipe from syntax by DescriptorSourceWitness. No factory replay
+          // inventory is manufactured from the candidate's expression maps.
+          if (syntax.layoutSyntax)
+            return true;
           if (inference->collectionDomains.count(expression) ||
               argument.binding)
             return true;
@@ -453,7 +458,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!visible)
       return {};
     if (evidence.scopedSource)
-      witnesses.calls[*evidence.scopedSource]->notationFamily = visible->vec();
+      witnesses.calls[*evidence.scopedSource]->notationFamily = visible;
     if (!checkOperatorOperands(checker.types, *expr.notation, evidence, binding,
                                authoredOperands, expr.span))
       return {};
@@ -475,7 +480,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     auto &families = witnesses.notations[decl.id.index];
     if (!families)
       families = std::make_shared<NotationFamilies>();
-    families->try_emplace(id, visible->vec());
+    families->try_emplace(id, visible);
   }
   auto emitCall = [&](decltype(Operation::action) action,
                       Components available) -> std::optional<ValueId> {

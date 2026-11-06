@@ -88,7 +88,24 @@ struct OperatorBinding {
   /// Preserve the written form independently of a legacy paired binding.
   bool filteredOnly = false;
 };
-using NotationFamilies = std::map<uint32_t, std::vector<OperatorBinding>>;
+/// Independently enumerated lexical bindings and the exact keys made while
+/// validating them. Only Checker can freeze a family; callers borrow immutable
+/// entries, never inference's mutable candidate list. Ownership can extend into
+/// source replay, where every consumer still checks current Type bounds.
+class AuthoredOperatorFamily {
+  friend class Checker;
+  explicit AuthoredOperatorFamily(std::map<std::string, OperatorBinding> &&);
+  std::vector<OperatorBinding> bindings;
+  std::vector<std::string> identities;
+
+public:
+  AuthoredOperatorFamily(const AuthoredOperatorFamily &) = delete;
+  AuthoredOperatorFamily &operator=(const AuthoredOperatorFamily &) = delete;
+  llvm::ArrayRef<OperatorBinding> entries() const { return bindings; }
+  llvm::ArrayRef<std::string> keys() const { return identities; }
+};
+using NotationFamilies =
+    std::map<uint32_t, std::shared_ptr<const AuthoredOperatorFamily>>;
 struct SyntaxSelector {
   bool output = false;
   std::string port;
@@ -412,6 +429,7 @@ struct SyntaxDeclaration {
   /// Private link to the frozen authored header, assigned before expansion.
   /// Not serialized and never an artifact or proof identity.
   std::optional<uint32_t> writtenDeclaration;
+  const protocol::FrontendDeclaration *installedDeclaration = nullptr;
   bool layoutSyntax = false;
   bool invalidBody = false;
   /// Authored parameter group, erased before native declaration collection.
@@ -497,6 +515,10 @@ staticSubscriptIndex(const SyntaxDeclaration &syntax, const Expression &expr) {
   return index.text;
 }
 
+/// Each actual operator key construction needs this debit, even for memo hits.
+class Semantics;
+bool chargeOperatorBindingKeys(const OperatorBinding &, Semantics &, Span);
+bool chargeOperatorBindingCopies(const OperatorBinding &, Semantics &, Span);
 std::string operatorBindingKey(const OperatorBinding &,
                                llvm::ArrayRef<Declaration>);
 llvm::StringRef operatorSymbol(const Expression &);
