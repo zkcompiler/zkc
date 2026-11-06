@@ -15,7 +15,37 @@ inductive SourcePlacement where
   | data (roles : List String)
   | oracle (holder : String) (receivers : List String)
   | product (arguments : List String) (fields : List SourcePlacement)
-  deriving BEq, Repr
+  deriving Repr
+
+mutual
+  /-- Source admission compares whole placement trees in the kernel, including
+  receiver order and every child of a product. -/
+  def SourcePlacement.decEq (a b : SourcePlacement) : Decidable (a = b) := by
+    cases a <;> cases b
+    all_goals first | exact isFalse (SourcePlacement.noConfusion ·) | skip
+    case data.data a b =>
+      exact decidable_of_iff (a = b) (by simp only [SourcePlacement.data.injEq])
+    case oracle.oracle h r h' r' =>
+      exact decidable_of_iff (h = h' ∧ r = r') (by simp only [SourcePlacement.oracle.injEq])
+    case product.product a xs b ys =>
+      letI : Decidable (xs = ys) := SourcePlacement.listDecEq xs ys
+      exact decidable_of_iff (a = b ∧ xs = ys) (by simp only [SourcePlacement.product.injEq])
+
+  def SourcePlacement.listDecEq : (xs ys : List SourcePlacement) → Decidable (xs = ys)
+    | [], [] => isTrue rfl
+    | [], _ :: _ => isFalse (by intro same; cases same)
+    | _ :: _, [] => isFalse (by intro same; cases same)
+    | x :: xs, y :: ys => by
+      letI : Decidable (x = y) := SourcePlacement.decEq x y
+      letI : Decidable (xs = ys) := SourcePlacement.listDecEq xs ys
+      exact decidable_of_iff (x = y ∧ xs = ys) (by simp only [List.cons.injEq])
+end
+
+instance : DecidableEq SourcePlacement := SourcePlacement.decEq
+instance : BEq SourcePlacement := ⟨fun a b => decide (a = b)⟩
+instance : LawfulBEq SourcePlacement where
+  eq_of_beq := of_decide_eq_true
+  rfl := by intro placement; exact decide_eq_true rfl
 
 /-- The top-level participant summary. Product arguments preserve telescope
 order; child roles are checked separately and never added to this summary. -/
