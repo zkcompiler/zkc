@@ -44,13 +44,37 @@ def fieldAnswer (preceding : History) (draw : Origin)
     Answer (preceding ++ [.challenge draw]) ≃ Octic :=
   (Typed.ByLast.read Domain.Raw).trans (Equiv.cast (by simp only [Domain.Raw, request]; rfl))
 
+def atAnswer {m : Nat} (domain : _root_.Domain.SmoothCosetFftDomain (m + 1) Octic)
+    (d : Nat) (message draw : Origin)
+    (request : draw.request = some (.draw ZkcExamples.Structured.FriSource.extension))
+    (preceding : History) (raw : Answer (preceding ++ [.challenge draw])) : Prop :=
+  ∃ word, wordAt message draw (2 ^ (m + 1)) (preceding ++ [.challenge draw]) = some word ∧
+    _root_.Fri.FoldingAgreementFailure domain word 1 d (1 / 4 : ℝ)
+      (fieldAnswer preceding draw request raw)
+
 def escapes {m : Nat} (domain : _root_.Domain.SmoothCosetFftDomain (m + 1) Octic)
     (d : Nat) (message draw : Origin)
     (request : draw.request = some (.draw ZkcExamples.Structured.FriSource.extension))
     (preceding : History) (table : (key : History) → Answer key) : Prop :=
-  ∃ word, wordAt message draw (2 ^ (m + 1)) (preceding ++ [.challenge draw]) = some word ∧
-    _root_.Fri.FoldingAgreementFailure domain word 1 d (1 / 4 : ℝ)
-      (fieldAnswer preceding draw request (table (preceding ++ [.challenge draw])))
+  atAnswer domain d message draw request preceding (table (preceding ++ [.challenge draw]))
+
+/-- Only the selected raw answer is random. This formulation applies both
+to the primitive oracle and to the field cells of the regrouped oracle. -/
+theorem sampled [SampleableType Octic] {m t R : Nat}
+    (domain : _root_.Domain.SmoothCosetFftDomain (m + 1) Octic)
+    (rate : t + (R + 1) + 1 ≤ m + 1) (message draw : Origin)
+    (request : draw.request = some (.draw ZkcExamples.Structured.FriSource.extension))
+    (preceding : History) [SampleableType (Answer (preceding ++ [.challenge draw]))] :
+    Pr{let raw ← $ᵗ (Answer (preceding ++ [.challenge draw]))}[
+      atAnswer domain (degreeBound R (2 ^ t)) message draw request preceding raw] ≤
+        uniqueDecodingError Octic (m + 1) 0 := by
+  cases fixed : wordAt message draw (2 ^ (m + 1)) (preceding ++ [.challenge draw]) with
+  | none => simp [atAnswer, fixed]
+  | some word =>
+    simp only [atAnswer, fixed, Option.some.injEq, exists_eq_left']
+    exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv (fieldAnswer preceding draw request)
+      (_root_.Fri.FoldingAgreementFailure domain word 1 (degreeBound R (2 ^ t)) (1 / 4 : ℝ)))).trans
+      ((Phases.foldingEscapes_uniqueDecoding domain rate).1 word)
 
 variable [DecidableEq (Domain.Event model.toCarriers)] [SampleableType Octic]
   [∀ key : History, SampleableType (Answer key)]
@@ -66,13 +90,7 @@ theorem resample {m t R : Nat} (domain : _root_.Domain.SmoothCosetFftDomain (m +
       escapes domain (degreeBound R (2 ^ t)) message draw request preceding
         (Function.update table (preceding ++ [.challenge draw]) raw)] ≤
           uniqueDecodingError Octic (m + 1) 0 := by
-  cases fixed : wordAt message draw (2 ^ (m + 1)) (preceding ++ [.challenge draw]) with
-  | none => simp [escapes, fixed]
-  | some word =>
-    simp only [escapes, fixed, Option.some.injEq, exists_eq_left', Function.update_self]
-    exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv (fieldAnswer preceding draw request)
-      (_root_.Fri.FoldingAgreementFailure domain word 1 (degreeBound R (2 ^ t)) (1 / 4 : ℝ)))).trans
-      ((Phases.foldingEscapes_uniqueDecoding domain rate).1 word)
+  simpa only [escapes, Function.update_self] using sampled domain rate message draw request preceding
 
 /-- Extend a round to all the oracle's keys. Unrelated addresses cannot
 witness this round's failure. Repeated calls at its address are still charged. -/
