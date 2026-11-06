@@ -1115,7 +1115,7 @@ def forward(a: index, b: index, values: ds::Sequence<Finite<index>, 2>) -> index
           head.sort = "foreign-sort";
           break;
         case 2:
-          head.dimension = Natural(1);
+          head.dimension = Natural::constant(1);
           break;
         case 3:
           head.symbolic = true;
