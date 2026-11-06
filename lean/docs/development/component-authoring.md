@@ -392,8 +392,13 @@ network actions, and adaptive choosers. The proof combines logical and
 physical preservation on the same record using the monad's exact support.
 
 FRI supplies the virtual table's captured parent, challenge and coset
-geometry. `CommitLoop.installed` follows all three iterations of the
-original repeat, including its private state masks. Each later send may
+geometry. `CommitIngress.installed` follows the linked coset admission
+helper, assembles the receiver's shift, initializes both handle sequences,
+and derives the loop inputs from the protocol arguments. `CommitLoop.installed`
+follows all three iterations of the original repeat, including its private
+state masks. `CommitBody.registered` establishes that all six associations
+still hold in the final store of any returning invocation, even when the
+provider updates its state during the terminal exchange. Each later send may
 publish a different word. `CommitReadback.fromCommit` derives the
 associations needed by the installed checker from those actual handles.
 Given the later call's one coefficient, positions, and preserved registry,

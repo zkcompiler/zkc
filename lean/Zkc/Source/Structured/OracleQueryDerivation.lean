@@ -67,6 +67,19 @@ theorem sendConcrete {ty : Ty} {peer : Nat} (atOwner : context.roles owner = sel
   simp [exchange, Participant.exchange, atOwner, concrete, ProtocolValue.materializeWith_ofConcrete,
     actions, PIR.Process.interpret, PIR.Process.bind]
 
+/-- In a two-owner assembly the second component belongs to this participant.
+The first owner's value may be absent or deferred. -/
+theorem assembleSecond {first second : Nat} {ty : Ty}
+    (other : context.roles first ≠ self) (active : context.roles second = self)
+    (x y : Component (ProtocolValue model.toCarriers) ty) :
+    ((algebra model self ordinary helpers).meaning table context self).operation
+      (.assemble ty [first, second]) (.cons x (.cons y .nil)) .nil = .done (.cons y .nil) := by
+  change PIR.Process.done (I := Interface model)
+    (Values.cons (Value := Component (ProtocolValue model.toCarriers)) (ty := ty)
+      (assembleComponent (fun r ↦ context.roles r == self) none [first, second] (.cons x (.cons y .nil))) .nil) = _
+  congr 2
+  simp [assembleComponent, active, other]
+
 theorem equalIndex (i : Nat) :
     ((algebra model self ordinary helpers).meaning table context self).OperationLaw
       (fun op ↦ .call op .done) (.calculate .indexEqual rfl)

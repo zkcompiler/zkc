@@ -18,7 +18,7 @@ open Zkc.Source.Structured.Bindings
 open OracleProtocol (AtMarkedCall concrete)
 attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results ProtocolOp.regions ServiceOp.contract
 
-checked_callback round := protocol0Body at 0
+checked_callback round := protocol0Body at 0 with_continuation
 
 abbrev kind := OracleKind.table (.field extension) none
 

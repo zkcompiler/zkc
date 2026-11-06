@@ -24,6 +24,15 @@ theorem owned_present (self : Nat) (args : Values model.Value helper.inputs) :
     ProtocolValue.materializeComponents_embedComponents, PIR.Process.bind, Participant.owned_present,
     PIR.Process.bind_assoc]
 
+/-- Specialize a checked helper result to the mapped owner of this call. -/
+theorem owned_returned {self owner : Nat} (active : owner = self)
+    (args : Values model.Value helper.inputs) (out : Values model.Value helper.outputs)
+    (computes : invoke tables.closed helper args = .done out) :
+    owned model self owner tables helper (ProtocolValue.embedComponents args.present) =
+      .done (ProtocolValue.embedComponents out.present) := by
+  rw [active, owned_present, computes]
+  rfl
+
 /-- A different role skips the call, even when its operands are incomplete
 or refer to deferred data. -/
 theorem owned_absent {self owner : Nat} (other : owner ≠ self)

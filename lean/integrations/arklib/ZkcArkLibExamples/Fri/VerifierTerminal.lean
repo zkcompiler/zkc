@@ -51,28 +51,6 @@ private theorem evaluatePolynomial (cs : List (M.Field d)) (size : cs.length < i
   rw [admitted]
   rfl
 
-private theorem pointValue (shift generator : M.Field d) (nonzero : shift ≠ 0) (n i : Nat)
-    (size : n < indexLimit) (inside : i < n) (root : Numerical.domainRoot M.toFieldModel d n = .ok generator) :
-    (Primitive.numerical .polyPoint d "").evaluateOn M.toFieldModel (.cons shift (.cons n (.cons i .nil))) =
-      .returned (.cons (shift * generator ^ i) .nil) := by
-  let field := {M.toFieldModel with inverse := fun _ ↦ none}
-  change Numerical.checkedEvaluateOn field d "" .polyPoint (.cons shift (.cons n (.cons i .nil))) = _
-  have selected : Numerical.domainRoot field d n = .ok generator := by
-    refine Eq.trans ?_ root
-    unfold Numerical.domainRoot
-    cases family : M.toFieldModel.twoAdic d with
-    | none => simp [field]
-    | some f => cases cell : f.roots[n.log2]? <;> simp [field, cell]
-  have admitted : @Numerical.checkValues field (Numerical.polyPoint.arguments d "")
-      (.cons shift (.cons n (.cons i .nil))) = .ok () := by
-    change (do Except.ok (); Numerical.require (n < indexLimit); Numerical.require (i < indexLimit); Except.ok ()) = _
-    simp [Numerical.require, size, inside.trans size, bind, Except.bind]
-  unfold Numerical.checkedEvaluateOn
-  rw [admitted]
-  simp [Numerical.evaluateOn, selected, Numerical.require, nonzero, inside, Numerical.finish,
-    bind, Except.bind, pure, Except.pure]
-  rfl
-
 private theorem body (M : DomainModel) (table : Evaluation.MeaningsOn M.toCarriers closedInterface)
     (cs : List (M.Field extension)) (shift x value : M.Field extension) (n i : Nat)
     (construct : invoke table helper34Helper (.cons cs .nil) =
@@ -119,7 +97,7 @@ theorem installed {I : PIR.Signature} {k : Nat} (bound : k ≤ 5)
   rw [Evaluation.closed_invoke_componentTablesOn, Evaluation.definitions_invoke_body_view_asOn model
     SiteObservations.closed unit.definitions unit.linked definition member helper36Helper signature helper36Body raw]
   rw [body model table cs shift x _ _ _ coefficients
-    (pointValue model extension shift _ nonzero _ _ size index.isLt (RetainedDomain.domainRoot k bound)) result]
+    (RetainedDomain.pointValue model extension shift _ nonzero _ _ size index.isLt (RetainedDomain.domainRoot k bound)) result]
   exact congrArg (fun value : Octic ↦ PIR.Process.done (I := I)
     (Values.cons (ty := Ty.field extension) (Value := model.Value) value .nil))
     (Phases.terminal_source_evaluate RetainedDomain.root cs shift k index.val)

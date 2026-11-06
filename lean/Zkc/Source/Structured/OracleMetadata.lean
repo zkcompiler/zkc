@@ -43,6 +43,22 @@ private theorem metadataReply (request : OracleRequest model.toCarriers)
     · rename_i valid
       exact False.elim (aligned (by simpa using valid))
 
+/-- A visible participant starts with an empty handle sequence. The capacity
+and the current invocation are checked even though no table is read. -/
+theorem sequenceEmpty (kind : OracleKind) (maximum : Nat) (owners : List Nat)
+    (roles : Nat → Nat) (site : OracleLocation) (state : OracleProtocol.State model snapshot domains math S)
+    (self : Nat) (atSelf : self = state.oracle.self) (active : state.oracle.self ∈ owners.map roles)
+    (limit : maximum < indexLimit) :
+    let op : OracleProtocolAction model.toCarriers := .oracle ⟨.sequenceEmpty kind maximum owners, site,
+      self, roles, .nil⟩
+    let reply := Values.cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) [])) .nil
+    actionM model oracles ordinary base publish op state = pure (cursorReply site state reply state.oracle []) := by
+  subst self
+  dsimp only
+  apply metadataReply _ _ _ _ _ rfl
+  intro loc
+  simp [OracleExecution.operation, active, Nat.not_le.mpr limit, OracleExecution.returned]
+
 /-- Length reads the concrete handle sequence without inspecting its cells.
 Its declared capacity and the index limit are still enforced. -/
 theorem sequenceLength (kind : OracleKind) (maximum : Nat) (roles : Nat → Nat) (site : OracleLocation)

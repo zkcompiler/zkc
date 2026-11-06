@@ -33,6 +33,16 @@ private theorem fromCursor {request : OracleRequest model.toCarriers}
   · exact ⟨same, fun _ eq ↦ (PIR.Outcome.returned.inj eq).symm⟩
   · exact ⟨same, by intro _ eq; cases eq⟩
 
+theorem sequenceEmptyAt {self maximum : Nat} {roles : Nat → Nat} {owners : List Nat} {kind : OracleKind}
+    (role : original.self = self) (active : self ∈ owners.map roles) (limit : maximum < indexLimit) :
+    Keeps oracles ordinary base publish original
+      (.call (.oracle ⟨.sequenceEmpty kind maximum owners, location, self, roles, .nil⟩) .done)
+      (.cons (some (ProtocolValue.ofConcrete (.oracleSequence kind maximum) [])) .nil) := by
+  apply fromCursor (location := location)
+  intro state same
+  exact OraclePublication.sequenceEmpty oracles ordinary base publish kind maximum owners roles location state
+    self ((same ▸ role).symm) ((same ▸ role) ▸ active) limit
+
 theorem sequenceLengthAt {self maximum : Nat} {roles : Nat → Nat} {kind : OracleKind} {anchors : List OracleAnchor}
     (role : original.self = self) (fits : anchors.length ≤ maximum) (limit : maximum < indexLimit) :
     Keeps oracles ordinary base publish original

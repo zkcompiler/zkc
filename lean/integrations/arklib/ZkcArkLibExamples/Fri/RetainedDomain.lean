@@ -59,6 +59,27 @@ theorem domainRoot (k : Nat) (bound : k ≤ 5) :
   exact Numerical.domainRoot_eq model.toFieldModel octicIdentity (2 ^ k)
     ⟨by positivity, size, by rw [log]⟩ octicRoots KoalaBearModel.octicRoots_installed _ atIndex
 
+/-- A call to the source point primitive selects this embedded generator at
+the given index. The verifier uses it both to admit its coset and to read
+the terminal polynomial. -/
+theorem pointValue (M : DomainModel) (d : String) (shift generator : M.Field d) (nonzero : shift ≠ 0) (n i : Nat)
+    (size : n < indexLimit) (inside : i < n) (root : Numerical.domainRoot M.toFieldModel d n = .ok generator) :
+    (Primitive.numerical .polyPoint d "").evaluateOn M.toFieldModel (.cons shift (.cons n (.cons i .nil))) =
+      .returned (.cons (shift * generator ^ i) .nil) := by
+  let field := {M.toFieldModel with inverse := fun _ ↦ none}
+  change Numerical.checkedEvaluateOn field d "" .polyPoint (.cons shift (.cons n (.cons i .nil))) = _
+  have selected : Numerical.domainRoot field d n = .ok generator :=
+    (Numerical.domainRoot_with_inverse _ _ _ _).trans root
+  have admitted : @Numerical.checkValues field (Numerical.polyPoint.arguments d "")
+      (.cons shift (.cons n (.cons i .nil))) = .ok () := by
+    change (do Except.ok (); Numerical.require (n < indexLimit); Numerical.require (i < indexLimit); Except.ok ()) = _
+    simp [Numerical.require, size, inside.trans size, bind, Except.bind]
+  unfold Numerical.checkedEvaluateOn
+  rw [admitted]
+  simp [Numerical.evaluateOn, selected, Numerical.require, nonzero, inside, Numerical.finish,
+    bind, Except.bind, pure, Except.pure]
+  rfl
+
 def domain (shift : Octic) (nonzero : shift ≠ 0) :=
   cosetDomain shift (root 5) nonzero (order 5 (by decide))
 

@@ -3,6 +3,7 @@ import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
 import ZkcArkLibExamples.Fri.CommitReadback
+import ZkcArkLibExamples.Fri.CommitBody
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -380,6 +381,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
 
 run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Source.RegionSelection, `ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitGeometry,
+   `Zkc.Semantics.ReturnedPostcondition, `ZkcExamples.Structured.FriCommitAdmission,
+   `ZkcArkLibExamples.Fri.CommitDomain, `ZkcArkLibExamples.Fri.CommitIngress, `ZkcArkLibExamples.Fri.CommitBody,
    `ZkcArkLibExamples.Fri.BinaryDomain, `ZkcArkLibExamples.Fri.CommitCaptures, `ZkcArkLibExamples.Fri.CommitDelivery,
    `Zkc.Source.Structured.RegisteredLifetime, `ZkcArkLibExamples.Fri.CommitIteration,
    `ZkcArkLibExamples.Fri.CommitLoop, `ZkcArkLibExamples.Fri.CommitReadback,

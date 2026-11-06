@@ -25,14 +25,6 @@ noncomputable def roundState (n : Nat) (shift : Octic) (layers folds : List Orac
     FriCommitRound.State model :=
   ⟨layers, folds, 2 ^ (n + 1), shift, RetainedDomain.root (n + 1), ((2 : Octic)⁻¹ : Octic), service⟩
 
-private theorem atReceiver (context : ProtocolContext) (receiver : context.roles 1 = 1)
-    (helper : Helper) (args : Values model.Value helper.inputs) (out : Values model.Value helper.outputs)
-    (computes : invoke (RetainedFold.helpers (I := OracleProtocol.Interface model)).closed helper args = .done out) :
-    OracleProtocol.owned model 1 (context.roles 1) RetainedFold.helpers helper
-      (ProtocolValue.embedComponents args.present) = .done (ProtocolValue.embedComponents out.present) := by
-  rw [receiver, OracleProtocol.owned_present, computes]
-  rfl
-
 private theorem restrictToHolder (context : ProtocolContext) (separate : context.roles 0 ≠ 1)
     (v : Component (ProtocolValue model.toCarriers) (.field extension)) :
     ((verifierAlgebra model).meaning (verifierTable model) context 1).operation
@@ -40,14 +32,6 @@ private theorem restrictToHolder (context : ProtocolContext) (separate : context
   change PIR.Process.done (I := OracleProtocol.Interface model)
     (Values.cons (Value := Component (ProtocolValue model.toCarriers)) (ty := Ty.field extension) (Participant.restrict ([context.roles 0].contains 1) v) .nil) = _
   simp [Participant.restrict, Ne.symm separate]
-
-private theorem assembled (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : context.roles 0 ≠ 1)
-    (x y : Component (ProtocolValue model.toCarriers) (.field extension)) :
-    ((verifierAlgebra model).meaning (verifierTable model) context 1).operation
-      (.assemble (.field extension) [0,1]) (.cons x (.cons y .nil)) .nil = .done (.cons y .nil) := by
-  change PIR.Process.done (I := OracleProtocol.Interface model) (Values.cons (Value := Component (ProtocolValue model.toCarriers)) (ty := Ty.field extension)
-    (assembleComponent (fun r ↦ context.roles r == 1) none [0,1] (.cons x (.cons y .nil))) .nil) = _
-  simp [assembleComponent, receiver, separate]
 
 private theorem halfRows (n : Nat) (bound : n + 1 ≤ 5) :
     ProtocolCalculation.strict model (OracleProtocol.demand model) 1 RetainedFold.helpers .indexLogicalShiftRight
@@ -126,10 +110,10 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
     have fits : live.stored.rows < indexLimit := of_decide_eq_true (Bool.and_eq_true_iff.mp live.shape).1
     simp [OracleStore.validRows, OracleKind.rows, live.registryRows, ← live.rows, fits]
   have rootNonzero := (RetainedDomain.order (n+1) (by omega)).ne_zero (by positivity)
-  have challenge := atReceiver context receiver helper6Helper (.cons beta .nil) _ (CommitGeometry.challenge beta)
-  have root := atReceiver context receiver helper3Helper (.cons (2 ^ (n+1)) .nil) _ (CommitGeometry.generator (n+1) bound)
-  have shiftInv := atReceiver context receiver helper4Helper (.cons shift .nil) _ (CommitGeometry.inverse shift nonzero)
-  have rootInv := atReceiver context receiver helper4Helper (.cons (RetainedDomain.root (n+1)) .nil) _
+  have challenge := OracleProtocol.owned_returned (helper := helper6Helper) RetainedFold.helpers receiver (.cons beta .nil) _ (CommitGeometry.challenge beta)
+  have root := OracleProtocol.owned_returned (helper := helper3Helper) RetainedFold.helpers receiver (.cons (2 ^ (n+1)) .nil) _ (CommitGeometry.generator (n+1) bound)
+  have shiftInv := OracleProtocol.owned_returned (helper := helper4Helper) RetainedFold.helpers receiver (.cons shift .nil) _ (CommitGeometry.inverse shift nonzero)
+  have rootInv := OracleProtocol.owned_returned (helper := helper4Helper) RetainedFold.helpers receiver (.cons (RetainedDomain.root (n+1)) .nil) _
     (CommitGeometry.inverse _ rootNonzero)
   repeat' first
     | (project_step ProtocolOp.mark
@@ -140,7 +124,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
     | (project_step ProtocolOp.restrict
        exact PIR.Process.ReturnsUnder.ofEquation (restrictToHolder context separate.symm _) (.done _))
     | (project_step ProtocolOp.assemble
-       exact PIR.Process.ReturnsUnder.ofEquation (assembled context receiver separate.symm _ _) (.done _))
+       exact PIR.Process.ReturnsUnder.ofEquation (OracleProtocol.assembleSecond model separate.symm receiver _ _) (.done _))
     | (project_step ProtocolOp.localCall
        first
        | (apply Region.returnsOfLaw; apply OracleProtocol.localCallInactive model _ _ separate.symm)
