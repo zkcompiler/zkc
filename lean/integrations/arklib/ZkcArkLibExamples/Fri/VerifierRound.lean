@@ -39,13 +39,14 @@ variable (oracles : List (CheckedOracle snapshot domains math))
   (network : PublishedWords.Table model → PIR.MonadHandler M (participantInterfaceOn model.toCarriers) Aux E)
   (choose : PublishedWords.Chooser M model Aux E)
 
-private theorem selectionOutcomes (context : ProtocolContext) (receiver : context.roles 1 = 1)
+theorem selectionOutcomes {A : Type} (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (original : Runtime model snapshot domains math Aux) (role : original.self = 1)
     (handles : List OracleAnchor) (index rows : Nat) (seqSite shapeSite : OracleLocation)
     (registered : Selection original handles index rows)
-    {tail : OracleAnchor → Process model → Prop} {process : Process model}
+    {tail : OracleAnchor → PIR.Process (OracleProtocol.Interface model) A → Prop}
+    {process : PIR.Process (OracleProtocol.Interface model) A}
     (head : selectsRows context handles index rows seqSite shapeSite tail process)
-    (property : PIR.Outcome (Values (FriBinding.Value model) roundSite.spec.state) → Runtime model snapshot domains math Aux → Prop)
+    (property : PIR.Outcome A → Runtime model snapshot domains math Aux → Prop)
     (refusal : ∀ store, property (.stopped .refused) store)
     (rest : ∀ p, tail (handles.get ⟨index, registered.inside⟩) p → ∀ current : State model snapshot domains math Aux,
       current.oracle = original → Std.Do.Internal.Ensures (fun record ↦ property record.outcome record.state.oracle)
@@ -156,11 +157,52 @@ local notation "K" => ZkcSecurity.Domains.KoalaBearModel.model
 
 /-- The source machine-index computation at this round agrees with the
 mathematical coset pair, including the upper half of the original word. -/
-private theorem lowCoordinate {m : Nat} (size : m + 1 ≤ 63) (carried : FriCheckRound.State K)
+theorem lowCoordinate {m : Nat} (size : m + 1 ≤ 63) (carried : FriCheckRound.State K)
     (rows : carried.rows = 2 ^ (m + 1)) (inside : carried.position < 2 ^ (m + 1)) :
     low carried = carried.position % 2 ^ m := by
   have bounded : 2 ^ (m + 1) < wordModulus := Nat.pow_lt_pow_right (by decide) (by omega)
   simpa only [low, nextRows, rows] using machine_pair_low carried.position m size (inside.trans bounded)
+
+/-- Interpret the virtual cell selected by either the peeled or a later fold.
+Its one source query records its own event and the two reads of its parent. -/
+theorem virtualOutcomes {A Aux E : Type}
+    (network : PublishedWords.Table K → PIR.MonadHandler M (participantInterfaceOn (K).toCarriers) Aux E)
+    (choose : PublishedWords.Chooser M K Aux E) (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    {n : Nat} (size : n + 1 ≤ 63) (domain : Domain.SmoothCosetFftDomain (n + 1) Octic)
+    (shift : Octic) (geometry : ∀ i, domain i = point RetainedDomain.root shift (n + 1) i)
+    (word : Fin (2 ^ (n + 1)) → Octic) (beta : Octic) (coordinate : Fin (2 ^ n))
+    (source anchor : OracleAnchor) (location : OracleLocation)
+    (original : Runtime K checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux)
+    (role : original.self = 1) (registered : VirtualStore.Registered original source anchor word beta shift)
+    {after} {process : PIR.Process (OracleProtocol.Interface K) A}
+    (head : OracleProtocol.AtMarkedCall (OracleProtocol.tableQuery K (.field extension) none anchor
+      coordinate.val 1 1 context.roles location) after process)
+    (property : PIR.Outcome A → Runtime K checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux → Prop)
+    (refusal : ∀ store, property (.stopped .refused) store)
+    (rest : ∀ next, after next → ∀ state : State K checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux,
+      state.oracle = {original with queries := original.queries + 3} →
+      Std.Do.Internal.Ensures (fun record ↦ property record.outcome record.state.oracle)
+        ((next (.cons (concrete K (.field extension) (ProximityGap.foldWord domain word 1 beta coordinate)) .nil)).runM
+          (PublishedWords.actionM checkedUnit.oracles network choose) state))
+    (state : State K checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux) (same : state.oracle = original) :
+    Std.Do.Internal.Ensures (fun record ↦ property record.outcome record.state.oracle)
+      (process.runM (PublishedWords.actionM checkedUnit.oracles network choose) state) := by
+  let trace := fun (current : State K checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux) ↦
+    let parent := Phases.publishedRequest extension anchor coordinate.val
+      {location with invocation := current.frame.invocation} []
+    [OracleProtocol.Event.logical (E := E) (.query parent),
+     .logical (.query (parent.expand (VirtualReads.leftRequest source (lowIndex coordinate).val))),
+     .logical (.query (parent.expand (VirtualReads.rightRequest source (highIndex coordinate).val)))]
+  apply OraclePublication.markedReplyOutcomes checkedUnit.oracles (PublishedWords.liftM network) PublishedWords.readM
+    (PublishedWords.publishM choose) head location _ original {original with queries := original.queries + 3}
+    trace _ property refusal rest state same
+  intro current kept
+  have view : VirtualStore.Registered current.oracle source anchor word beta shift := kept ▸ registered
+  have atSelf : 1 = current.oracle.self := kept ▸ role.symm
+  have law := view.sourceQuery network choose size domain shift geometry word beta coordinate
+    source anchor current 1 1 atSelf context.roles location (receiver.trans atSelf)
+  simp only [kept] at law
+  with_unfolding_all exact law
 
 /-- On matching input the only successful result of the actual iteration
 contains the ArkLib fold of that same layer. Both the base and virtual
@@ -208,25 +250,10 @@ theorem matchesFold {Aux E : Type}
   intro _ p head
   apply selectionOutcomes checkedUnit.oracles network choose context receiver afterLayer role folds (wrappingAdd step 1)
     (nextRows carried) (site 3) (site 4) fold head property (fun _ ↦ Or.inr rfl) _
-  intro q atQuery
-  let trace := fun (current : State K checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux) ↦
-    let parent := Phases.publishedRequest extension anchor coordinate.val
-      {site 5 with invocation := current.frame.invocation} []
-    [OracleProtocol.Event.logical (E := E) (.query parent),
-     .logical (.query (parent.expand (VirtualReads.leftRequest source (lowIndex coordinate).val))),
-     .logical (.query (parent.expand (VirtualReads.rightRequest source (highIndex coordinate).val)))]
-  refine OraclePublication.markedReplyOutcomes checkedUnit.oracles (PublishedWords.liftM network) PublishedWords.readM
-    (PublishedWords.publishM choose) atQuery (site 5) (.cons (concrete K (.field extension) folded) .nil)
-    afterLayer {afterLayer with queries := afterLayer.queries + 3} trace ?_ property (fun _ ↦ Or.inr rfl) ?_
-  · intro current kept
-    have view : VirtualStore.Registered current.oracle source anchor word beta carried.shift := by
-      rw [kept]; exact registered
-    have atSelf : 1 = current.oracle.self := kept ▸ role.symm
-    have law := view.sourceQuery network choose size domain carried.shift geometry word beta coordinate
-      source anchor current 1 1 atSelf context.roles (site 5) (receiver.trans atSelf)
-    simp only [kept] at law
-    rw [lowCoordinate size carried rows inside]
-    with_unfolding_all exact law
+  intro q atQuery current atStore
+  rw [lowCoordinate size carried rows inside] at atQuery
+  apply virtualOutcomes network choose context receiver size domain carried.shift geometry word beta coordinate
+    source anchor (site 5) afterLayer role registered atQuery property (fun _ ↦ Or.inr rfl) _ current atStore
   · intro next finished current kept
     obtain ⟨marks, equation⟩ := finished folded
     rw [equation]

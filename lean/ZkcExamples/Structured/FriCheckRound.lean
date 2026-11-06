@@ -17,6 +17,16 @@ attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results Pro
 
 checked_callback round := protocol3Body at 1 with_continuation
 
+/-- Only the coefficient operand of the installed terminal helper and the
+returned vector are needed from the enclosing SSA environment. -/
+def coefficientsPort : Var roundSite.context (.vector extension) :=
+  (roundSite.outerOperand (.vector extension) (.operation (fun op ↦ match op with
+    | .localCall helper _ _ _ => helper == helper36Helper
+    | _ => false) 0)).get (by decide +kernel)
+
+def rememberedPort : Var roundSite.context (.vector extension) :=
+  (roundSite.outerOperand (.vector extension) (.returned 0)).get (by decide +kernel)
+
 /-- Inside one query iteration the inner repeat is a sequential cut. In the
 full Check declaration the same repeat is nested in an outer callback. -/
 def insideQuery : RepeatAt roundSite FriCheckPositions.queryBody :=
@@ -128,9 +138,9 @@ abbrev Process (model : DomainModel) :=
   PIR.Process (OracleProtocol.Interface model) (Values (Value model) roundSite.spec.state)
 
 /-- Both selections check the registered row count before the cell action. -/
-def selectsRows (context : ProtocolContext) (anchors : List OracleAnchor) (index rows : Nat)
-    (sequenceSite shapeSite : OracleLocation) (tail : OracleAnchor → Process model → Prop)
-    (process : Process model) : Prop :=
+def selectsRows {A : Type} (context : ProtocolContext) (anchors : List OracleAnchor) (index rows : Nat)
+    (sequenceSite shapeSite : OracleLocation) (tail : OracleAnchor → PIR.Process (OracleProtocol.Interface model) A → Prop)
+    (process : PIR.Process (OracleProtocol.Interface model) A) : Prop :=
   AtMarkedCall (sequenceRequest context anchors index sequenceSite) (fun select ↦
     ∀ anchor, AtMarkedCall (rowsRequest context anchor shapeSite) (fun shape ↦
       tail anchor (shape (.cons (concrete model .index rows) .nil)))
@@ -157,7 +167,7 @@ def checksLayer (context : ProtocolContext) (step : Nat) (state : State model)
 open Lean.Parser.Tactic.Conv in
 /-- Open just the next retained operation under a marked-prefix or stop
 predicate. The unexamined suffix stays in its original environment. -/
-local macro "at_round_action " slot:enterArg " => " action:convSeq : tactic => `(tactic|
+scoped macro "at_fri_action " slot:enterArg " => " action:convSeq : tactic => `(tactic|
   (simp only [PIR.Process.bind]
    conv =>
      enter [$slot]
@@ -167,9 +177,9 @@ local macro "at_round_action " slot:enterArg " => " action:convSeq : tactic => `
      ($action:convSeq)))
 
 open Lean.Parser.Tactic.Conv in
-local macro "at_round_scalar " slot:enterArg " using " model:term ", " op:term ", " args:term
+scoped macro "at_fri_scalar " slot:enterArg " using " model:term ", " op:term ", " args:term
     " => " rest:convSeq : tactic => `(tactic|
-  at_round_action $slot =>
+  at_fri_action $slot =>
     change ProtocolCalculation.strict $model (OracleProtocol.demand $model) 1 (FriIndexCollections.helpers $model)
       $op (ProtocolValue.embedComponents $args) rfl
     erw [ProtocolCalculation.strict_embed $model (OracleProtocol.demand $model) 1 (FriIndexCollections.helpers $model)
@@ -177,9 +187,9 @@ local macro "at_round_scalar " slot:enterArg " using " model:term ", " op:term "
     ($rest:convSeq))
 
 open Lean.Parser.Tactic.Conv in
-local macro "at_round_guard " slot:enterArg " using " model:term ", " ctx:term ", " receiver:term ", " flag:term :
+scoped macro "at_fri_guard " slot:enterArg " using " model:term ", " ctx:term ", " receiver:term ", " flag:term :
     tactic => `(tactic|
-  at_round_action $slot =>
+  at_fri_action $slot =>
     change ((Participant.guard (services := services) (Value := ($model).Value) 1
       (ProtocolContext.roles $ctx 1) ((concrete $model .boolean $flag).bind ProtocolValue.toConcrete)).interpret
         (OracleProtocol.actions $model)).bind _
@@ -193,7 +203,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
     checksLayer context step state layers folds (iteration context step state layers folds) := by
   unfold checksLayer selectsRows iteration
   repeat' with_unfolding_all apply AtMarkedCall.mark
-  at_round_scalar 3 using model, .indexWrappingAdd, (.cons (some step) (.cons (some 1) .nil)) =>
+  at_fri_scalar 3 using model, .indexWrappingAdd, (.cons (some step) (.cons (some 1) .nil)) =>
     skip
   with_unfolding_all apply AtMarkedCall.mark
   with_unfolding_all apply AtMarkedCall.found
@@ -201,34 +211,34 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
   repeat' with_unfolding_all apply AtMarkedCall.mark
   with_unfolding_all apply AtMarkedCall.found
   repeat' with_unfolding_all apply AtMarkedCall.mark
-  at_round_scalar 3 using model, .indexEqual, (.cons (some state.rows) (.cons (some state.rows) .nil)) =>
+  at_fri_scalar 3 using model, .indexEqual, (.cons (some state.rows) (.cons (some state.rows) .nil)) =>
     change PIR.Process.done (I := OracleProtocol.Interface model)
       (.cons (concrete model .boolean (decide (state.rows = state.rows))) .nil)
     simp only [decide_true]
   with_unfolding_all apply AtMarkedCall.mark
-  at_round_guard 3 using model, context, receiver, true
+  at_fri_guard 3 using model, context, receiver, true
   with_unfolding_all apply AtMarkedCall.mark
   with_unfolding_all apply AtMarkedCall.found
   constructor
   · intro value mismatch
     repeat' with_unfolding_all apply StopsAfterMarks.mark
-    at_round_scalar 2 using model, (.fieldEqual extension), (.cons (some value) (.cons (some state.expected) .nil)) =>
+    at_fri_scalar 2 using model, (.fieldEqual extension), (.cons (some value) (.cons (some state.expected) .nil)) =>
       change PIR.Process.done (I := OracleProtocol.Interface model)
         (.cons (concrete model .boolean (decide (value = state.expected))) .nil)
       simp only [mismatch, decide_false]
     with_unfolding_all apply StopsAfterMarks.mark
-    at_round_guard 2 using model, context, receiver, false
+    at_fri_guard 2 using model, context, receiver, false
     with_unfolding_all apply StopsAfterMarks.now
   · unfold checksFold selectsRows
     repeat' with_unfolding_all apply AtMarkedCall.mark
-    at_round_scalar 3 using model, (.fieldEqual extension), (.cons (some state.expected) (.cons (some state.expected) .nil)) =>
+    at_fri_scalar 3 using model, (.fieldEqual extension), (.cons (some state.expected) (.cons (some state.expected) .nil)) =>
       change PIR.Process.done (I := OracleProtocol.Interface model)
         (.cons (concrete model .boolean (decide (state.expected = state.expected))) .nil)
       simp only [decide_true]
     with_unfolding_all apply AtMarkedCall.mark
-    at_round_guard 3 using model, context, receiver, true
+    at_fri_guard 3 using model, context, receiver, true
     with_unfolding_all apply AtMarkedCall.mark
-    at_round_action 3 =>
+    at_fri_action 3 =>
       change invoke (unit.oracleCalculations model 1) helper14Helper
         (.cons (concrete model .index state.position) (.cons (concrete model .index state.rows) .nil))
       erw [FriPairIndex.verifier model state.position state.rows]
@@ -238,23 +248,23 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
     with_unfolding_all apply AtMarkedCall.mark
     with_unfolding_all apply AtMarkedCall.found
     repeat' with_unfolding_all apply AtMarkedCall.mark
-    at_round_scalar 3 using model, .indexLogicalShiftRight, (.cons (some state.rows) (.cons (some 1) .nil)) =>
+    at_fri_scalar 3 using model, .indexLogicalShiftRight, (.cons (some state.rows) (.cons (some 1) .nil)) =>
       skip
     with_unfolding_all apply AtMarkedCall.mark
-    at_round_scalar 3 using model, .indexEqual, (.cons (some (nextRows state)) (.cons (some (nextRows state)) .nil)) =>
+    at_fri_scalar 3 using model, .indexEqual, (.cons (some (nextRows state)) (.cons (some (nextRows state)) .nil)) =>
       change PIR.Process.done (I := OracleProtocol.Interface model)
         (.cons (concrete model .boolean (decide (nextRows state = nextRows state))) .nil)
       simp only [decide_true]
     with_unfolding_all apply AtMarkedCall.mark
-    at_round_guard 3 using model, context, receiver, true
+    at_fri_guard 3 using model, context, receiver, true
     with_unfolding_all apply AtMarkedCall.mark
     with_unfolding_all apply AtMarkedCall.found
     intro folded
     repeat' with_unfolding_all apply OracleProtocol.AfterMarks.mark
-    at_round_scalar 2 using model, .indexLogicalShiftRight, (.cons (some state.rows) (.cons (some 1) .nil)) =>
+    at_fri_scalar 2 using model, .indexLogicalShiftRight, (.cons (some state.rows) (.cons (some 1) .nil)) =>
       skip
     with_unfolding_all apply OracleProtocol.AfterMarks.mark
-    at_round_scalar 2 using model, (.fieldMultiply extension), (.cons (some state.shift) (.cons (some state.shift) .nil)) =>
+    at_fri_scalar 2 using model, (.fieldMultiply extension), (.cons (some state.shift) (.cons (some state.shift) .nil)) =>
       skip
     with_unfolding_all apply OracleProtocol.AfterMarks.here
 

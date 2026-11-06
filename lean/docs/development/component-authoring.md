@@ -333,6 +333,17 @@ that maps the receiver to the participant and the holder to a different
 participant. The two-site control combines this law with executions of both
 sites and a same-sort handle swap.
 
+For a loop nested in another callback, select it inside that callback.
+`checked_repeat_prefix firstFoldBody := insideQuery using innerOnSpine`
+materializes the preceding operations and checks their equality with the
+retained source. A stop in this prefix bypasses the loop. In the FRI checker
+the prefix returns the live environment. The round reads its count and
+captures from its typed operands, and the terminal continuation identifies
+both the coefficient operand and the returned vector. The companion proves
+which registered word and virtual view the handles refer to. Reusing that
+association at another sampled position preserves the immutable words and
+accounts for each read, including repeated positions.
+
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and
 postconditions. An honest-only equation cannot prove the malformed-input

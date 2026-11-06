@@ -15,8 +15,8 @@ open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open FriSource (extension checkedUnit)
 open ZkcSecurity.Domains.KoalaBear (Octic)
 open ZkcSecurity.Domains.KoalaBearModel (model)
-open FriCheckRound (roundSite packed advanced nextRows)
-open VerifierTerminalGuard (terminalMeaning finalValues coefficientsPort rememberedPort)
+open FriCheckRound (roundSite packed advanced nextRows coefficientsPort rememberedPort)
+open VerifierTerminalGuard (terminalMeaning finalValues)
 open OracleProtocol (concrete)
 open Std.Do.Internal (Ensures)
 
@@ -49,7 +49,21 @@ inductive Registered {Aux : Type} (layers folds : List OracleAnchor) :
       (tail : Registered layers folds rest (shift * shift) (step + 1) (charged store 4)) :
       Registered layers folds (.fold word beta rest) shift step store
 
-private theorem advanced_eq {n : Nat} (bound : n + 1 ≤ 5) (shift value folded : Octic)
+/-- Changing only the read counter leaves every selected table, word and view
+intact. A second outer query can therefore use the original registrations. -/
+noncomputable def Registered.withQueries {Aux : Type} {layers folds : List OracleAnchor} {n r step : Nat}
+    {transcript : Layers Octic n r} {shift : Octic} {store : Store Aux}
+    (registration : Registered layers folds transcript shift step store) (queries : Nat) :
+    Registered layers folds transcript shift step {store with queries} := by
+  induction registration generalizing queries with
+  | final => exact .final _ _ _ _
+  | @fold n r word beta shift rest index store layer view live virtual tail ih =>
+    exact .fold ⟨layer.fits, layer.inside, layer.visible, layer.table, layer.lookup, layer.allowed, layer.valid, layer.size⟩
+      ⟨view.fits, view.inside, view.visible, view.table, view.lookup, view.allowed, view.valid, view.size⟩
+      live ⟨virtual.older, virtual.newer, virtual.holder, virtual.receivers, virtual.live,
+        virtual.allowed, virtual.fresh, virtual.entries⟩ (ih _)
+
+theorem advanced_eq {n : Nat} (bound : n + 1 ≤ 5) (shift value folded : Octic)
     (position : Fin (2 ^ (n + 1))) :
     advanced (carried shift position value) folded = packed (carried (shift * shift) (lowHalf position) folded) := by
   have rows : 2 ^ (n + 1) < wordModulus := Nat.pow_lt_pow_right (by decide) (by omega)
@@ -60,8 +74,8 @@ private theorem advanced_eq {n : Nat} (bound : n + 1 ≤ 5) (shift value folded 
   rw [machine_pair_low position.val n (by omega) (position.isLt.trans rows), half]
   rfl
 
-def outcome {Aux : Type} (passes : Bool) (returned : Values (FriBinding.Value model) roundSite.outputs)
-    (finalStore : Store Aux) (out : PIR.Outcome (Values (FriBinding.Value model) roundSite.outputs)) (store : Store Aux) : Prop :=
+def outcome {Aux A : Type} (passes : Bool) (returned : A)
+    (finalStore : Store Aux) (out : PIR.Outcome A) (store : Store Aux) : Prop :=
   (if passes then out = .returned returned ∧ store = finalStore else out = .stopped .reject) ∨ out = .stopped .refused
 
 variable {Aux E : Type} {M : Type → Type} [Monad M] [LawfulMonad M]

@@ -16,6 +16,15 @@ attribute [local implicit_reducible] Op.arguments Op.results Op.regions
 
 variable (model : DomainModel) (domain site : String)
 
+/-- Any typed projection, including tuples and repeated operands, can be
+installed by checking its actual declaration against the return region. -/
+def returnOperands {inputs outputs : List Ty} (refs : Operands inputs outputs) :
+    ReferenceLaw model inputs outputs where
+  body := .ret refs
+  Requires _ _ := True
+  reference args := .returned (Operands.eval args.get refs)
+  valid _ _ _ := rfl
+
 def emptyVector : ReferenceLaw model [] [.vector domain] where
   body := .letOp (.mark site) .nil .nil <|
     .letOp (.exec (.vectorEmpty domain)) .nil .nil (.ret (.cons .here .nil))

@@ -50,13 +50,45 @@ structure Captures (model : DomainModel) where
   first : Value model (.vector extension)
   remaining : Value model .index
 
+def captured (cap : Captures model) (xs : List Nat) (source : OracleAnchor) :
+    Values (Value model) querySite.spec.captures :=
+  .cons (concrete model initialSort.type source) (.cons cap.layers (.cons cap.folds (.cons cap.shift
+    (.cons cap.size (.cons cap.coefficients (.cons (concrete model .indices xs) (.cons cap.associate
+      (.cons cap.first (.cons cap.remaining .nil)))))))))
+
+def arguments (cap : Captures model) (xs : List Nat) (ordinal : Nat) (source : OracleAnchor) :
+    Values (Value model) (.index :: (querySite.spec.state ++ querySite.spec.captures)) :=
+  .cons (concrete model .index ordinal) (.cons cap.values (captured cap xs source))
+
 def iteration (context : ProtocolContext) (cap : Captures model) (xs : List Nat) (ordinal : Nat)
     (source : OracleAnchor) :=
-  let inputs : Values (Value model) (.index :: (querySite.spec.state ++ querySite.spec.captures)) :=
-    .cons (concrete model .index ordinal) (.cons cap.values (.cons (concrete model initialSort.type source)
-      (.cons cap.layers (.cons cap.folds (.cons cap.shift (.cons cap.size (.cons cap.coefficients
-        (.cons (concrete model .indices xs) (.cons cap.associate (.cons cap.first (.cons cap.remaining .nil)))))))))))
-  queryBody.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) inputs.get
+  queryBody.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
+    (arguments cap xs ordinal source).get
+
+def framed (context : ProtocolContext) (captures : Values (Value model) querySite.spec.captures)
+    (current : Values (Value model) querySite.spec.state) (ordinal : Nat) :=
+  OracleProtocol.enter model (.iteration querySite.site ordinal)
+    (queryBody.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
+      (Values.cons (concrete model .index ordinal) (current.append captures)).get)
+
+/-- The source iterates once per ordinal even when two positions coincide. -/
+theorem ordered (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (env : Environment (Value model) querySite.context) (count : Nat) (bound : count ≤ querySite.spec.maximum)
+    (initial : Values (Value model) querySite.spec.state) (captures : Values (Value model) querySite.spec.captures)
+    (selected : Operands.eval env querySite.operands = .cons (concrete model .index count) (initial.append captures)) :
+    querySite.iterations ((verifierAlgebra model).meaning (verifierTable model) context 1) env =
+      Finite.fold (framed context captures) (List.range count) initial := by
+  apply querySite.visibleIterations (verifierAlgebra model) (verifierTable model) context 1 env
+    (concrete model .index count) initial captures selected
+  · change ([0, 1].map context.roles).contains 1 = true
+    simp [receiver]
+  · intro out
+    match out with
+    | .cons _ .nil =>
+      change maskValues 1 ([[1]].map (List.map context.roles)) _ = _
+      simp [maskValues, receiver, Participant.restrict]
+  · exact ProtocolValue.toConcrete_ofConcrete (carriers := model.toCarriers) .index count
+  · exact bound
 
 /-- The installed outer loop must complete before the receiver can return
 true. The returned vector is precisely its last loop state. -/
@@ -116,7 +148,7 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
   (verifierAlgebra model).invokePresented unit.protocolsLinked protocol3Definition protocol3_member
     context 1 args _ (body context receiver _)
 
-private theorem lookup (xs : List Nat) (admitted : FriBoundedPositions.Admitted xs)
+theorem lookup (xs : List Nat) (admitted : FriBoundedPositions.Admitted xs)
     (ordinal : Fin xs.length) :
     OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper30Helper
       (.cons (concrete model .indices xs) (.cons (concrete model .index ordinal.val) .nil)) =

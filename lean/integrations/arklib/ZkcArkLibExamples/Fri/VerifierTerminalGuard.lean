@@ -14,7 +14,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.ArkLib.Fri.VerifierTerminalGuard
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open FriSource FriSourceBodies FriSourceViews
-open FriCheckRound (roundSite)
+open FriCheckRound (roundSite coefficientsPort rememberedPort)
 open OracleProtocol (concrete withMarks)
 open ZkcSecurity.Domains.KoalaBearModel (model)
 open ZkcSecurity.Domains.KoalaBear (Octic)
@@ -22,16 +22,6 @@ attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results Pro
 
 abbrev Γ := roundSite.context
 abbrev stateTypes : List Ty := [.field extension, .index, .index, .field extension]
-
-/-- Only the coefficient operand of the installed terminal helper and the
-returned vector are needed from the enclosing SSA environment. -/
-def coefficientsPort : Var Γ (.vector extension) :=
-  (roundSite.outerOperand (.vector extension) (.operation (fun op ↦ match op with
-    | .localCall helper _ _ _ => helper == helper36Helper
-    | _ => false) 0)).get (by decide +kernel)
-
-def rememberedPort : Var Γ (.vector extension) :=
-  (roundSite.outerOperand (.vector extension) (.returned 0)).get (by decide +kernel)
 
 abbrev terminalMeaning (context : ProtocolContext) :=
   (verifierAlgebra model).meaning (verifierTable model) context 1

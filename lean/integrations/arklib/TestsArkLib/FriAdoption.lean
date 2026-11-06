@@ -1,6 +1,6 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
-import ZkcArkLibExamples.Fri.VerifierPath
+import ZkcArkLibExamples.Fri.VerifierQueries
 import ZkcArkLibExamples.Fri.CommitChallenge
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
@@ -56,6 +56,7 @@ section
 open Zkc.Source ZkcExamples.Structured
 open ZkcSecurity.Domains.KoalaBearModel (model)
 open ZkcSecurity.Domains.KoalaBear (Octic)
+open FriCheckRound (coefficientsPort rememberedPort)
 open VerifierTerminalGuard
 example (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (env : Environment (FriBinding.Value model) Γ) (c : Octic)
@@ -95,6 +96,18 @@ example {Aux : Type} (before : VerifierPath.Store Aux)
   have count := congrArg (fun s : VerifierPath.Store Aux ↦ s.queries) wrong
   simp only [VerifierPath.charged] at count
   omega
+
+-- In the three-fold, eight-sample instance, coalescing one repeated
+-- position would perform only seven complete paths. The actual outer
+-- loop's successful return rules out that read count even for equal cells.
+example {Aux : Type} (store : VerifierPath.Store Aux) (returned : Values (FriBinding.Value model) FriCheckPositions.querySite.outputs) :
+    ¬ VerifierPath.outcome true returned (VerifierPath.charged store (4 * 3 * 8))
+      (.returned returned) (VerifierPath.charged store (4 * 3 * 7)) := by
+  rintro (⟨_, kept⟩ | refused)
+  · have count := congrArg (fun s : VerifierPath.Store Aux ↦ s.queries) kept
+    simp only [VerifierPath.charged] at count
+    omega
+  · cases refused
 end
 
 -- A scalar or Boolean terminal payload does not encode a coefficient vector,
@@ -296,7 +309,9 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcArkLibExamples.Fri.VirtualWord, `ZkcArkLibExamples.Fri.StoredWord,
    `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal,
    `Zkc.Source.Structured.Bindings.Continuation, `Zkc.Source.Structured.Bindings.RepeatPrefix,
-   `ZkcArkLibExamples.Fri.VerifierTerminalGuard, `ZkcArkLibExamples.Fri.VerifierPath]
+   `ZkcArkLibExamples.Fri.VerifierTerminalGuard, `ZkcArkLibExamples.Fri.VerifierPath,
+   `Zkc.Source.Structured.MarkedReturn, `ZkcExamples.Structured.FriPeeledQuery, `ZkcArkLibExamples.Fri.VerifierQuery,
+   `ZkcArkLibExamples.Fri.VerifierQueries]
   "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check
