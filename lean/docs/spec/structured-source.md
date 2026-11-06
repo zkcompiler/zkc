@@ -1600,6 +1600,14 @@ Its interpretation erases only structural application/iteration/mark bookkeeping
 runtime guard and the retained-body check are both required. This result does not
 identify an arbitrary ordinary provider with the canonical Oracle store or cursor.
 
+The Math fragment includes selected Boolean regions. Both callback bodies must
+pass the recursive fragment check. A missing selector or capture returns absent
+results. When all operands are present the Boolean chooses one callback, which
+receives its captures with their structural Oracle values intact. The embedding
+relates the chosen callback to the closed ordinary callback on present inputs and
+retains its entire process, including every stop. The dormant arm contributes
+formation obligations without issuing actions.
+
 A protocol containing logical oracles can still reuse ordinary Math companion laws.
 `ReferenceLaw.invokeOracleConcrete` combines exact `BodyIn` association, the original
 helper premises and the actual helper-table embedding for concrete operands. It
