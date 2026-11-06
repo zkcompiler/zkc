@@ -1,4 +1,5 @@
 import ZkcSecurity.Bindings.Gkr.RoundsReference
+import ZkcSecurity.Families.Sumcheck.Round
 import Mathlib.Tactic.NormNum
 
 namespace TestsSecurity.GkrRoundsReference
@@ -30,5 +31,22 @@ theorem arbitrary_prefix {F : Type} [Field F] {n : Nat} (count : Nat)
     (data F).admissible ((data F).restrictPrefix count s challenges) :=
   prefix_admissible count s challenges allowed
 
+open OracleComp OracleSpec
+open scoped ENNReal
+
+/-- Use the very same escape theorem as the endpoint-pair Sumcheck client.
+The GKR author supplies the gate reference invariant. The installed triple
+decoder already supplies the attacker's polynomial and its degree. -/
+theorem gate_arbitrary_triple {F : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
+    {n : Nat} (state : State F (n + 1)) (allowed : admissible state) (claim : F)
+    (wrong : claim ≠ total state) (triple : F × F × F)
+    (checked : (ZkcSecurity.Families.Sumcheck.Message.coefficientTriples F).boundary triple = claim) :
+    Pr{let r ← $ᵗ F}[(ZkcSecurity.Families.Sumcheck.Message.coefficientTriples F).evaluate triple r =
+      total (restrict state r)] ≤ 2 / (Fintype.card F : ℝ≥0∞) := by
+  simpa only [data, max_self, Nat.cast_ofNat] using
+    ZkcSecurity.Families.Sumcheck.escape_uniform_le laws ZkcSecurity.Families.Sumcheck.Message.coefficientTriples_laws
+      state allowed claim wrong triple checked
+
+#print axioms gate_arbitrary_triple
 #print axioms ZkcSecurity.Examples.Components.GkrRoundsReference.laws
 end TestsSecurity.GkrRoundsReference

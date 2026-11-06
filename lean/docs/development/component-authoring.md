@@ -356,8 +356,13 @@ companion also supplies the gate-specific reference and the residual after
 restriction. Its challenge occurrence and handler have to establish the
 sampling law used there. Reusing the round theorem proves neither freshness
 at another occurrence nor independence between two uses of the same draw.
-The focused checks are in `TestsSecurity.SumcheckReference` and
-`TestsSecurity.GkrRoundsResidual`.
+The direct finite-field instantiation is
+`TestsSecurity.GkrRoundsReference.gate_arbitrary_triple`. It uses the same
+escape theorem with GKR’s gate reference and the installed triple decoder.
+The companion control `cubic_off_cube` shows why the gate’s admissibility
+condition matters. The source-round checks are in
+`TestsSecurity.GkrRoundsResidual`, and the affine and mixed-degree
+controls are in `TestsSecurity.SumcheckReference`.
 
 For a loop nested in another callback, select it inside that callback.
 `checked_repeat_prefix firstFoldBody := insideQuery using innerOnSpine`
@@ -418,8 +423,12 @@ after the earlier folds. The returned size is halved, the offset is
 squared, and the generator is the root for that smaller domain. The
 parent and its view remain registered at the return. Capacity, visibility
 and cursor failures still stop the source. This result requires the
-parent's publication at delivery; the enclosing sequence must obtain that
-witness from its own send.
+parent's publication at delivery. `CommitIteration.installed` obtains
+that witness from the same callback’s own send and follows its actual
+appended handle and draw through the return. A bad cursor or duplicate
+anchor refuses before calling the word chooser. The theorem allows an
+adversarial word and an arbitrary field reply. Its sampling distribution
+and the relation between several rounds are separate obligations.
 
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and
