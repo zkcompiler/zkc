@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Mathematics.Fields.KoalaBear
+public import ZkcSecurity.Bindings.Models.KoalaBearSampling
 
 /-!
 Independent mathematical clients of the octic domain adapter. These controls
@@ -85,4 +85,24 @@ theorem zeroEmbedding_not_quotientAgreement :
   rw [hZero, map_one] at hOne
   exact zero_ne_one hOne
 
+open Sampling ZkcSecurity.FiatShamir.CoordinateRejection
+
+-- A high bit alone produces zero. The first out-of-field low word refuses.
+example : accepted (classify ⟨2^31, by decide⟩) = some 0 := by rw [candidate]; rfl
+example : accepted (classify ⟨q, by decide⟩) = none := by rw [candidate]; rfl
+
+-- The little-endian word positions and byte offset are visible in a real block.
+example : (words (fun i => if i.val = 5 then 1 else 0) 1).val = 256 := by decide
+example : (index (fun i => if i.val = 0 then 31 else 0)).val = 31 := by decide
+example : (index (fun i => if i.val = 8 then 31 else 0)).val = 0 := by decide
+
+-- The physical cap refuses even though an uncapped sampler could continue.
+example (blocks : Blocks) (miss : ∀ w ∈ (tape blocks).val, accepted w = none) :
+    octic blocks = none := by
+  apply (octic_refused blocks).2
+  have empty : (tape blocks).val.filterMap accepted = [] := List.filterMap_eq_nil_iff.mpr miss
+  simp [empty]
+
+#print axioms Sampling.octic_exact
+#print axioms Sampling.index_exact
 end TestsSecurity.KoalaBearDomain
