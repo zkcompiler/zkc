@@ -136,15 +136,37 @@ structure Template where
 
 namespace Template
 
+/-- A realization protocol name carries the digest of its checked source
+association. A malformed reserved name never passes native admission. -/
+def generatedProtocol (protocol : String) : Bool := "zkc.oracle.".toList.isPrefixOf protocol.toList
+
+def validProtocol (protocol : String) : Bool :=
+  if generatedProtocol protocol then
+    let digest := protocol.toList.drop "zkc.oracle.".length
+    digest.length == 64 && digest.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
+  else true
+
+/-- Generated common sites already have their final spelling. An authored
+step still extends the prefix in force at that point of the path. -/
+def expandSite (parent : Option String) (protocol site : String) : String :=
+  if generatedProtocol protocol then site else Structured.qualifyProtocolSite parent site
+
+def validNamespaces (template : Template) : Bool :=
+  template.steps.all (fun step => validProtocol step.protocol) &&
+    match template.event with
+    | tag :: protocol :: _ =>
+        validProtocol protocol && (!generatedProtocol protocol || tag == "message")
+    | _ => false
+
 /-- The application prefix of the template's path, rendered as the structured
 semantics renders nested application sites. -/
 def applicationPrefix (template : Template) : Option String :=
   template.steps.foldl (fun outer step =>
-    if step.kind = "apply" then some (Structured.qualifyProtocolSite outer step.site) else outer) none
+    if step.kind = "apply" then some (expandSite outer step.protocol step.site) else outer) none
 
 /-- A local site of the template's innermost protocol, qualified by its path. -/
 def qualify (template : Template) (site : String) : String :=
-  Structured.qualifyProtocolSite template.applicationPrefix site
+  expandSite template.applicationPrefix (template.event[1]?.getD "") site
 
 /-- The number of enclosing repeats, which is the number of dynamic coordinates. -/
 def repeats (template : Template) : Nat :=

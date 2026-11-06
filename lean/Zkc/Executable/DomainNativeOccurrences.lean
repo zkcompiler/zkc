@@ -13,7 +13,8 @@ theorem nativeTemplate_facts (context : Context) (depth : Nat) (template : Templ
     (checked : nativeTemplate context depth template = true) :
     template.entry = context.entry ∧ template.repeats = depth ∧
       template.steps.all (fun step => step.kind == "apply" || step.kind == "repeat") = true := by
-  simpa only [nativeTemplate, Bool.and_eq_true, beq_iff_eq, and_assoc] using checked
+  simp only [nativeTemplate, Bool.and_eq_true, beq_iff_eq] at checked
+  exact ⟨checked.1.1.1, checked.1.1.2, checked.1.2⟩
 
 theorem nativeMessageEvent_facts (event : List String) (checked : nativeMessageEvent event = true) :
     ∃ localEntry site sender receiver,

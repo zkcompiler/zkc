@@ -207,6 +207,49 @@ def template(hex_text):
     return tree
 
 
+def origin_structure(value):
+    version, entry, steps, coordinates, event = record(value, 5)
+    require(version == "zkc.native-origin-template/0" and coordinates == [], "invalid origin template")
+
+    def identifier(name):
+        require(isinstance(name, str) and 0 < len(name) <= 128
+                and all(33 <= ord(char) <= 126 for char in name), "invalid origin identifier")
+
+    def generated(protocol):
+        if not protocol.startswith("zkc.oracle."):
+            return False
+        require(re.fullmatch(r"zkc\.oracle\.[0-9a-f]{64}", protocol), "invalid generated origin protocol")
+        return True
+
+    identifier(entry)
+    require(isinstance(steps, list) and len(steps) <= 64, "invalid origin steps")
+    for step in steps:
+        record(step)
+        require(len(step) in (3, 4), "invalid origin step")
+        if len(step) == 3:
+            kind, protocol, site = step
+            require(kind in ("apply", "repeat"), "invalid origin step kind")
+        else:
+            kind, protocol, site, alternative = step
+            require(kind == "branch", "invalid origin step kind")
+            identifier(alternative)
+        identifier(protocol)
+        generated(protocol)
+        identifier(site)
+    record(event)
+    require(bool(event), "empty origin event")
+    sizes = {"query": 7, "message": 6, "start": 3}
+    require(isinstance(event[0], str) and event[0] in sizes, "unknown origin event")
+    record(event, sizes[event[0]])
+    for name in event[1:]:
+        identifier(name)
+    require(not generated(event[1]) or event[0] == "message", "invalid generated origin event")
+    if event[0] == "query":
+        require(event[3].startswith("input_"), "invalid origin input")
+        decimal(event[3][6:], limit=1 << 64)
+    return event
+
+
 def origin_step(value):
     """An application or repeat step `[kind, protocol, site]`, or a branch step
     `["branch", protocol, site, alternative]`; nothing else."""
@@ -221,10 +264,9 @@ def origin_step(value):
 
 def origin(hex_text):
     """The Lean occurrence template of a canonical template encoding."""
-    _, entry, steps, coordinates, event = template(hex_text)
-    require(isinstance(entry, str) and isinstance(steps, list) and len(steps) <= 64 and coordinates == [],
-            "invalid origin path")
-    require(isinstance(event, list) and event and all(isinstance(item, str) for item in event), "invalid origin event")
+    tree = template(hex_text)
+    origin_structure(tree)
+    _, entry, steps, _, event = tree
     return f"⟨{text(entry)}, {seq(steps, origin_step)}, {seq(event, text)}⟩"
 
 
