@@ -80,14 +80,32 @@ CheckedProject snapshotProject(unsigned clauses, unsigned instances,
   source += "    return value" + std::to_string(instances - 1) + "\n";
   return take(check(source));
 }
-CheckedProject unusedAdmissionProject() {
-  return take(
-      check(R"(protocol Unused<T: Type> roles(P, V)(x: T @P) -> T @V where ():
+CheckedProject unusedAdmissionProject(unsigned levels = 0) {
+  std::string source =
+      R"(protocol Unused<T: Type> roles(P, V)(x: T @P) -> T @V where ():
     y <- send x to V
     return y
-pub protocol Demo<T: Type> roles(P)(x: bool @P) -> bool @P:
-    return x
-)"));
+)";
+  if (levels) {
+    source += "def keep<N: nat>(x: bool) -> bool:\n    return x\n";
+    for (unsigned i = 0; i < levels; ++i) {
+      const auto target = i ? "level" + std::to_string(i - 1) : "keep";
+      source += "def level" + std::to_string(i) +
+                "<N: nat>(x: bool) -> bool:\n"
+                "    first = " +
+                target +
+                "<N * 2>(x)\n"
+                "    second = " +
+                target +
+                "<N * 2 + 1>(first)\n"
+                "    return second\n";
+    }
+  }
+  source += "pub protocol Demo<T: Type> roles(P)(x: bool @P) -> bool @P:\n";
+  source += levels
+                ? "    return level" + std::to_string(levels - 1) + "<0>(x)\n"
+                : "    return x\n";
+  return take(check(source));
 }
 std::pair<uint64_t, bool> specializeSnapshot(const CheckedProject &project,
                                              uint64_t allowance,
@@ -727,50 +745,124 @@ protocol Demand<T: Type> roles(P)(x: bool @P) -> bool @P where NativeMessage(T):
                 if (auto error = checkScopedSpecialization(closed))
                   throw std::runtime_error(toString(std::move(error)));
               });
-  cases.run("specialization replay meters unused admission snapshot", [] {
-    auto project = unusedAdmissionProject();
-    auto closed = take(
-        closeNativeRun(project, "m::Demo", {}, {Type(Type::Kind::Boolean)}));
-    auto replay = [&](uint64_t allowance) {
-      Limits limits;
-      limits.work = allowance;
-      std::vector<SourceWorkBudget> budgets;
-      auto error = checkScopedSpecialization(closed, limits, &budgets);
-      const bool ok = !error;
-      if (error)
-        require(namesIdentifier(toString(std::move(error)), "source.limit"),
-                "specialization replay returned the wrong refusal");
-      require(budgets.size() >= 2 &&
-                  budgets.back().phase == SourceWorkPhase::ScopedSpecialization,
-              "source check masks specialization replay snapshot budget");
-      const auto cost = budgets.back().ledger.total;
-      require(cost <= allowance, "specialization replay overspent");
-      return std::make_pair(cost, ok);
-    };
-    auto [smallCost, smallOK] = replay(Limits{}.work);
-    require(smallOK, "authentic specialization replay failed");
-    auto &admission = named(project, "m::Unused").admissions.front();
-    require(admission.calls.empty(),
-            "unused fixture unexpectedly has call origins");
-    const auto calls = project.checkedWork() + 256;
-    admission.calls.assign(calls, admission.span);
-    auto [largeCost, largeOK] = replay(Limits{}.work);
-    outs() << "admission specialization replay small=" << smallCost
-           << " large=" << largeCost << " retained_calls=" << calls << '\n';
-    require(largeOK && largeCost == smallCost + calls,
-            "independent specialization copy escaped admission charging");
-    require(replay(largeCost) == std::make_pair(largeCost, true),
-            "warm exact specialization replay changed work");
-    require(!replay(largeCost - 1).second,
-            "one-short specialization replay succeeded");
-    require(admission.calls.size() == calls,
-            "failed specialization replay changed the source template");
-    require(replay(largeCost) == std::make_pair(largeCost, true),
-            "specialization replay failure changed retry");
-    admission.calls.clear();
-    require(replay(Limits{}.work) == std::make_pair(smallCost, true),
-            "restored specialization replay changed work");
-  });
+  for (unsigned levels : {0u, 6u})
+    cases.run(
+        levels ? "specialization replay meters unused admission snapshot"
+               : "public replay meters unused admission snapshot",
+        [&] {
+          auto project = unusedAdmissionProject(levels);
+          auto closed = take(closeNativeRun(project, "m::Demo", {},
+                                            {Type(Type::Kind::Boolean)}));
+          if (levels)
+            require(
+                llvm::count_if(closed.declarations(),
+                               [&](const auto &decl) {
+                                 return decl.origin &&
+                                        decl.origin->index ==
+                                            named(project, "m::keep").id.index;
+                               }) == (1u << levels),
+                "replay fixture missed distinct static specializations");
+          const auto sourceBody = named(project, "m::Demo").body;
+          const auto closedBody = closed.root().body;
+          const auto closedInstances = take(inspectSourceInstances(closed));
+          auto sourceWork = [&] {
+            std::vector<SourceWorkBudget> budgets;
+            if (auto error = checkScopedElaboration(project, {}, &budgets))
+              throw std::runtime_error(toString(std::move(error)));
+            require(budgets.size() == 1 &&
+                        budgets.front().phase ==
+                            SourceWorkPhase::ScopedElaboration &&
+                        budgets.front().ledger.total <= Limits{}.work,
+                    "source replay has an invalid independent ledger");
+            return budgets.front().ledger.total;
+          };
+          auto replay = [&](uint64_t allowance,
+                            SourceWorkPhase last =
+                                SourceWorkPhase::ScopedSpecialization) {
+            Limits limits;
+            limits.work = allowance;
+            std::vector<SourceWorkBudget> budgets;
+            auto error = checkScopedSpecialization(closed, limits, &budgets);
+            const bool ok = !error;
+            if (error)
+              handleAllErrors(
+                  std::move(error), [&](const DiagnosticError &failure) {
+                    require(failure.diagnostic().code == "source.limit" &&
+                                StringRef(failure.diagnostic().message)
+                                    .contains(sourceWorkPhaseName(last)),
+                            "public replay refused in the wrong phase");
+                  });
+            require(
+                budgets.size() == (last == SourceWorkPhase::ScopedSpecialization
+                                       ? 2u
+                                       : 1u) &&
+                    budgets.front().phase ==
+                        SourceWorkPhase::ScopedElaboration &&
+                    budgets.back().phase == last,
+                "public replay did not reach the expected independent check");
+            for (const auto &budget : budgets)
+              require(budget.ledger.total <= allowance,
+                      "public replay overspent an independent ledger");
+            const auto cost = budgets.back().ledger.total;
+            return std::make_pair(cost, ok);
+          };
+          const auto smallSource = sourceWork();
+          auto [smallCost, smallOK] = replay(Limits{}.work);
+          require(smallOK, "authentic specialization replay failed");
+          auto &admission = named(project, "m::Unused").admissions.front();
+          require(admission.calls.empty(),
+                  "unused fixture unexpectedly has call origins");
+          const auto calls = project.checkedWork() + 256;
+          admission.calls.assign(calls, admission.span);
+          const auto largeSource = sourceWork();
+          auto [largeCost, largeOK] = replay(Limits{}.work);
+          outs() << "admission public replay levels=" << levels
+                 << " checked_work=" << project.checkedWork()
+                 << " source=" << largeSource << " small=" << smallCost
+                 << " large=" << largeCost << " retained_calls=" << calls
+                 << '\n';
+          require(largeOK && largeCost == smallCost + calls,
+                  "independent specialization copy escaped admission charging");
+          const auto boundary =
+              std::max({project.checkedWork(), largeSource, largeCost});
+          // These checks share a numeric limit, not a cumulative ledger.
+          // Genuine source instances make the closed witness dominant in the
+          // second fixture.
+          require(
+              levels ? largeCost > std::max(project.checkedWork(), largeSource)
+                     : largeSource > std::max(project.checkedWork(), largeCost),
+              "replay fixture does not isolate its intended budget boundary");
+          require(replay(boundary) == std::make_pair(largeCost, true),
+                  "warm exact public replay changed work");
+          const auto last = levels ? SourceWorkPhase::ScopedSpecialization
+                                   : SourceWorkPhase::ScopedElaboration;
+          const auto [shortCost, shortOK] = replay(boundary - 1, last);
+          require(!shortOK, "one-short public replay succeeded");
+          outs() << "admission public replay levels=" << levels
+                 << " exact=" << boundary << " one_short_spent=" << shortCost
+                 << " refused_phase=" << sourceWorkPhaseName(last) << '\n';
+          require(admission.calls.size() == calls &&
+                      llvm::all_of(admission.calls,
+                                   [&](const Span &span) {
+                                     return span.source.index ==
+                                                admission.span.source.index &&
+                                            span.begin ==
+                                                admission.span.begin &&
+                                            span.end == admission.span.end;
+                                   }) &&
+                      named(project, "m::Demo").body == sourceBody &&
+                      closed.root().body == closedBody &&
+                      take(inspectSourceInstances(closed)) == closedInstances,
+                  "failed public replay changed source or candidate state");
+          require(replay(boundary) == std::make_pair(largeCost, true) &&
+                      sourceWork() == largeSource,
+                  "public replay failure changed retry");
+          admission.calls.clear();
+          require(replay(Limits{}.work) == std::make_pair(smallCost, true) &&
+                      sourceWork() == smallSource &&
+                      take(inspectSourceInstances(closed)) == closedInstances,
+                  "restored public replay changed work or candidate state");
+        });
   for (bool depth : {false, true})
     cases.run("unused admission snapshot type boundary " + Twine(depth), [&] {
       auto project = unusedAdmissionProject();
