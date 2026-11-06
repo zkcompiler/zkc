@@ -120,7 +120,7 @@ theorem source_observation
   intro e
   cases e with
   | mk outcome state events =>
-    cases outcome <;> simp [returnedSatisfies, Causal.accepts, checkedResult, Values.get,
+    cases outcome <;> simp [returnedSatisfies, Causal.accepts, checkedResult,
       rawTerminal_iff_coordinates rawV table decoded]
 
 /-- Full imported Sumcheck returned-true bound for arbitrary receive/send

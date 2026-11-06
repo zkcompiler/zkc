@@ -12,7 +12,7 @@ theorem configuredQuery {F G S E : Type} [SampleableType F]
     (before : Key → Phase S E Unit) (after : Key → F → Phase S E Unit)
     (context : ProtocolContext) (handle : Nat) (initial : S) :
     (participantActions F G (.query (queryKey context handle).1
-      (queryKey context handle).2.1 (.cons handle .nil))).runM
+      (.draw (queryKey context handle).2.1) (.cons handle .nil))).runM
         (withUniformQueries network [queryKey context handle] before after) initial =
       freshQuery (before (queryKey context handle)) (after (queryKey context handle)) initial :=
   withUniformQueries_queryKey network before after context handle initial
