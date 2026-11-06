@@ -2,6 +2,7 @@ module
 
 public import ZkcArkLib.Fri.SourcePublication
 public import Zkc.Source.Structured.OracleReadback
+public import Zkc.Source.Structured.OracleReadEffects
 
 @[expose] public section
 
@@ -52,5 +53,28 @@ theorem Base.cell {entries : OracleEntries model snapshot domains math} {self : 
   rw [routed, SourcePublication.read_fixed_word source word stored answer shape rows cells
     index location expansion state found]
   rfl
+
+/-- At a reached source occurrence, the selected cell comes from the word
+stored at this handle. The prover and all samplers may still be effectful. -/
+theorem Base.sourceQuery {m : Type → Type} [Monad m] [LawfulMonad m]
+    (oracles : List (CheckedOracle snapshot domains math))
+    (network : PublishedWords.Table model →
+      PIR.MonadHandler m (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : PublishedWords.Chooser m model Aux E)
+    (state : OracleProtocol.State model snapshot domains math (PublishedWords.State model Aux))
+    {source : OracleAnchor} {word : Fin (2 ^ n) → model.Field d}
+    (live : Base state.oracle.entries state.oracle.self source word state.oracle.provider)
+    (index : Fin (2 ^ n)) (owner : Nat) (roles : Nat → Nat) (site : OracleLocation)
+    (atDef : site.definition = state.frame.definition) (atRow : site.row = state.frame.row)
+    (active : roles owner = state.oracle.self) :
+    PublishedWords.actionM oracles network choose
+        (OracleProtocol.tableQuery model (.field d) none source index.val state.oracle.self owner roles site) state =
+      pure ⟨.returned (.cons (some (ProtocolValue.ofConcrete (.field d) (word index))) .nil),
+        {state with oracle.queries := state.oracle.queries + 1},
+        [.logical (.query (Phases.publishedRequest d source index.val
+          {site with invocation := state.frame.invocation} []))]⟩ :=
+  OraclePublication.returnsCell oracles (PublishedWords.liftM network) PublishedWords.read
+    (PublishedWords.publishM choose) (.field d) none source index.val owner roles site state atDef atRow
+    active (word index) _ _ (live.cell index _ [] state.oracle.queries)
 
 end ZkcSecurity.ArkLib.Fri.StoredWord

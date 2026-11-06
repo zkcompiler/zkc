@@ -1,5 +1,7 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
+import ZkcArkLibExamples.Fri.VerifierTerminal
+import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
 import ZkcExamples.Structured.FriBindingExecution
 import ZkcArkLibExamples.Fri.PublishedSampling
@@ -207,3 +209,12 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcArkLibExamples.Fri.TranscriptTrace,
    `ZkcArkLibExamples.Fri.ClearSites,
    `ZkcArkLibExamples.Fri.ClearCertificate] "FRI-RETAINED-CERTIFICATE-BOUNDARIES-PASS" (exactModules := true))
+
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Semantics.CallRestriction, `Zkc.Source.Structured.OracleReadEffects,
+   `Zkc.Source.Structured.OracleReadback, `ZkcExamples.Structured.FriPower,
+   `ZkcExamples.Structured.FriVirtualBody, `ZkcArkLibExamples.Fri.VirtualReads,
+   `ZkcArkLibExamples.Fri.VirtualWord, `ZkcArkLibExamples.Fri.StoredWord,
+   `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal]
+  "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))

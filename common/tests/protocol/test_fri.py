@@ -396,6 +396,10 @@ DISHONEST = [
     # layer two, which is checked in round two.
     ('fold-shift', 'current = next;',
      'current = coset::word(coset::values(next), coset::offset(next) * coset::offset(current));', 'chain', ['0', '1']),
+    # Both handle sequences have the same port type. Once forwarded in the
+    # opposite order, the first supposed virtual Fold has 32 rows instead of 16.
+    ('handle-association', 'layers: committed.layers,\n    folds: committed.folds',
+     'layers: committed.folds,\n    folds: committed.layers', 'first_fold_rows', ['0']),
     # Honest folds with a wrong constant pass every chain check and fail where
     # the terminal polynomial is evaluated, after the first query's rounds.
     ('terminal-constant', 'let proposed @P = padded(polynomial::coefficients(coset::interpolate(current)),',
@@ -410,7 +414,7 @@ def test_fri_rejects_dishonest_folds_and_terminal(toolchain, journal, directory,
     # Altering a transmitted message moves the drawn positions, so a mutated
     # proof fails authentication before the fold chain or the terminal is
     # checked. Only a prover whose committed layers are self-consistent reaches
-    # those guards. Each variant replaces exactly one prover-only line of the
+    # those guards. Each variant changes one expression or field association in the
     # library; the emitted guards keep the library's shape, and the proof is
     # verified with its own package because the binding carries the source
     # digest. The transcript fixes the queried points, so the failing round is
