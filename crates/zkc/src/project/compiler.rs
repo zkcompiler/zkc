@@ -1063,28 +1063,41 @@ mod tests {
             crate::evm::tests::source_record(entry, "object \"Verifier\" { code {} }").to_string()
         }
 
+        fn fixture_project(directory: &Path) -> Project {
+            let module = directory.join("main.zkc");
+            std::fs::write(&module, "module example;\n").unwrap();
+            Project::explicit(
+                SourceFormat::Zkc,
+                BTreeMap::from([("example".into(), module.to_str().unwrap().into())]),
+                BTreeMap::new(),
+            )
+            .unwrap()
+        }
+
         fn fixture(directory: &Path, entry: &str) -> (Compiler, Project) {
             let path = directory.join("compiler");
             script(
                 &path,
                 &format!("#!/bin/sh\nprintf '%s' '{}'\n", response(entry)),
             );
-            let module = directory.join("main.zkc");
-            std::fs::write(&module, "module example;\n").unwrap();
-            let project = Project::explicit(
-                SourceFormat::Zkc,
-                BTreeMap::from([("example".into(), module.to_str().unwrap().into())]),
-                BTreeMap::new(),
+            (
+                Compiler::new(path.to_str().unwrap()).unwrap(),
+                fixture_project(directory),
             )
-            .unwrap();
-            (Compiler::new(path.to_str().unwrap()).unwrap(), project)
         }
 
         #[test]
         fn evm_limits_requests_are_complete_and_forged_responses_refuse_before_adoption() {
             use crate::evm::{Limits, Options, tests::source_record};
             let directory = tempfile::tempdir().unwrap();
-            let (compiler, project) = fixture(directory.path(), "example::Proof");
+            let project = fixture_project(directory.path());
+            let compiler = Compiler::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/evm-limits-compiler.sh"
+            ))
+            .unwrap();
+            let expected = directory.path().join("expected-limits");
+            let response = directory.path().join("response.json");
             let defaults = Options::default();
             let mut requests = vec![defaults.clone()];
             for row in &crate::evm_target::LIMITS {
@@ -1098,14 +1111,8 @@ mod tests {
             for options in &requests {
                 let mut record = source_record("example::Proof", "unchanged Yul");
                 record["limits"] = serde_json::json!(options.limits);
-                let flag = format!("--evm-limits={}", options.limits.canonical_json());
-                // Exactly one full inline object crosses the bounded adapter.
-                script(
-                    compiler.path(),
-                    &format!(
-                        "#!/bin/sh\ncount=0\nfor arg do\n case \"$arg\" in --evm-limits=*)\n [ \"$arg\" = '{flag}' ] || exit 8\n count=$((count+1));; esac\ndone\n[ \"$count\" = 1 ] || exit 9\nprintf '%s' '{record}'\n"
-                    ),
-                );
+                std::fs::write(&expected, options.limits.canonical_json()).unwrap();
+                std::fs::write(&response, record.to_string()).unwrap();
                 let direct = compiler
                     .evm_source_from(&project, Selection::default(), options)
                     .unwrap();
@@ -1123,10 +1130,7 @@ mod tests {
                     &defaults
                 };
                 record["limits"] = serde_json::json!(wrong.limits);
-                script(
-                    compiler.path(),
-                    &format!("#!/bin/sh\nprintf '%s' '{record}'\n"),
-                );
+                std::fs::write(&response, record.to_string()).unwrap();
                 for result in [
                     compiler.evm_source_from(&project, Selection::default(), options),
                     compiler.evm_source(&project, Selection::default(), options),
@@ -1160,11 +1164,9 @@ mod tests {
                 &format!("\"limits\":{{\"{}\":{},", row.name, row.maximum),
             );
             malformed.push((duplicate, "evm-json"));
+            std::fs::write(&expected, defaults.limits.canonical_json()).unwrap();
             for (record, code) in malformed {
-                script(
-                    compiler.path(),
-                    &format!("#!/bin/sh\nprintf '%s' '{record}'\n"),
-                );
+                std::fs::write(&response, record).unwrap();
                 assert_eq!(
                     compiler
                         .evm_source(&project, Selection::default(), &defaults)
