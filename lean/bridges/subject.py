@@ -503,7 +503,7 @@ class Driver(Runner):
         evaluations = [
             f'#eval IO.println ("total " ++ toString ({lowered}.toOption.bind (·.total?)))',
             f'#eval IO.println ("receives " ++ (repr ({lowered}.toOption.bind (fun l => Plan.static l.plan))).pretty 1000000)',
-            '#eval IO.println ("helpers " ++ (repr (Instruction.helperList '
+            '#eval IO.println ("helpers " ++ (repr (Zkc.Executable.Instruction.helpers '
             'Fresh.Constructed.participant.instructions)).pretty 1000000)',
             '#eval IO.println ("calls " ++ toString (Instruction.callList Fresh.Constructed.participant.instructions).length)',
             f'#eval IO.println ("exact actual " ++ toString (exact {lowered}))',
