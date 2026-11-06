@@ -136,6 +136,43 @@ theorem random_call_bound (s : Nat) :
       mass (acceptance handler randomPrefix s (· = true)) :=
   arbitrary_prefix_bound handler randomPrefix s
 
+/-! Two uses of a random resource share its table. Its read count and returned
+bits are independent observations of the same complete execution. -/
+namespace SharedReads
+
+private abbrev bits : PIR.Signature := ⟨Bool, fun _ => Fin 2⟩
+
+private def readTable (table : Fin 2 × Fin 2) : PIR.Handler bits Nat Bool :=
+  fun key count => ⟨.returned (if key then table.2 else table.1), count + 1, [key]⟩
+
+private def both (second : Bool) : PIR.Process bits (Fin 2 × Fin 2) :=
+  .call false fun a => .call second fun b => .done (a, b)
+
+private def discardFirst : PIR.Process bits (Fin 2) :=
+  .call false fun _ => .call false .done
+
+theorem discard_still_counts (table : Fin 2 × Fin 2) :
+    discardFirst.run (readTable table) 0 =
+      ⟨.returned table.1, 2, [false, false]⟩ := rfl
+
+private def bothOne (second : Bool) (table : Fin 2 × Fin 2) : Bool :=
+  (both second |>.run (readTable table) 0).outcome == .returned (1, 1)
+
+theorem reused_draw : Pr{let table ← $ᵗ (Fin 2 × Fin 2)}[bothOne false table = true] = 1 / 2 := by
+  rw [SampleableType.prEvent_uniformSample]
+  have count : (Finset.univ.filter (fun table => bothOne false table = true)).card = 2 := by decide
+  rw [count, Fintype.card_prod, Fintype.card_fin]
+  rw [← ENNReal.toReal_eq_toReal_iff' (by finiteness) (by finiteness)]
+  norm_num
+
+theorem independent_draws : Pr{let table ← $ᵗ (Fin 2 × Fin 2)}[bothOne true table = true] = 1 / 4 := by
+  rw [SampleableType.prEvent_uniformSample]
+  have count : (Finset.univ.filter (fun table => bothOne true table = true)).card = 1 := by decide
+  rw [count, Fintype.card_prod, Fintype.card_fin]
+  norm_num
+
+end SharedReads
+
 end TestsSecurity.CallComposition
 
 run_cmd do

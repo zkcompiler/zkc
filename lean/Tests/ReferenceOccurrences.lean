@@ -33,7 +33,7 @@ example (model : DomainModel) (_a _b : model.Field "bls12-381.fr") : True := by
   fail_if_success
     have : once.denote (meaning model) (Values.cons _a (.cons _b .nil) : Values model.Value scalarInputs).get = .done (.cons (0 : model.Field "bls12-381.fr") .nil) := by
       derive_reference_process [equalDifference model] using (scalarProgram false).payload.linked
-  -- Even _a definitionally true conclusion requires the requested installation.
+  -- Even a definitionally true conclusion requires the requested installation.
   fail_if_success
     have : once.denote (meaning model) (Values.cons _a (.cons _b .nil) : Values model.Value scalarInputs).get = .done (.cons (_a - _b) .nil) := by
       derive_reference_process [] using (scalarProgram false).payload.linked
@@ -48,6 +48,36 @@ example (model : DomainModel) (_a _b _c : model.Field "bls12-381.fr") : True := 
         .done (.cons ((_a - _b) - _c) (.cons (_a - _b) (.cons _b .nil))) := by
       derive_reference_process [difference model] using (scalarProgram false).payload.linked
   trivial
+
+private def guarded : Region dialect (.boolean :: scalarInputs) [field] :=
+  .letOp (.branch scalarInputs [field])
+    (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+    (.cons once (.cons (.stop .reject) .nil)) (.ret (.cons .here .nil))
+
+private abbrev input (model : DomainModel) (flag : Bool) (a b : model.Field "bls12-381.fr") :
+    Values model.Value (.boolean :: scalarInputs) := .cons flag (.cons a (.cons b .nil))
+
+/-- The selected callback receives the original two fields. The same typed
+callback would have no such equality premise at arbitrary arguments. -/
+example (model : DomainModel) (a b : model.Field "bls12-381.fr") (same : a = b) :
+    guarded.denote (meaning model) (input model true a b).get =
+      .done (.cons (0 : model.Field "bls12-381.fr") .nil) := by
+  derive_reference_process [equalDifference model] using (scalarProgram false).payload.linked
+
+/-- Dead arms do not require a body installation or a proof of input equality. -/
+example (model : DomainModel) (a b : model.Field "bls12-381.fr") :
+    guarded.denote (meaning model) (input model false a b).get = .halt .reject := by
+  derive_reference_process [] using (scalarProgram false).payload.linked
+
+/-- An unknown selector makes the entry condition available only on its arm. -/
+example (model : DomainModel) (flag : Bool) (a b : model.Field "bls12-381.fr")
+    (onTrue : flag = true → a = b) :
+    guarded.denote (meaning model) (input model flag a b).get =
+      (if flag = true then PIR.Process.done
+        (Values.cons (0 : model.Field "bls12-381.fr") .nil : Values model.Value [field])
+        else .halt .reject).bind (fun values => .done (.cons (values.get .here) .nil)) := by
+  derive_reference_process [equalDifference model] using (scalarProgram false).payload.linked
+  exact onTrue (by assumption)
 
 /-- A stopped lexical body never tries to select a reference in its suffix. -/
 example (model : DomainModel) (a b : model.Field "bls12-381.fr") :
