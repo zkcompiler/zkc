@@ -55,6 +55,26 @@ end ZkcSecurity.Tools.SourceInputReadback
 namespace ZkcSecurity.Tools.SourceInputReadback
 open Lean Meta Zkc.Source Zkc.Source.Structured ZkcSecurity.Claims.HonestPair
 
+/-- Recover the selected opaque instance and its concrete argument row. The
+predicate itself belongs to the registry and stays abstract during readback. -/
+def expandOpaque (clause readLaw applied : Expr) : MetaM Simp.Result := do
+  let arguments := applied.getAppArgs
+  let law ← mkAppM ``OpaqueRegistry.Binding.holds_exact
+    #[arguments[arguments.size - 2]!, arguments.back!]
+  let some (_, predicate) := (← inferType law).iff?
+    | throwError "source-input-clauses: expected the installed predicate law"
+  unless predicate.isAppOf ``OpaqueInstance.holds do
+    throwError "source-input-clauses: missing installed opaque instance"
+  let operands := predicate.getAppArgs
+  let instanceIndex := operands.size - 2
+  let selected ← match Kernel.whnf (← getEnv) (← getLCtx) operands[instanceIndex]! with
+    | .ok value => pure value
+    | .error error => throwError "source-input-clauses: cannot read opaque instance: {error.toMessageData {}}"
+  let values ← UnitViews.normalize operands.back!
+  let applied := mkAppN predicate.getAppFn
+    ((operands.set! instanceIndex selected).set! (operands.size - 1) values)
+  return { expr := applied, proof? := some (mkExpectedPropHint readLaw (← mkEq clause applied)) }
+
 /-- An absent selector fails the clause immediately. An opaque meaning retains
 its installed predicate. A formula uses its own admitted helper and arguments. -/
 def expandInput (term : Expr) : MetaM Simp.Result := do
@@ -64,7 +84,9 @@ def expandInput (term : Expr) : MetaM Simp.Result := do
   let holdClause := fun _ (declaration : ConstantInfo) => pure (declaration.name != ``RelationMeaning.HoldsOn)
   let truth ← withCanUnfoldPred holdClause <| withTransparency .all <| whnf read
   if !truth.isAppOf ``RelationMeaning.HoldsOn then return { expr := truth, proof? := some readLaw }
-  let equation ← withTransparency .all <| whnf truth
+  let holdOpaque := fun _ (declaration : ConstantInfo) => pure (declaration.name != ``OpaqueRegistry.Binding.Holds)
+  let equation ← withCanUnfoldPred holdOpaque <| withTransparency .all <| whnf truth
+  if equation.isAppOf ``OpaqueRegistry.Binding.Holds then return ← expandOpaque term readLaw equation
   let some (_, call, rhs) := equation.eq? | return { expr := truth, proof? := some readLaw }
   unless call.isAppOf ``FormulaBinding.invokeRelationOn do return { expr := truth, proof? := some readLaw }
   let bodyLaw ← mkAppM ``formula_body (call.getAppArgs.extract (call.getAppNumArgs - 3) call.getAppNumArgs)
