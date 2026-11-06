@@ -1143,11 +1143,19 @@ private def inlineMath (goal : MVarId) (args : Array Expr) (source target defini
     let slice ← MathRegion.propose before model locations extent body (mkApp target model)
     return (slice, ← mkLambdaFVars #[model] slice.suffixBlock)
   let yes ← mkEqRefl (mkConst ``Bool.true)
-  let rule ← mkAppOptM ``ConnectionCertificate.Alignment.inlineMath
-    ((args.extract 0 13).map some ++ #[some definition, some association, some arguments,
-      some references, some yes, some yes, some readback, some slice.spine,
-      some slice.extent, some slice.yielded, some slice.certificate, some sourceParts.back!, some rest])
-  goal.apply rule
+  tracePhase "Math inline slice checked"
+  -- All indices, body evidence and the suffix are fixed. Applying the rule by
+  -- unification asks Lean to compare the denotations of physical blocks inside
+  -- a repeat. Build the single remaining premise directly; the kernel still
+  -- checks every supplied argument and the original goal's exact result type.
+  let rule := mkAppN (mkConst ``ConnectionCertificate.Alignment.inlineMath)
+    (args.extract 0 13 ++ #[definition, association, arguments, references, yes, yes,
+      readback, slice.spine, slice.extent, slice.yielded, slice.certificate, sourceParts.back!, rest])
+  let .forallE _ suffixType _ _ ← inferType rule | throwError "alignment-inline-suffix-expected"
+  let suffix ← mkFreshExprSyntheticOpaqueMVar suffixType
+  goal.assign (mkApp rule suffix)
+  tracePhase "Math inline suffix assigned"
+  return [suffix.mvarId!]
 
 private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscovery) (goal : MVarId) : TacticM Unit := goal.withContext <| withTransparency .all <|
     Term.withoutErrToSorry <| withoutRecover do
@@ -1469,6 +1477,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
                 return (← viewHead block.getAppArgs[1]!).isAppOf ``Domain.View.helper
               return false
             if startsWithHelper then break
+            tracePhase "Math inline proposal"
             let pending ← inlineMath goal args source target selected body before after
             for tail in pending do derive cache discovery tail
             return

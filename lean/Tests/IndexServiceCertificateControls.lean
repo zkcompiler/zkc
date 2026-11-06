@@ -6,6 +6,9 @@ public import Tests.IndexServicesPrivate
 @[expose] public section
 
 /-! Accepted layout controls and refused mutations for actual tiny roots. -/
+-- Whole-root connection proposals retain large kernel terms. Check the roots
+-- in source order so independent proofs do not compete for memory.
+set_option Elab.async false
 set_option autoImplicit false
 set_option maxRecDepth 30000
 set_option maxHeartbeats 12000000

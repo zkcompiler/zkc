@@ -72,7 +72,9 @@ partial def propose (definitions model locations extent source target : Expr) : 
     let arm1 ← variant arm0.back! ``Regions.cons "branch-second-arm"
     let yesSource := arm0[arm0.size - 2]!
     let noSource := arm1[arm1.size - 2]!
-    let (_, read) ← selected locations operands
+    let (references, read) ← selected locations operands
+    let physicalReferences ← mkAppM ``List.cons #[physical[1]!, physical[2]!]
+    unless ← isDefEq references physicalReferences do throwError "alignment-computation-operand-mismatch"
     let count ← mkAppM ``List.length #[captures]
     let armLocations ← mkAppM ``ConnectionMathRegion.arguments #[count]
     let yesSlice ← propose definitions model armLocations count yesSource physical[7]!
