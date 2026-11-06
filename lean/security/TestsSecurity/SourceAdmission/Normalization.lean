@@ -2,6 +2,8 @@ module
 
 public import TestsSecurity.ABIInstallations.ConstrainedLaws
 public import TestsSecurity.SourceAdmission.ShapeFixture
+public import Zkc.Source.Structured.SumReference
+public meta import ZkcSecurityTools.SourceInputClauses
 
 @[expose] public section
 noncomputable section
@@ -13,6 +15,23 @@ set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 namespace TestsSecurity.SourceAdmission.Normalization
 open Zkc.Source Zkc.Source.Structured
+
+/-- The source formula selects a callback before applying its captured index.
+The presentation must account for both outcomes at arbitrary symbolic inputs. -/
+theorem selectedShape (model : DomainModel) (field : String) (xs : List (model.Field field)) (n : Nat) :
+    ((ReferenceLibrary.Sum.inputShape model field 2).body.denote
+      (Evaluation.meaningOn model (.silent _) ([] : Evaluation.MeaningsOn model.toCarriers closedInterface))
+      (Values.cons xs (.cons n .nil) : Values model.Value [.vector field, .index]).get =
+      .done (.cons true .nil)) ↔ xs.length = 2 ^ n ∧ n ≤ 2 := by
+  run_tac
+    let goal ← Lean.Elab.Tactic.getMainGoal
+    goal.withContext do
+      let target ← goal.getType
+      let result ← ZkcSecurity.Tools.SourceInputClauses.normalize target.getAppArgs[0]!
+      ZkcSecurity.Tools.SourceInputClauses.checkFinished result.expr
+      unless ← Lean.Meta.isDefEq result.expr target.getAppArgs[1]! do
+        throwError "unexpected selected shape presentation: {result.expr}"
+      goal.assign (← Lean.Meta.mkAppM ``Iff.of_eq #[← result.getProof])
 
 namespace Constrained
 open TestsSecurity.ABIInstallations.Constrained

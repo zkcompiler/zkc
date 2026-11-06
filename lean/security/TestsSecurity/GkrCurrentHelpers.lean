@@ -70,8 +70,7 @@ theorem mul_encoding : HonestCircuit.StackedEncoding rawMul 2 1 circuit.mul := b
     · rw [show block rawMul 1 (2 ^ (1 + 1 + 1)) = lowerMul by rfl,
         ← lower_mul_encoding, GkrRoundsLayout.decode_encode]
 
-/-- The actual helper34 supplies the intermediate wires; they are not test
-inputs to the upper layer helper. -/
+/-- The admitted lower-layer helper computes the intermediate wires used by the upper layer. -/
 theorem intermediate_values :
     invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
@@ -82,8 +81,8 @@ theorem intermediate_values :
     GkrFiniteCircuit.lower_layer]
   norm_num [GkrRoundsLayout.encode, GkrCallerRealization.below, vertex]
 
-/-- Actual helper34 followed by actual helper33 computes the independent
-circuit's outputs, exercising both mixed add/multiply layers. -/
+/-- Composing the two admitted helpers computes the independent circuit's outputs
+and exercises both mixed add/multiply layers. -/
 theorem mixed_two_layers :
     (invoke (helpers (G := ℚ)) GkrSourceBodies.helper65Helper
       (.cons rawAdd (.cons rawMul (.cons ([3, 5] : List ℚ)
@@ -167,7 +166,7 @@ theorem unchanged_suffix (suffix : List ℚ) :
 
 /-- All equations below are about the regenerated current-source import. -/
 theorem current_digest : GkrSourceData.snapshot.source =
-    "sha256:b8d4a08c910b4c6ae7326518656c1fc274045b055dc26cfcba21b878c6e41334" := rfl
+    "sha256:fe82552166ff05f9070dfa45a68fae1cb0a2b28d73a79a3168a42859446a1b3d" := rfl
 
 /-- Malformed rows stop during the ordered domain admission. -/
 theorem malformed_gate_map :

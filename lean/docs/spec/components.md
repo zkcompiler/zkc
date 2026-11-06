@@ -546,8 +546,12 @@ from the retained formulas. Optional presence is distinct from representability:
 an absent input cannot satisfy an accidentally simplified clause. The current
 elaborator splits presence only for coordinates selected by retained input
 clauses; unused optional coordinates remain arbitrary in the full equivalence.
-The current
-uniform ABI presentation explicitly refuses data inputs covered by neither the
+For a present formula application, the readback theorem selects the checked
+definition in the subject's linked table and interprets its complete body at
+the declared signature. The normalizer materializes this closed syntax while
+leaving the input values symbolic. A conditional applies only the selected
+callback to its captures. Opaque clauses keep their installed predicate.
+The uniform ABI presentation explicitly refuses data inputs covered by neither the
 producer nor public projection, rather than silently requiring their presence
 in the subject's meaning. This is a presentation limit, not a security premise.
 
