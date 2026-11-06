@@ -60,7 +60,8 @@ kinded formal roots. The generator checks each entry against its independently
 authored declaration expectation, including associated scope, ordered ports,
 requirements and parameter schema. These queries do not validate a binding or
 extend backend/interpreter support. The initial `structured-source-primitives`
-profile requires unselected implementations and retains sixteen data operations
-plus the three nominal resource-unit operations with exact Slot roots.
+profile requires unselected implementations. Its entries cover data operations and
+three nominal resource-unit operations with exact Slot roots. The ordered entries
+and signatures are recorded in the [catalog declarations](../../common/catalog/declarations.json).
 
 Run `cargo test -p zkc-catalog` for schema and semantic mutation controls.

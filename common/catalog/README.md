@@ -63,7 +63,7 @@ in scope, stage, ordered signature, requirements or parameter schema. Update an
 expectation only after its consumer owner accepts that contract. Adding a
 declaration or contribution never enrolls it into an existing profile. The first
 profile, `structured-source-primitives`, preserves the structured exporter's
-sixteen data primitive identities plus the three nominal resource-unit
+index, Boolean, field, vector, indices, polynomial and nominal resource-unit
 operations, with its unselected implementation policy. Slot roots retain their
 exact nominal identities and do not enroll algebraic domains. Independent
 formal-consumer support is tracked separately.
