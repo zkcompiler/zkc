@@ -34,6 +34,12 @@ shape already has a generator. An unsupported shape must produce an explicit
 obligation or refusal. A new method is an ordinary indexed Lean proof; it does
 not require global type-class search or a second interpreter.
 
+The [source proof assembly review](../design/source-proof-assembly.md) records
+the remaining gap between reusable local rules and constructing a proof for a
+new body. Endpoint correctness and authoring reuse are separate acceptance
+questions. The current FRI terminal-reply proof still contains an explicit
+structural traversal; it is not yet the intended first-author interface.
+
 ## Define the mathematical boundary
 
 [`ClaimRelation`](../../Zkc/Obligations/ClaimRelation.lean) separates an
