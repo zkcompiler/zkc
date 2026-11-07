@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Realization.QuerySourceContinuation
+public import Zkc.Source.Structured.OracleProcessContinuation
 public import Tests.OracleProcessData
 
 @[expose] public section
@@ -76,9 +77,45 @@ theorem stopped_reply_rejected :
   obtain ⟨request, next, reply, impossible, _⟩ := association.one
   cases impossible
 
+/-- Restoring a saved continuation is exact before provider selection. The
+cut uses the first actual source request; arbitrary child outcomes retain
+their states and ordered event prefixes through the common sequencing law. -/
+theorem source_cut {I : PIR.Signature} {S E : Type}
+    (operations : (request : OracleRead) → S →
+      PIR.Process I (PIR.Execution S E (model.Value request.kind.answer)))
+    (captured : OracleAnchor) (position : Nat) (state : S) :
+    OracleProcess.present operations (source captured position) state =
+      (OracleProcess.present operations
+        (.call (I := oracleReadInterface model.toCarriers)
+          (child captured position 0) .done) state).bind (fun result ↦
+          OracleProcess.sequence result (fun _ current ↦
+            OracleProcess.present operations
+              (.call (I := oracleReadInterface model.toCarriers)
+                (child captured position 1) (fun reply ↦
+                .done (.cons (some reply) .nil))) current)) := by
+  rw [source_body]
+  exact OracleProcess.present_bind (I := oracleReadInterface model.toCarriers) operations
+    (.call (child captured position 0) .done) _ state
+
+/-- A failed first child keeps its real poststate and event prefix; the
+second occurrence is not evaluated. This is not a semantic success case. -/
+theorem source_stopped {I : PIR.Signature} {S E : Type}
+    (operations : (request : OracleRead) → S →
+      PIR.Process I (PIR.Execution S E (model.Value request.kind.answer)))
+    (captured : OracleAnchor) (position : Nat) (before after : S)
+    (events : List E) (reason : PIR.Stop)
+    (failed : operations (child captured position 0) before =
+      .done ⟨.stopped reason, after, events⟩) :
+    OracleProcess.present operations (source captured position) before =
+      .done ⟨.stopped reason, after, events⟩ := by
+  rw [source_body]
+  simp only [OracleProcess.present, failed, PIR.Process.bind, OracleProcess.sequence]
+
 #print axioms source_body
 #print axioms afterFirst
 #print axioms completed
 #print axioms handle_swap_rejected
 #print axioms stopped_reply_rejected
+#print axioms source_cut
+#print axioms source_stopped
 end Tests.QuerySourceContinuation

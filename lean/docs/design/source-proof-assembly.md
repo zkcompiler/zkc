@@ -249,12 +249,43 @@ the selected provider actually returned the saved replies. Whole-controller
 simulation must establish those returns, static continuation selection and
 the captured source instance when saving and restoring each physical frame.
 
+`QuerySourceExecution.Produced` strengthens that cursor with a derivation of
+each actual child execution. The common rules derive both the typed saved
+cursor and reachability in `OracleProcess.present`; they retain the provider
+poststate, interaction phase and ordered events. A stopped child closes the
+source path without adding an answer. `OracleProcessContinuation` proves the
+outcome-preserving source cut and sequencing equations against that same
+presentation, including stopped prefixes. There is no additional evaluator.
+
+The stronger relation is necessary even when an open residual computation is
+known. The checked-source counterexample in `Tests.QuerySourceExecution` ignores
+its first answer: a cursor containing 99 and the eventual execution computation
+both pass independently although the actual child returns 10. The `Produced`
+derivation rejects their combination because it requires the very same reply
+for the child execution and saved cell. This is an infrastructure obligation,
+not a new mathematical premise for that component's author.
+
+`QuerySavedSource` connects a saved frame to its immutable installed parent,
+original capture tuple and source cursor. The frame's parent instance and
+position determine that body's arguments. Common storage laws derive capture
+and body uniqueness, and preserve the suspension across fresh registry and
+arena growth. Actual load/unpack restores these same coordinates; the stronger
+`load_produced` rule also consumes the child's actual execution evidence. The
+fixture uses a real checked source installation and rejects swapped parent
+coordinates and substituted same-typed captured handles. Static continuation
+dispatch, reached controller phases and nested-frame composition still belong
+to the whole-controller proof; these local relations do not establish them.
+
 `TestsArkLib.FriSourceContinuation.installed` consumes the same common cursor
 rules on the installed FRI virtual declaration. It reuses `VirtualReads.twoReads`
 and its existing helper/mathematical installation, then appends the two actual
 kind-indexed arena cells. It adds no source traversal, generated coordinate or
 mathematical assumption. This demonstrates the source-side reuse of the rule;
 it does not assert execution of the generated return arm or the whole root.
+Its `produced` companion now uses the same common progress constructors with
+the actual child executions, carrying their poststates, phases and logs through
+that installed mathematical connection. The mathematical/helper installation
+is unchanged and remains part of the author-effort account.
 
 `RecordAppend` now proves the exact length/pack/append fragment, including the
 old length as the new slot and preservation of the caller's prefix.
@@ -401,6 +432,14 @@ return and relational judgments, and checked mathematical-law installation were
 already present. The base-arm provider connection and common progress/allocation
 laws above advance the controller obligations identified in that review. The
 instantiated whole-controller relation and the original endpoints remain gates.
+
+The saved-parent installation, outcome-preserving continuation laws and
+`Produced` progress derivation repair concrete parts of that infrastructure.
+In particular, the unused-answer counterexample rules out treating two
+independent final-result/cursor proofs as evidence of a child's production.
+The actual FRI body reuses the same progress constructors and existing
+mathematical installation. These repairs do not move the generated invariant
+into its companion or substitute the fragment checks for the complete roots.
 
 `OracleMathEnvironment.invokePresent` and `invokeReturned` install the existing
 `ReferenceLaw` at its actual helper body and arguments. FRI's `powerRequires`,

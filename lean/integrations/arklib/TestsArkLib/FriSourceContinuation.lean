@@ -1,7 +1,7 @@
 module
 
 public import ZkcArkLibExamples.Fri.VirtualReads
-public import Zkc.Realization.QuerySourceContinuation
+public import Zkc.Realization.QuerySourceExecution
 
 @[expose] public section
 
@@ -43,5 +43,37 @@ def installed : Associated arenas
   have second := first.resume (reply := right) rightRead
   exact second
 
+/-- The same installed mathematical connection accepts actual open child
+executions. Provider state, interaction phase and logs come from those child
+executions, while source locations and the folded output come from `twoReads`.
+This is source progress, not an assertion that a generated arm executed. -/
+def produced {I : PIR.Signature} {S E : Type}
+    (interaction : PIR.Interaction I)
+    (operations : (query : OracleRead) → S →
+      PIR.Process I (PIR.Execution S E (model.Value query.kind.answer)))
+    (initial middle final : S) (initialPhase middlePhase finalPhase : interaction.Phase)
+    (leftEvents rightEvents : List E)
+    (leftExecution : PIR.Reaches interaction
+      (operations (leftRequest source (low position sourceRows)) initial) initialPhase
+      (.done ⟨.returned left, middle, leftEvents⟩) middlePhase)
+    (rightExecution : PIR.Reaches interaction
+      (operations (rightRequest source
+        (wrappingAdd (low position sourceRows) (logicalShiftRight sourceRows 1))) middle) middlePhase
+      (.done ⟨.returned right, final, rightEvents⟩) finalPhase) :
+    Produced interaction operations
+      (FriVirtualBody.installed.denote model
+        (arguments model source beta sourceRows rows shift generator inverseShift
+          inverseGenerator inverseTwo position).present)
+      initial initialPhase arenas
+      (.done (.cons (some ((left + right) * inverseTwo + beta * (left - right) * inverseTwo *
+        (inverseShift * inverseGenerator ^ low position sourceRows))) .nil))
+      [leftSlot, rightSlot] final finalPhase (leftEvents ++ rightEvents) := by
+  rw [twoReads]
+  have start := Produced.initial (interaction := interaction) (operations := operations)
+    (source := twoChildren model source beta sourceRows inverseShift inverseGenerator inverseTwo position)
+    (initialState := initial) (initialPhase := initialPhase) arenas
+  exact (start.resume leftExecution leftRead).resume rightExecution rightRead
+
 #print axioms installed
+#print axioms produced
 end TestsArkLib.FriSourceContinuation
