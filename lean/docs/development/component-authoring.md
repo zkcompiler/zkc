@@ -424,6 +424,15 @@ its own representation and execution laws. These local proofs do not supply
 source-event ownership, root capacity bounds or the complete query controller.
 No folded-word identity or FRI degree lemma is a premise of the allocator rule.
 
+`TableRead` proves the actual comparison, guard and field-vector lookup for
+all outcomes. Recognition checks the operand graph; the surrounding traversal
+must also supply the actual SSA start, which `recognizeAt` checks explicitly.
+`ClearStorage.Stored.read_simulation` connects this execution to the word selected
+by publication. Valid stored and requested shapes and the complete stored length
+remain reached-state invariants. They permit fixed-to-unsized handle use while
+preserving out-of-range refusal. The provider has no protocol-specific reader
+lemma, and query locations do not become publication identities.
+
 The virtual-closure capture boundary is likewise structural. `CaptureLayout`
 compares the original declaration's capture types with actual record fields,
 derives typed projections in the same order, and keeps every ordinary parameter

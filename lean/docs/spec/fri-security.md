@@ -80,11 +80,20 @@ allocation and typed projection. Its source-installation rule uses the actual
 returning virtual instruction to recover the exact checked body, captures,
 location and registry entry. The source return and physical allocation still
 need to be composed at every reached location in the full verifier.
+The common guarded field-vector read now retains all outcomes: finite-index
+checking, row-bound refusal and missing-cell refusal. Its physical execution
+agrees with the exact stored provider word for every position once publication
+has established a valid length. Fixed and unsized handle annotations may share
+that word when both admit its length; query locations remain independent of the
+publication location. This closes the local base-read boundary, not dispatch or
+virtual-child continuation execution.
 [Clear-store laws](../../Zkc/Realization/ClearStorage.lean)
 · [Constructed reads](../../Zkc/Realization/ClearStorageCalculations.lean)
 · [Actual allocation](../../Zkc/Realization/ClearStorageAllocation.lean)
 · [Common allocator rule](../../Zkc/Realization/RecordAllocator.lean)
 · [Checked lookup](../../Zkc/Realization/ClearStorageLookup.lean)
+· [Guarded table reads](../../Zkc/Realization/TableRead.lean)
+· [Provider read connection](../../Zkc/Realization/ClearStorageRead.lean)
 · [Typed captures](../../Zkc/Realization/CaptureLayout.lean)
 · [Capture storage association](../../Zkc/Realization/ClearStorageCaptures.lean)
 · [Virtual records](../../Zkc/Realization/VirtualStorage.lean)
