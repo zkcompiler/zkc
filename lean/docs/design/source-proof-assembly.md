@@ -235,6 +235,27 @@ answer, refusal and exhaustion. Each branch needs its reached-operand and
 capacity premises. A theorem for one physical fragment does not establish
 reachability of that fragment or the whole controller invariant.
 
+`QuerySourceContinuation` uses the existing `PIR.Reaches` judgment to relate
+ordered saved answers to the remaining original body. Each returned child
+extends a kind-indexed answer tuple and advances that body's actual
+continuation; its physical index is justified by `QueryContinuation.AnswersRead`.
+The initial cursor is the source itself, and append-only arena extension
+preserves the association. An empty prefix cannot skip a request. A one-answer
+prefix determines the first request, its stored reply and its continuation.
+The checked-source controls reject a redirected same-typed handle and a reply
+fabricated from a stopped source. Repeated requests remain separate positions.
+This is a source-side invariant, not another virtual evaluator or a proof that
+the selected provider actually returned the saved replies. Whole-controller
+simulation must establish those returns, static continuation selection and
+the captured source instance when saving and restoring each physical frame.
+
+`TestsArkLib.FriSourceContinuation.installed` consumes the same common cursor
+rules on the installed FRI virtual declaration. It reuses `VirtualReads.twoReads`
+and its existing helper/mathematical installation, then appends the two actual
+kind-indexed arena cells. It adds no source traversal, generated coordinate or
+mathematical assumption. This demonstrates the source-side reuse of the rule;
+it does not assert execution of the generated return arm or the whole root.
+
 `RecordAppend` now proves the exact length/pack/append fragment, including the
 old length as the new slot and preservation of the caller's prefix.
 `QueryContinuation` proves frame encoding uniqueness, save/load, preservation

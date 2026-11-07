@@ -141,6 +141,14 @@ inductive AnswersRead {Kind : Type} {Value : Kind → Type} (arenas : (kind : Ki
       (read : (arenas kind)[index]? = some value) (tail : AnswersRead arenas rest values) :
       AnswersRead arenas (index :: rest) (.cons value values)
 
+theorem AnswersRead.length {Kind : Type} {Value : Kind → Type}
+    {arenas : (kind : Kind) → List (Value kind)} {kinds : List Kind}
+    {indices : List Nat} {values : Values Value kinds}
+    (read : AnswersRead arenas indices values) : indices.length = kinds.length := by
+  induction read with
+  | nil => rfl
+  | cons found tail ih => simpa only [List.length_cons] using congrArg Nat.succ ih
+
 theorem AnswersRead.transport {Kind : Type} {Value : Kind → Type}
     {before after : (kind : Kind) → List (Value kind)}
     (extension : ∀ kind, before kind <+: after kind) {kinds : List Kind}

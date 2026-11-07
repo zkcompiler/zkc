@@ -46,6 +46,18 @@ inductive Reaches (P : Interaction I) : Process I A → P.Phase → Process I A 
       (rest : Reaches P (k reply) (P.advance phase o reply) tail last) :
       Reaches P (.call o k) phase tail last
 
+/-- Concatenate actual returned-response prefixes without choosing a new
+continuation or changing either interface's reply values. -/
+theorem Reaches.trans {P : Interaction I} {first middle last : Process I A}
+    {initial current final : P.Phase}
+    (head : Reaches P first initial middle current)
+    (tail : Reaches P middle current last final) :
+    Reaches P first initial last final := by
+  induction head with
+  | refl => exact tail
+  | step operation next phase reply residual finish rest ih =>
+      exact .step operation next phase reply last final (ih tail)
+
 theorem conformance_preserved (P : Interaction I)
     (p q : Process I A) (start finish : P.Phase)
     (path : Reaches P p start q finish) (formed : Conforms P p start) :
