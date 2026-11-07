@@ -182,6 +182,21 @@ theorem finish_success (request : OraclePublication.Request model) (before : Sta
     dsimp only [finish] at success ⊢
     split at success <;> simp_all
 
+/-- Successful publication certifies freshness and complete shape admission.
+These facts come from the actual provider branch, not from a caller's word law. -/
+theorem finish_admitted (request : OraclePublication.Request model) (before : State model Aux)
+    (attempt : PIR.Execution Aux E (List (model.Value request.kind.answer)))
+    (success : (finish request before attempt).outcome = .returned ()) :
+    ∃ proposal, attempt.outcome = .returned proposal ∧
+      hasAnchor before.words request.anchor = false ∧ valid request (selected request proposal) = true := by
+  rcases attempt with ⟨outcome, after, events⟩
+  cases outcome with
+  | stopped reason => cases success
+  | returned proposal =>
+    refine ⟨proposal, rfl, ?_⟩
+    dsimp only [finish] at success
+    split at success <;> simp_all
+
 /-- A successful install is exactly the selected whole word, rather than a per-query oracle. -/
 theorem installed (request : OraclePublication.Request model) (before : State model Aux)
     (proposal : List (model.Value request.kind.answer)) (after : Aux) (events : List E)

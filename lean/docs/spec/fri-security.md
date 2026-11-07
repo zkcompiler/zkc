@@ -45,6 +45,21 @@ obligations. [Provider laws](../../Zkc/Source/Structured/PublishedWordsLaws.lean
 · [Holder theorem](../../integrations/arklib/ZkcArkLibExamples/Fri/HonestMessages.lean)
 · [Paired source controls](../../security/TestsSecurity/FriHonestExchange.lean)
 
+The clear-store representation laws separately connect a provider publication to
+an immutable nominal record. The record contains the actual enclosing iteration
+coordinates, row count, one base leaf and the exact published data. The actual
+provider return supplies publication validity and freshness; appending the record
+assigns its old sequence length as the reference slot. Provider-preserving changes
+and physical append preserve that association. Existing checked sequence access
+and typed record projections recover the same word; equal payloads at different
+source anchors cannot justify exchanging their references. These are local
+representation and instruction laws. They do not yet establish that the complete
+exported allocator and query controller implement the relation, or discharge
+allocation bounds, generated-event ownership or the whole-run simulation.
+[Clear-store laws](../../Zkc/Realization/ClearStorage.lean)
+· [Constructed reads](../../Zkc/Realization/ClearStorageCalculations.lean)
+· [Publication and swap controls](../../Tests/ClearStorage.lean)
+
 The fixed-table access transport preserves both replies and the complete
 ordered query log. At the selected field and scalar sites, it recovers the
 same challenge values and charged keys used in the FRI experiment. The
