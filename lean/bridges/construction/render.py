@@ -24,6 +24,7 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import catalogue, lean_render, policy as native_policy, schema  # noqa: E402
+from bridges.structured.snapshot import product_fields
 from bridges.construction.types import data_type, render_type  # noqa: E402
 from bridges.common.lean_render import Refused as Refused  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
@@ -63,6 +64,26 @@ def data_ty(kind):
         return f"({render_type(domain)})"
     require(tag in ("boolean", "index", "field", "vector", "group"), "expected data type")
     return ".boolean" if tag == "boolean" else ".index" if tag == "index" else f"(.{tag} {text(domain)})"
+
+
+def data_descriptor(kind):
+    tag, domain = kind
+    if tag == "data":
+        return domain
+    require(tag in ("boolean", "index", "field", "vector", "group"), "expected data type")
+    if tag in ("boolean", "index"):
+        return ["bool" if tag == "boolean" else "index"]
+    return [tag, domain]
+
+
+def nominal_product(kind):
+    descriptor = data_descriptor(kind)
+    require(len(descriptor) == 4 and descriptor[0] == "product", "expected nominal product")
+    return descriptor[1:]
+
+
+def product_parameters(identity, constructor, fields):
+    return f"{text(identity)} {text(constructor)} ({product_fields(fields)})"
 
 
 def attributes(value):
@@ -113,6 +134,15 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
     """Classify one exported operation strictly; return its Lean term."""
     schema.binding(binding)
     boolean, index = ("boolean", None), ("index", None)
+    if name == "exec.variant":
+        require(set(attrs) == {"alternative", "site"} and binding == [] and len(result_kinds) == 1,
+                "product construction shape")
+        identity, constructor, fields = nominal_product(result_kinds[0])
+        require(string_attribute(attrs, "alternative") == constructor
+                and [data_descriptor(kind) for kind in operand_kinds] == fields,
+                "product construction fields")
+        string_attribute(attrs, "site")
+        return f".calculate (.makeProduct {product_parameters(identity, constructor, fields)})"
     if name == "data.index":
         require(set(attrs) == {"value"} and binding == [] and operand_kinds == [] and result_kinds == [index],
                 "index constant shape")
@@ -393,6 +423,45 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
             inputs = seq(arguments[:1 + carried], lambda v: sort(v)[0])
             region = f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩"
             rendered.append(f"{indent}⟨{term}, {seq(mapped[:1 + carried], nat)}, {result_terms}, [{region}]⟩")
+        elif name == "exec.match":
+            decoded = attributes(attrs)
+            require(set(decoded) == {"alternatives", "site"} and binding == []
+                    and len(regions) == 1 and mapped, "product projection shape")
+            identity, constructor, fields = nominal_product(kinds[mapped[0]])
+            require(decoded["alternatives"] == ("array", [["string", constructor]]),
+                    "product projection alternative")
+            string_attribute(decoded, "site")
+            arguments, nested, terminal, alternative, payload = record(regions[0], 5)
+            require(alternative == constructor and [data_type(value) for value in payload] == fields,
+                    "product projection payload")
+            capture_kinds = [kinds[reference] for reference in mapped[1:]]
+            argument_kinds = [sort(value)[1] for value in arguments]
+            require([data_descriptor(kind) for kind in argument_kinds]
+                    == fields + [data_descriptor(kind) for kind in capture_kinds],
+                    "product projection arguments")
+            require(nested == [] and record(terminal, 2)[0] == "exec.complete",
+                    "product projection body")
+            yielded = references(terminal[1], list(range(len(arguments))), "product projection yield")
+            require([argument_kinds[index] for index in yielded] == result_kinds,
+                    "product projection result sorts")
+            # A one-constructor, empty-body match only projects fields or aliases
+            # captures. Expand typed projections and retain exact outer aliases.
+            result_places = []
+            for index, kind in zip(yielded, result_kinds):
+                if index >= len(fields):
+                    result_places.append(mapped[1 + index - len(fields)])
+                    continue
+                field = ".here"
+                for _ in range(index):
+                    field = f".there ({field})"
+                calculation = (f".getProduct {product_parameters(identity, constructor, fields)} "
+                               f"({render_type(fields[index])}) ({field})")
+                result_places.append(len(kinds))
+                rendered.append(f"{indent}⟨.calculate ({calculation}), [{mapped[0]}], "
+                                f"[.data ({render_type(fields[index])})], []⟩")
+                kinds = kinds + [kind]
+            places = places + result_places
+            continue
         elif name == "data.branch":
             decoded = attributes(attrs)
             require(decoded == {"alternatives": ("array", [["string", "then"], ["string", "else"]])}

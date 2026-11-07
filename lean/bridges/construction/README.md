@@ -26,10 +26,11 @@ subject writes into its own subdirectory. `--write` rewrites the generated Lean
 modules the manifests own from the fresh exports instead of requiring them to
 be unchanged.
 
-The focused literal boundary controls run independently of Lean builds:
+The focused literal and product boundary controls run independently of Lean builds:
 
 ```sh
 python3 lean/bridges/construction/literal_tests.py
+python3 lean/bridges/construction/product_tests.py
 ```
 
 Natural field literals use the exact nominal field's catalogue characteristic,

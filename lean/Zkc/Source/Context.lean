@@ -23,7 +23,7 @@ variable {Ty : Type}
 inductive Var : List Ty → Ty → Type where
   | here {Γ : List Ty} {ty : Ty} : Var (ty :: Γ) ty
   | there {Γ : List Ty} {ty head : Ty} : Var Γ ty → Var (head :: Γ) ty
-  deriving Repr
+  deriving DecidableEq, Repr
 
 def Var.index {Γ : List Ty} {ty : Ty} : Var Γ ty → Nat
   | .here => 0

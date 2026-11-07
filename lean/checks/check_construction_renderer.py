@@ -165,6 +165,29 @@ def renderer_member_refusals():
     return count
 
 
+def product_controls():
+    """Projection expansion is checked against independently written Lean data."""
+    product = ["variant", ["tuple", [["atom", "test.record"]]], [["Record", [INDEX, INDEX]]]]
+    make = ["exec.variant", [["alternative", ["string", "Record"]], ["site", ["string", "make"]]],
+            [], [0, 1], [product], []]
+    match = ["exec.match", [["alternatives", ["array", [["string", "Record"]]]],
+                            ["site", ["string", "project"]]], [], [3, 0], [INDEX, INDEX, INDEX],
+             [[[INDEX, INDEX, INDEX], [], ["exec.complete", [1, 2, 0]], "Record", [INDEX, INDEX]]]]
+    data = export([INDEX, INDEX, TRANSCRIPT], [make, match], [4, 5, 6, 2])
+    data[6] = [INDEX, INDEX, INDEX, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedProduct")) + r'''
+open Zkc.Construction in
+example : RenderedProduct.participant.instructions = [
+    ⟨.calculate (.makeProduct "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil))),
+      [0, 1], [.data (.product "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil)))], []⟩,
+    ⟨.calculate (.getProduct "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil))
+      .index (.there .here)), [3], [.data .index], []⟩,
+    ⟨.calculate (.getProduct "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil))
+      .index .here), [3], [.data .index], []⟩] ∧
+    RenderedProduct.participant.returned = [4, 0, 5, 2] := by decide +kernel
+'''
+
+
 def check(output, lake):
     """Render controls; `lake=None` leaves all generated kernel checks pending."""
     output.mkdir(parents=True, exist_ok=True)
@@ -321,6 +344,7 @@ example : RenderedCaptures.participant.instructions =
         for namespace, _, _ in catalogue_cases) + \
         "] = [" + ", ".join(".ok ()" if code is None else f'.error "{code}"' for _, _, code in catalogue_cases) + \
         "] := by\n  decide +kernel\n"
+    source += product_controls()
     path = output / "Rendered.lean"
     path.write_text("module\n\npublic import Zkc.Construction.Participant\npublic import Zkc.Construction.CatalogueAdmission\n\n"
                     "@[expose] public section\n" + source, encoding="utf-8")
@@ -392,7 +416,7 @@ example : RenderedCaptures.participant.instructions =
             export([base, TRANSCRIPT], [changed], [2, 1]), "UnsupportedBinding"):
         raise AssertionError("renderer treated another binding as field embedding")
     member_refusals = renderer_member_refusals()
-    report = {"status": "pass", "kernel_cases": 7, "catalogue_cases": len(catalogue_cases),
+    report = {"status": "pass", "kernel_cases": 8, "catalogue_cases": len(catalogue_cases),
               "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals)
               + member_refusals + len(selection_refusals), "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),

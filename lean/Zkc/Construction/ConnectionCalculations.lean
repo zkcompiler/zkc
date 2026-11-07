@@ -45,10 +45,15 @@ theorem operation_closed (model : DomainModel) {I : PIR.Signature}
     Evaluation.operationOn model (.silent I) table calculation.op arguments
         (calculationRegions calculation) =
       (closedCalculation model calculation arguments).interpret (closedLift (I := I)) := by
-  cases calculation <;>
-    (rcases arguments with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | _⟩⟩⟩) <;> try rfl
-  simp only [closedCalculation, Calculation.op, calculationRegions, Evaluation.operationOn]
-  split <;> rfl
+  cases calculation
+  case makeProduct => rfl
+  case boundedAt =>
+    rcases arguments with _ | ⟨_, _ | ⟨_, _ | _⟩⟩
+    simp only [closedCalculation, Calculation.op, calculationRegions, Evaluation.operationOn]
+    split <;> rfl
+  all_goals
+    rcases arguments with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | _⟩⟩⟩
+    rfl
 
 /-- Present source component operations use precisely that closed meaning.
 No adequacy assumption is needed for calculations, even stopping ones. -/

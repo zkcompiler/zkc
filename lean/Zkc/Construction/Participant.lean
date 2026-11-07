@@ -212,6 +212,9 @@ inductive Calculation where
   | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual
   | select (type : Structured.Ty)
   | boundedAt (domain : String)
+  | makeProduct (identity constructor : String) (fields : Structured.ProductFields)
+  | getProduct (identity constructor : String) (fields : Structured.ProductFields)
+      (type : Structured.Ty) (field : Var fields.toList type)
   deriving DecidableEq, Repr
 
 namespace Calculation
@@ -242,6 +245,8 @@ def op : Calculation → Structured.Op
   | .booleanNotEqual => .booleanNotEqual
   | .select type => .select type
   | .boundedAt domain => .boundedAt domain
+  | .makeProduct identity constructor fields => .makeProduct identity constructor fields
+  | .getProduct identity constructor fields type field => .getProduct identity constructor fields type field
 
 /-- The calculation a structured operation is, if it is one. -/
 def ofOp? : Structured.Op → Option Calculation
@@ -269,6 +274,8 @@ def ofOp? : Structured.Op → Option Calculation
   | .booleanNotEqual => some .booleanNotEqual
   | .select type => some (.select type)
   | .boundedAt domain => some (.boundedAt domain)
+  | .makeProduct identity constructor fields => some (.makeProduct identity constructor fields)
+  | .getProduct identity constructor fields type field => some (.getProduct identity constructor fields type field)
   | _ => none
 
 theorem ofOp?_some {op : Structured.Op} {calculation : Calculation}

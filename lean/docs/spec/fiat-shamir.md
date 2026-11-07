@@ -111,6 +111,16 @@ Values use the shared recursive nominal data interpretation, including
 sequences and products, plus transcript histories and coordinates. Service
 capabilities are not admitted as data, even when nested.
 
+Nominal product construction and projection reuse the structured `makeProduct`
+and `getProduct` operations, including ordered heterogeneous fields. The reader
+expands a single-constructor `exec.match` with an empty body into typed projections;
+returned captures retain their original SSA aliases. Exact constructor, payload,
+argument and result sorts are checked before this conversion. It refuses executable
+match bodies and stopping terminals. Thus a same-typed field permutation remains a
+different calculation, and equal host carrier types do not identify nominal products.
+This deterministic reader boundary is tested independently of the kernel proofs;
+those proofs concern the rendered participant and the existing structured semantics.
+
 The same carrier also retains the actual producer's owner-local service
 interface in `Participant.servicePorts`, separate from ordinary SSA inputs.
 `Operation.localService port request template coordinates` retains the admitted

@@ -49,13 +49,18 @@ def interpreted_ty(value, depth=0):
         return f".sequence ({interpreted_ty(element, depth + 1)})"
     if value[0] == "product":
         _, identity, constructor, fields = record(value, 4)
-        if not isinstance(fields, list) or len(fields) > 512:
-            raise ValueError("invalid product fields")
-        components = ".nil"
-        for field in reversed(fields):
-            components = f".cons ({interpreted_ty(field, depth + 1)}) ({components})"
-        return f".product {text(identity)} {text(constructor)} ({components})"
+        return f".product {text(identity)} {text(constructor)} ({product_fields(fields, depth)})"
     return lean_render.interpreted_ty(value)
+
+
+def product_fields(fields, depth=0):
+    """Render the ordered heterogeneous fields of a nominal product."""
+    if not isinstance(fields, list) or len(fields) > 512:
+        raise ValueError("invalid product fields")
+    components = ".nil"
+    for field in reversed(fields):
+        components = f".cons ({interpreted_ty(field, depth + 1)}) ({components})"
+    return components
 
 
 def oracle_kind(value, depth=0):
