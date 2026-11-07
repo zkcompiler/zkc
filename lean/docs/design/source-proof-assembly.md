@@ -122,6 +122,14 @@ mutation controls reject parent-coordinate and same-typed answer swaps.
 The selected static continuation still determines the parent constructor and
 answer kinds; the record alone does not justify that selection.
 
+`AnswerReads` connects ordered heterogeneous arena reads to actual constructed
+instructions. Its operand readback determines a unique answer tuple, remains
+valid under caller-frame extension, and agrees with the existing whole-tuple
+encoding used by mathematical calls. A missing first answer refuses before the
+suffix runs. The rule specializes to all four two-answer read blocks in the
+retained FRI participant. The controller must still establish the reached
+readback from its saved continuation and actual child execution.
+
 The next composition step must establish this invariant from the actual
 generated controller and retain it across every branch. The companion supplies
 the virtual oracle's mathematical meaning and any new mathematical invariant;
