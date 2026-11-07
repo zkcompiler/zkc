@@ -86,7 +86,10 @@ agrees with the exact stored provider word for every position once publication
 has established a valid length. Fixed and unsized handle annotations may share
 that word when both admit its length; query locations remain independent of the
 publication location. This closes the local base-read boundary, not dispatch or
-virtual-child continuation execution.
+virtual-child continuation execution. `VirtualStorageLifetime` reuses the existing
+fresh-registry extension law to preserve installed closures across later source
+operations and physical append. A second actual construction with the same body
+and captures cannot replace the anchor associated with the first physical slot.
 [Clear-store laws](../../Zkc/Realization/ClearStorage.lean)
 · [Constructed reads](../../Zkc/Realization/ClearStorageCalculations.lean)
 · [Actual allocation](../../Zkc/Realization/ClearStorageAllocation.lean)
@@ -98,6 +101,7 @@ virtual-child continuation execution.
 · [Capture storage association](../../Zkc/Realization/ClearStorageCaptures.lean)
 · [Virtual records](../../Zkc/Realization/VirtualStorage.lean)
 · [Source installation](../../Zkc/Realization/VirtualStorageInstallation.lean)
+· [Virtual reference lifetime](../../Zkc/Realization/VirtualStorageLifetime.lean)
 · [Publication and swap controls](../../Tests/ClearStorage.lean)
 
 The fixed-table access transport preserves both replies and the complete

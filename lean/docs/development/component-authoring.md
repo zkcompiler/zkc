@@ -442,7 +442,11 @@ uniqueness and preservation laws. A word's mathematical fold relation remains
 outside this representation rule. `VirtualStorage` adds the actual source coordinates and metadata, proves
 allocation and typed field readback, and keeps distinct closure occurrences
 separate. `VirtualStorageInstallation.source_returned` ties the record to the
-actual returning source construction and its checked body. Full query dispatch,
+actual returning source construction and its checked body.
+`VirtualStorageLifetime` transports that association with the existing source
+freshness theorem, physical append and preservation of captured references.
+The regression installs a second real closure with identical captures and
+refuses reassociation of the earlier slot. Full query dispatch,
 child execution and root capacity bounds still require their own proof.
 
 FRI supplies the virtual table's captured parent, challenge and coset

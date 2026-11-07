@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Realization.VirtualStorageInstallation
+public import Zkc.Realization.VirtualStorageLifetime
 public import Zkc.Realization.ClearStorageCaptures
 public import Tests.OracleProcessData
 
@@ -88,6 +88,50 @@ theorem duplicate_refused :
   simp [OracleExecution.operation, before, OracleStore.visible,
     OracleExecution.capturesPresent_embed (model := model) captures]
   rfl
+
+/-- A second actual construction may have the same body and captures, but it
+has a distinct anchor. It cannot change the earlier physical reference. -/
+def later := OracleExecution.operation model [checked] (base none) (location 10) result.state.self id
+  (.virtual checked.declaration.signature 0 [1]) (ProtocolValue.embedComponents captures.present) result.state
+
+set_option backward.isDefEq.respectTransparency false in
+theorem later_returned : later.outcome = .returned
+    (.cons (some (ProtocolValue.ofConcrete (.oracle kind) (anchor 10))) .nil) := by
+  unfold later
+  rw [poststate]
+  simp [OracleExecution.operation, before, OracleStore.visible,
+    OracleExecution.capturesPresent_embed (model := model) captures]
+  rfl
+
+/-- Registry preservation comes from the actual operation law, including
+its stopped executions, rather than an extra protocol-author premise. -/
+theorem retained : VirtualStorage.Stored checked layout references later.state.entries [record]
+    (8, 0) (location 9) 2 2 0 [1] captures :=
+  installed.transport
+    (OracleExecution.operation_extension model [checked] (base none) (location 10)
+      result.state.self id (.virtual checked.declaration.signature 0 [1])
+      (ProtocolValue.embedComponents captures.present) result.state).fresh
+    (List.prefix_refl _) (fun _ _ _ _ found ↦ found)
+
+def virtualReferences := VirtualStorage.references checked layout references later.state.entries [record]
+
+theorem earlier_reference : virtualReferences kind layout.referenceIdentity (anchor 9) (8, 0) :=
+  ⟨rfl, rfl, location 9, 2, 2, 0, [1], captures, rfl, retained⟩
+
+/-- The later source closure is real and has equal captures; that still
+cannot reassociate the first physical slot with its anchor. -/
+theorem wrong_closure_refused :
+    ¬ virtualReferences kind layout.referenceIdentity (anchor 10) (8, 0) := by
+  intro wrong
+  have equal := VirtualStorage.references_unambiguous checked layout references
+    later.state.entries [record] kind layout.referenceIdentity (anchor 9) (anchor 10) (8, 0)
+    earlier_reference wrong
+  have different : anchor 9 ≠ anchor 10 := by decide +kernel
+  exact different equal
+
+#print axioms retained
+#print axioms later_returned
+#print axioms wrong_closure_refused
 
 #print axioms installed
 #print axioms lookup
