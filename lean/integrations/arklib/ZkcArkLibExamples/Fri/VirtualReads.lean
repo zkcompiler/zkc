@@ -4,6 +4,8 @@ public import ZkcArkLibExamples.Fri.RetainedFold
 public import ZkcExamples.Structured.FriVirtualBody
 public import ZkcExamples.Structured.FriPower
 public import Zkc.Source.Structured.OracleMathCalls
+public import Zkc.Source.DeriveRegion
+public meta import Zkc.Source.OperationFacts
 
 @[expose] public section
 
@@ -124,21 +126,9 @@ theorem bodyReads (source : OracleAnchor) (beta : model.Field extension) (source
     oracle0Body.denote (oracleBodyMeaning model tables)
       (arguments model source beta sourceRows rows shift generator inverseShift inverseGenerator inverseTwo position).present.get =
       twoChildren model source beta sourceRows inverseShift inverseGenerator inverseTwo position := by
-  unfold twoChildren
-  change (invoke tables.components helper14Helper
-    (Values.cons position (Values.cons sourceRows Values.nil)).present).bind _ = _
-  erw [pair]
-  change PIR.Process.call _ _ = PIR.Process.call _ _
-  congr 1
-  funext left
-  change PIR.Process.call _ _ = PIR.Process.call _ _
-  congr 1
-  funext right
-  change (invoke _ helper11Helper _).bind _ = _
-  erw [power]
-  change (invoke tables.components helper15Helper _).bind _ = _
-  erw [fold left right]
-  rfl
+  derive_process using
+    (apply RegionMeaning.OperationLaw.identity
+     source_facts [pair, power, fold])
 
 theorem twoReads (source : OracleAnchor) (beta : model.Field extension) (sourceRows rows : Nat)
     (shift generator inverseShift inverseGenerator inverseTwo : model.Field extension) (position : Nat) :

@@ -123,6 +123,13 @@ request identity before attempting semantic unification. It then uses ordinary
 Lean theorem application and bounded premise search. These keys only select a
 candidate: the complete law, arguments, captured meaning and expected reply must
 still type-check. Malformed fact terms and resource failures remain errors.
+Quantified helper facts are installed by exposing the ordered `present` tuple
+before matching their parameters. This avoids dependent-cast reduction blocking
+on unknown arguments; the original, unexpanded law is then checked again.
+Mathematical payloads remain opaque, and every unsolved law premise must still
+be discharged. The FRI virtual body now uses this path for its pair-index,
+power and fold equations. Its existing statement and mathematical premises are
+unchanged; the manual two-query traversal is removed.
 The constructor reduces an explicit index constant directly; it does not try to
 execute an arbitrary installed mathematical helper while looking for a return
 rule. Existing operation laws and fixed-reply equations have adapters into the
@@ -152,6 +159,13 @@ consumers supply their already proved helper and provider laws. A projected-retu
 control also rejects an unrelated same-typed helper law during construction, then
 succeeds with the correct law. This is an installation control, distinct from the
 semantic result-swap control.
+
+`Tests.OracleBodyConstruction` covers a different virtual component with two
+distinct handles, arbitrary query sites and a captured parameter. Its sole
+helper equation is quantified over the two replies. Common construction supplies
+the query order, capture routing and result layout; it needs no reply-variable
+names or source visitor. A semantic theorem rejects exchanging the two handles,
+and fact-installation controls retain an additional mathematical premise.
 
 ## Upstream reuse and one author interface
 
@@ -248,6 +262,17 @@ returned values. Neither introduces another evaluator or a source-authoring
 visitor. The resumption rule still requires the surrounding controller to
 associate the reached operands with its pending source query. Ordinary request
 coordinates are not unforgeable or single-use capabilities.
+
+`ConnectionLocalRange` composes callbacks through the existing constructed
+conditional range. Its callback judgment relates the complete typed yield,
+including the continuation flag, to the next source state. Shared composition
+handles caller checkpoints, finite iteration, early exit and final projection.
+A false continuation skips later callbacks; it is distinct from a stopped
+execution. Region formation still precedes a zero-trip interval. All eight
+retained FRI ranges pass formation and specialize this rule, with the callback
+invariant still explicit. A finite loop bound does not prove that the controller
+has reached a request or completion: its state invariant and decreasing work
+measure must separately justify the final phase requirement.
 
 The next composition step must establish this invariant from the actual
 generated controller and retain it across every branch. The companion supplies
