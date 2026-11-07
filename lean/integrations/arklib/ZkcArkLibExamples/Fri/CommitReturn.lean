@@ -50,11 +50,28 @@ private theorem received (context : ProtocolContext) (receiver : context.roles 1
   intro cs state
   exact Zkc.MonadicPostcondition.pure _ _ (fun values eq ↦ ⟨cs, (PIR.Outcome.returned.inj eq).symm⟩)
 
+/-- The first base word, its virtual child and the later rounds of this
+Commit execution. Later base words can be chosen after previous challenges. -/
+structure Publication where
+  source : OracleAnchor
+  view : OracleAnchor
+  word : Fin 32 → Octic
+  beta : Octic
+  tail : Rounds 4 2
+  coefficients : List Octic
+  singleton : coefficients.length = 1
+
+def Publication.rounds (pub : Publication) : Rounds 5 3 := .fold pub.source pub.view pub.word pub.beta pub.tail
+
+def Publication.handles (pub : Publication) : FriBindingExecution.Handles :=
+  ⟨pub.source, pub.source :: pub.tail.sources, pub.view :: pub.tail.views⟩
+
+def Publication.output (pub : Publication) (shift : Octic) :=
+  FriCommitTerminal.output model pub.source pub.handles.layers pub.handles.folds shift pub.coefficients
+
 def Result {Aux : Type} (shift : Octic) (out : Values (FriBinding.Value model) protocol0Signature.outputs)
-    (after : State Aux) : Prop :=
-  ∃ source view word beta, ∃ tail : Rounds 4 2, ∃ cs : List Octic,
-    cs.length = 1 ∧ out = output model source (source :: tail.sources) (view :: tail.views) shift cs ∧
-    (Rounds.fold source view word beta tail).Installed after.oracle shift ∧ after.oracle.self = 1
+    (store : CommitIteration.Store Aux) : Prop :=
+  ∃ pub : Publication, out = pub.output shift ∧ pub.rounds.Installed store shift ∧ store.self = 1
 
 set_option maxRecDepth 6000 in
 private theorem terminal (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
@@ -65,7 +82,7 @@ private theorem terminal (context : ProtocolContext) (receiver : context.roles 1
     (installed : rounds.Installed before.oracle shift) (role : before.oracle.self = 1) :
     PIR.Process.OnReturn (handler network choose) before (roundSite.next.denote (meaning context)
       (Environment.prepend entry.get (CommitLoop.packed 2 (rounds.endingShift shift) rounds.sources rounds.views)))
-      (Result shift) := by
+      (fun out state ↦ Result shift out state.oracle) := by
   cases rounds with
   | fold source view word beta tail =>
     let rounds := Rounds.fold source view word beta tail
@@ -94,28 +111,27 @@ private theorem terminal (context : ProtocolContext) (receiver : context.roles 1
       ((geometry _ _).trans count) cs current rfl
     rw [finish_exact]
     exact endLaw.weaken fun rec h out returned ↦
-      ⟨source, view, word, beta, tail, cs, (h.2 out returned).1, (h.2 out returned).2, h.1 ▸ reg, h.1 ▸ self⟩
+      ⟨⟨source, view, word, beta, tail, cs, (h.2 out returned).1⟩, (h.2 out returned).2, by rw [h.1]; exact reg, h.1 ▸ self⟩
 
 /-- Every returning receiver Commit exposes these six registered tables,
 the original geometry, and one coefficient from its own terminal message. -/
 theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
     (shift : Octic) (nz : shift ≠ 0) (service : Nat) (before : State Aux) (role : before.oracle.self = 1) :
     PIR.Process.OnReturn (handler network choose) before (invokeProtocol (verifierTable model) protocol0Signature
-      context 1 (FriCommitAdmission.arguments model shift service)) (Result shift) := by
+      context 1 (FriCommitAdmission.arguments model shift service)) (fun out state ↦ Result shift out state.oracle) := by
   rw [CommitBody.invokeReceiver context receiver shift service]
-  apply PIR.Process.OnReturn.bind (middle := Result shift)
-  · exact CommitBody.afterRounds network choose context receiver separate shift nz service before role (Result shift)
+  apply PIR.Process.OnReturn.bind (middle := fun out state ↦ Result shift out state.oracle)
+  · exact CommitBody.afterRounds network choose context receiver separate shift nz service before role (fun out state ↦ Result shift out state.oracle)
       (terminal network choose context receiver separate shift)
-  · rintro out after ⟨source, view, word, beta, tail, cs, one, rfl, registered, self⟩
+  · rintro out after ⟨pub, rfl, registered, self⟩
     have masked : maskValues 1 (context.mapScopes protocol0Signature.outputScopes)
-        (output model source (source :: tail.sources) (view :: tail.views) shift cs) =
-        output model source (source :: tail.sources) (view :: tail.views) shift cs := by
+        (pub.output shift) = pub.output shift := by
       apply (maskValues_mapScopes context 1 1 protocol0Signature.outputScopes _ _).trans
       · rfl
       · intro scope member
         have used : ∀ s ∈ protocol0Signature.outputScopes, s = [0] ∨ s = [1] ∨ s = [0,1] := by decide +kernel
         rcases used scope member with rfl | rfl | rfl <;> simp [receiver, separate]
     exact Zkc.MonadicPostcondition.pure _ _ (fun value eq ↦
-      ⟨source, view, word, beta, tail, cs, one, (PIR.Outcome.returned.inj eq).symm.trans masked, registered, self⟩)
+      ⟨pub, (PIR.Outcome.returned.inj eq).symm.trans masked, registered, self⟩)
 
 end ZkcSecurity.ArkLib.Fri.CommitReturn

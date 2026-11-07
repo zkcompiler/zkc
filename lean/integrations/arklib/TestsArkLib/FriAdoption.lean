@@ -2,7 +2,7 @@ import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
-import ZkcArkLibExamples.Fri.CommitReadback
+import ZkcArkLibExamples.Fri.VerifierRoot
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -392,5 +392,7 @@ run_cmd (ZkcTools.DeclarationAudit.check
 
 run_cmd (ZkcTools.DeclarationAudit.check
   [`ZkcExamples.Structured.FriSourceCalls, `ZkcExamples.Structured.FriPhaseCalls,
-   `ZkcExamples.Structured.FriLowDegreeCall, `ZkcExamples.Structured.FriQueryCall]
+   `ZkcExamples.Structured.FriLowDegreeCall, `ZkcExamples.Structured.FriQueryCall,
+   `Zkc.Source.Structured.ReceiverCall, `ZkcExamples.Structured.FriPhaseTransfer,
+   `ZkcArkLibExamples.Fri.VerifierCalls, `ZkcArkLibExamples.Fri.VerifierRoot]
   "FRI-SOURCE-DERIVED-PHASE-CALLS-PASS" (exactModules := true))

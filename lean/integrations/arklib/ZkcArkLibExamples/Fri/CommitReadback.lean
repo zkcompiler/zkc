@@ -202,10 +202,11 @@ theorem fromCommit [MonadAttach M] [LawfulMonadAttach M]
         ∀ positions : Fin 8 → Fin 32, Checked network choose source view word beta shift tail cs positions child after) := by
   apply (CommitReturn.installed network choose context receiver separate shift nonzero service before role).weaken
   intro record law out returned
-  obtain ⟨source, view, word, beta, tail, cs, one, output, live, who⟩ := law out returned
+  obtain ⟨⟨source, view, word, beta, tail, cs, one⟩, output, live, who⟩ := law out returned
+  change (Rounds.fold source view word beta tail).Installed record.state.oracle shift at live
   refine ⟨source, view, word, beta, tail, cs, one, output, ?_⟩
   intro child receiver' separate' after frame positions
-  exact checked network choose tail cs one positions nonzero child receiver' separate' after (frame.registry.1.trans who)
+  exact checked network choose (word := word) tail cs one positions nonzero child receiver' separate' after (frame.registry.1.trans who)
     ((Rounds.fold source view word beta tail).transport frame shift live)
 
 end ZkcSecurity.ArkLib.Fri.CommitReadback

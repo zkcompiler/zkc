@@ -403,8 +403,16 @@ and the ordered layer and fold sequences identify all six registered tables.
 `CommitReadback.fromCommit` supplies these exact outputs to the installed
 checker under a later publication-preserving frame. For any eight positions,
 a returning checker gives the eight original cells in order and charges
-96 reads. Each later base publication may select a different word. The distribution of the draws and the probability of accepting
-a far first word are separate security obligations.
+96 reads. Each later base publication may select a different word.
+
+`VerifierRoot.afterCommit` keeps that particular publication fixed before
+the sampler runs. The receiver executes the original mark schedule, call
+frames, binding and query wrapper. `VerifierRoot.verifier` proves that a
+return from the public verifier has its acceptance bit set and satisfies
+the mathematical path predicate for the sampled positions, with the same
+publication still installed. These are conditional return statements.
+Honest termination and the probability of accepting a far first word each
+need a separate proof.
 
 For a publication followed by a virtual construction, `Region.cutFirst`
 selects a reached operation on the continuation spine. A bind still executes
