@@ -123,6 +123,27 @@ theorem helper (name : String) (references : List Nat) (declared : List ValueSor
   intro env
   kernel_rfl
 
+theorem finiteFold (domain helper predicate : String) (references : List Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.finiteFold domain helper predicate, references, declared, []⟩
+      (View.finiteFold model program domain helper predicate references declared) := by
+  intro env
+  kernel_rfl
+
+/-- One rule binds an embedded Math body for every frame and return tuple. -/
+theorem mathCompute (references : List Nat) (declared : List ValueSort)
+    (region : InstructionRegion) {view : View.Block model.toCarriers}
+    (same : Block (program := program) (context := context) region.instructions view) :
+    Step (program := program) (context := context)
+      ⟨.mathCompute, references, declared, [region]⟩
+      (View.mathCompute program references declared region view) := by
+  have bodyMeaning : evaluate model program context region.instructions = view := funext same
+  intro env
+  rcases region with ⟨inputs, body, yielded⟩
+  change compute program references declared _ (evaluate model program context body) env = _
+  rw [bodyMeaning]
+  rfl
+
 theorem guard (site : String) (condition : Nat) (declared : List ValueSort) :
     Step (model := model) (program := program) (context := context)
       ⟨.guard site, [condition], declared, []⟩ (View.guard condition declared) := by

@@ -58,6 +58,13 @@ def action (instruction : Instruction) (bodies : List (String × String)) : Exce
   | .call name, _, [], [] =>
       let args := [literal name, references, declared]
       .ok (app "View.helper" (["model", "program"] ++ args), app "Correspondence.helper" args)
+  | .finiteFold domain helper predicate, _, [], [] =>
+      let args := [literal domain, literal helper, literal predicate, references, declared]
+      .ok (app "View.finiteFold" (["model", "program"] ++ args), app "Correspondence.finiteFold" args)
+  | .mathCompute, _, [region], [body] =>
+      let args := [references, declared, literal region]
+      .ok (app "View.mathCompute" (["program"] ++ args ++ [body.1]),
+        app "Correspondence.mathCompute" (args ++ [body.2]))
   | .guard site, [condition], [], [] =>
       .ok (app "View.guard" [toString condition, declared],
        app "Correspondence.guard" [literal site, toString condition, declared])

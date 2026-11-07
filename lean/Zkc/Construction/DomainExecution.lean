@@ -352,6 +352,68 @@ def closedCallMatches (program : Structured.Program) (kind : Structured.HelperKi
       definition.name == name && definition.inputs.map ValueSort.data == inputs &&
         definition.outputs.map ValueSort.data == outputs
 
+/-- Resolve the same finite-domain tree and callback premises as original
+Math. No incoming bound facts or mutable-state invariants are invented here. -/
+def resolveFiniteFold (program : Structured.Program) (domain step predicate : String)
+    (inputs outputs : List ValueSort) : Except String Structured.FoldSpec := do
+  let dataSort := fun sort => match sort with
+    | .data ty => if dataType ty then some ty else none
+    | _ => none
+  let some arguments := inputs.mapM dataSort | throw "construction-math-fold-inputs"
+  let some results := outputs.mapM dataSort | throw "construction-math-fold-results"
+  let domains ← program.snapshot.domains.mapM Structured.Domain.resolve
+  let spec ← Structured.resolveFold program.snapshot domains .math domain step predicate
+    arguments results (List.range arguments.length) []
+  let installed := fun helper => program.payload.definitions.any (fun definition => definition.helper == helper)
+  if !installed spec.stepHelper || (!predicate.isEmpty && !installed spec.predicateHelper) then
+    throw "construction-math-fold-helper"
+  return spec
+
+/-- Original helper signatures and fold specifications share one closed-code
+admission boundary. Nested Math always keeps Math callback rights. -/
+def closedOperationMatches (program : Structured.Program) (kind : Structured.HelperKind)
+    (operation : Operation) (inputs outputs : List ValueSort) : Bool :=
+  match operation with
+  | .call name => closedCallMatches program kind name inputs outputs
+  | .finiteFold domain step predicate => (resolveFiniteFold program domain step predicate inputs outputs).isOk
+  | _ => false
+
+/-- A fold invokes the structured evaluator over the actual admitted helper
+prefix. Domain-admission failures and callback stops are preserved exactly. -/
+def finiteFold (model : Structured.DomainModel) (program : Structured.Program)
+    (domain step predicate : String) (declared : List ValueSort)
+    (arguments : Environment model.toCarriers) : PIR.Outcome (Environment model.toCarriers) :=
+  match resolveFiniteFold program domain step predicate (arguments.map Value.sort) declared with
+  | .error _ => .stopped .refused
+  | .ok spec =>
+    match decodeValues spec.arguments arguments with
+    | none => .stopped .refused
+    | some values =>
+      match closedOutcome (Structured.Evaluation.denoteFoldOn (helperTable model program) spec values) with
+      | .stopped reason => .stopped reason
+      | .returned values =>
+        match encodeValues values with
+        | some results => .returned results
+        | none => .stopped .refused
+
+/-- An embedded mathematical body forms against the original program before
+execution. Its explicit input/result map retains all computations and stops. -/
+def compute (program : Structured.Program) (references : List Nat) (declared : List ValueSort)
+    (region : InstructionRegion)
+    (body : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
+    (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
+  match read env references with
+  | none => .halt .refused
+  | some arguments =>
+    if sortsMatch region.inputs arguments ∧
+        (checkClosedBodyResults .math declared region
+          (checkClosedFrom .math (closedOperationMatches program) region.inputs region.instructions)).isOk then
+      ((body arguments).interpret (withCallerFrame env)).bind fun final =>
+        match read final region.yielded with
+        | some results => if sortsMatch declared results then .done (env ++ results) else .halt .refused
+        | none => .halt .refused
+    else .halt .refused
+
 /-- Closed selection validates both arms before executing the chosen one.
 All nested helper signatures and frame kinds are checked against the original
 program; only the selected arm receives the capture frame. -/
@@ -362,7 +424,7 @@ def selectClosed (kind : Structured.HelperKind) (program : Structured.Program)
   match env[selector]?, read env captures with
   | some (.data (.boolean condition)), some arguments =>
       if yes.inputs = no.inputs ∧ sortsMatch yes.inputs arguments ∧
-          (checkClosedArms kind (closedCallMatches program) declared yes no).isOk then
+          (checkClosedArms kind (closedOperationMatches program) declared yes no).isOk then
         let run := if condition then runYes else runNo
         let yielded := if condition then yes.yielded else no.yielded
         ((run arguments).interpret (withCallerFrame env)).bind fun final =>
@@ -397,7 +459,7 @@ def executeRange (program : Structured.Program) (conditional : Bool) (lower uppe
       let captured := arguments.drop declared.length
       if sortsMatch declared carried ∧
           (checkClosedRangeResults conditional declared (captured.map Value.sort) region
-            (checkClosedFrom .local (closedCallMatches program)
+            (checkClosedFrom .local (closedOperationMatches program)
               region.inputs region.instructions)).isOk then
         (Finite.execute (.elements (List.range' lo (hi - lo)))
           (fun (current : Bool × Environment carriers) index =>
@@ -497,6 +559,15 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
             | .returned results => append results
             | .stopped reason => .halt reason
         | none => .halt .refused
+    | .finiteFold domain helper predicate, references, [] =>
+        match read env references with
+        | some arguments =>
+            match finiteFold model program domain helper predicate declared arguments with
+            | .returned results => append results
+            | .stopped reason => .halt reason
+        | none => .halt .refused
+    | .mathCompute, references, [region@⟨_, body, _⟩] =>
+        compute program references declared region (evaluate model program context body) env
     | .guard _, [condition], [] =>
         if declared = [] then
           match env[condition]? with

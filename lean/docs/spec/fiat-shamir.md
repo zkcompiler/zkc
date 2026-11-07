@@ -143,8 +143,23 @@ empty or descending intervals retain the initial state. Formation checks the
 body, including yields and actual helper signatures, before traversal even for
 zero trips. The induction creates no protocol sampling ancestry. Checkpoints
 preserve the caller frame, and reached stops propagate. The reader admits
-`exec.complete` terminals and refuses other terminals. Embedded Math computations
-still require their interpretation rules.
+`exec.complete` terminals and refuses other terminals.
+
+Embedded `exec.compute` retains its actual Math body as `Operation.mathCompute`
+with an explicit closed input frame and return map. Its original generated
+callee name is diagnostic metadata; the retained body defines its computation.
+The native exporter checks the actual callee, and the deterministic reader
+checks the exported signature and `func.return` terminal. Formation uses the
+same Math walk as selected arms, so nesting inside Local grants no Local rights.
+
+`Operation.finiteFold` retains the domain, step and optional predicate names.
+It resolves the original program's domain tree and callbacks through
+`Structured.resolveFold`, with no invented incoming bound facts, and checks the
+actual installed helper signatures. Execution uses `Evaluation.denoteFoldOn` and
+the original helper table. This preserves domain admission even for zero trips,
+predicate filtering, ordered state updates and callback stops. Folds whose
+callbacks require an unprovided index/container premise refuse. Supplying such
+premises in a future profile needs a checked association, not a same-sort guess.
 
 The same carrier also retains the actual producer's owner-local service
 interface in `Participant.servicePorts`, separate from ordinary SSA inputs.

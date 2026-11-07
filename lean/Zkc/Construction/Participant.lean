@@ -327,6 +327,11 @@ inductive Operation where
       (template : Template) (coordinates : List Nat)
   | calculate (calculation : Calculation)
   | call (helper : String)
+  /-- A Math fold resolves its named domain and callbacks against the original
+  checked program, using the structured fold admission and evaluation. -/
+  | finiteFold (domain step predicate : String)
+  /-- The actual embedded Math body, in its own closed operand/result frame. -/
+  | mathCompute
   | guard (site : String)
   /-- Installed backend requirement. False is a kernel refusal, distinct from
   the explicit rejection of a source protocol guard. -/

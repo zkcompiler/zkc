@@ -60,9 +60,11 @@ laws for arbitrary fields and controls for same-typed ordering and nominal
 mismatches. Closed local tests use a kind-sensitive checker and evaluator that
 preserve guard rejection and exclude transcript effects. The independent
 construction renderer now admits closed conditional ranges using the structured
-finite traversal. It next refuses `exec.compute`. Sequence operations and
-embedded mathematical bodies still need formal admission and execution
-correspondence. Natural field constants already use the exact
+finite traversal and retains the embedded Math bodies, including folds resolved
+against the original domain and callback definitions. The export renders as a
+complete instruction tree; sequence and remaining scalar primitive operations
+are still explicit `unsupported` cases and fail formal admission. Their meanings
+and the complete execution correspondence remain required. Natural field constants already use the exact
 nominal field's catalogue characteristic.
 
 The executable-byte reader separately requires support for the nominal

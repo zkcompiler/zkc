@@ -41,8 +41,8 @@ example (model : Structured.DomainModel) (program : Structured.Program) (context
         .data (.field "test-field" value), .data (.field "test-field" value)] := by rfl
 
 /-- Linking validates a dormant call's complete source signature. -/
-private def knownCall (name : String) (inputs outputs : List ValueSort) : Bool :=
-  name == "predicate" && inputs == [field] && outputs == [.data .boolean]
+private def knownCall (operation : Operation) (inputs outputs : List ValueSort) : Bool :=
+  operation == .call "predicate" && inputs == [field] && outputs == [.data .boolean]
 
 private def callSelection (name : String) (argument : Nat) (results : List ValueSort) : Instruction :=
   ⟨.mathBranch, [0, 0, 1], [.data .boolean],

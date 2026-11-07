@@ -48,9 +48,9 @@ example : checkClosedStep .local (fun _ _ _ _ => true) [.data .boolean, .transcr
     ⟨.localBranch, [0, 1], [], [⟨[.transcript "suite"], [], []⟩, ⟨[.transcript "suite"], [], []⟩]⟩ =
       .error "construction-local-captures" := by rfl
 
-def localCall (kind : Structured.HelperKind) (name : String)
+def localCall (kind : Structured.HelperKind) (operation : Operation)
     (inputs outputs : List ValueSort) : Bool :=
-  kind == .local && name == "local-only" && inputs == [.data .boolean] && outputs == [.data .boolean]
+  kind == .local && operation == .call "local-only" && inputs == [.data .boolean] && outputs == [.data .boolean]
 
 def callingArm : InstructionRegion :=
   ⟨[.data .boolean], [⟨.call "local-only", [0], [.data .boolean], []⟩], [1]⟩

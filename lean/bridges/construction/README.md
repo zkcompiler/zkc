@@ -33,6 +33,7 @@ python3 lean/bridges/construction/literal_tests.py
 python3 lean/bridges/construction/product_tests.py
 python3 lean/bridges/construction/local_branch_tests.py
 python3 lean/bridges/construction/local_range_tests.py
+python3 lean/bridges/construction/embedded_math_tests.py
 ```
 
 Natural field literals use the exact nominal field's catalogue characteristic,

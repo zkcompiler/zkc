@@ -143,6 +143,21 @@ def require (condition : Nat) (declared : List ValueSort) : Block carriers := fu
     | _ => .halt .refused
   else .halt .refused
 
+def finiteFold (model : Structured.DomainModel) (program : Structured.Program)
+    (domain helper predicate : String) (references : List Nat) (declared : List ValueSort) :
+    Block model.toCarriers := fun env =>
+  match read env references with
+  | some arguments =>
+      match Domain.finiteFold model program domain helper predicate declared arguments with
+      | .returned results => append declared env results
+      | .stopped reason => .halt reason
+  | none => .halt .refused
+
+/-- The independently bound Math body retains its closed ABI and formation. -/
+def mathCompute (program : Structured.Program) (references : List Nat) (declared : List ValueSort)
+    (region : InstructionRegion) (body : Block carriers) : Block carriers :=
+  compute program references declared region body
+
 /-- A mathematical arm is a closed data computation. The retained signature,
 helper classification and all-arm formation remain explicit; body meanings are
 independently supplied and bound by the correspondence theorem. -/

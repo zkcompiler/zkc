@@ -97,7 +97,7 @@ def analyzeWithContext (program : Program) (context : Zkc.Construction.Context)
         let count :: initial := instruction.operands | throw "construction-binding-loop-operands"
         unless (count :: initial).all (· < offset) do throw "construction-binding-forward-reference"
         loops := loops ++ [⟨index, offset, site, maximum, count, initial, yielded, region.instructions, call⟩]
-    | .mathBranch =>
+    | .mathBranch | .mathCompute =>
         unless (checkClosedStep .math (fun _ _ _ _ => true) slots instruction).isOk do
           throw "construction-binding-math-region"
     | .localBranch | .localRange _ =>
