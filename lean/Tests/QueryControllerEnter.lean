@@ -21,7 +21,8 @@ def body := RequiredIndices.constantInstructions 9 5 0 "kind" ++ lookupBody ++
   DomainGuard.instructions 17 2 15 "domain" ++ Phase.instructions 2
 def yielded := Phase.output state 18
 def checked : BaseEntry.Recognized body yielded :=
-  ⟨9, 0, 5, "kind", 2, 15, "domain", state, lookupBody, lookup, rfl, rfl, rfl, rfl, rfl⟩
+  ⟨_, ⟨9, 0, 5, "kind", 2, 15, "domain", state, lookupBody, lookup, rfl, rfl, rfl, rfl⟩,
+    rfl, rfl⟩
 def header (position : Nat) : Header := Header.initial 7 0 position
 def record (model : DomainModel) (rows : Nat) : model.Value layout.type := (1, rows, 1, ())
 def environment (model : DomainModel) (position rows : Nat) : Domain.Environment model.toCarriers :=

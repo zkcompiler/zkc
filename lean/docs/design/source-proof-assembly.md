@@ -562,15 +562,46 @@ and Request phase with the full state projection. It derives kind and position
 readback from that same header. Installation supplies stored-record membership
 and row meaning. Out-of-domain positions and oversized row bounds refuse before
 Request. All four actual FRI arms admit the common rule, with checked certificates
-derived from their bodies. The common domain-guard rule is also the entry prefix
-needed by virtual dispatch.
+derived from their bodies. `EntryPrefix` now owns this entire admission prefix;
+base entry and virtual entry use that same proof.
 
-These leaves do not establish the entire controller. Virtual entry and nested
-return dispatch must still connect their actual math slices, frame/answer stores
-and static selections to the source/work relation. Both enclosing ranges then
-consume that relation. These are enclosing proof obligations, not new companion
-assumptions. The strict generated-delivery and original endpoint/authoring gates
-remain unchanged.
+### Embedded mathematics and complete virtual entry
+
+`ConnectionMathRegion.Alignment.embedded` installs an existing source-slice
+certificate under the actual `mathCompute` wrapper. It derives the selected
+source arguments from the larger typed capture row, preserves the caller at
+internal checkpoints, and selects the complete result tuple. Stopped mathematics
+keeps its original stop. The FRI controller's nine captures contain the two
+inputs to the original pair-index helper. Its first and second child-position
+regions reuse that helper and the ordinary typed bind rule; their four actual
+occurrences each admit the same construction. Swapping the equal-typed source
+arguments is rejected. This is source/body connection, not a mathematical
+postcondition assumed for an emitted helper.
+
+`QueryControllerChild` composes the complete saved-child tail: checked frame
+length, parent packing and append, the original position computation, nominal
+child-reference unpacking, and emitted literals. The output rule installs that
+child's coordinates and new frame slot, retains the old answer, and updates only
+the selected frame store. It accommodates literals reused by CSE. Exhaustion
+precedes the position computation; a stopped computation precedes projection.
+All eight actual FRI first-child/sibling tails and their complete outputs match.
+
+`QueryControllerVirtualEntry` joins this tail with `EntryPrefix` and the full
+output projection. It derives the saved parent from the incoming header; the
+certificate checks the four equal-typed parent coordinates in order. It also
+derives the old answer and retained store slices from whole-state readback.
+Those are common structural facts, not companion inputs. Installation still
+supplies the admitted anchor, row meaning, physical frame arena, child reference,
+position-slice association and static continuation/kind literals. The rule
+covers domain refusal before capacity exhaustion and subsequent Math stops.
+Same-typed saved-parent and output mutations are rejected.
+
+These arms do not establish the entire controller. Their installation premises
+must be derived from the source/work relation. Nested return still needs its
+complete frame/answer loading and parent-answer Math composition; dispatch and
+both enclosing ranges must preserve that same relation. These remain common
+proof obligations, not new companion assumptions. The strict generated-delivery
+and original endpoint/authoring gates remain unchanged.
 
 ## Disposition of the revised closing review
 

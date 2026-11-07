@@ -39,7 +39,8 @@ def recognize (start : Nat) (state : List Nat) (body : List Construction.Instruc
     else none
   else none
 
-private theorem read_parts {carriers : Carriers} (environment : Domain.Environment carriers)
+/-- Whole-state readback determines both parts of any ordered projection. -/
+theorem read_parts {carriers : Carriers} (environment : Domain.Environment carriers)
     (references : List Nat) (values : Domain.Environment carriers)
     (read : Domain.read environment references = some values) (count : Nat) :
     Domain.read environment (references.take count) = some (values.take count) ∧

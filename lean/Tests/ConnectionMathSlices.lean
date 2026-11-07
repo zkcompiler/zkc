@@ -115,4 +115,67 @@ example : True := by
 
 #print axioms nested
 #print axioms nestedExecution
+
+def embeddedRegion : InstructionRegion :=
+  ⟨[.data .index, .data .index],
+    [⟨.calculate .indexWrappingSubtract, [0, 1], [.data .index], []⟩], [2]⟩
+
+/-- The same typed mathematical slice installs inside the actual Math wrapper
+at any caller position, retaining the caller frame and the existing arithmetic.
+No second helper-result law or capture-layout proof is supplied by the author. -/
+noncomputable def embedded (model : DomainModel) (program : Program) (context : Context)
+    (caller : Domain.Environment model.toCarriers) (left right : Nat) :
+    let environment := caller ++ [.data (.index left), .data (.index right)]
+    Original.Simulation
+      (fun result frame ↦ frame = environment ++ Original.encodeHelperResult result)
+      (fun _ frame ↦ ArtifactBinding.Captures environment frame)
+      ((body.denote (meaning model [])
+        (show Values model.Value [.index, .index] from .cons left (.cons right .nil)).get).interpret
+        (closedLift (I := Domain.effects model.toCarriers)))
+      (Domain.step model program context
+        ⟨.mathCompute, [caller.length, caller.length + 1], [.data .index], [embeddedRegion]⟩
+        environment) := by
+  dsimp only
+  apply (placed [] 0 1 2).embedded (captures := [.index, .index]) (sourceReferences := [0, 1])
+    (region := embeddedRegion) (.cons .here (.cons (.there .here) .nil)) rfl
+    model program context rfl rfl
+    (Domain.Correspondence.sequence
+      (Domain.Correspondence.calculation .indexWrappingSubtract [0, 1] [.data .index])
+      Domain.Correspondence.empty) rfl rfl rfl (.cons left (.cons right .nil))
+  simp [Domain.read, Domain.encodeValues_cons, Domain.encodeValues_nil,
+    Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle]
+
+/-- Closed stopping behavior passes through the same wrapper. There is no
+successful-result or totality premise in embedded installation. -/
+def readBody : Region dialect [.vector "F", .index] [.field "F"] :=
+  .letOp (Calculation.boundedAt "F").op (.cons .here (.cons (.there .here) .nil)) .nil
+    (.ret (.cons .here .nil))
+def stoppedRegion : InstructionRegion :=
+  ⟨[.data (.vector "F"), .data .index],
+    [⟨.calculate (.boundedAt "F"), [0, 1], [.data (.field "F")], []⟩], [2]⟩
+
+noncomputable def stoppedEmbedded (model : DomainModel) (program : Program) (context : Context) :
+    let environment : Domain.Environment model.toCarriers :=
+      [.data ⟨.vector "F", rfl, []⟩, .data (.index 0)]
+    Original.Simulation
+      (fun result frame ↦ frame = environment ++
+        Original.encodeHelperResult (tys := [.field "F"]) result)
+      (fun _ frame ↦ ArtifactBinding.Captures environment frame)
+      (.halt .refused)
+      (Domain.step model program context
+        ⟨.mathCompute, [0, 1], [.data (.field "F")], [stoppedRegion]⟩ environment) := by
+  let aligned : Alignment [] readBody (arguments 2) 2
+      (fun model ↦ Domain.View.sequence
+        (Domain.View.calculation model (.boundedAt "F") [0, 1] [.data (.field "F")])
+        Domain.View.empty) [2] 3 := by derive_math_region
+  exact aligned.embedded (region := stoppedRegion) (.cons .here (.cons (.there .here) .nil)) rfl
+    model program context rfl rfl
+    (Domain.Correspondence.sequence
+      (Domain.Correspondence.calculation (.boundedAt "F") [0, 1] [.data (.field "F")])
+      Domain.Correspondence.empty) rfl rfl rfl
+    (.cons ([] : List (model.Field "F")) (.cons 0 .nil))
+    [.data ⟨.vector "F", rfl, []⟩, .data (.index 0)] [0, 1] rfl
+
+#print axioms embedded
+#print axioms stoppedEmbedded
 end Tests.ConnectionMathSlices

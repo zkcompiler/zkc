@@ -89,9 +89,9 @@ theorem simulation (model : DomainModel) (program : Program) (context : Context)
 
 end DomainGuard
 
-namespace BaseEntry
+namespace EntryPrefix
 
-structure Recognized (body : List Construction.Instruction) (returned : List Nat) where
+structure Recognized (body : List Construction.Instruction) where
   start : Nat
   kind : Nat
   kindReference : Nat
@@ -108,21 +108,20 @@ structure Recognized (body : List Construction.Instruction) (returned : List Nat
   exactBody : body =
     RequiredIndices.constantInstructions start kindReference kind kindSite ++ lookupBody ++
     DomainGuard.instructions (start + 5 + lookup.projection.selections.length)
-      position rows domainSite ++ Phase.instructions 2
-  exactOutput : returned = Phase.output state (start + 6 + lookup.projection.selections.length)
+      position rows domainSite
 
-/-- This recognizes the whole base-entry leaf, including its unchanged header
-fields and stores. The lookup's constructor and projections remain nominal. -/
-def recognize (start : Nat) (state : List Nat) (body : List Construction.Instruction)
-    (returned : List Nat) : Option (Recognized body returned) := do
+/-- Admit the common kind, immutable record and domain prefix of base and
+virtual entry. The complete prefix ends at the checked domain guard. -/
+def recognize (start : Nat) (state : List Nat) (body : List Construction.Instruction) :
+    Option (Recognized body) := do
   let constant :: compare :: require :: _ := body | none
   let .execute (.indexConstant kind) := constant.operation | none
   let [kindReference, _] := compare.operands | none
   let .require kindSite := require.operation | none
-  let [domain, guard, _] := body.drop (body.length - 3) | none
+  let [domain, guard] := body.drop (body.length - 2) | none
   let [position, rows] := domain.operands | none
   let .require domainSite := guard.operation | none
-  let lookupBody := (body.drop 3).take (body.length - 6)
+  let lookupBody := (body.drop 3).take (body.length - 5)
   let lookup ← RecordLookupProjection.recognize lookupBody
   if kindField : state[5]? = some kindReference then
     if positionField : state[2]? = some position then
@@ -130,19 +129,16 @@ def recognize (start : Nat) (state : List Nat) (body : List Construction.Instruc
         if exactBody : body =
             RequiredIndices.constantInstructions start kindReference kind kindSite ++ lookupBody ++
             DomainGuard.instructions (start + 5 + lookup.projection.selections.length)
-              position rows domainSite ++ Phase.instructions 2 then
-          if exactOutput : returned =
-              Phase.output state (start + 6 + lookup.projection.selections.length) then
-            some ⟨start, kind, kindReference, kindSite, position, rows, domainSite, state,
-              lookupBody, lookup, kindField, positionField, lookupStart, exactBody, exactOutput⟩
-          else none
+              position rows domainSite then
+          some ⟨start, kind, kindReference, kindSite, position, rows, domainSite, state,
+            lookupBody, lookup, kindField, positionField, lookupStart, exactBody⟩
         else none
       else none
     else none
   else none
 
-def projected {body : List Construction.Instruction} {returned : List Nat}
-    (checked : Recognized body returned) (model : DomainModel)
+def projected {body : List Construction.Instruction}
+    (checked : Recognized body) (model : DomainModel)
     (data : checked.lookup.projection.layout.type.isHandle = false)
     (environment : Domain.Environment model.toCarriers)
     (record : model.Value checked.lookup.projection.layout.type) :
@@ -153,11 +149,9 @@ def projected {body : List Construction.Instruction} {returned : List Nat}
     RecordProjection.results model checked.lookup.projection.layout record
       checked.lookup.projection.selections
 
-/-- The complete emitted base-entry arm. Record membership and row meaning
-come from installation; kind and position readback come from the same full
-controller state. The theorem covers every domain-check outcome. -/
-theorem Recognized.simulation {body : List Construction.Instruction} {returned : List Nat}
-    (checked : Recognized body returned) (model : DomainModel) (program : Program)
+/-- The common entry prefix retains exact refusal order and the caller frame. -/
+theorem Recognized.simulation {body : List Construction.Instruction}
+    (checked : Recognized body) (model : DomainModel) (program : Program)
     (context : Context) (header : Header) (stores environment : Domain.Environment model.toCarriers)
     (start : checked.start = environment.length)
     (read : Domain.read environment checked.state = some (header.encode stores))
@@ -179,11 +173,9 @@ theorem Recognized.simulation {body : List Construction.Instruction} {returned :
       some (.data (.index rows))) :
     Nonempty (Original.Simulation Eq (fun _ frame ↦ environment <+: frame)
       (if DomainGuard.Accepted header.position rows then
-        .done ({header with phase := 2}.encode stores) else .halt .refused)
-      ((Domain.evaluate model program context body environment).bind fun final ↦
-        match Domain.read final returned with
-        | some values => .done values
-        | none => .halt .refused)) := by
+        .done (projected checked model data environment record ++ [.data (.boolean true)])
+       else .halt .refused)
+      (Domain.evaluate model program context body environment)) := by
   have readKind : environment[checked.kindReference]? = some (.data (.index checked.kind)) := by
     have field := Domain.View.read_getElem? read 5
     rw [checked.kindField] at field
@@ -205,11 +197,6 @@ theorem Recognized.simulation {body : List Construction.Instruction} {returned :
       checked.start + 5 + checked.lookup.projection.selections.length := by
     simp [projected, RecordProjection.results_length model _ record _ localFields, start]
     omega
-  have selectedState : Domain.read (projected checked model data environment record)
-      checked.state = some (header.encode stores) := by
-    exact RecordAllocator.read_extended _ fields _ _
-      (RecordAllocator.read_extended _ lookupValues _ _
-        (RecordAllocator.read_extended _ kindValues _ _ read))
   have selectedPosition : (projected checked model data environment record)[checked.position]? =
       some (.data (.index header.position)) :=
     Original.read_append (Original.read_append (Original.read_append readPosition kindValues)
@@ -238,27 +225,94 @@ theorem Recognized.simulation {body : List Construction.Instruction} {returned :
   have domainWeakened := domain.mapRelations (fun _ _ equal ↦ equal)
     (fun _ _ held ↦ retained.trans held)
   rw [selectedLength] at domainWeakened
+  refine ⟨?_⟩
+  simp only [checked.exactBody, Domain.evaluate_append, PIR.Process.bind_assoc]
+  exact kindGuard.continueDone (fun _ held ↦ held)
+    (lookupWeakened.continueDone (fun _ held ↦ held) domainWeakened)
+
+end EntryPrefix
+
+namespace BaseEntry
+
+structure Recognized (body : List Construction.Instruction) (returned : List Nat) where
+  entryBody : List Construction.Instruction
+  entry : EntryPrefix.Recognized entryBody
+  exactBody : body = entryBody ++ Phase.instructions 2
+  exactOutput : returned = Phase.output entry.state
+    (entry.start + 6 + entry.lookup.projection.selections.length)
+
+def recognize (start : Nat) (state : List Nat) (body : List Construction.Instruction)
+    (returned : List Nat) : Option (Recognized body returned) := do
+  let entryBody := body.take (body.length - 1)
+  let entry ← EntryPrefix.recognize start state entryBody
+  if exactBody : body = entryBody ++ Phase.instructions 2 then
+    if exactOutput : returned = Phase.output entry.state
+        (entry.start + 6 + entry.lookup.projection.selections.length) then
+      some ⟨entryBody, entry, exactBody, exactOutput⟩
+    else none
+  else none
+
+/-- The complete base entry uses the same prefix as virtual dispatch. -/
+theorem Recognized.simulation {body : List Construction.Instruction} {returned : List Nat}
+    (checked : Recognized body returned) (model : DomainModel) (program : Program)
+    (context : Context) (header : Header) (stores environment : Domain.Environment model.toCarriers)
+    (start : checked.entry.start = environment.length)
+    (read : Domain.read environment checked.entry.state = some (header.encode stores))
+    (kind : header.kind = checked.entry.kind) (kindBound : checked.entry.kind < indexLimit)
+    (data : checked.entry.lookup.projection.layout.type.isHandle = false)
+    (localFields : ∀ selection ∈ checked.entry.lookup.projection.selections,
+      Domain.localType selection.type = true)
+    (recordIndex : Nat) (records : List (model.Value checked.entry.lookup.projection.layout.type))
+    (record : model.Value checked.entry.lookup.projection.layout.type)
+    (readTag : environment[checked.entry.lookup.lookup.placement.constructor]? =
+      some (.data (.index checked.entry.lookup.lookup.layout.constructor)))
+    (readInstance : environment[checked.entry.lookup.lookup.placement.slot]? =
+      some (.data (.index recordIndex)))
+    (readStore : environment[checked.entry.lookup.lookup.placement.store]? =
+      some (.data ⟨.sequence checked.entry.lookup.projection.layout.type, data, records⟩))
+    (found : records[recordIndex]? = some record)
+    (tagBound : checked.entry.lookup.lookup.layout.constructor < indexLimit) (rows : Nat)
+    (readRows : (EntryPrefix.projected checked.entry model data environment record)[checked.entry.rows]? =
+      some (.data (.index rows))) :
+    Nonempty (Original.Simulation Eq (fun _ frame ↦ environment <+: frame)
+      (if DomainGuard.Accepted header.position rows then
+        .done ({header with phase := 2}.encode stores) else .halt .refused)
+      ((Domain.evaluate model program context body environment).bind fun final ↦
+        match Domain.read final returned with
+        | some values => .done values
+        | none => .halt .refused)) := by
+  let selected := EntryPrefix.projected checked.entry model data environment record
+  have selectedLength : selected.length =
+      checked.entry.start + 5 + checked.entry.lookup.projection.selections.length := by
+    simp [selected, EntryPrefix.projected,
+      RecordProjection.results_length model _ record _ localFields, start]
+    omega
+  have retained : environment <+: selected :=
+    ((List.prefix_append _ _).trans (List.prefix_append _ _)).trans (List.prefix_append _ _)
+  have selectedState : Domain.read selected checked.entry.state = some (header.encode stores) :=
+    RecordAllocator.read_extended _ _ _ _ (RecordAllocator.read_extended _ _ _ _
+      (RecordAllocator.read_extended _ _ _ _ read))
+  obtain ⟨entry⟩ := checked.entry.simulation model program context header stores environment start
+    read kind kindBound data localFields recordIndex records record readTag readInstance readStore
+    found tagBound rows readRows
   let literal : Phase.Recognized (Phase.instructions 2) returned :=
-    ⟨2, checked.start + 6 + checked.lookup.projection.selections.length, checked.state,
-      rfl, checked.exactOutput⟩
+    ⟨2, checked.entry.start + 6 + checked.entry.lookup.projection.selections.length,
+      checked.entry.state, rfl, checked.exactOutput⟩
   obtain ⟨phase⟩ := literal.simulation model program context header stores
-    (projected checked model data environment record ++ [.data (.boolean true)])
+    (selected ++ [.data (.boolean true)])
     (by dsimp only [literal]; simp only [List.length_append, List.length_cons, List.length_nil,
       selectedLength]; omega)
     (by change 2 < indexLimit; decide)
-    (RecordAllocator.read_extended _ [.data (.boolean true)] _ _ selectedState)
+    (RecordAllocator.read_extended selected [.data (.boolean true)] _ _ selectedState)
   have phaseWeakened := phase.mapRelations (fun _ _ equal ↦ equal)
     (fun _ _ held ↦ (retained.trans (List.prefix_append _ _)).trans held)
   refine ⟨?_⟩
-  rw [checked.exactBody, Domain.evaluate_append, Domain.evaluate_append,
-    Domain.evaluate_append, PIR.Process.bind_assoc, PIR.Process.bind_assoc, PIR.Process.bind_assoc]
-  apply kindGuard.continueDone (fun _ held ↦ held)
-  apply lookupWeakened.continueDone (fun _ held ↦ held)
+  rw [checked.exactBody, Domain.evaluate_append, PIR.Process.bind_assoc]
   by_cases accepted : DomainGuard.Accepted header.position rows
-  · simp only [accepted, ↓reduceIte] at domainWeakened ⊢
-    exact domainWeakened.continueDone (fun _ held ↦ held) phaseWeakened
-  · simp only [accepted, ↓reduceIte] at domainWeakened ⊢
-    exact domainWeakened.continueHalt _ (fun _ held ↦ held)
+  · simp only [accepted, ↓reduceIte] at entry ⊢
+    exact entry.continueDone (fun _ held ↦ held) phaseWeakened
+  · simp only [accepted, ↓reduceIte] at entry ⊢
+    exact entry.continueHalt _ (fun _ held ↦ held)
 
 end BaseEntry
 end Zkc.Realization.QueryController

@@ -255,4 +255,57 @@ noncomputable def Alignment.sound {definitions : List CheckedDefinition}
           (fun _ _ final => ⟨final.1, final.2.1,
             ArtifactBinding.captures_trans returned.2.2 final.2.2⟩)
           (fun _ _ retained => ArtifactBinding.captures_trans returned.2.2 retained)
+
+/-- Install a structurally connected mathematical slice at an actual embedded
+region. Capture locations, extent, frame preservation and the output tuple are
+derived here. The caller supplies the checked source/body association, not a
+second execution law or a postulated result for the generated helper. -/
+noncomputable def Alignment.embedded {definitions : List CheckedDefinition}
+    {inputs captures outputs : List Ty} {body : Region dialect inputs outputs}
+    {target : TargetBlock} {region : InstructionRegion} {finalSize : Nat}
+    {sourceReferences : List Nat}
+    (certificate : Alignment definitions body (sourceReferences.map Original.Location.data) captures.length
+      target region.yielded finalSize)
+    (positions : Operands captures inputs)
+    (selected : ConnectionCalculations.operandReferences (arguments captures.length) positions =
+      some sourceReferences)
+    (model : DomainModel) (program : Program) (context : Context)
+    (inputSorts : region.inputs = captures.map ValueSort.data)
+    (formed : checkClosedBodyResults .math (outputs.map ValueSort.data) region
+      (checkClosedFrom .math (Domain.closedOperationMatches program)
+        region.inputs region.instructions) = .ok ())
+    (correspondence : Domain.Correspondence.Block (model := model) (program := program)
+      (context := context) region.instructions (target model))
+    (captureData : captures.all Domain.localType = true)
+    (inputData : inputs.all Domain.localType = true)
+    (outputData : outputs.all Domain.localType = true)
+    (values : Values model.Value captures) (environment : Domain.Environment model.toCarriers)
+    (references : List Nat)
+    (read : Domain.read environment references = Domain.encodeValues values) :
+    Original.Simulation (fun result frame ↦ frame = environment ++ Original.encodeHelperResult result)
+      (fun _ frame ↦ ArtifactBinding.Captures environment frame)
+      ((body.denote (meaning model definitions) (positions.eval values.get).get).interpret
+        (closedLift (I := Domain.effects model.toCarriers)))
+      (Domain.step model program context
+        ⟨.mathCompute, references, outputs.map ValueSort.data, [region]⟩ environment) := by
+  have encoding := Original.encodeHelperResult_eq captureData values
+  have extent := encoded_length values encoding
+  have captured : Original.ValuesHolds (Original.encodeHelperResult values)
+      (arguments captures.length) values.present := by
+    simpa only [List.nil_append, List.append_nil, List.length_nil, arguments] using
+      valuesHolds_encoded values [] [] encoding
+  have selectedEncoding := Original.encodeHelperResult_eq inputData (positions.eval values.get)
+  have selectedRead := (read_present values positions selected captured).trans selectedEncoding
+  have sourceFrame := read_encoded (positions.eval values.get) _ sourceReferences
+    selectedEncoding selectedRead
+  have connected := certificate.sound model (positions.eval values.get)
+    (Original.encodeHelperResult values) outputData extent
+    (by simpa only [extent] using sourceFrame.2) sourceFrame.1
+  have placed := Original.Simulation.mathCompute program values
+    (body.denote (meaning model definitions) (positions.eval values.get).get) (target model) region
+    inputSorts formed captureData outputData environment references read
+    (connected.mapRelations (fun _ _ result ↦ result.1) (fun _ _ retained ↦ retained))
+  rw [Domain.Correspondence.mathCompute references (outputs.map ValueSort.data) region correspondence]
+  exact placed
+
 end Zkc.Construction.ConnectionMathRegion

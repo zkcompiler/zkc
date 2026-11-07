@@ -146,6 +146,38 @@ noncomputable def Simulation.closeMathArm {types : List Structured.Ty}
       exact .done rfl)
   simpa only [PIR.Process.bind_done] using connected
 
+/-- Enter an embedded Math body with its actual captures and restore the
+caller after its complete output selection. This is the same closed-arm
+boundary used by selection, including stopped computations and checkpoints. -/
+noncomputable def Simulation.mathCompute (program : Structured.Program)
+    {captures results : List Structured.Ty}
+    (arguments : Values carriers.Value captures)
+    (source : PIR.Process Structured.closedInterface (Values carriers.Value results))
+    (body : Domain.View.Block carriers) (region : InstructionRegion)
+    (inputs : region.inputs = captures.map ValueSort.data)
+    (formed : checkClosedBodyResults .math (results.map ValueSort.data) region
+      (checkClosedFrom .math (Domain.closedOperationMatches program)
+        region.inputs region.instructions) = .ok ())
+    (captureData : captures.all Domain.localType = true)
+    (resultData : results.all Domain.localType = true)
+    (environment : Domain.Environment carriers) (references : List Nat)
+    (read : Domain.read environment references = Domain.encodeValues arguments)
+    (connected : Simulation (MathReturns region.yielded)
+      (fun _ frame ↦ ArtifactBinding.Captures (encodeHelperResult arguments) frame)
+      (source.interpret (Structured.closedLift (I := Domain.effects carriers)))
+      (body (encodeHelperResult arguments))) :
+    Simulation (fun values final ↦ final = environment ++ encodeHelperResult values)
+      (fun _ frame ↦ ArtifactBinding.Captures environment frame)
+      (source.interpret (Structured.closedLift (I := Domain.effects carriers)))
+      (Domain.View.mathCompute program references (results.map ValueSort.data) region body
+        environment) := by
+  have capturesRead := read.trans (encodeHelperResult_eq captureData arguments)
+  have sorts : Domain.sortsMatch region.inputs (encodeHelperResult arguments) = true := by
+    rw [inputs]
+    exact encodeHelperResult_sorts captureData arguments
+  simp only [Domain.View.mathCompute, Domain.compute, capturesRead, formed, Except.isOk, sorts]
+  exact Simulation.closeMathArm source _ _ _ _ resultData connected
+
 /-- Selection composes the connected closed arms with exact caller/capture
 readback. Both arms require evidence; no honest or successful input premise is
 introduced, and the unselected process is never evaluated. -/
