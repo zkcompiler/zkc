@@ -424,6 +424,18 @@ its own representation and execution laws. These local proofs do not supply
 source-event ownership, root capacity bounds or the complete query controller.
 No folded-word identity or FRI degree lemma is a premise of the allocator rule.
 
+The virtual-closure capture boundary is likewise structural. `CaptureLayout`
+compares the original declaration's capture types with actual record fields,
+derives typed projections in the same order, and keeps every ordinary parameter
+unchanged. Parent handles use a reference relation supplied by immutable storage;
+`ClearStorageCaptures` obtains that relation from `Stored`, including its
+uniqueness and preservation laws. A word's mathematical fold relation remains
+outside this representation rule. `VirtualStorage` adds the actual source coordinates and metadata, proves
+allocation and typed field readback, and keeps distinct closure occurrences
+separate. `VirtualStorageInstallation.source_returned` ties the record to the
+actual returning source construction and its checked body. Full query dispatch,
+child execution and root capacity bounds still require their own proof.
+
 FRI supplies the virtual table's captured parent, challenge and coset
 geometry. `CommitIngress.installed` follows the linked coset admission
 helper, assembles the receiver's shift, initializes both handle sequences,

@@ -65,13 +65,30 @@ checks the reference constructor before reading the immutable slot. Its executio
 rule applies to all 66 lookup fragments in the retained FRI tree. `Stored.lookup`
 connects a returning lookup to the exact publication record, and the existing
 projections recover that word's data. These are static helper occurrences, not
-runtime read counts. The complete query controller, generated-event ownership,
-root allocation bounds and whole-run simulation remain open.
+runtime read counts. Virtual capture layouts are checked against the original
+oracle's declared input types and the actual allocator's record fields. The
+shared relation keeps ordinary parameters equal and resolves each parent
+reference through immutable storage; typed projections preserve source order.
+For the actual Fold record, this checks nine captures following three index
+metadata fields. The metadata's dynamic source meaning still belongs to the
+whole-run relation. A two-parent control rejects exchanging distinct same-typed
+anchors even when their published words have identical cells. The complete query
+controller, generated-event ownership,
+root allocation bounds and whole-run simulation remain open. The common virtual
+record rule now additionally preserves the original captures through actual
+allocation and typed projection. Its source-installation rule uses the actual
+returning virtual instruction to recover the exact checked body, captures,
+location and registry entry. The source return and physical allocation still
+need to be composed at every reached location in the full verifier.
 [Clear-store laws](../../Zkc/Realization/ClearStorage.lean)
 · [Constructed reads](../../Zkc/Realization/ClearStorageCalculations.lean)
 · [Actual allocation](../../Zkc/Realization/ClearStorageAllocation.lean)
 · [Common allocator rule](../../Zkc/Realization/RecordAllocator.lean)
 · [Checked lookup](../../Zkc/Realization/ClearStorageLookup.lean)
+· [Typed captures](../../Zkc/Realization/CaptureLayout.lean)
+· [Capture storage association](../../Zkc/Realization/ClearStorageCaptures.lean)
+· [Virtual records](../../Zkc/Realization/VirtualStorage.lean)
+· [Source installation](../../Zkc/Realization/VirtualStorageInstallation.lean)
 · [Publication and swap controls](../../Tests/ClearStorage.lean)
 
 The fixed-table access transport preserves both replies and the complete
