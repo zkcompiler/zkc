@@ -104,6 +104,44 @@ inductive Alignment (definitions : List CheckedDefinition) :
         locations size (fun model => Domain.View.sequence
           (Domain.View.mathBranch program selector references (results.map ValueSort.data)
             yesRegion noRegion (yesBody model) (noBody model)) (rest model)) yielded finalSize
+  | invoke {inputs outputs : List Ty}
+      (linked : DeclarationsLinked [] definitions) (definition : CheckedDefinition)
+      (member : definition ∈ definitions)
+      (operands : Operands inputs definition.inputs)
+      {next : Region dialect (definition.outputs ++ inputs) outputs}
+      (locations : List Original.Location) (size : Nat) (references : List Nat)
+      (selected : operandReferences locations operands = some references)
+      (inputData : definition.inputs.all Domain.localType = true)
+      (outputData : definition.outputs.all Domain.localType = true)
+      {spine : ConnectionTargetPrefix.Prefix} {rest : TargetBlock}
+      {returned yielded : List Nat} {middleSize finalSize : Nat}
+      (head : Alignment definitions definition.body (references.map Original.Location.data)
+        size spine.block returned middleSize)
+      (tail : Alignment definitions next (returned.map Original.Location.data ++ locations)
+        middleSize rest yielded finalSize) :
+      Alignment definitions (.letOp (.invoke definition.helper) operands .nil next)
+        locations size (spine.plug rest) yielded finalSize
+  | finiteFold {inputs outputs : List Ty}
+      (program : Program) (after : List CheckedDefinition)
+      (split : program.payload.definitions = definitions ++ after)
+      (domain step predicate : String) (spec : FoldSpec)
+      (fresh : after.all (fun definition => (Op.fold spec).helpers.all
+        (fun helper => definition.name != helper.name)) = true)
+      (resolved : Domain.resolveFiniteFold program domain step predicate
+        (spec.arguments.map ValueSort.data) (spec.state.map ValueSort.data) = .ok spec)
+      (operands : Operands inputs spec.arguments)
+      {next : Region dialect (spec.state ++ inputs) outputs}
+      (locations : List Original.Location) (size : Nat) (references : List Nat)
+      (selected : operandReferences locations operands = some references)
+      (inputData : spec.arguments.all Domain.localType = true)
+      (outputData : spec.state.all Domain.localType = true)
+      {rest : TargetBlock} {yielded : List Nat} {finalSize : Nat}
+      (tail : Alignment definitions next (allocated size spec.state.length ++ locations)
+        (size + spec.state.length) rest yielded finalSize) :
+      Alignment definitions (.letOp (.fold spec) operands .nil next)
+        locations size (fun model => Domain.View.sequence
+          (Domain.View.finiteFold model program domain step predicate references (spec.state.map .data))
+          (rest model)) yielded finalSize
   | bind {inputs intermediate outputs : List Ty} {body : Region dialect inputs intermediate}
       {next : Region dialect (intermediate ++ inputs) outputs}
       {locations : List Original.Location} {size middleSize finalSize : Nat}

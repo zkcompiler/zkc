@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.ConnectionMathSimulation
+public import Zkc.Source.Structured.DomainLinking
 
 @[expose] public section
 
@@ -10,6 +11,26 @@ caller-frame preservation; domain refusals and callback stops remain unchanged. 
 set_option autoImplicit false
 namespace Zkc.Construction.ConnectionFiniteFold
 open Zkc.Source Zkc.Source.Structured
+
+/-- A retained fold may be resolved in the complete admitted program while
+its source body was closed over an earlier declaration prefix. Only its step
+and optional predicate are observable; later declarations cannot replace them. -/
+theorem lexical (model : DomainModel) (program : Program)
+    (definitions after : List CheckedDefinition) (spec : FoldSpec)
+    (split : program.payload.definitions = definitions ++ after)
+    (fresh : after.all (fun definition => (Op.fold spec).helpers.all
+      (fun helper => definition.name != helper.name)) = true) :
+    Evaluation.denoteFoldOn
+        (definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []) spec =
+      Evaluation.denoteFoldOn (Domain.helperTable model program) spec := by
+  apply Evaluation.denoteFoldOn_table_congr model
+  intro helper used
+  simp only [Domain.helperTable, split, List.foldl_append]
+  symm
+  apply Evaluation.invoke_foldl_otherOn model SiteObservations.closed
+  intro definition member
+  have different := List.all_eq_true.mp (List.all_eq_true.mp fresh definition member) helper used
+  simpa only [bne_iff_ne] using different
 
 /-- Resolution fixes the actual domain tree, callback identities and full ABI.
 It does not assert that domain admission or any callback returns successfully. -/

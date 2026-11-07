@@ -461,9 +461,17 @@ Generated pure slices use `derive_math_region`, the same producer as inlined
 Math calls. It checks the complete source tree, ordered operands, caller extent
 and returned coordinates, and refuses an unconsumed target suffix. The actual
 FRI child-position body and final fold arithmetic instantiate this rule without
-new value proofs. `ConnectionFiniteFold` connects an embedded finite fold to the
+new value proofs. Nested inlined calls are expanded from their exact linked
+declarations. The common rule composes their checked instruction spines, derives
+the intermediate return locations and preserves the caller frame; it adds no
+checkpoint at a source call boundary. Wrong declaration order and same-typed
+operand swaps refuse the proposal. The retained FRI power fragment uses this
+path for its nested bit-width helpers and its finite fold.
+`ConnectionFiniteFold` connects an embedded finite fold to the
 admitted original domain and callback table, including domain refusals and callback
-stops. This connection is separate from the mathematical power lemma and from
+stops. A lexical framing law permits later declarations only when they preserve
+the fold's step and optional predicate. A prefix missing the callback cannot
+gain its meaning from a later declaration. This connection is separate from the mathematical power lemma and from
 proving which controller continuation supplies its operands.
 
 FRI supplies the virtual table's captured parent, challenge and coset

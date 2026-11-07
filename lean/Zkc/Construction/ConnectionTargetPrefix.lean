@@ -25,6 +25,19 @@ def Prefix.plug (spine : Prefix) (suffix : TargetBlock) : TargetBlock :=
 def Prefix.block (spine : Prefix) : TargetBlock :=
   spine.plug (fun _ => Domain.View.empty)
 
+/-- Concatenate two checked instruction spines without adding an execution
+checkpoint at the source-call boundary. -/
+def Prefix.append (first second : Prefix) : Prefix :=
+  match first with
+  | .empty => second
+  | .step view rest => .step view (rest.append second)
+
+theorem Prefix.append_plug (first second : Prefix) (suffix : TargetBlock) :
+    (first.append second).plug suffix = first.plug (second.plug suffix) := by
+  induction first with
+  | empty => rfl
+  | step view rest ih => simp only [append, plug, ih]
+
 /-- The exact flat instruction/checkpoint schedule, for every continuation
 and environment. This equation concerns only existing target combinators. -/
 theorem Prefix.plug_eq_bind (spine : Prefix) (suffix : TargetBlock) (model : Zkc.Source.Structured.DomainModel)

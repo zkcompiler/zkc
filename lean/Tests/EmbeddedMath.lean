@@ -3,6 +3,7 @@ module
 public import Zkc.Construction.DomainCorrespondence
 public import Zkc.Construction.ConnectionFiniteFold
 public import Zkc.Construction.LayoutPermutation
+public import ZkcTools.ConstructionBindings.MathRegion
 
 @[expose] public section
 
@@ -111,5 +112,49 @@ example : Domain.View.finiteFold model program "range" "sum" "" [1, 2, 0]
       .halt .refused := rfl
 
 #print axioms connected
+
+private noncomputable def foldBody : Region dialect spec.arguments spec.state :=
+  .letOp (.fold spec) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+    .nil (.ret (.cons .here .nil))
+
+private def foldTarget (domain step predicate : String) : ConnectionMathRegion.TargetBlock := fun model ↦
+  Domain.View.sequence
+    (Domain.View.finiteFold model program domain step predicate [1, 2, 0] [.data .index])
+    Domain.View.empty
+
+private noncomputable def foldAlignment : ConnectionMathRegion.Alignment program.payload.definitions foldBody
+    [.data 1, .data 2, .data 0] 3 (foldTarget "range" "sum" "") [3] 4 := by
+  derive_math_region
+
+/-- The later, unrelated predicate declaration changes neither the captured
+step meaning nor the ordered physical fold inputs. -/
+private noncomputable def lexicalFoldAlignment :
+    ConnectionMathRegion.Alignment (program.payload.definitions.take 1) foldBody
+      [.data 1, .data 2, .data 0] 3 (foldTarget "range" "sum" "") [3] 4 := by
+  derive_math_region
+
+example : True := by
+  fail_if_success
+    have : ConnectionMathRegion.Alignment [] foldBody
+        [.data 1, .data 2, .data 0] 3 (foldTarget "range" "sum" "") [3] 4 := by
+      derive_math_region
+  trivial
+
+example : True := by
+  fail_if_success
+    have : ConnectionMathRegion.Alignment program.payload.definitions foldBody
+        [.data 1, .data 2, .data 0] 3 (foldTarget "range" "sum" "skip") [3] 4 := by
+      derive_math_region
+  trivial
+
+example : True := by
+  fail_if_success
+    have : ConnectionMathRegion.Alignment program.payload.definitions foldBody
+        [.data 1, .data 0, .data 2] 3 (foldTarget "range" "sum" "") [3] 4 := by
+      derive_math_region
+  trivial
+
+#print axioms foldAlignment
+#print axioms lexicalFoldAlignment
 
 end Tests.EmbeddedMath
