@@ -22,6 +22,38 @@ def values : {kinds : List Kind} →
   | _, .nil => .nil
   | _, .cons value rest => .cons value (values rest)
 
+/-- Installation fixes the arena of each occurrence before saved indices are
+loaded. Kinds with the same answer type remain distinct here. -/
+inductive Arenas (model : DomainModel) (answerType : Kind → Ty)
+    (arenas : (kind : Kind) → List (model.Value (answerType kind)))
+    (environment : Domain.Environment model.toCarriers) :
+    {kinds : List Kind} → AnswerReads.Placement (kinds.map answerType) → Prop where
+  | nil : Arenas model answerType arenas environment (kinds := []) .nil
+  | cons {kind : Kind} {kinds : List Kind} {arena index : Nat}
+      {rest : AnswerReads.Placement (kinds.map answerType)}
+      (answerData : (answerType kind).isHandle = false)
+      (read : Domain.Value.encode (ty := .sequence (answerType kind)) (arenas kind) =
+        environment[arena]?)
+      (tail : Arenas model answerType arenas environment rest) :
+      Arenas model answerType arenas environment (kinds := kind :: kinds) (.cons arena index rest)
+
+theorem Arenas.extended
+    {arenas : (kind : Kind) → List (model.Value (answerType kind))}
+    {environment : Domain.Environment model.toCarriers} {kinds : List Kind}
+    {placement : AnswerReads.Placement (kinds.map answerType)}
+    (installed : Arenas model answerType arenas environment placement)
+    (suffix : Domain.Environment model.toCarriers) :
+    Arenas model answerType arenas (environment ++ suffix) placement := by
+  induction installed with
+  | nil => exact .nil
+  | @cons kind kinds arena index rest answerData read tail ih =>
+      refine .cons answerData ?_ ih
+      obtain ⟨value, encoded⟩ := Domain.Value.encode_local_exists (carriers := model.toCarriers)
+        (ty := .sequence (answerType kind))
+        (by simp [Domain.localType, Domain.dataType, Ty.isHandle, answerData]) (arenas kind)
+      rw [encoded] at read ⊢
+      exact (Original.read_append read.symm suffix).symm
+
 /-- The controller must establish these reached operands from its saved frame
 and current arenas. Equal answer types alone cannot supply this association. -/
 inductive ArenaOperands (model : DomainModel) (answerType : Kind → Ty)
@@ -38,6 +70,48 @@ inductive ArenaOperands (model : DomainModel) (answerType : Kind → Ty)
       (tail : ArenaOperands model answerType arenas environment rest indices) :
       ArenaOperands model answerType arenas environment
         (kinds := kind :: kinds) (.cons arena index rest) (slot :: indices)
+
+/-- The saved index tuple and installed arenas construct every physical read
+operand. No companion reconstructs the generated read traversal. -/
+theorem Arenas.operands
+    {arenas : (kind : Kind) → List (model.Value (answerType kind))}
+    {environment : Domain.Environment model.toCarriers} {kinds : List Kind}
+    {placement : AnswerReads.Placement (kinds.map answerType)}
+    (installed : Arenas model answerType arenas environment placement)
+    (indices : List Nat)
+    (read : Domain.read environment placement.indices =
+      some (indices.map (fun index ↦ Domain.Value.data (.index index)))) :
+    ArenaOperands model answerType arenas environment placement indices := by
+  induction installed generalizing indices with
+  | nil =>
+      have empty : indices = [] := by simpa [Domain.read, AnswerReads.Placement.indices] using read.symm
+      subst indices
+      exact .nil
+  | @cons kind kinds arena index rest answerData arenaRead tail ih =>
+      cases current : environment[index]? with
+      | none => simp [Domain.read, AnswerReads.Placement.indices, current] at read
+      | some value =>
+          cases remaining : Domain.read environment rest.indices with
+          | none =>
+              simp only [Domain.read] at remaining
+              simp [Domain.read, AnswerReads.Placement.indices, current, remaining] at read
+          | some values =>
+              have remainingMap := remaining
+              simp only [Domain.read] at remainingMap
+              have joined : value :: values = indices.map (fun index ↦ Domain.Value.data (.index index)) := by
+                apply Option.some.inj
+                simpa [Domain.read, AnswerReads.Placement.indices, current, remainingMap] using read
+              cases indices with
+              | nil => cases joined
+              | cons slot indices =>
+                  obtain ⟨head, restValues⟩ := List.cons.inj joined
+                  subst value
+                  subst values
+                  apply ArenaOperands.cons
+                    (by simp [Primitive.arguments, Domain.localType, Domain.dataType, Ty.isHandle, answerData])
+                    (by simp [Primitive.results, Domain.localType, Domain.dataType, answerData]) _ (ih indices remaining)
+                  simp [Domain.read, ← arenaRead, current, Domain.encodeValues_cons,
+                    Domain.encodeValues_nil, Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle]
 
 theorem ArenaOperands.readback
     {arenas : (kind : Kind) → List (model.Value (answerType kind))}

@@ -17,6 +17,15 @@ inductive Placement : List Ty → Type where
   | cons {type : Ty} {types : List Ty} (arena index : Nat) (rest : Placement types) :
       Placement (type :: types)
 
+/-- Index operands retain their occurrence order even when result types agree. -/
+def Placement.indices : {types : List Ty} → Placement types → List Nat
+  | _, .nil => []
+  | _, .cons _ index rest => index :: rest.indices
+
+@[simp] theorem Placement.indices_cast {types other : List Ty}
+    (same : types = other) (placement : Placement types) :
+    (same ▸ placement).indices = placement.indices := by cases same; rfl
+
 def Placement.instructions : {types : List Ty} → Placement types → List Construction.Instruction
   | _, .nil => []
   | type :: _, .cons arena index rest =>
@@ -66,6 +75,14 @@ inductive Readback (model : DomainModel) (environment : Domain.Environment model
         (tys := [.sequence type, .index]) (.cons records (.cons slot .nil)))
       (found : records[slot]? = some value) (tail : Readback model environment rest values) :
       Readback model environment (.cons arena index rest) (.cons value values)
+
+theorem Readback.cast {model : DomainModel} {environment : Domain.Environment model.toCarriers}
+    {types other : List Ty} (same : types = other)
+    {placement : Placement types} {values : Values model.Value types}
+    (readback : Readback model environment placement values) :
+    Readback model environment (same ▸ placement) (same ▸ values) := by
+  cases same
+  exact readback
 
 set_option backward.isDefEq.respectTransparency false in
 theorem Readback.extended {model : DomainModel} {environment : Domain.Environment model.toCarriers}

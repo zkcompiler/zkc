@@ -26,9 +26,13 @@ def placement : AnswerReads.Placement ([false, true].map answerType) :=
 def swapped : AnswerReads.Placement ([false, true].map answerType) :=
   .cons 1 2 (.cons 0 2 .nil)
 
+theorem installed (model : DomainModel) :
+    Arenas model answerType (arenas model) (environment model) placement :=
+  .cons rfl rfl (.cons rfl rfl .nil)
+
 theorem association (model : DomainModel) :
     ArenaOperands model answerType (arenas model) (environment model) placement [0, 0] :=
-  .cons rfl rfl rfl (.cons rfl rfl rfl .nil)
+  (installed model).operands [0, 0] rfl
 
 theorem stored (model : DomainModel) :
     QueryContinuation.AnswersRead (arenas model) [0, 0]
@@ -56,6 +60,13 @@ theorem swapped_arenas_refused (model : DomainModel) :
   have same := physical.unique (wrong.readback (stored model))
   have impossible : (71 : Nat) = 23 := congrArg (fun tuple ↦ tuple.get .here) same
   contradiction
+
+/-- The same swap already fails installation, before a mathematical answer law
+is considered. It cannot be repaired by the equality of result types. -/
+theorem swapped_installation_refused (model : DomainModel) :
+    ¬ Arenas model answerType (arenas model) (environment model) swapped := by
+  intro wrong
+  exact swapped_arenas_refused model (wrong.operands [0, 0] rfl)
 
 #print axioms actual
 #print axioms swapped_arenas_refused

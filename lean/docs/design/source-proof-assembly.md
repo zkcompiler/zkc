@@ -627,15 +627,26 @@ Each rule discharges a premise of the enclosing controller result:
 | --- | --- | --- |
 | Return prefix | Restore the reached parent and saved answer indices | Static continuation selection and current nominal arena membership |
 | Complete sibling | Preserve the parent association while entering the next child | Installed child reference, source position slice and static kind/continuation |
-| Parent-answer suffix | Read ordered answers, compute and insert the parent's result | Kind-specific answer readback, original answer-slice connection and restored-coordinate readback |
+| Complete parent arm | Restore coordinates, read ordered replies, compute and insert the parent's result | Kind-specific installed arenas, saved source replies and original answer-slice connection |
 
-The last row is a suffix rule. The complete parent arm must still derive its
-answer operands and restored coordinates from the saved source frame and compose
-the restoration prefix. It must not expose those generated-layout obligations as
-new companion inputs. The common source/work relation must establish every
-arm's installation premises, and dispatch and both enclosing ranges must preserve
-that relation. These remaining obligations, strict generated delivery and the
-original endpoint/authoring gates are unchanged.
+`QueryControllerParent` now composes the restoration prefix and answer suffix.
+It derives all five parent/outer coordinates and the ordered reply-index operands
+from the actual loaded frame and current header. `QueryAnswerReads.Arenas`
+retains the kind of every installed arena even when answer types agree; its
+common operand construction combines those arenas with the derived index tuple.
+The whole-arm theorem consumes the saved source replies and original answer
+calculation without requiring a protocol-specific read traversal or output proof.
+All four retained FRI parent arms admit this complete certificate. The focused
+client covers arbitrary outer coordinates, actual prior/current arena cells and
+capacity outcomes; swapped answers, wrong coordinates and same-typed arena swaps
+are rejected.
+
+The common source/work relation must still establish every arm's installation
+premises and install the complete original FRI answer calculation. Dispatch and
+both enclosing ranges must preserve that relation. Actual-arm recognition and
+specialization of the common execution theorem are not a whole-controller
+simulation. Strict generated delivery and the original endpoint/authoring gates
+remain open.
 
 ## Disposition of the revised closing review
 
