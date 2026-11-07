@@ -41,7 +41,8 @@ theorem afterRounds (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (finish : ∀ (live : Values (FriBinding.Value model) roundSite.context)
         (after : State Aux) (rounds : Rounds 5 3),
       live.get shiftPort = concrete model (.field extension) shift → live.get sizePort = concrete model .index 32 →
-      live.get countPort = concrete model .index 3 → rounds.Installed after.oracle shift → after.oracle.self = 1 →
+      live.get countPort = concrete model .index 3 → rounds.First before.oracle.provider.words after.oracle.provider.words →
+      rounds.Installed after.oracle shift → after.oracle.self = 1 →
       PIR.Process.OnReturn (CommitLoop.handler network choose) after (roundSite.next.denote
         ((verifierAlgebra model).meaning (verifierTable model) context 1)
         (Environment.prepend live.get (CommitLoop.packed 2 (rounds.endingShift shift) rounds.sources rounds.views))) post) :
@@ -57,13 +58,13 @@ theorem afterRounds (context : ProtocolContext) (receiver : context.roles 1 = 1)
   · exact entry.weaken (fun rec h live returned ↦ And.intro h.1 (h.2 live returned))
   rintro live state ⟨kept, inputs, offset, rows, count⟩
   apply PIR.Process.OnReturn.bind (middle := fun values after ↦ ∃ rounds : Rounds 5 3,
-    rounds.Installed after.oracle shift ∧ after.oracle.self = 1 ∧ values =
+    rounds.First state.oracle.provider.words after.oracle.provider.words ∧ rounds.Installed after.oracle shift ∧ after.oracle.self = 1 ∧ values =
       CommitLoop.packed 2 (rounds.endingShift shift) ([] ++ rounds.sources) ([] ++ rounds.views))
   · exact CommitLoop.installed network choose context receiver separate live.get shift nz service inputs state (kept ▸ role)
-  rintro values after ⟨rounds, stored, self, result⟩
+  rintro values after ⟨rounds, position, stored, self, result⟩
   rw [List.nil_append, List.nil_append] at result
   subst values
-  exact finish live after rounds offset rows count stored self
+  exact finish live after rounds offset rows count (by simpa only [kept] using position) stored self
 
 /-- The actual role projection of the linked protocol definition at
 this call. The two private holder inputs are absent at the receiver. -/

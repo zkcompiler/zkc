@@ -410,7 +410,12 @@ the sampler runs. The receiver executes the original mark schedule, call
 frames, binding and query wrapper. `VerifierRoot.verifier` proves that a
 return from the public verifier has its acceptance bit set and satisfies
 the mathematical path predicate for the sampled positions, with the same
-publication still installed. These are conditional return statements.
+publication still installed. The provider records each successful publication
+as a new entry in a newest-first table. Its generic suffix law preserves
+the position and contents of that entry through later changes. Starting
+with an empty provider, `VerifierRoot.sourceEvent` therefore measures
+distance on the very word published in the first send, including after
+the query loop returns. These are conditional return statements.
 For a fixed safe transcript with a far initial word, the probability that
 the actual suffix returns is at most `(1 − min(1/4, δ))^8`.
 `VerifierQueryProbability.safeFar_le` uses freshness of the eight scalar

@@ -35,6 +35,23 @@ structure Preserves (before after : Table model) : Prop where
 theorem Preserves.refl (words : Table model) : Preserves words words :=
   ⟨List.suffix_refl words, fun _ _ _ found ↦ found⟩
 
+/-- A word published at this point in the provider history. Newer
+publications may precede it in the newest-first table. -/
+def PublishedAfter (prior current : Table model) {row : Ty} (anchor : OracleAnchor) (cells : List (model.Value row)) : Prop :=
+  ∃ stored : Word model row, stored.anchor = anchor ∧ stored.cells = cells ∧ (⟨row, stored⟩ :: prior) <:+ current
+
+theorem PublishedAfter.transport {prior current later : Table model} {row : Ty} {anchor : OracleAnchor}
+    {cells : List (model.Value row)} (atSend : PublishedAfter prior current anchor cells) (frame : Preserves current later) :
+    PublishedAfter prior later anchor cells := by
+  obtain ⟨word, source, contents, order⟩ := atSend
+  exact ⟨word, source, contents, order.trans frame.order⟩
+
+theorem PublishedAfter.first {current : Table model} {row : Ty} {anchor : OracleAnchor} {cells : List (model.Value row)}
+    (atSend : PublishedAfter [] current anchor cells) :
+    ∃ stored : Word model row, stored.anchor = anchor ∧ stored.cells = cells ∧ current.getLast? = some ⟨row, stored⟩ := by
+  obtain ⟨stored, source, contents, extra, rfl⟩ := atSend
+  exact ⟨stored, source, contents, by simp⟩
+
 theorem Preserves.trans {first second third : Table model}
     (left : Preserves first second) (right : Preserves second third) : Preserves first third :=
   ⟨left.order.trans right.order, fun row anchor stored found ↦

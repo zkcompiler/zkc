@@ -139,7 +139,9 @@ theorem returnedBase (context : ProtocolContext) (receiver : context.roles 1 = 1
       ∃ word : Fin (2 ^ n) → model.Field extension,
         attempt.outcome = .returned (List.ofFn word) ∧
         Nonempty (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries result.state.oracle.self site.anchor word
-          result.state.oracle.provider) := by
+          result.state.oracle.provider) ∧
+        PublishedWords.PublishedAfter (row := .field extension) state.oracle.provider.words result.state.oracle.provider.words
+          site.anchor (List.ofFn word) := by
   let site := location state
   let req : OraclePublication.Request model := request context (2 ^ n) site
   dsimp only
@@ -163,9 +165,14 @@ theorem returnedBase (context : ProtocolContext) (receiver : context.roles 1 = 1
       let Live (pub : PIR.Execution (PublishedWords.State model Aux) E Unit) : Prop :=
         let result := OraclePublication.complete state (candidate context (2 ^ n) state) pub
         Nonempty (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries result.state.oracle.self site.anchor word
-          result.state.oracle.provider)
+          result.state.oracle.provider) ∧
+          PublishedWords.PublishedAfter (row := .field extension) state.oracle.provider.words result.state.oracle.provider.words
+            site.anchor (List.ofFn word)
       change Live (PublishedWords.finish req state.oracle.provider proposed)
       apply (congrArg Live installed).mpr
+      constructor
+      swap
+      · exact ⟨PublishedWords.word req cells, rfl, canonical.symm, List.suffix_refl _⟩
       refine ⟨{ registry := ⟨site.anchor, 2 ^ n, context.roles 0, [context.roles 1], .base none⟩
                 lookup := ?_, data := none, base := rfl, visible := ?_, registryRows := rfl,
                 stored := PublishedWords.word req cells, found := ?_, answer := rfl,
@@ -206,7 +213,9 @@ private theorem alignedRegistration (context : ProtocolContext) (receiver : cont
       reply = .cons (OracleProtocol.concrete model (.oracle kind) source) .nil ∧
       result.state.oracle.self = 1 ∧ ∃ word : Fin (2 ^ n) → model.Field extension, Nonempty
         (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries
-          result.state.oracle.self source word result.state.oracle.provider))
+          result.state.oracle.self source word result.state.oracle.provider) ∧
+        PublishedWords.PublishedAfter (row := .field extension) state.oracle.provider.words result.state.oracle.provider.words
+          source (List.ofFn word))
       (PublishedWords.actionM oracles network choose (sendRequest context (2 ^ n)) state) := by
   dsimp only
   rw [send oracles network choose context receiver separate _ bounded state role atDef atRow fresh]
@@ -258,7 +267,9 @@ theorem sendRegisters (context : ProtocolContext) (receiver : context.roles 1 = 
       reply = .cons (OracleProtocol.concrete model (.oracle kind) source) .nil ∧ result.state.oracle.self = 1 ∧
       ∃ word : Fin (2 ^ n) → model.Field extension, Nonempty
         (PublishedWords.RegisteredWord (row := .field extension) result.state.oracle.entries
-          result.state.oracle.self source word result.state.oracle.provider))
+          result.state.oracle.self source word result.state.oracle.provider) ∧
+        PublishedWords.PublishedAfter (row := .field extension) state.oracle.provider.words result.state.oracle.provider.words
+          source (List.ofFn word))
       (PublishedWords.actionM oracles network choose (sendRequest context (2 ^ n)) state) := by
   by_cases valid : (registrySite 0).definition = state.frame.definition ∧ (registrySite 0).row = state.frame.row ∧
     OracleStore.hasAnchor state.oracle.entries (location state).anchor = false

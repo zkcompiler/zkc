@@ -32,6 +32,12 @@ def Rounds.views : {n r : Nat} → Rounds n r → List OracleAnchor
   | _, _, .empty _ => []
   | _, _, .fold _ view _ _ tail => view :: tail.views
 
+/-- Location of the first word published by this suffix of the repeat. -/
+def Rounds.First (prior current : PublishedWords.Table model) : {n r : Nat} → Rounds n r → Prop
+  | _, _, .empty _ => True
+  | _, _, .fold source _ word _ _ =>
+    PublishedWords.PublishedAfter (row := .field extension) prior current source (List.ofFn word)
+
 def Rounds.Installed {Aux : Type} (store : Store Aux) : {n r : Nat} → Rounds n r → Octic → Prop
   | _, _, .empty _, _ => True
   | _, _, .fold source view word beta tail, shift =>
@@ -80,9 +86,9 @@ noncomputable abbrev callback (context : ProtocolContext) (service : Nat) :=
     context 1 (captures service)
 
 def Returned {Aux : Type} (n r : Nat) (shift : Octic) (layers folds : List OracleAnchor)
-    (out : PIR.Outcome LoopState) (store : Store Aux) : Prop :=
+    (prior : PublishedWords.Table model) (out : PIR.Outcome LoopState) (store : Store Aux) : Prop :=
   ∀ values, out = .returned values → ∃ rounds : Rounds (n + r) r,
-    rounds.Installed store shift ∧ store.self = 1 ∧ values =
+    rounds.First prior store.provider.words ∧ rounds.Installed store shift ∧ store.self = 1 ∧ values =
       packed n (rounds.endingShift shift) (layers ++ rounds.sources) (folds ++ rounds.views)
 
 variable {M : Type → Type} [Monad M] [LawfulMonad M] {Aux E : Type}
@@ -94,27 +100,27 @@ abbrev State (Aux : Type) :=
 abbrev handler := PublishedWords.actionM checkedUnit.oracles network choose
 
 set_option maxRecDepth 6000 in
-private theorem callbackReturns (context : ProtocolContext) (receiver : context.roles 1 = 1)
+private theorem callbackReturns [MonadAttach M] [LawfulMonadAttach M] (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (separate : 1 ≠ context.roles 0) (step n : Nat) (bound : n + 1 ≤ 5) (shift : Octic) (nz : shift ≠ 0)
     (layers folds : List OracleAnchor) (service : Nat) (before : State Aux) (role : before.oracle.self = 1) :
-    Ensures (fun rec ↦ CommitIteration.Completed n shift layers folds rec.outcome rec.state.oracle)
+    Ensures (fun rec ↦ CommitIteration.Completed n shift layers folds before.oracle.provider.words rec.outcome rec.state.oracle)
       ((callback context service (packed (n + 1) shift layers folds) step).runM (handler network choose) before) := by
   unfold callback Bindings.RepeatSite.maskedIteration
   dsimp only
   rw [mask context receiver, PIR.runM_bind]
-  refine Ensures.bind (P := fun rec ↦ CommitIteration.Completed n shift layers folds rec.outcome rec.state.oracle) ?_ ?_
+  refine Ensures.bind (P := fun rec ↦ CommitIteration.Completed n shift layers folds before.oracle.provider.words rec.outcome rec.state.oracle) ?_ ?_
   · apply OraclePublication.iterationOutcomes checkedUnit.oracles (PublishedWords.liftM network) PublishedWords.readM
       (PublishedWords.publishM choose) roundSite.site step
       (FriCommitRound.iteration model context step (CommitCaptures.roundState n shift layers folds service))
-      (CommitIteration.Completed n shift layers folds) (fun _ _ eq ↦ by cases eq) before
+      (CommitIteration.Completed n shift layers folds before.oracle.provider.words) (fun _ _ eq ↦ by cases eq) before
     intro state same
-    exact CommitIteration.installed network choose context receiver separate step n bound shift nz layers folds service
+    simpa only [same, PublishedWords.actionM] using CommitIteration.installed network choose context receiver separate step n bound shift nz layers folds service
       state (same ▸ role)
   · rintro ⟨out, after, events⟩ completed
     cases out with
     | stopped why => exact Zkc.MonadicPostcondition.pure _ _ (fun _ eq ↦ by cases eq)
     | returned values =>
-      obtain ⟨source, word, beta, view, rfl, who, virtual, live⟩ := completed values rfl
+      obtain ⟨source, word, beta, position, view, rfl, who, virtual, live⟩ := completed values rfl
       simp only [PIR.Execution.followM, PIR.Process.runM, pure_bind]
       apply Zkc.MonadicPostcondition.pure
       intro out eq
@@ -122,7 +128,7 @@ private theorem callbackReturns (context : ProtocolContext) (receiver : context.
       change PIR.Outcome.returned (maskValues 1 _ (packed n (shift ^ 2) (layers ++ [source]) (folds ++ [view]))) = _ at eq
       rw [same] at eq
       cases eq
-      exact ⟨source, word, beta, view, rfl, who, virtual, live⟩
+      exact ⟨source, word, beta, position, view, rfl, who, virtual, live⟩
 
 /-- At any reached suffix of the installed repeat, all earlier base and
 virtual handles survive the later iterations under the same participant.
@@ -131,7 +137,7 @@ theorem fromStep [MonadAttach M] [LawfulMonadAttach M]
     (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
     (n r step : Nat) (bound : n + r ≤ 5) (shift : Octic) (nz : shift ≠ 0)
     (layers folds : List OracleAnchor) (service : Nat) (before : State Aux) (role : before.oracle.self = 1) :
-    Ensures (fun rec ↦ Returned n r shift layers folds rec.outcome rec.state.oracle)
+    Ensures (fun rec ↦ Returned n r shift layers folds before.oracle.provider.words rec.outcome rec.state.oracle)
       ((Finite.fold (callback context service) (List.range' step r)
         (packed (n+r) shift layers folds)).runM (handler network choose) before) := by
   induction r generalizing step shift layers folds before with
@@ -139,16 +145,16 @@ theorem fromStep [MonadAttach M] [LawfulMonadAttach M]
     apply Zkc.MonadicPostcondition.pure
     intro values eq
     cases eq
-    exact ⟨.empty n, trivial, role, by simp [Rounds.endingShift, Rounds.sources, Rounds.views]⟩
+    exact ⟨.empty n, trivial, trivial, role, by simp [Rounds.endingShift, Rounds.sources, Rounds.views]⟩
   | succ r ih =>
     rw [List.range'_succ, Finite.fold, PIR.runM_bind]
-    refine Ensures.bind (P := fun rec ↦ CommitIteration.Completed (n+r) shift layers folds rec.outcome rec.state.oracle)
+    refine Ensures.bind (P := fun rec ↦ CommitIteration.Completed (n+r) shift layers folds before.oracle.provider.words rec.outcome rec.state.oracle)
       (callbackReturns network choose context receiver separate step (n+r) bound shift nz layers folds service before role) ?_
     rintro ⟨out, after, events⟩ completed
     cases out with
     | stopped why => exact Zkc.MonadicPostcondition.pure _ _ (fun _ eq ↦ by cases eq)
     | returned values =>
-      obtain ⟨source, word, beta, view, rfl, who, ⟨virtual⟩, ⟨parent⟩⟩ := completed values rfl
+      obtain ⟨source, word, beta, position, view, rfl, who, ⟨virtual⟩, ⟨parent⟩⟩ := completed values rfl
       simp only [PIR.Execution.followM]
       have tail := ih (step + 1) (by omega) (shift ^ 2) (pow_ne_zero _ nz)
         (layers ++ [source]) (folds ++ [view]) after who
@@ -157,8 +163,8 @@ theorem fromStep [MonadAttach M] [LawfulMonadAttach M]
           (packed (n+r) (shift ^ 2) (layers ++ [source]) (folds ++ [view]))) after
       apply Zkc.MonadicPostcondition.map (Zkc.MonadicPostcondition.conjunction tail frame)
       intro result both values returned
-      obtain ⟨later, live, role, state⟩ := both.1 values returned
-      exact ⟨.fold source view word beta later,
+      obtain ⟨later, _, live, role, state⟩ := both.1 values returned
+      exact ⟨.fold source view word beta later, position.transport both.2.words,
         ⟨parent.transport both.2, virtual.transport both.2, live⟩, role, by
           simpa only [Rounds.endingShift, Rounds.sources, Rounds.views, List.append_assoc, List.singleton_append]
             using state⟩
@@ -171,7 +177,7 @@ theorem installed [MonadAttach M] [LawfulMonadAttach M]
     (inputs : Operands.eval env roundSite.operands = .cons (concrete model .index 3)
       ((packed 5 shift [] []).append (captures service)))
     (before : State Aux) (role : before.oracle.self = 1) :
-    Ensures (fun rec ↦ Returned 2 3 shift [] [] rec.outcome rec.state.oracle)
+    Ensures (fun rec ↦ Returned 2 3 shift [] [] before.oracle.provider.words rec.outcome rec.state.oracle)
       ((roundSite.iterations ((FriSource.verifierAlgebra model).meaning (FriSource.verifierTable model) context 1)
         env).runM (handler network choose) before) := by
   rw [roundSite.maskedIterations (FriSource.verifierAlgebra model) (FriSource.verifierTable model) context 1 env

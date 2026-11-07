@@ -380,7 +380,7 @@ run_cmd (ZkcTools.DeclarationAudit.check
   "FRI-VERIFIER-CELLS-AND-ROUNDS-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check
-  [`Zkc.Source.RegionSelection, `ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitGeometry,
+  [`Zkc.Source.Structured.PublishedWordsLaws, `Zkc.Source.RegionSelection, `ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitGeometry,
    `Zkc.Semantics.ReturnedPostcondition, `ZkcExamples.Structured.FriCommitAdmission,
    `ZkcArkLibExamples.Fri.CommitDomain, `ZkcArkLibExamples.Fri.CommitIngress, `ZkcArkLibExamples.Fri.CommitBody,
    `ZkcArkLibExamples.Fri.BinaryDomain, `ZkcArkLibExamples.Fri.CommitCaptures, `ZkcArkLibExamples.Fri.CommitDelivery,

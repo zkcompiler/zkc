@@ -146,16 +146,27 @@ theorem afterCommit (pub : Publication) (shift : Octic) (nonzero : shift ≠ 0) 
 theorem program (shift : Octic) (nonzero : shift ≠ 0) (service : Nat)
     (before : State Aux) (role : before.oracle.self = 1) :
     PIR.Process.OnReturn (handler network choose) before (FriLowDegreeCall.program model shift 3 8 service)
-      (fun out after ↦ ∃ pub : Publication, Checked pub shift out after.oracle) := by
+      (fun out after ↦ ∃ pub : Publication, Checked pub shift out after.oracle ∧
+        pub.rounds.First before.oracle.provider.words after.oracle.provider.words) := by
   unfold FriLowDegreeCall.program
-  apply PIR.Process.OnReturn.bind (middle := fun out after ↦ CommitReturn.Result shift out after.oracle)
-  · apply Caller.callReturns sourceOracles sourceNetwork sourceReads sourcePublisher (caller := caller) (selected := FriSourceCalls.commitment) (post := CommitReturn.Result shift)
+  apply PIR.Process.OnReturn.bind (middle := fun out after ↦ CommitReturn.Result before.oracle.provider.words shift out after.oracle)
+  · apply Caller.callReturns sourceOracles sourceNetwork sourceReads sourcePublisher (caller := caller) (selected := FriSourceCalls.commitment) (post := CommitReturn.Result before.oracle.provider.words shift)
     intro entered same
-    exact CommitReturn.installed network choose (FriSourceCalls.commitment.childContext caller.context)
+    have occurrence := CommitReturn.installed network choose (FriSourceCalls.commitment.childContext caller.context)
       rfl (by decide) shift nonzero service entered (same ▸ role)
-  · rintro _ current ⟨pub, rfl, live, who⟩
-    exact (afterCommit network choose pub shift nonzero service current who live).weaken fun _ law out returned ↦
-      ⟨pub, law out returned⟩
+    exact occurrence.weaken fun _ h out returned ↦ by simpa only [same] using h out returned
+  · rintro _ current ⟨pub, rfl, first, live, who⟩
+    apply (PublishedWords.withPublicationFrame sourceOracles network choose
+      (afterCommit network choose pub shift nonzero service current who live)).weaken
+    intro record law out returned
+    obtain ⟨checked, frame⟩ := law out returned
+    exact ⟨pub, checked, PublishedWords.PublishedAfter.transport first frame.words⟩
+
+/-- The last entry of the newest-first table is the word of the first
+source publication. It can be observed from the final record alone. -/
+def FirstWord (pub : Publication) (store : CommitIteration.Store Aux) : Prop :=
+  ∃ stored : PublishedWords.Word model (.field extension), stored.anchor = pub.source ∧
+    stored.cells = List.ofFn pub.word ∧ store.provider.words.getLast? = some ⟨.field extension, stored⟩
 
 /-- The original verifier returns its actual acceptance bit. Its intermediate
 output binds the three installed folds to the eight sampled positions; the
@@ -163,7 +174,7 @@ public entry exposes only the boolean. This law permits early stops. -/
 theorem verifier (shift : Octic) (nonzero : shift ≠ 0) (service : Nat) (auxiliary : Aux) :
     Std.Do.Internal.Ensures (fun record ↦ ∀ out, record.outcome = .returned out →
       out = Values.cons (concrete model .boolean true) .nil ∧
-      ∃ (pub : Publication) (xs : Fin 8 → Fin 32), accepts pub shift xs = true ∧ pub.rounds.Installed record.state.oracle shift)
+      ∃ (pub : Publication) (xs : Fin 8 → Fin 32), accepts pub shift xs = true ∧ pub.rounds.Installed record.state.oracle shift ∧ FirstWord pub record.state.oracle)
       (FriSource.verifier shift 3 8 service auxiliary network choose) := by
   erw [FriLowDegreeCall.verifier model shift 3 8 service auxiliary network choose]
   let initial := (start (model := model) 1 [] shift 3 8 service auxiliary).state
@@ -171,16 +182,41 @@ theorem verifier (shift : Octic) (nonzero : shift ≠ 0) (service : Nat) (auxili
     .done (maskValues 1 (lowDegreeContext.mapScopes protocol5Signature.outputScopes) values)
   have parent := ReceiverForwarding.atApplication sourceOracles sourceNetwork sourceReads sourcePublisher initial
     [(rootSite.site, rootSite.site)] protocol5Signature rootSite.site low
-    (fun values store ↦ ∃ pub : Publication, Checked pub shift values store) (by
+    (fun values store ↦ ∃ pub : Publication, Checked pub shift values store ∧ FirstWord pub store) (by
       intro entered aligned
       apply PIR.Process.OnReturn.bind (head := program network choose shift nonzero service entered (aligned ▸ rfl))
-      rintro _ after ⟨pub, xs, ok, rfl, reg⟩
-      exact PIR.Process.OnReturn.done ⟨pub, xs, ok, rfl, reg⟩)
+      rintro _ after ⟨pub, ⟨xs, ok, rfl, reg⟩, position⟩
+      have empty : entered.oracle.provider.words = [] := aligned ▸ rfl
+      rw [empty] at position
+      exact PIR.Process.OnReturn.done ⟨pub, ⟨xs, ok, rfl, reg⟩, PublishedWords.PublishedAfter.first position⟩)
   apply PIR.Process.OnReturn.bind (head := parent)
     (next := fun out ↦ .done (maskValues 1 runSignature.outputScopes (.cons (out.get .here) .nil)))
     (post := fun out (state : State Aux) ↦ out = Values.cons (concrete model .boolean true) .nil ∧
-      ∃ (pub : Publication) (xs : Fin 8 → Fin 32), accepts pub shift xs = true ∧ pub.rounds.Installed state.oracle shift)
-  rintro _ after ⟨pub, xs, ok, rfl, reg⟩
-  exact PIR.Process.OnReturn.done ⟨rfl, pub, xs, ok, reg⟩
+      ∃ (pub : Publication) (xs : Fin 8 → Fin 32), accepts pub shift xs = true ∧ pub.rounds.Installed state.oracle shift ∧ FirstWord pub state.oracle)
+  rintro _ after ⟨pub, ⟨xs, ok, rfl, reg⟩, first⟩
+  exact PIR.Process.OnReturn.done ⟨rfl, pub, xs, ok, reg, first⟩
+
+/-- The observable far-word event on a whole execution uses the same word
+as its mathematical path. Reading a later publication cannot establish it. -/
+theorem sourceEvent (shift : Octic) (nonzero : shift ≠ 0) (δ : ℝ) (service : Nat) (auxiliary : Aux) :
+    Std.Do.Internal.Ensures (fun record ↦ RetainedDomain.sourceEvent shift nonzero δ record →
+      ∃ (pub : Publication) (xs : Fin 8 → Fin 32), FirstWord pub record.state.oracle ∧
+        Far (RetainedDomain.domain shift nonzero) 8 δ pub.word ∧ accepts pub shift xs = true ∧
+        pub.rounds.Installed record.state.oracle shift)
+      (FriSource.verifier shift 3 8 service auxiliary network choose) := by
+  apply (verifier network choose shift nonzero service auxiliary).weaken
+  intro record law event
+  cases out : record.outcome with
+  | stopped why => exact (RetainedDomain.sourceEvent_stopped out event).elim
+  | returned values =>
+    obtain ⟨_, pub, xs, ok, reg, first⟩ := law values out
+    obtain ⟨stored, _, storedCells, last⟩ := (show FirstWord pub record.state.oracle from first)
+    obtain ⟨_, other, last', word, otherCells, far⟩ := event
+    have same : stored = other := by
+      have tagged := Option.some.inj (last.symm.trans last')
+      cases tagged
+      rfl
+    have words : pub.word = word := List.ofFn_inj.mp (storedCells.symm.trans (same ▸ otherCells))
+    exact ⟨pub, xs, first, words ▸ far, ok, reg⟩
 
 end ZkcSecurity.ArkLib.Fri.VerifierRoot
