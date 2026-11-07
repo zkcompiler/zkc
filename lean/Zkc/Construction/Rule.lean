@@ -213,6 +213,31 @@ def localServiceValid (context : Context) (self : Nat) (sorts : List ValueSort) 
     coordinates.all (fun reference => sorts[reference]? == some (.data .index)) &&
     template.repeats == coordinates.length
 
+/-- A repeat may carry only local values when it leaves the transcript outside
+its result ABI. The body still receives the actual protocol induction, so local
+service occurrences retain their ancestry. Both participant checkers use this
+formation rule. -/
+def localLoopInput (state : CheckState) (count : Nat) (initial : List Nat)
+    (results : List ValueSort) : Except String CheckState :=
+  if state.pending = .none ∧ state.sorts[count]? = some (.data .index) ∧
+      initial.map (state.sorts[·]?) = results.map some ∧
+      initial.all (fun operand => isLocalValue state.sorts[operand]?) ∧
+      results.all (fun result => isLocalValue (some result)) then
+    .ok { state with
+      sorts := state.sorts ++ .data .index :: results
+      inductions := state.inductions ++ [state.sorts.length] }
+  else .error "construction-local-loop"
+
+/-- A local-only carry cannot lose a new transcript, leave a pending message,
+or claim a challenge inside a repeat whose transcript is not returned. Body-local
+coordinates do not escape to the surrounding frame. -/
+def localLoopOutput (state final : CheckState) (results : List ValueSort)
+    (yielded : List Nat) : Except String CheckState :=
+  if final.pending = .none ∧ final.current = state.current ∧ final.seen = state.seen ∧
+      yielded.map (final.sorts[·]?) = results.map some then
+    .ok { state with sorts := state.sorts ++ results }
+  else .error "construction-local-loop-yield"
+
 mutual
 def checkFrom (context : Context) : CheckState → List Instruction → Except String CheckState
   | state, [] => .ok state
@@ -224,9 +249,10 @@ def checkFrom (context : Context) : CheckState → List Instruction → Except S
 occurrence. A challenge needs no pending observation, consumes the current
 state, carries a selected query occurrence, and its delivery is observed next.
 Calculations and guards read ordinary data; helper calls also carry local
-custody. These steps may separate a challenge from its delivery. A loop carries the current transcript exactly once,
-starts and ends its body with nothing pending, and yields its final state.
-Every other operation refuses. -/
+custody. These steps may separate a challenge from its delivery. A loop either
+carries the current transcript exactly once and yields its final state, or has
+only local carried values and leaves the transcript and challenges unchanged.
+Both cases start and finish with nothing pending. Every other operation refuses. -/
 def checkStep (context : Context) (state : CheckState) : Instruction → Except String CheckState
   | ⟨.localService port request template coordinates, operands, results, []⟩ =>
       match state.pending with
@@ -359,7 +385,10 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
                 else .error "construction-loop-yield"
             | .error error => .error error
           else .error "construction-loop"
-      | .none, none => .error "construction-loop-transcript"
+      | .none, none => do
+          let input ← localLoopInput state count initial results
+          let final ← checkFrom context input body
+          localLoopOutput state final results yielded
       | _, _ => .error "construction-pending"
   | ⟨.send .., _, _, _⟩ => .error "construction-send"
   | ⟨.unsupported _, _, _, _⟩ => .error "construction-unsupported"

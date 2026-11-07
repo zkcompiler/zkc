@@ -266,10 +266,13 @@ already challenged. It accepts exactly when:
   and its template has one repeat step for each;
 - a calculation, helper call or guard has no received message pending and reads
   data only; it may separate a challenge from its delivery;
-- a loop has nothing pending, carries the current transcript exactly once and
-  data otherwise, checks its body from the block's transcript argument with
-  nothing pending, and its body ends with nothing pending and yields its final
-  state at the same position;
+- a loop has nothing pending. When it carries the transcript, it carries it
+  exactly once with local values otherwise, checks the body from that block
+  argument, and yields the final transcript at the same position. A loop carrying
+  only local values must leave the current transcript and challenged-site set
+  unchanged. Both forms check the complete body, including nested repeats, with
+  the actual induction ancestry and exact yields, and end with nothing pending.
+  The same local-carry boundary serves producer and validator;
 - every other operation, including sends and unsupported ones, is refused;
 - the selected query sites are distinct and each is challenged, nothing remains
   pending, the last returned value is the final state, and the other returned

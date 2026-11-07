@@ -65,10 +65,12 @@ against the original domain and callback definitions. The export renders as a
 complete instruction tree with no unsupported operations. Checked scalar and
 immutable sequence operations use the shared structured evaluator. Their nominal
 element types, out-of-range refusal and distinction from total mathematical
-operations remain explicit. This rendering result is not full formal admission:
-the actual participant currently encounters `construction-loop-transcript` on a
-loop without a carried transcript. Source occurrence admission and the complete
-clear-store execution correspondence remain required. Natural field constants use
+operations remain explicit. The actual participant passes `checkExport` in the
+kernel, including the shared loop rule for local carries that leave the transcript
+unchanged. This is construction formation only: `checkCompiled` still refuses
+`construction-source-occurrence` because the generated clear-delivery event is not
+an ordinary authored exchange. Its association to the original oracle publication
+and the complete clear-store execution correspondence remain required. Natural field constants use
 the exact nominal field's catalogue characteristic.
 
 The executable-byte reader separately requires support for the nominal
