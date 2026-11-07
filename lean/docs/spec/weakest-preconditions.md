@@ -133,7 +133,10 @@ finds that a reduced dependent source restriction fails generic specification
 matching on 4.35 and succeeds on 4.36-rc1. The actual Sumcheck terminal's existing
 decision equation composes through `vcgen` on 4.35; complete FRI assembly through
 that engine remains unvalidated. The common `derive_oracle_returns` constructor
-currently selects typed rules for the actual FRI reply region and independent
-new components, including deriving their ordered return layout. These are
+currently selects typed rules for the actual FRI reply and Check admission
+regions and independent new components, including deriving their ordered return
+layout and projected loop operands. Candidate selection checks judgment and
+operation identity before semantic unification; kernel checking validates the
+complete selected law. These are
 proofs about the existing execution. Neither tactic choice establishes totality,
 source/realization correspondence or a toolchain migration.

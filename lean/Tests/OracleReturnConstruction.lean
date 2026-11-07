@@ -37,6 +37,8 @@ def stopped : Region protocolDialect [] [.index] :=
 
 def newHelper : Helper := ⟨"new_checked_component", .local, [.index], [.index]⟩
 
+def otherHelper : Helper := ⟨"another_checked_component", .local, [.index], [.index]⟩
+
 def helperClient (owner : Nat) : Region protocolDialect [.index] [.index, .index] :=
   .letOp (.localCall newHelper rfl owner "compute") (.cons .here .nil) .nil
   (.letOp (.calculate (.indexConstant 7) rfl) .nil .nil
@@ -104,6 +106,39 @@ theorem helperClient_spec (active : context.roles owner = self) (input output : 
   derive_oracle_returns [mathematics]
   exact ⟨by assumption, of_decide_eq_true (by assumption), rfl⟩
 
+/-- An existing operation contract uses the same constructor at a projected
+return boundary. The companion supplies no traversal or caller-frame proof. -/
+theorem helperProjection_spec (input : Nat)
+    (law : ((OracleProtocol.algebra model self ordinary helpers).meaning table context self).OperationLaw
+      (fun action ↦ .call action .done) (.localCall newHelper rfl owner "compute")
+      (.cons (concrete model .index input) .nil) .nil
+      (.done (.cons (concrete model .index 7) .nil))) :
+    Region.ReturnsProjection (OraclePublication.actionM model oracles ordinaryHandler base publish)
+      (fun state ↦ state.oracle = original)
+      ((OracleProtocol.algebra model self ordinary helpers).meaning table context self)
+      (helperClient owner) (Values.cons (concrete model .index input) .nil).get
+      (fun out ↦ out.get .here) (concrete model .index input) := by
+  derive_oracle_returns [law]
+
+/-- Candidate selection rejects an unrelated same-typed helper contract.
+This is a proof-construction control; it is not an execution refusal. -/
+theorem helper_selection (input : Nat)
+    (_unrelated : ((OracleProtocol.algebra model self ordinary helpers).meaning table context self).OperationLaw
+      (fun action ↦ .call action .done) (.localCall otherHelper rfl owner "compute")
+      (.cons (concrete model .index input) .nil) .nil
+      (.done (.cons (concrete model .index 9) .nil)))
+    (law : ((OracleProtocol.algebra model self ordinary helpers).meaning table context self).OperationLaw
+      (fun action ↦ .call action .done) (.localCall newHelper rfl owner "compute")
+      (.cons (concrete model .index input) .nil) .nil
+      (.done (.cons (concrete model .index 7) .nil))) :
+    Region.ReturnsProjection (OraclePublication.actionM model oracles ordinaryHandler base publish)
+      (fun state ↦ state.oracle = original)
+      ((OracleProtocol.algebra model self ordinary helpers).meaning table context self)
+      (helperClient owner) (Values.cons (concrete model .index input) .nil).get
+      (fun out ↦ out.get .here) (concrete model .index input) := by
+  fail_if_success derive_oracle_returns [_unrelated]
+  derive_oracle_returns [_unrelated, law]
+
 /-- On every actual returned record, exchanging the two same-typed result
 ports violates the proved association. Stops retain their ordinary meaning. -/
 theorem wrong_result_order (active : context.roles owner = self)
@@ -126,6 +161,8 @@ theorem wrong_result_order (active : context.roles owner = self)
 #print axioms guarded_spec
 #print axioms twoChecks_spec
 #print axioms stopped_spec
+#print axioms helper_selection
+#print axioms helperProjection_spec
 #print axioms helperClient_spec
 #print axioms wrong_result_order
 end Tests.OracleReturnConstruction

@@ -1,9 +1,9 @@
 module
 
 public import ZkcExamples.Structured.FriPeeledQuery
-public import Zkc.Source.RegionReturnProjection
+public import Zkc.Source.Structured.OracleReturnConstruction
 public import Zkc.Source.Structured.ReceiverMetadata
-public meta import Zkc.Source.RegionReturnProjection
+public meta import Zkc.Source.Structured.OracleReturnConstruction
 public meta import ZkcExamples.Structured.FriCheckPositions
 public meta import ZkcTools.StructuredSource.Bindings.CheckedCallback
 
@@ -122,45 +122,26 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
       admissionBody (arguments handles shift cs xs).get (fun live ↦ Operands.eval live.get querySite.operands)
       (selected handles shift cs xs) := by
   have short : cs.length < indexLimit := one ▸ (by decide)
-  have coeff : OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper0Helper
+  have coeff : OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper0Helper
       (.cons (concrete model (.vector extension) cs) .nil) = .done (.cons (concrete model .index 1) .nil) := by
-    rw [receiver]
     simpa only [one] using (FriIndexCollections.coefficientLength model cs).trans (ite_eq_left short)
-  have disabled : OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper29Helper
+  have disabled : OracleProtocol.owned model 1 1 (FriIndexCollections.helpers model) helper29Helper
       (.cons (concrete model .boolean false) (.cons (concrete model (.vector extension) [])
         (.cons (concrete model .index 8) .nil))) = .done (.cons (concrete model .boolean true) .nil) := by
-    rw [receiver]; exact associationStep
-  repeat' first
-    | (project_step ProtocolOp.mark
-       apply PIR.Process.ReturnsUnder.call
-       exact ReceiverForwarding.mark oracles ordinary base publish original _ _
-       apply PIR.Process.ReturnsUnder.done)
-    | (project_step ProtocolOp.oracle [OracleOp.input]
-       with_unfolding_all apply ReceiverForwarding.inputAt role <;> first | exact separate | simp [receiver])
-    | (project_step ProtocolOp.oracle [OracleOp.sequenceLength]
-       apply lengthThree oracles ordinary base publish original role _
-       first | exact layers | exact folds)
-    | (project_step ProtocolOp.oracle [OracleOp.shape]
-       exact rows32 oracles ordinary base publish original role handles.initial table lookup visible size)
-    | (project_step ProtocolOp.guard
-       apply Region.returnsOfLaw; apply OracleProtocol.guardTrue model)
-    | (project_step ProtocolOp.localCall
-       first
-       | exact PIR.Process.ReturnsUnder.ofEquation coeff (.done _)
-       | exact PIR.Process.ReturnsUnder.ofEquation disabled (.done _)
-       | (apply Region.returnsOfLaw
-          first | apply lengthStep model context receiver xs eight | apply FriQueryCall.emptyStep model context receiver))
-    | (project_step ProtocolOp.calculate [Op.invoke]
-       first
-       | exact PIR.Process.ReturnsUnder.ofEquation dimensionsStep (.done _)
-       | exact PIR.Process.ReturnsUnder.ofEquation (FriPeeledQuery.sizeProjection shift 32) (.done _))
-    | (project_step ProtocolOp.calculate [Op.indexEqual]
-       apply Region.returnsOfLaw; exact OracleProtocol.equalIndex model _)
-    | (project_step ProtocolOp.calculate [Op.indexWrappingSubtract]
-       apply Region.returnsOfLaw
-       exact subtractOne context)
-    | (project_step ProtocolOp.calculate [Op.indexConstant]
-       apply PIR.Process.ReturnsUnder.done)
-  apply Region.ReturnsProjection.ret
+    exact associationStep
+  have inputs {location : OracleLocation} {sort : OracleLogicalSort}
+      {anchors : model.Value sort.type} {bounds : List (String × Nat)} :=
+    ReceiverForwarding.inputAt (oracles := oracles) (ordinary := ordinary) (base := base)
+      (publish := publish) (location := location) (sort := sort) (anchors := anchors)
+      (bounds := bounds) (roles := context.roles) (receivers := [1]) role separate
+      (by simp [receiver])
+  have lengths {location : OracleLocation} {roles : Nat → Nat} :=
+    lengthThree oracles ordinary base publish original (location := location) (roles := roles) role
+  have geometry {location : OracleLocation} {roles : Nat → Nat} :=
+    rows32 oracles ordinary base publish original (location := location) (roles := roles)
+      role handles.initial table lookup visible size
+  derive_oracle_returns [inputs, lengths, layers, folds, geometry, coeff, disabled,
+    lengthStep model context receiver xs eight, FriQueryCall.emptyStep model context receiver,
+    dimensionsStep, FriPeeledQuery.sizeProjection shift 32, subtractOne context]
 
 end ZkcExamples.Structured.FriCheckAdmission

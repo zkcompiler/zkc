@@ -9,7 +9,9 @@ not by itself remove an author's traversal of a new source body.
 restrictions, comparisons, guards, assembly and oracle operations. It now uses
 the common `derive_oracle_returns` constructor. Its remaining premises describe
 the length helper, provider associations and the mathematical output relation.
-This closes that suffix's traversal gap; the complete FRI endpoint and general
+The actual Check admission prefix now uses the same constructor, retaining its
+original mathematical and provider premises and projected loop operands. These
+two migrations close their traversal gaps; the complete FRI endpoint and general
 authoring acceptance remain separate requirements.
 
 ## Boundaries of an author's contribution
@@ -107,6 +109,16 @@ derive_oracle_returns [helperLaw, publicationLaw]
 -- Prove the mathematical consequence of the learned conditions and outputs.
 ```
 
+`OperationFacts` filters supplied facts by judgment, typed source operation and
+request identity before attempting semantic unification. It then uses ordinary
+Lean theorem application and bounded premise search. These keys only select a
+candidate: the complete law, arguments, captured meaning and expected reply must
+still type-check. Malformed fact terms and resource failures remain errors.
+The constructor reduces an explicit index constant directly; it does not try to
+execute an arbitrary installed mathematical helper while looking for a return
+rule. Existing operation laws and fixed-reply equations have adapters into the
+same return construction.
+
 The common return projection follows typed references through explicit result
 prefixes and leaves an unknown caller frame opaque. It reconstructs the actual
 ordered output tuple by kernel-checked conversion. The FRI author no longer
@@ -125,7 +137,10 @@ independently of its source site. None imports FRI or Sumcheck or adds a source
 visitor. A semantic theorem excludes exchanging two same-typed output ports.
 These tests demonstrate new structural assembly; the helper equation is an
 explicit premise, not a newly proved mathematical result. The actual FRI
-consumer supplies its already proved helper and provider laws.
+consumers supply their already proved helper and provider laws. A projected-return
+control also rejects an unrelated same-typed helper law during construction, then
+succeeds with the correct law. This is an installation control, distinct from the
+semantic result-swap control.
 
 ## Upstream reuse and one author interface
 

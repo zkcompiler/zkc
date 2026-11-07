@@ -4,7 +4,7 @@ public import Zkc.Source.RegionReturnProjection
 public import Zkc.Source.Structured.ReceiverMetadata
 public import Zkc.Source.Structured.OracleQueryDerivation
 public meta import Zkc.Source.RegionReturnProjection
-public meta import Lean.Elab.Tactic
+public meta import Zkc.Source.OperationFacts
 
 @[expose] public section
 
@@ -50,7 +50,7 @@ end Zkc.Source.Structured.OracleProtocol
 /-- The supplied laws are facts, not a source traversal. Structural source
 operations use their common semantics; checked operations introduce their
 successful condition before constructing the continuation. -/
-macro "derive_oracle_returns" "[" laws:Lean.Parser.Tactic.SolveByElim.arg,* "]" : tactic =>
+macro "derive_oracle_returns" "[" laws:term,* "]" : tactic =>
   `(tactic|
     (repeat' first
       | (project_step Zkc.Source.Structured.ProtocolOp.mark
@@ -75,20 +75,29 @@ macro "derive_oracle_returns" "[" laws:Lean.Parser.Tactic.SolveByElim.arg,* "]" 
          apply PIR.Process.ReturnsUnder.ofEquation
          exact Zkc.Source.Structured.OracleProtocol.compareIndex _ _ _
          apply PIR.Process.ReturnsUnder.done)
-      | (project_step Zkc.Source.Structured.ProtocolOp.calculate
+      | (project_step Zkc.Source.Structured.ProtocolOp.calculate [Zkc.Source.Structured.Op.indexConstant]
          apply PIR.Process.ReturnsUnder.done)
+      | (project_step Zkc.Source.Structured.ProtocolOp.calculate
+         apply Zkc.Source.Region.returnsOfLaw
+         source_facts [$laws,*])
       | (project_checked Zkc.Source.Structured.ProtocolOp.calculate
-         solve_by_elim (maxDepth := 4) only [$laws,*]
+         source_facts [$laws,*]
          intro)
       | (project_step Zkc.Source.Structured.ProtocolOp.calculate
          apply PIR.Process.ReturnsUnder.ofEquation
-         solve_by_elim (maxDepth := 4) only [$laws,*]
+         source_facts [$laws,*]
          apply PIR.Process.ReturnsUnder.done)
+      | (project_step Zkc.Source.Structured.ProtocolOp.localCall
+         apply Zkc.Source.Region.returnsOfLaw
+         source_facts [$laws,*])
       | (project_checked Zkc.Source.Structured.ProtocolOp.localCall
          apply Zkc.Source.Structured.OracleProtocol.localCallFromLaw
          assumption
-         solve_by_elim (maxDepth := 4) only [$laws,*]
+         source_facts [$laws,*]
          intro)
+      | (project_step Zkc.Source.Structured.ProtocolOp.guard
+         apply Zkc.Source.Region.returnsOfLaw
+         apply Zkc.Source.Structured.OracleProtocol.guardTrue)
       | (project_checked Zkc.Source.Structured.ProtocolOp.guard
          exact Zkc.Source.Structured.OracleProtocol.guardActive _ (by assumption) _ _
          intro)
@@ -96,10 +105,11 @@ macro "derive_oracle_returns" "[" laws:Lean.Parser.Tactic.SolveByElim.arg,* "]" 
          apply PIR.Process.ReturnsUnder.ofEquation
          apply Zkc.Source.Structured.OracleProtocol.localCallFromLaw
          assumption
-         solve_by_elim (maxDepth := 4) only [$laws,*]
+         source_facts [$laws,*]
          apply PIR.Process.ReturnsUnder.done)
       | (project_step Zkc.Source.Structured.ProtocolOp.oracle
-         solve_by_elim (maxDepth := 4) only [$laws,*])
+         source_facts [$laws,*])
      first
      | project_return
+     | apply Zkc.Source.Region.ReturnsProjection.ret
      | apply Zkc.Source.Region.ReturnsSatisfying.stop))
