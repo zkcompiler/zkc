@@ -91,6 +91,51 @@ theorem results_length (model : DomainModel) (layout : Layout) (record : model.V
       simp only [results, List.flatMap_cons, List.length_append, List.length_cons, length] at *
       omega
 
+/-- One selected local field occupies one SSA result, with the value read by
+the typed product projection. Handle-like values cannot satisfy this rule. -/
+theorem result_single (model : DomainModel) (layout : Layout)
+    (record : model.Value layout.type) (selected : Selection layout.fields)
+    (data : selected.type.isHandle = false) :
+    Original.encodeHelperResult (.cons ((layout.fields.unpack record).get selected.field) .nil) =
+      [Domain.Value.data ⟨selected.type, data, (layout.fields.unpack record).get selected.field⟩] := by
+  have encoded : Domain.Value.encode selected.type
+      ((layout.fields.unpack record).get selected.field) =
+      some (Domain.Value.data (carriers := model.toCarriers)
+        ⟨selected.type, data, (layout.fields.unpack record).get selected.field⟩) :=
+    Domain.Value.encode_ofPayload
+    (by simp [Domain.Payload.ofValue, data])
+  simp [Original.encodeHelperResult, Domain.encodeValues_cons, Domain.encodeValues_nil, encoded]
+
+/-- The generated output position selects the actual ordered field. Both its
+type and its field variable are retained; equal field types do not suffice. -/
+theorem results_get (model : DomainModel) (layout : Layout) (record : model.Value layout.type)
+    (selections : List (Selection layout.fields))
+    (localFields : ∀ selection ∈ selections, Domain.localType selection.type = true)
+    (index : Nat) (selected : Selection layout.fields)
+    (found : selections[index]? = some selected) (data : selected.type.isHandle = false) :
+    (results model layout record selections)[index]? =
+      some (.data ⟨selected.type, data, (layout.fields.unpack record).get selected.field⟩) := by
+  induction selections generalizing index with
+  | nil => simp at found
+  | cons first rest ih =>
+      have firstLocal := localFields first (by simp)
+      simp only [results, List.flatMap_cons]
+      cases index with
+      | zero =>
+          cases Option.some.inj found
+          rw [result_single model layout record selected data]
+          rfl
+      | succ index =>
+          obtain ⟨firstValue, encoded⟩ := Domain.Value.encode_local_exists firstLocal
+            ((layout.fields.unpack record).get first.field)
+          have firstResult : Original.encodeHelperResult
+              (.cons ((layout.fields.unpack record).get first.field) .nil) = [firstValue] := by
+            simp [Original.encodeHelperResult, Domain.encodeValues_cons,
+              Domain.encodeValues_nil, encoded]
+          rw [firstResult]
+          change (results model layout record rest)[index]? = _
+          exact ih (fun selection present ↦ localFields selection (by simp [present])) index found
+
 set_option backward.isDefEq.respectTransparency false in
 /-- The existing typed calculation determines each result. This rule is valid
 for arbitrary selection order, repeated fields and additional caller values. -/

@@ -2,6 +2,7 @@ module
 
 public import Zkc.Realization.ClearStorage
 public import Zkc.Construction.ConnectionPrimitives
+public import Zkc.Realization.RecordProjection
 
 @[expose] public section
 
@@ -40,6 +41,64 @@ theorem packed_projection {carriers : Carriers} {tail : ProductFields} {type : T
       exact ih found
 
 variable {kind : OracleKind} {model : DomainModel}
+
+def Layout.projection (layout : Layout kind) : RecordProjection.Layout :=
+  ⟨layout.recordIdentity, "Record", layout.fields⟩
+
+def Layout.rowField (layout : Layout kind) : RecordProjection.Selection layout.fields :=
+  ⟨.index, afterCoordinates layout.depth .here⟩
+
+def Layout.dataField (layout : Layout kind) : RecordProjection.Selection layout.fields :=
+  ⟨kind.data, afterCoordinates layout.depth (.there (.there .here))⟩
+
+set_option backward.isDefEq.respectTransparency false in
+/-- Field selection in the generated projection gives the published row
+count at its actual SSA result position. The author supplies no routing law. -/
+theorem Encodes.projected_rows {layout : Layout kind}
+    {word : PublishedWords.Word model kind.answer} {record : model.Value layout.recordType}
+    (encoding : Encodes layout word record)
+    (selections : List (RecordProjection.Selection layout.fields))
+    (localFields : ∀ selection ∈ selections, Domain.localType selection.type = true)
+    (ordinal : Nat) (selected : selections[ordinal]? = some layout.rowField)
+    (environment : Domain.Environment model.toCarriers) :
+    (environment ++ RecordProjection.results model layout.projection record selections)[
+      environment.length + ordinal]? = some (.data (.index word.rows)) := by
+  have read := RecordProjection.results_get model layout.projection record selections
+    localFields ordinal layout.rowField selected rfl
+  change (RecordProjection.results model layout.projection record selections)[ordinal]? =
+    some (.data ⟨.index, rfl,
+      (layout.fields.unpack record).get (afterCoordinates layout.depth .here)⟩) at read
+  have projection : (layout.fields.unpack record).get (afterCoordinates layout.depth .here) =
+      word.rows := packed_projection layout.depth encoding.encoded .here
+  rw [projection] at read
+  rw [List.getElem?_append_right (by omega)]
+  simpa [Domain.Payload.index] using read
+
+set_option backward.isDefEq.respectTransparency false in
+/-- The projected data is the word fixed by publication. An unrelated
+same-typed field cannot establish this statement through type agreement. -/
+theorem Encodes.projected_data {domain : String} {shape : Option Nat}
+    {layout : Layout (.table (.field domain) shape)}
+    {word : PublishedWords.Word model (.field domain)} {record : model.Value layout.recordType}
+    (encoding : Encodes layout word record)
+    (selections : List (RecordProjection.Selection layout.fields))
+    (localFields : ∀ selection ∈ selections, Domain.localType selection.type = true)
+    (ordinal : Nat) (selected : selections[ordinal]? = some layout.dataField)
+    (environment : Domain.Environment model.toCarriers) :
+    (environment ++ RecordProjection.results model layout.projection record selections)[
+      environment.length + ordinal]? = some (.data ⟨.vector domain, rfl, word.cells⟩) := by
+  have read := RecordProjection.results_get model layout.projection record selections
+    localFields ordinal layout.dataField selected rfl
+  change (RecordProjection.results model layout.projection record selections)[ordinal]? =
+    some (.data ⟨.vector domain, rfl,
+      (layout.fields.unpack record).get
+        (afterCoordinates layout.depth (.there (.there .here)))⟩) at read
+  have projection : (layout.fields.unpack record).get
+      (afterCoordinates layout.depth (.there (.there .here))) = word.cells :=
+    packed_projection layout.depth encoding.encoded (.there (.there .here))
+  rw [projection] at read
+  rw [List.getElem?_append_right (by omega)]
+  simpa using read
 
 /-- The actual get-product calculation reads the published length. -/
 theorem Encodes.rows {layout : Layout kind} {word : PublishedWords.Word model kind.answer}

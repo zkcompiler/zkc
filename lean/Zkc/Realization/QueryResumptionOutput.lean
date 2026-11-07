@@ -70,6 +70,20 @@ theorem read_pending_position {carriers : Carriers} {environment : Domain.Enviro
           cases rest with
           | cons found _ _ => exact found
 
+/-- Lookup uses the same constructor and instance that the reached request
+carries; these are derived from its ordered coordinate readback. -/
+theorem read_pending_reference {carriers : Carriers} {environment : Domain.Environment carriers}
+    {placement : Placement} {pending supplied : Coordinates}
+    (coordinates : RequiredIndices.Readback environment placement.checks
+      (pairs pending supplied)) :
+    environment[placement.pending.constructor]? = some (.data (.index pending.constructor)) ∧
+      environment[placement.pending.anchorInstance]? =
+        some (.data (.index pending.anchorInstance)) := by
+  cases coordinates with
+  | cons constructor _ rest =>
+      cases rest with
+      | cons anchor _ _ => exact ⟨constructor, anchor⟩
+
 /-- Read the complete returned state, including the original five coordinates,
 the checked kind, Return phase, old arena length and appended answer. -/
 theorem read_output (model : DomainModel) (type : Ty) (data : type.isHandle = false)

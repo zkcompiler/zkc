@@ -285,11 +285,17 @@ any later resumption check or arena exhaustion.
 `BaseQueryResponse` composes lookup, projection and read/resumption into one
 complete clear-base arm. It checks contiguous SSA placement and derives the
 intermediate frame length. The four actual FRI arms specialize this same law.
-The provider must still establish immutable-record membership and the relation
-between projected cells and the published word. The controller invariant must
-establish the reached header and arena readback. These are explicit premises;
-recognizing an arm does not prove its reachability or discharge that invariant.
-The whole controller and strict generated-publication connection remain open.
+`ClearStorage.Stored.response_simulation` now composes that arm with the
+published-word relation. The immutable record supplies its rows and cells;
+ordered nominal field selection supplies their actual SSA operands. The pending
+coordinates supply the lookup constructor, instance and query position. No
+separate equation for projected cells or intermediate header preservation is
+required. Stored and requested shape annotations may differ when both admit
+the word's length. Out-of-range refusal precedes resumption and allocation.
+The four actual FRI arms pass the geometry and complete-body checks, conditional
+on the source publication layout; those checks do not identify a publication by
+its physical layout alone. The surrounding controller still establishes the
+reached record association, header, arena and retained-store readback.
 
 `ConnectionLocalRange` composes callbacks through the existing constructed
 conditional range. Its callback judgment relates the complete typed yield,
@@ -302,12 +308,48 @@ invariant still explicit. A finite loop bound does not prove that the controller
 has reached a request or completion: its state invariant and decreasing work
 measure must separately justify the final phase requirement.
 
+`ConnectionLocalRangeProgress` derives finite-range exit from a preserved
+invariant and a decreasing natural rank on continuing returns. The strict
+iteration bound includes the extra iteration that observes completion. A stop
+remains a stop, so this theorem does not establish honest termination.
+
+`QueryWork` supplies the common rank and allocation arithmetic for depth-first
+query expansion. It is an erased work relation, carrying no values, positions,
+provider or outcome. It counts repeated child occurrences separately and
+distinguishes a zero-query virtual node from a base-provider leaf. One successful
+complete expansion uses twice its node count in administrative transitions,
+one reply per base leaf, one answer per node and one saved frame per tree edge.
+The same accounting bounds every partial prefix and derives room for its next
+allocation. The controller must connect these steps to the actual source body
+and physical branches and derive the expansion's size from source admission.
+An abstract work bound alone does not discharge that connection.
+
 The next composition step must establish this invariant from the actual
 generated controller and retain it across every branch. The companion supplies
 the virtual oracle's mathematical meaning and any new mathematical invariant;
 it must not supply the dispatch traversal. Generated delivery separately proves
 that the physical publication implements the original source publication.
 Generated names do not satisfy the ordinary source-occurrence check.
+
+## Disposition of the revised closing review
+
+The review at `62bb4ed39` was checked against the later implementation, rather
+than treated as a new package plan. Shared typed construction, distinct exact,
+return and relational judgments, and checked mathematical-law installation were
+already present. The base-arm provider connection and common progress/allocation
+laws above advance the controller obligations identified in that review. The
+instantiated whole-controller relation and the original endpoints remain gates.
+
+`OracleMathEnvironment.invokePresent` and `invokeReturned` install the existing
+`ReferenceLaw` at its actual helper body and arguments. FRI's `powerRequires`,
+`pairCall`, `powerCall` and `foldCall` include dependency association, typed input
+and output assembly, and genuine mathematical premises. Count that work in the
+authoring account; the short `bodyReads` traversal is not its total cost.
+`Tests.FriBindingSites.bothSites` already checks component placement reuse at
+two actual calls. It does not, on its own, discharge the separate new
+mathematical-connection gate. Reuse existing installation for that gate where it
+suffices. Broad module moves, optional discovery/search and a toolchain change
+remain later decisions supported by evidence after this package lands.
 
 ## Acceptance and cost accounting
 
