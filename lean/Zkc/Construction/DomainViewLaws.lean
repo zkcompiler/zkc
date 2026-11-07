@@ -23,6 +23,27 @@ theorem read_cons (env : Environment carriers) (reference : Nat) (references : L
   simp only [read] at rest
   simp [read, found, rest]
 
+/-- A field of a returned tuple is the value at its actual selected SSA slot.
+This retains the association when multiple fields have the same type. -/
+theorem read_getElem? {env values : Environment carriers} {references : List Nat}
+    (found : read env references = some values) (index : Nat) :
+    values[index]? = references[index]?.bind (env[·]?) := by
+  induction references generalizing values index with
+  | nil => simp [read] at found; subst found; simp
+  | cons reference rest ih =>
+      simp only [read, List.mapM_cons, Option.bind_eq_bind] at found
+      cases first : env[reference]? with
+      | none => simp [first] at found
+      | some value =>
+          cases others : rest.mapM (env[·]?) with
+          | none => simp [first, others] at found
+          | some tail =>
+              simp [first, others] at found
+              subst found
+              cases index with
+              | zero => simp [first]
+              | succ index => simpa using ih (show read env rest = some tail from others) index
+
 theorem append_eq (declared : List ValueSort) (env results : Environment carriers)
     (matched : sortsMatch declared results = true) :
     append declared env results = .done (env ++ results) := by

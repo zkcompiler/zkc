@@ -23,6 +23,28 @@ structure Selection (fields : ProductFields) where
   type : Ty
   field : Var fields.toList type
 
+/-- Ordered unpacking of the declared product. This selects every field once,
+preserving its typed ordinal, including distinct fields with equal types. -/
+def allFields : (fields : ProductFields) → List (Selection fields)
+  | .nil => []
+  | .cons type rest => ⟨type, .here⟩ ::
+      (allFields rest).map (fun selected ↦ ⟨selected.type, .there selected.field⟩)
+
+theorem allFields_local (fields : ProductFields)
+    (localTypes : fields.toList.all Domain.localType = true) :
+    ∀ selection ∈ allFields fields, Domain.localType selection.type = true := by
+  cases fields with
+  | nil => simp [allFields]
+  | cons type rest =>
+      have localParts : Domain.localType type = true ∧
+          rest.toList.all Domain.localType = true := by
+        simpa only [ProductFields.toList, List.all_cons, Bool.and_eq_true] using localTypes
+      intro selection member
+      rcases List.mem_cons.mp member with rfl | tail
+      · exact localParts.1
+      · obtain ⟨selected, present, rfl⟩ := List.mem_map.mp tail
+        exact allFields_local rest localParts.2 selected present
+
 def Selection.calculation {layout : Layout} (selection : Selection layout.fields) : Calculation :=
   .getProduct layout.identity layout.constructor layout.fields selection.type selection.field
 
@@ -135,6 +157,33 @@ theorem results_get (model : DomainModel) (layout : Layout) (record : model.Valu
           rw [firstResult]
           change (results model layout record rest)[index]? = _
           exact ih (fun selection present ↦ localFields selection (by simp [present])) index found
+
+/-- Complete nominal unpacking agrees with the common typed-tuple encoding.
+The equality follows from field selection, not from equal output types. -/
+theorem results_all (model : DomainModel) (identity constructor : String)
+    (fields : ProductFields) (record : model.ProductValue fields)
+    (localTypes : fields.toList.all Domain.localType = true) :
+    results model ⟨identity, constructor, fields⟩ record (allFields fields) =
+      Original.encodeHelperResult (fields.unpack record) := by
+  cases fields with
+  | nil => rfl
+  | cons type rest =>
+      have localParts : Domain.localType type = true ∧
+          rest.toList.all Domain.localType = true := by
+        simpa only [ProductFields.toList, List.all_cons, Bool.and_eq_true] using localTypes
+      rcases record with ⟨value, values⟩
+      simp only [allFields, results, List.flatMap_cons, List.flatMap_map]
+      change Original.encodeHelperResult (.cons value .nil) ++
+        results model ⟨identity, constructor, rest⟩ values (allFields rest) =
+          Original.encodeHelperResult (.cons value (rest.unpack values))
+      rw [results_all model identity constructor rest values localParts.2]
+      obtain ⟨encoded, encoding⟩ := Domain.Value.encode_local_exists localParts.1 value
+      have tail := Original.encodeHelperResult_eq localParts.2 (rest.unpack values)
+      change (Domain.encodeValues (.cons value .nil)).getD [] ++
+        Original.encodeHelperResult (rest.unpack values) =
+          (Domain.encodeValues (.cons value (rest.unpack values))).getD []
+      simp only [Domain.encodeValues_cons, encoding, Domain.encodeValues_nil, tail]
+      rfl
 
 set_option backward.isDefEq.respectTransparency false in
 /-- The existing typed calculation determines each result. This rule is valid

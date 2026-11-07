@@ -64,6 +64,21 @@ inductive Position where
   | completed
   deriving Repr
 
+/-- The producer's four header phases. A source-work position determines its
+phase, but the physical header must still be related to this position. -/
+def Position.phase : Position → Nat
+  | .enter .. => 0
+  | .returned .. => 1
+  | .request .. => 2
+  | .completed => 3
+
+theorem Position.phase_le (position : Position) : position.phase ≤ 3 := by
+  cases position <;> simp [Position.phase]
+
+theorem Position.completed_iff (position : Position) :
+    3 ≤ position.phase ↔ position = .completed := by
+  cases position <;> simp [Position.phase]
+
 def Position.transitions : Position → Nat
   | .enter shape frames => 2 * shape.nodes + 2 * frameNodes frames + frames.length
   | .returned frames | .request frames => 1 + 2 * frameNodes frames + frames.length
@@ -248,5 +263,63 @@ theorem Prefix.frame_room {shape : Shape} {current next : Position}
   have allocated := allocates.accounting
   change current.saves + saves = shape.nodes - 1 + 0 at accounted
   omega
+
+/-- Advancing exits only at a request or completed root. The yielded Boolean
+must be the actual phase comparison; a premature false flag cannot establish
+this result, even if the work decreases. -/
+theorem advance_completed {carriers : Zkc.Source.Structured.Carriers} {A : Type}
+    (step : A → Nat → PIR.Process (Zkc.Construction.Domain.effects carriers) (Bool × A))
+    (invariant : A → Prop) (position : A → Position)
+    (connected : ∀ value index, invariant value → PIR.Yields
+      (fun result ↦ invariant result.2 ∧
+        (∃ answers saves, Advance (position value) (position result.2) answers saves) ∧
+        result.1 = decide ((position result.2).phase < 2)) (step value index))
+    (indices : List Nat) (value : A) (held : invariant value)
+    (enough : (position value).transitions < indices.length) :
+    PIR.Yields (fun result ↦ invariant result ∧ 2 ≤ (position result).phase)
+      ((Zkc.Source.Finite.fold (Zkc.Construction.ConnectionLocalRange.gated step)
+        indices (true, value)).bind fun result ↦ .done result.2) := by
+  apply Zkc.Construction.ConnectionLocalRange.fold_completed
+    (advance_progress step invariant position (fun value index held ↦
+      (connected value index held).mono fun _ result ↦ ⟨result.1, result.2.1⟩))
+    (indices := indices) (value := value) (held := held) (enough := enough)
+  intro value index held
+  apply (connected value index held).mono
+  rintro result ⟨retained, _, phase⟩
+  refine ⟨retained, ?_⟩
+  intro inactive
+  have notAdvancing : ¬ (position result.2).phase < 2 := by
+    simpa only [decide_eq_false_iff_not] using phase.symm.trans inactive
+  omega
+
+/-- The outer request loop exits at Completed, using the same root expansion
+to bound its replies. A completed zero-reply cycle is allowed. A continuing
+cycle must consume a reply, and the flag must come from the actual phase. -/
+theorem evaluation_completed {carriers : Zkc.Source.Structured.Carriers} {A : Type}
+    (step : A → Nat → PIR.Process (Zkc.Construction.Domain.effects carriers) (Bool × A))
+    (invariant : A → Prop) (position : A → Position)
+    (connected : ∀ value index, invariant value → PIR.Yields
+      (fun result ↦ invariant result.2 ∧
+        (∃ steps replies answers saves,
+          Prefix (position value) (position result.2) steps replies answers saves ∧
+          (result.1 = true → 0 < replies)) ∧
+        result.1 = decide ((position result.2).phase < 3)) (step value index))
+    (indices : List Nat) (value : A) (held : invariant value)
+    (enough : (position value).reads < indices.length) :
+    PIR.Yields (fun result ↦ invariant result ∧ position result = .completed)
+      ((Zkc.Source.Finite.fold (Zkc.Construction.ConnectionLocalRange.gated step)
+        indices (true, value)).bind fun result ↦ .done result.2) := by
+  apply Zkc.Construction.ConnectionLocalRange.fold_completed
+    (response_progress step invariant position (fun value index held ↦
+      (connected value index held).mono fun _ result ↦ ⟨result.1, result.2.1⟩))
+    (indices := indices) (value := value) (held := held) (enough := enough)
+  intro value index held
+  apply (connected value index held).mono
+  rintro result ⟨retained, _, phase⟩
+  refine ⟨retained, ?_⟩
+  intro inactive
+  have notActive : ¬ (position result.2).phase < 3 := by
+    simpa only [decide_eq_false_iff_not] using phase.symm.trans inactive
+  exact (Position.completed_iff _).mp (by omega)
 
 end Zkc.Realization.QueryWork

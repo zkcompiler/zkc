@@ -41,6 +41,24 @@ def forgetCheckpoints : PIR.OperationInterpretation (Domain.effects carriers) (D
   | .checkpoint _ => .done ()
   | operation => .call operation .done
 
+/-- Attach an independently proved source return property to an existing
+connection. The source, target and checkpoint obligations remain unchanged;
+the property is propagated through every reply, not assumed of the target. -/
+noncomputable def Simulation.refineReturns
+    {returns nextReturns : A → B → Prop} {property : A → Prop}
+    {live : PIR.Process (Domain.effects carriers) A → Domain.Environment carriers → Prop}
+    {source : PIR.Process (Domain.effects carriers) A}
+    {target : PIR.Process (Domain.effects carriers) B}
+    (certificate : Simulation returns live source target)
+    (proved : PIR.Yields property source)
+    (refine : ∀ a b, property a → returns a b → nextReturns a b) :
+    Simulation nextReturns live source target := by
+  induction certificate with
+  | done related => exact .done (refine _ _ proved related)
+  | halt reason => exact .halt reason
+  | call operation next ih => exact .call operation (fun reply ↦ ih reply (proved reply))
+  | checkpoint frame related next ih => exact .checkpoint frame related (ih proved)
+
 /-- For equal result carriers, the complete non-administrative process agrees.
 The independent `live` evidence remains available in the certificate. -/
 theorem Simulation.forget {live : PIR.Process (Domain.effects carriers) A → Domain.Environment carriers → Prop}

@@ -57,4 +57,6 @@ theorem nonuniform_counts : nonuniform.nodes = 6 ∧ nonuniform.leaves = 3 := by
 #print axioms no_extra_base_answer
 #print axioms Prefix.bounds
 #print axioms advance_progress
+#print axioms advance_completed
+#print axioms evaluation_completed
 end Tests.QueryWork

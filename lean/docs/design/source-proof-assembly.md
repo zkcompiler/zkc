@@ -243,6 +243,15 @@ mutation controls reject parent-coordinate and same-typed answer swaps.
 The selected static continuation still determines the parent constructor and
 answer kinds; the record alone does not justify that selection.
 
+`QueryContinuationProjection` composes the actual saved-slot load and complete
+nominal unpack. The shared `RecordProjection.allFields` rule derives the ordered
+tuple from the declared product, including fields with identical types. The
+frame's outer continuation, parent instance/position and prior answer indices
+therefore come from its immutable saved record. Recognition checks the entire
+fragment, actual SSA slot and field order; it does not infer source ownership
+from a generated name. The surrounding invariant still selects the correct
+static continuation and associates its frame arena with that source suspension.
+
 `AnswerReads` connects ordered heterogeneous arena reads to actual constructed
 instructions. Its operand readback determines a unique answer tuple, remains
 valid under caller-frame extension, and agrees with the existing whole-tuple
@@ -324,6 +333,26 @@ measure must separately justify the final phase requirement.
 invariant and a decreasing natural rank on continuing returns. The strict
 iteration bound includes the extra iteration that observes completion. A stop
 remains a stop, so this theorem does not establish honest termination.
+
+The range's final physical condition now composes with that proof through
+`completedSimulation` and `Simulation.refineReturns`. Exit meaning is a separate
+checked obligation: an early false yield at Return is compatible with decreasing
+work but does not establish Request or Completed. `QueryWork.advance_completed`
+and `evaluation_completed` consume the actual phase/flag correspondence and
+derive those respective postconditions. The actual-body certificate retains
+its source, target, output layout and all frame checkpoints when strengthened.
+These rules close loop composition; branch reachability and source expansion
+still have to instantiate their common invariant.
+
+`QueryPhaseYield` derives the continuation flag from the actual final comparison
+and full returned tuple. Recognition checks that the comparison reads that
+tuple's phase field and yields the Boolean it produced; it rejects a same-typed
+kind-field substitution, reversed comparison or different Boolean operand.
+The reached tuple supplies the phase value through common SSA readback, so the
+callback need not assume an independent equation for the flag. Advance and
+evaluation retain their distinct thresholds, two and three. This rule connects
+the iteration's end; the preceding dispatch still establishes the source state
+and work transition.
 
 `QueryWork` supplies the common rank and allocation arithmetic for depth-first
 query expansion. It is an erased work relation, carrying no values, positions,

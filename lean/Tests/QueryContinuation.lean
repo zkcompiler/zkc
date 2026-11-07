@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Realization.QueryContinuation
+public import Zkc.Realization.QueryContinuationProjection
 
 @[expose] public section
 
@@ -35,6 +35,52 @@ theorem save (model : DomainModel)
 theorem stable (model : DomainModel) (other : List (model.Value (layout "continuation" 1).type)) :
     Stored "continuation" 1 ([saved model] ++ other) 0 frame :=
   (stored_append [] (encoded model)).transport (by simp)
+
+/-- Every projected coordinate comes from the actual saved frame. The nominal
+unpack works at another SSA position without another association proof. -/
+theorem unpacked (model : DomainModel) (program : Program) (context : Context)
+    (caller suffix : Domain.Environment model.toCarriers) :
+    let environment := caller ++
+      [.data ⟨(layout "continuation" 1).type, rfl, saved model⟩] ++ suffix
+    Nonempty (Original.Simulation Eq (fun _ live ↦ caller <+: live)
+      (.done (environment ++ [Domain.Value.data (.index 7), .data (.index 3),
+        .data (.index 11), .data (.index 5), .data (.index 1)]))
+      (Domain.evaluate model program context
+        (RecordProjection.instructions (projection "continuation" 1) caller.length
+          (RecordProjection.allFields (fields 1))) environment)) := by
+  dsimp only
+  exact (encoded model).project _ caller
+    ((List.prefix_append _ _).trans (List.prefix_append _ _)) caller.length
+    (by simp) program context
+
+theorem loaded_frame (model : DomainModel) (program : Program) (context : Context)
+    (suffix : Domain.Environment model.toCarriers) :
+    let environment : Domain.Environment model.toCarriers :=
+      [.data ⟨.sequence (layout "continuation" 1).type, rfl, [saved model]⟩,
+        .data (.index 0)] ++ suffix
+    ∃ record, Encodes "continuation" 1 frame record ∧
+      Nonempty (Original.Simulation Eq (fun _ live ↦ environment <+: live)
+        (.done (environment ++
+          [.data ⟨(layout "continuation" 1).type, rfl, record⟩] ++
+          frame.values.map (fun value ↦ Domain.Value.data (.index value))))
+        (Domain.evaluate model program context
+          (loadInstructions "continuation" 1 environment.length 0 1) environment)) := by
+  dsimp only
+  exact (stored_append [] (encoded model)).load_project _ 0 1 rfl program context
+
+example : (recognizeLoad 2 (loadInstructions "continuation" 1 2 0 1)).isSome = true := by
+  decide +kernel
+
+-- Equal output types do not authorize exchanging outer and parent instance.
+example : (recognizeLoad 2
+    ((loadInstructions "continuation" 1 2 0 1).take 2 ++
+      [(loadInstructions "continuation" 1 2 0 1)[3],
+       (loadInstructions "continuation" 1 2 0 1)[2]] ++
+      (loadInstructions "continuation" 1 2 0 1).drop 4)).isNone = true := by decide +kernel
+
+-- A projection must refer to the just-loaded record, not another same-typed one.
+example : (recognizeLoad 2 (loadInstructions "continuation" 1 3 0 1)).isNone = true := by
+  decide +kernel
 
 /-- No field operand is needed on the exhausted path: packing never runs. -/
 theorem full_arena (model : DomainModel)
@@ -107,6 +153,9 @@ example : (RecordAppend.recognizeAt 6
 #print axioms save
 #print axioms full_arena
 #print axioms stable
+#print axioms unpacked
+#print axioms loaded_frame
+#print axioms Encodes.projected
 #print axioms QueryContinuation.Stored.load
 #print axioms ordered_resume
 #print axioms parent_swap_refused
