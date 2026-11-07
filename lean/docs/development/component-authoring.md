@@ -457,6 +457,15 @@ the first and second child separately, including repeated reads. Full physical
 query dispatch, child execution and root capacity bounds still require their
 own proof.
 
+Generated pure slices use `derive_math_region`, the same producer as inlined
+Math calls. It checks the complete source tree, ordered operands, caller extent
+and returned coordinates, and refuses an unconsumed target suffix. The actual
+FRI child-position body and final fold arithmetic instantiate this rule without
+new value proofs. `ConnectionFiniteFold` connects an embedded finite fold to the
+admitted original domain and callback table, including domain refusals and callback
+stops. This connection is separate from the mathematical power lemma and from
+proving which controller continuation supplies its operands.
+
 FRI supplies the virtual table's captured parent, challenge and coset
 geometry. `CommitIngress.installed` follows the linked coset admission
 helper, assembles the receiver's shift, initializes both handle sequences,

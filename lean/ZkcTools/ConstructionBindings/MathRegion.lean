@@ -112,4 +112,24 @@ partial def propose (definitions model locations extent source target : Expr) : 
       none, none, none, some tail.certificate]
   finish tail certificate
 
+/-- Check a complete closed slice with the same producer used by inlined calls.
+The caller fixes the actual source region, operand placement, complete target
+block and returned coordinates. No unused physical suffix is accepted. -/
+elab "derive_math_region" : tactic => withMainContext do
+  Term.withoutErrToSorry <| withoutRecover do
+    let goal ← getMainGoal
+    let expected ← instantiateMVars (← goal.getType)
+    unless expected.isAppOf ``ConnectionMathRegion.Alignment do
+      throwError "expected a closed Math region alignment"
+    let args := expected.getAppArgs
+    let slice ← withLocalDeclD `model (mkConst ``DomainModel) fun model => do
+      let slice ← propose args[0]! model args[4]! args[5]! args[3]! (mkApp args[6]! model)
+      unless (← TargetEquality.expose slice.suffixBlock).isAppOf ``Domain.View.empty do
+        throwError "alignment-computation-unconsumed-block"
+      return slice
+    unless ← isDefEq (← inferType slice.certificate) expected do
+      throwError "alignment-computation-result-mismatch"
+    goal.assign slice.certificate
+    replaceMainGoal []
+
 end ZkcTools.ConstructionBindings.MathRegion

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.DomainCorrespondence
+public import Zkc.Construction.ConnectionFiniteFold
 public import Zkc.Construction.LayoutPermutation
 
 @[expose] public section
@@ -86,5 +87,29 @@ example (domainModel : DomainModel) (original : Program) (context : Context) :
     Domain.Correspondence.Step (model := domainModel) (program := original) (context := context) computation
       (Domain.View.mathCompute original [1, 0] [.data .index, .data .index] region Domain.View.empty) :=
   Domain.Correspondence.mathCompute [1, 0] [.data .index, .data .index] region Domain.Correspondence.empty
+
+private def spec : FoldSpec :=
+  (Domain.resolveFiniteFold program "range" "sum" ""
+    [.data .index, .data .index, .data .index] [.data .index]).toOption.get (by decide +kernel)
+
+/-- The common connection works for every domain input, including refused
+finite-index bounds; it does not assume that the selected callback is reached. -/
+private noncomputable def connected (lower upper initial : Nat) :=
+  ConnectionFiniteFold.simulation model program "range" "sum" "" spec
+    (by kernel_rfl) (.cons lower (.cons upper (.cons initial .nil)))
+    (by kernel_rfl) (by kernel_rfl)
+    [.data (.index initial), .data (.index lower), .data (.index upper)] [1, 2, 0]
+    (by rfl)
+
+/-- Callback semantics and refusal are both taken from the admitted source. -/
+example : Domain.View.finiteFold model program "range" "sum" "" [1, 2, 0]
+    [.data .index] [.data (.index 10), .data (.index 2), .data (.index 5)] =
+      .done [.data (.index 10), .data (.index 2), .data (.index 5), .data (.index 19)] := rfl
+
+example : Domain.View.finiteFold model program "range" "sum" "" [1, 2, 0]
+    [.data .index] [.data (.index 10), .data (.index indexLimit), .data (.index indexLimit)] =
+      .halt .refused := rfl
+
+#print axioms connected
 
 end Tests.EmbeddedMath
