@@ -233,6 +233,22 @@ because their answer types coincide. It preserves arbitrary caller suffixes;
 a semantic control rejects a type-correct arena swap. Reaching those operands
 and selecting the continuation remain controller obligations.
 
+`QueryResumption` composes checked requirements with answer insertion for the
+entire resumption block. Phase and kind checks precede all five request
+coordinates; only then does the checked arena length precede append. Successful
+resumption determines the same saved request and parent continuation coordinates.
+The proof includes refusal, exhaustion, and every caller-frame checkpoint. It
+applies to all four actual resumption blocks in the retained FRI participant,
+including the reflexive coordinate comparisons left by inlining. Those still
+check machine-index bounds. The returned answer slot is the arena's old length.
+
+`RequiredIndices` owns the ordered requirement proof; `ConnectionClosedSimulation`
+composes known closed returns and stops without obligations at unreachable
+returned values. Neither introduces another evaluator or a source-authoring
+visitor. The resumption rule still requires the surrounding controller to
+associate the reached operands with its pending source query. Ordinary request
+coordinates are not unforgeable or single-use capabilities.
+
 The next composition step must establish this invariant from the actual
 generated controller and retain it across every branch. The companion supplies
 the virtual oracle's mathematical meaning and any new mathematical invariant;

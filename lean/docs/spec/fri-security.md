@@ -112,6 +112,15 @@ read. This is a logical expansion law, not the physical controller simulation.
 · [Immutable registry context](../../Zkc/Source/Structured/OracleStoreLocation.lean)
 · [Publication and swap controls](../../Tests/ClearStorage.lean)
 
+The common [query resumption rule](../../Zkc/Realization/QueryResumption.lean)
+checks phase, kind and all five saved request coordinates before appending an
+answer. It preserves checked-index refusal, arena exhaustion and diagnostic
+frames. Successful return fixes the request association and the exact new
+answer slot. The [controls](../../Tests/QueryResumption.lean) include same-typed
+coordinate swaps, stale phases, wrong kinds and out-of-range reflexive checks.
+This local transition does not establish controller reachability, root capacity,
+or the association of the external exchange with the reached request.
+
 The fixed-table access transport preserves both replies and the complete
 ordered query log. At the selected field and scalar sites, it recovers the
 same challenge values and charged keys used in the FRI experiment. The
