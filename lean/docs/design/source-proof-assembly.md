@@ -263,6 +263,34 @@ visitor. The resumption rule still requires the surrounding controller to
 associate the reached operands with its pending source query. Ordinary request
 coordinates are not unforgeable or single-use capabilities.
 
+`QueryResumptionOutput` derives the entire returned controller tuple from the
+actual SSA references: the five saved coordinates, checked kind, Return phase,
+old arena length as answer index, updated answer arena and other retained stores.
+All four emitted FRI return layouts have been checked against this projection.
+
+`RecordProjection` and `RecordLookupProjection` derive ordered typed field
+selection from the immutable record actually returned by lookup. Nominal identity,
+record reference, result sorts and selection order are checked together. The
+same rule permits repeated fields and arbitrary caller placements; equal result
+types do not identify two field selections. The number of projected SSA results
+follows from the checked local types.
+
+`QueryReadResponse` composes checked table access with the complete resumption
+and output projection. Its table query position is derived from the saved request
+coordinates, and the answer operand must be the actual newly read field value.
+`ConnectionClosedSimulation.continueClosed` supplies composition across both
+returns and stops of that closed computation. An invalid read refuses before
+any later resumption check or arena exhaustion.
+
+`BaseQueryResponse` composes lookup, projection and read/resumption into one
+complete clear-base arm. It checks contiguous SSA placement and derives the
+intermediate frame length. The four actual FRI arms specialize this same law.
+The provider must still establish immutable-record membership and the relation
+between projected cells and the published word. The controller invariant must
+establish the reached header and arena readback. These are explicit premises;
+recognizing an arm does not prove its reachability or discharge that invariant.
+The whole controller and strict generated-publication connection remain open.
+
 `ConnectionLocalRange` composes callbacks through the existing constructed
 conditional range. Its callback judgment relates the complete typed yield,
 including the continuation flag, to the next source state. Shared composition

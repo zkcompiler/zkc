@@ -72,5 +72,29 @@ noncomputable def Simulation.continueHalt
       cases sourceEq
       exact .checkpoint frame (frames frame retained) (ih rfl)
 
+/-- Compose a complete closed computation, including its stopping outcome.
+The continuation sees the mathematical result, while the target receives its
+derived frame. Only frames the closed computation can return need a suffix law. -/
+noncomputable def Simulation.continueClosed {D : Type}
+    (process : Structured.Closed A) (encode : A → B)
+    {target : PIR.Process (Domain.effects carriers) B}
+    {live : PIR.Process (Domain.effects carriers) B → Domain.Environment carriers → Prop}
+    {nextLive : PIR.Process (Domain.effects carriers) C → Domain.Environment carriers → Prop}
+    {returns : C → D → Prop}
+    {sourceNext : A → PIR.Process (Domain.effects carriers) C}
+    {targetNext : B → PIR.Process (Domain.effects carriers) D}
+    (head : Simulation Eq live
+      ((process.interpret (Structured.closedLift (I := Domain.effects carriers))).bind
+        fun value ↦ .done (encode value)) target)
+    (frames : ∀ first next frame, live first frame → nextLive next frame)
+    (tail : ∀ value, Simulation returns nextLive (sourceNext value) (targetNext (encode value))) :
+    Simulation returns nextLive
+      ((process.interpret (Structured.closedLift (I := Domain.effects carriers))).bind sourceNext)
+      (target.bind targetNext) := by
+  cases process with
+  | done value => exact head.continueDone (fun frame held ↦ frames _ _ frame held) (tail value)
+  | halt reason => exact head.continueHalt _ (fun frame held ↦ frames _ _ frame held)
+  | call operation _ => exact nomatch operation
+
 end Original
 end Zkc.Construction
