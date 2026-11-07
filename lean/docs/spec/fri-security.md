@@ -60,12 +60,18 @@ recognizer extracts nominal types and SSA positions from an instruction fragment
 both the base and virtual FRI allocator fragments have been checked against that
 rule. The same rule applies at arbitrary caller offsets, and an invalid constructor
 refuses before reading the store. Returning allocation requires the explicit
-constructor and store-length bounds. The complete query controller, generated-event
-ownership, root allocation bounds and whole-run simulation remain open.
+constructor and store-length bounds. The common four-instruction lookup rule
+checks the reference constructor before reading the immutable slot. Its execution
+rule applies to all 66 lookup fragments in the retained FRI tree. `Stored.lookup`
+connects a returning lookup to the exact publication record, and the existing
+projections recover that word's data. These are static helper occurrences, not
+runtime read counts. The complete query controller, generated-event ownership,
+root allocation bounds and whole-run simulation remain open.
 [Clear-store laws](../../Zkc/Realization/ClearStorage.lean)
 · [Constructed reads](../../Zkc/Realization/ClearStorageCalculations.lean)
 · [Actual allocation](../../Zkc/Realization/ClearStorageAllocation.lean)
 · [Common allocator rule](../../Zkc/Realization/RecordAllocator.lean)
+· [Checked lookup](../../Zkc/Realization/ClearStorageLookup.lean)
 · [Publication and swap controls](../../Tests/ClearStorage.lean)
 
 The fixed-table access transport preserves both replies and the complete

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Realization.ClearStorageAllocation
+public import Zkc.Realization.ClearStorageLookup
 
 @[expose] public section
 
@@ -62,6 +63,21 @@ theorem first_stored (model : DomainModel) :
   have first := stored_append layout [] [] _ _ (record_encodes model 2 7)
   exact first.transport
     (PublishedWords.cons_preserves _ (word model 2 9) (by rfl)) (by exact ⟨[record model 2 9], rfl⟩)
+
+/-- Actual lookup retains the first publication even after the equal-payload
+second word has been stored at a different source anchor. -/
+theorem lookup_first (model : DomainModel) (program : Program) (context : Construction.Context) :
+    let environment : Construction.Domain.Environment model.toCarriers :=
+      [.data (.index 7), .data (.index 0),
+        .data ⟨.sequence layout.recordType, rfl, records model⟩]
+    ∃ record, Encodes layout (word model 2 7) record ∧
+      Nonempty (Construction.Original.Simulation Eq (fun _ frame ↦ environment <+: frame)
+        (.done (environment ++ [.data (.index 7), .data (.boolean true),
+          .data ⟨layout.recordType, rfl, record⟩]))
+        (Construction.Domain.evaluate model program context
+          (Zkc.Realization.RecordLookup.instructions layout.lookup ⟨3, 0, 1, 2, "record"⟩)
+          environment)) :=
+  (first_stored model).lookup program context rfl _ 0 1 2 "record" rfl rfl rfl (by decide)
 
 theorem second_stored (model : DomainModel) :
     Stored layout (words model) (records model) (7, 1) (word model 2 9) :=
@@ -147,4 +163,5 @@ example (model : DomainModel) :
 #print axioms swapped_anchor_refused
 #print axioms first_stored
 #print axioms actual_allocation
+#print axioms lookup_first
 end Tests.ClearStorage

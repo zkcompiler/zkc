@@ -415,8 +415,11 @@ physical storage. `RecordAllocator` proves the existing five instructions for
 arbitrary record fields and caller frames. Its checked recognizer recovers
 nominal types and SSA positions from the fragment, and the same execution rule
 specializes to both base and virtual FRI records. `Encodes.allocate` joins the
-physical allocation with the provider association. A different protocol reuses
-these rules when it uses this realization; a different realization must prove
+physical allocation with the provider association. `RecordLookup` similarly
+checks the constructor and reads the immutable slot; `Stored.lookup` recovers the
+record bound to the original publication. Swapping constructor/slot values or
+reading a missing slot refuses in the actual instruction semantics. A different
+protocol reuses these rules when it uses this realization; a different realization must prove
 its own representation and execution laws. These local proofs do not supply
 source-event ownership, root capacity bounds or the complete query controller.
 No folded-word identity or FRI degree lemma is a premise of the allocator rule.
