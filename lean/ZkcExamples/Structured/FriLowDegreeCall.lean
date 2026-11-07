@@ -93,7 +93,9 @@ theorem verifier {m : Type → Type} [Monad m] [LawfulMonad m] {Aux E : Type}
         (start 1 [] shift rounds queries service auxiliary).state := by
   change (subject.imported.program.oracleParticipant model 1
     (ProtocolValue.embedComponents (FriSource.inputs 1 [] shift rounds queries service))).runM _ _ = _
-  rw [FriSource.root_participant, rootCall, installed]
+  have invokes : invokeProtocol (partyTable model (1 : Fin 2).val) protocol5Signature lowDegreeContext (1 : Fin 2).val
+      (partyArguments model 1 [] shift rounds queries service) = _ := installed model shift rounds queries service
+  rw [FriSource.root_participant, rootCall, partyCall, invokes]
   simp only [PIR.Process.bind, PIR.Process.bind_assoc, PublishedWords.actionM]
   kernel_rfl
 

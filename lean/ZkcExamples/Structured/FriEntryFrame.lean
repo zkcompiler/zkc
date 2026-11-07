@@ -55,6 +55,45 @@ theorem run (self : Fin 2) (privateWord : List (model.Field extension)) (shift :
   rw [logged] at eqn
   exact eqn
 
+set_option maxHeartbeats 1200000 in
+/-- Both source roles reach the same checked call frame. Keep their own
+inputs, local computations, observations, stops and returned visibility. -/
+theorem party (self : Fin 2) (word : List (model.Field extension)) (shift : model.Field extension)
+    (rounds queries service : Nat) (aux : Aux)
+    (network : PublishedWords.Table model → PIR.MonadHandler m (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : PublishedWords.Chooser m model Aux E) :
+    let initial := (start (model := model) self word shift rounds queries service aux).state
+    let handler := PublishedWords.actionM subject.unit.oracles network choose
+    let child := invokeProtocol (partyTable model self.val) protocol5Signature lowDegreeContext self.val
+      (partyArguments model self word shift rounds queries service)
+    PublishedWords.sourceRunM (start self word shift rounds queries service aux) network choose = (do
+      let result ← (child.bind fun value ↦ .call .leave fun _ ↦ .done value).runM handler
+        {initial with frame := checked.entered, parents := [checked.marked]}
+      let observed := {result with events := [OracleProtocol.Event.mark (E := E) rootSite.site] ++ result.events}
+      observed.followM fun out ↦ (PIR.Process.done (I := OracleProtocol.Interface model)
+        (maskValues self.val runSignature.outputScopes (.cons (out.get .here) .nil))).runM handler) := by
+  intro initial handler child
+  change (subject.imported.program.oracleParticipant model self.val
+    (ProtocolValue.embedComponents (inputs self.val word shift rounds queries service))).runM handler initial = _
+  rw [FriSource.partyRoot]
+  let call := (withMarks labels (.done ())).bind fun _ ↦
+    OracleProtocol.enter model (.application protocol5Signature rootSite.site) child
+  let finish := fun (out : Values (Component (verifierValue model)) protocol5Signature.outputs) ↦
+    PIR.Process.done (I := OracleProtocol.Interface model) (maskValues self.val runSignature.outputScopes (.cons (out.get .here) .nil))
+  have same : (partyCall model self word shift rounds queries service).bind
+      (fun out ↦ .done (maskValues self.val runSignature.outputScopes out)) = call.bind finish := by
+    simp only [partyCall, call, rootLabels, withMarks, PIR.Process.bind, PIR.Process.bind_assoc]
+    rfl
+  rw [same]
+  refine (PIR.runM_bind handler call finish initial).trans ?_
+  have eqn := run self word shift rounds queries service aux network choose child
+  change call.runM handler initial = _ at eqn
+  refine (congrArg (fun action ↦ action >>= fun result ↦
+    result.followM (fun value ↦ (finish value).runM handler)) eqn).trans ?_
+  rw [bind_assoc]
+  simp only [pure_bind]
+  rfl
+
 /-- At the verifier entry the checked mark and application always reach the
 selected low-degree body. Keep its complete record, its exit, and the final
 caller mask when passing the result back to the root. -/
@@ -72,18 +111,12 @@ theorem verifier (shift : model.Field extension) (rounds queries service : Nat) 
       observed.followM fun out ↦ (PIR.Process.done (I := OracleProtocol.Interface model)
         (maskValues 1 runSignature.outputScopes (.cons (out.get .here) .nil))).runM handler) := by
   intro initial handler child
-  apply (FriLowDegreeCall.verifier model shift rounds queries service aux network choose).trans
-  let call := (withMarks labels (.done ())).bind fun _ ↦
-    OracleProtocol.enter model (.application protocol5Signature rootSite.site) child
-  let finish := fun (out : Values (Component (verifierValue model)) protocol5Signature.outputs) ↦
-    PIR.Process.done (I := OracleProtocol.Interface model) (maskValues 1 runSignature.outputScopes (.cons (out.get .here) .nil))
-  change (call.bind finish).runM handler initial = _
-  rw [PIR.runM_bind]
-  have eqn := run 1 [] shift rounds queries service aux network choose child
-  change call.runM handler initial = _ at eqn
-  rw [eqn, bind_assoc]
-  simp only [pure_bind]
-  rfl
+  have entry := party 1 [] shift rounds queries service aux network choose
+  dsimp only at entry
+  have invokes : invokeProtocol (partyTable model (1 : Fin 2).val) protocol5Signature lowDegreeContext (1 : Fin 2).val
+      (partyArguments model 1 [] shift rounds queries service) = _ := FriLowDegreeCall.installed model shift rounds queries service
+  rw [invokes] at entry
+  exact entry
 
 abbrev commit := FriSourceCalls.commitment
 def commitLabels := markLabels FriLowDegreeCall.caller commit
