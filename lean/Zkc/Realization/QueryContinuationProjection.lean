@@ -84,6 +84,18 @@ theorem Encodes.projected {model : DomainModel} {identity : String} {count : Nat
     List.map_cons, List.map_nil]
   rfl
 
+/-- The physical field tuple is the exact saved coordinate and answer list. -/
+theorem Encodes.values_encoded {model : DomainModel} {identity : String} {count : Nat}
+    {frame : Frame} {record : model.Value (layout identity count).type}
+    (encoding : Encodes identity count frame record) :
+    Domain.encodeValues ((fields count).unpack record) =
+      some (frame.values.map (fun value ↦ Domain.Value.data (.index value))) := by
+  have all := RecordProjection.results_all model identity "Record" (fields count) record
+    (fields_local count)
+  have encoded := Original.encodeHelperResult_eq (carriers := model.toCarriers)
+    (fields_local count) ((fields count).unpack record)
+  exact encoded.trans (congrArg some (all.symm.trans encoding.projected))
+
 set_option backward.isDefEq.respectTransparency false in
 /-- The physical projection uses the complete field list in its declared
 order. Its result is the saved frame, even after unrelated caller extension. -/

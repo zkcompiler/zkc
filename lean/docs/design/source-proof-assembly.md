@@ -596,12 +596,46 @@ position-slice association and static continuation/kind literals. The rule
 covers domain refusal before capacity exhaustion and subsequent Math stops.
 Same-typed saved-parent and output mutations are rejected.
 
-These arms do not establish the entire controller. Their installation premises
-must be derived from the source/work relation. Nested return still needs its
-complete frame/answer loading and parent-answer Math composition; dispatch and
-both enclosing ranges must preserve that same relation. These remain common
-proof obligations, not new companion assumptions. The strict generated-delivery
-and original endpoint/authoring gates remain unchanged.
+### Restoring parents, dispatching siblings and computing answers
+
+`QueryControllerReturn` supplies the `ReturnPrefix` rule. It checks the selected continuation and kind,
+loads the actual continuation slot, and recovers the parent's nominal record.
+Parent lookup uses the saved parent instance. The current child's instance
+cannot substitute for it. The packed frame determines the number and order of
+prior answer indices; installation does not supply an unrelated width assertion.
+
+`QueryControllerSibling` composes that prefix with the complete child transition
+and output. Its certificate checks that the newly packed frame contains the
+restored outer continuation, parent instance and position, then the prior answer
+indices followed by the current reply's index. Its execution theorem constructs
+that encoding and derives field readback, retained stores and answer routing.
+The rule covers frame capacity failure and the original position computation's
+stops. The concrete test preserves an earlier reply and rejects a same-typed
+reply permutation and a wrong retained-store output.
+
+`QueryControllerAnswer` composes ordered child reads, the original answer
+computation, checked insertion into the answer arena and complete Return output.
+Math stops precede the capacity check. The selected answer slot must be the
+newly computed value. CSE may reuse phase and kind literals: the common insertion
+proof now covers the two emitted insertion instructions, and the existing
+three-instruction resumption delegates to that proof before its phase literal.
+Both public execution behaviors remain unchanged.
+
+Each rule discharges a premise of the enclosing controller result:
+
+| Rule | Enclosing obligation | Still supplied by common installation |
+| --- | --- | --- |
+| Return prefix | Restore the reached parent and saved answer indices | Static continuation selection and current nominal arena membership |
+| Complete sibling | Preserve the parent association while entering the next child | Installed child reference, source position slice and static kind/continuation |
+| Parent-answer suffix | Read ordered answers, compute and insert the parent's result | Kind-specific answer readback, original answer-slice connection and restored-coordinate readback |
+
+The last row is a suffix rule. The complete parent arm must still derive its
+answer operands and restored coordinates from the saved source frame and compose
+the restoration prefix. It must not expose those generated-layout obligations as
+new companion inputs. The common source/work relation must establish every
+arm's installation premises, and dispatch and both enclosing ranges must preserve
+that relation. These remaining obligations, strict generated delivery and the
+original endpoint/authoring gates are unchanged.
 
 ## Disposition of the revised closing review
 
@@ -635,6 +669,14 @@ two actual calls. It does not, on its own, discharge the separate new
 mathematical-connection gate. Reuse existing installation for that gate where it
 suffices. Broad module moves, optional discovery/search and a toolchain change
 remain later decisions supported by evidence after this package lands.
+
+The subsequent convergence review is consistent with this boundary. Saved replies,
+their source executions and ordered parent contexts were already common facts.
+The return-prefix, sibling and answer rules above close specific physical
+composition obligations; they do not establish the whole generated controller.
+Broad consolidation and remaining repeated mechanical installation are follow-up
+cleanup after this package lands. Security completion and full author-effort
+acceptance remain separate gates.
 
 ## Acceptance and cost accounting
 

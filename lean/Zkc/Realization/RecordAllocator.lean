@@ -115,6 +115,19 @@ theorem read_extended {carriers : Carriers} (environment suffix : Domain.Environ
         cases Option.some.inj (splitRead.symm.trans read)
         exact Domain.View.read_cons _ _ _ _ _ (Original.read_append found suffix) (ih tail remaining)
 
+theorem read_appended {carriers : Carriers} (environment : Domain.Environment carriers) :
+    ∀ values : Domain.Environment carriers,
+      Domain.read (environment ++ values) (List.range' environment.length values.length) =
+        some values
+  | [] => rfl
+  | value :: values => by
+      simp only [Domain.read, List.length_cons, List.range'_succ, List.mapM_cons]
+      have tail := read_appended (environment ++ [value]) values
+      simp only [Domain.read, List.length_append, List.length_cons, List.length_nil,
+        List.append_assoc, List.singleton_append] at tail
+      rw [tail]
+      simp
+
 def silent_sequence {carriers : Carriers} {captured environment next final : Domain.Environment carriers}
     {first rest : Domain.View.Block carriers}
     (step : first environment = .done next)

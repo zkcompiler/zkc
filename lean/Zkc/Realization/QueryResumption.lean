@@ -72,36 +72,32 @@ theorem accepted_iff (pending supplied : Coordinates) :
       · rintro ⟨⟨rfl, rfl, rfl, rfl, rfl⟩, a, b, c, d, e⟩
         exact ⟨⟨a, a, rfl⟩, ⟨b, b, rfl⟩, ⟨c, c, rfl⟩, ⟨d, d, rfl⟩, ⟨e, e, rfl⟩⟩
 
-def answerInstructions (type : Ty) (arena answer : Nat) : List Construction.Instruction :=
+def appendInstructions (type : Ty) (arena answer : Nat) : List Construction.Instruction :=
   [⟨.execute (.sequenceLength type), [arena], [.data .index], []⟩,
-   ⟨.execute (.sequenceAppend type), [arena, answer], [.data (.sequence type)], []⟩,
-   ⟨.execute (.indexConstant 1), [], [.data .index], []⟩]
+   ⟨.execute (.sequenceAppend type), [arena, answer], [.data (.sequence type)], []⟩]
 
-def answerSpine (type : Ty) (arena answer : Nat) : ConnectionTargetPrefix.Prefix :=
+def appendSpine (type : Ty) (arena answer : Nat) : ConnectionTargetPrefix.Prefix :=
   .step (fun model ↦ Domain.View.execute model (.sequenceLength type) [arena] [.data .index])
   (.step (fun model ↦ Domain.View.execute model (.sequenceAppend type)
-    [arena, answer] [.data (.sequence type)])
-  (.step (fun model ↦ Domain.View.execute model (.indexConstant 1) [] [.data .index]) .empty))
+    [arena, answer] [.data (.sequence type)]) .empty)
 
-theorem answerCorrespondence (model : DomainModel) (program : Program) (context : Context)
+theorem appendCorrespondence (model : DomainModel) (program : Program) (context : Context)
     (type : Ty) (arena answer : Nat) :
     Domain.Correspondence.Block (model := model) (program := program) (context := context)
-      (answerInstructions type arena answer) ((answerSpine type arena answer).block model) :=
+      (appendInstructions type arena answer) ((appendSpine type arena answer).block model) :=
   Domain.Correspondence.sequence (Domain.Correspondence.execute _ _ _)
     (Domain.Correspondence.sequence (Domain.Correspondence.execute _ _ _)
-      (Domain.Correspondence.sequence (Domain.Correspondence.execute _ _ _)
-        Domain.Correspondence.empty))
+      Domain.Correspondence.empty)
 
-def answerResults (model : DomainModel) (type : Ty) (data : type.isHandle = false)
+def appendResults (model : DomainModel) (type : Ty) (data : type.isHandle = false)
     (answers : List (model.Value type)) (answer : model.Value type) :
     Domain.Environment model.toCarriers :=
-  [.data (.index answers.length), .data ⟨.sequence type, data, answers ++ [answer]⟩,
-   .data (.index 1)]
+  [.data (.index answers.length), .data ⟨.sequence type, data, answers ++ [answer]⟩]
 
 set_option backward.isDefEq.respectTransparency false in
 /-- Checked length failure precedes insertion. On success the returned index
-names precisely the appended answer, and the final phase is Return (one). -/
-theorem answerSimulation (model : DomainModel) (type : Ty) (data : type.isHandle = false)
+names precisely the appended answer. Phase assignment belongs to the caller. -/
+theorem appendSimulation (model : DomainModel) (type : Ty) (data : type.isHandle = false)
     (environment captured : Domain.Environment model.toCarriers)
     (preserved : captured <+: environment)
     (arena answerSlot : Nat) (answers : List (model.Value type)) (answer : model.Value type)
@@ -109,8 +105,8 @@ theorem answerSimulation (model : DomainModel) (type : Ty) (data : type.isHandle
     (readAnswer : environment[answerSlot]? = some (.data ⟨type, data, answer⟩)) :
     Nonempty (Original.Simulation Eq (fun _ frame ↦ captured <+: frame)
       (if answers.length < indexLimit then
-        .done (environment ++ answerResults model type data answers answer) else .halt .exhausted)
-      ((answerSpine type arena answerSlot).block model environment)) := by
+        .done (environment ++ appendResults model type data answers answer) else .halt .exhausted)
+      ((appendSpine type arena answerSlot).block model environment)) := by
   have localType : Domain.localType type = true := by
     simp [Domain.localType, Domain.dataType, data]
   have localSequence : Domain.localType (.sequence type) = true := by
@@ -157,20 +153,9 @@ theorem answerSimulation (model : DomainModel) (type : Ty) (data : type.isHandle
         PIR.Process.bind, Original.encodeHelperResult, Domain.encodeValues_cons,
         Domain.encodeValues_nil, Domain.Value.encode, Domain.Payload.ofValue,
         Ty.isHandle, data, List.append_assoc] using law
-    have phaseStep : Domain.View.execute model (.indexConstant 1) [] [.data .index]
-        (environment ++ [length, extended]) =
-          .done (environment ++ [length, extended, .data (.index 1)]) := by
-      have law := ConnectionPrimitives.view_execute model (.indexConstant 1)
-        .nil rfl rfl (environment ++ [length, extended]) [] rfl
-      simpa [Primitive.results, Primitive.evaluateOn, indexLimit, primitiveOutcome,
-        PIR.Process.bind, Original.encodeHelperResult, Domain.encodeValues_cons,
-        Domain.encodeValues_nil, Domain.Value.encode, Domain.Payload.ofValue,
-        Ty.isHandle, List.append_assoc] using law
     apply RecordAllocator.silent_sequence lengthStep preserved
       (preserved.trans (List.prefix_append _ _))
     apply RecordAllocator.silent_sequence appendStep
-      (preserved.trans (List.prefix_append _ _)) (preserved.trans (List.prefix_append _ _))
-    apply RecordAllocator.silent_sequence phaseStep
       (preserved.trans (List.prefix_append _ _)) (preserved.trans (List.prefix_append _ _))
     exact .done rfl
   · simp only [bounded, ↓reduceIte]
@@ -180,6 +165,68 @@ theorem answerSimulation (model : DomainModel) (type : Ty) (data : type.isHandle
         PIR.Process.bind] using lengthLaw
     rw [Domain.View.sequence_stop _ _ _ _ stopped]
     exact .checkpoint environment preserved (.halt .exhausted)
+
+def answerInstructions (type : Ty) (arena answer : Nat) : List Construction.Instruction :=
+  appendInstructions type arena answer ++
+    [⟨.execute (.indexConstant 1), [], [.data .index], []⟩]
+
+def answerSpine (type : Ty) (arena answer : Nat) : ConnectionTargetPrefix.Prefix :=
+  (appendSpine type arena answer).append
+    (.step (fun model ↦ Domain.View.execute model (.indexConstant 1) [] [.data .index]) .empty)
+
+theorem answerCorrespondence (model : DomainModel) (program : Program) (context : Context)
+    (type : Ty) (arena answer : Nat) :
+    Domain.Correspondence.Block (model := model) (program := program) (context := context)
+      (answerInstructions type arena answer) ((answerSpine type arena answer).block model) :=
+  Domain.Correspondence.sequence (Domain.Correspondence.execute _ _ _)
+    (Domain.Correspondence.sequence (Domain.Correspondence.execute _ _ _)
+      (Domain.Correspondence.sequence (Domain.Correspondence.execute _ _ _)
+        Domain.Correspondence.empty))
+
+def answerResults (model : DomainModel) (type : Ty) (data : type.isHandle = false)
+    (answers : List (model.Value type)) (answer : model.Value type) :
+    Domain.Environment model.toCarriers :=
+  [.data (.index answers.length), .data ⟨.sequence type, data, answers ++ [answer]⟩,
+   .data (.index 1)]
+
+set_option backward.isDefEq.respectTransparency false in
+/-- Checked length failure precedes insertion. On success the returned index
+names precisely the appended answer, and the final phase is Return (one). -/
+theorem answerSimulation (model : DomainModel) (type : Ty) (data : type.isHandle = false)
+    (environment captured : Domain.Environment model.toCarriers)
+    (preserved : captured <+: environment)
+    (arena answerSlot : Nat) (answers : List (model.Value type)) (answer : model.Value type)
+    (readArena : environment[arena]? = some (.data ⟨.sequence type, data, answers⟩))
+    (readAnswer : environment[answerSlot]? = some (.data ⟨type, data, answer⟩)) :
+    Nonempty (Original.Simulation Eq (fun _ frame ↦ captured <+: frame)
+      (if answers.length < indexLimit then
+        .done (environment ++ answerResults model type data answers answer) else .halt .exhausted)
+      ((answerSpine type arena answerSlot).block model environment)) := by
+  obtain ⟨insert⟩ := appendSimulation model type data environment captured preserved
+    arena answerSlot answers answer readArena readAnswer
+  change Nonempty (Original.Simulation _ _ _
+    (((appendSpine type arena answerSlot).append
+      (.step (fun model ↦ Domain.View.execute model (.indexConstant 1) [] [.data .index])
+        .empty)).plug (fun _ ↦ Domain.View.empty) model environment))
+  rw [ConnectionTargetPrefix.Prefix.append_plug, ConnectionTargetPrefix.Prefix.plug_eq_bind]
+  refine ⟨?_⟩
+  by_cases bounded : answers.length < indexLimit
+  · simp only [bounded, ↓reduceIte] at insert ⊢
+    apply insert.continueDone (fun _ held ↦ held)
+    have phaseStep : Domain.View.execute model (.indexConstant 1) [] [.data .index]
+        (environment ++ appendResults model type data answers answer) =
+          .done (environment ++ answerResults model type data answers answer) := by
+      have law := ConnectionPrimitives.view_execute model (.indexConstant 1)
+        .nil rfl rfl (environment ++ appendResults model type data answers answer) [] rfl
+      simpa [Primitive.results, Primitive.evaluateOn, indexLimit, primitiveOutcome,
+        PIR.Process.bind, Original.encodeHelperResult, Domain.encodeValues_cons,
+        Domain.encodeValues_nil, Domain.Value.encode, Domain.Payload.ofValue,
+        Ty.isHandle, answerResults, appendResults, List.append_assoc] using law
+    apply RecordAllocator.silent_sequence phaseStep
+      (preserved.trans (List.prefix_append _ _)) (preserved.trans (List.prefix_append _ _))
+    exact .done rfl
+  · simp only [bounded, ↓reduceIte] at insert ⊢
+    exact insert.continueHalt _ (fun _ held ↦ held)
 
 def instructions (type : Ty) (kind : Nat) (placement : Placement) : List Construction.Instruction :=
   RequiredIndices.constantInstructions placement.start placement.phase 2 placement.phaseSite ++

@@ -33,6 +33,30 @@ def Encodes {carriers : Carriers} (identity : String) (count : Nat)
     ClearStorage.packCoordinates count frame.answers () = some saved ∧
     record = (frame.outer, frame.outerInstance, frame.parentInstance, frame.position, saved)
 
+/-- The number of prior replies is determined by the actual packed frame. -/
+theorem Encodes.answers_length {carriers : Carriers} {identity : String} {count : Nat}
+    {frame : Frame} {record : carriers.Value (layout identity count).type}
+    (encoded : Encodes identity count frame record) : frame.answers.length = count := by
+  have width : ∀ (size : Nat) (indices : List Nat)
+      (packed : carriers.ProductValue (ClearStorage.indexFields size .nil)),
+      ClearStorage.packCoordinates size indices () = some packed → indices.length = size := by
+    intro size
+    induction size with
+    | zero =>
+        intro indices packed matched
+        cases indices with
+        | nil => rfl
+        | cons => simp [ClearStorage.packCoordinates] at matched
+    | succ size ih =>
+        intro indices packed matched
+        cases indices with
+        | nil => simp [ClearStorage.packCoordinates] at matched
+        | cons first rest =>
+            obtain ⟨tail, found, _⟩ := Option.map_eq_some_iff.mp matched
+            exact congrArg Nat.succ (ih rest tail found)
+  obtain ⟨packed, matched, _⟩ := encoded
+  exact width count frame.answers packed matched
+
 theorem encoding_exists {carriers : Carriers} (identity : String) (count : Nat)
     (frame : Frame) (width : frame.answers.length = count) :
     ∃ record : carriers.Value (layout identity count).type, Encodes identity count frame record := by

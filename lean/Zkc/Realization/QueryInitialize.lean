@@ -168,18 +168,6 @@ def initialState (model : DomainModel) (constructor anchorInstance position : Na
   [constructor, anchorInstance, position, 0, 0, 0, 0, 0].map
     (fun value ↦ .data (.index value)) ++ emptyValues model types
 
-private theorem read_appended {carriers : Carriers} (environment : Domain.Environment carriers) :
-    ∀ values : Domain.Environment carriers,
-      Domain.read (environment ++ values) (List.range' environment.length values.length) =
-        some values
-  | [] => rfl
-  | value :: values => by
-      simp only [Domain.read, List.length_cons, List.range'_succ, List.mapM_cons]
-      have tail := read_appended (environment ++ [value]) values
-      simp only [Domain.read, List.length_append, List.length_cons, List.length_nil,
-        List.append_assoc, List.singleton_append] at tail
-      rw [tail]
-      simp
 
 theorem read_output (model : DomainModel) (types : List Ty)
     (localTypes : ∀ type ∈ types, Domain.localType (.sequence type) = true)
@@ -191,7 +179,7 @@ theorem read_output (model : DomainModel) (types : List Ty)
         some (initialState model constructor anchorInstance position types) := by
   let header : Domain.Environment model.toCarriers :=
     [.data (.index constructor), .data (.index anchorInstance), .data (.index 0)]
-  have tail := read_appended (environment ++ header) (emptyValues model types)
+  have tail := RecordAllocator.read_appended (environment ++ header) (emptyValues model types)
   rw [emptyValues_length model types localTypes] at tail
   have length : (environment ++ header).length = environment.length + 3 := by simp [header]
   rw [length] at tail
