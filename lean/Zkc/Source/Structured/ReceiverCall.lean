@@ -28,7 +28,7 @@ theorem marks (original : Store) (labels : List (String × String)) :
   | nil => exact PIR.Process.ReturnsUnder.done _
   | cons label rest ih => exact (mark oracles ordinary base publish original label.1 label.2).call ih
 
-private theorem enterCall (original : Store) (signature : ProtocolSignature) (site : String) :
+theorem enterCall (original : Store) (signature : ProtocolSignature) (site : String) :
     Keeps oracles ordinary base publish original (.call (.application signature site) .done) () := by
   apply PIR.Process.ReturnsUnder.action
   intro state same
@@ -38,7 +38,16 @@ private theorem enterCall (original : Store) (signature : ProtocolSignature) (si
   repeat' split
   all_goals exact ⟨same, fun _ _ ↦ trivial⟩
 
-private theorem leaveCall (original : Store) :
+theorem enterIteration (original : Store) (site : String) (index : Nat) :
+    Keeps oracles ordinary base publish original (.call (.iteration site index) .done) () := by
+  apply PIR.Process.ReturnsUnder.action
+  intro state same
+  rw [OraclePublication.actionM_local _ _ _ _ _ _ rfl]
+  apply Zkc.MonadicPostcondition.pure
+  simp only [OracleProtocol.handler]
+  split <;> exact ⟨same, fun _ _ ↦ trivial⟩
+
+theorem leaveCall (original : Store) :
     Keeps oracles ordinary base publish original (.call .leave .done) () := by
   apply PIR.Process.ReturnsUnder.action
   intro state same

@@ -69,20 +69,32 @@ def Publication.handles (pub : Publication) : FriBindingExecution.Handles :=
 def Publication.output (pub : Publication) (shift : Octic) :=
   FriCommitTerminal.output model pub.source pub.handles.layers pub.handles.folds shift pub.coefficients
 
+def Publication.Returned {Aux : Type} (pub : Publication) (prior : PublishedWords.Table model) (shift : Octic)
+    (out : Values (FriBinding.Value model) protocol0Signature.outputs) (store : CommitIteration.Store Aux) : Prop :=
+  out = pub.output shift ∧ pub.rounds.First prior store.provider.words ∧ pub.rounds.Installed store shift ∧ store.self = 1
+
 def Result {Aux : Type} (prior : PublishedWords.Table model) (shift : Octic) (out : Values (FriBinding.Value model) protocol0Signature.outputs)
-    (store : CommitIteration.Store Aux) : Prop :=
-  ∃ pub : Publication, out = pub.output shift ∧ pub.rounds.First prior store.provider.words ∧ pub.rounds.Installed store shift ∧ store.self = 1
+    (store : CommitIteration.Store Aux) : Prop := ∃ pub : Publication, pub.Returned prior shift out store
+
+theorem Publication.mask (pub : Publication) (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (separate : 1 ≠ context.roles 0) (shift : Octic) :
+    maskValues 1 (context.mapScopes protocol0Signature.outputScopes) (pub.output shift) = pub.output shift := by
+  apply (maskValues_mapScopes context 1 1 protocol0Signature.outputScopes _ _).trans
+  · rfl
+  · intro scope member
+    have used : ∀ s ∈ protocol0Signature.outputScopes, s = [0] ∨ s = [1] ∨ s = [0,1] := by decide +kernel
+    rcases used scope member with rfl | rfl | rfl <;> simp [receiver, separate]
 
 set_option maxRecDepth 6000 in
-private theorem terminal (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
+theorem terminal (context : ProtocolContext) (receiver : context.roles 1 = 1) (separate : 1 ≠ context.roles 0)
     (prior : PublishedWords.Table model) (shift : Octic) (entry : Values (FriBinding.Value model) roundSite.context) (before : State Aux) (rounds : Rounds 5 3)
     (offset : entry.get FriCommitAdmission.shiftPort = concrete model (.field extension) shift)
     (rows : entry.get FriCommitAdmission.sizePort = concrete model .index 32)
     (count : entry.get FriCommitAdmission.countPort = concrete model .index 3)
     (position : rounds.First prior before.oracle.provider.words) (installed : rounds.Installed before.oracle shift) (role : before.oracle.self = 1) :
-    PIR.Process.OnReturn (handler network choose) before (roundSite.next.denote (meaning context)
+    PIR.Process.OnReturn (handler network choose) before (roundSite.next.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
       (Environment.prepend entry.get (CommitLoop.packed 2 (rounds.endingShift shift) rounds.sources rounds.views)))
-      (fun out state ↦ Result prior shift out state.oracle) := by
+      (fun out state ↦ ∃ pub : Publication, pub.rounds = rounds ∧ pub.Returned prior shift out state.oracle) := by
   cases rounds with
   | fold source view word beta tail =>
     let rounds := Rounds.fold source view word beta tail
@@ -113,7 +125,7 @@ private theorem terminal (context : ProtocolContext) (receiver : context.roles 1
     change PublishedWords.PublishedAfter (row := .field extension) prior before.oracle.provider.words source (List.ofFn word) at position
     have chronology := position.transport (frame.words.trans later.words)
     exact endLaw.weaken fun rec h out returned ↦
-      ⟨⟨source, view, word, beta, tail, cs, (h.2 out returned).1⟩, (h.2 out returned).2,
+      ⟨⟨source, view, word, beta, tail, cs, (h.2 out returned).1⟩, rfl, (h.2 out returned).2,
        by rw [h.1]; exact chronology, by rw [h.1]; exact reg, h.1 ▸ self⟩
 
 /-- Every returning receiver Commit exposes these six registered tables,
@@ -125,15 +137,11 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
   rw [CommitBody.invokeReceiver context receiver shift service]
   apply PIR.Process.OnReturn.bind (middle := fun out state ↦ Result before.oracle.provider.words shift out state.oracle)
   · exact CommitBody.afterRounds network choose context receiver separate shift nz service before role (fun out state ↦ Result before.oracle.provider.words shift out state.oracle)
-      (terminal network choose context receiver separate before.oracle.provider.words shift)
+      (fun entry after rounds offset rows count position live self ↦
+        (terminal network choose context receiver separate before.oracle.provider.words shift entry after rounds offset rows count position live self).weaken
+          fun _ law out returned ↦ let ⟨pub, _, result⟩ := law out returned; ⟨pub, result⟩)
   · rintro out after ⟨pub, rfl, position, registered, self⟩
-    have masked : maskValues 1 (context.mapScopes protocol0Signature.outputScopes)
-        (pub.output shift) = pub.output shift := by
-      apply (maskValues_mapScopes context 1 1 protocol0Signature.outputScopes _ _).trans
-      · rfl
-      · intro scope member
-        have used : ∀ s ∈ protocol0Signature.outputScopes, s = [0] ∨ s = [1] ∨ s = [0,1] := by decide +kernel
-        rcases used scope member with rfl | rfl | rfl <;> simp [receiver, separate]
+    have masked := pub.mask context receiver separate shift
     exact Zkc.MonadicPostcondition.pure _ _ (fun value eq ↦
       ⟨pub, (PIR.Outcome.returned.inj eq).symm.trans masked, position, registered, self⟩)
 

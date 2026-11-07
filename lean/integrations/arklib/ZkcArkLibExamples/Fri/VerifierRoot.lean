@@ -168,6 +168,24 @@ def FirstWord (pub : Publication) (store : CommitIteration.Store Aux) : Prop :=
   ∃ stored : PublishedWords.Word model (.field extension), stored.anchor = pub.source ∧
     stored.cells = List.ofFn pub.word ∧ store.provider.words.getLast? = some ⟨.field extension, stored⟩
 
+def FirstFar (shift : Octic) (nonzero : shift ≠ 0) (δ : ℝ) (store : CommitIteration.Store Aux) : Prop :=
+  ∃ stored : PublishedWords.Word model (.field extension), store.provider.words.getLast? = some ⟨.field extension, stored⟩ ∧
+    ∃ word : Fin 32 → Octic, stored.cells = List.ofFn word ∧ Far (RetainedDomain.domain shift nonzero) 8 δ word
+
+theorem FirstWord.far_iff {pub : Publication} {store : CommitIteration.Store Aux} (first : FirstWord pub store)
+    (shift : Octic) (nonzero : shift ≠ 0) (δ : ℝ) :
+    FirstFar shift nonzero δ store ↔ Far (RetainedDomain.domain shift nonzero) 8 δ pub.word := by
+  obtain ⟨stored, _, storedCells, last⟩ := first
+  constructor
+  · rintro ⟨other, last', word, otherCells, far⟩
+    have same : stored = other := by
+      have tagged := Option.some.inj (last.symm.trans last')
+      cases tagged
+      rfl
+    have words : pub.word = word := List.ofFn_inj.mp (storedCells.symm.trans (same ▸ otherCells))
+    exact words ▸ far
+  · exact fun far ↦ ⟨stored, last, pub.word, storedCells, far⟩
+
 /-- The original verifier returns its actual acceptance bit. Its intermediate
 output binds the three installed folds to the eight sampled positions; the
 public entry exposes only the boolean. This law permits early stops. -/
@@ -210,13 +228,6 @@ theorem sourceEvent (shift : Octic) (nonzero : shift ≠ 0) (δ : ℝ) (service 
   | stopped why => exact (RetainedDomain.sourceEvent_stopped out event).elim
   | returned values =>
     obtain ⟨_, pub, xs, ok, reg, first⟩ := law values out
-    obtain ⟨stored, _, storedCells, last⟩ := (show FirstWord pub record.state.oracle from first)
-    obtain ⟨_, other, last', word, otherCells, far⟩ := event
-    have same : stored = other := by
-      have tagged := Option.some.inj (last.symm.trans last')
-      cases tagged
-      rfl
-    have words : pub.word = word := List.ofFn_inj.mp (storedCells.symm.trans (same ▸ otherCells))
-    exact ⟨pub, xs, first, words ▸ far, ok, reg⟩
+    exact ⟨pub, xs, first, (first.far_iff shift nonzero δ).mp event.2, ok, reg⟩
 
 end ZkcSecurity.ArkLib.Fri.VerifierRoot

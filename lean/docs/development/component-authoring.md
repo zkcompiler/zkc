@@ -419,9 +419,17 @@ the query loop returns. These are conditional return statements.
 For a fixed safe transcript with a far initial word, the probability that
 the actual suffix returns is at most `(1 − min(1/4, δ))^8`.
 `VerifierQueryProbability.safeFar_le` uses freshness of the eight scalar
-requests and keeps the unconditional mass of aborts. Applying this bound
-to the full security event also requires bounding unsafe fold transitions
-before those positions are drawn. Honest termination is a separate claim.
+requests and keeps the unconditional mass of aborts. `InteractiveSoundness.soundness` bounds the original verifier's joint event
+of acceptance and a far first publication. Before each of the three field
+draws the source has already selected a word. The common probability rule
+charges a failed postcondition at that draw and composes it with the
+remaining source under the actual post-state. The FRI companion instantiates
+the rule with ArkLib's folding-agreement failure and its unique-decoding
+bound. A good loop return fixes the three rounds independently of the
+terminal coefficient. The final error is the sum of the three fold charges
+and the eight-position term above. The theorem assumes the clear-word
+provider and the configured fresh interactive sampler. Honest termination
+and the compiled Fiat–Shamir reduction have separate obligations.
 
 For a publication followed by a virtual construction, `Region.cutFirst`
 selects a reached operation on the continuation spine. A bind still executes

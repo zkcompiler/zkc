@@ -74,7 +74,7 @@ noncomputable def captures (service : Nat) : Values (FriBinding.Value model) rou
   .cons (concrete model (.field extension) ((2 : Octic)⁻¹ : Octic))
     (.cons (concrete model (.service FriScalarLoop.contract) service) .nil)
 
-private theorem mask (context : ProtocolContext) (receiver : context.roles 1 = 1)
+theorem mask (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (n : Nat) (shift : Octic) (layers folds : List OracleAnchor) :
     maskValues 1 (context.mapScopes roundSite.spec.stateScopes) (packed n shift layers folds) =
       packed n shift layers folds := by

@@ -23,7 +23,7 @@ variable {M : Type → Type} [Monad M] [LawfulMonad M] [MonadAttach M] [LawfulMo
   (choose : PublishedWords.Chooser M model Aux E)
 
 set_option maxRecDepth 6000 in
-private theorem split (context : ProtocolContext) (shift : Octic) (service : Nat) :
+theorem split (context : ProtocolContext) (shift : Octic) (service : Nat) :
     let inputs := arguments model shift service
     let meaning := (verifierAlgebra model).meaning (verifierTable model) context 1
     protocol0Body.denote meaning inputs.get = (admission.denote meaning inputs.get).bind fun live ↦

@@ -2,7 +2,7 @@ import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
-import ZkcArkLibExamples.Fri.VerifierQueryProbability
+import ZkcArkLibExamples.Fri.InteractiveSoundness
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -397,3 +397,9 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `Zkc.Source.Structured.ReceiverCall, `ZkcExamples.Structured.FriPhaseTransfer,
    `ZkcArkLibExamples.Fri.VerifierCalls, `ZkcArkLibExamples.Fri.VerifierRoot]
   "FRI-SOURCE-DERIVED-PHASE-CALLS-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcSecurity.ProgramLogic.ReturnBound, `ZkcSecurity.Bindings.Source.ReturnBound,
+   `ZkcArkLibExamples.Fri.CommitRoundProbability, `ZkcArkLibExamples.Fri.CommitLoopProbability,
+   `ZkcArkLibExamples.Fri.CommitProbability, `ZkcArkLibExamples.Fri.InteractiveSoundness]
+  "FRI-INTERACTIVE-SOURCE-SOUNDNESS-PASS" (exactModules := true))
