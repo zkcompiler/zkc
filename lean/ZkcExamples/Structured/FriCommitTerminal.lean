@@ -23,6 +23,9 @@ def delivery : Region.OperationCut roundNext :=
 set_option maxRecDepth 6000 in
 checked_cut_suffix finish := delivery
 
+def messageSite :=
+  (match delivery.op with | .exchange _ 0 1 site => some site | _ => none).get (by kernel_rfl)
+
 /-- The two handle sequences come from different ports of the returned
 round state. Geometry and count come from the pre-round environment. -/
 def layersPort : Var delivery.context layersSort.type := delivery.inherited (.there (.there .here))

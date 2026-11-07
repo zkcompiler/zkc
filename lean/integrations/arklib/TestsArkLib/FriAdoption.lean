@@ -13,7 +13,7 @@ import ZkcExamples.Structured.FriBindingExecution
 import ZkcExamples.Structured.FriLowDegreeCall
 import ZkcExamples.Structured.FriQueryCall
 import ZkcArkLibExamples.Fri.PublishedSampling
-import ZkcArkLibExamples.Fri.ClearCertificate
+import ZkcArkLibExamples.Fri.ClearAccess
 import ZkcTools.DeclarationAudit
 
 /-! Focused controls for the mathematical FRI adapters. The two-round example is a mathematical
@@ -411,3 +411,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Source.Structured.CheckedFrames, `ZkcExamples.Structured.FriEntryFrame,
    `ZkcArkLibExamples.Fri.HonestMessages, `ZkcSecurityExamples.FriHonestExchange]
   "FRI-CHECKED-ENTRY-AND-HONEST-MESSAGES-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcSecurity.Bindings.Transcript.QueryTreeSource.Composition.AccessLog,
+   `ZkcArkLibExamples.Fri.ClearFoldRoute, `ZkcArkLibExamples.Fri.ClearAccess]
+  "FRI-COMPILED-FIELD-SITES-AND-PRIMITIVE-LOG-PASS" (exactModules := true))

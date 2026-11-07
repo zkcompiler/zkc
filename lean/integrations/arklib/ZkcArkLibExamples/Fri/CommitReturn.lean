@@ -24,9 +24,6 @@ variable {M : Type → Type} [Monad M] [LawfulMonad M] [MonadAttach M] [LawfulMo
 
 private abbrev meaning (context : ProtocolContext) := (verifierAlgebra model).meaning (verifierTable model) context 1
 
-private def messageSite :=
-  (match delivery.op with | .exchange _ 0 1 site => some site | _ => none).get (by kernel_rfl)
-
 private abbrev reply (cs : List Octic) :=
   Values.cons (Value := FriBinding.Value model) (ty := .vector extension) (concrete model (.vector extension) cs) .nil
 
