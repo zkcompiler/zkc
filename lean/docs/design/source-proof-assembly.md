@@ -276,6 +276,17 @@ coordinates and substituted same-typed captured handles. Static continuation
 dispatch, reached controller phases and nested-frame composition still belong
 to the whole-controller proof; these local relations do not establish them.
 
+`QuerySourceContext` fixes the progress relation's child operations to that
+parent's actual installation suffix. Source reachability supplies the context;
+fresh later constructions preserve exactly the same child operations. Its
+completion rule reconnects body progress to the original `OracleProcess.answer`,
+including the parent's leading query event and query charge. The checked-source
+fixture completes one virtual query with two repeated children: three logical
+queries, two provider calls, the real poststate and ordered events. A stopped
+first child retains the parent/child charges and events while skipping the
+second child. This is the source half of the connection; execution of the
+generated controller must still construct the matching progress derivation.
+
 `TestsArkLib.FriSourceContinuation.installed` consumes the same common cursor
 rules on the installed FRI virtual declaration. It reuses `VirtualReads.twoReads`
 and its existing helper/mathematical installation, then appends the two actual
