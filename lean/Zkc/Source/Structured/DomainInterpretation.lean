@@ -115,10 +115,10 @@ theorem operationOn_interpret (operations : PIR.OperationInterpretation I J)
     (operationOn model leftSites left op args bodies).interpret operations =
       operationOn model rightSites right op args (RegionFunctions.translate (dialect := dialect) operations bodies) := by
   cases op with
-  | fieldEmbed | vectorLength =>
+  | sequenceLength | fieldEmbed | vectorLength =>
     cases args with
     | cons value rest => cases rest; cases bodies; rfl
-  | indexConstant | fieldConstant | booleanConstant | groupIdentity => cases args; cases bodies; rfl
+  | sequenceEmpty | indexConstant | fieldConstant | booleanConstant | groupIdentity => cases args; cases bodies; rfl
   | mark site =>
     cases args; cases bodies
     change ((leftSites.mark site).bind (fun _ => .done (Values.nil : Values model.Value []))).interpret operations =
@@ -146,7 +146,7 @@ theorem operationOn_interpret (operations : PIR.OperationInterpretation I J)
           .done (Values.nil : Values model.Value []))).interpret operations =
         (rightSites.consumeUnit slot token).bind (fun _ => .done .nil)
       simp only [PIR.Process.interpret_bind, sites.consumeUnit slot token, PIR.Process.interpret]
-  | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | sequenceAppend | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale | groupEqual =>
     cases args with
     | cons a rest => cases rest with

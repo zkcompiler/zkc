@@ -235,9 +235,9 @@ repeat, rather than the prefix of a later application inside that repeat. -/
 def repeatSites (template : Template) : List String :=
   (template.steps.foldl (fun (state : Option String × List String) step =>
     if step.kind = "apply" then
-      (some (Structured.qualifyProtocolSite state.1 step.site), state.2)
+      (some (Template.expandSite state.1 step.protocol step.site), state.2)
     else if step.kind = "repeat" then
-      (state.1, state.2 ++ [Structured.qualifyProtocolSite state.1 step.site])
+      (state.1, state.2 ++ [Template.expandSite state.1 step.protocol step.site])
     else state) (none, [])).2
 
 mutual

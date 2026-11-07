@@ -106,14 +106,15 @@ def publicFormula : FormulaBinding SumcheckSourceViews.imported publicApplicatio
 
 def reductionFormula : FormulaBinding SumcheckReduceViews.imported reductionApplication.relation := by bind_contract
 
-set_option maxRecDepth 20000 in
-theorem sourceBodies : Bodies SumcheckSourceViews.unit.definitions where
-  add := by exact_body SumcheckSourceViews.sumAddDefinition
-  step := by exact_body SumcheckSourceViews.sumStepDefinition
-  total := by exact_body SumcheckSourceViews.sumTotalDefinition
+theorem sourceBodies (model : DomainModel) :
+    ReferenceLibrary.Sum.Bodies model SumcheckSourceViews.unit.definitions "bls12-381.fr"
+      SumcheckSourceSelections.sumBindings :=
+  (SumcheckSourceSelections.scalarInstallation.property model).toBodies
 
 set_option maxRecDepth 20000 in
-theorem reductionBodies : Bodies SumcheckReduceViews.unit.definitions where
+theorem reductionBodies (model : DomainModel) :
+    ReferenceLibrary.Sum.Bodies model SumcheckReduceViews.unit.definitions "bls12-381.fr"
+      SumcheckSourceSelections.sumBindings where
   add := by exact_body SumcheckReduceViews.sumAddDefinition
   step := by exact_body SumcheckReduceViews.sumStepDefinition
   total := by exact_body SumcheckReduceViews.sumTotalDefinition
@@ -202,22 +203,11 @@ set_option backward.isDefEq.respectTransparency false in
 theorem public_formula_equation (raw : List F) (claim : F) (bounded : raw.length < indexLimit) :
     publicFormula.invokeRelation (F := F) (G := G) (.cons raw (.cons claim .nil)) =
       .done (.cons (decide (claim = raw.sum)) .nil) := by
-  change publicFormula.process (.cons raw (.cons claim .nil)) = _
-  rw [publicFormula.process_eq_body]
-  have totalLaw :
-      (meaning F G (closedMeanings SumcheckSourceViews.unit.definitions)).OperationLaw
-        (fun op => .call op .done) (.invoke totalHelper) (.cons raw .nil) .nil
-        (.done (.cons raw.sum .nil)) := by
-    apply RegionMeaning.OperationLaw.identity
-    exact total_equation SumcheckSourceViews.unit.linked sourceBodies raw bounded
-  have derived : Region.Derivation
-      (meaning F G (closedMeanings SumcheckSourceViews.unit.definitions))
-      (fun op => .call op .done) publicFormula.definition.body
-      (Values.cons raw (.cons claim .nil)).get (.done (.cons (decide (claim = raw.sum)) .nil)) := by
-    derive_region using (first
-      | exact totalLaw
-      | (apply RegionMeaning.OperationLaw.identity; rfl))
-  exact derived.sound_identity
+  rw [FormulaBinding.invokeRelation_eq_invokeRelationOn]
+  refine (ReferenceLibrary.Sum.scalar_eq (ringModel F G) SumcheckSourceViews.unit.linked
+    (sourceBodies _) publicFormula.original.name (SumcheckSourceSelections.scalarBody _)
+    raw claim).trans ?_
+  simp [ReferenceLibrary.Sum.scalarRelation, bounded, primitiveOutcome]
 
 set_option maxRecDepth 20000 in
 theorem reduction_formula_equation (raw : List F) (dimension width : Nat)
@@ -225,7 +215,7 @@ theorem reduction_formula_equation (raw : List F) (dimension width : Nat)
     reductionFormula.invokeRelation (F := F) (G := G)
       (.cons raw (.cons dimension (.cons width (.cons point (.cons claim .nil))))) =
       .done (.cons (decide (claim = (restrictPrefixValues raw point).sum)) .nil) := by
-  exact pending_equation (F := F) (G := G) SumcheckReduceViews.unit.linked reductionBodies
+  exact pending_equation (F := F) (G := G) SumcheckReduceViews.unit.linked (reductionBodies _)
     (by exact_body SumcheckReduceViews.pendingFormulaDefinition)
     (by exact_body SumcheckReduceViews.valuesDefinition) raw dimension width point claim bounded
 
@@ -299,7 +289,7 @@ theorem reduction_residual_formula_law :
   cases rest with | cons point rest => ?_
   cases rest with | cons claim rest => ?_
   cases rest
-  exact pending_equation (F := F) (G := G) SumcheckReduceViews.unit.linked reductionBodies
+  exact pending_equation (F := F) (G := G) SumcheckReduceViews.unit.linked (reductionBodies _)
     (by exact_body SumcheckReduceViews.pendingFormulaDefinition)
     (by exact_body SumcheckReduceViews.valuesDefinition) raw dimension width point claim bounded
 

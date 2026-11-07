@@ -137,6 +137,17 @@ fn generated_origin_protocol(protocol: &str) -> Result<bool> {
     Ok(true)
 }
 
+fn origin_step_site(prefix: Option<&str>, protocol: &str, site: &str) -> Result<String> {
+    expanded_site(
+        if generated_origin_protocol(protocol)? {
+            None
+        } else {
+            prefix
+        },
+        site,
+    )
+}
+
 /// Read only the already checked origin tree. Authored frames expand application
 /// prefixes; generated oracle frames retain their already expanded actual sites.
 fn control_frames(origin: &serde_json::Value, work: &mut ProofWork) -> Result<Vec<ControlFrame>> {
@@ -155,14 +166,7 @@ fn control_frames(origin: &serde_json::Value, work: &mut ProofWork) -> Result<Ve
             1 + field(1)?.len() + field(2)?.len() + prefix.as_ref().map_or(0, String::len) + 40,
         )?;
         let protocol = field(1)?.to_owned();
-        let site = expanded_site(
-            if generated_origin_protocol(&protocol)? {
-                None
-            } else {
-                prefix.as_deref()
-            },
-            field(2)?,
-        )?;
+        let site = origin_step_site(prefix.as_deref(), &protocol, field(2)?)?;
         match field(0)? {
             "apply" => prefix = Some(site),
             "repeat" => {
@@ -237,7 +241,10 @@ pub fn native_origin_site(origin: &str, kind: &str) -> Result<String> {
             let site = step[2]
                 .as_str()
                 .ok_or_else(|| refuse("native-proof-origin"))?;
-            prefix = Some(expanded_site(prefix.as_deref(), site)?);
+            let protocol = step[1]
+                .as_str()
+                .ok_or_else(|| refuse("native-proof-origin"))?;
+            prefix = Some(origin_step_site(prefix.as_deref(), protocol, site)?);
         }
     }
     let site = origin[4][2]

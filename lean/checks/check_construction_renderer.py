@@ -165,6 +165,115 @@ def renderer_member_refusals():
     return count
 
 
+def product_controls():
+    """Projection expansion is checked against independently written Lean data."""
+    product = ["variant", ["tuple", [["atom", "test.record"]]], [["Record", [INDEX, INDEX]]]]
+    make = ["exec.variant", [["alternative", ["string", "Record"]], ["site", ["string", "make"]]],
+            [], [0, 1], [product], []]
+    match = ["exec.match", [["alternatives", ["array", [["string", "Record"]]]],
+                            ["site", ["string", "project"]]], [], [3, 0], [INDEX, INDEX, INDEX],
+             [[[INDEX, INDEX, INDEX], [], ["exec.complete", [1, 2, 0]], "Record", [INDEX, INDEX]]]]
+    data = export([INDEX, INDEX, TRANSCRIPT], [make, match], [4, 5, 6, 2])
+    data[6] = [INDEX, INDEX, INDEX, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedProduct")) + r'''
+open Zkc.Construction in
+example : RenderedProduct.participant.instructions = [
+    ⟨.calculate (.makeProduct "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil))),
+      [0, 1], [.data (.product "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil)))], []⟩,
+    ⟨.calculate (.getProduct "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil))
+      .index (.there .here)), [3], [.data .index], []⟩,
+    ⟨.calculate (.getProduct "[\"test.record\"]" "Record" (.cons .index (.cons .index .nil))
+      .index .here), [3], [.data .index], []⟩] ∧
+    RenderedProduct.participant.returned = [4, 0, 5, 2] := by decide +kernel
+'''
+
+
+def local_branch_controls():
+    guard = ["exec.apply", [["binding", ["symbol", ["require"]]], ["parameters", ["array", []]],
+                            ["site", ["string", "guard"]]],
+             ["control.require", [], "", [BOOLEAN], []], [0], [], []]
+    branch = ["exec.test", [["site", ["string", "choose"]]], [], [0, 1], [BOOLEAN],
+              [[[BOOLEAN], [], ["exec.complete", [0]], "then", []],
+               [[BOOLEAN], [guard], ["exec.complete", [0]], "else", []]]]
+    data = export([BOOLEAN, BOOLEAN, TRANSCRIPT], [branch], [3, 2])
+    return strip(renderer.render(data, "RenderedLocalBranch")) + '''
+open Zkc.Construction in
+example : RenderedLocalBranch.participant.instructions = [
+    ⟨.localBranch, [0, 1], [.data .boolean],
+      [⟨[.data .boolean], [], [0]⟩,
+       ⟨[.data .boolean], [⟨.require "guard", [0], [], []⟩], [0]⟩]⟩] := by decide +kernel
+'''
+
+
+def local_range_controls():
+    region = [[INDEX, INDEX, BOOLEAN], [], ["exec.complete", [2, 0]], True]
+    instruction = ["exec.range", [["site", ["string", "traverse"]]], [], [0, 1, 2, 3], [INDEX], [region]]
+    data = export([INDEX, INDEX, INDEX, BOOLEAN, TRANSCRIPT], [instruction], [5, 4])
+    data[6] = [INDEX, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedLocalRange")) + '''
+open Zkc.Construction in
+example : RenderedLocalRange.participant.instructions = [
+    ⟨.localRange true, [0, 1, 2, 3], [.data .index],
+      [⟨[.data .index, .data .index, .data .boolean], [], [2, 0]⟩]⟩] := by decide +kernel
+'''
+
+
+def embedded_math_controls():
+    folded = ["data.finite_fold", [["domain", ["symbol", ["range"]]],
+                                   ["step", ["symbol", ["sum"]]]], [], [0, 1, 2], [INDEX], []]
+    instruction = ["exec.compute", [["callee", ["symbol", ["calculation"]]],
+                                     ["site", ["string", "compute"]]], [], [0, 1, 2], [INDEX],
+                   [[[INDEX, INDEX, INDEX], [folded], ["func.return", [3]]]]]
+    data = export([INDEX, INDEX, INDEX, TRANSCRIPT], [instruction], [4, 3])
+    data[6] = [INDEX, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedMathCompute")) + '''
+open Zkc.Construction in
+example : RenderedMathCompute.participant.instructions = [
+    ⟨.mathCompute, [0, 1, 2], [.data .index],
+      [⟨[.data .index, .data .index, .data .index],
+        [⟨.finiteFold "range" "sum" "", [0, 1, 2], [.data .index], []⟩], [3]⟩]⟩] := by decide +kernel
+'''
+
+
+def checked_primitive_controls():
+    attrs = [["binding", ["symbol", ["installed"]]], ["parameters", ["array", []]],
+             ["site", ["string", "comparison"]]]
+    instruction = ["exec.apply", attrs, ["index.equal", [], "", [INDEX, INDEX], [BOOLEAN]],
+                   [0, 1], [BOOLEAN], []]
+    data = export([INDEX, INDEX, TRANSCRIPT], [instruction], [3, 2])
+    data[6] = [BOOLEAN, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedCheckedPrimitive")) + '''
+open Zkc.Construction in
+example : RenderedCheckedPrimitive.participant.instructions =
+    [⟨.execute .indexEqual, [0, 1], [.data .boolean], []⟩] := by decide +kernel
+'''
+
+
+def sequence_controls():
+    sequence = ["apply", "sequence", [["type", INDEX]]]
+    attrs = [["binding", ["symbol", ["installed"]]], ["parameters", ["array", []]],
+             ["site", ["string", "sequence"]]]
+    body = [
+        ["exec.apply", attrs, ["sequence.empty", [["type", INDEX]], "", [], [sequence]], [], [sequence], []],
+        ["exec.apply", attrs, ["sequence.append", [["type", INDEX]], "", [sequence, INDEX], [sequence]],
+         [2, 0], [sequence], []],
+        ["exec.apply", attrs, ["sequence.at", [["type", INDEX]], "", [sequence, INDEX], [INDEX]],
+         [3, 0], [INDEX], []],
+        ["data.sequence_length", [], [], [3], [INDEX], []],
+        ["data.sequence_empty", [], [], [], [sequence], []]]
+    data = export([INDEX, TRANSCRIPT], body, [4, 1])
+    data[6] = [INDEX, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedSequences")) + '''
+open Zkc.Construction in
+example : RenderedSequences.participant.instructions = [
+    ⟨.execute (.sequenceEmpty .index), [], [.data (.sequence .index)], []⟩,
+    ⟨.execute (.sequenceAppend .index), [2, 0], [.data (.sequence .index)], []⟩,
+    ⟨.execute (.sequenceAt .index), [3, 0], [.data .index], []⟩,
+    ⟨.calculate (.sequenceLength .index), [3], [.data .index], []⟩,
+    ⟨.calculate (.sequenceEmpty .index), [], [.data (.sequence .index)], []⟩] := by decide +kernel
+'''
+
+
 def check(output, lake):
     """Render controls; `lake=None` leaves all generated kernel checks pending."""
     output.mkdir(parents=True, exist_ok=True)
@@ -321,6 +430,7 @@ example : RenderedCaptures.participant.instructions =
         for namespace, _, _ in catalogue_cases) + \
         "] = [" + ", ".join(".ok ()" if code is None else f'.error "{code}"' for _, _, code in catalogue_cases) + \
         "] := by\n  decide +kernel\n"
+    source += product_controls() + local_branch_controls() + local_range_controls() + embedded_math_controls() + checked_primitive_controls() + sequence_controls()
     path = output / "Rendered.lean"
     path.write_text("module\n\npublic import Zkc.Construction.Participant\npublic import Zkc.Construction.CatalogueAdmission\n\n"
                     "@[expose] public section\n" + source, encoding="utf-8")
@@ -392,7 +502,7 @@ example : RenderedCaptures.participant.instructions =
             export([base, TRANSCRIPT], [changed], [2, 1]), "UnsupportedBinding"):
         raise AssertionError("renderer treated another binding as field embedding")
     member_refusals = renderer_member_refusals()
-    report = {"status": "pass", "kernel_cases": 7, "catalogue_cases": len(catalogue_cases),
+    report = {"status": "pass", "kernel_cases": 13, "catalogue_cases": len(catalogue_cases),
               "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals)
               + member_refusals + len(selection_refusals), "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),

@@ -9,7 +9,9 @@ public meta section
 /-! Search finite source syntax against actual physical instructions. This
 producer proposes only structural evidence; the kernel checks operation identity,
 all inputs, both closed arms and every returned coordinate in the core rules.
-No invocation result or semantic equality is proposed. -/
+Inlined calls are expanded from the linked declaration table; retained folds
+resolve their exact admitted domain and callbacks. No semantic equality is
+proposed. -/
 set_option autoImplicit false
 namespace ZkcTools.ConstructionBindings.MathRegion
 open Lean Meta Elab Tactic
@@ -37,6 +39,26 @@ private def variant (expr : Expr) (head : Name) (failure : String) : MetaM (Arra
   unless value.isAppOf head do throwError "alignment-computation-{failure}"
   return value.getAppArgs
 
+private def checked (type : Expr) : TacticM Expr := do
+  let proof ← Term.elabTerm (← `(by decide +kernel)) type
+  Term.synthesizeSyntheticMVarsNoPostponing
+  instantiateMVars proof
+
+private def declaration (definitions helper : Expr) : TacticM (Expr × Expr) := do
+  let mut rest := definitions
+  let mut index := 0
+  repeat
+    let entries ← variant rest ``List.cons "missing-declaration"
+    let entry := entries[1]!
+    if ← isDefEq (← mkAppM ``CheckedDefinition.helper #[entry]) helper then
+      let definitionsSyntax ← Term.exprToSyntax definitions
+      let member ← Term.elabTerm
+        (← `(List.get_mem $definitionsSyntax ⟨$(quote index), by decide +kernel⟩)) none
+      Term.synthesizeSyntheticMVarsNoPostponing
+      return (entry, ← instantiateMVars member)
+    rest := entries[2]!
+    index := index + 1
+
 /-- Return the first unconsumed actual instruction along with a proof of the
 exact consumed prefix. A callback must consume its entire own block. -/
 partial def propose (definitions model locations extent source target : Expr) : TacticM Slice := withIncRecDepth do
@@ -53,16 +75,53 @@ partial def propose (definitions model locations extent source target : Expr) : 
   let operands := parts[parts.size - 3]!
   let regions := parts[parts.size - 2]!
   let next := parts.back!
+  let yes ← mkEqRefl (mkConst ``Bool.true)
+  if op.isAppOf ``Op.invoke then
+    let (definition, member) ← declaration definitions op.getAppArgs.back!
+    let empty ← mkListLit (mkConst ``Helper) []
+    let linked ← checked (← mkAppM ``DeclarationsLinked #[empty, definitions])
+    let (references, read) ← selected locations operands
+    let inputLocations ← mkAppM ``List.map #[mkConst ``Original.Location.data, references]
+    let head ← propose definitions model inputLocations extent
+      (← mkAppM ``CheckedDefinition.body #[definition]) target
+    let returned ← mkAppM ``List.map #[mkConst ``Original.Location.data, head.yielded]
+    let extended ← mkAppM ``List.append #[returned, locations]
+    let tail ← propose definitions model extended head.extent next head.suffixBlock
+    let certificate ← mkAppOptM ``ConnectionMathRegion.Alignment.invoke
+      #[some definitions, none, none, some linked, some definition, some member, some operands,
+        some next, some locations, some extent, some references, some read, some yes, some yes,
+        some head.spine, none, none, none, none, none, some head.certificate, some tail.certificate]
+    let spine ← mkAppM ``ConnectionTargetPrefix.Prefix.append #[head.spine, tail.spine]
+    return {tail with spine, certificate}
   let target ← TargetEquality.expose target
   unless target.isAppOf ``Domain.View.sequence do throwError "alignment-computation-missing-step"
   let first := target.getAppArgs[1]!
   let rest := target.getAppArgs[2]!
   let view ← TargetEquality.expose first
   let physical := view.getAppArgs
-  let yes ← mkEqRefl (mkConst ``Bool.true)
   let finish (tail : Slice) (certificate : Expr) : TacticM Slice := do
     let spine ← mkAppM ``ConnectionTargetPrefix.Prefix.step #[← mkLambdaFVars #[model] first, tail.spine]
     return {tail with spine, certificate}
+  if op.isAppOf ``Op.fold then
+    unless view.isAppOf ``Domain.View.finiteFold do throwError "alignment-computation-fold-mismatch"
+    let spec := op.getAppArgs.back!
+    let (references, read) ← selected locations operands
+    unless ← isDefEq references physical[5]! do throwError "alignment-computation-operand-mismatch"
+    let results ← mkAppM ``FoldSpec.state #[spec]
+    let (extended, nextExtent) ← extension locations extent results
+    let tail ← propose definitions model extended nextExtent next rest
+    let payload ← mkAppM ``Program.payload #[physical[1]!]
+    let complete ← mkAppM ``UnitPayload.definitions #[payload]
+    let after ← mkAppM ``List.drop #[← mkAppM ``List.length #[definitions], complete]
+    let split ← mkEqRefl complete
+    let resolved ← mkEqRefl (← mkAppOptM ``Except.ok
+      #[some (mkConst ``String), some (mkConst ``FoldSpec), some spec])
+    let certificate ← mkAppOptM ``ConnectionMathRegion.Alignment.finiteFold
+      #[some definitions, none, none, some physical[1]!, some after, some split,
+        some physical[2]!, some physical[3]!, some physical[4]!, some spec, some yes, some resolved,
+        some operands, some next, some locations, some extent, some references, some read,
+        some yes, some yes, none, none, none, some tail.certificate]
+    return ← finish tail certificate
   if op.isAppOf ``Op.branch then
     unless view.isAppOf ``Domain.View.mathBranch do throwError "alignment-computation-branch-mismatch"
     let captures := op.getAppArgs[0]!
@@ -111,5 +170,25 @@ partial def propose (definitions model locations extent source target : Expr) : 
       some locations, some extent, some references, some read, some yes, some yes,
       none, none, none, some tail.certificate]
   finish tail certificate
+
+/-- Check a complete closed slice with the same producer used by inlined calls.
+The caller fixes the actual source region, operand placement, complete target
+block and returned coordinates. No unused physical suffix is accepted. -/
+elab "derive_math_region" : tactic => withMainContext do
+  Term.withoutErrToSorry <| withoutRecover do
+    let goal ← getMainGoal
+    let expected ← instantiateMVars (← goal.getType)
+    unless expected.isAppOf ``ConnectionMathRegion.Alignment do
+      throwError "expected a closed Math region alignment"
+    let args := expected.getAppArgs
+    let slice ← withLocalDeclD `model (mkConst ``DomainModel) fun model => do
+      let slice ← propose args[0]! model args[4]! args[5]! args[3]! (mkApp args[6]! model)
+      unless (← TargetEquality.expose slice.suffixBlock).isAppOf ``Domain.View.empty do
+        throwError "alignment-computation-unconsumed-block"
+      return slice
+    unless ← isDefEq (← inferType slice.certificate) expected do
+      throwError "alignment-computation-result-mismatch"
+    goal.assign slice.certificate
+    replaceMainGoal []
 
 end ZkcTools.ConstructionBindings.MathRegion

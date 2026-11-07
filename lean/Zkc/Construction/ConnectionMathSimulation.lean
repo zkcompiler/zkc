@@ -157,7 +157,7 @@ noncomputable def Simulation.mathBranch (program : Structured.Program)
     (yes no : InstructionRegion)
     (yesInputs : yes.inputs = captures.map ValueSort.data)
     (noInputs : no.inputs = captures.map ValueSort.data)
-    (formed : checkMathArms (Domain.mathCallMatches program) (results.map ValueSort.data) yes no = .ok ())
+    (formed : checkClosedArms .math (Domain.closedOperationMatches program) (results.map ValueSort.data) yes no = .ok ())
     (captureData : captures.all Domain.localType = true)
     (resultData : results.all Domain.localType = true)
     (environment : Domain.Environment carriers) (selector : Nat) (references : List Nat)
@@ -179,7 +179,7 @@ noncomputable def Simulation.mathBranch (program : Structured.Program)
         yes no yesBody noBody environment) := by
   have capturesRead := read.trans (encodeHelperResult_eq captureData arguments)
   have same : yes.inputs = no.inputs := yesInputs.trans noInputs.symm
-  simp only [Domain.View.mathBranch, Domain.selectMath, selected, capturesRead,
+  simp only [Domain.View.mathBranch, Domain.selectClosed, selected, capturesRead,
     same, noInputs, encodeHelperResult_sorts captureData arguments,
     formed, Except.isOk]
   cases condition with

@@ -87,6 +87,20 @@ def calculate (model : Structured.DomainModel) (calculation : Calculation)
           | some encoded => .returned encoded
           | none => .stopped .refused
 
+/-- Installed local primitives use their checked structured outcome, including
+machine-index ingress and arithmetic overflow refusals. -/
+def executePrimitive (model : Structured.DomainModel) (primitive : Structured.Primitive)
+    (arguments : Environment model.toCarriers) : PIR.Outcome (Environment model.toCarriers) :=
+  match decodeValues primitive.arguments arguments with
+  | none => .stopped .refused
+  | some values =>
+      match primitive.evaluateOn model.toFieldModel values with
+      | .stopped reason => .stopped reason
+      | .returned results =>
+          match encodeValues results with
+          | some encoded => .returned encoded
+          | none => .stopped .refused
+
 /-- Helpers close over the exact admitted program's checked dependency prefix. -/
 def helperTable (model : Structured.DomainModel) (program : Structured.Program) :
     Structured.MeaningsOn model.toCarriers :=
@@ -343,18 +357,88 @@ def mathCallMatches (program : Structured.Program) (name : String)
     definition.inputs.map ValueSort.data == inputs &&
     definition.outputs.map ValueSort.data == outputs
 
-/-- Closed mathematical selection keeps formation separate from execution.
-Both stored arms must form, and every call must match an actual Math helper
-including its input and output ABI, even in a dormant arm.
-Only the selected callback receives the explicit capture frame. -/
-def selectMath (program : Structured.Program) (selector : Nat) (captures : List Nat)
-    (declared : List ValueSort) (yes no : InstructionRegion)
+/-- Nested Math keeps its original helper restriction inside a local frame. -/
+def closedCallMatches (program : Structured.Program) (kind : Structured.HelperKind)
+    (name : String) (inputs outputs : List ValueSort) : Bool :=
+  match kind with
+  | .math => mathCallMatches program name inputs outputs
+  | .local => program.payload.definitions.any fun definition =>
+      definition.name == name && definition.inputs.map ValueSort.data == inputs &&
+        definition.outputs.map ValueSort.data == outputs
+
+/-- Resolve the same finite-domain tree and callback premises as original
+Math. No incoming bound facts or mutable-state invariants are invented here. -/
+def resolveFiniteFold (program : Structured.Program) (domain step predicate : String)
+    (inputs outputs : List ValueSort) : Except String Structured.FoldSpec := do
+  let dataSort := fun sort => match sort with
+    | .data ty => if dataType ty then some ty else none
+    | _ => none
+  let some arguments := inputs.mapM dataSort | throw "construction-math-fold-inputs"
+  let some results := outputs.mapM dataSort | throw "construction-math-fold-results"
+  let domains ← program.snapshot.domains.mapM Structured.Domain.resolve
+  let spec ← Structured.resolveFold program.snapshot domains .math domain step predicate
+    arguments results (List.range arguments.length) []
+  let installed := fun helper => program.payload.definitions.any (fun definition => definition.helper == helper)
+  if !installed spec.stepHelper || (!predicate.isEmpty && !installed spec.predicateHelper) then
+    throw "construction-math-fold-helper"
+  return spec
+
+/-- Original helper signatures and fold specifications share one closed-code
+admission boundary. Nested Math always keeps Math callback rights. -/
+def closedOperationMatches (program : Structured.Program) (kind : Structured.HelperKind)
+    (operation : Operation) (inputs outputs : List ValueSort) : Bool :=
+  match operation with
+  | .call name => closedCallMatches program kind name inputs outputs
+  | .finiteFold domain step predicate => (resolveFiniteFold program domain step predicate inputs outputs).isOk
+  | _ => false
+
+/-- A fold invokes the structured evaluator over the actual admitted helper
+prefix. Domain-admission failures and callback stops are preserved exactly. -/
+def finiteFold (model : Structured.DomainModel) (program : Structured.Program)
+    (domain step predicate : String) (declared : List ValueSort)
+    (arguments : Environment model.toCarriers) : PIR.Outcome (Environment model.toCarriers) :=
+  match resolveFiniteFold program domain step predicate (arguments.map Value.sort) declared with
+  | .error _ => .stopped .refused
+  | .ok spec =>
+    match decodeValues spec.arguments arguments with
+    | none => .stopped .refused
+    | some values =>
+      match closedOutcome (Structured.Evaluation.denoteFoldOn (helperTable model program) spec values) with
+      | .stopped reason => .stopped reason
+      | .returned values =>
+        match encodeValues values with
+        | some results => .returned results
+        | none => .stopped .refused
+
+/-- An embedded mathematical body forms against the original program before
+execution. Its explicit input/result map retains all computations and stops. -/
+def compute (program : Structured.Program) (references : List Nat) (declared : List ValueSort)
+    (region : InstructionRegion)
+    (body : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
+    (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
+  match read env references with
+  | none => .halt .refused
+  | some arguments =>
+    if sortsMatch region.inputs arguments ∧
+        (checkClosedBodyResults .math declared region
+          (checkClosedFrom .math (closedOperationMatches program) region.inputs region.instructions)).isOk then
+      ((body arguments).interpret (withCallerFrame env)).bind fun final =>
+        match read final region.yielded with
+        | some results => if sortsMatch declared results then .done (env ++ results) else .halt .refused
+        | none => .halt .refused
+    else .halt .refused
+
+/-- Closed selection validates both arms before executing the chosen one.
+All nested helper signatures and frame kinds are checked against the original
+program; only the selected arm receives the capture frame. -/
+def selectClosed (kind : Structured.HelperKind) (program : Structured.Program)
+    (selector : Nat) (captures : List Nat) (declared : List ValueSort) (yes no : InstructionRegion)
     (runYes runNo : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
     (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
   match env[selector]?, read env captures with
   | some (.data (.boolean condition)), some arguments =>
       if yes.inputs = no.inputs ∧ sortsMatch yes.inputs arguments ∧
-          (checkMathArms (mathCallMatches program) declared yes no).isOk then
+          (checkClosedArms kind (closedOperationMatches program) declared yes no).isOk then
         let run := if condition then runYes else runNo
         let yielded := if condition then yes.yielded else no.yielded
         ((run arguments).interpret (withCallerFrame env)).bind fun final =>
@@ -364,6 +448,45 @@ def selectMath (program : Structured.Program) (selector : Nat) (captures : List 
           | none => .halt .refused
       else .halt .refused
   | _, _ => .halt .refused
+
+
+/-- Decode the exact conditional or unconditional range yield. -/
+def rangeResult (conditional : Bool) (declared : List ValueSort)
+    (values : Environment carriers) : Option (Bool × Environment carriers) := do
+  let (continuing, carried) ← if conditional then
+      match values with
+      | .data (.boolean continuing) :: carried => some (continuing, carried)
+      | _ => none
+    else some (true, values)
+  if sortsMatch declared carried then some (continuing, carried) else none
+
+/-- Local ranges use the same finite traversal as structured source loops.
+Both empty intervals and an early false continuation keep their carried values.
+The closed body forms before traversal, and its checkpoints retain the caller. -/
+def executeRange (program : Structured.Program) (conditional : Bool) (lower upper : Nat)
+    (values : List Nat) (declared : List ValueSort) (region : InstructionRegion)
+    (body : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
+    (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
+  match env[lower]?, env[upper]?, read env values with
+  | some (.data (.index lo)), some (.data (.index hi)), some arguments =>
+      let carried := arguments.take declared.length
+      let captured := arguments.drop declared.length
+      if sortsMatch declared carried ∧
+          (checkClosedRangeResults conditional declared (captured.map Value.sort) region
+            (checkClosedFrom .local (closedOperationMatches program)
+              region.inputs region.instructions)).isOk then
+        (Finite.execute (.elements (List.range' lo (hi - lo)))
+          (fun (current : Bool × Environment carriers) index =>
+            if current.1 then
+              ((body (.data (.index index) :: (current.2 ++ captured))).interpret
+                (withCallerFrame env)).bind fun final =>
+                  match (read final region.yielded).bind (rangeResult conditional declared) with
+                  | some next => .done next
+                  | none => .halt .refused
+            else .done current) (true, carried)).bind fun result =>
+            if sortsMatch declared result.2 then .done (env ++ result.2) else .halt .refused
+      else .halt .refused
+  | _, _, _ => .halt .refused
 
 mutual
 /-- Structural evaluation of the retained constructed instruction tree. -/
@@ -444,6 +567,13 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
             | .returned results => append results
             | .stopped reason => .halt reason
         | none => .halt .refused
+    | .execute primitive, references, [] =>
+        match read env references with
+        | some arguments =>
+            match executePrimitive model primitive arguments with
+            | .returned results => append results
+            | .stopped reason => .halt reason
+        | none => .halt .refused
     | .call name, references, [] =>
         match read env references with
         | some arguments =>
@@ -451,6 +581,15 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
             | .returned results => append results
             | .stopped reason => .halt reason
         | none => .halt .refused
+    | .finiteFold domain helper predicate, references, [] =>
+        match read env references with
+        | some arguments =>
+            match finiteFold model program domain helper predicate declared arguments with
+            | .returned results => append results
+            | .stopped reason => .halt reason
+        | none => .halt .refused
+    | .mathCompute, references, [region@⟨_, body, _⟩] =>
+        compute program references declared region (evaluate model program context body) env
     | .guard _, [condition], [] =>
         if declared = [] then
           match env[condition]? with
@@ -458,10 +597,23 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
           | some (.data (.boolean false)) => .halt .reject
           | _ => .halt .refused
         else .halt .refused
+    | .require _, [condition], [] =>
+        if declared = [] then
+          match env[condition]? with
+          | some (.data (.boolean true)) => .done env
+          | _ => .halt .refused
+        else .halt .refused
     | .mathBranch, selector :: captures,
         [yes@⟨_, yesBody, _⟩, no@⟨_, noBody, _⟩] =>
-        selectMath program selector captures declared yes no
+        selectClosed .math program selector captures declared yes no
           (evaluate model program context yesBody) (evaluate model program context noBody) env
+    | .localBranch, selector :: captures,
+        [yes@⟨_, yesBody, _⟩, no@⟨_, noBody, _⟩] =>
+        selectClosed .local program selector captures declared yes no
+          (evaluate model program context yesBody) (evaluate model program context noBody) env
+    | .localRange conditional, lower :: upper :: values, [region@⟨_, body, _⟩] =>
+        executeRange program conditional lower upper values declared region
+          (evaluate model program context body) env
     | .loop _ maximum, count :: initial, [⟨inputs, body, yielded⟩] =>
         executeLoop inputs maximum yielded count initial declared
           (evaluate model program context body) env

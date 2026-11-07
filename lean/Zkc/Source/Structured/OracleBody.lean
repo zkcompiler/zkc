@@ -236,6 +236,12 @@ structure OracleRead where
   location : OracleLocation
   expansion : List (OracleAnchor × OracleLocation) := []
 
+/-- A virtual child retains its own source row and executes under its parent's
+invocation. The path records each enclosing read in order. -/
+def OracleRead.expand (parent child : OracleRead) : OracleRead :=
+  {child with location := {child.location with invocation := parent.location.invocation}
+              expansion := parent.expansion ++ [(parent.anchor, parent.location)]}
+
 abbrev oracleReadInterface (carriers : Carriers) : PIR.Signature where
   Op := OracleRead
   Reply request := carriers.Value request.kind.answer
@@ -271,5 +277,15 @@ theorem CheckedOracle.exactBody {snapshot : Snapshot} {domains : List DomainSpec
     {math : OracleMathEnvironment} (checked : CheckedOracle snapshot domains math) :
     checked.body.erase = checked.raw :=
   RawRegion.erase_of_elaborate (dialect := protocolDialect) checked.raw checked.formed
+
+/-- A printed candidate can be used only when its erased instructions agree
+with this declaration's admitted raw body, including its located child queries. -/
+theorem CheckedOracle.body_eq_of_raw {snapshot : Snapshot} {domains : List DomainSpec}
+    {math : OracleMathEnvironment} (checked : CheckedOracle snapshot domains math)
+    (candidate : Region protocolDialect checked.declaration.inputs [checked.declaration.kind.answer])
+    (same : checked.raw = candidate.erase) : checked.body = candidate := by
+  have formed := checked.formed
+  rw [same, Region.elaborate_erase (dialect := protocolDialect) candidate] at formed
+  exact (Except.ok.inj formed).symm
 
 end Zkc.Source.Structured

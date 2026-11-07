@@ -165,6 +165,7 @@ theorem operation_eq {I : PIR.Signature} (observations : Structured.SiteObservat
     Structured.Evaluation.operation observations table calculation.op arguments bodies =
       ofOutcome (calculation.evaluate arguments) := by
   cases calculation <;> cases bodies
+  case makeProduct => rfl
   case boundedAt domain =>
     rcases arguments with _ | ⟨container, _ | ⟨index, _ | _⟩⟩
     simp only [Calculation.op, Structured.Evaluation.operation_boundedAt,

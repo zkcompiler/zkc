@@ -18,25 +18,41 @@ private meta def applyRule (goal : MVarId) (rule : Name) : TacticM (List MVarId)
   goal.withContext do
     goal.apply (← mkConstWithFreshMVarLevels rule) { newGoals := .nonDependentOnly }
 
-private meta def localLaw (goal : MVarId) (solver : Syntax) : TacticM (List MVarId) := do
+/-- Resource failures are errors even inside a search over candidate laws. -/
+meta def rethrowResourceFailure (error : Exception) : TacticM Unit := do
+  if error.isInterrupt || error.isRuntime then throw error
+  -- Lean also renders some kernel resource failures as untagged messages.
+  let message ← error.toMessageData.toString
+  for failure in [Kernel.Exception.deterministicTimeout, .deepRecursion, .excessiveMemory] do
+    if message == (← (failure.toMessageData (← getOptions)).toString) then throw error
+
+private meta def localLaw (goal : MVarId) (solver : Syntax) (strict : Bool) :
+    TacticM (List MVarId) := do
+  if strict then return ← evalTacticAt solver goal
   let saved ← saveState
   try
     evalTacticAt solver goal
   catch error =>
-    if error.isInterrupt || error.isRuntime then throw error
-    -- Lean 4.34 converts kernel resource failures into untagged messages.
-    -- Compare with the upstream renderings until those failures carry a tag;
-    -- a spent resource budget is not an unsupported mathematical law.
-    let message ← error.toMessageData.toString
-    for failure in [Kernel.Exception.deterministicTimeout, .deepRecursion, .excessiveMemory] do
-      if message == (← (failure.toMessageData (← getOptions)).toString) then
-        throw error
+    rethrowResourceFailure error
     saved.restore
     pure [goal]
 
+/-- A dialect can prove a callback operation at its actual captures. On a
+match the rule fills the callback and operation goals and returns source
+derivations to visit recursively. Other operations use pointwise callbacks. -/
+meta abbrev CallbackRule := MVarId → MVarId → TacticM (Option (List MVarId))
+
+/-- A single request can return an SSA tuple determined by its typed reply.
+The continuation then needs to handle only tuples the operation can return. -/
+private meta def returnsPacked (response : Expr) : MetaM Bool := do
+  let .forallE name type _ info ← whnf (← inferType response) | return false
+  withLocalDecl name info type fun reply => do
+    return (← whnf (mkApp response reply)).isAppOf ``PIR.Process.done
+
 /-- Traverse each structural subtree once. Local targets select the rule;
 pending mathematical obligations are retained when reusing the subtree proof. -/
-private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (List MVarId) :=
+private meta partial def derive (goal : MVarId) (solver : Syntax) (strict : Bool)
+    (callbackRule : CallbackRule) : TacticM (List MVarId) :=
   goal.withContext do
     let type ← whnf (← instantiateMVars (← goal.getType))
     if type.isForall then
@@ -58,8 +74,8 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
               | throwError "derive_region: unexpected environment rule shape"
             let normalized ← mkFreshExprMVar premise
             next.assign (mkApp rule normalized)
-            derive normalized.mvarId! solver
-      return ← derive next solver
+            derive normalized.mvarId! solver strict callbackRule
+      return ← derive next solver strict callbackRule
     let args := type.getAppArgs
     if type.isAppOf ``Regions.Derivation then
       let source ← whnf args[args.size - 2]!
@@ -68,7 +84,7 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
       if source.isAppOf ``Regions.cons then
         let [body, tail] ← applyRule goal ``Regions.Derivation.cons
           | throwError "derive_region: unexpected callback rule shape"
-        return (← derive body solver) ++ (← derive tail solver)
+        return (← derive body solver strict callbackRule) ++ (← derive tail solver strict callbackRule)
       return [goal]
     unless type.isAppOf ``Region.Derivation do
       throwError "derive_region expects Region.Derivation, got {type}"
@@ -85,13 +101,26 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
         (mkAppN type.getAppFn (args.set! (args.size - 1) candidateTarget))
       let [callbacks, operation, _] ← applyRule candidate.mvarId! ``Region.Derivation.letOp
         | throwError "derive_region: unexpected operation rule shape"
-      let pending ← derive callbacks solver
-      let obligations ← localLaw operation solver
+      let (pending, obligations) ← match ← callbackRule callbacks operation with
+        | some reached => do
+          let pending ← reached.flatMapM fun body => derive body solver strict callbackRule
+          pure (pending, [])
+        | none => do
+          pure (← derive callbacks solver strict callbackRule, ← localLaw operation solver strict)
       let operationType ← instantiateMVars (← operation.getType)
-      let step ← whnf operationType.getAppArgs.back!
-      let rule := if step.isAppOf ``PIR.Process.done then ``Region.Derivation.letOpReturn
-        else if step.isAppOf ``PIR.Process.halt then ``Region.Derivation.letOpStop
-        else ``Region.Derivation.letOp
+      let presented := operationType.getAppArgs.back!
+      let view ← if presented.isAppOf ``PIR.Process.bind then
+        returnsPacked presented.getAppArgs.back! else pure false
+      let rule ← if view then
+        pure ``Region.Derivation.letOpView
+      else do
+        let step ← whnf presented
+        if step.isAppOf ``PIR.Process.done then pure ``Region.Derivation.letOpReturn
+        else if step.isAppOf ``PIR.Process.halt then pure ``Region.Derivation.letOpStop
+        else if step.isAppOf ``PIR.Process.call then
+          pure (if ← returnsPacked step.getAppArgs.back! then ``Region.Derivation.letOpReply
+            else ``Region.Derivation.letOp)
+        else pure ``Region.Derivation.letOp
       let newGoals ← applyRule goal rule
       let newCallbacks :: newOperation :: rest := newGoals
         | throwError "derive_region: unexpected selected operation rule shape"
@@ -101,7 +130,7 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
         fresh.assign (mkMVar proven)
       match rest with
       | [] => return pending ++ obligations
-      | [next] => return pending ++ obligations ++ (← derive next solver)
+      | [next] => return pending ++ obligations ++ (← derive next solver strict callbackRule)
       | _ => throwError "derive_region: unexpected suffix rule shape"
     if source.isAppOf ``Region.bind then
       let candidateTarget ← mkFreshExprMVar (← inferType args.back!)
@@ -109,7 +138,7 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
         (mkAppN type.getAppFn (args.set! (args.size - 1) candidateTarget))
       let [body, _] ← applyRule candidate.mvarId! ``Region.Derivation.bind
         | throwError "derive_region: unexpected bind rule shape"
-      let pending ← derive body solver
+      let pending ← derive body solver strict callbackRule
       let bodyType ← instantiateMVars (← body.getType)
       let first ← whnf bodyType.getAppArgs.back!
       let rule := if first.isAppOf ``PIR.Process.done then ``Region.Derivation.bindReturn
@@ -122,14 +151,15 @@ private meta partial def derive (goal : MVarId) (solver : Syntax) : TacticM (Lis
       newBody.assign (mkMVar body)
       match rest with
       | [] => return pending
-      | [next] => return pending ++ (← derive next solver)
+      | [next] => return pending ++ (← derive next solver strict callbackRule)
       | _ => throwError "derive_region: unexpected bind suffix rule shape"
     -- Abstract bodies remain visible rather than being replaced by an equality.
     pure [goal]
 
 /-- Synthesize the target independently of the expected target. A mismatch is
 an error, never an automatically introduced whole-program equality premise. -/
-meta def run (solver : Syntax) : TacticM Unit := withMainContext do
+meta def run (solver : Syntax) (strict := false)
+    (callbackRule : CallbackRule := fun _ _ => pure none) : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let type ← whnf (← instantiateMVars (← goal.getType))
   unless type.isAppOf ``Region.Derivation || type.isAppOf ``Regions.Derivation do
@@ -138,13 +168,33 @@ meta def run (solver : Syntax) : TacticM Unit := withMainContext do
   let target := args.back!
   let generated ← mkFreshExprMVar (← inferType target)
   let proof ← mkFreshExprMVar (mkAppN type.getAppFn (args.set! (args.size - 1) generated))
-  let pending ← derive proof.mvarId! solver
+  let pending ← derive proof.mvarId! solver strict callbackRule
   if target.isMVar then
     target.mvarId!.assign (← instantiateMVars generated)
   else unless ← isDefEq generated target do
     throwError "derive_region: generated target does not match the requested target"
   goal.assign (← instantiateMVars proof)
   replaceMainGoal pending
+
+/-- Try a client-selected law on the original callbacks. When it does not
+apply, restore the proof state and use recursive derivation. The local law
+must discharge all its premises, including agreement at the reached inputs. -/
+meta def summarizeCallbacks (solver : Syntax) : CallbackRule := fun callbacks operation =>
+  callbacks.withContext do
+    let type ← instantiateMVars (← callbacks.getType)
+    let bodies ← whnf type.getAppArgs[type.getAppArgs.size - 2]!
+    unless bodies.isAppOf ``Regions.cons do return none
+    let saved ← saveState
+    try
+      let [] ← applyRule callbacks ``Regions.Derivation.identity
+        | throwError "could not retain the source callbacks"
+      let [] ← evalTacticAt solver operation
+        | throwError "incomplete callback summary"
+      return some []
+    catch error =>
+      rethrowResourceFailure error
+      saved.restore
+      return none
 
 end DeriveRegion
 
@@ -167,5 +217,13 @@ macro_rules
       (refine Zkc.Source.Region.Derivation.sound_identity ?_
        derive_region using
          (first | ($laws) | (apply Zkc.Source.RegionMeaning.OperationLaw.identity; rfl))))
+
+/-- A loop or higher-order operation may select a local summary proved for
+its retained callback. All other operations follow normal structural derivation. -/
+elab "derive_process" " using " "(" laws:tacticSeq ")" " summarizing " "(" summaries:tacticSeq ")" : tactic =>
+  Term.withoutErrToSorry <| withoutRecover do
+    evalTactic (← `(tactic| apply Zkc.Source.Region.Derivation.sound_identity))
+    DeriveRegion.run (← `(tactic| first | ($laws) | (apply Zkc.Source.RegionMeaning.OperationLaw.identity; rfl)))
+      false (DeriveRegion.summarizeCallbacks summaries)
 
 end Zkc.Source

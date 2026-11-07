@@ -1,5 +1,19 @@
 import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
+import ZkcArkLibExamples.Fri.VerifierCheck
+import ZkcArkLibExamples.Fri.CommitChallenge
+import ZkcArkLibExamples.Fri.InteractiveSoundness
+import ZkcArkLibExamples.Fri.VerifierInitialRead
+import ZkcArkLibExamples.Fri.VirtualStore
+import ZkcArkLibExamples.Fri.HolderPadding
+import ZkcArkLibExamples.Fri.HonestMessages
+import ZkcExamples.Structured.FriEntryFrame
+import ZkcSecurityExamples.FriHonestExchange
+import ZkcExamples.Structured.FriBindingExecution
+import ZkcExamples.Structured.FriLowDegreeCall
+import ZkcExamples.Structured.FriQueryCall
+import ZkcArkLibExamples.Fri.PublishedSampling
+import ZkcArkLibExamples.Fri.ClearScalarPath
 import ZkcTools.DeclarationAudit
 
 /-! Focused controls for the mathematical FRI adapters. The two-round example is a mathematical
@@ -13,6 +27,158 @@ open ZkcSecurity.ArkLib.Fri
 open Zkc.Source.Structured
 open Domain OracleComp ReedSolomon.HiddenDerivative
 
+section
+open Zkc.Source ZkcExamples.Structured.FriScalarLoop
+
+-- Source labels may change. Draw and delivery still have to occur in order,
+-- and empty or repeated marks remain observations of the original process.
+example : (DrawSites.fromBody (.letOp (.mark "") [] [] .nil
+    (.letOp (.mark "") [] [] .nil (.letOp (.query 1 (.sampleIndex contract) "fresh") [] [] .nil
+    (.letOp (.exchange .index 1 0 "forwarded") [] [] .nil (.ret [])))))).map
+    (fun sites ↦ (sites.beforeDraw, sites.draw, sites.delivery)) = some (["", ""], "fresh", "forwarded") := rfl
+
+example : DrawSites.fromBody (.letOp (.exchange .index 1 0 "forwarded") [] [] .nil
+    (.letOp (.query 1 (.sampleIndex contract) "fresh") [] [] .nil (.ret []))) = none := rfl
+
+example : DrawSites.fromBody (.bind [] (.stop .reject) (.ret [])) = none := rfl
+
+private def selectsMark : ProtocolOp → Bool
+  | .mark _ => true
+  | _ => false
+
+-- A mark inside a nested body is not a mark on the caller's continuation.
+example : (Region.cutFirst selectsMark (d := protocolDialect) (Γ := []) (out := [])
+    (.bind (.letOp (.mark "inner") .nil .nil (.ret (.nil : Operands [] []))) (.ret .nil))).isNone := rfl
+
+-- The following mark is structurally present, but the stopping prefix keeps
+-- it unreachable under every interpretation.
+private def stoppedCaller : Region protocolDialect [] [] :=
+  .bind (.stop (out := []) .reject) (.letOp (.mark "later") .nil .nil (.ret .nil))
+
+example {I : PIR.Signature} (meaning : RegionMeaning protocolDialect I) (env : Environment meaning.Value []) :
+    ((Region.cutFirst selectsMark stoppedCaller).get (by kernel_rfl)).reached meaning env = .halt .reject := rfl
+end
+
+-- A wrong source cursor cannot register a virtual view, even when the
+-- captured word, challenge and geometry have the required types.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+open ZkcSecurity.Domains.KoalaBear (Octic)
+variable {Aux E : Type} {M : Type → Type} [Monad M] [LawfulMonad M]
+
+example (network : PublishedWords.Table model → PIR.MonadHandler M (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : PublishedWords.Chooser M model Aux E) (context : ProtocolContext) (n : Nat)
+    (source : OracleAnchor) (beta shift : Octic) (before : VerifierPath.State Aux)
+    (wrong : CommitVirtual.constructionSite.definition ≠ before.frame.definition) :
+    PublishedWords.actionM FriSource.checkedUnit.oracles network choose (CommitVirtual.request context n source beta shift) before =
+      pure ⟨.stopped .refused, before, []⟩ := by
+  unfold PublishedWords.actionM
+  rw [OraclePublication.actionM_local _ _ _ _ _ _ rfl]
+  have different : (CommitVirtual.constructionSite.definition != before.frame.definition) = true :=
+    bne_iff_ne.mpr wrong
+  simp only [CommitVirtual.request, OracleProtocol.handler, different, Bool.true_or, ↓reduceIte]
+end
+
+-- Both random services run against the same published-word table in the
+-- installed Commit caller. A different service handle fails at that site.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+variable {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMathEnvironment} {Aux E : Type}
+  [SampleableType (model.Field FriSource.extension)]
+  (oracles : List (CheckedOracle snapshot domains math)) (ordinary : PublishedSampling.Network model Aux E)
+  (fieldAudit : PublishedWords.Table model → model.Field FriSource.extension → List E)
+  (indexAudit : PublishedWords.Table model → Fin 32 → List E)
+  (choose : PublishedWords.Chooser ProbComp model Aux E)
+
+private abbrev enteredCommit := FriSourceCalls.commitment.childContext FriSource.lowDegreeContext
+private noncomputable abbrev servicesAt (service : Nat) :=
+  CommitChallenge.handler oracles ordinary enteredCommit service fieldAudit indexAudit choose
+
+noncomputable example (service : Nat) :
+    RetainedSampling.Fresh (servicesAt oracles ordinary fieldAudit indexAudit choose service) service :=
+  CommitChallenge.freshPositions oracles ordinary enteredCommit service fieldAudit indexAudit choose
+
+example (state : CommitPublication.State model snapshot domains math Aux) :
+    servicesAt oracles ordinary fieldAudit indexAudit choose 0 (FriCommitRound.drawRequest enteredCommit 1) state =
+      pure ⟨.stopped .refused, state, []⟩ :=
+  CommitChallenge.wrongService oracles ordinary enteredCommit 0 fieldAudit indexAudit choose 1 (by decide) state
+end
+
+-- On the same reached loop state, changing the sole coefficient from zero
+-- to one flips the verifier's actual terminal guard. Even if its cursor
+-- stops, no execution of the second suffix can return the remembered vector.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+open ZkcSecurity.Domains.KoalaBear (Octic)
+open FriCheckRound (coefficientsPort rememberedPort)
+open VerifierTerminalGuard
+example (context : ProtocolContext) (receiver : context.roles 1 = 1)
+    (env : Environment (FriBinding.Value model) Γ) (c : Octic)
+    (selected : env coefficientsPort = OracleProtocol.concrete model (.vector FriSource.extension) [c]) :
+    FriCheckRound.roundSite.next.denote (terminalMeaning context) (env.prepend (finalValues 0 0 4 1)) =
+      OracleProtocol.withMarks (FriCheckRound.roundSite.continuationMarks context)
+        (if c = 0 then .done (.cons (env rememberedPort) .nil) else .halt .reject) := by
+  simpa [terminal, evaluate] using
+    (VerifierTerminalGuard.installed context receiver env [c] selected 1 one_ne_zero (k := 2) (by decide)
+      ⟨0, by decide⟩ (show 1 < indexLimit by decide) 0)
+
+example : coefficientsPort.index ≠ rememberedPort.index := by decide +kernel
+
+-- Cutting through the outer callback as though its nested body executed
+-- exactly once would erase the trip count and change early-stop behavior.
+example : FriCheckRound.roundOccurrence.onSpine = false := by kernel_rfl
+end
+
+-- On an invalid mathematical path the actual loop can reject or encounter a
+-- cursor refusal. A returned vector, even the expected vector, is excluded.
+section
+open Zkc.Source ZkcExamples.Structured
+open ZkcSecurity.Domains.KoalaBearModel (model)
+example {Aux : Type} (before after : VerifierPath.Store Aux)
+    (vector : Values (FriBinding.Value model) FriCheckRound.roundSite.outputs) :
+    ¬ VerifierPath.outcome false vector before (.returned vector) after := by
+  simp [VerifierPath.outcome]
+
+-- A matching path cannot return with one read missing from the ledger.
+example {Aux : Type} (before : VerifierPath.Store Aux)
+    (vector : Values (FriBinding.Value model) FriCheckRound.roundSite.outputs) :
+    ¬ VerifierPath.outcome true vector (VerifierPath.charged before 8) (.returned vector)
+      (VerifierPath.charged before 7) := by
+  rintro (⟨_, wrong⟩ | stopped)
+  swap
+  · cases stopped
+  have count := congrArg (fun s : VerifierPath.Store Aux ↦ s.queries) wrong
+  simp only [VerifierPath.charged] at count
+  omega
+
+-- In the three-fold, eight-sample instance, coalescing one repeated
+-- position would perform only seven complete paths. The actual outer
+-- loop's successful return rules out that read count even for equal cells.
+example {Aux : Type} (store : VerifierPath.Store Aux) (returned : Values (FriBinding.Value model) FriCheckPositions.querySite.outputs) :
+    ¬ VerifierPath.outcome true returned (VerifierPath.charged store (4 * 3 * 8))
+      (.returned returned) (VerifierPath.charged store (4 * 3 * 7)) := by
+  rintro (⟨_, kept⟩ | refused)
+  · have count := congrArg (fun s : VerifierPath.Store Aux ↦ s.queries) kept
+    simp only [VerifierPath.charged] at count
+    omega
+  · cases refused
+end
+
+-- A scalar or Boolean terminal payload does not encode a coefficient vector,
+-- even at the expected terminal origin.
+example (sites : ObservedLayers.Sites) : ObservedLayers.decode sites 2 0 3
+    [.message sites.terminal (.boolean true)] = none := by
+  simp [ObservedLayers.decode, Zkc.Construction.Domain.Payload.value]
+
+-- The entry root remembers the exact earlier word and challenge values in order.
+example (sites : ObservedLayers.Sites) (prior : ObservedFold.History)
+    (layers : Layers ZkcSecurity.Domains.KoalaBear.Octic 5 3) :
+    ObservedLayers.atRoot sites 5 3 (prior ++ ObservedLayers.observations sites 0 layers) =
+      some layers := ObservedLayers.atRoot_observations sites prior layers
+
 -- The actual word expression chooses an antipodal pair, not the original row.
 example : bitAnd 31 (wrappingSubtract (logicalShiftRight 32 1) 1) = 15 := by decide
 example : wrappingAdd 15 16 = 31 := by decide
@@ -25,6 +191,26 @@ example : bitAnd (2 ^ 64 - 1)
 -- Exact current padding rejects the overlength mathematical case.
 example : ¬ (([1, 2, 3] : List ℚ) ++ List.replicate (2 - 3) 0).length = 2 := by decide
 example : bounded 1 ([1] : List ℚ) = true ∧ ([1] : List ℚ).length ≠ 2 ^ 1 := by decide
+
+section
+open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured.FriSourceBodies
+open ZkcSecurity.Domains.KoalaBear (Octic)
+
+-- The installed helper rejects the two-cell input at width one; truncation
+-- would turn this mutation into an apparently valid terminal message.
+example {I : PIR.Signature} (a b : Octic) :
+    invoke (RetainedFold.helpers (I := I)).closed helper21Helper (.cons [a, b] (.cons 1 .nil)) =
+      .halt .reject := by
+  refine (HolderPadding.installed [a, b] 1 (show 2 < indexLimit by decide) (by decide)).trans ?_
+  rfl
+
+-- Even the canonical empty list from interpolating zero produces one sent zero.
+example {I : PIR.Signature} :
+    invoke (RetainedFold.helpers (I := I)).closed helper21Helper (.cons [] (.cons 1 .nil)) =
+      .done (.cons [(0 : Octic)] .nil) := by
+  refine (HolderPadding.installed (I := I) [] 1 (by decide) (by decide)).trans ?_
+  rfl
+end
 
 -- Sampled equality does not identify unsampled positions.
 example : ∃ initial : Fin 2 → ℕ, initial 0 = 0 ∧ initial ≠ (fun _ ↦ 0) := by
@@ -145,3 +331,89 @@ run_cmd (ZkcTools.DeclarationAudit.checkBoundary
   [`ArkLib] [] "FRI-JOHNSON-UPSTREAM-BOUNDARY-PASS")
 
 run_cmd ZkcTools.DeclarationAudit.checkCurrent "FRI-ADOPTION-CONTROLS-PASS"
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Source.Structured.Bindings.MarkedSpine, `Zkc.Source.Structured.OracleQueryDerivation,
+   `ZkcExamples.Structured.FriIndexCollections,
+   `ZkcExamples.Structured.FriScalarLoop, `ZkcExamples.Structured.FriBoundedPositions,
+   `ZkcExamples.Structured.FriBinding, `ZkcExamples.Structured.FriApplications,
+   `ZkcArkLibExamples.Fri.RetainedQueries, `ZkcArkLibExamples.Fri.RetainedSampling,
+   `ZkcArkLibExamples.Fri.PublishedSampling, `ZkcArkLib.Fri.ReturnProbability,
+   `ZkcArkLibExamples.Fri.VerifierQueryProbability] "FRI-INSTALLED-SCALAR-SAMPLING-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Semantics.HandlerReturn, `Zkc.Source.Structured.OracleForwarding,
+   `Zkc.Source.Structured.OracleLocalAction, `Zkc.Source.Structured.ReceiverForwarding,
+   `ZkcExamples.Structured.FriBindingExecution] "FRI-RECEIVER-FORWARDING-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcArkLibExamples.Fri.RetainedDomain,
+   `ZkcArkLibExamples.Fri.RetainedFold,
+   `ZkcArkLibExamples.Fri.HolderFold,
+   `ZkcArkLibExamples.Fri.HolderInterpolation,
+   `ZkcArkLibExamples.Fri.HolderPadding,
+   `ZkcArkLibExamples.Fri.ObservedFold,
+   `ZkcArkLibExamples.Fri.ObservedLayers,
+   `ZkcArkLibExamples.Fri.ObservedQueries,
+   `ZkcArkLibExamples.Fri.TranscriptCharge,
+   `ZkcArkLibExamples.Fri.TranscriptTrace,
+   `ZkcArkLibExamples.Fri.ClearSites,
+   `ZkcArkLibExamples.Fri.ClearCertificate] "FRI-RETAINED-CERTIFICATE-BOUNDARIES-PASS" (exactModules := true))
+
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Semantics.CallRestriction, `Zkc.Source.Structured.OracleReadEffects,
+   `Zkc.Source.Structured.OracleReadback, `ZkcExamples.Structured.FriPower,
+   `ZkcExamples.Structured.FriVirtualBody, `ZkcArkLibExamples.Fri.VirtualReads,
+   `ZkcArkLibExamples.Fri.VirtualWord, `Zkc.Source.Structured.RegisteredWord,
+   `ZkcArkLibExamples.Fri.VirtualStore, `ZkcArkLibExamples.Fri.VerifierTerminal,
+   `Zkc.Source.Structured.Bindings.Continuation, `Zkc.Source.Structured.Bindings.RepeatPrefix,
+   `ZkcArkLibExamples.Fri.VerifierTerminalGuard, `ZkcArkLibExamples.Fri.VerifierPath,
+   `Zkc.Source.Structured.MarkedReturn, `ZkcExamples.Structured.FriPeeledQuery, `ZkcArkLibExamples.Fri.VerifierQuery,
+   `ZkcArkLibExamples.Fri.VerifierQueries, `Zkc.Source.RegionReturnProjection, `Zkc.Source.Structured.ReceiverMetadata,
+   `ZkcExamples.Structured.FriCheckAdmission, `ZkcArkLibExamples.Fri.VerifierCheck,
+   `Zkc.Source.Structured.OracleVirtualInstallation, `ZkcArkLibExamples.Fri.CommitVirtual]
+  "FRI-VERIFIER-READS-AND-TERMINAL-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Source.Structured.OracleMetadata, `Zkc.Source.Structured.MarkedPrefix, `Zkc.Source.Structured.MarkedPublication,
+   `ZkcExamples.Structured.FriValueAssociation, `ZkcExamples.Structured.FriCheckPositions,
+   `Zkc.Source.Structured.ProtocolEmbeddingCheck, `ZkcExamples.Structured.FriPairIndex,
+   `ZkcExamples.Structured.FriCheckRound, `ZkcArkLibExamples.Fri.VerifierInitialRead, `ZkcArkLibExamples.Fri.VerifierRound]
+  "FRI-VERIFIER-CELLS-AND-ROUNDS-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Source.Structured.PublishedWordsLaws, `Zkc.Source.RegionSelection, `ZkcExamples.Structured.FriCommitRound, `ZkcArkLibExamples.Fri.CommitGeometry,
+   `Zkc.Semantics.ReturnedPostcondition, `ZkcExamples.Structured.FriCommitAdmission,
+   `ZkcArkLibExamples.Fri.CommitDomain, `ZkcArkLibExamples.Fri.CommitIngress, `ZkcArkLibExamples.Fri.CommitBody,
+   `ZkcArkLibExamples.Fri.BinaryDomain, `ZkcArkLibExamples.Fri.CommitCaptures, `ZkcArkLibExamples.Fri.CommitDelivery,
+   `Zkc.Source.Structured.RegisteredLifetime, `ZkcArkLibExamples.Fri.CommitIteration,
+   `ZkcArkLibExamples.Fri.CommitLoop, `ZkcArkLibExamples.Fri.CommitReadback,
+   `ZkcExamples.Structured.FriCommitTerminal, `ZkcExamples.Structured.FriCommitReply, `ZkcArkLibExamples.Fri.CommitReturn,
+   `ZkcArkLibExamples.Fri.CommitPublication,
+   `ZkcArkLibExamples.Fri.CommitChallenge]
+  "FRI-PUBLICATION-BEFORE-CHALLENGE-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcExamples.Structured.FriSourceCalls, `ZkcExamples.Structured.FriPhaseCalls,
+   `ZkcExamples.Structured.FriLowDegreeCall, `ZkcExamples.Structured.FriQueryCall,
+   `Zkc.Source.Structured.ReceiverCall, `ZkcExamples.Structured.FriPhaseTransfer,
+   `ZkcArkLibExamples.Fri.VerifierCalls, `ZkcArkLibExamples.Fri.VerifierRoot]
+  "FRI-SOURCE-DERIVED-PHASE-CALLS-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcSecurity.ProgramLogic.ReturnBound, `ZkcSecurity.Bindings.Source.ReturnBound,
+   `ZkcArkLibExamples.Fri.CommitRoundProbability, `ZkcArkLibExamples.Fri.CommitLoopProbability,
+   `ZkcArkLibExamples.Fri.CommitProbability, `ZkcArkLibExamples.Fri.InteractiveSoundness]
+  "FRI-INTERACTIVE-SOURCE-SOUNDNESS-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Source.Structured.CheckedFrames, `ZkcExamples.Structured.FriApplications, `ZkcExamples.Structured.FriEntryFrame,
+   `ZkcArkLibExamples.Fri.HonestMessages, `ZkcSecurityExamples.FriHonestExchange]
+  "FRI-CHECKED-ENTRY-AND-HONEST-MESSAGES-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`ZkcSecurity.Bindings.Transcript.QueryTreeSource.Composition.AccessLog,
+   `ZkcSecurity.Bindings.Transcript.QueryTreeSource.Composition.PathReading,
+   `ZkcArkLibExamples.Fri.ClearFoldRoute, `ZkcArkLibExamples.Fri.ClearAccess, `ZkcArkLibExamples.Fri.ClearScalarPath]
+  "FRI-COMPILED-FIELD-SITES-AND-PRIMITIVE-LOG-PASS" (exactModules := true))

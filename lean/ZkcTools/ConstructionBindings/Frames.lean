@@ -58,9 +58,12 @@ def collect : Nat → List Zkc.Construction.Instruction → List ValueSort → L
           throw "construction-binding-frame-yield"
         repeats := repeats ++ [⟨here, offset, site, maximum, count, initial,
           yielded, instruction.results, region.instructions⟩] ++ children
-      | .mathBranch =>
-        unless (checkMathStep (fun _ _ _ => true) slots instruction).isOk do
+      | .mathBranch | .mathCompute =>
+        unless (checkClosedStep .math (fun _ _ _ _ => true) slots instruction).isOk do
           throw "construction-binding-frame-math-region"
+      | .localBranch | .localRange _ =>
+        unless (checkClosedStep .local (fun _ _ _ _ => true) slots instruction).isOk do
+          throw "construction-binding-frame-local-region"
       | _ =>
         unless instruction.regions.isEmpty do throw "construction-binding-frame-region"
       offset := offset + instruction.results.length

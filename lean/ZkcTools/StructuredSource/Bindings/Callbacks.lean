@@ -2,7 +2,7 @@ module
 
 public import ZkcTools.StructuredSource.Bindings.Generate
 public import ZkcTools.StructuredSource.Bindings.Inputs
-public import Zkc.Source.Structured.Bindings.Selection
+public import ZkcTools.StructuredSource.Bindings.CallbackView
 
 @[expose] public section
 
@@ -21,19 +21,6 @@ def callbacks {inputs outputs : List Ty} (body : Region protocolDialect inputs o
 
 def callbackName (protocolIndex callbackIndex : Nat) : String :=
   "protocol" ++ toString protocolIndex ++ "Callback" ++ toString callbackIndex
-
-/-- Keep the small typed header reducible without reevaluating admission at
-every role equation. The entire suffix is projected, never serialized. The
-complete descriptor equality below checks this header and the shared body. -/
-def repeatSiteText (selected : RepeatSite) (name : String) : String :=
-  let source := name ++ "Selection.repeatSite"
-  let suffix := "Eq.mp (show Region protocolDialect (" ++ source ++ ".spec.state ++ " ++
-    source ++ ".context) " ++ source ++ ".outputs = Region protocolDialect " ++
-    typesText (selected.spec.state ++ selected.context) ++ " " ++ typesText selected.outputs ++
-    " from by kernel_rfl) " ++ source ++ ".next"
-  "⟨" ++ ", ".intercalate [typesText selected.context, typesText selected.outputs,
-    repeatText selected.spec, quoted selected.site, operandsText selected.operands,
-    name ++ "Body", paren suffix] ++ "⟩"
 
 /-- Optional, explicitly selected checked library presentation. All emitted
 law bodies and their use are kernel checked. The default keeps every helper
@@ -63,19 +50,7 @@ def callbacksSource (program : Program) (output : Output)
     for (selected, callbackIndex) in inventory.zipIdx do
       let callback := selected.repeatSite
       let name := callbackName index callbackIndex
-      let locator := toString callbackIndex ++ " " ++ definitionName index ++ ".body"
-      text := text ++ "def " ++ name ++ "Selection : RepeatOccurrence " ++ definitionName index ++
-        ".body :=\n  checkedRepeat " ++ locator ++ " (by kernel_rfl)\n\n" ++
-        "def " ++ name ++ "Body : Region protocolDialect " ++
-        typesText (.index :: (callback.spec.state ++ callback.spec.captures)) ++ " " ++
-        typesText callback.spec.state ++ " :=\n  " ++ regionText callback.body ++ "\n\n" ++
-        "abbrev " ++ name ++ "Site : RepeatSite :=\n  " ++ repeatSiteText callback name ++ "\n\n" ++
-        "theorem " ++ name ++ "_body : " ++ name ++ "Site.body = " ++ name ++
-        "Body := rfl\n\n" ++
-        "theorem " ++ name ++ "_selected : (selectRepeat " ++ locator ++
-        ").map (·.repeatSite) = some " ++ name ++ "Site := by\n  kernel_rfl\n\n" ++
-        "def " ++ name ++ "Occurrence : RepeatAt " ++ name ++ "Site " ++ definitionName index ++
-        ".body :=\n  selectedRepeat " ++ name ++ "_selected\n\n" ++
+      text := text ++ String.join (callbackDeclarations name (definitionName index ++ ".body") callbackIndex callback) ++
         "theorem " ++ name ++ "_position : " ++ name ++ "Occurrence.position = " ++
         natsText selected.position ++ " := by\n  kernel_rfl\n\n"
     for role in List.range definition.roles.length do

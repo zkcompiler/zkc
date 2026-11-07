@@ -180,16 +180,16 @@ theorem operation_sites_congr {I : PIR.Signature} (left right : SiteObservations
     funext arguments callbacks
     cases callbacks
     rfl
-  | getProduct | fieldEmbed | vectorLength =>
+  | getProduct | sequenceLength | fieldEmbed | vectorLength =>
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | indexConstant | fieldConstant | booleanConstant | groupIdentity =>
+  | sequenceEmpty | indexConstant | fieldConstant | booleanConstant | groupIdentity =>
     funext arguments callbacks
     cases arguments
     cases callbacks
     rfl
-  | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd |
+  | sequenceAppend | indexEqual | indexLess | indexPowerOfTwo | indexWrappingAdd | indexWrappingSubtract | indexBitAnd |
       indexLogicalShiftRight | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply |
       fieldEqual | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual | boundedAt |
       groupAdd | groupScale | groupEqual =>

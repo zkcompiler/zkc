@@ -216,7 +216,7 @@ theorem child_formula_law :
   cases rest with | cons point rest => ?_
   cases rest with | cons claim rest => ?_
   cases rest
-  exact pending_equation (F := F) (G := G) SumcheckSourceViews.unit.linked sourceBodies
+  exact pending_equation (F := F) (G := G) SumcheckSourceViews.unit.linked (sourceBodies _)
     (by exact_body SumcheckSourceViews.pendingFormulaDefinition)
     (by exact_body SumcheckSourceViews.valuesDefinition) raw dimension width point claim bounded
 

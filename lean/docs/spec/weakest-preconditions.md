@@ -17,6 +17,7 @@ module never installs a process-wide instance.
 | Charged rejection | Actual ordered transcript history | Selected residual or rejection predicate | `True` at the soundness boundary |
 | Pathwise cost | History and remaining `ENNReal` credit | At least the continuation's reserved credit | `True` at the cost boundary |
 | Concrete execution | Complete handler state and preceding event trace | Actual returned value, final state and trace | Explicit reason, final state and trace |
+| Monadic execution | Complete handler state and preceding event trace | Bind-faithful postcondition on actual returned records | Explicit reason, final state and trace on stopped records |
 
 `ZkcSecurity.ProgramLogic.WeakestPrecondition` owns the first two interpretations.
 Its charged WP is definitionally equal to `Interface.Charged` at the soundness
@@ -34,6 +35,20 @@ The core `PIR.WeakestPrecondition` instead interprets the actual `Process.run`.
 Its adequacy includes state, ordered events and all terminal reasons. Setting its
 stop predicate to `False` requires an actual return. This is suitable for a
 pointwise honest-completeness proof under a fixed answer table.
+
+`MonadicWeakestPrecondition` instead uses the same `Process.runM` and
+`Std.Do.Internal.Ensures`. The local `wpMonadM` selects the handler and outer
+monad. `tripleM_iff_run` states its exact execution meaning; `runMWP_id_iff`
+recovers the actual complete record in the deterministic instance. Bind
+composition retains event order and the state of a stopped prefix. It neither
+erases already performed work nor enters the skipped continuation.
+
+For an arbitrary outer monad, this is a partial execution postcondition.
+Setting the stopped predicate to `False` excludes stopped **records**, but
+does not establish that a record is produced or that probability mass is one.
+Universal honest termination or a support/mass theorem is still needed.
+`Region.ReturnsSatisfying.iff_triple` preserves precisely the existing partial
+source judgment; it does not strengthen it to completeness.
 
 ## Reusable rules and obligations
 
@@ -111,3 +126,24 @@ This exposes reply projections and instantiates local hypothesis types for the
 matcher; it is definitional normalization, not an additional proof assumption.
 The concrete receive/send/query controls exercise this form together with
 history-dependent prices, decoding failure, stopped paths and infinite credit.
+
+The [source assembly design](../design/source-proof-assembly.md) distinguishes
+the validated local adapter from source construction. A bounded comparison
+finds that a reduced dependent source restriction fails generic specification
+matching on 4.35 and succeeds on 4.36-rc1. The actual Sumcheck terminal's existing
+decision equation composes through `vcgen` on 4.35; complete FRI assembly through
+that engine remains unvalidated. The common `derive_oracle_returns` constructor
+currently selects typed rules for the actual FRI reply and Check admission
+regions and independent new components, including deriving their ordered return
+layout and projected loop operands. Candidate selection checks judgment and
+operation identity before semantic unification; kernel checking validates the
+complete selected law. These are
+proofs about the existing execution. Neither tactic choice establishes totality,
+source/realization correspondence or a toolchain migration.
+
+The linked `ProtocolAlgebra.invokeReturns` adapter consumes a body specification
+at the declaration's masked inputs and returns its masked outputs. It uses the
+captured linked table and retains the same handler and invariant, including on
+stops. The complete FRI binding component uses this adapter and the shared source
+constructor; its earlier receiver-only traversal and separate process
+presentation are removed. This does not add an honest-termination claim.

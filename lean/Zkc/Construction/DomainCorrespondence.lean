@@ -123,9 +123,43 @@ theorem helper (name : String) (references : List Nat) (declared : List ValueSor
   intro env
   kernel_rfl
 
+theorem execute (primitive : Structured.Primitive) (references : List Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.execute primitive, references, declared, []⟩
+      (View.execute model primitive references declared) := by
+  intro env
+  kernel_rfl
+
+theorem finiteFold (domain helper predicate : String) (references : List Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.finiteFold domain helper predicate, references, declared, []⟩
+      (View.finiteFold model program domain helper predicate references declared) := by
+  intro env
+  kernel_rfl
+
+/-- One rule binds an embedded Math body for every frame and return tuple. -/
+theorem mathCompute (references : List Nat) (declared : List ValueSort)
+    (region : InstructionRegion) {view : View.Block model.toCarriers}
+    (same : Block (program := program) (context := context) region.instructions view) :
+    Step (program := program) (context := context)
+      ⟨.mathCompute, references, declared, [region]⟩
+      (View.mathCompute program references declared region view) := by
+  have bodyMeaning : evaluate model program context region.instructions = view := funext same
+  intro env
+  rcases region with ⟨inputs, body, yielded⟩
+  change compute program references declared _ (evaluate model program context body) env = _
+  rw [bodyMeaning]
+  rfl
+
 theorem guard (site : String) (condition : Nat) (declared : List ValueSort) :
     Step (model := model) (program := program) (context := context)
       ⟨.guard site, [condition], declared, []⟩ (View.guard condition declared) := by
+  intro env
+  kernel_rfl
+
+theorem require (site : String) (condition : Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.require site, [condition], declared, []⟩ (View.require condition declared) := by
   intro env
   kernel_rfl
 
@@ -143,9 +177,42 @@ theorem mathBranch (selector : Nat) (captures : List Nat) (declared : List Value
   intro env
   rcases yes with ⟨yesInputs, yesBody, yesYielded⟩
   rcases no with ⟨noInputs, noBody, noYielded⟩
-  change selectMath program selector captures declared _ _
+  change selectClosed .math program selector captures declared _ _
     (evaluate model program context yesBody) (evaluate model program context noBody) env = _
   rw [yesMeaning, noMeaning]
+  rfl
+
+/-- The same all-arm correspondence rule applies to closed local selection. -/
+theorem localBranch (selector : Nat) (captures : List Nat) (declared : List ValueSort)
+    (yes no : InstructionRegion) {yesView noView : View.Block model.toCarriers}
+    (yesSame : Block (program := program) (context := context) yes.instructions yesView)
+    (noSame : Block (program := program) (context := context) no.instructions noView) :
+    Step (program := program) (context := context)
+      ⟨.localBranch, selector :: captures, declared, [yes, no]⟩
+      (View.localBranch program selector captures declared yes no yesView noView) := by
+  have yesMeaning : evaluate model program context yes.instructions = yesView := funext yesSame
+  have noMeaning : evaluate model program context no.instructions = noView := funext noSame
+  intro env
+  rcases yes with ⟨yesInputs, yesBody, yesYielded⟩
+  rcases no with ⟨noInputs, noBody, noYielded⟩
+  change selectClosed .local program selector captures declared _ _
+    (evaluate model program context yesBody) (evaluate model program context noBody) env = _
+  rw [yesMeaning, noMeaning]
+  rfl
+
+/-- Closed range correspondence retains all iterations, early completion and stops. -/
+theorem localRange (conditional : Bool) (lower upper : Nat) (values : List Nat)
+    (declared : List ValueSort) (region : InstructionRegion) {view : View.Block model.toCarriers}
+    (same : Block (program := program) (context := context) region.instructions view) :
+    Step (program := program) (context := context)
+      ⟨.localRange conditional, lower :: upper :: values, declared, [region]⟩
+      (View.localRange program conditional lower upper values declared region view) := by
+  have bodyMeaning : evaluate model program context region.instructions = view := funext same
+  intro env
+  rcases region with ⟨inputs, body, yielded⟩
+  change executeRange program conditional lower upper values declared _
+    (evaluate model program context body) env = _
+  rw [bodyMeaning]
   rfl
 
 theorem loop (site : String) (maximum : Nat) (yielded : List Nat) (count : Nat)

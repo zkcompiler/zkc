@@ -396,6 +396,10 @@ DISHONEST = [
     # layer two, which is checked in round two.
     ('fold-shift', 'current = next;',
      'current = coset::word(coset::values(next), coset::offset(next) * coset::offset(current));', 'chain', ['0', '1']),
+    # Both handle sequences have the same port type. Once forwarded in the
+    # opposite order, the first supposed virtual Fold has 32 rows instead of 16.
+    ('handle-association', 'layers: committed.layers,\n    folds: committed.folds',
+     'layers: committed.folds,\n    folds: committed.layers', 'first_fold_rows', ['0']),
     # Honest folds with a wrong constant pass every chain check and fail where
     # the terminal polynomial is evaluated, after the first query's rounds.
     ('terminal-constant', 'let proposed @P = padded(polynomial::coefficients(coset::interpolate(current)),',
@@ -410,7 +414,7 @@ def test_fri_rejects_dishonest_folds_and_terminal(toolchain, journal, directory,
     # Altering a transmitted message moves the drawn positions, so a mutated
     # proof fails authentication before the fold chain or the terminal is
     # checked. Only a prover whose committed layers are self-consistent reaches
-    # those guards. Each variant replaces exactly one prover-only line of the
+    # those guards. Each variant changes one expression or field association in the
     # library; the emitted guards keep the library's shape, and the proof is
     # verified with its own package because the binding carries the source
     # digest. The transcript fixes the queried points, so the failing round is
@@ -759,3 +763,26 @@ def test_fri_binding_refuses_malformed_positions(toolchain, journal, directory,
     assert stop['role'] == 'role00000000' and stop['kind'] == 'Explicit("reject")'
     assert stop_guard(stop, sites) == (guard, [])
     assert not proof.exists()
+
+
+def test_two_call_binding_source_matches_the_lean_subject(toolchain, journal, directory):
+    from harness import load
+    from project import project_inputs
+
+    # Import the structured renderer with the same package root as the subject pipeline.
+    load("fri_snapshot_reader", "lean/bridges/structured/snapshot.py")
+    from bridges.structured.binding_sites import render
+
+    fixtures = ROOT / "lean/bridges/structured/fixtures"
+    modules, assets = project_inputs(EXAMPLE.with_name("zkc.toml"))
+    modules["example"] = fixtures / "fri-binding-sites.zkc"
+    flags = ["--source-format=zkc", "--subject=example::Fri",
+             *(f"--module={name}={path}" for name, path in sorted(modules.items())),
+             *(f"--asset={name}={kind}={path}" for name, (kind, path) in sorted(assets.items()))]
+    interface = journal.json([toolchain.compiler, "language-interface", *flags])
+    source = directory / "double-fri.mlir"
+    source.write_text(journal.run([toolchain.compiler, "language-emit", *flags]))
+    double = journal.json([toolchain.compiler, "protocol-structured", source,
+                           f"--symbol={interface['protocol']}"])
+    single = json.loads((fixtures / "fri-source.json").read_text())
+    assert render(single, double) == (ROOT / "lean/Tests/FriBindingSitesData.lean").read_text()

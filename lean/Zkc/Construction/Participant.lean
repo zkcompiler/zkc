@@ -4,6 +4,7 @@ meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
 public import Zkc.Source.Structured.Operations
+public import Zkc.Source.Structured.TypeProperties
 public import Zkc.Source.Structured.ProtocolContext
 public import Zkc.Source.Structured.ServiceOperations
 public import Init.Data.Nat.Power2.Bitwise
@@ -136,15 +137,37 @@ structure Template where
 
 namespace Template
 
+/-- A realization protocol name carries the digest of its checked source
+association. A malformed reserved name never passes native admission. -/
+def generatedProtocol (protocol : String) : Bool := "zkc.oracle.".toList.isPrefixOf protocol.toList
+
+def validProtocol (protocol : String) : Bool :=
+  if generatedProtocol protocol then
+    let digest := protocol.toList.drop "zkc.oracle.".length
+    digest.length == 64 && digest.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
+  else true
+
+/-- Generated common sites already have their final spelling. An authored
+step still extends the prefix in force at that point of the path. -/
+def expandSite (parent : Option String) (protocol site : String) : String :=
+  if generatedProtocol protocol then site else Structured.qualifyProtocolSite parent site
+
+def validNamespaces (template : Template) : Bool :=
+  template.steps.all (fun step => validProtocol step.protocol) &&
+    match template.event with
+    | tag :: protocol :: _ =>
+        validProtocol protocol && (!generatedProtocol protocol || tag == "message")
+    | _ => false
+
 /-- The application prefix of the template's path, rendered as the structured
 semantics renders nested application sites. -/
 def applicationPrefix (template : Template) : Option String :=
   template.steps.foldl (fun outer step =>
-    if step.kind = "apply" then some (Structured.qualifyProtocolSite outer step.site) else outer) none
+    if step.kind = "apply" then some (expandSite outer step.protocol step.site) else outer) none
 
 /-- A local site of the template's innermost protocol, qualified by its path. -/
 def qualify (template : Template) (site : String) : String :=
-  Structured.qualifyProtocolSite template.applicationPrefix site
+  expandSite template.applicationPrefix (template.event[1]?.getD "") site
 
 /-- The number of enclosing repeats, which is the number of dynamic coordinates. -/
 def repeats (template : Template) : Nat :=
@@ -190,6 +213,11 @@ inductive Calculation where
   | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual
   | select (type : Structured.Ty)
   | boundedAt (domain : String)
+  | sequenceEmpty (element : Structured.Ty) | sequenceAppend (element : Structured.Ty)
+  | sequenceLength (element : Structured.Ty)
+  | makeProduct (identity constructor : String) (fields : Structured.ProductFields)
+  | getProduct (identity constructor : String) (fields : Structured.ProductFields)
+      (type : Structured.Ty) (field : Var fields.toList type)
   deriving DecidableEq, Repr
 
 namespace Calculation
@@ -220,6 +248,11 @@ def op : Calculation → Structured.Op
   | .booleanNotEqual => .booleanNotEqual
   | .select type => .select type
   | .boundedAt domain => .boundedAt domain
+  | .sequenceEmpty element => .sequenceEmpty element
+  | .sequenceAppend element => .sequenceAppend element
+  | .sequenceLength element => .sequenceLength element
+  | .makeProduct identity constructor fields => .makeProduct identity constructor fields
+  | .getProduct identity constructor fields type field => .getProduct identity constructor fields type field
 
 /-- The calculation a structured operation is, if it is one. -/
 def ofOp? : Structured.Op → Option Calculation
@@ -247,15 +280,22 @@ def ofOp? : Structured.Op → Option Calculation
   | .booleanNotEqual => some .booleanNotEqual
   | .select type => some (.select type)
   | .boundedAt domain => some (.boundedAt domain)
+  | .sequenceEmpty element => some (.sequenceEmpty element)
+  | .sequenceAppend element => some (.sequenceAppend element)
+  | .sequenceLength element => some (.sequenceLength element)
+  | .makeProduct identity constructor fields => some (.makeProduct identity constructor fields)
+  | .getProduct identity constructor fields type field => some (.getProduct identity constructor fields type field)
   | _ => none
 
 theorem ofOp?_some {op : Structured.Op} {calculation : Calculation}
     (found : ofOp? op = some calculation) : calculation.op = op := by
   cases op <;> simp [ofOp?] at found <;> subst found <;> rfl
 
-/-- Calculations that never stop; only an out-of-range `boundedAt` refuses. -/
+/-- Calculations whose evaluation and result encoding never stop on admitted
+ordinary inputs. Even an empty sequence needs an eligible element type. -/
 def total : Calculation → Bool
   | .boundedAt _ => false
+  | .sequenceEmpty element => !element.isHandle
   | _ => true
 
 end Calculation
@@ -297,14 +337,32 @@ inductive Operation where
   | localService (port : ServicePort) (request : Request)
       (template : Template) (coordinates : List Nat)
   | calculate (calculation : Calculation)
+  /-- Installed local primitives retain ingress checks and stopping outcomes.
+  These do not acquire mathematical calculation rights. -/
+  | execute (primitive : Structured.Primitive)
   | call (helper : String)
+  /-- A Math fold resolves its named domain and callbacks against the original
+  checked program, using the structured fold admission and evaluation. -/
+  | finiteFold (domain step predicate : String)
+  /-- The actual embedded Math body, in its own closed operand/result frame. -/
+  | mathCompute
   | guard (site : String)
+  /-- Installed backend requirement. False is a kernel refusal, distinct from
+  the explicit rejection of a source protocol guard. -/
+  | require (site : String)
   /-- A loop of at most `maximum` iterations. Its single region owns the
   induction/carried arguments, body and yielded references. -/
   | loop (site : String) (maximum : Nat)
   /-- Pure Boolean selection. Both closed arms are retained and checked; only
   the selected arm executes. It does not select protocol interactions. -/
   | mathBranch
+  /-- Closed local selection may contain checked guards and local helper calls.
+  It cannot select transcript, communication or service interactions. -/
+  | localBranch
+  /-- Closed local traversal of an exclusive index interval. Its region receives
+  induction, carried state and invariant captures. A conditional body yields a
+  continuation Boolean before its new state; false retains that state. -/
+  | localRange (conditional : Bool)
   | unsupported (name : String)
   deriving DecidableEq, Repr
 

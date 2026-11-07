@@ -12,6 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from types import SimpleNamespace
 
@@ -26,9 +27,11 @@ from bridges.common import policy as native_policy  # noqa: E402
 from bridges.common.lean_render import Refused  # noqa: E402
 from bridges.common.replacement import ReplacementError, replace_exactly_once  # noqa: E402
 from bridges.construction import render as participant  # noqa: E402
-from bridges.executable import render as executable  # noqa: E402
+from bridges.executable import events, render as executable  # noqa: E402
 from bridges.pipeline import glue  # noqa: E402
 import intent  # noqa: E402
+from intent_association_tests import scalar_fixture  # noqa: E402
+from request_support import Obligation as IntentObligation  # noqa: E402
 from bridges.common import check as scalar_controls  # noqa: E402
 from bridges.common.request_support import Obligation, check_lean_resources  # noqa: E402
 
@@ -318,35 +321,40 @@ class GluePublishedInputs(unittest.TestCase):
 class IntentSchemas(unittest.TestCase):
     """Port types are compared by schema and typed leaf, never by display text."""
 
-    def setUp(self):
-        self.data = original(inputs=(FIELD, FIELD, FIELD, FIELD), outputs=(BOOLEAN,))
-        interface = proof_interface()
-        self.output = interface["protocols"][0]["outputs"][0]
-        self.witness = interface["protocols"][0]["inputs"][2]
-        self.formal = {"name": "secret", "purpose": "witness", "native": [3],
-                       "schema": deepcopy(self.witness["schema"])}
+    def resolve(self, data, interface, spec):
+        with tempfile.TemporaryDirectory() as directory:
+            return intent.resolve(spec, data, interface, None, Path(directory))
 
     def test_harmless_display_changes_still_match(self):
+        data, interface, spec = scalar_fixture()
+        protocol = interface["protocols"][0]
+        witness = protocol["inputs"][2]
+        witness["type"] = witness["schema"]["type"] = "Fr"
         for spelling in ("Bool", "boolean"):
-            self.output["type"] = self.output["schema"]["type"] = spelling
-            self.assertTrue(intent.boolean_decision(self.output, self.data))
-        self.witness["type"] = self.witness["schema"]["type"] = "Fr"
-        self.assertTrue(intent.witness_field(self.witness, self.formal, self.data, "bls12-381.fr"))
+            output = protocol["outputs"][0]
+            output["type"] = output["schema"]["type"] = spelling
+            self.resolve(data, interface, spec)
 
     def test_distinct_nominal_types_spelled_alike_do_not_match(self):
-        self.witness["type"] = self.witness["schema"]["type"] = "Fr"
-        other = deepcopy(self.formal)
-        other["schema"]["identity"] = "4" * 64
-        other["schema"]["type"] = "Fr"
-        self.assertFalse(intent.witness_field(self.witness, other, self.data, "bls12-381.fr"))
-        # The typed native leaf decides the field, whatever either display says.
-        self.assertFalse(intent.witness_field(self.witness, self.formal, self.data, "bn254.fr"))
-        self.assertFalse(intent.witness_field(
-            self.witness, self.formal, original(inputs=(FIELD, FIELD, FIELD, OTHER_FIELD)), "bls12-381.fr"))
-        # A field port spelled `bool` is not a Boolean decision.
-        self.output["schema"] = scalar_schema(display="bool")
-        self.output["type"] = "bool"
-        self.assertFalse(intent.boolean_decision(self.output, self.data))
+        for mutation in ("identity", "domain", "native-leaf", "decision"):
+            data, interface, spec = scalar_fixture()
+            protocol = interface["protocols"][0]
+            witness = protocol["inputs"][2]
+            formal = interface["relations"][0]["inputs"][2]
+            witness["type"] = witness["schema"]["type"] = formal["schema"]["type"] = "Fr"
+            if mutation == "identity":
+                formal["schema"]["identity"] = "4" * 64
+            elif mutation == "domain":
+                spec["wiring"]["fieldDomain"] = "bn254.fr"
+            elif mutation == "native-leaf":
+                root = next(row for row in data[7] if row[1] == data[3])
+                root[4][2] = deepcopy(OTHER_FIELD)
+            else:
+                output = protocol["outputs"][0]
+                output["schema"] = deepcopy(witness["schema"])
+                output["type"] = output["schema"]["type"] = "bool"
+            with self.subTest(mutation=mutation), self.assertRaises(IntentObligation):
+                self.resolve(data, interface, spec)
 
 
 def deployment(parameter="0", site="site", policy=None):
@@ -492,10 +500,50 @@ class OriginSteps(unittest.TestCase):
                         origin_structure(["zkc.native-origin-template/0", "main", [step], [],
                                                  ["message", "main", "site", "site", "P", "V"]])
 
+    def test_generated_protocol_requires_a_canonical_identity_and_a_message(self):
+        tree = lean_render.template(self.template([["apply", "main", "call"]]))
+        generated = "zkc.oracle." + "a" * 64
+        tree[4][1] = generated
+        self.assertIn(generated, lean_render.origin(lean_render.encode_tree(tree).hex()))
+        for invalid in ("zkc.oracle.", generated[:-1], generated.upper().replace("ZKC.ORACLE.", "zkc.oracle.")):
+            for location in (tree[4], tree[2][0]):
+                previous, location[1] = location[1], invalid
+                with self.assertRaisesRegex(ValueError, "generated origin protocol"):
+                    lean_render.origin(lean_render.encode_tree(tree).hex())
+                location[1] = previous
+        tree[4] = ["query", generated, "draw", "input_0", "random.test/0", "draw", "V"]
+        with self.assertRaisesRegex(ValueError, "generated origin event"):
+            lean_render.origin(lean_render.encode_tree(tree).hex())
+
     def test_branch_labels_are_origin_identifiers(self):
         with self.assertRaisesRegex(ValueError, "origin identifier"):
             origin_structure(["zkc.native-origin-template/0", "main", [["branch", "main", "choose", ""]], [],
                                      ["message", "main", "site", "site", "P", "V"]])
+
+
+class DescriptorEvents(unittest.TestCase):
+    def test_origin_and_codec_must_select_the_same_transmission(self):
+        encoded = lean_render.encode_tree(["zkc.native-origin-template/0", "main", [],
+            [], ["message", "main", "word", "word", "P", "V"]]).hex()
+        source = "1" * 64
+        codec = [encoded, "vector:test", "zkc.native-data/0"]
+        descriptor = ["zkc.native-proof-descriptor/0", native(), "zkc.native-origin/0",
+                      [["message", encoded]], [], [codec], [], [], ""]
+        bundle = ["zkc.native-proof/0", source, descriptor, None, None, None, None, None, None]
+        self.assertIn('.message "vector:test" "zkc.native-data/0"',
+                      events.render(bundle, "sha256:" + source, "Control"))
+        with self.assertRaisesRegex(Refused, "source"):
+            events.render(bundle, "sha256:" + "2" * 64, "Control")
+        for mutate, reason in (
+            (lambda d: d[3].append(d[3][0]), "repeated event"),
+            (lambda d: d[5].clear(), "missing transmitted message"),
+            (lambda d: d[5].append(d[5][0]), "duplicate message codec"),
+            (lambda d: d[3][0].__setitem__(0, "query"), "expected field draw"),
+        ):
+            other = deepcopy(bundle)
+            mutate(other[2])
+            with self.subTest(reason=reason), self.assertRaisesRegex(Refused, reason):
+                events.render(other, "sha256:" + source, "Control")
 
 
 if __name__ == "__main__":

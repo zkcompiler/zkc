@@ -74,24 +74,10 @@ def checkProducerStep (program : Program) (context : Context) (state : CheckStat
                 else .error "construction-producer-loop-yield"
             | .error error => .error error
           else .error "construction-producer-loop"
-      | .none, none =>
-          let fresh := state.sorts.length
-          if state.sorts[count]? = some (.data .index) ∧
-              initial.map (state.sorts[·]?) = results.map some ∧
-              initial.all (fun operand => isLocalValue state.sorts[operand]?) ∧
-              results.all (fun result => isLocalValue (some result)) ∧
-              yielded.length = initial.length then
-            match checkProducerFrom program context
-                { state with
-                  sorts := state.sorts ++ .data .index :: results
-                  inductions := state.inductions ++ [fresh] } body with
-            | .ok final =>
-                if final.pending = .none ∧ final.current = state.current ∧
-                    yielded.map (final.sorts[·]?) = results.map some then
-                  .ok { state with sorts := state.sorts ++ results, seen := final.seen }
-                else .error "construction-producer-local-loop-yield"
-            | .error error => .error error
-          else .error "construction-producer-local-loop"
+      | .none, none => do
+          let input ← localLoopInput state count initial results
+          let final ← checkProducerFrom program context input body
+          localLoopOutput state final results yielded
       | _, _ => .error "construction-producer-loop-transcript"
   | instruction => checkStep context state instruction
 end

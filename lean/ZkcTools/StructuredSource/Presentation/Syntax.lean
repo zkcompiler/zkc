@@ -101,6 +101,10 @@ def primitiveText : Primitive → String
   | .indexConstant n => app ".indexConstant" [toString n]
   | .indexEqual => ".indexEqual" | .indexLess => ".indexLess" | .indexAdd => ".indexAdd"
   | .indexMul => ".indexMul" | .indexSub => ".indexSub" | .indexDiv => ".indexDiv" | .indexMod => ".indexMod"
+  | .sequenceEmpty element => app ".sequenceEmpty" [tyText element]
+  | .sequenceAppend element => app ".sequenceAppend" [tyText element]
+  | .sequenceLength element => app ".sequenceLength" [tyText element]
+  | .sequenceAt element => app ".sequenceAt" [tyText element]
   | .vectorEmpty d => app ".vectorEmpty" [quoted d] | .vectorLength d => app ".vectorLength" [quoted d]
   | .vectorSum d => app ".vectorSum" [quoted d] | .vectorSplit d => app ".vectorSplit" [quoted d]
   | .vectorAppend d => app ".vectorAppend" [quoted d] | .vectorEqual d => app ".vectorEqual" [quoted d]
@@ -141,6 +145,9 @@ def opText : Op → String
   | .indexLess => ".indexLess" | .indexPowerOfTwo => ".indexPowerOfTwo"
   | .indexWrappingAdd => ".indexWrappingAdd" | .indexWrappingSubtract => ".indexWrappingSubtract"
   | .indexBitAnd => ".indexBitAnd" | .indexLogicalShiftRight => ".indexLogicalShiftRight"
+  | .sequenceEmpty element => app ".sequenceEmpty" [tyText element]
+  | .sequenceAppend element => app ".sequenceAppend" [tyText element]
+  | .sequenceLength element => app ".sequenceLength" [tyText element]
   | .vectorLength d => app ".vectorLength" [quoted d]
   | .multilinearRestrictPrefix d => app ".multilinearRestrictPrefix" [quoted d]
   | .fieldConstant d n => app ".fieldConstant" [quoted d, toString n]

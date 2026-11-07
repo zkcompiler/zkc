@@ -19,6 +19,142 @@ below is to the pinned verifier, not the current phased implementation.
 Connecting the current implementation to these mathematical results remains
 separate work; this page does not establish that connection.
 
+## Retained Direct scalar source
+
+The current octic KoalaBear entry has a separate theorem on the admitted
+source verifier. Fix a nonzero shift, 32 cells, a degree bound of eight,
+three folding challenges, eight scalar queries with replacement, and the
+clear full-word provider. The installed interactive service draws fresh
+uniform field elements and positions. For every adaptive network and word
+chooser, the probability that the verifier returns true **and its first
+successfully published word is far** is bounded by the sum of the three
+unique-decoding folding errors and `(1 − min(1/4, δ))^8`. The word is read
+from the provider's final publication history. An abort retains its mass,
+post-state and observations. A later word can depend on earlier challenges.
+[Original source-event theorem](../../integrations/arklib/ZkcArkLibExamples/Fri/InteractiveSoundness.lean)
+
+The clear provider preserves the published cells, nominal anchor and order
+under subsequent source operations. The FRI library proves which parent,
+challenge and coset a virtual fold uses. For every eligible codeword and
+every triple of draws, the linked holder helpers produce folded words and
+one terminal coefficient satisfying the scalar predicate at all positions.
+Two paired executions additionally run both original roles through every
+return. Universal honest termination and the connection from the compiled
+scalar verifier to its charged random-oracle queries are separate proof
+obligations. [Provider laws](../../Zkc/Source/Structured/PublishedWordsLaws.lean)
+· [Holder theorem](../../integrations/arklib/ZkcArkLibExamples/Fri/HonestMessages.lean)
+· [Paired source controls](../../security/TestsSecurity/FriHonestExchange.lean)
+
+The clear-store representation laws separately connect a provider publication to
+an immutable nominal record. The record contains the actual enclosing iteration
+coordinates, row count, one base leaf and the exact published data. The actual
+provider return supplies publication validity and freshness; appending the record
+assigns its old sequence length as the reference slot. Provider-preserving changes
+and physical append preserve that association. Existing checked sequence access
+and typed record projections recover the same word; equal payloads at different
+source anchors cannot justify exchanging their references. These are local
+representation and instruction laws. The common five-instruction allocator rule
+now establishes the appended record and returned reference in actual constructed
+instruction semantics, retaining every intermediate cell and checkpoint. A checked
+recognizer extracts nominal types and SSA positions from an instruction fragment;
+both the base and virtual FRI allocator fragments have been checked against that
+rule. The same rule applies at arbitrary caller offsets, and an invalid constructor
+refuses before reading the store. Returning allocation requires the explicit
+constructor and store-length bounds. The common four-instruction lookup rule
+checks the reference constructor before reading the immutable slot. Its execution
+rule applies to all 66 lookup fragments in the retained FRI tree. `Stored.lookup`
+connects a returning lookup to the exact publication record, and the existing
+projections recover that word's data. These are static helper occurrences, not
+runtime read counts. Virtual capture layouts are checked against the original
+oracle's declared input types and the actual allocator's record fields. The
+shared relation keeps ordinary parameters equal and resolves each parent
+reference through immutable storage; typed projections preserve source order.
+For the actual Fold record, this checks nine captures following three index
+metadata fields. The metadata's dynamic source meaning still belongs to the
+whole-run relation. A two-parent control rejects exchanging distinct same-typed
+anchors even when their published words have identical cells. The complete query
+controller, generated-event ownership,
+root allocation bounds and whole-run simulation remain open. The common virtual
+record rule now additionally preserves the original captures through actual
+allocation and typed projection. Its source-installation rule uses the actual
+returning virtual instruction to recover the exact checked body, captures,
+location and registry entry. The source return and physical allocation still
+need to be composed at every reached location in the full verifier.
+The common guarded field-vector read now retains all outcomes: finite-index
+checking, row-bound refusal and missing-cell refusal. Its physical execution
+agrees with the exact stored provider word for every position once publication
+has established a valid length. Fixed and unsized handle annotations may share
+that word when both admit its length; query locations remain independent of the
+publication location. This closes the local base-read boundary, not dispatch or
+virtual-child continuation execution. `VirtualStorageLifetime` reuses the existing
+fresh-registry extension law to preserve installed closures across later source
+operations and physical append. A second actual construction with the same body
+and captures cannot replace the anchor associated with the first physical slot.
+`OracleStore.Located` also preserves the exact older registry used for child
+expansion. Source reachability derives this placement and capture validity from
+lookup; it does not assume a protocol-authored dependency graph. FRI's virtual
+registration now uses the shared placement and transport laws. Its mathematical
+fold relation remains in FRI. The generic virtual-read equation includes every
+outcome, state and event, with controls for stops at either child of a repeated
+read. This is a logical expansion law, not the physical controller simulation.
+[Clear-store laws](../../Zkc/Realization/ClearStorage.lean)
+· [Constructed reads](../../Zkc/Realization/ClearStorageCalculations.lean)
+· [Actual allocation](../../Zkc/Realization/ClearStorageAllocation.lean)
+· [Common allocator rule](../../Zkc/Realization/RecordAllocator.lean)
+· [Checked lookup](../../Zkc/Realization/ClearStorageLookup.lean)
+· [Guarded table reads](../../Zkc/Realization/TableRead.lean)
+· [Provider read connection](../../Zkc/Realization/ClearStorageRead.lean)
+· [Typed captures](../../Zkc/Realization/CaptureLayout.lean)
+· [Capture storage association](../../Zkc/Realization/ClearStorageCaptures.lean)
+· [Virtual records](../../Zkc/Realization/VirtualStorage.lean)
+· [Source installation](../../Zkc/Realization/VirtualStorageInstallation.lean)
+· [Virtual reference lifetime](../../Zkc/Realization/VirtualStorageLifetime.lean)
+· [Immutable registry context](../../Zkc/Source/Structured/OracleStoreLocation.lean)
+· [Publication and swap controls](../../Tests/ClearStorage.lean)
+
+The common [query resumption rule](../../Zkc/Realization/QueryResumption.lean)
+checks phase, kind and all five saved request coordinates before appending an
+answer. It preserves checked-index refusal, arena exhaustion and diagnostic
+frames. Successful return fixes the request association and the exact new
+answer slot. The [controls](../../Tests/QueryResumption.lean) include same-typed
+coordinate swaps, stale phases, wrong kinds and out-of-range reflexive checks.
+This local transition does not establish controller reachability, root capacity,
+or the association of the external exchange with the reached request.
+
+The fixed-table access transport preserves both replies and the complete
+ordered query log. At the selected field and scalar sites, it recovers the
+same challenge values and charged keys used in the FRI experiment. The
+scalar segment reads eight positions even when values or keys repeat.
+The complete compiled endpoint additionally needs an admitted interpretation
+of the selected constructed participant and a realization correspondence
+for its generated clear-store helpers. The native export now retains both
+roles, including closed ranges and actual mathematical computation bodies.
+The retained validator has 1,566 exported instructions and fits the unchanged
+1 MiB bound. Nominal record construction and empty single-constructor
+projections now use the shared structured product calculations, with kernel
+laws for arbitrary fields and controls for same-typed ordering and nominal
+mismatches. Closed local tests use a kind-sensitive checker and evaluator that
+preserve guard rejection and exclude transcript effects. The independent
+construction renderer now admits closed conditional ranges using the structured
+finite traversal and retains the embedded Math bodies, including folds resolved
+against the original domain and callback definitions. The export renders as a
+complete instruction tree with no unsupported operations. Checked scalar and
+immutable sequence operations use the shared structured evaluator. Their nominal
+element types, out-of-range refusal and distinction from total mathematical
+operations remain explicit. The actual participant passes `checkExport` in the
+kernel, including the shared loop rule for local carries that leave the transcript
+unchanged. This is construction formation only: `checkCompiled` still refuses
+`construction-source-occurrence` because the generated clear-delivery event is not
+an ordinary authored exchange. Its association to the original oracle publication
+and the complete clear-store execution correspondence remain required. Natural field constants use
+the exact nominal field's catalogue characteristic.
+
+The executable-byte reader separately requires support for the nominal
+sequence-of-record storage representation. Whole-run event transport and finite
+sampling-retry accounting remain required by the compiled-ideal theorem.
+[Access transport](../../security/ZkcSecurity/Bindings/Transcript/QueryTreeSource/Composition/AccessLog.lean)
+· [Scalar source path](../../integrations/arklib/ZkcArkLibExamples/Fri/ClearScalarPath.lean)
+
 ## Subject
 
 `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` tests one word of

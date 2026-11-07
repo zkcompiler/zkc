@@ -50,6 +50,19 @@ theorem Region.Derivation.identity
   | nil => exact .nil
   | cons body tail bodyIH tailIH => exact .cons (fun values => bodyIH values.get) tailIH
 
+/-- Keep the actual callbacks while an operation-specific rule derives a
+callback only at the arguments the operation passes to it. -/
+theorem Regions.Derivation.identity (meaning : RegionMeaning dialect I) {signatures}
+    (bodies : Regions dialect signatures) :
+    Regions.Derivation meaning (fun op => .call op .done) bodies (bodies.denote meaning) := by
+  cases bodies with
+  | nil => exact .nil
+  | cons body tail =>
+      exact .cons (fun values => Region.Derivation.identity meaning body values.get)
+        (Regions.Derivation.identity meaning tail)
+termination_by sizeOf bodies
+decreasing_by all_goals simp_all; all_goals omega
+
 /-- Reconstructing an ordered tuple from its typed projections preserves it. -/
 theorem Values.reify_get {Ty : Type} {Value : Ty → Type} {types : List Ty}
     (values : Values Value types) : Environment.toValues values.get = values := by

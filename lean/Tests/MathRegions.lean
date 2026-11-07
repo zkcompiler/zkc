@@ -17,17 +17,17 @@ private def checkedRead : InstructionRegion :=
 private def selection : Instruction :=
   ⟨.mathBranch, [0, 1, 2, 3], [field], [immediate, checkedRead]⟩
 
-example : checkMathStep (fun _ _ _ => true) (.data .boolean :: captures) selection =
+example : checkClosedStep .math (fun _ _ _ _ => true) (.data .boolean :: captures) selection =
     .ok (.data .boolean :: captures ++ [field]) := by rfl
 
 /-- A dormant arm still cannot issue a protocol guard. -/
-example : checkMathStep (fun _ _ _ => true) [.data .boolean]
+example : checkClosedStep .math (fun _ _ _ _ => true) [.data .boolean]
     ⟨.mathBranch, [0], [], [⟨[], [], []⟩,
       ⟨[], [⟨.guard "hidden", [0], [], []⟩], []⟩]⟩ =
     .error "construction-math-operation" := by rfl
 
 /-- Out-of-frame yields in a dormant arm are formation failures. -/
-example : checkMathStep (fun _ _ _ => true) [.data .boolean]
+example : checkClosedStep .math (fun _ _ _ _ => true) [.data .boolean]
     ⟨.mathBranch, [0], [], [⟨[], [], []⟩, ⟨[], [], [1]⟩]⟩ =
     .error "construction-math-yields" := by rfl
 
@@ -41,26 +41,26 @@ example (model : Structured.DomainModel) (program : Structured.Program) (context
         .data (.field "test-field" value), .data (.field "test-field" value)] := by rfl
 
 /-- Linking validates a dormant call's complete source signature. -/
-private def knownCall (name : String) (inputs outputs : List ValueSort) : Bool :=
-  name == "predicate" && inputs == [field] && outputs == [.data .boolean]
+private def knownCall (operation : Operation) (inputs outputs : List ValueSort) : Bool :=
+  operation == .call "predicate" && inputs == [field] && outputs == [.data .boolean]
 
 private def callSelection (name : String) (argument : Nat) (results : List ValueSort) : Instruction :=
   ⟨.mathBranch, [0, 0, 1], [.data .boolean],
     [⟨[.data .boolean, field], [], [0]⟩,
      ⟨[.data .boolean, field], [⟨.call name, [argument], results, []⟩], [2]⟩]⟩
 
-example : (checkMathStep knownCall [.data .boolean, field]
+example : (checkClosedStep .math (fun _ => knownCall) [.data .boolean, field]
     (callSelection "predicate" 1 [.data .boolean])).isOk = true := by rfl
 
-example : checkMathStep knownCall [.data .boolean, field]
+example : checkClosedStep .math (fun _ => knownCall) [.data .boolean, field]
     (callSelection "missing" 1 [.data .boolean]) =
     .error "construction-math-call" := by rfl
 
-example : checkMathStep knownCall [.data .boolean, field]
+example : checkClosedStep .math (fun _ => knownCall) [.data .boolean, field]
     (callSelection "predicate" 0 [.data .boolean]) =
     .error "construction-math-call" := by rfl
 
-example : checkMathStep knownCall [.data .boolean, field]
+example : checkClosedStep .math (fun _ => knownCall) [.data .boolean, field]
     (callSelection "predicate" 1 [field]) =
     .error "construction-math-call" := by rfl
 

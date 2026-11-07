@@ -2930,6 +2930,91 @@ class ParticipantExporter {
     return regions;
   }
 
+  Expected<json::Array> rangeHelper(const protocol::SourceExecutionStep &step,
+                                    unsigned depth) {
+    unsigned carried = step.outputs.size();
+    if (step.regions.size() != 1 || step.inputs.size() < 2 + carried)
+      return error("constructed-participant-range");
+    auto function = step.regions.front();
+    auto outcome = function.getFunctionType().getNumResults() == 1
+                       ? dyn_cast<exec::OutcomeType>(
+                             function.getFunctionType().getResult(0))
+                       : exec::OutcomeType();
+    auto index =
+        IntegerType::get(function.getContext(), 64, IntegerType::Unsigned);
+    SmallVector<Type> expectedInputs{index};
+    append_range(expectedInputs,
+                 ValueRange(step.inputs).drop_front(2).getTypes());
+    SmallVector<Type> expectedOutputs;
+    if (step.conditional)
+      expectedOutputs.push_back(IntegerType::get(function.getContext(), 1));
+    append_range(expectedOutputs, ValueRange(step.outputs).getTypes());
+    if (!function->hasAttr("runtime.region") || !outcome ||
+        step.inputs[0].getType() != index ||
+        step.inputs[1].getType() != index ||
+        TypeRange(function.getArgumentTypes().drop_front()) !=
+            TypeRange(expectedInputs) ||
+        TypeRange(outcome.getPayload()) != TypeRange(expectedOutputs) ||
+        ValueRange(step.inputs).slice(2, carried).getTypes() !=
+            ValueRange(step.outputs).getTypes())
+      return error("constructed-participant-range");
+    if (auto e = chargeFrame(references.size() + coordinateSize()))
+      return std::move(e);
+    Frame frame(*this);
+    auto arguments = function.getArguments().drop_front();
+    if (auto e =
+            enterArm(arguments, ValueRange(step.inputs).drop_front(2 + carried),
+                     1 + carried))
+      return std::move(e);
+    json::Array nested;
+    auto ending = helperBody(function, depth + 1, nested);
+    if (!ending)
+      return ending.takeError();
+    auto types = exportLogicalTypesData(ValueRange(arguments).getTypes());
+    if (!types)
+      return types.takeError();
+    json::Array region{
+        std::move(*types), json::Array{},
+        json::Array{ending->operation.str(), indices(ending->values)},
+        step.conditional};
+    if (auto e = chargeBytes(region))
+      return std::move(e);
+    region[1] = std::move(nested);
+    return json::Array{std::move(region)};
+  }
+
+  Expected<json::Array>
+  computationHelper(const protocol::SourceExecutionStep &step, unsigned depth) {
+    auto call = cast<exec::ComputeOp>(step.operation);
+    SymbolTableCollection tables;
+    auto function = call.resolveCallee(tables);
+    if (!function || protocol::isScopedExecutionFunction(function) ||
+        !llvm::hasSingleElement(function.getBody()) ||
+        TypeRange(function.getArgumentTypes()) !=
+            ValueRange(step.inputs).getTypes() ||
+        TypeRange(function.getResultTypes()) !=
+            ValueRange(step.outputs).getTypes())
+      return error("constructed-participant-computation");
+    if (auto e = chargeFrame(references.size() + coordinateSize()))
+      return std::move(e);
+    Frame frame(*this);
+    if (auto e = enterArm(function.getArguments(), step.inputs, 0))
+      return std::move(e);
+    json::Array nested;
+    auto returned = body(function.front(), "func.return", depth + 1, nested);
+    if (!returned)
+      return returned.takeError();
+    auto types = exportLogicalTypesData(function.getArgumentTypes());
+    if (!types)
+      return types.takeError();
+    json::Array region{std::move(*types), json::Array{},
+                       json::Array{"func.return", indices(*returned)}};
+    if (auto e = chargeBytes(region))
+      return std::move(e);
+    region[1] = std::move(nested);
+    return json::Array{std::move(region)};
+  }
+
   Error helper(FlatSymbolRefAttr callee, ValueRange inputs, ValueRange outputs,
                unsigned depth, json::Array &out, Operation *invocation) {
     if (depth > 64)
@@ -3021,6 +3106,28 @@ class ParticipantExporter {
       }
       if (isa<exec::TestOp, exec::MatchOp>(op)) {
         auto regions = selectedHelper(step, depth);
+        if (!regions)
+          return regions.takeError();
+        if (auto e = emit(op, step.inputs, ValueRange(step.outputs).getTypes(),
+                          out, std::move(*regions)))
+          return std::move(e);
+        for (Value result : step.outputs)
+          references[result] = next++;
+        continue;
+      }
+      if (isa<exec::RangeOp>(op)) {
+        auto regions = rangeHelper(step, depth);
+        if (!regions)
+          return regions.takeError();
+        if (auto e = emit(op, step.inputs, ValueRange(step.outputs).getTypes(),
+                          out, std::move(*regions)))
+          return std::move(e);
+        for (Value result : step.outputs)
+          references[result] = next++;
+        continue;
+      }
+      if (isa<exec::ComputeOp>(op)) {
+        auto regions = computationHelper(step, depth);
         if (!regions)
           return regions.takeError();
         if (auto e = emit(op, step.inputs, ValueRange(step.outputs).getTypes(),

@@ -58,9 +58,22 @@ def action (instruction : Instruction) (bodies : List (String × String)) : Exce
   | .call name, _, [], [] =>
       let args := [literal name, references, declared]
       .ok (app "View.helper" (["model", "program"] ++ args), app "Correspondence.helper" args)
+  | .execute primitive, _, [], [] =>
+      let args := [literal primitive, references, declared]
+      .ok (app "View.execute" (["model"] ++ args), app "Correspondence.execute" args)
+  | .finiteFold domain helper predicate, _, [], [] =>
+      let args := [literal domain, literal helper, literal predicate, references, declared]
+      .ok (app "View.finiteFold" (["model", "program"] ++ args), app "Correspondence.finiteFold" args)
+  | .mathCompute, _, [region], [body] =>
+      let args := [references, declared, literal region]
+      .ok (app "View.mathCompute" (["program"] ++ args ++ [body.1]),
+        app "Correspondence.mathCompute" (args ++ [body.2]))
   | .guard site, [condition], [], [] =>
       .ok (app "View.guard" [toString condition, declared],
        app "Correspondence.guard" [literal site, toString condition, declared])
+  | .require site, [condition], [], [] =>
+      .ok (app "View.require" [toString condition, declared],
+        app "Correspondence.require" [literal site, toString condition, declared])
   | .loop site maximum, count :: initial, [⟨inputs, _, yielded⟩], [body] =>
       if inputs != .data .index :: instruction.results then
         throw "constructed-view-loop-signature"
@@ -72,6 +85,15 @@ def action (instruction : Instruction) (bodies : List (String × String)) : Exce
       let args := [toString selector, literal captures, declared, literal yes, literal no]
       .ok (app "View.mathBranch" (["program"] ++ args ++ [yesBody.1, noBody.1]),
         app "Correspondence.mathBranch" (args ++ [yesBody.2, noBody.2]))
+  | .localRange conditional, lower :: upper :: values, [region], [body] =>
+      let args := [literal conditional, toString lower, toString upper, literal values, declared,
+        literal region]
+      .ok (app "View.localRange" (["program"] ++ args ++ [body.1]),
+        app "Correspondence.localRange" (args ++ [body.2]))
+  | .localBranch, selector :: captures, [yes, no], [yesBody, noBody] =>
+      let args := [toString selector, literal captures, declared, literal yes, literal no]
+      .ok (app "View.localBranch" (["program"] ++ args ++ [yesBody.1, noBody.1]),
+        app "Correspondence.localBranch" (args ++ [yesBody.2, noBody.2]))
   | _, _, _, _ => throw ("constructed-view-unsupported-shape: operation=" ++
       literal instruction.operation ++ "; operands=" ++ references ++ "; results=" ++
       declared ++ "; regions=" ++ toString instruction.regions.length)

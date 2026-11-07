@@ -4,7 +4,7 @@ namespace Tests.RegionViewControls
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured Tests.DeriveRegionSources
 
 /-- Generated projection agrees with the existing raw-body witness. -/
-theorem sum_view_matches_existing : sumAddView = SumcheckRelationContract.addBody := rfl
+theorem sum_view_matches_existing : sumAddView = SumcheckSourceBodies.sumAddBody := rfl
 
 theorem sum_raw_witness : sumAdd.raw = sumAddView.erase := rfl
 

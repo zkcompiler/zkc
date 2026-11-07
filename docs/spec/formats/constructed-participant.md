@@ -183,13 +183,12 @@ SSA value/result associations while preserving inline slot numbering. An
 original helper's opaque result does not acquire lineage from an equal sort or
 reference number. A participant's `protocol.finish` supplies `returned`.
 
-This exporter does not flatten arbitrary generated control flow. Generated
-helper loops (`exec.range`), other unsupported operations, successors outside
-the admitted helper view, or missing references refuse with a
-`constructed-participant-*` diagnostic. Selected conditional codec helpers use
-the admitted `exec.test` association below; unresolved computations, finite
-requests and storage-release steps remain unsupported. Original source helpers
-remain calls rather than being interpreted or inlined.
+Generated helper loops use the checked range-region projection below. Other
+unsupported operations, successors outside the admitted helper view, or missing
+references refuse with a `constructed-participant-*` diagnostic. Selected
+conditional codec helpers use the admitted `exec.test` association below.
+Unresolved `exec.fold`/`exec.collect` requests and storage-release steps remain
+unsupported. Original source helpers remain calls.
 
 Limits: 512 inputs and results, 64 nested blocks, 4096 inspected operations,
 2048 exported instructions in total and 1 MiB of printed JSON per participant,
@@ -257,6 +256,54 @@ the ordinary order. Its actual `site` and `owner` remain attributes. True exits
 the participant through its checked completion/finalization path; false binds
 the continuation results and proceeds. Completion propagates out of nested arms
 and loops; it does not become a guard failure, helper yield or branch result.
+
+## Generated mathematical computations
+
+An admitted `exec.compute` retains its actual callee and site attributes, logical
+operands and successful result sorts. Its one region contains that callee's
+actual mathematical body:
+
+```text
+[argument-types, instructions, ["func.return", references]]
+```
+
+This is a closed, zero-based argument frame. Its signature equals the actual
+invocation's input and output sorts. Actual argument/formal associations can
+forward enclosing protocol coordinates. The body uses the same instruction
+encoding and allowances as the participant. Original finite domains and callback
+references remain named references to their checked source declarations;
+unsupported nested control or helper forms refuse. A computation's return
+restores the caller and appends its declared results. The region supplies the
+actual implementation to independent readers; it does not itself prove the
+computation's relation to the original oracle mathematics.
+
+## Generated range regions
+
+A generated `exec.range` retains its actual name and attributes. Its logical
+operands are lower bound, exclusive upper bound, initial carried values, and
+invariant captures. Its result sorts are exactly the carried sorts. The single
+region is:
+
+```text
+[argument-types, instructions, [terminal-operation, references], conditional]
+```
+
+`conditional` is a Boolean derived from the admitted execution closure. The
+closed region's zero-based arguments are the unsigned 64-bit induction value,
+carried values, and captures. A normal `exec.complete` returns the carried values;
+a conditional region returns a Boolean continuation decision first, followed by
+the carried values. False retains the newly returned carry and ends the loop.
+A helper completion returns to its range; it is not participant completion.
+`exec.reject` retains the stop reason and supplies no synthetic carried tuple.
+Bounds, iteration, scope exit and failure
+propagation are the admitted range semantics. This carrier does not authorize
+reordering iterations or erasing a stop.
+
+Only invariant captures forward enclosing protocol-coordinate aliases into this
+closed frame. The local induction value and mutable carry do not establish a new
+protocol coordinate. All nested instructions, frames and bytes consume the same
+export allowances as selected regions. On leaving the range, the enclosing frame
+is restored and the actual carried result tuple is appended.
 
 ## Selected generated helpers
 

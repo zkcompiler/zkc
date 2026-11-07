@@ -97,6 +97,16 @@ theorem ringFieldModel_no_inverse (F G : Type) [CommRing F] [DecidableEq F] (d :
   simp only [Numerical.inverse, Numerical.require, ringFieldModel]
   split <;> rfl
 
+/-- Selecting a root consults the installed root family and embedding. The
+primitive can mask its inverse capability without changing this outcome. -/
+theorem Numerical.domainRoot_with_inverse (model : FieldModel) (inv : ∀ d, Option (model.Field d → model.Field d))
+    (d : String) (n : Nat) :
+    domainRoot {model with inverse := inv} d n = domainRoot model d n := by
+  unfold domainRoot
+  cases model.twoAdic d with
+  | none => simp
+  | some family => cases atIndex : family.roots[n.log2]? <;> simp [atIndex]
+
 theorem Numerical.domainRoot_eq (model : FieldModel) (d : String) (n : Nat)
     (size : 0 < n ∧ n < indexLimit ∧ 2 ^ n.log2 = n) (data : TwoAdicData model.Field)
     (supplied : model.twoAdic d = some data) (root : model.Field data.base)

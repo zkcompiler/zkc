@@ -111,6 +111,72 @@ Values use the shared recursive nominal data interpretation, including
 sequences and products, plus transcript histories and coordinates. Service
 capabilities are not admitted as data, even when nested.
 
+Nominal product construction and projection reuse the structured `makeProduct`
+and `getProduct` operations, including ordered heterogeneous fields. The reader
+expands a single-constructor `exec.match` with an empty body into typed projections;
+returned captures retain their original SSA aliases. Exact constructor, payload,
+argument and result sorts are checked before this conversion. It refuses executable
+match bodies and stopping terminals. Thus a same-typed field permutation remains a
+different calculation, and equal host carrier types do not identify nominal products.
+This deterministic reader boundary is tested independently of the kernel proofs;
+those proofs concern the rendered participant and the existing structured semantics.
+
+Immutable sequence operations retain their complete nominal element types,
+including record identity, constructor and field order. Mathematical empty,
+append and length use the shared structured calculations. Checked Local empty,
+append, length and indexed access use `Primitive.evaluateOn`; a missing element
+refuses without a default. Both preserve input sequences and ordered elements.
+Even empty collections exclude handle elements from ordinary payloads. The
+logical model does not account for native retained bytes or cumulative sequence
+work: these remain separate native execution premises, as with checked vectors.
+An admitted constructed operation does not expand the original source binding
+profile or establish native storage correspondence.
+
+Closed `exec.test` regions use `Operation.localBranch`; `data.branch` uses
+`Operation.mathBranch`. One kind-sensitive formation walk checks both arms and
+every nested helper ABI before selection. Local frames may contain rejecting
+guards, bound requirements and closed local calls. `Operation.require` keeps
+installed `control.require` separate from a protocol guard: true continues,
+false is `.refused`, matching the executable model's kernel-failure projection.
+The native backend diagnostic remains `rejected:require`; this ideal carrier
+does not model native diagnostic strings. `Operation.execute` invokes the shared checked primitive evaluator. Installed
+index comparisons validate machine-index ingress; installed addition also
+checks overflow. These are distinct from total mathematical equality and
+wrapping arithmetic, even where their port types coincide. Boolean negation
+and vector length use the same checked adapter. Nested Math refuses installed
+local execution and retains its stricter helper admission;
+it does not inherit local call rights. Neither frame admits transcript operations,
+communication, services or handles. Both use the same closed-frame evaluator,
+which executes only the selected arm and preserves its checkpoints and stops.
+The reader currently admits completing branch terminals; other terminal outcomes
+remain explicit refusals.
+
+Generated `exec.range` uses `Operation.localRange`, with its own closed frame:
+induction, carried values, invariant captures. It traverses the same exclusive
+interval as the structured evaluator using `Finite.execute`. A conditional
+body's false continuation keeps its newly returned state and skips later bodies;
+empty or descending intervals retain the initial state. Formation checks the
+body, including yields and actual helper signatures, before traversal even for
+zero trips. The induction creates no protocol sampling ancestry. Checkpoints
+preserve the caller frame, and reached stops propagate. The reader admits
+`exec.complete` terminals and refuses other terminals.
+
+Embedded `exec.compute` retains its actual Math body as `Operation.mathCompute`
+with an explicit closed input frame and return map. Its original generated
+callee name is diagnostic metadata; the retained body defines its computation.
+The native exporter checks the actual callee, and the deterministic reader
+checks the exported signature and `func.return` terminal. Formation uses the
+same Math walk as selected arms, so nesting inside Local grants no Local rights.
+
+`Operation.finiteFold` retains the domain, step and optional predicate names.
+It resolves the original program's domain tree and callbacks through
+`Structured.resolveFold`, with no invented incoming bound facts, and checks the
+actual installed helper signatures. Execution uses `Evaluation.denoteFoldOn` and
+the original helper table. This preserves domain admission even for zero trips,
+predicate filtering, ordered state updates and callback stops. Folds whose
+callbacks require an unprovided index/container premise refuse. Supplying such
+premises in a future profile needs a checked association, not a same-sort guess.
+
 The same carrier also retains the actual producer's owner-local service
 interface in `Participant.servicePorts`, separate from ordinary SSA inputs.
 `Operation.localService port request template coordinates` retains the admitted
@@ -200,10 +266,13 @@ already challenged. It accepts exactly when:
   and its template has one repeat step for each;
 - a calculation, helper call or guard has no received message pending and reads
   data only; it may separate a challenge from its delivery;
-- a loop has nothing pending, carries the current transcript exactly once and
-  data otherwise, checks its body from the block's transcript argument with
-  nothing pending, and its body ends with nothing pending and yields its final
-  state at the same position;
+- a loop has nothing pending. When it carries the transcript, it carries it
+  exactly once with local values otherwise, checks the body from that block
+  argument, and yields the final transcript at the same position. A loop carrying
+  only local values must leave the current transcript and challenged-site set
+  unchanged. Both forms check the complete body, including nested repeats, with
+  the actual induction ancestry and exact yields, and end with nothing pending.
+  The same local-carry boundary serves producer and validator;
 - every other operation, including sends and unsupported ones, is refused;
 - the selected query sites are distinct and each is challenged, nothing remains
   pending, the last returned value is the final state, and the other returned

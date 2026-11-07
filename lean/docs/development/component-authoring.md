@@ -34,6 +34,15 @@ shape already has a generator. An unsupported shape must produce an explicit
 obligation or refusal. A new method is an ordinary indexed Lean proof; it does
 not require global type-class search or a second interpreter.
 
+The [source proof assembly review](../design/source-proof-assembly.md) records
+the remaining gap between reusable local rules and constructing a proof for a
+new body. Endpoint correctness and authoring reuse are separate acceptance
+questions. The FRI terminal-reply proof now uses the common
+`derive_oracle_returns` constructor with mathematical helper and provider laws;
+it no longer walks source operations. Different small components use the same
+constructor. Its current straight-line coverage does not establish the complete
+generated query controller or universal honest termination.
+
 ## Define the mathematical boundary
 
 [`ClaimRelation`](../../Zkc/Obligations/ClaimRelation.lean) separates an
@@ -312,12 +321,246 @@ protocol_call inputCall from rootBody to inputSignature
 The selection requires the complete signature and a unique occurrence. `at
 [path...]` disambiguates multiple calls. It produces a materialized `CallSite`
 with a checked occurrence equation, so downstream proofs use `inputCall.site`
-and `inputCall.roles` without repeating source strings. Occurrences after a
+and `inputCall.roles` without repeating source strings. Use
+`inputCall.childContext parent` to enter it with the recorded role substitution.
+A closed executable header can also supply this context to computations.
+Occurrences after a
 stopped prefix are still lexical occurrences; this facility never claims that
 they execute. A same-typed operand swap changes the selected header.
 An ambiguous selection reports candidate paths, sites and role maps. Missing
 signatures and incorrect paths have distinct diagnostics. Paths must be closed
 values: `_` cannot silently choose the first candidate.
+
+For a receiver that forwards logical handles, specify which named input
+field supplies each named output field. `PortForwarding.compile` resolves
+those paths against the admitted declaration, including holder and receiver
+leaves, and builds the typed return tuple. In the FRI example,
+`FriBinding.origin` identifies the committed fields, sampled positions and
+query count. The shared derivation follows the original source operations
+and marks. `FriBindingExecution.installed` applies in every caller frame
+that maps the receiver to the participant and the holder to a different
+participant. The two-site control combines this law with executions of both
+sites and a same-sort handle swap. At the enclosing FRI calls and the scalar
+draw, the checked straight-line body also supplies the marks between actions,
+the query and delivery locations, and any marks after the last action. The
+whole-body equation checks the order. A callback has its own mark schedule.
+
+There are two separate tests of reuse in the Sumcheck examples. At the
+two calls in `TwoSums`, the same installed callee proof runs on different
+arguments and in different frames. Each call still charges its own resources.
+A change in wire representation tests a different question.
+`Sumcheck.escape_uniform_le` takes a message law and a reference law. For
+a false claim, an attacker message fixed before a fresh uniform challenge,
+and a passing boundary check, it gives the error
+`max(messageDegree, referenceDegree) / |F|`. The endpoint-pair decoder
+interprets `(a,b)` as the two values at zero and one. The coefficient-triple
+decoder interprets `(a,b,c)` as the coefficients of `a + bX + cX²`. Both
+instantiate that theorem. The mixed-degree test uses a quadratic message
+against an affine reference and needs the larger degree.
+
+A second author using an installed encoding reuses its decoder, degree
+bound, and boundary and evaluation laws. A new encoding needs those laws
+and an equation linking the actual source evaluator to it. The GKR round
+companion also supplies the gate-specific reference and the residual after
+restriction. Its challenge occurrence and handler have to establish the
+sampling law used there. Reusing the round theorem proves neither freshness
+at another occurrence nor independence between two uses of the same draw.
+The direct finite-field instantiation is
+`TestsSecurity.GkrRoundsReference.gate_arbitrary_triple`. It uses the same
+escape theorem with GKR’s gate reference and the installed triple decoder.
+The companion control `cubic_off_cube` shows why the gate’s admissibility
+condition matters. The source-round checks are in
+`TestsSecurity.GkrRoundsResidual`, and the affine and mixed-degree
+controls are in `TestsSecurity.SumcheckReference`.
+
+The two Sumcheck roots permit a like-for-like comparison against main
+`1015d2112`. Both keep their original security propositions and proof
+consumers. One parametric library-call rule covers the left and right calls
+in `TwoSums`. The generated modules went from 214 to 195 lines for
+`SmallSumcheck` and from 270 to 229 for `TwoSums`. These counts measure
+generated structural code. They measure neither human proof time nor a
+reduction in the protocol's mathematical obligations.
+
+For the current FRI source theorem there is no equal-strength main baseline.
+The binder author supplies a forwarding policy for named fields and a proof
+that their values agree with the committed handles and sampled positions.
+The second caller uses the same binder proof. The clear provider supplies
+persistent lookup and publication order. The FRI companion still connects
+the field operations, virtual reads and degree invariant to the actual
+round and final check. The amount of this source-specific proof work matters
+when estimating the cost of adopting another protocol for the first time.
+
+For a loop nested in another callback, select it inside that callback.
+`checked_repeat_prefix firstFoldBody := insideQuery using innerOnSpine`
+materializes the preceding operations and checks their equality with the
+retained source. A stop in this prefix bypasses the loop. In the FRI checker
+the prefix returns the live environment. The round reads its count and
+captures from its typed operands, and the terminal continuation identifies
+both the coefficient operand and the returned vector. The companion proves
+which registered word and virtual view the handles refer to. Reusing that
+association at another sampled position preserves the immutable words and
+accounts for each read, including repeated positions. At the installed
+`Check` declaration, `FriCheckAdmission.installed` projects the returned
+SSA environment onto the loop's actual operands. Its input is the receiver's
+argument tuple and visible registry. `VerifierCheck.installed` combines
+this projection with the loop theorem, including both input and output
+scope masks. A successful retained call returns the eight ordered cells
+and charges 96 reads. The retained `Commit` loop supplies
+those registrations from its own sends, draws, and virtual constructions.
+
+For a clear base table, `PublishedWords.RegisteredWord` ties a visible
+logical anchor to the entire finite word selected at its publication. An
+in-range read returns the original cell and charges one read. The source
+cursor still checks the occurrence. `processPublicationFrame` proves that
+every later returned or stopped execution record preserves the logical
+anchor and the provider-side registered word. It covers arbitrary row types,
+effectful network actions, and adaptive choosers. The proof combines the logical
+registry and provider store on the same record using the monad's exact support.
+
+At the compiled clear-store boundary, `ClearStorage.Encodes` relates an actual
+published word to its nominal record, including source coordinates, shape and
+payload. `Stored.transport` combines provider preservation with append-only
+physical storage. `RecordAllocator` proves the existing five instructions for
+arbitrary record fields and caller frames. Its checked recognizer recovers
+nominal types and SSA positions from the fragment, and the same execution rule
+specializes to both base and virtual FRI records. `Encodes.allocate` joins the
+physical allocation with the provider association. `RecordLookup` similarly
+checks the constructor and reads the immutable slot; `Stored.lookup` recovers the
+record bound to the original publication. Swapping constructor/slot values or
+reading a missing slot refuses in the actual instruction semantics. A different
+protocol reuses these rules when it uses this realization; a different realization must prove
+its own representation and execution laws. These local proofs do not supply
+source-event ownership, root capacity bounds or the complete query controller.
+No folded-word identity or FRI degree lemma is a premise of the allocator rule.
+
+`TableRead` proves the actual comparison, guard and field-vector lookup for
+all outcomes. Recognition checks the operand graph; the surrounding traversal
+must also supply the actual SSA start, which `recognizeAt` checks explicitly.
+`ClearStorage.Stored.read_simulation` connects this execution to the word selected
+by publication. Valid stored and requested shapes and the complete stored length
+remain reached-state invariants. They permit fixed-to-unsized handle use while
+preserving out-of-range refusal. The provider has no protocol-specific reader
+lemma, and query locations do not become publication identities.
+
+The virtual-closure capture boundary is likewise structural. `CaptureLayout`
+compares the original declaration's capture types with actual record fields,
+derives typed projections in the same order, and keeps every ordinary parameter
+unchanged. Parent handles use a reference relation supplied by immutable storage;
+`ClearStorageCaptures` obtains that relation from `Stored`, including its
+uniqueness and preservation laws. A word's mathematical fold relation remains
+outside this representation rule. `VirtualStorage` adds the actual source coordinates and metadata, proves
+allocation and typed field readback, and keeps distinct closure occurrences
+separate. `VirtualStorageInstallation.source_returned` ties the record to the
+actual returning source construction and its checked body.
+`VirtualStorageLifetime` transports that association with the existing source
+freshness theorem, physical append and preservation of captured references.
+The regression installs a second real closure with identical captures and
+refuses reassociation of the earlier slot. `OracleStore.Located` retains the
+exact older registry against which that closure expands its children. The
+existing source reachability invariant derives this placement and its capture
+validity from lookup; fresh extensions preserve it. FRI uses this common law
+instead of maintaining a separate registry-extension proof. Its companion still
+owns the parent-word, challenge and coset relation. The common full-outcome read
+law preserves stops, provider state and the ordered query trace; controls stop
+the first and second child separately, including repeated reads. Full physical
+query dispatch, child execution and root capacity bounds still require their
+own proof.
+
+Generated pure slices use `derive_math_region`, the same producer as inlined
+Math calls. It checks the complete source tree, ordered operands, caller extent
+and returned coordinates, and refuses an unconsumed target suffix. The actual
+FRI child-position body and final fold arithmetic instantiate this rule without
+new value proofs. Nested inlined calls are expanded from their exact linked
+declarations. The common rule composes their checked instruction spines, derives
+the intermediate return locations and preserves the caller frame; it adds no
+checkpoint at a source call boundary. Wrong declaration order and same-typed
+operand swaps refuse the proposal. The retained FRI power fragment uses this
+path for its nested bit-width helpers and its finite fold.
+`ConnectionFiniteFold` connects an embedded finite fold to the
+admitted original domain and callback table, including domain refusals and callback
+stops. A lexical framing law permits later declarations only when they preserve
+the fold's step and optional predicate. A prefix missing the callback cannot
+gain its meaning from a later declaration. This connection is separate from the mathematical power lemma and from
+proving which controller continuation supplies its operands.
+
+FRI supplies the virtual table's captured parent, challenge and coset
+geometry. `CommitIngress.installed` follows the linked coset admission
+helper, assembles the receiver's shift, initializes both handle sequences,
+and derives the loop inputs from the protocol arguments. `CommitLoop.installed`
+follows all three iterations of the original repeat, including its private
+state masks. `CommitReturn.installed` follows the terminal exchange under
+arbitrary participant replies. On success the received coefficient vector
+has length one, the first handle is the head of the actual layer sequence,
+and the ordered layer and fold sequences identify all six registered tables.
+`CommitReadback.fromCommit` supplies these exact outputs to the installed
+checker under a later publication-preserving frame. For any eight positions,
+a returning checker gives the eight original cells in order and charges
+96 reads. Each later base publication may select a different word.
+
+`VerifierRoot.afterCommit` keeps that particular publication fixed before
+the sampler runs. The receiver executes the original mark schedule, call
+frames, binding and query wrapper. `VerifierRoot.verifier` proves that a
+return from the public verifier has its acceptance bit set and satisfies
+the mathematical path predicate for the sampled positions, with the same
+publication still installed. The provider records each successful publication
+as a new entry in a newest-first table. Its generic suffix law preserves
+the position and contents of that entry through later changes. Starting
+with an empty provider, `VerifierRoot.sourceEvent` therefore measures
+distance on the very word published in the first send, including after
+the query loop returns. These are conditional return statements.
+For a fixed safe transcript with a far initial word, the probability that
+the actual suffix returns is at most `(1 − min(1/4, δ))^8`.
+`VerifierQueryProbability.safeFar_le` uses freshness of the eight scalar
+requests and keeps the unconditional mass of aborts. `InteractiveSoundness.soundness` bounds the original verifier's joint event
+of acceptance and a far first publication. Before each of the three field
+draws the source has already selected a word. The common probability rule
+charges a failed postcondition at that draw and composes it with the
+remaining source under the actual post-state. The FRI companion instantiates
+the rule with ArkLib's folding-agreement failure and its unique-decoding
+bound. A good loop return fixes the three rounds independently of the
+terminal coefficient. The final error is the sum of the three fold charges
+and the eight-position term above. The theorem assumes the clear-word
+provider and the configured fresh interactive sampler. For honest inputs, `HonestMessages.retained` connects every
+linked holder fold and the exact terminal vector to the check at all eight
+positions. `CheckedCall.check` derives the caller cursor, target signature,
+entered frame and mark observations from the admitted source. A valid
+certificate works at another invocation with the same lexical prefix.
+`FriEntryFrame.verifier` applies this rule to the root before either party
+uses a service or publishes a word. Honest termination
+and the compiled Fiat–Shamir reduction have separate obligations.
+
+For a publication followed by a virtual construction, `Region.cutFirst`
+selects a reached operation on the continuation spine. A bind still executes
+its nested body, and an earlier stop skips the operation. The checked prefix
+returns the live SSA values and proves where every inherited operand occurs
+in that tuple. `OperationCut.resume` puts its reply and those
+values back into the original continuation, with the same actions and stops.
+
+In the retained FRI round, the delivery continuation carries the actual parent
+anchor and the sampled field. The receiver reads the row count at that anchor
+before constructing the view. `CommitCaptures.registeredAfterDelivery`
+relates a successfully returned view to that parent, challenge and word on
+this execution. The source supplies the operation, the capture order and the
+caller environment. The companion supplies the retained coset, the semantics
+of the linked arithmetic helpers, and the earlier publication witness.
+The protocol and the virtual oracle use the same power law with their
+respective linked helper tables. `CommitDelivery.iterationToView` selects the
+delivery segment from the original iteration after the send, append and draw.
+`RegisteredWord.throughOrdinary` allows the network to update its auxiliary
+state while retaining the publication. `CommitDelivery.registered` uses this
+law across the actual delivery and its source marks. Starting from the
+post-draw continuation, `CommitDelivery.sampledReturn` proves the whole
+returned iteration state. A returned append places the new virtual handle
+after the earlier folds. The returned size is halved, the offset is
+squared, and the generator is the root for that smaller domain. The
+parent and its view remain registered at the return. Capacity, visibility
+and cursor failures still stop the source. This result requires the
+parent's publication at delivery. `CommitIteration.installed` obtains
+that witness from the same callback’s own send and follows its actual
+appended handle and draw through the return. A bad cursor or duplicate
+anchor refuses before calling the word chooser. The theorem allows an
+adversarial word and an arbitrary field reply. Its sampling distribution
+and the relation between several rounds are separate obligations.
 
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and

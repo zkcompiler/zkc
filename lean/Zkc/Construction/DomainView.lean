@@ -134,13 +134,60 @@ def guard (condition : Nat) (declared : List ValueSort) : Block carriers := fun 
     | _ => .halt .refused
   else .halt .refused
 
+/-- The installed requirement uses the executable model's kernel-refusal
+projection. A false backend condition is not a source guard rejection. -/
+def require (condition : Nat) (declared : List ValueSort) : Block carriers := fun env =>
+  if declared = [] then
+    match env[condition]? with
+    | some (.data (.boolean true)) => .done env
+    | _ => .halt .refused
+  else .halt .refused
+
+/-- Checked primitive outcomes, separate from mathematical calculations. -/
+def execute (model : Structured.DomainModel) (primitive : Structured.Primitive)
+    (references : List Nat) (declared : List ValueSort) : Block model.toCarriers := fun env =>
+  match read env references with
+  | some arguments =>
+      match executePrimitive model primitive arguments with
+      | .returned results => append declared env results
+      | .stopped reason => .halt reason
+  | none => .halt .refused
+
+def finiteFold (model : Structured.DomainModel) (program : Structured.Program)
+    (domain helper predicate : String) (references : List Nat) (declared : List ValueSort) :
+    Block model.toCarriers := fun env =>
+  match read env references with
+  | some arguments =>
+      match Domain.finiteFold model program domain helper predicate declared arguments with
+      | .returned results => append declared env results
+      | .stopped reason => .halt reason
+  | none => .halt .refused
+
+/-- The independently bound Math body retains its closed ABI and formation. -/
+def mathCompute (program : Structured.Program) (references : List Nat) (declared : List ValueSort)
+    (region : InstructionRegion) (body : Block carriers) : Block carriers :=
+  compute program references declared region body
+
 /-- A mathematical arm is a closed data computation. The retained signature,
 helper classification and all-arm formation remain explicit; body meanings are
 independently supplied and bound by the correspondence theorem. -/
 def mathBranch (program : Structured.Program) (selector : Nat) (captures : List Nat)
     (declared : List ValueSort) (yes no : InstructionRegion)
     (yesBody noBody : Block carriers) : Block carriers :=
-  selectMath program selector captures declared yes no yesBody noBody
+  selectClosed .math program selector captures declared yes no yesBody noBody
+
+/-- Closed local selection uses the same capture and checkpoint boundary as
+Math, with local guard and helper admission. -/
+def localBranch (program : Structured.Program) (selector : Nat) (captures : List Nat)
+    (declared : List ValueSort) (yes no : InstructionRegion)
+    (yesBody noBody : Block carriers) : Block carriers :=
+  selectClosed .local program selector captures declared yes no yesBody noBody
+
+/-- A local interval has a closed body and no protocol induction coordinate. -/
+def localRange (program : Structured.Program) (conditional : Bool) (lower upper : Nat)
+    (values : List Nat) (declared : List ValueSort) (region : InstructionRegion)
+    (body : Block carriers) : Block carriers :=
+  executeRange program conditional lower upper values declared region body
 
 /-- Immutable captures, induction coordinates and explicit yields use the
 existing generic loop. The body is an independently bound Process view. -/

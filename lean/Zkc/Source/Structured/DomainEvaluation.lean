@@ -152,6 +152,10 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
   | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
       .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
   | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
+  | .sequenceEmpty _, .nil, .nil => .done (.cons [] .nil)
+  | .sequenceAppend _, .cons values (.cons value .nil), .nil =>
+      .done (.cons (values ++ [value]) .nil)
+  | .sequenceLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
   | .fieldEmbed extension base, .cons value .nil, .nil =>
       .done (.cons (model.embed extension base value) .nil)
   | .fieldConstant domain value, .nil, .nil => .done (.cons (value : model.Field domain) .nil)
@@ -268,6 +272,11 @@ end Evaluation
 
 /-- Closed helper tables over carriers. -/
 abbrev MeaningsOn (carriers : Carriers) := Evaluation.MeaningsOn carriers closedInterface
+
+/-- The closed fold of a definition list over a model. -/
+abbrev closedMeaningsOn (model : DomainModel) (definitions : List CheckedDefinition) :
+    MeaningsOn model.toCarriers :=
+  definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) []
 
 /-- The closed meaning over a domain model. -/
 abbrev meaningOn (model : DomainModel) := Evaluation.meaningOn model SiteObservations.closed

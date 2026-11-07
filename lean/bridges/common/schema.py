@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import re
 
-from bridges.common.lean_render import record, require
+from bridges.common.lean_render import origin_structure, record, require
 
 U64 = 1 << 64
 
@@ -346,41 +346,6 @@ def parameter(value, depth=0, budget=None):
     else:
         raise ValueError("unknown parameter tag")
     return value
-
-
-def origin_structure(value):
-    version, entry, steps, coordinates, event = record(value, 5)
-    require(version == "zkc.native-origin-template/0" and coordinates == [], "invalid origin template")
-
-    def identifier(name):
-        require(isinstance(name, str) and 0 < len(name) <= 128
-                and all(33 <= ord(char) <= 126 for char in name), "invalid origin identifier")
-
-    identifier(entry)
-    require(isinstance(steps, list) and len(steps) <= 64, "invalid origin steps")
-    for step in steps:
-        record(step)
-        require(len(step) in (3, 4), "invalid origin step")
-        if len(step) == 3:
-            kind, protocol, site = step
-            require(kind in ("apply", "repeat"), "invalid origin step kind")
-        else:
-            kind, protocol, site, alternative = step
-            require(kind == "branch", "invalid origin step kind")
-            identifier(alternative)
-        identifier(protocol)
-        identifier(site)
-    record(event)
-    require(bool(event), "empty origin event")
-    sizes = {"query": 7, "message": 6, "start": 3}
-    require(isinstance(event[0], str) and event[0] in sizes, "unknown origin event")
-    record(event, sizes[event[0]])
-    for name in event[1:]:
-        identifier(name)
-    if event[0] == "query":
-        require(event[3].startswith("input_"), "invalid origin input")
-        natural(event[3][6:])
-    return event
 
 
 def expression_structure(value):

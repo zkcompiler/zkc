@@ -175,6 +175,21 @@ fn ordinary_control_and_event_still_expand_nested_applications() {
 }
 
 #[test]
+fn generated_apply_resets_the_prefix_for_later_authored_events_and_frames() {
+    let protocol = format!("zkc.oracle.{}", "a".repeat(64));
+    let mut tree = mixed_origin("Leaf");
+    tree[2][2][1] = json!(protocol);
+    let frames = read_frames(&tree, &mut ProofWork(PROOF_WORK)).unwrap();
+    assert!(
+        matches!(&frames[3], ControlFrame::Repeat { site, .. } if site == "apply_11_apply_1_b_c_tail")
+    );
+    assert_eq!(
+        native_origin_site(&encode(&tree), "message").unwrap(),
+        "apply_11_apply_1_b_c_message"
+    );
+}
+
+#[test]
 fn generated_repeat_matches_only_exact_actual_control_and_bijective_lineage() {
     let protocol = format!("zkc.oracle.{}", "a".repeat(64));
     let frames = read_frames(&mixed_origin(&protocol), &mut ProofWork(PROOF_WORK)).unwrap();

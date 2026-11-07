@@ -46,6 +46,20 @@ structure Proposal where
   deliveries : List Original.Delivery
   locals : List Original.LocalRoute
 
+/-- Original public routes are shared by the source experiment and the constructed
+participant. Physical instructions only contribute local capability routes. -/
+def publicRouting (snapshot : Snapshot) (context : Context) (mode : Domain.Mode)
+    (selectedHandle : Nat) : Except String Original.Routing := do
+  let all := SourceDelivery.templates snapshot context
+  let deliveries ← context.draws.mapM fun (query, message) =>
+    match SourceDelivery.resolve snapshot context query message with
+    | some (draw, sent) => pure (⟨draw, sent⟩ : Original.Delivery)
+    | none => throw "connection-source-delivery-refused"
+  return { snapshot, context, mode, selectedHandle
+           messages := all.filter (·.messageSite?.isSome)
+           draws := all.filter (·.querySite?.isSome)
+           deliveries, locals := [] }
+
 /-- The same finite proposal supports producer and validator. The selected
 public handle is required only when the validator actually calls that service;
 producer delivery is justified by the source draw-to-exchange association. -/
@@ -58,16 +72,12 @@ def propose (snapshot : Snapshot) (context : Context) (mode : Domain.Mode)
         | some handle => pure handle
         | none => throw "connection-missing-selected-capability"
     | _, _ => pure 0
-  let all := SourceDelivery.templates snapshot context
-  let deliveries ← context.draws.mapM fun (query, message) =>
-    match SourceDelivery.resolve snapshot context query message with
-    | some (draw, sent) => pure (⟨draw, sent⟩ : Original.Delivery)
-    | none => throw "connection-source-delivery-refused"
+  let publicRoutes ← publicRouting snapshot context mode selected
   return {
     selectedHandle := selected
-    messages := all.filter (·.messageSite?.isSome)
-    draws := all.filter (·.querySite?.isSome)
-    deliveries
+    messages := publicRoutes.messages
+    draws := publicRoutes.draws
+    deliveries := publicRoutes.deliveries
     locals := (← localRoutes capabilities artifact.instructions).eraseDups
   }
 

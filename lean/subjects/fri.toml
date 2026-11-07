@@ -1,0 +1,24 @@
+schema = "zkc.subject/0"
+name = "fri"
+
+[source]
+project = "examples/projects/fri"
+
+[entries]
+proof = "example::Proof"
+interactive = "example::Fri"
+instantiation = "ScalarLowDegree<Direct<E>,5,0,3,8>"
+
+[profiles]
+structured = true
+
+[generated]
+descriptor_events = "lean/ZkcExamples/Structured/FriClearDescriptor.lean"
+interactive_data = "lean/ZkcExamples/Structured/FriSourceData.lean"
+interactive_source = "lean/bridges/structured/fixtures/fri-source.mlir"
+interactive_export = "lean/bridges/structured/fixtures/fri-source.json"
+interactive_bodies = "lean/ZkcExamples/Structured/FriSourceBodies.lean"
+interactive_views = "lean/ZkcExamples/Structured/FriSourceViews.lean"
+
+[bodies]
+interactive_entry = "run"

@@ -57,6 +57,16 @@ theorem Yields.mono {I : Signature} {A : Type} {property weaker : A → Prop}
   | halt reason => trivial
   | call operation continuation ih => exact fun reply => ih reply (yields reply)
 
+/-- Facts proved about the same open process hold together at every return.
+The two proofs quantify over the same replies, including stopped prefixes. -/
+theorem Yields.and {I : Signature} {A : Type} {left right : A → Prop}
+    {process : Process I A} (first : Yields left process) (second : Yields right process) :
+    Yields (fun value ↦ left value ∧ right value) process := by
+  induction process with
+  | done => exact ⟨first, second⟩
+  | halt => trivial
+  | call _ _ ih => exact fun reply ↦ ih reply (first reply) (second reply)
+
 /-- Replacing operations preserves a fact that holds for every possible
 returned value. Interpreted operations may themselves stop or make calls. -/
 theorem Yields.interpret {I J : Signature} {A : Type} {property : A → Prop}

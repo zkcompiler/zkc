@@ -24,10 +24,11 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import catalogue, lean_render, policy as native_policy, schema  # noqa: E402
+from bridges.structured.snapshot import product_fields
 from bridges.construction.types import data_type, render_type  # noqa: E402
 from bridges.common.lean_render import Refused as Refused  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
-    CALCULATIONS, FIELD_MODULUS, decimal, origin, record, require, seq, text)
+    CALCULATIONS, decimal, origin, record, require, seq, text)
 
 FORMAT = "zkc.constructed-participant/0"
 
@@ -63,6 +64,26 @@ def data_ty(kind):
         return f"({render_type(domain)})"
     require(tag in ("boolean", "index", "field", "vector", "group"), "expected data type")
     return ".boolean" if tag == "boolean" else ".index" if tag == "index" else f"(.{tag} {text(domain)})"
+
+
+def data_descriptor(kind):
+    tag, domain = kind
+    if tag == "data":
+        return domain
+    require(tag in ("boolean", "index", "field", "vector", "group"), "expected data type")
+    if tag in ("boolean", "index"):
+        return ["bool" if tag == "boolean" else "index"]
+    return [tag, domain]
+
+
+def nominal_product(kind):
+    descriptor = data_descriptor(kind)
+    require(len(descriptor) == 4 and descriptor[0] == "product", "expected nominal product")
+    return descriptor[1:]
+
+
+def product_parameters(identity, constructor, fields):
+    return f"{text(identity)} {text(constructor)} ({product_fields(fields)})"
 
 
 def attributes(value):
@@ -106,22 +127,62 @@ def one_parameter(attrs):
 CONSTRUCTION_PRIMITIVES = frozenset((
     "index.constant", "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
     "transcript.native.indexed.index", "transcript.native.indexed.indices",
-    "transcript.native.indexed.challenge", "field.embed"))
+    "transcript.native.indexed.challenge", "field.embed", "control.require", "index.equal", "index.less", "index.add", "bool.not", "vector.get", "vector.length",
+    "sequence.empty", "sequence.append", "sequence.length", "sequence.at"))
 
 
 def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_values=None):
     """Classify one exported operation strictly; return its Lean term."""
     schema.binding(binding)
     boolean, index = ("boolean", None), ("index", None)
+    if name == "exec.variant":
+        require(set(attrs) == {"alternative", "site"} and binding == [] and len(result_kinds) == 1,
+                "product construction shape")
+        identity, constructor, fields = nominal_product(result_kinds[0])
+        require(string_attribute(attrs, "alternative") == constructor
+                and [data_descriptor(kind) for kind in operand_kinds] == fields,
+                "product construction fields")
+        string_attribute(attrs, "site")
+        return f".calculate (.makeProduct {product_parameters(identity, constructor, fields)})"
     if name == "data.index":
         require(set(attrs) == {"value"} and binding == [] and operand_kinds == [] and result_kinds == [index],
                 "index constant shape")
         value = integer_attribute(attrs, "value", signedness="unsigned")
         return f".calculate (.indexConstant {decimal(value, 1 << 64)})"
+    if name in ("data.sequence_empty", "data.sequence_append", "data.sequence_length"):
+        require(not attrs and not binding, "mathematical sequence metadata")
+        empty = name == "data.sequence_empty"
+        require(len(result_kinds) == 1 and (empty or operand_kinds), "mathematical sequence arity")
+        container = data_descriptor(result_kinds[0] if empty else operand_kinds[0])
+        require(len(container) == 2 and container[0] == "sequence", "mathematical sequence type")
+        element = container[1]
+        inputs = [] if empty else ([container, element] if name == "data.sequence_append" else [container])
+        output = ["index"] if name == "data.sequence_length" else container
+        require([data_descriptor(kind) for kind in operand_kinds] == inputs and
+                data_descriptor(result_kinds[0]) == output, "mathematical sequence ports")
+        constructor = {"data.sequence_empty": "sequenceEmpty", "data.sequence_append": "sequenceAppend",
+                       "data.sequence_length": "sequenceLength"}[name]
+        return f".calculate (.{constructor} ({render_type(element)}))"
     if name == "data.index_equal":
         require(not attrs and binding == [] and operand_kinds == [index, index] and result_kinds == [boolean],
                 "index equality shape")
         return ".calculate .indexEqual"
+    index_words = {
+        "data.index_wrapping_add": "indexWrappingAdd",
+        "data.index_wrapping_subtract": "indexWrappingSubtract",
+        "data.index_bit_and": "indexBitAnd",
+        "data.index_logical_shift_right": "indexLogicalShiftRight",
+    }
+    if name in index_words:
+        require(not attrs and binding == [] and operand_kinds == [index, index]
+                and result_kinds == [index], "index word shape")
+        return f".calculate .{index_words[name]}"
+    if name == "arith.select":
+        require(not attrs and binding == [] and len(operand_kinds) == 3
+                and operand_kinds[0] == boolean and operand_kinds[1] == operand_kinds[2]
+                and result_kinds == [operand_kinds[1]] and operand_kinds[1][0] in CAPTURED,
+                "data select shape")
+        return f".calculate (.select {data_ty(operand_kinds[1])})"
     if name == "arith.constant":
         require(set(attrs) == {"value"} and binding == [] and not operand_kinds and result_kinds == [boolean]
                 and attrs["value"][0] == "bool" and type(attrs["value"][1]) is bool,
@@ -155,11 +216,41 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
         require([sort(value)[1] for value in inputs] == [logical_kind(k) for k in operand_kinds]
                 and [sort(value)[1] for value in outputs] == [logical_kind(k) for k in result_kinds],
                 "execution binding actual ports")
+        if contract in ("sequence.empty", "sequence.append", "sequence.length", "sequence.at"):
+            require(not parameters and len(arguments) == 1 and arguments[0][0] == "type",
+                    "sequence static element type")
+            element = data_type(arguments[0][1])
+            constructor = {"sequence.empty": "sequenceEmpty", "sequence.append": "sequenceAppend",
+                           "sequence.length": "sequenceLength", "sequence.at": "sequenceAt"}[contract]
+            return f".execute (.{constructor} ({render_type(element)}))"
+        if contract in ("index.equal", "index.less", "index.add"):
+            result = index if contract == "index.add" else boolean
+            require(not arguments and not parameters and operand_kinds == [index, index]
+                    and result_kinds == [result], "checked index ports")
+            constructor = {"index.equal": "indexEqual", "index.less": "indexLess", "index.add": "indexAdd"}[contract]
+            return f".execute .{constructor}"
+        if contract == "bool.not":
+            require(not arguments and not parameters and operand_kinds == [boolean]
+                    and result_kinds == [boolean], "Boolean negation ports")
+            return ".execute .booleanNot"
+        if contract == "vector.length":
+            require(not parameters and len(operand_kinds) == 1 and operand_kinds[0][0] == "vector"
+                    and result_kinds == [index], "checked vector length ports")
+            return f".execute (.vectorLength {text(operand_kinds[0][1])})"
+        if contract == "vector.get":
+            require(not parameters and len(operand_kinds) == 2 and operand_kinds[0][0] == "vector"
+                    and operand_kinds[1] == index and result_kinds == [("field", operand_kinds[0][1])],
+                    "checked vector read ports")
+            return f".calculate (.boundedAt {text(operand_kinds[0][1])})"
+        if contract == "control.require":
+            require(not arguments and not parameters and operand_kinds == [boolean] and not result_kinds,
+                    "local guard shape")
+            return f".require {text(string_attribute(attrs, 'site'))}"
         if contract == "index.constant":
             require(not arguments and not operand_kinds and result_kinds == [index]
                     and len(parameters) == 1, "index constant shape")
             value = int(parameters[0][1])
-            return f".calculate (.indexConstant {value})"
+            return f".execute (.indexConstant {value})"
         if contract == "indices.empty":
             require(not arguments and not parameters and not operand_kinds
                     and result_kinds == [("indices", None)], "indices empty shape")
@@ -224,6 +315,20 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
             require(arguments == [["domain", "Field", extension]], "field embedding binding")
             return f".calculate (.fieldEmbed {text(extension)} {text(base)})"
         return f".unsupported {text(name + ':' + contract)}"
+    if name == "data.finite_fold":
+        require(set(attrs) in ({"domain", "step"}, {"domain", "step", "predicate"}) and binding == [],
+                "finite fold attributes")
+        require(all(kind[0] in CAPTURED for kind in operand_kinds + result_kinds), "finite fold sorts")
+        names = []
+        for key in ("domain", "step", "predicate"):
+            if key not in attrs:
+                names.append("")
+                continue
+            kind, symbol = attrs[key]
+            require(kind == "symbol" and isinstance(symbol, list) and len(symbol) == 1
+                    and isinstance(symbol[0], str) and symbol[0], "finite fold symbol")
+            names.append(symbol[0])
+        return ".finiteFold " + " ".join(text(name) for name in names)
     if name == "exec.boolean":
         require(set(attrs) == {"value", "site"} and binding == [] and not operand_kinds
                 and result_kinds == [boolean] and attrs["value"][0] == "bool",
@@ -244,14 +349,13 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
                 and result_kinds == [("boolean", None)], "boolean conjunction shape")
         return ".calculate .booleanAnd"
     if name == "algebra.constant" and set(attrs) == {"value"} and binding == []:
-        # The canonical bound below is the BLS12-381 scalar modulus.
-        require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0] == ("field", "bls12-381.fr"),
+        require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0][0] == "field",
                 "field constant shape")
         kind, literal = attrs["value"]
         require(kind == "parameter" and literal[:3] ==
                 ["field_literal", result_kinds[0][1], "natural"], "field constant parameter")
         return (f".calculate (.fieldConstant {text(result_kinds[0][1])} "
-                f"{decimal(literal[3], FIELD_MODULUS)})")
+                f"{decimal(literal[3], catalogue.field_modulus(rows, result_kinds[0][1]))})")
     if name in ("protocol.local_call", "func.call"):
         expected = {"callee", "site", "role"} if name == "protocol.local_call" else {"callee", "runtime.site"}
         require(set(attrs) == expected and binding == [], "call attributes")
@@ -394,11 +498,107 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
             inputs = seq(arguments[:1 + carried], lambda v: sort(v)[0])
             region = f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩"
             rendered.append(f"{indent}⟨{term}, {seq(mapped[:1 + carried], nat)}, {result_terms}, [{region}]⟩")
-        elif name == "data.branch":
+        elif name == "exec.compute":
             decoded = attributes(attrs)
-            require(decoded == {"alternatives": ("array", [["string", "then"], ["string", "else"]])}
-                    and binding == [] and len(regions) == 2 and len(mapped) >= 1,
-                    "Math branch attributes")
+            require(set(decoded) == {"callee", "site"} and binding == [] and len(regions) == 1,
+                    "Math computation attributes")
+            string_attribute(decoded, "site")
+            kind, callee = decoded["callee"]
+            require(kind == "symbol" and isinstance(callee, list) and len(callee) == 1
+                    and isinstance(callee[0], str) and callee[0], "Math computation callee")
+            arguments, nested, terminal = record(regions[0], 3)
+            require(record(terminal, 2)[0] == "func.return", "Math computation terminal")
+            argument_kinds = [sort(value)[1] for value in arguments]
+            require(argument_kinds == [kinds[o] for o in mapped] and
+                    all(kind[0] in CAPTURED for kind in argument_kinds + result_kinds),
+                    "Math computation arguments")
+            inner, inner_kinds, inner_places = block(
+                nested, argument_kinds, list(range(len(arguments))), indent + "    ", rows, depth + 1, {})
+            yielded = references(terminal[1], inner_places, "Math computation yielded")
+            require([inner_kinds[o] for o in yielded] == result_kinds, "Math computation result sorts")
+            body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
+            inputs = seq(arguments, lambda v: sort(v)[0])
+            region = f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩"
+            rendered.append(f"{indent}⟨.mathCompute, {seq(mapped, nat)}, {result_terms}, [{region}]⟩")
+        elif name == "exec.range":
+            decoded = attributes(attrs)
+            require(set(decoded) == {"site"} and binding == [], "local range attributes")
+            string_attribute(decoded, "site")
+            require(len(regions) == 1 and len(mapped) >= 2 + len(results), "local range shape")
+            require([kinds[o] for o in mapped[:2]] == [("index", None)] * 2,
+                    "local range bounds")
+            carried = len(results)
+            require([kinds[o] for o in mapped[2:2 + carried]] == result_kinds,
+                    "local range initial state")
+            capture_kinds = [kinds[o] for o in mapped[2 + carried:]]
+            require(all(kind[0] in CAPTURED for kind in result_kinds + capture_kinds),
+                    "local range sorts")
+            arguments, nested, terminal, conditional = record(regions[0], 4)
+            require(type(conditional) is bool and record(terminal, 2)[0] == "exec.complete",
+                    "local range terminal")
+            argument_kinds = [sort(value)[1] for value in arguments]
+            require(argument_kinds == [("index", None)] + result_kinds + capture_kinds,
+                    "local range arguments")
+            inner, inner_kinds, inner_places = block(
+                nested, argument_kinds, list(range(len(arguments))), indent + "    ", rows, depth + 1, {})
+            yielded = references(terminal[1], inner_places, "local range yielded")
+            require([inner_kinds[o] for o in yielded] ==
+                    ([("boolean", None)] if conditional else []) + result_kinds,
+                    "local range yield sorts")
+            body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
+            inputs = seq(arguments, lambda v: sort(v)[0])
+            region = f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩"
+            term = f".localRange {'true' if conditional else 'false'}"
+            rendered.append(f"{indent}⟨{term}, {seq(mapped, nat)}, {result_terms}, [{region}]⟩")
+        elif name == "exec.match":
+            decoded = attributes(attrs)
+            require(set(decoded) == {"alternatives", "site"} and binding == []
+                    and len(regions) == 1 and mapped, "product projection shape")
+            identity, constructor, fields = nominal_product(kinds[mapped[0]])
+            require(decoded["alternatives"] == ("array", [["string", constructor]]),
+                    "product projection alternative")
+            string_attribute(decoded, "site")
+            arguments, nested, terminal, alternative, payload = record(regions[0], 5)
+            require(alternative == constructor and [data_type(value) for value in payload] == fields,
+                    "product projection payload")
+            capture_kinds = [kinds[reference] for reference in mapped[1:]]
+            argument_kinds = [sort(value)[1] for value in arguments]
+            require([data_descriptor(kind) for kind in argument_kinds]
+                    == fields + [data_descriptor(kind) for kind in capture_kinds],
+                    "product projection arguments")
+            require(nested == [] and record(terminal, 2)[0] == "exec.complete",
+                    "product projection body")
+            yielded = references(terminal[1], list(range(len(arguments))), "product projection yield")
+            require([argument_kinds[index] for index in yielded] == result_kinds,
+                    "product projection result sorts")
+            # A one-constructor, empty-body match only projects fields or aliases
+            # captures. Expand typed projections and retain exact outer aliases.
+            result_places = []
+            for index, kind in zip(yielded, result_kinds):
+                if index >= len(fields):
+                    result_places.append(mapped[1 + index - len(fields)])
+                    continue
+                field = ".here"
+                for _ in range(index):
+                    field = f".there ({field})"
+                calculation = (f".getProduct {product_parameters(identity, constructor, fields)} "
+                               f"({render_type(fields[index])}) ({field})")
+                result_places.append(len(kinds))
+                rendered.append(f"{indent}⟨.calculate ({calculation}), [{mapped[0]}], "
+                                f"[.data ({render_type(fields[index])})], []⟩")
+                kinds = kinds + [kind]
+            places = places + result_places
+            continue
+        elif name in ("data.branch", "exec.test"):
+            decoded = attributes(attrs)
+            local = name == "exec.test"
+            if local:
+                require(set(decoded) == {"site"}, "local branch attributes")
+                string_attribute(decoded, "site")
+            else:
+                require(decoded == {"alternatives": ("array", [["string", "then"], ["string", "else"]])},
+                        "Math branch attributes")
+            require(binding == [] and len(regions) == 2 and len(mapped) >= 1, "closed branch shape")
             require(kinds[mapped[0]] == ("boolean", None), "Math branch selector")
             capture_kinds = [kinds[o] for o in mapped[1:]]
             require(all(kind[0] in CAPTURED for kind in capture_kinds)
@@ -406,7 +606,7 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
             arms = []
             for label, region in zip(("then", "else"), regions):
                 arguments, nested, terminal, alternative, payload = record(region, 5)
-                require(alternative == label and payload == [] and record(terminal, 2)[0] == "data.yield",
+                require(alternative == label and payload == [] and record(terminal, 2)[0] == ("exec.complete" if local else "data.yield"),
                         "Math branch arm")
                 argument_kinds = [sort(value)[1] for value in arguments]
                 require(argument_kinds == capture_kinds, "Math branch captures")
@@ -417,9 +617,10 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
                 body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
                 inputs = seq(arguments, lambda v: sort(v)[0])
                 arms.append(f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩")
-            rendered.append(f"{indent}⟨.mathBranch, {seq(mapped, nat)}, {result_terms}, [{', '.join(arms)}]⟩")
+            branch = ".localBranch" if local else ".mathBranch"
+            rendered.append(f"{indent}⟨{branch}, {seq(mapped, nat)}, {result_terms}, [{', '.join(arms)}]⟩")
         else:
-            require(regions == [], "unexpected operation region")
+            require(regions == [], f"unexpected operation region: {name}")
             if is_service:
                 term = local_service(attributes(attrs), binding, mapped, result_kinds,
                                      item[6], ports or {}, places, kinds, rows, constants)

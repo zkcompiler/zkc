@@ -44,6 +44,10 @@ theorem Primitive.evaluateOn_inverse_congr (model : FieldModel)
       try contradiction
     all_goals rfl
   | binaryConstant d bits => cases args; rfl
+  | sequenceAt element =>
+    rcases args with _ | ⟨values, _ | ⟨index, _ | _⟩⟩
+    simp only [evaluateOn]
+    split <;> simp_all
   | _ => (iterate 3 (try (rcases args with _ | ⟨_, args⟩))); rfl
 
 namespace Evaluation

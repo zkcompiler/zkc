@@ -95,12 +95,7 @@ theorem step_local (program : Structured.Program) (context : Context)
   cases operation with
   | loop site maximum => exact absurd rfl (notLoop site maximum)
   | localService port request template coordinates => exact absurd rfl (notLocal port request template coordinates)
-  | calculate calculation =>
-      simp only [Domain.step, found, read_positions]
-      repeat' first
-        | (solve | simp_all [PIR.Process.bind])
-        | (split <;> try simp_all)
-  | call name =>
+  | calculate | call | execute | finiteFold =>
       simp only [Domain.step, found, read_positions]
       repeat' first
         | (solve | simp_all [PIR.Process.bind])

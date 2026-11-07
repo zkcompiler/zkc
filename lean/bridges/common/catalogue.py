@@ -88,6 +88,17 @@ def require_capabilities(operation, terms, rows):
         require(domain is not None and requirement["capability"] in domain[4], "missing binding capability")
 
 
+def field_modulus(rows, identity):
+    """Read a field's characteristic; formal catalogue admission checks the row."""
+    matches = [row for row in rows[0] if row[1] == identity and row[2] == "Field"]
+    require(len(matches) == 1 and len(matches[0]) == 6 and matches[0][5] is not None,
+            "field parameter needs independent domain admission")
+    value = matches[0][5]
+    modulus(value)
+    require(int(value) > 1, "invalid field characteristic")
+    return int(value)
+
+
 def service(rows, contract):
     """The exported row of a random service contract."""
     matches = [row for row in rows[1] if row[1] == contract]

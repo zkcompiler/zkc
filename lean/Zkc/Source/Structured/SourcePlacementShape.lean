@@ -87,7 +87,7 @@ def buildPlacementShape (source : SourceDeclarations) :
     | .unit => return .unit
     | .tuple fields => return .tuple (← fields.mapM (buildPlacementShape source depth))
     | .array element count =>
-      let some count := count.toNat? | throw "component-declaration-type"
+      let some count := Source.Format.canonicalDecimal count Limits.originStringBytes | throw "component-declaration-type"
       if count > Limits.listEntries then throw "component-declaration-limit"
       return .array (← buildPlacementShape source depth element) count
     | .builtin "indices" [] => return .data .indices
@@ -116,7 +116,7 @@ def buildPlacementShape (source : SourceDeclarations) :
       let (row, fixed) ← match kind with
         | .builtin "oracle.table" [row] => pure (row, none)
         | .builtin "oracle.table" [row, .natural decimal] => do
-          let some rows := decimal.toNat? | throw "component-declaration-type"
+          let some rows := Source.Format.canonicalDecimal decimal Limits.originStringBytes | throw "component-declaration-type"
           if rows ≥ indexLimit then throw "component-declaration-type"
           pure (row, some rows)
         | _ => throw "component-declaration-type"
@@ -127,7 +127,7 @@ def buildPlacementShape (source : SourceDeclarations) :
       match head, term with
       | "oracle", .builtin _ [_] => return .oracle kind.data (.oracle kind)
       | "oracle_sequence", .builtin _ [_, .natural decimal] =>
-        let some maximum := decimal.toNat? | throw "component-declaration-type"
+        let some maximum := Source.Format.canonicalDecimal decimal Limits.originStringBytes | throw "component-declaration-type"
         if maximum ≥ indexLimit then throw "component-declaration-type"
         return .oracle (.sequence kind.data) (.oracleSequence kind maximum)
       | _, _ => throw "component-declaration-type"

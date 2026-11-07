@@ -26,6 +26,23 @@ subject writes into its own subdirectory. `--write` rewrites the generated Lean
 modules the manifests own from the fresh exports instead of requiring them to
 be unchanged.
 
+The focused literal, product and closed-control boundary controls run independently of Lean builds:
+
+```sh
+python3 lean/bridges/construction/literal_tests.py
+python3 lean/bridges/construction/product_tests.py
+python3 lean/bridges/construction/local_branch_tests.py
+python3 lean/bridges/construction/local_range_tests.py
+python3 lean/bridges/construction/embedded_math_tests.py
+python3 lean/bridges/construction/primitive_tests.py
+python3 lean/bridges/construction/sequence_tests.py
+```
+
+Natural field literals use the exact nominal field's catalogue characteristic,
+including extension fields. Kernel admission separately compares that catalogue
+against the installed formal rows. Binary extension bit strings require their
+own interpretation and remain outside this calculation form.
+
 ## What is checked
 
 For each subject with the construction profile:

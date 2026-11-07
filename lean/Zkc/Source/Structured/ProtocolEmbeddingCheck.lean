@@ -58,22 +58,28 @@ theorem checkOrdinaryOperation_sound (op : ProtocolOp)
     (checked : checkOrdinaryOperation op = true) : OrdinaryOperation op := by
   cases op <;> simp_all [checkOrdinaryOperation, OrdinaryOperation]
 
+/-- An oracle protocol can still use its ordinary Math laws. Check their
+actual bodies independently of the protocol's own kinds of effects. -/
+def checkMathFragment (definitions : List CheckedDefinition) : Bool :=
+  definitions.all (fun definition ↦ definition.kind != .math || checkFragment checkMathOperation definition.body)
+
+theorem checkMathFragment_sound (definitions : List CheckedDefinition)
+    (checked : checkMathFragment definitions = true) : MathFragment definitions := by
+  intro definition member math
+  have body := List.all_eq_true.mp checked definition member
+  simp only [math, bne_self_eq_false, Bool.false_or] at body
+  exact checkFragment_sound _ _ checkMathOperation_sound _ body
+
 /-- This inspects every retained definition and nested Region, including dormant ones. -/
 def checkOrdinaryFragment (payload : UnitPayload) : Bool :=
-  payload.definitions.all (fun definition ↦ definition.kind != .math ||
-    checkFragment checkMathOperation definition.body) &&
-  payload.protocols.all (fun definition ↦ checkFragment checkOrdinaryOperation definition.body)
+  checkMathFragment payload.definitions &&
+    payload.protocols.all (fun definition ↦ checkFragment checkOrdinaryOperation definition.body)
 
 theorem checkOrdinaryFragment_sound (payload : UnitPayload)
     (checked : checkOrdinaryFragment payload = true) : OrdinaryFragment payload := by
-  simp only [checkOrdinaryFragment, Bool.and_eq_true, List.all_eq_true] at checked
-  constructor
-  · intro definition member math
-    have body := checked.1 definition member
-    simp only [math, bne_self_eq_false, Bool.false_or] at body
-    exact checkFragment_sound _ _ checkMathOperation_sound _ body
-  · intro definition member
-    exact checkFragment_sound _ _ checkOrdinaryOperation_sound _ (checked.2 definition member)
+  obtain ⟨math, protocols⟩ := Bool.and_eq_true_iff.mp checked
+  exact ⟨checkMathFragment_sound _ math, fun definition member ↦
+    checkFragment_sound _ _ checkOrdinaryOperation_sound _ (List.all_eq_true.mp protocols definition member)⟩
 
 /-- Canonical imported source, a computable fragment check, and no semantic premises. -/
 theorem checked_imported_embedding {snapshot : Snapshot} (imported : Imported snapshot)

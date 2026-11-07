@@ -50,7 +50,8 @@ def nativeHelperSignatures (program : Structured.Program) : List Structured.Help
 /-- Both path kinds and the root Entry are inspected, before event interpretation. -/
 def nativeTemplate (context : Context) (depth : Nat) (template : Template) : Bool :=
   template.entry == context.entry && template.repeats == depth &&
-    template.steps.all (fun step => step.kind == "apply" || step.kind == "repeat")
+    template.steps.all (fun step => step.kind == "apply" || step.kind == "repeat") &&
+    template.validNamespaces
 
 def nativeMessageEvent : List String → Bool
   | ["message", _, site, schema, _, _] => site == schema

@@ -280,10 +280,9 @@ def test_structured_only_subject_preserves_unselected_claim_inventory(driver_mod
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
     manifest = tmp_path / "subject.toml"
     manifest.write_text("source fixture")
-    subject = SimpleNamespace(
-        name="structured", path=manifest, modules={},
-        profile=lambda name: name == "structured", table=lambda name: {},
-        get=lambda table, key, default=None: default)
+    subject = driver_module.manifest.Subject(manifest, {
+        "name": "structured", "profiles": {"structured": True},
+    })
     inventory = [{"node": {"kind": "source-claim", "owner": "library::Run", "block": 0, "claim": 0}}]
     driver, _ = recording(driver_module, tmp_path)
     monkeypatch.setattr(driver, "interactive", lambda subject, record:

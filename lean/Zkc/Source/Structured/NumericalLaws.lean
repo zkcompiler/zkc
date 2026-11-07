@@ -48,6 +48,32 @@ theorem normalize_polynomial (cs : List F) :
       simp [Polynomial.ofCoeffList_cons, h.2, tail]
     · simp only [Polynomial.ofCoeffList_cons, ih]
 
+private theorem normalize_zero (cs : List F) (zero : ∀ i, cs.getD i 0 = 0) :
+    normalizeCoefficients 0 cs = [] := by
+  induction cs with
+  | nil => rfl
+  | cons a cs ih =>
+    have head : a = 0 := zero 0
+    have tail : normalizeCoefficients 0 cs = [] := ih (fun i ↦ zero (i + 1))
+    simp [normalizeCoefficients, head, tail]
+
+/-- Equality as polynomials determines the actual serialized ascending
+coefficients after normalization, including the empty representation of zero. -/
+theorem normalized_eq_of_polynomial (as bs : List F) (equal : Polynomial.ofCoeffList as =
+    Polynomial.ofCoeffList bs) : normalizeCoefficients 0 as = normalizeCoefficients 0 bs := by
+  have cells (i : Nat) : as.getD i 0 = bs.getD i 0 := by
+    simpa using congrArg (fun p : Polynomial F ↦ p.coeff i) equal
+  clear equal
+  induction as generalizing bs with
+  | nil => exact (normalize_zero bs (fun i ↦ (cells i).symm)).symm
+  | cons a as ih =>
+    cases bs with
+    | nil => exact normalize_zero _ cells
+    | cons b bs =>
+      have head : a = b := cells 0
+      have tail := ih bs (fun i ↦ cells (i + 1))
+      simp only [normalizeCoefficients, head, tail]
+
 omit [DecidableEq F] in
 theorem evaluate_add (as bs : List F) (x : F) :
     evaluate (add as bs) x = evaluate as x + evaluate bs x := by

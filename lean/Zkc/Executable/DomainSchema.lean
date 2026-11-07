@@ -95,7 +95,9 @@ theorem step_schema (model : Structured.DomainModel) (program : Structured.Progr
   unfold Domain.step
   split
   all_goals try unfold Domain.executeLoop
-  all_goals try unfold Domain.selectMath
+  all_goals try unfold Domain.selectClosed
+  all_goals try unfold Domain.compute
+  all_goals try unfold Domain.executeRange
   all_goals repeat' first
     | exact appendChecked _
     | exact bindChecked _
@@ -131,6 +133,21 @@ theorem evaluate_schema (model : Structured.DomainModel) (program : Structured.P
       exact (ih (env ++ values)).mono fun final found => by
         simpa [List.map_append, sorted, List.flatMap_cons, List.append_assoc] using found
 
+private theorem fields_data (fields : Structured.ProductFields) :
+    fields.toList.all Domain.dataType = !fields.hasHandle := by
+  cases fields with
+  | nil => rfl
+  | cons type rest =>
+      simp [Structured.ProductFields.toList, Domain.dataType,
+        Structured.ProductFields.hasHandle, fields_data rest]
+
+private theorem variable_data {types : List Structured.Ty} {type : Structured.Ty}
+    (reference : Var types type) (eligible : types.all Domain.dataType = true) :
+    Domain.dataType type = true := by
+  induction reference with
+  | here => simp_all
+  | there reference ih => simp_all
+
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- Totality is a checked operation property, while operand availability and
@@ -143,13 +160,26 @@ theorem calculate_total (calculation : Calculation) (total : calculation.total =
       results.map Domain.Value.sort = calculation.op.results.map ValueSort.data := by
   obtain ⟨values, decoded⟩ := decodeValues_of_sorts _ arguments sorted
   have evaluates : ∃ results, calculation.evaluate values = .returned results := by
-    cases calculation <;> simp [Calculation.total] at total <;>
-      rcases values with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | _⟩⟩⟩ <;> exact ⟨_, rfl⟩
+    cases calculation
+    case makeProduct => exact ⟨_, rfl⟩
+    all_goals simp [Calculation.total] at total
+    all_goals rcases values with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | _⟩⟩⟩; exact ⟨_, rfl⟩
   obtain ⟨results, evaluated⟩ := evaluates
   have eligible : calculation.op.results.all Domain.dataType = true := by
-    cases calculation <;>
+    cases calculation
+    case makeProduct identity constructor fields =>
+      have clean : fields.hasHandle = false := by
+        have all := (fields_data fields).symm.trans data
+        simpa using all
+      simp [Calculation.op, Structured.Op.results, Domain.dataType, Structured.Ty.isHandle, clean]
+    case getProduct identity constructor fields type field =>
+      have clean : fields.hasHandle = false := by
+        simpa [Calculation.op, Structured.Op.arguments, Domain.dataType, Structured.Ty.isHandle] using data
+      have all : fields.toList.all Domain.dataType = true := (fields_data fields).trans (by simp [clean])
+      simpa [Calculation.op, Structured.Op.results] using variable_data field all
+    all_goals
       simp_all [Calculation.op, Structured.Op.arguments, Structured.Op.results,
-        Domain.dataType, Structured.Ty.isHandle]
+        Domain.dataType, Structured.Ty.isHandle, Calculation.total]
   obtain ⟨encoded, encodedEq⟩ := Domain.encodeValues_exists results eligible
   refine ⟨encoded, ?_, encodeValues_sorts results encodedEq⟩
   simp only [Domain.calculate, decoded,

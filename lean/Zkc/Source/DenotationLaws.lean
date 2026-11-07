@@ -49,6 +49,27 @@ theorem Region.denote_letOp_done {d : Dialect} {I : PIR.Signature} (m : RegionMe
   rw [Region.denote_letOp_values, operation]
   rfl
 
+/-- An exact returning denotation indexed by the source and its flat SSA
+environment. Keeping the source in the judgement lets each step match its
+own instruction before reducing any subsequent control flow. -/
+def Region.ReturnsValues {d : Dialect} {I : PIR.Signature} (m : RegionMeaning d I)
+    {Γ out : List d.Ty} (body : Region d Γ out) (inputs : Values m.Value Γ)
+    (result : Values m.Value out) : Prop :=
+  body.denote m inputs.get = .done result
+
+theorem Region.ReturnsValues.letOp {d : Dialect} {I : PIR.Signature} {m : RegionMeaning d I}
+    {Γ out : List d.Ty} {op : d.Op} {args : Operands Γ (d.arguments op)}
+    {bodies : Regions d (d.regions op)} {next : Region d (d.results op ++ Γ) out}
+    {inputs : Values m.Value Γ} {result : Values m.Value out} (reply : Values m.Value (d.results op))
+    (step : m.operation op (args.eval inputs.get) (bodies.denote m) = .done reply)
+    (tail : next.ReturnsValues m (reply.append inputs) result) :
+    (Region.letOp op args bodies next).ReturnsValues m inputs result :=
+  (Region.denote_letOp_done m op args bodies next inputs reply step).trans tail
+
+theorem Region.ReturnsValues.ret {d : Dialect} {I : PIR.Signature} {m : RegionMeaning d I}
+    {Γ out : List d.Ty} (args : Operands Γ out) (inputs : Values m.Value Γ) :
+    (Region.ret args).ReturnsValues m inputs (args.eval inputs.get) := rfl
+
 /-- A stopped operation does not enter the literal continuation. -/
 theorem Region.denote_letOp_halt {d : Dialect} {I : PIR.Signature} (m : RegionMeaning d I) {Γ out : List d.Ty}
     (op : d.Op) (args : Operands Γ (d.arguments op))

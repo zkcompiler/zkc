@@ -37,4 +37,17 @@ theorem stopped_operation :
   derive_region using (
     exact RegionMeaning.OperationLaw.ofTranslation translation .guard _ _ rfl)
 
+private def repeatThenDraw (count : Nat) (body : Region dialect [Ty.scalar] [Ty.scalar]) :
+    Region dialect [Ty.scalar] [Ty.scalar] :=
+  .letOp (.repeat count) (.cons .here .nil) (.cons body .nil)
+    (.letOp .draw .nil .nil (.ret (.cons .here .nil)))
+
+/-- Neither remaining iterations nor either enclosing draw executes after the
+inner stop. The local solver accepts only the repeat operation. -/
+theorem stop_in_nested_repeat (initial : Nat) :
+    Derives (repeatThenDraw 2 (repeatThenDraw 3 (.stop .refused)))
+      (Values.cons initial .nil).get (.halt .refused) := by
+  derive_region using
+    (exact RegionMeaning.OperationLaw.ofTranslation translation (.repeat _) _ _ rfl)
+
 end Tests.DeriveRegionCallbacks

@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Mathematics.Fields.KoalaBear
-public import Zkc.Source.Structured.DomainLaws
+public import Zkc.Source.Structured.NumericalCapabilities
 public import Mathlib.Algebra.Group.PUnit
 
 /-!
@@ -9,13 +9,11 @@ public import Mathlib.Algebra.Group.PUnit
 
 The selected catalogue is the core's installed KoalaBear catalogue, whose rows
 follow `compiler/lib/Contracts/Domains.cpp`. The random service's identity, sampled
-field and methods follow `crates/zkc-runtime/src/vm/services.rs`. This is a
-restricted catalogue, not the entire native installation. Its capability
-strings record native admission facts; the law records prove the field,
-embedding and characteristic obligations consumed here. They do not certify
-two-adic operations, native arithmetic, codecs or sampling distributions.
-The index-block capability and method are catalogue metadata only; this model
-does not interpret index-block requests or gates.
+field and methods follow `crates/zkc-runtime/src/vm/services.rs`. The catalogue selects the two fields and their random service.
+Its law records certify the field, embedding and characteristic. The octic
+root table uses the installed base-field literals. KoalaBearNumerics proves
+their order and squaring laws. Native arithmetic, codecs, index-block
+requests and sampling distributions have separate interpretation obligations.
 
 Unknown names have a default carrier because `DomainModel` is total, but are
 never admitted. There are no group rows. Only local standard algebra instances
@@ -98,6 +96,8 @@ def model : DomainModel where
   fieldDecEq identity := inferInstanceAs (DecidableEq (carrier (resolve identity)))
   inverse identity := inverse (resolve identity)
   embed extension base := embedding (resolve extension) (resolve base)
+  twoAdic identity := if identity == octicIdentity then
+    some ⟨baseIdentity, koalaBearRootLiterals.map (fun (n : Nat) ↦ (n : Base))⟩ else none
   groupAdd _ := inferInstanceAs (AddCommGroup PUnit)
   groupDecEq _ := inferInstanceAs (DecidableEq PUnit)
   smul _ _ _ point := point

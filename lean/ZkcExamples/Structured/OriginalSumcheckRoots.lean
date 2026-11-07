@@ -61,17 +61,6 @@ theorem root_lookup (args : Values (Component (assignment F G)) root.inputs) :
         protocolPrefix Occurrence.iterations {} 1 args :=
   Generated.Original.SmallSumcheck.root_lookup args
 
-theorem body_binding
-    (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
-    (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G)))
-    (entries : Option (List F)) (claim : Option F) (count service : Option Nat) :
-    Generated.Original.SmallSumcheck.sourceBody.denote
-      (participantMeaningWithOn (ringModel F G) (.silent _) actions tables.toOn 1
-        protocols {} Occurrence.iterations)
-      ((.cons entries (.cons claim (.cons count (.cons service .nil)))) : Values (Component (assignment F G)) root.inputs).get =
-      Generated.Original.SmallSumcheck.process tables protocols entries claim count service :=
-  Generated.Original.SmallSumcheck.body_binding tables protocols entries claim count service
-
 set_option backward.isDefEq.respectTransparency false in
 theorem root_binding (entries : Option (List F)) (claim : Option F) (count service : Option Nat) :
     Occurrence.participant (ringModel F G) OriginalSumcheckInstances.Small.imported.program 1
@@ -121,17 +110,6 @@ theorem root_lookup (args : Values (Component (assignment F G)) root.inputs) :
       root.denoteWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn
         protocolPrefix Occurrence.iterations {} 1 args :=
   Generated.Original.TwoSums.root_lookup args
-
-theorem body_binding
-    (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
-    (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G)))
-    (left right : Option (List F)) (leftClaim rightClaim : Option F) (count service : Option Nat) :
-    Generated.Original.TwoSums.sourceBody.denote
-      (participantMeaningWithOn (ringModel F G) (.silent _) actions tables.toOn 1
-        protocols {} Occurrence.iterations)
-      ((.cons left (.cons right (.cons leftClaim (.cons rightClaim (.cons count (.cons service .nil)))))) : Values (Component (assignment F G)) root.inputs).get =
-      Generated.Original.TwoSums.process tables protocols left right leftClaim rightClaim count service :=
-  Generated.Original.TwoSums.body_binding tables protocols left right leftClaim rightClaim count service
 
 set_option backward.isDefEq.respectTransparency false in
 theorem root_binding (left right : Option (List F)) (leftClaim rightClaim : Option F)

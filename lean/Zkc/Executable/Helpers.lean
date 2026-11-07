@@ -85,6 +85,7 @@ def operationKind : Structured.Op → String
   | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual | .booleanNotEqual => "boolean"
   | .select _ => "select"
   | .boundedAt _ => "bounded-at"
+  | .sequenceEmpty _ | .sequenceAppend _ | .sequenceLength _ => "sequence"
   | .multilinearRestrictPrefix _ => "multilinear-restrict-prefix"
   | .makeProduct .. => "product-make"
   | .getProduct .. => "product-get"
@@ -136,7 +137,7 @@ def needsBounded : Structured.Op → Resolved → Bool
 checked primitives check or bound their results, and an index constant is
 bounded when it is. Other results are not tracked. -/
 def resultsBounded : Structured.Op → Bool
-  | .exec _ => true
+  | .exec primitive => primitiveDataProfile primitive
   | .indexConstant value => decide (value < indexLimit)
   | _ => false
 

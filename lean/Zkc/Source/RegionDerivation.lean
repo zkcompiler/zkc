@@ -86,6 +86,19 @@ mutual
         (operationLaw : meaning.OperationLaw operations op (Operands.eval env args) callbacks step)
         (nextLaw : ∀ values, Region.Derivation meaning operations next (env.prepend values) (suffix values)) :
         Region.Derivation meaning operations (.letOp op args bodies next) (@env) (step.bind suffix)
+    | letOpView {Γ out} (op : dialect.Op) (args : Operands Γ (dialect.arguments op))
+        {bodies : Regions dialect (dialect.regions op)}
+        {next : Region dialect (dialect.results op ++ Γ) out}
+        {env : Environment meaning.Value Γ}
+        {callbacks : Values (RegionFunction meaning.Value J) (dialect.regions op)}
+        {A : Type} {step : PIR.Process J A} {pack : A → Values meaning.Value (dialect.results op)}
+        {suffix : A → PIR.Process J (Values meaning.Value out)}
+        (callbackLaws : Regions.Derivation meaning operations bodies callbacks)
+        (operationLaw : meaning.OperationLaw operations op (Operands.eval env args) callbacks
+          (step.bind fun reply => .done (pack reply)))
+        (nextLaw : ∀ reply, Region.Derivation meaning operations next
+          (env.prepend (pack reply)) (suffix reply)) :
+        Region.Derivation meaning operations (.letOp op args bodies next) (@env) (step.bind suffix)
     | letOpReturn {Γ out} (op : dialect.Op) (args : Operands Γ (dialect.arguments op))
         {bodies : Regions dialect (dialect.regions op)}
         {next : Region dialect (dialect.results op ++ Γ) out}
@@ -122,6 +135,25 @@ mutual
         Regions.Derivation meaning operations (.cons body tail) (.cons callback callbacks)
 end
 
+/-- Specialize a successful return view to a single typed request. -/
+theorem Region.Derivation.letOpReply {meaning : RegionMeaning dialect I}
+    {operations : PIR.OperationInterpretation I J} {Γ out}
+    (op : dialect.Op) (args : Operands Γ (dialect.arguments op))
+    {bodies : Regions dialect (dialect.regions op)}
+    {next : Region dialect (dialect.results op ++ Γ) out}
+    {env : Environment meaning.Value Γ}
+    {callbacks : Values (RegionFunction meaning.Value J) (dialect.regions op)}
+    {request : J.Op} {pack : J.Reply request → Values meaning.Value (dialect.results op)}
+    {suffix : J.Reply request → PIR.Process J (Values meaning.Value out)}
+    (callbackLaws : Regions.Derivation meaning operations bodies callbacks)
+    (operationLaw : meaning.OperationLaw operations op (Operands.eval env args) callbacks
+      (.call request fun reply => .done (pack reply)))
+    (nextLaw : ∀ reply, Region.Derivation meaning operations next
+      (env.prepend (pack reply)) (suffix reply)) :
+    Region.Derivation meaning operations (.letOp op args bodies next) (@env) (.call request suffix) := by
+  exact Region.Derivation.letOpView (step := PIR.Process.call request .done)
+    (pack := pack) op args callbackLaws operationLaw nextLaw
+
 /-- The complete process equation is an output of structural proof construction. -/
 theorem Region.Derivation.sound {meaning : RegionMeaning dialect I}
     {operations : PIR.OperationInterpretation I J} {Γ out}
@@ -148,6 +180,12 @@ theorem Region.Derivation.sound {meaning : RegionMeaning dialect I}
       congr 1
       funext values
       exact nextIH values
+  | letOpView op args callbackLaws operationLaw nextLaw callbacksIH nextIH =>
+      simp only [Region.denote, PIR.Process.interpret_bind, operationLaw _ callbacksIH,
+        PIR.Process.bind_assoc, PIR.Process.bind]
+      congr 1
+      funext reply
+      exact nextIH reply
   | letOpReturn op args callbackLaws operationLaw nextLaw callbacksIH nextIH =>
       simpa only [Region.denote, PIR.Process.interpret_bind,
         operationLaw _ callbacksIH, PIR.Process.bind] using nextIH
