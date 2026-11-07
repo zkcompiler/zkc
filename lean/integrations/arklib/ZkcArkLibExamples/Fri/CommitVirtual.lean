@@ -58,13 +58,11 @@ theorem registered (n : Nat) (source : OracleAnchor) (word : Fin (2 ^ (n + 1)) �
   refine ⟨replyEq, ?_, ⟨parent.afterExtension extended (.refl _)⟩, self⟩
   exact ⟨{
     older := before.entries
-    newer := []
     holder := roles 0
     receivers := [1].map roles
     live := parent
     allowed := visible
-    fresh := rfl
-    entries := rfl }⟩
+    located := .head _ _ }⟩
 
 def constructionSites : List OracleLocation :=
   FriCommitRound.roundBody.erase.operations.filterMap fun op ↦ match op with

@@ -368,6 +368,23 @@ theorem calculation_embed (model : DomainModel)
           PIR.Process.done (Values.cons (some (ProtocolValue.ofConcrete .index value.length)) .nil)
         simp only [Option.bind_some, ProtocolValue.ofConcrete, ProtocolValue.observedLength,
           Option.map_some, ProtocolValue.toConcrete_concrete]
+  case sequenceEmpty element =>
+    cases args
+    exact (ProtocolCalculation.strict_embed model demand self ordinary
+      (.sequenceEmpty element) .nil rfl).trans rfl
+  case sequenceAppend element =>
+    cases args with | cons values rest =>
+    cases rest with | cons value rest =>
+    cases rest
+    refine (ProtocolCalculation.strict_embed model demand self ordinary
+      (.sequenceAppend element) (.cons values (.cons value .nil)) rfl).trans ?_
+    cases values <;> cases value <;> rfl
+  case sequenceLength element =>
+    cases args with | cons values rest =>
+    cases rest
+    refine (ProtocolCalculation.strict_embed model demand self ordinary
+      (.sequenceLength element) (.cons values .nil) rfl).trans ?_
+    cases values <;> rfl
   case indexConstant value =>
     cases args
     refine (ProtocolCalculation.strict_embed model demand self ordinary

@@ -1,7 +1,7 @@
 module
 
 public import ZkcArkLibExamples.Fri.VirtualWord
-public import Zkc.Source.Structured.RegisteredLifetime
+public import Zkc.Source.Structured.OracleStoreLocation
 public import ZkcArkLib.Fri.SourcePublication
 
 @[expose] public section
@@ -30,15 +30,16 @@ theorem foldedCell {Aux E : Type} {m : Nat} (size : m + 1 ≤ 63)
     (domain : Domain.SmoothCosetFftDomain (m + 1) Octic) (shift : Octic)
     (geometry : ∀ i : Fin (2 ^ (m + 1)), domain i = point RetainedDomain.root shift (m + 1) i)
     (word : Fin (2 ^ (m + 1)) → Octic) (beta : Octic) (index : Fin (2 ^ m))
-    (older newer : Entries) (source anchor : OracleAnchor) (holder self : Nat) (receivers : List Nat)
+    (entries older : Entries) (source anchor : OracleAnchor) (holder self : Nat) (receivers : List Nat)
     (state : PublishedWords.State model Aux) (live : PublishedWords.RegisteredWord (row := .field extension) older self source word state)
     (allowed : OracleStore.visible self holder receivers = true)
-    (fresh : OracleStore.hasAnchor newer anchor = false) (location : OracleLocation)
+    (located : OracleStore.Located entries
+      (table anchor (2 ^ m) holder receivers (VirtualReads.captures model source beta
+        (2 ^ (m + 1)) (2 ^ m) shift (RetainedDomain.root (m + 1)) (shift⁻¹ : Octic)
+        ((RetainedDomain.root (m + 1))⁻¹ : Octic) ((2 : Octic)⁻¹ : Octic))) older)
+    (location : OracleLocation)
     (expansion : List (OracleAnchor × OracleLocation)) (count : Nat) :
     let parent := Phases.publishedRequest extension anchor index.val location expansion
-    let captures := VirtualReads.captures model source beta (2 ^ (m + 1)) (2 ^ m) shift
-      (RetainedDomain.root (m + 1)) (shift⁻¹ : Octic) ((RetainedDomain.root (m + 1))⁻¹ : Octic) ((2 : Octic)⁻¹ : Octic)
-    let entries := newer ++ (⟨kind.answer, table anchor (2 ^ m) holder receivers captures⟩ :: older)
     OracleStore.answer model (PublishedWords.read (E := E)) self entries parent (state, count) =
       ⟨.returned (ProximityGap.foldWord domain word 1 beta index), (state, count + 3),
         [.query parent,
@@ -57,7 +58,7 @@ theorem foldedCell {Aux E : Type} {m : Nat} (size : m + 1 ≤ 63)
   have small : 2 ^ m < indexLimit := Nat.pow_lt_pow_right (by decide) (by omega : m < 64)
   have shape : OracleStore.validRows parent.kind (2 ^ m) = true := by
     simp [OracleStore.validRows, OracleKind.rows, parent, Phases.publishedRequest, small]
-  rw [OracleStore.answerSkipNewer _ _ _ _ _ _ fresh]
+  rw [located.answer (PublishedWords.read (E := E)) self parent rfl (state, count)]
   exact OracleStore.answerOfVirtual (PublishedWords.read (E := E)) self older parent (2 ^ m)
     holder receivers FriVirtualBody.installed rfl _ rfl allowed shape index.isLt (state, count)
     (ProximityGap.foldWord domain word 1 beta index) _ _ body
@@ -69,53 +70,32 @@ structure Registered {Aux : Type} {m : Nat}
       (PublishedWords.State model Aux))
     (source anchor : OracleAnchor) (word : Fin (2 ^ (m + 1)) → Octic) (beta shift : Octic) where
   older : Entries
-  newer : Entries
   holder : Nat
   receivers : List Nat
   live : PublishedWords.RegisteredWord (row := .field extension) older runtime.self source word runtime.provider
   allowed : OracleStore.visible runtime.self holder receivers = true
-  fresh : OracleStore.hasAnchor newer anchor = false
-  entries : runtime.entries = newer ++ (⟨kind.answer, table anchor (2 ^ m) holder receivers
+  located : OracleStore.Located runtime.entries (table anchor (2 ^ m) holder receivers
     (VirtualReads.captures model source beta (2 ^ (m + 1)) (2 ^ m) shift (RetainedDomain.root (m + 1))
-      (shift⁻¹ : Octic) ((RetainedDomain.root (m + 1))⁻¹ : Octic) ((2 : Octic)⁻¹ : Octic))⟩ :: older)
+      (shift⁻¹ : Octic) ((RetainedDomain.root (m + 1))⁻¹ : Octic) ((2 : Octic)⁻¹ : Octic))) older
 
-/-- Later publications may extend the registry and advance the read count.
-The child still reads from the older prefix captured by this virtual table.
-Only the provider word travels through its provider frame. -/
-def Registered.extend {Aux : Type} {m : Nat}
-    {runtime : OracleRuntimeState model checkedUnit.snapshot checkedUnit.domains checkedUnit.math
-      (PublishedWords.State model Aux)}
-    {source anchor : OracleAnchor} {word : Fin (2 ^ (m + 1)) → Octic} {beta shift : Octic}
-    (view : Registered runtime source anchor word beta shift) (extra : Entries)
-    (fresh : OracleStore.hasAnchor extra anchor = false) {provider : PublishedWords.State model Aux}
-    (frame : PublishedWords.Preserves runtime.provider.words provider.words) (count : Nat) :
-    Registered {runtime with entries := extra ++ runtime.entries, provider := provider, queries := count}
-      source anchor word beta shift where
-  older := view.older
-  newer := extra ++ view.newer
-  holder := view.holder
-  receivers := view.receivers
-  live := view.live.extend [] rfl frame
-  allowed := view.allowed
-  fresh := by simpa [OracleStore.hasAnchor, List.any_append] using And.intro fresh view.fresh
-  entries := by dsimp only; rw [view.entries, List.append_assoc]
-
-/-- The virtual closure keeps its own snapshot of the parent. All that
-later source execution has to provide is the common publication frame. -/
+/-- The shared registry law preserves the installation suffix. FRI only
+transports the mathematical parent registration through the provider frame. -/
 theorem Registered.transport {Aux : Type} {m : Nat}
     {before after : PublishedWords.Runtime model checkedUnit.snapshot checkedUnit.domains checkedUnit.math Aux}
     {source anchor : OracleAnchor} {word : Fin (2 ^ (m + 1)) → Octic} {beta shift : Octic}
     (view : Registered before source anchor word beta shift)
     (frame : PublishedWords.PublicationFrame before after) :
     Nonempty (Registered after source anchor word beta shift) := by
-  obtain ⟨who, extra, entries, fresh⟩ := frame.registry
-  have present : OracleStore.hasAnchor before.entries anchor = true := by
-    simp [view.entries, OracleStore.hasAnchor, List.any_append, table]
-  have extended := view.extend extra (fresh anchor present) frame.words after.queries
-  have same : {before with entries := extra ++ before.entries, provider := after.provider, queries := after.queries} = after := by
-    cases before; cases after
-    simp_all
-  exact ⟨same ▸ extended⟩
+  refine ⟨{
+    older := view.older
+    holder := view.holder
+    receivers := view.receivers
+    live := ?_
+    allowed := ?_
+    located := view.located.transport frame.registry.2 }⟩
+  · rw [frame.registry.1]
+    exact view.live.extend [] rfl frame.words
+  · simpa only [frame.registry.1] using view.allowed
 
 /-- An actual receiver query of the registered virtual handle obtains the
 ArkLib fold. The frame supplies the invocation for all three reads. -/
@@ -147,8 +127,8 @@ theorem Registered.sourceQuery {M : Type → Type} [Monad M] [LawfulMonad M] {Au
     (PublishedWords.publishM choose) (.field extension) none anchor index.val owner roles site state
     active _ (state.oracle.provider, state.oracle.queries + 3)
     [.query _, .query _, .query _]
-  rw [view.entries]
-  exact foldedCell size domain shift geometry word beta index view.older view.newer source anchor view.holder
-    state.oracle.self view.receivers state.oracle.provider view.live view.allowed view.fresh _ [] state.oracle.queries
+  exact foldedCell size domain shift geometry word beta index state.oracle.entries view.older
+    source anchor view.holder state.oracle.self view.receivers state.oracle.provider
+    view.live view.allowed view.located _ [] state.oracle.queries
 
 end ZkcSecurity.ArkLib.Fri.VirtualStore

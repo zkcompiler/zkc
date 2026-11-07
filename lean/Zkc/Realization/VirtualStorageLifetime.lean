@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Realization.VirtualStorageInstallation
-public import Zkc.Source.Structured.RegisteredLifetime
+public import Zkc.Source.Structured.OracleStoreLocation
 
 @[expose] public section
 
@@ -39,6 +39,23 @@ theorem Stored.transport {checked : CheckedOracle snapshot domains math}
       (fresh location.anchor (OracleStore.hasAnchor_of_find found))]
     exact found
   · exact (List.getElem?_append_left (List.getElem?_eq_some_iff.mp atSlot).1).trans atSlot
+
+/-- The source invariant recovers the installation suffix from actual lookup.
+The physical relation does not get to choose a replacement registry or body. -/
+theorem Stored.source_context {checked : CheckedOracle snapshot domains math}
+    {layout : Layout checked.declaration.inputs.dropLast} {references : CaptureLayout.References}
+    {entries : OracleEntries model snapshot domains math}
+    {records : List (model.Value layout.recordType)} {reference : Nat × Nat}
+    {location : OracleLocation} {rows leaves holder self : Nat} {receivers : List Nat}
+    {captures : Values model.Value checked.declaration.inputs.dropLast}
+    (stored : Stored checked layout references entries records reference
+      location rows leaves holder receivers captures)
+    (reachable : OracleStore.Reachable self entries) :
+    ∃ older, OracleStore.Located entries (table checked location rows holder receivers captures) older ∧
+      OracleStore.Reachable self older ∧
+      OracleStore.PayloadBefore self older (table checked location rows holder receivers captures) ∧
+      older.length < entries.length :=
+  reachable.find_location stored.2.1
 
 /-- A virtual physical reference denotes its installed construction anchor.
 Its body and captures come from the original checked registry entry. -/

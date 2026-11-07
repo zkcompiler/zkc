@@ -90,6 +90,13 @@ virtual-child continuation execution. `VirtualStorageLifetime` reuses the existi
 fresh-registry extension law to preserve installed closures across later source
 operations and physical append. A second actual construction with the same body
 and captures cannot replace the anchor associated with the first physical slot.
+`OracleStore.Located` also preserves the exact older registry used for child
+expansion. Source reachability derives this placement and capture validity from
+lookup; it does not assume a protocol-authored dependency graph. FRI's virtual
+registration now uses the shared placement and transport laws. Its mathematical
+fold relation remains in FRI. The generic virtual-read equation includes every
+outcome, state and event, with controls for stops at either child of a repeated
+read. This is a logical expansion law, not the physical controller simulation.
 [Clear-store laws](../../Zkc/Realization/ClearStorage.lean)
 · [Constructed reads](../../Zkc/Realization/ClearStorageCalculations.lean)
 · [Actual allocation](../../Zkc/Realization/ClearStorageAllocation.lean)
@@ -102,6 +109,7 @@ and captures cannot replace the anchor associated with the first physical slot.
 · [Virtual records](../../Zkc/Realization/VirtualStorage.lean)
 · [Source installation](../../Zkc/Realization/VirtualStorageInstallation.lean)
 · [Virtual reference lifetime](../../Zkc/Realization/VirtualStorageLifetime.lean)
+· [Immutable registry context](../../Zkc/Source/Structured/OracleStoreLocation.lean)
 · [Publication and swap controls](../../Tests/ClearStorage.lean)
 
 The fixed-table access transport preserves both replies and the complete

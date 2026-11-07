@@ -6,6 +6,7 @@ public import Tests.OracleProcessData
 
 @[expose] public section
 
+set_option backward.isDefEq.respectTransparency false
 namespace Tests.VirtualStorageInstallation
 open Zkc Zkc.Source Zkc.Source.Structured Zkc.Realization
 open OracleProcessData
@@ -128,6 +129,105 @@ theorem wrong_closure_refused :
     earlier_reference wrong
   have different : anchor 9 ≠ anchor 10 := by decide +kernel
   exact different equal
+
+theorem before_reachable : OracleStore.Reachable before.self before.entries :=
+  .inserted baseTable .empty rfl trivial
+
+theorem result_reachable : OracleStore.Reachable before.self result.state.entries :=
+  (OracleExecution.operation_extension model [checked] (base none) (location 9)
+    before.self id (.virtual checked.declaration.signature 0 [1])
+    (ProtocolValue.embedComponents captures.present) before).reachable before_reachable
+
+theorem later_reachable : OracleStore.Reachable result.state.self later.state.entries :=
+  (OracleExecution.operation_extension model [checked] (base none) (location 10)
+    result.state.self id (.virtual checked.declaration.signature 0 [1])
+    (ProtocolValue.embedComponents captures.present) result.state).reachable
+      (by simpa only [poststate] using result_reachable)
+
+/-- The general rule derives a valid source context from reached storage.
+No protocol author provides a virtual dependency graph. -/
+theorem recovered_context :
+    ∃ older, OracleStore.Located later.state.entries
+        (VirtualStorage.table checked (location 9) 2 0 [1] captures) older ∧
+      OracleStore.Reachable result.state.self older ∧
+      OracleStore.PayloadBefore result.state.self older
+        (VirtualStorage.table checked (location 9) 2 0 [1] captures) ∧
+      older.length < later.state.entries.length :=
+  retained.source_context later_reachable
+
+/-- The retained context is the exact registry from before the first
+construction, even after a second real construction has succeeded. -/
+theorem retained_context : OracleStore.Located later.state.entries
+    (VirtualStorage.table checked (location 9) 2 0 [1] captures) before.entries := by
+  have first : OracleStore.Located result.state.entries
+      (VirtualStorage.table checked (location 9) 2 0 [1] captures) before.entries := by
+    rw [poststate]
+    exact .head _ _
+  exact first.transport
+    (OracleExecution.operation_extension model [checked] (base none) (location 10)
+      result.state.self id (.virtual checked.declaration.signature 0 [1])
+      (ProtocolValue.embedComponents captures.present) result.state).fresh
+
+def parentQuery : OracleRead := ⟨kind, anchor 9, 0, location 20, []⟩
+
+def readRetained (failure : Option (Nat × PIR.Stop)) :
+    PIR.Execution (Provider × Nat) (OracleEvent ProviderEvent) Nat :=
+  OracleStore.answer model (base failure) 1 later.state.entries parentQuery (({} : Provider), 0)
+
+/-- The library exposes all outcomes of the actual checked body on the
+retained prefix. This equation is independent of the provider's answers. -/
+theorem read_expands (failure : Option (Nat × PIR.Stop)) :
+    readRetained failure =
+      let args : Values model.Value checked.declaration.inputs :=
+        (show checked.declaration.inputs = checked.declaration.inputs.dropLast ++ [.index]
+          by kernel_rfl).symm ▸ captures.append (.cons parentQuery.position .nil)
+      let body := (checked.denote model args.present).run
+        (fun child current ↦ OracleStore.answer model (base failure) 1 before.entries
+          (parentQuery.expand child) current) (({} : Provider), 1)
+      ⟨match body.outcome with
+        | .stopped reason => .stopped reason
+        | .returned values => match values.get .here with
+          | none => .stopped .incomplete
+          | some value => .returned value,
+        body.state, .query parentQuery :: body.events⟩ := by
+  refine (retained_context.virtual_answer checked parentQuery rfl 2 0 [1] captures
+    (by kernel_rfl) (base failure) 1 (by decide) (by decide) (by decide)
+    (({} : Provider), 0)).trans ?_
+  dsimp only
+  congr 1
+  split <;> simp_all
+  split <;> simp_all
+
+theorem retained_read : (readRetained none).outcome = .returned 10 ∧
+    (readRetained none).state.1.calls = 2 ∧ (readRetained none).state.1.hits = 1 ∧
+    (readRetained none).state.2 = 3 := by
+  rw [read_expands]
+  decide +kernel
+
+/-- A stopped first child prevents the second read. Any provider work and
+its reached query charge remain in the stopped record. -/
+theorem first_child_stop (reason : PIR.Stop) :
+    (readRetained (some (1, reason))).outcome = .stopped reason ∧
+    (readRetained (some (1, reason))).state.1.calls = 1 ∧
+    (readRetained (some (1, reason))).state.2 = 2 := by
+  rw [read_expands]
+  cases reason <;> decide +kernel
+
+/-- The second child's stop retains the first child's work and repeated-read
+cache hit. It cannot be mistaken for successful refusal of a mutation. -/
+theorem second_child_stop (reason : PIR.Stop) :
+    (readRetained (some (2, reason))).outcome = .stopped reason ∧
+    (readRetained (some (2, reason))).state.1.calls = 2 ∧
+    (readRetained (some (2, reason))).state.1.hits = 1 ∧
+    (readRetained (some (2, reason))).state.2 = 3 := by
+  rw [read_expands]
+  cases reason <;> decide +kernel
+
+#print axioms recovered_context
+#print axioms read_expands
+#print axioms retained_read
+#print axioms first_child_stop
+#print axioms second_child_stop
 
 #print axioms retained
 #print axioms later_returned

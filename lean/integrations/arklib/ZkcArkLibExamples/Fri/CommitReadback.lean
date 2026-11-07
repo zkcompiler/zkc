@@ -43,9 +43,8 @@ private theorem metadata {store : Store Aux} {source view : OracleAnchor} {n : N
   refine ⟨⟨base.registry, base.lookup, base.visible, ?_, base.registryRows⟩, ?_⟩
   · simp [OracleStore.validRows, OracleKind.rows, base.registryRows, fits]
   · unfold Known
-    rw [fold.entries, OracleStore.findSkipNewer _ _ _ _ fold.fresh]
-    simp only [OracleStore.find, VirtualStore.table, ↓reduceDIte, ↓reduceIte]
-    exact ⟨_, rfl, fold.allowed, by simp [OracleStore.validRows, OracleKind.rows, half], rfl⟩
+    exact ⟨_, fold.located.find, fold.allowed,
+      by simp [VirtualStore.table, OracleStore.validRows, OracleKind.rows, half], rfl⟩
 
 private theorem allVisible {store : Store Aux} {n r : Nat} (rounds : Rounds n r) {shift : Octic}
     (live : rounds.Installed store shift) (bound : n ≤ 5) :

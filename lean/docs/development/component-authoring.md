@@ -446,8 +446,16 @@ actual returning source construction and its checked body.
 `VirtualStorageLifetime` transports that association with the existing source
 freshness theorem, physical append and preservation of captured references.
 The regression installs a second real closure with identical captures and
-refuses reassociation of the earlier slot. Full query dispatch,
-child execution and root capacity bounds still require their own proof.
+refuses reassociation of the earlier slot. `OracleStore.Located` retains the
+exact older registry against which that closure expands its children. The
+existing source reachability invariant derives this placement and its capture
+validity from lookup; fresh extensions preserve it. FRI uses this common law
+instead of maintaining a separate registry-extension proof. Its companion still
+owns the parent-word, challenge and coset relation. The common full-outcome read
+law preserves stops, provider state and the ordered query trace; controls stop
+the first and second child separately, including repeated reads. Full physical
+query dispatch, child execution and root capacity bounds still require their
+own proof.
 
 FRI supplies the virtual table's captured parent, challenge and coset
 geometry. `CommitIngress.installed` follows the linked coset admission

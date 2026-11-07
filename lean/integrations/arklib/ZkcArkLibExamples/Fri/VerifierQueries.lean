@@ -35,7 +35,8 @@ noncomputable def Publication.withQueries {Aux : Type} {n r : Nat} {store : Stor
   initial := pub.initial
   view := ⟨pub.view.fits, pub.view.inside, pub.view.visible, pub.view.table, pub.view.lookup,
     pub.view.allowed, pub.view.valid, pub.view.size⟩
-  virtual := pub.virtual.extend [] rfl (.refl _) _
+  virtual := ⟨pub.virtual.older, pub.virtual.holder, pub.virtual.receivers,
+    pub.virtual.live, pub.virtual.allowed, pub.virtual.located⟩
   later := pub.later.withQueries _
 
 def samples {n s : Nat} (positions : Fin s → Fin (2 ^ (n + 1))) : List Nat :=
