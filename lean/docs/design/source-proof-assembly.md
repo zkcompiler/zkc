@@ -299,6 +299,18 @@ Distinct nested occurrence paths and a swapped outer continuation have explicit
 controls. This connects nested source suspension and physical frame restoration;
 selection of those frames by the complete generated dispatch remains to prove.
 
+`QuerySourceStack` also links the physical frames to each other. A saved
+frame's outer tag and slot index the rest of the stack; continuation zero is
+reserved for a root with slot zero. Descent consumes the actual source progress
+and saved-frame association, and restoration composes the existing source
+continuations. One common rule propagates a stopped child through every parent,
+retaining its poststate and the outermost-first query/event prefix. The nested
+test uses the same installed closures with their actual linked slots, checks a
+real provider reply, and rejects a changed outer slot. Ordinary composition of
+source continuations alone would not establish those physical links. Static
+dispatch selection and association with the entire current store tuple remain
+part of the complete controller proof, not assumptions for a protocol companion.
+
 `TestsArkLib.FriSourceContinuation.installed` consumes the same common cursor
 rules on the installed FRI virtual declaration. It reuses `VirtualReads.twoReads`
 and its existing helper/mathematical installation, then appends the two actual
@@ -363,6 +375,14 @@ coordinates are not unforgeable or single-use capabilities.
 actual SSA references: the five saved coordinates, checked kind, Return phase,
 old arena length as answer index, updated answer arena and other retained stores.
 All four emitted FRI return layouts have been checked against this projection.
+
+`QueryInitialize` derives the initial header and empty stores from the actual
+nominal reference projection, caller position, zero constant and ordered typed
+sequence creation. Its complete output selection rejects exchanged reference
+coordinates or equal-typed arenas. The same rule checks all four retained FRI
+initialization spans and the state operands passed to their following ranges.
+The ranges themselves still require dispatch correspondence and progress; no
+initialization or final-projection check establishes those facts.
 
 `QueryFinish` checks the complete final body and its answer projection. Completed
 and root-kind guards precede the arena read; incorrect phase, kind or missing
@@ -473,8 +493,10 @@ The actual FRI body reuses the same progress constructors and existing
 mathematical installation. These repairs do not move the generated invariant
 into its companion or substitute the fragment checks for the complete roots.
 Nested suspension and final-result selection now have common proved rules and
-focused controls as well. The root dispatch still has to construct and preserve
-their premises, including the correct static continuation selection.
+focused controls as well. Initialization and the linked physical continuation
+stack are now derived by common rules. The root dispatch still has to construct
+and preserve their premises, including the correct static continuation selection
+and current store tuple. These changes do not alter a protocol author's inputs.
 
 `OracleMathEnvironment.invokePresent` and `invokeReturned` install the existing
 `ReferenceLaw` at its actual helper body and arguments. FRI's `powerRequires`,
