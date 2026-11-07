@@ -1,7 +1,9 @@
 module
 
 public import ZkcExamples.Structured.FriBinding
-public import Zkc.Source.Structured.DeriveReceiver
+public import Zkc.Source.Structured.OracleReturnConstruction
+public import Zkc.Source.Structured.ProtocolReturnSpecification
+public meta import Zkc.Source.Structured.OracleReturnConstruction
 
 @[expose] public section
 
@@ -56,17 +58,30 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1)
     (inputs model (handles.attach rest) xs) (placement _ (by decide +kernel))
   have outputMask := maskValues_mapScopes context 1 1 protocol2Signature.outputScopes
     (output (handles.attach rest) xs) (placement _ (by decide +kernel))
-  refine PIR.Process.ReturnsUnder.ofEquation
-    ((verifierAlgebra model).invokePresented unit.protocolsLinked protocol2Definition protocol2_member
-      context 1 (inputs model (handles.attach rest) xs) _ (by
-        exact (congrArg (fun args : Values (Value model) protocol2Signature.inputs ↦
-          protocol2Body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1) args.get)
-            inputMask).trans (presentation model context receiver separate (handles.attach rest) xs count).property)) ?_
-  apply PIR.Process.ReturnsUnder.bind (a := output (handles.attach rest) xs)
-  · derive_receiver_returns oracles ordinary base publish original role using
-      first | exact separate | simp [receiver]
-  · exact (congrArg (fun out : Values (Value model) protocol2Signature.outputs ↦
-      ReceiverForwarding.Keeps oracles ordinary base publish original (.done out) (output (handles.attach rest) xs))
-        outputMask).mpr (PIR.Process.ReturnsUnder.done _)
+  change maskValues 1 (context.mapScopes protocol2Signature.inputScopes)
+    (inputs model (handles.attach rest) xs) = inputs model (handles.attach rest) xs at inputMask
+  change maskValues 1 (context.mapScopes protocol2Signature.outputScopes)
+    (output (handles.attach rest) xs) = output (handles.attach rest) xs at outputMask
+  rw [← outputMask]
+  apply (verifierAlgebra model).invokeReturns unit.protocolsLinked protocol2Definition protocol2_member
+  change Region.ReturnsSatisfying _ _
+    ((verifierAlgebra model).meaning (verifierTable model) context 1) protocol2Body
+    (maskValues 1 (context.mapScopes protocol2Signature.inputScopes)
+      (inputs model (handles.attach rest) xs)).get _
+  rw [inputMask]
+  have input {location : OracleLocation} {sort : OracleLogicalSort}
+      {anchors : model.Value sort.type} {bounds : List (String × Nat)} :=
+    ReceiverForwarding.inputAt (oracles := oracles) (ordinary := ordinary) (base := base)
+      (publish := publish) (location := location) (sort := sort) (anchors := anchors)
+      (bounds := bounds) (roles := context.roles) (receivers := [1]) role separate
+      (by simp [receiver])
+  have components {location : OracleLocation} {sort : OracleLogicalSort}
+      {anchors : model.Value sort.type} :=
+    ReceiverForwarding.componentsAt (oracles := oracles) (ordinary := ordinary) (base := base)
+      (publish := publish) (location := location) (sort := sort) (anchors := anchors)
+      (roles := context.roles) (receivers := [1]) role separate (by simp [receiver])
+  derive_oracle_returns [input, components, lengthStep model context receiver xs count,
+    boundsStep model context receiver xs count]
+  rfl
 
 end ZkcExamples.Structured.FriBindingExecution

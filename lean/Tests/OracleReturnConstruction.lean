@@ -39,6 +39,14 @@ def newHelper : Helper := ⟨"new_checked_component", .local, [.index], [.index]
 
 def otherHelper : Helper := ⟨"another_checked_component", .local, [.index], [.index]⟩
 
+/-- Foreign local work retains absence through a comparison and guard. -/
+def foreignClient (owner : Nat) : Region protocolDialect [.index] [.boolean] :=
+  .letOp (.localCall newHelper rfl owner "foreign") (.cons .here .nil) .nil
+  (.letOp (.calculate (.indexConstant 7) rfl) .nil .nil
+  (.letOp (.calculate .indexEqual rfl) (.cons (.there .here) (.cons .here .nil)) .nil
+  (.letOp (.guard owner "foreign-check") (.cons .here .nil) .nil
+  (.ret (.cons .here .nil)))))
+
 def helperClient (owner : Nat) : Region protocolDialect [.index] [.index, .index] :=
   .letOp (.localCall newHelper rfl owner "compute") (.cons .here .nil) .nil
   (.letOp (.calculate (.indexConstant 7) rfl) .nil .nil
@@ -57,6 +65,15 @@ variable (model : DomainModel) {self owner : Nat} (context : ProtocolContext)
   (base : PIR.MonadHandler M (oracleReadInterface model.toCarriers) S E)
   (publish : PIR.MonadHandler M (OraclePublication.Interface model) S E)
   (original : OracleRuntimeState model snapshot domains math S)
+
+theorem foreignClient_spec (inactive : context.roles owner ≠ self)
+    (input : Component (ProtocolValue model.toCarriers) .index) :
+    Region.ReturnsSatisfying (OraclePublication.actionM model oracles ordinaryHandler base publish)
+      (fun state ↦ state.oracle = original)
+      ((OracleProtocol.algebra model self ordinary helpers).meaning table context self)
+      (foreignClient owner) (Values.cons input .nil).get (fun out ↦ out = .cons none .nil) := by
+  derive_oracle_returns []
+  rfl
 
 theorem guarded_spec (active : context.roles owner = self) (site : String) (value : Nat) :
     Region.ReturnsSatisfying (OraclePublication.actionM model oracles ordinaryHandler base publish)
@@ -158,6 +175,7 @@ theorem wrong_result_order (active : context.roles owner = self)
   simp only [Values.get, concrete, Option.bind_some,
     ProtocolValue.toConcrete_ofConcrete, Option.some.injEq, Nat.reduceEqDiff] at decoded
 
+#print axioms foreignClient_spec
 #print axioms guarded_spec
 #print axioms twoChecks_spec
 #print axioms stopped_spec

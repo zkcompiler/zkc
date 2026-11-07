@@ -75,6 +75,10 @@ macro "derive_oracle_returns" "[" laws:term,* "]" : tactic =>
          apply PIR.Process.ReturnsUnder.ofEquation
          exact Zkc.Source.Structured.OracleProtocol.compareIndex _ _ _
          apply PIR.Process.ReturnsUnder.done)
+      | (project_step Zkc.Source.Structured.ProtocolOp.calculate [Zkc.Source.Structured.Op.indexEqual]
+         apply PIR.Process.ReturnsUnder.ofEquation
+         exact Zkc.Source.Structured.OracleProtocol.compareMissingIndexLeft _ _
+         apply PIR.Process.ReturnsUnder.done)
       | (project_step Zkc.Source.Structured.ProtocolOp.calculate [Zkc.Source.Structured.Op.indexConstant]
          apply PIR.Process.ReturnsUnder.done)
       | (project_step Zkc.Source.Structured.ProtocolOp.calculate
@@ -90,6 +94,10 @@ macro "derive_oracle_returns" "[" laws:term,* "]" : tactic =>
       | (project_step Zkc.Source.Structured.ProtocolOp.localCall
          apply Zkc.Source.Region.returnsOfLaw
          source_facts [$laws,*])
+      | (project_step Zkc.Source.Structured.ProtocolOp.localCall
+         apply Zkc.Source.Region.returnsOfLaw
+         apply Zkc.Source.Structured.OracleProtocol.localCallInactive
+         first | assumption | exact Ne.symm (by assumption))
       | (project_checked Zkc.Source.Structured.ProtocolOp.localCall
          apply Zkc.Source.Structured.OracleProtocol.localCallFromLaw
          assumption
@@ -98,6 +106,10 @@ macro "derive_oracle_returns" "[" laws:term,* "]" : tactic =>
       | (project_step Zkc.Source.Structured.ProtocolOp.guard
          apply Zkc.Source.Region.returnsOfLaw
          apply Zkc.Source.Structured.OracleProtocol.guardTrue)
+      | (project_step Zkc.Source.Structured.ProtocolOp.guard
+         apply Zkc.Source.Region.returnsOfLaw
+         apply Zkc.Source.Structured.OracleProtocol.guardInactive
+         first | assumption | exact Ne.symm (by assumption))
       | (project_checked Zkc.Source.Structured.ProtocolOp.guard
          exact Zkc.Source.Structured.OracleProtocol.guardActive _ (by assumption) _ _
          intro)

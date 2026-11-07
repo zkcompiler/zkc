@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.DeriveReceiver
+public import Zkc.Source.Structured.ReceiverForwarding
 public import Zkc.Source.Structured.OracleMetadata
 
 @[expose] public section

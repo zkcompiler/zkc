@@ -110,6 +110,13 @@ theorem compareIndex (a b : Nat) :
     (.cons (some a) (.cons (some b) .nil)) rfl]
   rfl
 
+/-- A missing first operand keeps the comparison absent. In particular it
+does not demand a deferred second operand or invent a Boolean for another role. -/
+theorem compareMissingIndexLeft (right : Component (ProtocolValue model.toCarriers) .index) :
+    ((algebra model self ordinary helpers).meaning table context self).operation (.calculate .indexEqual rfl)
+      (.cons none (.cons right .nil)) .nil = .done (.cons none .nil) := by
+  rfl
+
 theorem equalIndex (i : Nat) :
     ((algebra model self ordinary helpers).meaning table context self).OperationLaw
       (fun op ↦ .call op .done) (.calculate .indexEqual rfl)

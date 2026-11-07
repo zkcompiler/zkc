@@ -87,25 +87,4 @@ theorem boundsStep (model : DomainModel) (context : ProtocolContext) (receiver :
     (by decide) (by intro x h; obtain ⟨j, _, rfl⟩ := List.mem_map.mp h; exact j.isLt)]
   rfl
 
-set_option maxHeartbeats 2000000 in
-/-- The process and its equation are synthesized together from the admitted
-body, with only the mathematical guards supplied at their reached operands. -/
-def presentation (model : DomainModel) (context : ProtocolContext) (receiver : context.roles 1 = 1)
-    (separate : 1 ≠ context.roles 0) (state : Committed model)
-    (xs : FriScalarLoop.Positions) (count : xs.length = 8) :
-    { process // protocol2Body.denote ((verifierAlgebra model).meaning (verifierTable model) context 1)
-        (inputs model state xs).get = process } := by
-  refine ⟨?process, ?certificate⟩
-  case certificate =>
-    apply Region.Derivation.sound_identity
-    derive_region using
-      (first
-       | apply lengthStep model context receiver xs count
-       | apply boundsStep model context receiver xs count
-       | exact OracleProtocol.equalIndex model 8
-       | apply OracleProtocol.localCallInactive model _ _ (Ne.symm separate)
-       | apply OracleProtocol.guardInactive model (Ne.symm separate)
-       | apply OracleProtocol.guardTrue model
-       | apply RegionMeaning.OperationLaw.identity; rfl)
-
 end ZkcExamples.Structured.FriBinding

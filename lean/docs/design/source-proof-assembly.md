@@ -109,6 +109,15 @@ derive_oracle_returns [helperLaw, publicationLaw]
 -- Prove the mathematical consequence of the learned conditions and outputs.
 ```
 
+The complete `FriBindingExecution.installed` component also uses this constructor.
+Its separate process presentation and `derive_receiver_returns` traversal are
+removed. The reusable input/component laws now live with `ReceiverForwarding`.
+`ProtocolAlgebra.invokeReturns` installs a body return specification at the
+linked declaration and derives its boundary masks. The binder retains its
+explicit participant-placement facts and named forwarding plan; it supplies no
+source walk, per-operation frame proof or output tuple reconstruction. This is
+complete adoption for the binding component, not for all FRI phases.
+
 `OperationFacts` filters supplied facts by judgment, typed source operation and
 request identity before attempting semantic unification. It then uses ordinary
 Lean theorem application and bounded premise search. These keys only select a
@@ -135,7 +144,9 @@ replace the relational controller proof below.
 layouts, and a new helper client whose mathematical equation is supplied
 independently of its source site. None imports FRI or Sumcheck or adds a source
 visitor. A semantic theorem excludes exchanging two same-typed output ports.
-These tests demonstrate new structural assembly; the helper equation is an
+A foreign-helper control retains absent operands through an index comparison
+and an inactive guard. A linked-call control checks the actual output mask and
+rejects exposing a foreign same-typed result. These tests demonstrate new structural assembly; the helper equation is an
 explicit premise, not a newly proved mathematical result. The actual FRI
 consumers supply their already proved helper and provider laws. A projected-return
 control also rejects an unrelated same-typed helper law during construction, then

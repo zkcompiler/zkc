@@ -140,3 +140,10 @@ operation identity before semantic unification; kernel checking validates the
 complete selected law. These are
 proofs about the existing execution. Neither tactic choice establishes totality,
 source/realization correspondence or a toolchain migration.
+
+The linked `ProtocolAlgebra.invokeReturns` adapter consumes a body specification
+at the declaration's masked inputs and returns its masked outputs. It uses the
+captured linked table and retains the same handler and invariant, including on
+stops. The complete FRI binding component uses this adapter and the shared source
+constructor; its earlier receiver-only traversal and separate process
+presentation are removed. This does not add an honest-termination claim.
