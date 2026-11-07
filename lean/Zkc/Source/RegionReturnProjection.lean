@@ -144,4 +144,56 @@ elab "project_step " head:ident : tactic => projectStep head none
 elab "project_halt " head:ident : tactic => projectStep head none true
 elab "project_checked " head:ident : tactic => projectStep head none false true
 
+open Lean Meta Elab Tactic in
+/-- Follow a typed operand through explicit result prefixes. Stop at an unknown
+caller tuple, keeping its original reference and semantic value opaque. -/
+private meta partial def projectValue (values reference : Expr) : MetaM Expr := do
+  let tuple ← whnf values
+  let position ← whnf reference
+  if tuple.isAppOf ``Values.cons then
+    let fields := tuple.getAppArgs
+    if position.isAppOf ``Var.here then
+      return fields[fields.size - 2]!
+    if position.isAppOf ``Var.there then
+      return ← projectValue fields.back! position.getAppArgs.back!
+  mkAppM ``Values.get #[tuple, position]
+
+open Lean Meta Elab Tactic in
+/-- Normalize only the ordered tuple and its typed projections. In particular,
+do not normalize the mathematical values stored in that tuple. -/
+private meta partial def projectValues (values : Expr) : MetaM Expr := do
+  let tuple ← whnf values
+  unless tuple.isAppOf ``Values.cons do return tuple
+  let fields := tuple.getAppArgs
+  let mut value := fields[fields.size - 2]!.cleanupAnnotations
+  repeat
+    if value.isHeadBetaTarget then
+      value := value.headBeta.cleanupAnnotations
+    else if value.isAppOf ``Values.get then
+      let args := value.getAppArgs
+      let projected ← projectValue args[args.size - 2]! args.back!
+      if projected == value then break
+      value := projected.cleanupAnnotations
+    else break
+  let tail ← projectValues fields.back!
+  return mkAppN tuple.getAppFn
+    ((fields.set! (fields.size - 2) value).set! (fields.size - 1) tail)
+
+open Lean Meta Elab Tactic in
+/-- Derive the actual output layout before handing its mathematical
+postcondition to the author. All normalization is kernel-checked conversion. -/
+elab "project_return" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let type := (← instantiateMVars (← goal.getType)).cleanupAnnotations
+  unless type.isAppOf ``ReturnsSatisfying do throwError "expected a region return judgment"
+  let args := type.getAppArgs
+  let body ← whnf args[args.size - 3]!
+  unless body.isAppOf ``Region.ret do throwError "expected a source return"
+  let values ← projectValues (← mkAppM ``Operands.eval
+    #[args[args.size - 2]!, body.getAppArgs.back!])
+  let goals ← goal.apply (← mkConstWithFreshMVarLevels ``ReturnsSatisfying.ret)
+  match goals with
+  | [result] => replaceMainGoal [← result.replaceTargetDefEq (mkApp args.back! values)]
+  | _ => throwError "expected one return postcondition"
+
 end Zkc.Source.Region

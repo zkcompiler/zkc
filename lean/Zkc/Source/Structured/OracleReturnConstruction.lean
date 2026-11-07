@@ -101,5 +101,5 @@ macro "derive_oracle_returns" "[" laws:Lean.Parser.Tactic.SolveByElim.arg,* "]" 
       | (project_step Zkc.Source.Structured.ProtocolOp.oracle
          solve_by_elim (maxDepth := 4) only [$laws,*])
      first
-     | apply Zkc.Source.Region.ReturnsSatisfying.ret
+     | project_return
      | apply Zkc.Source.Region.ReturnsSatisfying.stop))

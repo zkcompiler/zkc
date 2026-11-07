@@ -57,11 +57,6 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
   derive_oracle_returns [size, picked, pair, layers, views]
   refine ⟨?_, ?_⟩
   · simpa only [decide_eq_true_eq] using (by assumption : decide (cs.length = 1) = true)
-  · change FriPhaseCalls.prependPairs (FriPhaseCalls.pairs none (concrete model initialSort.type initial)
-      none (concrete model layersSort.type (initial :: later)) none (concrete model layersSort.type folds))
-      (.cons (live.get shiftPort) (.cons (live.get rowsPort) (.cons (concrete model (.vector extension) cs)
-        (.cons (live.get countPort) .nil)))) = _
-    rw [offset, rows, count]
-    rfl
+  · repeat' congr 1
 
 end ZkcExamples.Structured.FriCommitReply

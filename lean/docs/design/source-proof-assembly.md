@@ -59,10 +59,34 @@ region rules. Handler selection is local, not a global instance.
 The current standard `vcgen` tests compose a guarded component with a second
 read and preserve exact state changes and event order. An abstract-handler test
 also reuses an existing fixed-reply law. These are useful tests of the common
-interface, **not** evidence of complete source-authoring automation. A direct
-`vcgen` experiment on `FriCommitReply` failed specification matching on
-dependent source operations. Its replacement instead uses common typed rule
-selection over the same proved rules and execution semantics.
+interface, **not** evidence of complete source-authoring automation.
+
+A bounded comparison against Lean 4.36.0-rc1 isolates a relevant limitation of
+4.35.0. A reduced typed mark/restriction/return region, using zkc's actual
+`Region`, `Values`, `Process` and locally selected monadic WP, fails to apply
+its generic restriction specification on 4.35 and succeeds on 4.36-rc1. The
+mark-only case succeeds on both. Upstream [Lean PR15555](https://github.com/leanprover/lean4/pull/15555)
+changes specification-rule construction to reuse the goal's WP instance; its
+own regression also reproduces that version difference. This establishes the
+patch's relevance, not isolated causal attribution for every FRI failure.
+
+On the pinned toolchain, the actual FRI mark region passes, and a fixed-reply
+adapter gets its terminal reply through the restriction. The next obstacle is
+installation of a helper law at symbolic arguments: a concrete input equation
+does not match the unknown result of a preceding operation merely because an
+equality will later relate them. Canonical operation heads and specification
+preconditions must expose that association. The actual Sumcheck terminal's
+complete decision equation composes with `vcgen`, retaining all size guards,
+stopped reasons, state and ordered observations. This reuses an existing source
+equation; it does not automate that equation's original derivation.
+
+Therefore `vcgen` remains the preferred execution-specification engine, but the
+full FRI suffix has not yet passed through it. The repository toolchain remains
+unchanged. An isolated backport attempt failed in tactic/plugin loading and is
+not validation of either a proof or a semantic refusal. The existing typed
+constructor remains the working implementation until the same client statement
+and premises pass through the consolidated path. Do not grow a parallel
+protocol-specific visitor to work around specification installation.
 
 The implementation must preserve a stable typed source boundary when selecting
 rules. Unfolding the entire installed table to find a mark is not the desired
@@ -83,6 +107,11 @@ derive_oracle_returns [helperLaw, publicationLaw]
 -- Prove the mathematical consequence of the learned conditions and outputs.
 ```
 
+The common return projection follows typed references through explicit result
+prefixes and leaves an unknown caller frame opaque. It reconstructs the actual
+ordered output tuple by kernel-checked conversion. The FRI author no longer
+repeats that tuple or its generated positions in the proof.
+
 The constructor currently covers straight-line regions, active local calls,
 checked guards and oracle operations with supplied provider laws. It requires
 an actual return or stop at the end; unsupported operations fail construction.
@@ -97,6 +126,46 @@ visitor. A semantic theorem excludes exchanging two same-typed output ports.
 These tests demonstrate new structural assembly; the helper equation is an
 explicit premise, not a newly proved mathematical result. The actual FRI
 consumer supplies its already proved helper and provider laws.
+
+## Upstream reuse and one author interface
+
+The author interface should extend the existing named helper presentations and
+source-addressed companions. A component contributes its mathematical law,
+representation and invariants. Common installation fixes the body, role,
+captures and actual arguments before selecting that law. Exact equations,
+return specifications, simulations and probabilistic claims retain separate
+types; common source decomposition and installation do not identify them.
+The existing `NormalForm.ActionForm` and `Region.Derivation` already provide a
+checked source decomposition, including callbacks. They are the starting point
+for shared structural work, not an invitation to add another interpreter.
+
+The pinned PolyFun (`a5edfe2dd24d9d76f9a13cc1f131b220617ad534`) provides
+operation specifications, `wpFold`, `WPMonad`, and transport through monad
+homomorphisms. Its syntactic fold and semantic handler WP are related by an
+inequality; equality additionally needs exact operation laws and an exact-WP
+interpretation. These are useful optional adapters, but importing PolyFun into the Std-only execution layer would not
+remove the need to relate its model to `Process.runM`. Such a correspondence
+must preserve short-circuit stops, the reached state, ordered observations and
+outer-monad missing mass. No losslessness conclusion follows from the current
+`Ensures` adapter.
+
+The pinned ArkLib (`1e0241333c18d8b22cb68f9522da5f9fb88f9a06`) provides oracle
+execution and soundness composition in `Interaction/Oracle/Composition.lean`
+and `CompositionSoundness.lean`. Its exported interfaces retain a public
+statement, closed oracle and private continuation from the same reached run;
+composition restricts what a selector may observe. These are candidates for
+security composition after the actual source-to-interface correspondence is
+proved. They neither construct a source traversal nor justify replacing the
+published word or hidden continuation with a fresh one. The current FRI
+mathematical theorem reuse is narrower than that full composition adapter.
+
+Within this package, consolidate operation-specification installation and
+adopt the shared construction on both actual clients before retiring replaced
+manual paths. Keep relational controller simulation and probability transport
+as distinct consumers. A repository-wide toolchain upgrade, a PolyFun core
+dependency and a general ArkLib exported-interface adapter require their own
+dependency and correspondence evidence; none is a prerequisite inferred just
+from similar API names.
 
 ## Generated query controller
 
@@ -129,6 +198,14 @@ encoding used by mathematical calls. A missing first answer refuses before the
 suffix runs. The rule specializes to all four two-answer read blocks in the
 retained FRI participant. The controller must still establish the reached
 readback from its saved continuation and actual child execution.
+
+`QueryAnswerReads` now composes kind-indexed saved-answer lookup with the
+physical readback. Its `ArenaOperands` premise associates each actual arena and
+index operand with the selected kind and saved slot before forgetting kinds in
+the returned value tuple. This prevents conflating distinct arenas merely
+because their answer types coincide. It preserves arbitrary caller suffixes;
+a semantic control rejects a type-correct arena swap. Reaching those operands
+and selecting the continuation remain controller obligations.
 
 The next composition step must establish this invariant from the actual
 generated controller and retain it across every branch. The companion supplies

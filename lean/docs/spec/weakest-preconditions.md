@@ -128,9 +128,12 @@ The concrete receive/send/query controls exercise this form together with
 history-dependent prices, decoding failure, stopped paths and infinite credit.
 
 The [source assembly design](../design/source-proof-assembly.md) distinguishes
-the validated local adapter from source construction. Small `vcgen` examples
-exercise that adapter; direct dependent FRI matching remains unsupported by
-that experiment. The common `derive_oracle_returns` constructor instead selects
-typed rules for the actual FRI reply region and independent new components.
-Both approaches prove statements about the existing execution; neither alone
-establishes totality or source/realization correspondence.
+the validated local adapter from source construction. A bounded comparison
+finds that a reduced dependent source restriction fails generic specification
+matching on 4.35 and succeeds on 4.36-rc1. The actual Sumcheck terminal's existing
+decision equation composes through `vcgen` on 4.35; complete FRI assembly through
+that engine remains unvalidated. The common `derive_oracle_returns` constructor
+currently selects typed rules for the actual FRI reply region and independent
+new components, including deriving their ordered return layout. These are
+proofs about the existing execution. Neither tactic choice establishes totality,
+source/realization correspondence or a toolchain migration.
