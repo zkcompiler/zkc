@@ -287,6 +287,18 @@ first child retains the parent/child charges and events while skipping the
 second child. This is the source half of the connection; execution of the
 generated controller must still construct the matching progress derivation.
 
+`QuerySourceSuspension` exposes the actual child process with the installed
+parent's continuation attached. Nested parents compose using `Reaches.bind`;
+there is no separate stack evaluator. The source test constructs an outer
+virtual table that captures an earlier virtual table, reuses the same inner
+execution proof at both actual child occurrences, and restores its physical
+saved frame. Its completed execution retains seven logical queries, four
+provider operations, the final provider state and ordered events. A first-leaf
+stop propagates through both parents without running either later child.
+Distinct nested occurrence paths and a swapped outer continuation have explicit
+controls. This connects nested source suspension and physical frame restoration;
+selection of those frames by the complete generated dispatch remains to prove.
+
 `TestsArkLib.FriSourceContinuation.installed` consumes the same common cursor
 rules on the installed FRI virtual declaration. It reuses `VirtualReads.twoReads`
 and its existing helper/mathematical installation, then appends the two actual
@@ -351,6 +363,15 @@ coordinates are not unforgeable or single-use capabilities.
 actual SSA references: the five saved coordinates, checked kind, Return phase,
 old arena length as answer index, updated answer arena and other retained stores.
 All four emitted FRI return layouts have been checked against this projection.
+
+`QueryFinish` checks the complete final body and its answer projection. Completed
+and root-kind guards precede the arena read; incorrect phase, kind or missing
+answer refuses. An index-valued root cannot substitute its same-typed phase
+constant for the answer output. The existing FRI artifact contains four inlined
+finish spans, all checked with their actual SSA offsets. This is local result
+projection, not correspondence of the enclosing caller. The artifact traversal
+accounts for source loops' inherited frames separately from closed local regions;
+its kernel-checked match count prevents a vacuous successful inspection.
 
 `RecordProjection` and `RecordLookupProjection` derive ordered typed field
 selection from the immutable record actually returned by lookup. Nominal identity,
@@ -451,6 +472,9 @@ independent final-result/cursor proofs as evidence of a child's production.
 The actual FRI body reuses the same progress constructors and existing
 mathematical installation. These repairs do not move the generated invariant
 into its companion or substitute the fragment checks for the complete roots.
+Nested suspension and final-result selection now have common proved rules and
+focused controls as well. The root dispatch still has to construct and preserve
+their premises, including the correct static continuation selection.
 
 `OracleMathEnvironment.invokePresent` and `invokeReturned` install the existing
 `ReferenceLaw` at its actual helper body and arguments. FRI's `powerRequires`,
