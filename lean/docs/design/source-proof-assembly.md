@@ -5,11 +5,12 @@ and the selected handler. The outstanding authoring problem is construction of
 proofs about that model. A library of sound local rules is necessary, but does
 not by itself remove an author's traversal of a new source body.
 
-`FriCommitReply.installed` is a concrete counterexample to claiming that this
-work is finished. Its operation laws are reusable, but its proof still selects
-marks, restrictions, comparisons, guards, assembly and oracle operations. The
-complete FRI endpoint and the elimination of this author-owned traversal are
-separate acceptance requirements.
+`FriCommitReply.installed` exposed this gap: its old proof selected marks,
+restrictions, comparisons, guards, assembly and oracle operations. It now uses
+the common `derive_oracle_returns` constructor. Its remaining premises describe
+the length helper, provider associations and the mathematical output relation.
+This closes that suffix's traversal gap; the complete FRI endpoint and general
+authoring acceptance remain separate requirements.
 
 ## Boundaries of an author's contribution
 
@@ -58,17 +59,44 @@ region rules. Handler selection is local, not a global instance.
 The current standard `vcgen` tests compose a guarded component with a second
 read and preserve exact state changes and event order. An abstract-handler test
 also reuses an existing fixed-reply law. These are useful tests of the common
-interface, **not** evidence of complete source-authoring automation. The
-isolated `FriCommitReply` migration still fails specification matching on
-dependent source operations. The production proof has not been replaced.
+interface, **not** evidence of complete source-authoring automation. A direct
+`vcgen` experiment on `FriCommitReply` failed specification matching on
+dependent source operations. Its replacement instead uses common typed rule
+selection over the same proved rules and execution semantics.
 
 The implementation must preserve a stable typed source boundary when selecting
 rules. Unfolding the entire installed table to find a mark is not the desired
 proof-construction interface. Prefer standard proof tooling where it composes
 the rules reliably; otherwise isolate the necessary typed rule selection in
 one common, kernel-checked proof producer. Neither option permits a new
-protocol-specific source visitor. The concrete tactic interface remains under
-evaluation until both actual clients and a new component pass.
+protocol-specific source visitor.
+
+`OracleReturnConstruction.derive_oracle_returns` selects operations from the
+actual typed region and composes their return specifications. Checked operations
+introduce their successful condition in the continuation; the common rule
+handles the refused branch. Marks, operand selection, result environments and
+preservation composition are constructed once in the common layer. The author
+provides semantic facts, for example:
+
+```lean
+derive_oracle_returns [helperLaw, publicationLaw]
+-- Prove the mathematical consequence of the learned conditions and outputs.
+```
+
+The constructor currently covers straight-line regions, active local calls,
+checked guards and oracle operations with supplied provider laws. It requires
+an actual return or stop at the end; unsupported operations fail construction.
+The returned proposition concerns successful records and invariant preservation
+on all records. It does not prove termination or probability mass, and does not
+replace the relational controller proof below.
+
+`Tests.OracleReturnConstruction` adds components with different guards and return
+layouts, and a new helper client whose mathematical equation is supplied
+independently of its source site. None imports FRI or Sumcheck or adds a source
+visitor. A semantic theorem excludes exchanging two same-typed output ports.
+These tests demonstrate new structural assembly; the helper equation is an
+explicit premise, not a newly proved mathematical result. The actual FRI
+consumer supplies its already proved helper and provider laws.
 
 ## Generated query controller
 

@@ -127,7 +127,10 @@ matcher; it is definitional normalization, not an additional proof assumption.
 The concrete receive/send/query controls exercise this form together with
 history-dependent prices, decoding failure, stopped paths and infinite credit.
 
-The [source assembly design](../design/source-proof-assembly.md) separates the
-validated local adapter from the unfinished automatic source consumer. In
-particular, successful small `vcgen` examples do not establish that the actual
-dependent FRI region is assembled automatically.
+The [source assembly design](../design/source-proof-assembly.md) distinguishes
+the validated local adapter from source construction. Small `vcgen` examples
+exercise that adapter; direct dependent FRI matching remains unsupported by
+that experiment. The common `derive_oracle_returns` constructor instead selects
+typed rules for the actual FRI reply region and independent new components.
+Both approaches prove statements about the existing execution; neither alone
+establishes totality or source/realization correspondence.

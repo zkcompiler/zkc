@@ -37,8 +37,11 @@ not require global type-class search or a second interpreter.
 The [source proof assembly review](../design/source-proof-assembly.md) records
 the remaining gap between reusable local rules and constructing a proof for a
 new body. Endpoint correctness and authoring reuse are separate acceptance
-questions. The current FRI terminal-reply proof still contains an explicit
-structural traversal; it is not yet the intended first-author interface.
+questions. The FRI terminal-reply proof now uses the common
+`derive_oracle_returns` constructor with mathematical helper and provider laws;
+it no longer walks source operations. Different small components use the same
+constructor. Its current straight-line coverage does not establish the complete
+generated query controller or universal honest termination.
 
 ## Define the mathematical boundary
 

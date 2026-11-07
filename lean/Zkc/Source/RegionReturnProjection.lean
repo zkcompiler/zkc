@@ -69,6 +69,22 @@ theorem ReturnsSatisfying.letHalt {op : dialect.Op} {args : Operands Γ (dialect
   rw [Region.denote, operation]
   exact Zkc.MonadicPostcondition.pure _ _ ⟨valid, by intro _ eq; cases eq⟩
 
+/-- A checked pure operation contributes its success condition to the actual
+continuation. The refused branch never needs a proof of that continuation. -/
+theorem ReturnsSatisfying.letChecked {op : dialect.Op} {args : Operands Γ (dialect.arguments op)}
+    {bodies : Regions dialect (dialect.regions op)} {next : Region dialect (dialect.results op ++ Γ) outputs}
+    {inputs : Values meaning.Value Γ} {post : Values meaning.Value outputs → Prop}
+    {reply : Values meaning.Value (dialect.results op)} {condition : Prop} [Decidable condition]
+    {reason : PIR.Stop}
+    (operation : meaning.operation op (Operands.eval inputs.get args) (bodies.denote meaning) =
+      if condition then .done reply else .halt reason)
+    (tail : condition → ReturnsSatisfying handler invariant meaning next (reply.append inputs).get post) :
+    ReturnsSatisfying handler invariant meaning (.letOp op args bodies next) inputs.get post := by
+  by_cases holds : condition
+  · exact ReturnsSatisfying.letOp
+      (PIR.Process.ReturnsUnder.ofEquation (operation.trans (ite_eq_left holds)) (.done reply)) (tail holds)
+  · exact ReturnsSatisfying.letHalt (operation.trans (ite_eq_right holds))
+
 theorem ReturnsProjection.letOp {op : dialect.Op} {args : Operands Γ (dialect.arguments op)}
     {bodies : Regions dialect (dialect.regions op)} {next : Region dialect (dialect.results op ++ Γ) outputs}
     {inputs : Values meaning.Value Γ} {project : Values meaning.Value outputs → A}
@@ -84,6 +100,13 @@ theorem ReturnsSatisfying.ret {args : Operands Γ outputs} {env : Environment me
     ReturnsSatisfying handler invariant meaning (.ret args) env post :=
   fun _ kept ↦ Zkc.MonadicPostcondition.pure _ _ ⟨kept, by intro _ eq; cases eq; exact result⟩
 
+theorem ReturnsSatisfying.stop {reason : PIR.Stop} {env : Environment meaning.Value Γ}
+    {post : Values meaning.Value outputs → Prop} :
+    ReturnsSatisfying handler invariant meaning (.stop reason) env post := by
+  intro state kept
+  rw [Region.denote]
+  exact Zkc.MonadicPostcondition.pure _ _ ⟨kept, by intro _ eq; cases eq⟩
+
 theorem ReturnsProjection.ret {args : Operands Γ outputs} {env : Environment meaning.Value Γ}
     {project : Values meaning.Value outputs → A} :
     ReturnsProjection handler invariant meaning (.ret args) env project (project (Operands.eval env args)) :=
@@ -93,7 +116,8 @@ open Lean Meta Elab Tactic in
 /-- Select an operation by its syntax before applying a handler law. Trying
 all handler equations by definitional equality can unfold an entire installed
 table, even on an unrelated mark. The kernel still checks the local law. -/
-private meta def projectStep (head : Ident) (inner : Option Ident) (halt := false) : TacticM Unit := withMainContext do
+private meta def projectStep (head : Ident) (inner : Option Ident) (halt := false)
+    (checked := false) : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let type := (← instantiateMVars (← goal.getType)).cleanupAnnotations
   let projected := type.isAppOf ``ReturnsProjection
@@ -108,13 +132,16 @@ private meta def projectStep (head : Ident) (inner : Option Ident) (halt := fals
   if let some nested := inner then
     let target ← realizeGlobalConstNoOverloadWithInfo nested
     unless (← whnf op.getAppArgs[0]!).isAppOf target do throwError "different nested operation"
-  let rule := if halt then ``ReturnsSatisfying.letHalt else if projected then ``ReturnsProjection.letOp else ``ReturnsSatisfying.letOp
+  if checked && projected then throwError "checked operation requires a return postcondition"
+  let rule := if checked then ``ReturnsSatisfying.letChecked else if halt then ``ReturnsSatisfying.letHalt
+    else if projected then ``ReturnsProjection.letOp else ``ReturnsSatisfying.letOp
   let goals ← goal.apply (← mkConstWithFreshMVarLevels rule)
-    {newGoals := .nonDependentOnly}
+    {newGoals := .nonDependentOnly, allowSynthFailures := checked}
   replaceMainGoal goals
 
 elab "project_step " head:ident "[" nested:ident "]" : tactic => projectStep head (some nested)
 elab "project_step " head:ident : tactic => projectStep head none
 elab "project_halt " head:ident : tactic => projectStep head none true
+elab "project_checked " head:ident : tactic => projectStep head none false true
 
 end Zkc.Source.Region

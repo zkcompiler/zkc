@@ -1,9 +1,9 @@
 module
 
 public import ZkcExamples.Structured.FriCommitTerminal
-public import Zkc.Source.RegionReturnProjection
+public import Zkc.Source.Structured.OracleReturnConstruction
 public import Zkc.Source.Structured.ReceiverMetadata
-public meta import Zkc.Source.RegionReturnProjection
+public meta import Zkc.Source.Structured.OracleReturnConstruction
 
 @[expose] public section
 
@@ -41,21 +41,6 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
         (concrete model (.vector extension) cs) .nil).append live).get
       (fun out ↦ cs.length = 1 ∧ out = FriCommitTerminal.output model initial (initial :: later) folds shift cs) := by
   have size := FriIndexCollections.coefficientLength model cs
-  have lengthCall (site : String) :
-      ((verifierAlgebra model).meaning (verifierTable model) context 1).operation (.localCall helper0Helper rfl 1 site)
-        (.cons (concrete model (.vector extension) cs) .nil) .nil =
-        (if cs.length < indexLimit then .done (.cons (concrete model .index cs.length) .nil) else .halt .exhausted) := by
-    change OracleProtocol.owned model 1 (context.roles 1) (FriIndexCollections.helpers model) helper0Helper
-      (.cons (concrete model (.vector extension) cs) .nil) = _
-    rw [receiver]
-    exact size
-  have passing (one : cs.length = 1) (site : String) :
-      ((verifierAlgebra model).meaning (verifierTable model) context 1).operation (.guard 1 site)
-        (.cons (concrete model .boolean (decide (cs.length = 1))) .nil) .nil = .done .nil := by
-    rw [decide_eq_true one]
-    change ((Participant.guard (services := services) (Value := model.Value) 1 (context.roles 1)
-      ((concrete model .boolean true).bind ProtocolValue.toConcrete)).interpret (OracleProtocol.actions model)).bind _ = _
-    simp [OracleProtocol.concrete, Participant.guard, PIR.Process.interpret, PIR.Process.bind]
   have picked {location : OracleLocation} : ReceiverForwarding.Keeps oracles ordinary base publish original
       (.call (.oracle ⟨.sequenceAt FriCommitRound.kind 3 [0,1], location, 1, context.roles,
         .cons (live.get layersPort) (.cons (concrete model .index 0) .nil)⟩) .done)
@@ -69,39 +54,10 @@ theorem installed (context : ProtocolContext) (receiver : context.roles 1 = 1) (
         (.cons none (.cons (concrete model sort.type anchors) .nil)) := by
     rw [correct]
     exact ReceiverForwarding.componentsAt role separate (by simp [receiver])
-  by_cases fits : cs.length < indexLimit <;> by_cases one : cs.length = 1
-  all_goals
-    repeat' first
-      | (project_step ProtocolOp.mark
-         apply PIR.Process.ReturnsUnder.call
-         exact ReceiverForwarding.mark oracles ordinary base publish original _ _
-         apply PIR.Process.ReturnsUnder.done)
-      | (project_step ProtocolOp.restrict
-         exact PIR.Process.ReturnsUnder.ofEquation (OracleProtocol.restrictActive model receiver _) (.done _))
-      | (project_halt ProtocolOp.localCall
-         exact (lengthCall _).trans (ite_eq_right (by assumption)))
-      | (project_step ProtocolOp.localCall
-         exact PIR.Process.ReturnsUnder.ofEquation ((lengthCall _).trans (ite_eq_left (by assumption))) (.done _))
-      | (project_step ProtocolOp.calculate [Op.indexConstant]
-         apply PIR.Process.ReturnsUnder.done)
-      | (project_step ProtocolOp.calculate [Op.indexEqual]
-         exact PIR.Process.ReturnsUnder.ofEquation (OracleProtocol.compareIndex model cs.length 1) (.done _))
-      | (project_halt ProtocolOp.guard
-         apply Eq.trans _ (OracleProtocol.guardFalse model receiver)
-         exact congrArg (fun flag ↦ ((verifierAlgebra model).meaning (verifierTable model) context 1).operation
-           (.guard 1 _) (.cons (concrete model .boolean flag) .nil) .nil) (decide_eq_false (by assumption)))
-      | (project_step ProtocolOp.guard
-         exact PIR.Process.ReturnsUnder.ofEquation (passing (by assumption) _) (.done _))
-      | (project_step ProtocolOp.assemble
-         exact PIR.Process.ReturnsUnder.ofEquation (OracleProtocol.assembleSecond model separate.symm receiver _ _) (.done _))
-      | (project_step ProtocolOp.oracle [OracleOp.sequenceAt]
-         exact picked)
-      | (project_step ProtocolOp.oracle [OracleOp.components]
-         first | exact pair initialSort initial _ rfl | exact pair layersSort _ _ layers | exact pair layersSort _ _ views)
-  all_goals
-    apply Region.ReturnsSatisfying.ret
-    refine ⟨one, ?_⟩
-    change FriPhaseCalls.prependPairs (FriPhaseCalls.pairs none (concrete model initialSort.type initial)
+  derive_oracle_returns [size, picked, pair, layers, views]
+  refine ⟨?_, ?_⟩
+  · simpa only [decide_eq_true_eq] using (by assumption : decide (cs.length = 1) = true)
+  · change FriPhaseCalls.prependPairs (FriPhaseCalls.pairs none (concrete model initialSort.type initial)
       none (concrete model layersSort.type (initial :: later)) none (concrete model layersSort.type folds))
       (.cons (live.get shiftPort) (.cons (live.get rowsPort) (.cons (concrete model (.vector extension) cs)
         (.cons (live.get countPort) .nil)))) = _
