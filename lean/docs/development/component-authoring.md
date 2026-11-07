@@ -428,7 +428,13 @@ the rule with ArkLib's folding-agreement failure and its unique-decoding
 bound. A good loop return fixes the three rounds independently of the
 terminal coefficient. The final error is the sum of the three fold charges
 and the eight-position term above. The theorem assumes the clear-word
-provider and the configured fresh interactive sampler. Honest termination
+provider and the configured fresh interactive sampler. For honest inputs, `HonestMessages.retained` connects every
+linked holder fold and the exact terminal vector to the check at all eight
+positions. `CheckedCall.check` derives the caller cursor, target signature,
+entered frame and mark observations from the admitted source. A valid
+certificate works at another invocation with the same lexical prefix.
+`FriEntryFrame.verifier` applies this rule to the root before either party
+uses a service or publishes a word. Honest termination
 and the compiled Fiat–Shamir reduction have separate obligations.
 
 For a publication followed by a virtual construction, `Region.cutFirst`

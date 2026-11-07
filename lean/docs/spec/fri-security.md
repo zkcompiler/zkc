@@ -19,6 +19,32 @@ below is to the pinned verifier, not the current phased implementation.
 Connecting the current implementation to these mathematical results remains
 separate work; this page does not establish that connection.
 
+## Retained Direct scalar source
+
+The current octic KoalaBear entry has a separate theorem on the admitted
+source verifier. Fix a nonzero shift, 32 cells, a degree bound of eight,
+three folding challenges, eight scalar queries with replacement, and the
+clear full-word provider. The installed interactive service draws fresh
+uniform field elements and positions. For every adaptive network and word
+chooser, the probability that the verifier returns true **and its first
+successfully published word is far** is bounded by the sum of the three
+unique-decoding folding errors and `(1 − min(1/4, δ))^8`. The word is read
+from the final physical publication history. An abort retains its mass,
+post-state and observations. A later word can depend on earlier challenges.
+[Original source-event theorem](../../integrations/arklib/ZkcArkLibExamples/Fri/InteractiveSoundness.lean)
+
+The clear provider preserves the published cells, nominal anchor and order
+under subsequent source operations. The FRI library proves which parent,
+challenge and coset a virtual fold uses. For every eligible codeword and
+every triple of draws, the linked holder helpers produce folded words and
+one terminal coefficient satisfying the scalar predicate at all positions.
+Two paired executions additionally run both original roles through every
+return. Universal honest termination and the connection from the compiled
+scalar verifier to its charged random-oracle queries are separate proof
+obligations. [Provider laws](../../Zkc/Source/Structured/PublishedWordsLaws.lean)
+· [Holder theorem](../../integrations/arklib/ZkcArkLibExamples/Fri/HonestMessages.lean)
+· [Paired source controls](../../security/TestsSecurity/FriHonestExchange.lean)
+
 ## Subject
 
 `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` tests one word of

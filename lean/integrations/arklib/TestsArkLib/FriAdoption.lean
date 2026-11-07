@@ -6,6 +6,8 @@ import ZkcArkLibExamples.Fri.InteractiveSoundness
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
+import ZkcArkLibExamples.Fri.HonestMessages
+import ZkcExamples.Structured.FriEntryFrame
 import ZkcExamples.Structured.FriBindingExecution
 import ZkcExamples.Structured.FriLowDegreeCall
 import ZkcExamples.Structured.FriQueryCall
@@ -403,3 +405,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcArkLibExamples.Fri.CommitRoundProbability, `ZkcArkLibExamples.Fri.CommitLoopProbability,
    `ZkcArkLibExamples.Fri.CommitProbability, `ZkcArkLibExamples.Fri.InteractiveSoundness]
   "FRI-INTERACTIVE-SOURCE-SOUNDNESS-PASS" (exactModules := true))
+
+run_cmd (ZkcTools.DeclarationAudit.check
+  [`Zkc.Source.Structured.CheckedFrames, `ZkcExamples.Structured.FriEntryFrame,
+   `ZkcArkLibExamples.Fri.HonestMessages]
+  "FRI-CHECKED-ENTRY-AND-HONEST-MESSAGES-PASS" (exactModules := true))
