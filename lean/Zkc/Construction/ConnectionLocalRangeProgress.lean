@@ -140,4 +140,59 @@ noncomputable def completedSimulation {B : Type}
   certificate.refineReturns (fold_completed progress exits indices value held enough)
     (fun value final established ↦ refine value final established.1 established.2)
 
+/-- Progress at actual callback entries. An inactive yielded state retains
+the invariant and exit meaning without needing the callback's entry premise.
+This is the progress counterpart of `activeSimulation`. -/
+theorem fold_active_remaining
+    {step : A → Nat → PIR.Process (Domain.effects carriers) (Bool × A)}
+    {invariant active finished : A → Prop} {remaining : A → Nat}
+    (connected : ∀ value index, invariant value → active value → PIR.Yields
+      (fun result ↦ invariant result.2 ∧
+        (result.1 = true → active result.2 ∧ remaining result.2 < remaining value) ∧
+        (result.1 = false → finished result.2)) (step value index))
+    (indices : List Nat) (value : A) (held : invariant value) (starts : active value) :
+    PIR.Yields (fun result ↦ invariant result.2 ∧
+      (result.1 = true → remaining result.2 + indices.length ≤ remaining value) ∧
+      (result.1 = false → finished result.2))
+      (Finite.fold (gated step) indices (true, value)) := by
+  induction indices generalizing value with
+  | nil => exact ⟨held, by simp, by simp⟩
+  | cons index rest ih =>
+      change PIR.Yields _ ((step value index).bind (Finite.fold (gated step) rest))
+      apply (connected value index held starts).bind
+      rintro ⟨flag, next⟩ ⟨retained, proceeds, exits⟩
+      cases flag with
+      | false =>
+          rw [fold_inactive]
+          exact ⟨retained, by simp, exits⟩
+      | true =>
+          obtain ⟨enabled, smaller⟩ := proceeds rfl
+          dsimp only at smaller
+          apply (ih next retained enabled).mono
+          rintro result ⟨retained, remainingWork, finished⟩
+          refine ⟨retained, ?_, finished⟩
+          intro continuing
+          have consumed := remainingWork continuing
+          simp only [List.length_cons]
+          omega
+
+/-- An adequate finite bound forces a valid exit using only reachable active
+callbacks. Halts remain halts; this is a returned-state completion theorem. -/
+theorem fold_active_completed
+    {step : A → Nat → PIR.Process (Domain.effects carriers) (Bool × A)}
+    {invariant active finished : A → Prop} {remaining : A → Nat}
+    (connected : ∀ value index, invariant value → active value → PIR.Yields
+      (fun result ↦ invariant result.2 ∧
+        (result.1 = true → active result.2 ∧ remaining result.2 < remaining value) ∧
+        (result.1 = false → finished result.2)) (step value index))
+    (indices : List Nat) (value : A) (held : invariant value) (starts : active value)
+    (enough : remaining value < indices.length) :
+    PIR.Yields (fun result ↦ invariant result ∧ finished result)
+      ((Finite.fold (gated step) indices (true, value)).bind fun result ↦ .done result.2) := by
+  apply (fold_active_remaining connected indices value held starts).bind
+  rintro ⟨flag, next⟩ ⟨retained, remainingWork, finished⟩
+  cases flag with
+  | false => exact ⟨retained, finished rfl⟩
+  | true => have impossible := remainingWork rfl; omega
+
 end Zkc.Construction.ConnectionLocalRange

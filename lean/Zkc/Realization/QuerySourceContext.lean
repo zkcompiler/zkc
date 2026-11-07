@@ -43,6 +43,12 @@ def Parent.request (parent : Parent layout references entries records frame)
 
 variable {parent : Parent layout references entries records frame} {self : Nat} {S E : Type}
 
+/-- A saved-answer update retains the original installation context. It
+cannot select a newer registry when the next sibling is entered. -/
+def SourceContext.withAnswers (context : SourceContext parent self) (answers : List Nat) :
+    SourceContext (parent.withAnswers answers) self :=
+  ⟨context.older, context.located, context.reachable, context.smaller⟩
+
 /-- Later fresh constructions cannot change the registry used by an already
 saved parent's children. The same context survives physical store growth. -/
 def SourceContext.transport (context : SourceContext parent self)

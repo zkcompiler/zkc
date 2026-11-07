@@ -44,6 +44,17 @@ def Parent.body (parent : Parent layout references entries records frame) :
   checked.denote model (parent.signature.symm ▸
     parent.captures.append (.cons frame.position .nil)).present
 
+/-- Returning a child changes only the saved answer indices. The installed
+parent, captures, position and outer continuation remain the same. -/
+def Parent.withAnswers (parent : Parent layout references entries records frame)
+    (answers : List Nat) :
+    Parent layout references entries records {frame with answers := answers} :=
+  ⟨parent.location, parent.rows, parent.leaves, parent.holder, parent.receivers,
+    parent.captures, parent.signature, parent.installed⟩
+
+theorem Parent.withAnswers_body (parent : Parent layout references entries records frame)
+    (answers : List Nat) : (parent.withAnswers answers).body = parent.body := rfl
+
 /-- The parent slot fixes its complete source capture tuple, including
 distinct handles with equal answer types. -/
 theorem Parent.captures_unique (first second : Parent layout references entries records frame)
@@ -152,6 +163,30 @@ def Saved.resume (saved : Saved identity count frames slot arenas parent request
     (returned : (arenas request.kind)[answerSlot]? = some answer) :
     QuerySourceContinuation.Associated arenas parent.body (next answer)
       (frame.answers ++ [answerSlot]) := saved.cursor.resume returned
+
+/-- Install the next actual suspension after a returned child. Its saved
+indices are derived from the old cursor and the child's current arena cell.
+The next static frame may have a different nominal layout and store. -/
+def Saved.sibling (saved : Saved identity count frames slot arenas parent request next)
+    {currentArenas : (kind : OracleKind) → List (model.Value kind.answer)}
+    (retained : ∀ kind, arenas kind <+: currentArenas kind)
+    {answerSlot : Nat} {answer : model.Value request.kind.answer}
+    (returned : (currentArenas request.kind)[answerSlot]? = some answer)
+    {following : OracleRead}
+    {continuation : model.Value following.kind.answer →
+      PIR.Process (oracleReadInterface model.toCarriers)
+        (Values (Component model.Value) [checked.declaration.kind.answer])}
+    (nextQuery : next answer = .call following continuation)
+    (nextIdentity : String) (nextCount : Nat)
+    (nextFrames : List (model.Value (QueryContinuation.layout nextIdentity nextCount).type))
+    {record : model.Value (QueryContinuation.layout nextIdentity nextCount).type}
+    (encoded : QueryContinuation.Encodes nextIdentity nextCount
+      {frame with answers := frame.answers ++ [answerSlot]} record) :
+    Saved nextIdentity nextCount (nextFrames ++ [record]) nextFrames.length currentArenas
+      (parent.withAnswers (frame.answers ++ [answerSlot])) following continuation := by
+  apply save nextFrames encoded
+  rw [Parent.withAnswers_body, ← nextQuery]
+  exact (saved.cursor.transport retained).resume returned
 
 /-- Strengthen the physical restore with the actual source child execution.
 The derived progress retains its provider poststate, phase and events as well

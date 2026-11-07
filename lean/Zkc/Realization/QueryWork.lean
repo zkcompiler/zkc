@@ -322,4 +322,75 @@ theorem evaluation_completed {carriers : Zkc.Source.Structured.Carriers} {A : Ty
     simpa only [decide_eq_false_iff_not] using phase.symm.trans inactive
   exact (Position.completed_iff _).mp (by omega)
 
+/-- The actual advance range only invokes dispatch in Enter or Return.
+Request and Completed remain valid outputs, without an impossible obligation
+to give either one another administrative transition. -/
+theorem advance_active_completed {carriers : Zkc.Source.Structured.Carriers} {A : Type}
+    (step : A → Nat → PIR.Process (Zkc.Construction.Domain.effects carriers) (Bool × A))
+    (invariant : A → Prop) (position : A → Position)
+    (connected : ∀ value index, invariant value → (position value).phase < 2 → PIR.Yields
+      (fun result ↦ invariant result.2 ∧
+        (∃ answers saves, Advance (position value) (position result.2) answers saves) ∧
+        result.1 = decide ((position result.2).phase < 2)) (step value index))
+    (indices : List Nat) (value : A) (held : invariant value)
+    (starts : (position value).phase < 2)
+    (enough : (position value).transitions < indices.length) :
+    PIR.Yields (fun result ↦ invariant result ∧ 2 ≤ (position result).phase)
+      ((Zkc.Source.Finite.fold (Zkc.Construction.ConnectionLocalRange.gated step)
+        indices (true, value)).bind fun result ↦ .done result.2) := by
+  apply Zkc.Construction.ConnectionLocalRange.fold_active_completed
+    (active := fun value ↦ (position value).phase < 2)
+    (remaining := fun value ↦ (position value).transitions) ?_
+    indices value held starts enough
+  intro value index held active
+  apply (connected value index held active).mono
+  rintro result ⟨retained, ⟨answers, saves, transition⟩, flag⟩
+  refine ⟨retained, ?_, ?_⟩
+  · intro continuing
+    have nextActive : (position result.2).phase < 2 := by
+      simpa only [decide_eq_true_eq] using flag.symm.trans continuing
+    have accounted := transition.accounting
+    exact ⟨nextActive, by omega⟩
+  · intro inactive
+    have stopped : ¬ (position result.2).phase < 2 := by
+      simpa only [decide_eq_false_iff_not] using flag.symm.trans inactive
+    omega
+
+/-- The outer query range likewise invokes its cycle only before Completed.
+Its capacity and exit proof use the same work relation as the inner range. -/
+theorem evaluation_active_completed {carriers : Zkc.Source.Structured.Carriers} {A : Type}
+    (step : A → Nat → PIR.Process (Zkc.Construction.Domain.effects carriers) (Bool × A))
+    (invariant : A → Prop) (position : A → Position)
+    (connected : ∀ value index, invariant value → (position value).phase < 3 → PIR.Yields
+      (fun result ↦ invariant result.2 ∧
+        (∃ steps replies answers saves,
+          Prefix (position value) (position result.2) steps replies answers saves ∧
+          (result.1 = true → 0 < replies)) ∧
+        result.1 = decide ((position result.2).phase < 3)) (step value index))
+    (indices : List Nat) (value : A) (held : invariant value)
+    (starts : (position value).phase < 3)
+    (enough : (position value).reads < indices.length) :
+    PIR.Yields (fun result ↦ invariant result ∧ position result = .completed)
+      ((Zkc.Source.Finite.fold (Zkc.Construction.ConnectionLocalRange.gated step)
+        indices (true, value)).bind fun result ↦ .done result.2) := by
+  apply Zkc.Construction.ConnectionLocalRange.fold_active_completed
+    (active := fun value ↦ (position value).phase < 3)
+    (remaining := fun value ↦ (position value).reads) ?_
+    indices value held starts enough
+  intro value index held active
+  apply (connected value index held active).mono
+  rintro result ⟨retained, ⟨steps, replies, answers, saves, execution, consumed⟩, flag⟩
+  refine ⟨retained, ?_, ?_⟩
+  · intro continuing
+    have nextActive : (position result.2).phase < 3 := by
+      simpa only [decide_eq_true_eq] using flag.symm.trans continuing
+    have used := consumed continuing
+    have accounted := execution.accounting
+    exact ⟨nextActive, by omega⟩
+  · intro inactive
+    apply (Position.completed_iff _).mp
+    have stopped : ¬ (position result.2).phase < 3 := by
+      simpa only [decide_eq_false_iff_not] using flag.symm.trans inactive
+    omega
+
 end Zkc.Realization.QueryWork

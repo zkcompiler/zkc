@@ -504,6 +504,34 @@ connection must still consume the installed-word laws. No new companion
 obligation, alternative query semantics or broad module reorganization is
 introduced by this join.
 
+### Return dispatch and active range entries
+
+Returning to a sibling retains the same installed parent, captures and older
+registry. `Saved.sibling` derives the new ordered index prefix from the previous
+cursor and the actual returned arena cell; `Stack.restore_sibling` relates that
+frame to the original next operation. `Stack.restore_parent` returns the
+parent's mathematical answer through its outer stack, while its stopped form
+unwinds the stack without fabricating an answer. The nested return test uses
+these rules for two actual child executions and the same physical frame load.
+
+Dispatch and range composition also use ordinary construction semantics.
+`ConnectionLocalBranch.simulation` retains both-arm formation, exact capture
+and output order, selected stops and nested caller checkpoints. It reuses the
+existing frame-prefix proof. `ConnectionLocalRange.activeSimulation` requires
+its entry premise only when the continuation flag is true. A false yield may
+leave that premise while retaining the state relation; no callback proof is
+required at an inactive state. The unrestricted range rule delegates to this
+same construction with a trivial entry premise.
+
+For query advance the active predicate is phase below Request; for the outer
+range it is phase below Completed. Their active completion rules derive exits
+from actual flags and work consumption. This removes an inappropriate demand
+for an administrative transition from a Request or Completed state. It does
+not prove that the actual dispatch branches preserve the source/physical
+relation. Their static selection, source expansion and ordered store tuple
+remain the enclosing controller's obligations. No new companion premise or
+alternative query evaluator is introduced.
+
 ## Disposition of the revised closing review
 
 The review at `62bb4ed39` was checked against the later implementation, rather

@@ -151,9 +151,60 @@ theorem malformed_empty (model : DomainModel) (program : Program) (context : Con
       [.data .index] malformed (Domain.evaluate model program context malformed.instructions)
       [.data (.index 0)] = .halt .refused := rfl
 
+/-- The source callback only describes the active state. Its returned index
+may leave that state, and the false flag then prevents every later call. -/
+def activeStep (model : DomainModel) (initial value index : Nat) :
+    PIR.Process (Domain.effects model.toCarriers) (Bool × Nat) :=
+  if value = initial then .done (false, index) else .halt .reject
+
+/-- The actual region may have behavior outside the source callback's entry
+predicate. The gated range does not demand correspondence on those unused
+states, but it still validates the complete region and its returned tuple. -/
+noncomputable def active_actual (model : DomainModel) (program : Program) (context : Context)
+    (lo hi initial captured : Nat) :
+    let caller : Domain.Environment model.toCarriers :=
+      [.data (.index lo), .data (.index hi), .data (.index initial), .data (.index captured)]
+    Original.Simulation
+      (fun value final ↦ final = caller ++ [.data (.index value)])
+      (fun _ frame ↦ caller <+: frame)
+      ((Finite.fold (gated (activeStep model initial)) (List.range' lo (hi - lo))
+        (true, initial)).bind fun result ↦ .done result.2)
+      (Domain.executeRange program true 0 1 [2, 3] [.data .index] region
+        (Domain.evaluate model program context region.instructions) caller) := by
+  dsimp only
+  let caller : Domain.Environment model.toCarriers :=
+    [.data (.index lo), .data (.index hi), .data (.index initial), .data (.index captured)]
+  have proof := activeSimulation program true [.data .index] region
+    (Domain.evaluate model program context region.instructions) (activeStep model initial)
+    (carry model) (fun value ↦ value = initial)
+    (fun frame ↦ caller <+: frame) caller [.data (.index captured)] rfl
+    (fun _ _ related ↦ by rw [related]; rfl)
+    (fun value carried index related enabled ↦ by
+      cases related
+      have connected := (callback model program context caller captured value index).refineReturns
+        (property := fun result ↦ result.1 = false)
+        (nextReturns := fun result frame ↦ Yield (carry model) true [.data .index]
+          region.yielded result frame ∧ (result.1 = true → result.2 = initial))
+        rfl (fun result frame inactive returned ↦
+          ⟨returned, fun active ↦ False.elim (Bool.false_ne_true (inactive.symm.trans active))⟩)
+      simp only [activeStep, enabled, ↓reduceIte]
+      convert connected using 1
+      · rfl
+      · rw [enabled]
+        rfl)
+    0 1 [2, 3] lo hi rfl rfl initial [.data (.index initial)] rfl rfl rfl rfl
+  simpa only [carry, exists_eq_left] using proof
+
+theorem inactive_result_is_not_reentered (model : DomainModel) :
+    (Finite.fold (gated (activeStep model 0)) [1, 2, 3] (true, 0)).bind
+      (fun result ↦ .done result.2) = .done 1 := by
+  simp only [Finite.fold, gated, activeStep, Bool.false_eq_true, ↓reduceIte, PIR.Process.bind]
+
 #print axioms actual
 #print axioms first_iteration
 #print axioms refuses
 #print axioms malformed_empty
+#print axioms active_actual
+#print axioms inactive_result_is_not_reentered
 
 end Tests.ConnectionLocalRange

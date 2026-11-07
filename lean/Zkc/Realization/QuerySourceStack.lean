@@ -192,4 +192,96 @@ theorem stopped (interaction : PIR.Interaction (OracleProcess.Interface model S 
       (.done ⟨.stopped reason, state, stack.events ++ following⟩) final := by
   simpa only [stack.restore_stopped] using returned interaction stack reached _ child
 
+section Return
+variable {checked : CheckedOracle snapshot domains math}
+  {layout : VirtualStorage.Layout checked.declaration.inputs.dropLast}
+  {references : CaptureLayout.References} {entries : OracleEntries model snapshot domains math}
+  {records : List (model.Value layout.recordType)} {frame : QueryContinuation.Frame}
+  {parent : Parent layout references entries records frame}
+  {identity : String} {count cell : Nat}
+  {frames : List (model.Value (QueryContinuation.layout identity count).type)}
+  {arenas : (kind : OracleKind) → List (model.Value kind.answer)}
+  {request : OracleRead}
+  {next : model.Value request.kind.answer → PIR.Process (oracleReadInterface model.toCarriers)
+    (Values (Component model.Value) [checked.declaration.kind.answer])}
+
+/-- The return dispatcher moves to the actual next source operation. The old
+parent event and the child's complete log become the saved prefix for that
+sibling; the outer stack and original installation context are unchanged. -/
+theorem Stack.restore_sibling
+    (context : SourceContext parent self)
+    (saved : Saved identity count frames cell arenas parent request next)
+    (site : OracleLocation) (expansion : List (OracleAnchor × OracleLocation))
+    (events followingEvents : List (OracleEvent E)) (selection nextSelection : Nat)
+    (outer : Stack model snapshot domains math self S E root checked.declaration.kind
+      frame.outer frame.outerInstance)
+    (answer : model.Value request.kind.answer) (state : S × Nat)
+    {currentArenas : (kind : OracleKind) → List (model.Value kind.answer)}
+    (retained : ∀ kind, arenas kind <+: currentArenas kind)
+    {answerSlot : Nat}
+    (returned : (currentArenas request.kind)[answerSlot]? = some answer)
+    {following : OracleRead}
+    {continuation : model.Value following.kind.answer →
+      PIR.Process (oracleReadInterface model.toCarriers)
+        (Values (Component model.Value) [checked.declaration.kind.answer])}
+    (nextQuery : next answer = .call following continuation)
+    (nextIdentity : String) (nextCount : Nat)
+    (nextFrames : List (model.Value (QueryContinuation.layout nextIdentity nextCount).type))
+    {record : model.Value (QueryContinuation.layout nextIdentity nextCount).type}
+    (encoded : QueryContinuation.Encodes nextIdentity nextCount
+      {frame with answers := frame.answers ++ [answerSlot]} record) :
+    (Stack.saved context saved site expansion events selection outer).restore
+      ⟨.returned answer, state, followingEvents⟩ =
+    (context.operations site expansion following state).bind
+      (Stack.restore (.saved (context.withAnswers (frame.answers ++ [answerSlot]))
+        (saved.sibling retained returned nextQuery nextIdentity nextCount nextFrames encoded)
+        site expansion (events ++ followingEvents) nextSelection outer)) := by
+  simp only [Stack.restore, SourceContext.restore_returned, nextQuery, OracleProcess.present]
+  simp only [SourceContext.restore, OracleProcess.prependEvents, OracleProcess.mapResult,
+    PIR.Process.bind_assoc, PIR.Process.bind]
+  rfl
+
+/-- Completing the last child returns its parent's actual answer through the
+outer continuation. No provider call, query charge or phase transition is
+invented by this administrative return; all of those are already in the child
+record and saved prefix. -/
+theorem Stack.restore_parent
+    (context : SourceContext parent self)
+    (saved : Saved identity count frames cell arenas parent request next)
+    (site : OracleLocation) (expansion : List (OracleAnchor × OracleLocation))
+    (events following : List (OracleEvent E)) (selection : Nat)
+    (outer : Stack model snapshot domains math self S E root checked.declaration.kind
+      frame.outer frame.outerInstance)
+    (answer : model.Value request.kind.answer) (state : S × Nat)
+    (parentAnswer : model.Value checked.declaration.kind.answer)
+    (finished : next answer = .done (.cons (some parentAnswer) .nil)) :
+    (Stack.saved context saved site expansion events selection outer).restore
+      ⟨.returned answer, state, following⟩ =
+    outer.restore ⟨.returned parentAnswer, state,
+      .query (parent.request site expansion) :: (events ++ following)⟩ := by
+  simp only [Stack.restore, SourceContext.restore_returned, finished,
+    OracleProcess.present, OracleProcess.prependEvents, OracleProcess.mapResult,
+    PIR.Process.bind, Parent.finish, Values.get, List.append_nil]
+
+/-- A failed parent calculation stops through every outer frame. It cannot
+be replaced by a successful parent answer merely because the child returned. -/
+theorem Stack.restore_parent_stopped
+    (context : SourceContext parent self)
+    (saved : Saved identity count frames cell arenas parent request next)
+    (site : OracleLocation) (expansion : List (OracleAnchor × OracleLocation))
+    (events following : List (OracleEvent E)) (selection : Nat)
+    (outer : Stack model snapshot domains math self S E root checked.declaration.kind
+      frame.outer frame.outerInstance)
+    (answer : model.Value request.kind.answer) (state : S × Nat)
+    (reason : PIR.Stop) (stopped : next answer = .halt reason) :
+    (Stack.saved context saved site expansion events selection outer).restore
+      ⟨.returned answer, state, following⟩ =
+    .done ⟨.stopped reason, state,
+      outer.events ++ .query (parent.request site expansion) :: (events ++ following)⟩ := by
+  simp only [Stack.restore, SourceContext.restore_returned, stopped,
+    OracleProcess.present, OracleProcess.prependEvents, OracleProcess.mapResult,
+    PIR.Process.bind, Parent.finish, List.append_nil]
+  exact outer.restore_stopped reason state _
+
+end Return
 end Zkc.Realization.QuerySourceStack
