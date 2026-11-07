@@ -768,13 +768,17 @@ theorem single_bounded {n : Nat} (below : n < indexLimit) :
   exact below
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- An index primitive that returns, on checked arguments, returns one index
-below the limit. -/
+/-- A primitive in the scalar data profile returns only bounded indices.
+Polymorphic sequence reads are outside that profile: an element can itself be
+an unbounded mathematical index, so success alone gives no index bound. -/
 theorem primitive_bounded {primitive : Primitive}
+    (profile : primitiveDataProfile primitive = true)
     (arguments : Values (assignment F G) primitive.arguments) {outs : Values (assignment F G) primitive.results}
     (returned : primitive.evaluate arguments = .returned outs) :
     ∀ value ∈ encodeValues outs, ∀ index, value = .index index → index < indexLimit := by
   cases primitive with
+  | sequenceEmpty | sequenceAppend | sequenceLength | sequenceAt =>
+      simp [primitiveDataProfile, Primitive.arguments, Primitive.results, dataType] at profile
   | numerical operation domain base =>
       cases operation with
       | indicesAt =>
@@ -868,7 +872,7 @@ theorem resultsBounded_sound (table : Structured.Meanings F G) {op : Structured.
   | exec primitive =>
       cases callbacks
       change Construction.closedOutcome (primitiveOutcome (primitive.evaluate arguments)) = _ at returned
-      apply primitive_bounded arguments (outs := outs)
+      apply primitive_bounded bounded arguments (outs := outs)
       cases evaluated : primitive.evaluate arguments with
       | returned results =>
           rw [evaluated] at returned

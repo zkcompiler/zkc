@@ -4,6 +4,7 @@ meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
 public import Zkc.Source.Structured.Operations
+public import Zkc.Source.Structured.TypeProperties
 public import Zkc.Source.Structured.ProtocolContext
 public import Zkc.Source.Structured.ServiceOperations
 public import Init.Data.Nat.Power2.Bitwise
@@ -212,6 +213,8 @@ inductive Calculation where
   | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual
   | select (type : Structured.Ty)
   | boundedAt (domain : String)
+  | sequenceEmpty (element : Structured.Ty) | sequenceAppend (element : Structured.Ty)
+  | sequenceLength (element : Structured.Ty)
   | makeProduct (identity constructor : String) (fields : Structured.ProductFields)
   | getProduct (identity constructor : String) (fields : Structured.ProductFields)
       (type : Structured.Ty) (field : Var fields.toList type)
@@ -245,6 +248,9 @@ def op : Calculation → Structured.Op
   | .booleanNotEqual => .booleanNotEqual
   | .select type => .select type
   | .boundedAt domain => .boundedAt domain
+  | .sequenceEmpty element => .sequenceEmpty element
+  | .sequenceAppend element => .sequenceAppend element
+  | .sequenceLength element => .sequenceLength element
   | .makeProduct identity constructor fields => .makeProduct identity constructor fields
   | .getProduct identity constructor fields type field => .getProduct identity constructor fields type field
 
@@ -274,6 +280,9 @@ def ofOp? : Structured.Op → Option Calculation
   | .booleanNotEqual => some .booleanNotEqual
   | .select type => some (.select type)
   | .boundedAt domain => some (.boundedAt domain)
+  | .sequenceEmpty element => some (.sequenceEmpty element)
+  | .sequenceAppend element => some (.sequenceAppend element)
+  | .sequenceLength element => some (.sequenceLength element)
   | .makeProduct identity constructor fields => some (.makeProduct identity constructor fields)
   | .getProduct identity constructor fields type field => some (.getProduct identity constructor fields type field)
   | _ => none
@@ -282,9 +291,11 @@ theorem ofOp?_some {op : Structured.Op} {calculation : Calculation}
     (found : ofOp? op = some calculation) : calculation.op = op := by
   cases op <;> simp [ofOp?] at found <;> subst found <;> rfl
 
-/-- Calculations that never stop; only an out-of-range `boundedAt` refuses. -/
+/-- Calculations whose evaluation and result encoding never stop on admitted
+ordinary inputs. Even an empty sequence needs an eligible element type. -/
 def total : Calculation → Bool
   | .boundedAt _ => false
+  | .sequenceEmpty element => !element.isHandle
   | _ => true
 
 end Calculation

@@ -95,6 +95,10 @@ def operation {F G : Type} {interface : PIR.Signature}
   | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
       .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
   | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
+  | .sequenceEmpty _, .nil, .nil => .done (.cons [] .nil)
+  | .sequenceAppend _, .cons values (.cons value .nil), .nil =>
+      .done (.cons (values ++ [value]) .nil)
+  | .sequenceLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
   | .fieldConstant _ value, .nil, .nil => .done (.cons (value : F) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)

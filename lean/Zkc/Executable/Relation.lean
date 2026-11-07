@@ -445,6 +445,15 @@ theorem evaluate_stopped [Field F] [DecidableEq F] [AddCommGroup G] [Module F G]
       · cases stopped
       · cases stopped
         rfl
+  | makeProduct =>
+      change PIR.Outcome.returned _ = PIR.Outcome.stopped reason at stopped
+      cases stopped
+  | getProduct =>
+      cases values with
+      | cons value rest =>
+        cases rest
+        change PIR.Outcome.returned _ = PIR.Outcome.stopped reason at stopped
+        cases stopped
   | _ =>
       rcases values with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | _⟩⟩⟩
       change PIR.Outcome.returned _ = PIR.Outcome.stopped reason at stopped

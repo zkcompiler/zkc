@@ -151,6 +151,7 @@ inductive Op where
   | indexWrappingAdd | indexWrappingSubtract | indexBitAnd | indexLogicalShiftRight
   | multilinearRestrictPrefix (domain : String)
   | vectorLength (domain : String)
+  | sequenceEmpty (element : Ty) | sequenceAppend (element : Ty) | sequenceLength (element : Ty)
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String) | fieldSubtract (domain : String)
   | fieldMultiply (domain : String) | fieldEqual (domain : String)
@@ -188,6 +189,9 @@ def Op.arguments : Op → List Ty
   | .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight => [.index, .index]
   | .multilinearRestrictPrefix d => [.vector d, .vector d]
   | .vectorLength d => [.vector d]
+  | .sequenceEmpty _ => []
+  | .sequenceAppend element => [.sequence element, element]
+  | .sequenceLength element => [.sequence element]
   | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
   | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .fieldEqual d => [.field d, .field d]
   | .fieldEmbed _ base => [.field base]
@@ -214,7 +218,8 @@ def Op.results : Op → List Ty
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.boolean]
   | .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight => [.index]
   | .multilinearRestrictPrefix d => [.vector d]
-  | .vectorLength _ => [.index]
+  | .vectorLength _ | .sequenceLength _ => [.index]
+  | .sequenceEmpty element | .sequenceAppend element => [.sequence element]
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
   | .fieldEmbed extension _ => [.field extension]
   | .groupIdentity d | .groupAdd d | .groupScale d _ => [.group d]
@@ -248,7 +253,8 @@ def Op.helpers : Op → List Helper
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
-  | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
+  | .sequenceEmpty .. | .sequenceAppend .. | .sequenceLength ..
+    | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
     .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |

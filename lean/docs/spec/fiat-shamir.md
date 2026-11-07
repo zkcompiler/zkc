@@ -121,6 +121,17 @@ different calculation, and equal host carrier types do not identify nominal prod
 This deterministic reader boundary is tested independently of the kernel proofs;
 those proofs concern the rendered participant and the existing structured semantics.
 
+Immutable sequence operations retain their complete nominal element types,
+including record identity, constructor and field order. Mathematical empty,
+append and length use the shared structured calculations. Checked Local empty,
+append, length and indexed access use `Primitive.evaluateOn`; a missing element
+refuses without a default. Both preserve input sequences and ordered elements.
+Even empty collections exclude handle elements from ordinary payloads. The
+logical model does not account for native retained bytes or cumulative sequence
+work: these remain separate native execution premises, as with checked vectors.
+An admitted constructed operation does not expand the original source binding
+profile or establish native storage correspondence.
+
 Closed `exec.test` regions use `Operation.localBranch`; `data.branch` uses
 `Operation.mathBranch`. One kind-sensitive formation walk checks both arms and
 every nested helper ABI before selection. Local frames may contain rejecting

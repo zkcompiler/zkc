@@ -14,6 +14,8 @@ inductive Primitive where
   | numerical (operation : Numerical) (domain base : String)
   | binaryConstant (domain : String) (bits : Nat)
   | booleanNot
+  | sequenceEmpty (element : Ty) | sequenceAppend (element : Ty)
+  | sequenceLength (element : Ty) | sequenceAt (element : Ty)
   | indexConstant (value : Nat)
   | indexEqual | indexLess | indexAdd | indexMul | indexSub | indexDiv | indexMod
   | vectorEmpty (domain : String) | vectorLength (domain : String)
@@ -26,6 +28,10 @@ def Primitive.arguments : Primitive → List Ty
   | .numerical op d b => op.arguments d b
   | .binaryConstant .. => []
   | .booleanNot => [.boolean]
+  | .sequenceEmpty _ => []
+  | .sequenceAppend element => [.sequence element, element]
+  | .sequenceLength element => [.sequence element]
+  | .sequenceAt element => [.sequence element, .index]
   | .indexConstant _ | .vectorEmpty _ => []
   | .indexEqual | .indexLess | .indexAdd | .indexMul | .indexSub | .indexDiv | .indexMod =>
       [.index, .index]
@@ -38,6 +44,9 @@ def Primitive.results : Primitive → List Ty
   | .numerical op d b => op.results d b
   | .binaryConstant d _ => [.field d]
   | .booleanNot => [.boolean]
+  | .sequenceEmpty element | .sequenceAppend element => [.sequence element]
+  | .sequenceLength _ => [.index]
+  | .sequenceAt element => [element]
   | .indexConstant _ | .indexAdd | .indexMul | .indexSub | .indexDiv | .indexMod |
     .vectorLength _ => [.index]
   | .indexEqual | .indexLess | .vectorEqual _ | .fieldEqual _ => [.boolean]

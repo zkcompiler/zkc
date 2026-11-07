@@ -127,7 +127,8 @@ def one_parameter(attrs):
 CONSTRUCTION_PRIMITIVES = frozenset((
     "index.constant", "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
     "transcript.native.indexed.index", "transcript.native.indexed.indices",
-    "transcript.native.indexed.challenge", "field.embed", "control.require", "index.equal", "index.less", "index.add", "bool.not", "vector.get", "vector.length"))
+    "transcript.native.indexed.challenge", "field.embed", "control.require", "index.equal", "index.less", "index.add", "bool.not", "vector.get", "vector.length",
+    "sequence.empty", "sequence.append", "sequence.length", "sequence.at"))
 
 
 def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_values=None):
@@ -148,6 +149,20 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
                 "index constant shape")
         value = integer_attribute(attrs, "value", signedness="unsigned")
         return f".calculate (.indexConstant {decimal(value, 1 << 64)})"
+    if name in ("data.sequence_empty", "data.sequence_append", "data.sequence_length"):
+        require(not attrs and not binding, "mathematical sequence metadata")
+        empty = name == "data.sequence_empty"
+        require(len(result_kinds) == 1 and (empty or operand_kinds), "mathematical sequence arity")
+        container = data_descriptor(result_kinds[0] if empty else operand_kinds[0])
+        require(len(container) == 2 and container[0] == "sequence", "mathematical sequence type")
+        element = container[1]
+        inputs = [] if empty else ([container, element] if name == "data.sequence_append" else [container])
+        output = ["index"] if name == "data.sequence_length" else container
+        require([data_descriptor(kind) for kind in operand_kinds] == inputs and
+                data_descriptor(result_kinds[0]) == output, "mathematical sequence ports")
+        constructor = {"data.sequence_empty": "sequenceEmpty", "data.sequence_append": "sequenceAppend",
+                       "data.sequence_length": "sequenceLength"}[name]
+        return f".calculate (.{constructor} ({render_type(element)}))"
     if name == "data.index_equal":
         require(not attrs and binding == [] and operand_kinds == [index, index] and result_kinds == [boolean],
                 "index equality shape")
@@ -201,6 +216,13 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
         require([sort(value)[1] for value in inputs] == [logical_kind(k) for k in operand_kinds]
                 and [sort(value)[1] for value in outputs] == [logical_kind(k) for k in result_kinds],
                 "execution binding actual ports")
+        if contract in ("sequence.empty", "sequence.append", "sequence.length", "sequence.at"):
+            require(not parameters and len(arguments) == 1 and arguments[0][0] == "type",
+                    "sequence static element type")
+            element = data_type(arguments[0][1])
+            constructor = {"sequence.empty": "sequenceEmpty", "sequence.append": "sequenceAppend",
+                           "sequence.length": "sequenceLength", "sequence.at": "sequenceAt"}[contract]
+            return f".execute (.{constructor} ({render_type(element)}))"
         if contract in ("index.equal", "index.less", "index.add"):
             result = index if contract == "index.add" else boolean
             require(not arguments and not parameters and operand_kinds == [index, index]

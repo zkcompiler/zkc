@@ -16,7 +16,7 @@ namespace Zkc.Source.Structured
 Exact signatures retain the kind; a hand-built Local reference cannot inhabit
 this view. Admission separately checks the kind of every stored helper body. -/
 def Op.isCalculation : Op → Bool
-  | .makeProduct .. | .getProduct .. => true
+  | .makeProduct .. | .getProduct .. | .sequenceEmpty .. | .sequenceAppend .. | .sequenceLength .. => true
   | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
     .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |

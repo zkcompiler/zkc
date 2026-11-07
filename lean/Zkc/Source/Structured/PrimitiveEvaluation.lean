@@ -24,6 +24,19 @@ def Primitive.evaluateOn (model : FieldModel) :
       PIR.Outcome (Values model.Value primitive.results)
   | .booleanNot => fun
     | .cons value .nil => .returned (.cons (!value) .nil)
+  | .sequenceEmpty _ => fun
+    | .nil => .returned (.cons [] .nil)
+  | .sequenceAppend _ => fun
+    | .cons values (.cons value .nil) => .returned (.cons (values ++ [value]) .nil)
+  | .sequenceLength _ => fun
+    | .cons values .nil =>
+      if values.length < indexLimit then .returned (.cons values.length .nil)
+      else .stopped .exhausted
+  | .sequenceAt _ => fun
+    | .cons values (.cons index .nil) =>
+      match values[index]? with
+      | some value => .returned (.cons value .nil)
+      | none => .stopped .refused
   -- Restrict each fixed operation to its declared capability dependencies.
   -- This makes inverse transfer structural rather than an assumption about all operations.
   | .numerical op d base => fun args => Numerical.checkedEvaluateOn

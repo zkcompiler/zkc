@@ -152,6 +152,10 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
   | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
       .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
   | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
+  | .sequenceEmpty _, .nil, .nil => .done (.cons [] .nil)
+  | .sequenceAppend _, .cons values (.cons value .nil), .nil =>
+      .done (.cons (values ++ [value]) .nil)
+  | .sequenceLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
   | .fieldEmbed extension base, .cons value .nil, .nil =>
       .done (.cons (model.embed extension base value) .nil)
   | .fieldConstant domain value, .nil, .nil => .done (.cons (value : model.Field domain) .nil)

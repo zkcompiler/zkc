@@ -115,6 +115,7 @@ def checkClosedStep (kind : Structured.HelperKind)
       else .error (closedDiagnostic kind "calculation")
   | ⟨.execute primitive, operands, results, []⟩ =>
       if kind == .local &&
+          primitive.arguments.all (fun ty => isData (some (.data ty))) &&
           operands.map (sorts[·]?) == primitive.arguments.map (some ∘ .data) &&
           results == primitive.results.map .data && results.all (fun s => isData (some s)) then
         .ok (sorts ++ results)

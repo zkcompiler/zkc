@@ -249,6 +249,31 @@ example : RenderedCheckedPrimitive.participant.instructions =
 '''
 
 
+def sequence_controls():
+    sequence = ["apply", "sequence", [["type", INDEX]]]
+    attrs = [["binding", ["symbol", ["installed"]]], ["parameters", ["array", []]],
+             ["site", ["string", "sequence"]]]
+    body = [
+        ["exec.apply", attrs, ["sequence.empty", [["type", INDEX]], "", [], [sequence]], [], [sequence], []],
+        ["exec.apply", attrs, ["sequence.append", [["type", INDEX]], "", [sequence, INDEX], [sequence]],
+         [2, 0], [sequence], []],
+        ["exec.apply", attrs, ["sequence.at", [["type", INDEX]], "", [sequence, INDEX], [INDEX]],
+         [3, 0], [INDEX], []],
+        ["data.sequence_length", [], [], [3], [INDEX], []],
+        ["data.sequence_empty", [], [], [], [sequence], []]]
+    data = export([INDEX, TRANSCRIPT], body, [4, 1])
+    data[6] = [INDEX, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedSequences")) + '''
+open Zkc.Construction in
+example : RenderedSequences.participant.instructions = [
+    ⟨.execute (.sequenceEmpty .index), [], [.data (.sequence .index)], []⟩,
+    ⟨.execute (.sequenceAppend .index), [2, 0], [.data (.sequence .index)], []⟩,
+    ⟨.execute (.sequenceAt .index), [3, 0], [.data .index], []⟩,
+    ⟨.calculate (.sequenceLength .index), [3], [.data .index], []⟩,
+    ⟨.calculate (.sequenceEmpty .index), [], [.data (.sequence .index)], []⟩] := by decide +kernel
+'''
+
+
 def check(output, lake):
     """Render controls; `lake=None` leaves all generated kernel checks pending."""
     output.mkdir(parents=True, exist_ok=True)
@@ -405,7 +430,7 @@ example : RenderedCaptures.participant.instructions =
         for namespace, _, _ in catalogue_cases) + \
         "] = [" + ", ".join(".ok ()" if code is None else f'.error "{code}"' for _, _, code in catalogue_cases) + \
         "] := by\n  decide +kernel\n"
-    source += product_controls() + local_branch_controls() + local_range_controls() + embedded_math_controls() + checked_primitive_controls()
+    source += product_controls() + local_branch_controls() + local_range_controls() + embedded_math_controls() + checked_primitive_controls() + sequence_controls()
     path = output / "Rendered.lean"
     path.write_text("module\n\npublic import Zkc.Construction.Participant\npublic import Zkc.Construction.CatalogueAdmission\n\n"
                     "@[expose] public section\n" + source, encoding="utf-8")
@@ -477,7 +502,7 @@ example : RenderedCaptures.participant.instructions =
             export([base, TRANSCRIPT], [changed], [2, 1]), "UnsupportedBinding"):
         raise AssertionError("renderer treated another binding as field embedding")
     member_refusals = renderer_member_refusals()
-    report = {"status": "pass", "kernel_cases": 12, "catalogue_cases": len(catalogue_cases),
+    report = {"status": "pass", "kernel_cases": 13, "catalogue_cases": len(catalogue_cases),
               "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals)
               + member_refusals + len(selection_refusals), "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),

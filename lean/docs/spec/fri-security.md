@@ -62,10 +62,14 @@ preserve guard rejection and exclude transcript effects. The independent
 construction renderer now admits closed conditional ranges using the structured
 finite traversal and retains the embedded Math bodies, including folds resolved
 against the original domain and callback definitions. The export renders as a
-complete instruction tree; sequence and remaining scalar primitive operations
-are still explicit `unsupported` cases and fail formal admission. Their meanings
-and the complete execution correspondence remain required. Natural field constants already use the exact
-nominal field's catalogue characteristic.
+complete instruction tree with no unsupported operations. Checked scalar and
+immutable sequence operations use the shared structured evaluator. Their nominal
+element types, out-of-range refusal and distinction from total mathematical
+operations remain explicit. This rendering result is not full formal admission:
+the actual participant currently encounters `construction-loop-transcript` on a
+loop without a carried transcript. Source occurrence admission and the complete
+clear-store execution correspondence remain required. Natural field constants use
+the exact nominal field's catalogue characteristic.
 
 The executable-byte reader separately requires support for the nominal
 sequence-of-record storage representation. Whole-run event transport and finite

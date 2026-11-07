@@ -179,7 +179,7 @@ theorem calculate_total (calculation : Calculation) (total : calculation.total =
       simpa [Calculation.op, Structured.Op.results] using variable_data field all
     all_goals
       simp_all [Calculation.op, Structured.Op.arguments, Structured.Op.results,
-        Domain.dataType, Structured.Ty.isHandle]
+        Domain.dataType, Structured.Ty.isHandle, Calculation.total]
   obtain ⟨encoded, encodedEq⟩ := Domain.encodeValues_exists results eligible
   refine ⟨encoded, ?_, encodeValues_sorts results encodedEq⟩
   simp only [Domain.calculate, decoded,
