@@ -59,6 +59,36 @@ def Stack.events : {current : OracleKind} → {tag slot : Nat} →
   | _, _, _, .saved (parent := parent) _ _ site expansion events _ outer =>
       outer.events ++ (.query (parent.request site expansion) :: events)
 
+/-- Every saved link must still be resident in the controller's current
+physical stores. The historical frame and answer snapshots are immutable
+prefixes, not independent arrays selected when a continuation is restored. -/
+def Stack.Resident
+    (arenas : (kind : OracleKind) → List (model.Value kind.answer))
+    (frames : (identity : String) → (count : Nat) →
+      List (model.Value (QueryContinuation.layout identity count).type)) :
+    {current : OracleKind} → {tag slot : Nat} →
+    Stack model snapshot domains math self S E root current tag slot → Prop
+  | _, _, _, .root => True
+  | _, _, _, .saved (identity := identity) (count := count) (frames := savedFrames)
+      (arenas := savedArenas) _ _ _ _ _ _ outer =>
+      savedFrames <+: frames identity count ∧
+        (∀ kind, savedArenas kind <+: arenas kind) ∧ outer.Resident arenas frames
+
+theorem Stack.Resident.transport
+    {arenas nextArenas : (kind : OracleKind) → List (model.Value kind.answer)}
+    {frames nextFrames : (identity : String) → (count : Nat) →
+      List (model.Value (QueryContinuation.layout identity count).type)}
+    {stack : Stack model snapshot domains math self S E root current tag slot}
+    (resident : stack.Resident arenas frames)
+    (answers : ∀ kind, arenas kind <+: nextArenas kind)
+    (saved : ∀ identity count, frames identity count <+: nextFrames identity count) :
+    stack.Resident nextArenas nextFrames := by
+  induction stack with
+  | root => trivial
+  | saved context link site expansion events selection outer ih =>
+      exact ⟨resident.1.trans (saved _ _),
+        fun kind ↦ (resident.2.1 kind).trans (answers kind), ih resident.2.2⟩
+
 theorem Stack.restore_stopped
     (stack : Stack model snapshot domains math self S E root current tag slot)
     (reason : PIR.Stop) (state : S × Nat) (following : List (OracleEvent E)) :

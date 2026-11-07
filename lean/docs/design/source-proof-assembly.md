@@ -476,6 +476,34 @@ it must not supply the dispatch traversal. Generated delivery separately proves
 that the physical publication implements the original source publication.
 Generated names do not satisfy the ordinary source-occurrence check.
 
+`QueryController` now joins the source-progress, header and work obligations
+at resumption and final output. A pending query fixes the original request,
+provider state, interaction phase and linked source continuation. A returned
+cell is tied to that child's execution. The actual resumption body derives
+Return, the appended cell and complete output tuple; its allocation room comes
+from the root's work history. The checked finish body selects the same root
+answer as that source derivation, retaining the poststate and ordered events.
+These are premises of the enclosing controller result, not its completion.
+
+Saved snapshots must also remain resident in the current stores. The common
+`Stack.Resident` relation requires every saved frame and answer snapshot to be
+an immutable prefix of the corresponding current store. Resumption preserves
+this relation through arena growth. This closes a concrete composition gap:
+an isolated source-continuation proof can use an existing answer arena, but
+cannot install that snapshot over an empty current controller arena. The new
+nested resumption example starts with empty answer arenas and both actual saved
+frames; controls reject disappearing answers, disappearing frames, premature
+Completed and uncharged arena growth.
+
+The whole enter/return dispatch still has to establish these premises from
+its checked source and physical store layout. Its source expansion must fix
+the work shape and saved-frame suffixes; the two existing range rules then
+consume the derived progress and exit facts. Open `Reaches` witnesses do not
+by themselves choose or validate a clear-publication provider: the provider
+connection must still consume the installed-word laws. No new companion
+obligation, alternative query semantics or broad module reorganization is
+introduced by this join.
+
 ## Disposition of the revised closing review
 
 The review at `62bb4ed39` was checked against the later implementation, rather
