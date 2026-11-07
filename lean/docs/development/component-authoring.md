@@ -364,6 +364,23 @@ condition matters. The source-round checks are in
 `TestsSecurity.GkrRoundsResidual`, and the affine and mixed-degree
 controls are in `TestsSecurity.SumcheckReference`.
 
+The two Sumcheck roots permit a like-for-like comparison against main
+`1015d2112`. Both keep their original security propositions and proof
+consumers. One parametric library-call rule covers the left and right calls
+in `TwoSums`. The generated modules went from 214 to 195 lines for
+`SmallSumcheck` and from 270 to 229 for `TwoSums`. These counts measure
+generated structural code. They measure neither human proof time nor a
+reduction in the protocol's mathematical obligations.
+
+For the current FRI source theorem there is no equal-strength main baseline.
+The binder author supplies a forwarding policy for named fields and a proof
+that their values agree with the committed handles and sampled positions.
+The second caller uses the same binder proof. The clear provider supplies
+persistent lookup and publication order. The FRI companion still connects
+the field operations, virtual reads and degree invariant to the actual
+round and final check. The amount of this source-specific proof work matters
+when estimating the cost of adopting another protocol for the first time.
+
 For a loop nested in another callback, select it inside that callback.
 `checked_repeat_prefix firstFoldBody := insideQuery using innerOnSpine`
 materializes the preceding operations and checks their equality with the
