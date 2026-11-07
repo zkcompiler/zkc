@@ -404,9 +404,9 @@ logical anchor to the entire finite word selected at its publication. An
 in-range read returns the original cell and charges one read. The source
 cursor still checks the occurrence. `processPublicationFrame` proves that
 every later returned or stopped execution record preserves the logical
-anchor and the physical word. It covers arbitrary row types, effectful
-network actions, and adaptive choosers. The proof combines logical and
-physical preservation on the same record using the monad's exact support.
+anchor and the provider-side registered word. It covers arbitrary row types,
+effectful network actions, and adaptive choosers. The proof combines the logical
+registry and provider store on the same record using the monad's exact support.
 
 FRI supplies the virtual table's captured parent, challenge and coset
 geometry. `CommitIngress.installed` follows the linked coset admission

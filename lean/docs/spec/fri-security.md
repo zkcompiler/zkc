@@ -51,12 +51,18 @@ same challenge values and charged keys used in the FRI experiment. The
 scalar segment reads eight positions even when values or keys repeat.
 The complete compiled endpoint additionally needs an admitted interpretation
 of the selected constructed participant and a realization correspondence
-for its generated clear-store helpers. The current constructed-participant
-export reaches an unsupported `exec.range` in that generated closure.
-The executable-byte reader also requires support for its nominal
-sequence-of-record storage representation. These are separate admission
-boundaries. Whole-run event transport and finite sampling-retry accounting
-remain required by the compiled theorem.
+for its generated clear-store helpers. The native export now retains both
+roles, including closed ranges and actual mathematical computation bodies.
+The retained validator has 1,566 exported instructions and fits the unchanged
+1 MiB bound. The independent construction renderer currently refuses its
+`exec.match` regions. Their one-constructor records, sequence operations,
+conditional ranges and mathematical bodies still need formal admission and
+execution correspondence. Natural field constants already use the exact
+nominal field's catalogue characteristic.
+
+The executable-byte reader separately requires support for the nominal
+sequence-of-record storage representation. Whole-run event transport and finite
+sampling-retry accounting remain required by the compiled-ideal theorem.
 [Access transport](../../security/ZkcSecurity/Bindings/Transcript/QueryTreeSource/Composition/AccessLog.lean)
 · [Scalar source path](../../integrations/arklib/ZkcArkLibExamples/Fri/ClearScalarPath.lean)
 

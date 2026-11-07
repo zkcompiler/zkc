@@ -161,10 +161,6 @@ CALCULATIONS = {
     "algebra.group_equal": ("groupEqual", "group"),
 }
 
-# The BLS12-381 scalar modulus bounds canonical field constants.
-FIELD_MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
-
-
 # ---------------------------------------------------------------------------
 # Canonical occurrence templates
 

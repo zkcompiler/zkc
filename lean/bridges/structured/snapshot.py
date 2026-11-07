@@ -13,7 +13,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import lean_render, schema  # noqa: E402
 from bridges.common.catalogue import (  # noqa: E402
-    catalogue, member_resolver, require_capabilities)
+    catalogue, field_modulus, member_resolver, require_capabilities)
 from bridges.common.lean_render import optional, record  # noqa: E402
 
 # The structured source profile bounds strings at 512 bytes and references at 4096.
@@ -610,10 +610,7 @@ def render(data, namespace):
             op, terms = schema.resolve_signature(installed[name], member_resolver(rows), SOURCE_PRIMITIVES)
             if op["name"] == "field.constant":
                 root = terms[0][2]
-                matches = [row for row in rows[0] if row[1] == root and row[2] == "Field"]
-                if len(matches) != 1 or matches[0][5] is None:
-                    raise ValueError("field parameter needs independent domain admission")
-                schema.validate_parameters(parameters, op["parameters"], root, int(matches[0][5]))
+                schema.validate_parameters(parameters, op["parameters"], root, field_modulus(rows, root))
             else:
                 schema.validate_parameters(parameters, op["parameters"])
         for child in value:

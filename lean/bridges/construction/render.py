@@ -27,7 +27,7 @@ from bridges.common import catalogue, lean_render, policy as native_policy, sche
 from bridges.construction.types import data_type, render_type  # noqa: E402
 from bridges.common.lean_render import Refused as Refused  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
-    CALCULATIONS, FIELD_MODULUS, decimal, origin, record, require, seq, text)
+    CALCULATIONS, decimal, origin, record, require, seq, text)
 
 FORMAT = "zkc.constructed-participant/0"
 
@@ -244,14 +244,13 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
                 and result_kinds == [("boolean", None)], "boolean conjunction shape")
         return ".calculate .booleanAnd"
     if name == "algebra.constant" and set(attrs) == {"value"} and binding == []:
-        # The canonical bound below is the BLS12-381 scalar modulus.
-        require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0] == ("field", "bls12-381.fr"),
+        require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0][0] == "field",
                 "field constant shape")
         kind, literal = attrs["value"]
         require(kind == "parameter" and literal[:3] ==
                 ["field_literal", result_kinds[0][1], "natural"], "field constant parameter")
         return (f".calculate (.fieldConstant {text(result_kinds[0][1])} "
-                f"{decimal(literal[3], FIELD_MODULUS)})")
+                f"{decimal(literal[3], catalogue.field_modulus(rows, result_kinds[0][1]))})")
     if name in ("protocol.local_call", "func.call"):
         expected = {"callee", "site", "role"} if name == "protocol.local_call" else {"callee", "runtime.site"}
         require(set(attrs) == expected and binding == [], "call attributes")
@@ -419,7 +418,7 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
                 arms.append(f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩")
             rendered.append(f"{indent}⟨.mathBranch, {seq(mapped, nat)}, {result_terms}, [{', '.join(arms)}]⟩")
         else:
-            require(regions == [], "unexpected operation region")
+            require(regions == [], f"unexpected operation region: {name}")
             if is_service:
                 term = local_service(attributes(attrs), binding, mapped, result_kinds,
                                      item[6], ports or {}, places, kinds, rows, constants)

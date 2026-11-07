@@ -571,7 +571,8 @@ struct Inspection {
     std::string received = {};
   };
   using Environment = std::vector<Slot>;
-  unsigned selected = 0, queries = 0, completions = 0, stops = 0;
+  unsigned selected = 0, queries = 0, completions = 0, stops = 0, ranges = 0,
+           computations = 0;
   std::vector<std::string> receivedSelectorSites;
   SmallVector<std::pair<std::string, std::string>> branches;
   const json::Array &outputs;
@@ -619,6 +620,66 @@ struct Inspection {
         }
         local = body(array(region[1]), std::move(local));
         references(array(region[2]), local, results);
+      } else if (name == "exec.compute") {
+        ++computations;
+        require(regions.size() == 1, "computation region count");
+        const auto &region = array(regions[0], 3);
+        const auto &arguments = array(region[0]);
+        require(arguments.size() == operands.size(),
+                "computation argument arity");
+        Environment local;
+        for (auto [argument, operand] : zip(arguments, operands)) {
+          auto actual = environment[referenceIndex(operand)];
+          same(argument, actual.type);
+          local.push_back(std::move(actual));
+        }
+        local = body(array(region[1]), std::move(local));
+        const auto &ending = array(region[2], 2);
+        require(string(ending[0]) == "func.return",
+                "computation terminal changed");
+        references(array(ending[1]), local, results);
+      } else if (name == "exec.range") {
+        ++ranges;
+        require(regions.size() == 1 && operands.size() >= 2 + results.size(),
+                "generated range ABI changed");
+        const auto &region = array(regions[0], 4);
+        const auto &arguments = array(region[0]);
+        auto conditional = region[3].getAsBoolean();
+        require(conditional.has_value(), "range lost its continuation kind");
+        require(arguments.size() + 1 == operands.size(),
+                "range argument arity");
+        const json::Value index = json::Array{"apply", "index", json::Array{}};
+        same(arguments[0], index);
+        same(environment[referenceIndex(operands[0])].type, index);
+        same(environment[referenceIndex(operands[1])].type, index);
+        Environment local{{index, ""}};
+        for (unsigned i = 2; i < operands.size(); ++i) {
+          auto captured = environment[referenceIndex(operands[i])];
+          same(arguments[i - 1], captured.type);
+          if (i < 2 + results.size()) {
+            same(results[i - 2], captured.type);
+            captured.coordinate.clear();
+            captured.received.clear();
+          }
+          local.push_back(std::move(captured));
+        }
+        local = body(array(region[1]), std::move(local));
+        const auto &ending = array(region[2], 2);
+        if (string(ending[0]) == "exec.reject") {
+          require(array(ending[1]).empty() && !array(region[1]).empty() &&
+                      string(array(array(region[1]).back())[0]) ==
+                          "exec.reject",
+                  "range rejection lost its reason or gained carried values");
+        } else {
+          require(string(ending[0]) == "exec.complete",
+                  "range terminal changed");
+          json::Array expected;
+          if (*conditional)
+            expected.push_back(json::Array{"apply", "bool", json::Array{}});
+          for (const auto &type : results)
+            expected.push_back(type);
+          references(array(ending[1]), local, expected);
+        }
       } else if (name == "protocol.participant_branch" ||
                  name == "data.branch" || name == "exec.test" ||
                  name == "exec.match") {
@@ -941,6 +1002,64 @@ int main() {
          json::Array{6, 7});
     same(array(record)[8], json::Array{8});
   });
+  for (bool virtualized : {false, true})
+    cases.run(
+        virtualized ? "virtual query retains generated mathematical bodies"
+                    : "actual oracle query exports closed generated ranges",
+        [&] {
+          std::string source = R"mlir(
+#K = #protocol.oracle_kind<"table", [ui64, 4 : ui64]>
+!H = !protocol.oracle<#K>
+!D = !data.indices
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%word:!D,%position:ui64):
+  %rows = "data.index"() {value=4:ui64} : ()->ui64
+  %handle = "protocol.oracle_send"(%word,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="word"} : (!D,ui64)->!H
+  %answer = "protocol.oracle_query"(%handle,%position) {owner="V",site="query"} : (!H,ui64)->ui64
+  %ok = "data.index_equal"(%answer,%position) : (ui64,ui64)->i1
+  "protocol.return"(%ok) : (i1)->()
+ }) {sym_name="main",function_type=(!D,ui64)->i1,roles=["P","V"],input_roles=[["P"],["P","V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+          if (virtualized) {
+            source = replaceText(source, " \"protocol.func\"()", R"mlir(
+ relation.declare @admissible {kind="external",key="test/translation",revision="0",signature=(!D)->i1,purposes=["witness"]}
+ "protocol.oracle"() ({ ^entry(%base:!H,%position:ui64):
+  %answer = "protocol.oracle_query"(%base,%position) {site="base"} : (!H,ui64)->ui64
+  %one = "data.index"() {value=1:ui64} : ()->ui64
+  %translated = "data.index_wrapping_add"(%answer,%one) : (ui64,ui64)->ui64
+  "protocol.oracle_yield"(%translated) : (ui64)->()
+ }) {sym_name="translated",function_type=(!H,ui64)->ui64,kind=#K,shape_arguments={},shape_bounds={},admissibility=@admissible} : ()->()
+ "protocol.func"())mlir");
+            source = replaceText(
+                source,
+                "  %answer = \"protocol.oracle_query\"(%handle,%position)",
+                R"mlir(
+  %view = "protocol.oracle_virtual"(%handle) {callee=@translated,holder="P",receivers=["V"]} : (!H)->!H
+  %answer = "protocol.oracle_query"(%view,%position))mlir");
+          }
+          auto subject = build(context, source, plainPolicy({1}));
+          auto record = subject.record();
+          Inspection inspector(record);
+          inspector.run(record);
+          require(inspector.ranges >= 2, "query controller ranges missing");
+          require(virtualized ? inspector.computations > 0
+                              : inspector.computations == 0,
+                  "actual generated computation association changed");
+          const auto &range =
+              findInstruction(array(array(record)[7]), "exec.range");
+          require(
+              array(array(range[5], 1)[0], 4)[3].getAsBoolean().value_or(false),
+              "query controller lost its conditional termination");
+          exec::RangeOp changed;
+          subject.built.module->walk([&](exec::RangeOp op) {
+            if (!changed)
+              changed = op;
+          });
+          require(bool(changed), "actual controller range missing");
+          changed.getUpperMutable().assign(changed.getLower());
+          rejected(subject);
+        });
   cases.run("straight-line empty-suite encoding is unchanged", [&] {
     auto subject = build(context, R"mlir(module { "protocol.module"() ({
       "protocol.func"() ({ ^entry(%ok:i1): "protocol.return"(%ok) : (i1)->()
