@@ -1,5 +1,6 @@
 module
 
+public import ZkcArkLib.Fri.ReturnProbability
 public import ZkcArkLibExamples.Fri.RetainedQueries
 
 @[expose] public section
@@ -22,16 +23,6 @@ structure Fresh (handler : PIR.MonadHandler ProbComp (OracleProtocol.Interface m
       let x ← $ᵗ (Fin 32)
       repack (fun _ ↦ x) <$> afterDraw x state)
 
-private theorem prefix_le {I : PIR.Signature} {A B : Type}
-    (handler : PIR.MonadHandler ProbComp I S E) (prior : PIR.Process I A)
-    (next : A → PIR.Process I B) (state : S) (event : B → Prop) (upper : ENNReal)
-    (bound : ∀ x s, Pr{let r ← (next x).runM handler s}[returned event r] ≤ upper) :
-    Pr{let r ← (prior.bind next).runM handler state}[returned event r] ≤ upper := by
-  rw [PIR.runM_bind]
-  apply prEvent_bind_le_of_forall_le
-  intro head
-  exact prEvent_followM_le head _ event upper bound
-
 theorem fold_le (handler : PIR.MonadHandler ProbComp (OracleProtocol.Interface model) S E)
     (service : Nat) (fresh : Fresh handler service) (items : List Nat) (prior : Positions)
     (state : S) (event : Positions → Prop) :
@@ -44,9 +35,9 @@ theorem fold_le (handler : PIR.MonadHandler ProbComp (OracleProtocol.Interface m
   | cons i rest ih =>
     simp only [Finite.fold, IterationObservations.within_eq, step, draw, bind, pure,
       PIR.Process.bind_assoc, PIR.Process.bind]
-    apply prefix_le
+    apply boundAfterPrefix
     intro _ afterEntry
-    apply prefix_le
+    apply boundAfterPrefix
     intro _ afterMarks
     rw [PIR.runM_bind, fresh.sample]
     simp only [List.length_cons, productPositions, bind_assoc, bind_map_left]
@@ -64,9 +55,9 @@ theorem fold_le (handler : PIR.MonadHandler ProbComp (OracleProtocol.Interface m
       | returned ack =>
         cases ack
         dsimp only [repack, PIR.Execution.follow]
-        apply prefix_le
+        apply boundAfterPrefix
         intro _ afterDelivery
-        apply prefix_le
+        apply boundAfterPrefix
         intro _ afterLeave
         simpa only [map_pure, pure_bind, bind_pure_comp, Functor.map_map, Function.comp_def,
           IterationObservations.within_eq, step, draw, bind, pure, PIR.Process.bind_assoc, PIR.Process.bind,
@@ -87,7 +78,7 @@ theorem installed_le (handler : PIR.MonadHandler ProbComp (OracleProtocol.Interf
         (.cons (OracleProtocol.concrete model (.service contract) service) .nil))).runM handler state}[
       returned event r] ≤ Pr{let ys ← $ᵗ (Fin 8 → Fin 32)}[event (packed model (List.ofFn ys))] := by
   rw [RetainedQueries.installed]
-  apply prefix_le
+  apply boundAfterPrefix
   intro _ afterPrelude
   have mapEq := congrArg (fun p ↦ p.bind (fun xs ↦ PIR.Process.done (packed model xs)))
     (RetainedQueries.positions_eq model service)

@@ -411,8 +411,12 @@ frames, binding and query wrapper. `VerifierRoot.verifier` proves that a
 return from the public verifier has its acceptance bit set and satisfies
 the mathematical path predicate for the sampled positions, with the same
 publication still installed. These are conditional return statements.
-Honest termination and the probability of accepting a far first word each
-need a separate proof.
+For a fixed safe transcript with a far initial word, the probability that
+the actual suffix returns is at most `(1 − min(1/4, δ))^8`.
+`VerifierQueryProbability.safeFar_le` uses freshness of the eight scalar
+requests and keeps the unconditional mass of aborts. Applying this bound
+to the full security event also requires bounding unsafe fold transitions
+before those positions are drawn. Honest termination is a separate claim.
 
 For a publication followed by a virtual construction, `Region.cutFirst`
 selects a reached operation on the continuation spine. A bind still executes

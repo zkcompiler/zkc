@@ -2,7 +2,7 @@ import ZkcArkLib.Fri.Johnson
 import ZkcArkLib.Fri.SourceCalculations
 import ZkcArkLibExamples.Fri.VerifierCheck
 import ZkcArkLibExamples.Fri.CommitChallenge
-import ZkcArkLibExamples.Fri.VerifierRoot
+import ZkcArkLibExamples.Fri.VerifierQueryProbability
 import ZkcArkLibExamples.Fri.VerifierInitialRead
 import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
@@ -335,7 +335,8 @@ run_cmd (ZkcTools.DeclarationAudit.check
    `ZkcExamples.Structured.FriScalarLoop, `ZkcExamples.Structured.FriBoundedPositions,
    `ZkcExamples.Structured.FriBinding, `ZkcExamples.Structured.FriApplications,
    `ZkcArkLibExamples.Fri.RetainedQueries, `ZkcArkLibExamples.Fri.RetainedSampling,
-   `ZkcArkLibExamples.Fri.PublishedSampling] "FRI-INSTALLED-SCALAR-SAMPLING-PASS" (exactModules := true))
+   `ZkcArkLibExamples.Fri.PublishedSampling, `ZkcArkLib.Fri.ReturnProbability,
+   `ZkcArkLibExamples.Fri.VerifierQueryProbability] "FRI-INSTALLED-SCALAR-SAMPLING-PASS" (exactModules := true))
 
 run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Semantics.HandlerReturn, `Zkc.Source.Structured.OracleForwarding,

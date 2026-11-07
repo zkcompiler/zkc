@@ -31,7 +31,7 @@ def sampled (xs : Fin 8 → Fin 32) := concrete model .indices ((List.ofFn xs).m
 def output (pub : Publication) (xs : Fin 8 → Fin 32) : Values (FriBinding.Value model) protocol5Signature.outputs :=
   .cons (concrete model .boolean true) (.cons none (.cons (sampled xs) (VerifierQueries.packed (cells pub xs))))
 
-private theorem sample (service : Nat) (before : State Aux) :
+theorem sample (service : Nat) (before : State Aux) :
     PIR.Process.OnReturn (handler network choose) before
       (caller.call FriSourceCalls.scalarQueries (.cons (concrete model .index 8)
         (.cons (concrete model (.service FriScalarLoop.contract) service) .nil)))
@@ -97,6 +97,34 @@ def Checked (pub : Publication) (shift : Octic) (out : Values (FriBinding.Value 
     (store : CommitIteration.Store Aux) : Prop :=
   ∃ xs : Fin 8 → Fin 32, accepts pub shift xs = true ∧ out = output pub xs ∧ pub.rounds.Installed store shift
 
+/-- The original continuation after the sampler returns. The sampled list
+still enters BindQueries as a receiver value supplied by its caller. -/
+def resume (pub : Publication) (shift : Octic) (drawn : Values (FriBinding.Value model) protocol1Signature.outputs) :
+    FriPhaseCalls.Process model (Values (FriBinding.Value model) protocol5Signature.outputs) := do
+  let projected ← caller.projections projectionSites.1 (receiverHandles model pub.handles)
+  let state := committed pub shift
+  let bound ← caller.call FriSourceCalls.binding (prependPairs projected (.cons state.shift (.cons state.size
+    (.cons state.coefficients (.cons state.rounds (.cons (drawn.get .here) .nil))))))
+  FriLowDegreeCall.query model (drawn.get .here) bound
+
+set_option maxRecDepth 6000 in
+theorem afterSample (pub : Publication) (shift : Octic) (nonzero : shift ≠ 0) (xs : Fin 8 → Fin 32)
+    (before : State Aux) (role : before.oracle.self = 1) (live : pub.rounds.Installed before.oracle shift) :
+    PIR.Process.OnReturn (handler network choose) before (resume pub shift (FriScalarLoop.packed model (List.ofFn xs)))
+      (fun out after ↦ accepts pub shift xs = true ∧ out = output pub xs ∧ pub.rounds.Installed after.oracle shift) := by
+  unfold resume
+  apply PIR.Process.OnReturn.bind (head := (projectionsKeep (oracles := sourceOracles) (ordinary := sourceNetwork) (base := sourceReads)
+    (publish := sourcePublisher) caller rfl (by decide) role projectionSites.1 pub.handles).onReturn rfl)
+  rintro _ current ⟨same, rfl⟩
+  apply PIR.Process.OnReturn.bind (head := binding network choose pub shift xs current (same ▸ role))
+  rintro _ bound ⟨kept, rfl⟩
+  have original := kept.trans same
+  apply (PublishedWords.withPublicationFrame sourceOracles network choose
+    (queries network choose pub shift nonzero xs bound (original ▸ role) (original ▸ live))).weaken
+  intro rec law out returning
+  obtain ⟨⟨ok, values, _⟩, survived⟩ := law out returning
+  exact ⟨ok, values, pub.rounds.transport survived shift (original ▸ live)⟩
+
 set_option maxRecDepth 6000 in
 /-- This publication is fixed before the eight scalar queries. Every
 successful continuation uses its handles and the positions actually sampled. -/
@@ -112,17 +140,8 @@ theorem afterCommit (pub : Publication) (shift : Octic) (nonzero : shift ≠ 0) 
   rintro _ drawn ⟨⟨xs, rfl⟩, frame⟩
   have valid := pub.rounds.transport frame shift (gatheredAt ▸ live)
   have who := frame.registry.1.trans (gatheredAt ▸ role)
-  apply PIR.Process.OnReturn.bind (head := (projectionsKeep (oracles := sourceOracles) (ordinary := sourceNetwork) (base := sourceReads)
-    (publish := sourcePublisher) caller rfl (by decide) who projectionSites.1 pub.handles).onReturn rfl)
-  rintro _ current ⟨same, rfl⟩
-  apply PIR.Process.OnReturn.bind (head := binding network choose pub shift xs current (same ▸ who))
-  rintro _ bound ⟨kept, rfl⟩
-  have original := kept.trans same
-  apply (PublishedWords.withPublicationFrame sourceOracles network choose
-    (queries network choose pub shift nonzero xs bound (original ▸ who) (original ▸ valid))).weaken
-  intro rec law out returning
-  obtain ⟨⟨ok, values, _⟩, survived⟩ := law out returning
-  exact ⟨xs, ok, values, pub.rounds.transport survived shift (original ▸ valid)⟩
+  exact (afterSample network choose pub shift nonzero xs drawn who valid).weaken fun _ law out returned ↦
+    ⟨xs, law out returned⟩
 
 theorem program (shift : Octic) (nonzero : shift ≠ 0) (service : Nat)
     (before : State Aux) (role : before.oracle.self = 1) :
