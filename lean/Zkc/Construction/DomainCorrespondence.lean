@@ -129,6 +129,12 @@ theorem guard (site : String) (condition : Nat) (declared : List ValueSort) :
   intro env
   kernel_rfl
 
+theorem require (site : String) (condition : Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.require site, [condition], declared, []⟩ (View.require condition declared) := by
+  intro env
+  kernel_rfl
+
 /-- One selected-region rule works for arbitrary closed arms, captures and
 result tuples. Both body correspondences are required, including dormant arms. -/
 theorem mathBranch (selector : Nat) (captures : List Nat) (declared : List ValueSort)
@@ -143,7 +149,25 @@ theorem mathBranch (selector : Nat) (captures : List Nat) (declared : List Value
   intro env
   rcases yes with ⟨yesInputs, yesBody, yesYielded⟩
   rcases no with ⟨noInputs, noBody, noYielded⟩
-  change selectMath program selector captures declared _ _
+  change selectClosed .math program selector captures declared _ _
+    (evaluate model program context yesBody) (evaluate model program context noBody) env = _
+  rw [yesMeaning, noMeaning]
+  rfl
+
+/-- The same all-arm correspondence rule applies to closed local selection. -/
+theorem localBranch (selector : Nat) (captures : List Nat) (declared : List ValueSort)
+    (yes no : InstructionRegion) {yesView noView : View.Block model.toCarriers}
+    (yesSame : Block (program := program) (context := context) yes.instructions yesView)
+    (noSame : Block (program := program) (context := context) no.instructions noView) :
+    Step (program := program) (context := context)
+      ⟨.localBranch, selector :: captures, declared, [yes, no]⟩
+      (View.localBranch program selector captures declared yes no yesView noView) := by
+  have yesMeaning : evaluate model program context yes.instructions = yesView := funext yesSame
+  have noMeaning : evaluate model program context no.instructions = noView := funext noSame
+  intro env
+  rcases yes with ⟨yesInputs, yesBody, yesYielded⟩
+  rcases no with ⟨noInputs, noBody, noYielded⟩
+  change selectClosed .local program selector captures declared _ _
     (evaluate model program context yesBody) (evaluate model program context noBody) env = _
   rw [yesMeaning, noMeaning]
   rfl

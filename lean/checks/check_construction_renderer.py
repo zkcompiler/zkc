@@ -188,6 +188,23 @@ example : RenderedProduct.participant.instructions = [
 '''
 
 
+def local_branch_controls():
+    guard = ["exec.apply", [["binding", ["symbol", ["require"]]], ["parameters", ["array", []]],
+                            ["site", ["string", "guard"]]],
+             ["control.require", [], "", [BOOLEAN], []], [0], [], []]
+    branch = ["exec.test", [["site", ["string", "choose"]]], [], [0, 1], [BOOLEAN],
+              [[[BOOLEAN], [], ["exec.complete", [0]], "then", []],
+               [[BOOLEAN], [guard], ["exec.complete", [0]], "else", []]]]
+    data = export([BOOLEAN, BOOLEAN, TRANSCRIPT], [branch], [3, 2])
+    return strip(renderer.render(data, "RenderedLocalBranch")) + '''
+open Zkc.Construction in
+example : RenderedLocalBranch.participant.instructions = [
+    ⟨.localBranch, [0, 1], [.data .boolean],
+      [⟨[.data .boolean], [], [0]⟩,
+       ⟨[.data .boolean], [⟨.require "guard", [0], [], []⟩], [0]⟩]⟩] := by decide +kernel
+'''
+
+
 def check(output, lake):
     """Render controls; `lake=None` leaves all generated kernel checks pending."""
     output.mkdir(parents=True, exist_ok=True)
@@ -344,7 +361,7 @@ example : RenderedCaptures.participant.instructions =
         for namespace, _, _ in catalogue_cases) + \
         "] = [" + ", ".join(".ok ()" if code is None else f'.error "{code}"' for _, _, code in catalogue_cases) + \
         "] := by\n  decide +kernel\n"
-    source += product_controls()
+    source += product_controls() + local_branch_controls()
     path = output / "Rendered.lean"
     path.write_text("module\n\npublic import Zkc.Construction.Participant\npublic import Zkc.Construction.CatalogueAdmission\n\n"
                     "@[expose] public section\n" + source, encoding="utf-8")
@@ -416,7 +433,7 @@ example : RenderedCaptures.participant.instructions =
             export([base, TRANSCRIPT], [changed], [2, 1]), "UnsupportedBinding"):
         raise AssertionError("renderer treated another binding as field embedding")
     member_refusals = renderer_member_refusals()
-    report = {"status": "pass", "kernel_cases": 8, "catalogue_cases": len(catalogue_cases),
+    report = {"status": "pass", "kernel_cases": 9, "catalogue_cases": len(catalogue_cases),
               "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals)
               + member_refusals + len(selection_refusals), "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),

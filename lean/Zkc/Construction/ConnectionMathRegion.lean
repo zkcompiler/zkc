@@ -90,7 +90,7 @@ inductive Alignment (definitions : List CheckedDefinition) :
       (yesRegion noRegion : InstructionRegion)
       (yesInputs : yesRegion.inputs = captures.map ValueSort.data)
       (noInputs : noRegion.inputs = captures.map ValueSort.data)
-      (formed : checkMathArms (Domain.mathCallMatches program)
+      (formed : checkClosedArms .math (Domain.closedCallMatches program)
         (results.map ValueSort.data) yesRegion noRegion = .ok ())
       {yesBody noBody rest : TargetBlock} {yesSize noSize finalSize : Nat} {yielded : List Nat}
       (yesConnected : Alignment definitions yes (arguments captures.length) captures.length

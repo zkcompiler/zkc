@@ -343,18 +343,26 @@ def mathCallMatches (program : Structured.Program) (name : String)
     definition.inputs.map ValueSort.data == inputs &&
     definition.outputs.map ValueSort.data == outputs
 
-/-- Closed mathematical selection keeps formation separate from execution.
-Both stored arms must form, and every call must match an actual Math helper
-including its input and output ABI, even in a dormant arm.
-Only the selected callback receives the explicit capture frame. -/
-def selectMath (program : Structured.Program) (selector : Nat) (captures : List Nat)
-    (declared : List ValueSort) (yes no : InstructionRegion)
+/-- Nested Math keeps its original helper restriction inside a local frame. -/
+def closedCallMatches (program : Structured.Program) (kind : Structured.HelperKind)
+    (name : String) (inputs outputs : List ValueSort) : Bool :=
+  match kind with
+  | .math => mathCallMatches program name inputs outputs
+  | .local => program.payload.definitions.any fun definition =>
+      definition.name == name && definition.inputs.map ValueSort.data == inputs &&
+        definition.outputs.map ValueSort.data == outputs
+
+/-- Closed selection validates both arms before executing the chosen one.
+All nested helper signatures and frame kinds are checked against the original
+program; only the selected arm receives the capture frame. -/
+def selectClosed (kind : Structured.HelperKind) (program : Structured.Program)
+    (selector : Nat) (captures : List Nat) (declared : List ValueSort) (yes no : InstructionRegion)
     (runYes runNo : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
     (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
   match env[selector]?, read env captures with
   | some (.data (.boolean condition)), some arguments =>
       if yes.inputs = no.inputs ∧ sortsMatch yes.inputs arguments ∧
-          (checkMathArms (mathCallMatches program) declared yes no).isOk then
+          (checkClosedArms kind (closedCallMatches program) declared yes no).isOk then
         let run := if condition then runYes else runNo
         let yielded := if condition then yes.yielded else no.yielded
         ((run arguments).interpret (withCallerFrame env)).bind fun final =>
@@ -364,6 +372,7 @@ def selectMath (program : Structured.Program) (selector : Nat) (captures : List 
           | none => .halt .refused
       else .halt .refused
   | _, _ => .halt .refused
+
 
 mutual
 /-- Structural evaluation of the retained constructed instruction tree. -/
@@ -458,9 +467,19 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
           | some (.data (.boolean false)) => .halt .reject
           | _ => .halt .refused
         else .halt .refused
+    | .require _, [condition], [] =>
+        if declared = [] then
+          match env[condition]? with
+          | some (.data (.boolean true)) => .done env
+          | _ => .halt .refused
+        else .halt .refused
     | .mathBranch, selector :: captures,
         [yes@⟨_, yesBody, _⟩, no@⟨_, noBody, _⟩] =>
-        selectMath program selector captures declared yes no
+        selectClosed .math program selector captures declared yes no
+          (evaluate model program context yesBody) (evaluate model program context noBody) env
+    | .localBranch, selector :: captures,
+        [yes@⟨_, yesBody, _⟩, no@⟨_, noBody, _⟩] =>
+        selectClosed .local program selector captures declared yes no
           (evaluate model program context yesBody) (evaluate model program context noBody) env
     | .loop _ maximum, count :: initial, [⟨inputs, body, yielded⟩] =>
         executeLoop inputs maximum yielded count initial declared

@@ -127,7 +127,7 @@ def one_parameter(attrs):
 CONSTRUCTION_PRIMITIVES = frozenset((
     "index.constant", "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
     "transcript.native.indexed.index", "transcript.native.indexed.indices",
-    "transcript.native.indexed.challenge", "field.embed"))
+    "transcript.native.indexed.challenge", "field.embed", "control.require"))
 
 
 def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_values=None):
@@ -185,6 +185,10 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
         require([sort(value)[1] for value in inputs] == [logical_kind(k) for k in operand_kinds]
                 and [sort(value)[1] for value in outputs] == [logical_kind(k) for k in result_kinds],
                 "execution binding actual ports")
+        if contract == "control.require":
+            require(not arguments and not parameters and operand_kinds == [boolean] and not result_kinds,
+                    "local guard shape")
+            return f".require {text(string_attribute(attrs, 'site'))}"
         if contract == "index.constant":
             require(not arguments and not operand_kinds and result_kinds == [index]
                     and len(parameters) == 1, "index constant shape")
@@ -462,11 +466,16 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
                 kinds = kinds + [kind]
             places = places + result_places
             continue
-        elif name == "data.branch":
+        elif name in ("data.branch", "exec.test"):
             decoded = attributes(attrs)
-            require(decoded == {"alternatives": ("array", [["string", "then"], ["string", "else"]])}
-                    and binding == [] and len(regions) == 2 and len(mapped) >= 1,
-                    "Math branch attributes")
+            local = name == "exec.test"
+            if local:
+                require(set(decoded) == {"site"}, "local branch attributes")
+                string_attribute(decoded, "site")
+            else:
+                require(decoded == {"alternatives": ("array", [["string", "then"], ["string", "else"]])},
+                        "Math branch attributes")
+            require(binding == [] and len(regions) == 2 and len(mapped) >= 1, "closed branch shape")
             require(kinds[mapped[0]] == ("boolean", None), "Math branch selector")
             capture_kinds = [kinds[o] for o in mapped[1:]]
             require(all(kind[0] in CAPTURED for kind in capture_kinds)
@@ -474,7 +483,7 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
             arms = []
             for label, region in zip(("then", "else"), regions):
                 arguments, nested, terminal, alternative, payload = record(region, 5)
-                require(alternative == label and payload == [] and record(terminal, 2)[0] == "data.yield",
+                require(alternative == label and payload == [] and record(terminal, 2)[0] == ("exec.complete" if local else "data.yield"),
                         "Math branch arm")
                 argument_kinds = [sort(value)[1] for value in arguments]
                 require(argument_kinds == capture_kinds, "Math branch captures")
@@ -485,7 +494,8 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
                 body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
                 inputs = seq(arguments, lambda v: sort(v)[0])
                 arms.append(f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩")
-            rendered.append(f"{indent}⟨.mathBranch, {seq(mapped, nat)}, {result_terms}, [{', '.join(arms)}]⟩")
+            branch = ".localBranch" if local else ".mathBranch"
+            rendered.append(f"{indent}⟨{branch}, {seq(mapped, nat)}, {result_terms}, [{', '.join(arms)}]⟩")
         else:
             require(regions == [], f"unexpected operation region: {name}")
             if is_service:

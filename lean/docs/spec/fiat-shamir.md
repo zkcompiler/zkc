@@ -121,6 +121,21 @@ different calculation, and equal host carrier types do not identify nominal prod
 This deterministic reader boundary is tested independently of the kernel proofs;
 those proofs concern the rendered participant and the existing structured semantics.
 
+Closed `exec.test` regions use `Operation.localBranch`; `data.branch` uses
+`Operation.mathBranch`. One kind-sensitive formation walk checks both arms and
+every nested helper ABI before selection. Local frames may contain rejecting
+guards, bound requirements and closed local calls. `Operation.require` keeps
+installed `control.require` separate from a protocol guard: true continues,
+false is `.refused`, matching the executable model's kernel-failure projection.
+The native backend diagnostic remains `rejected:require`; this ideal carrier
+does not model native diagnostic strings. Nested Math retains its stricter helper admission;
+it does not inherit local call rights. Neither frame admits transcript operations,
+communication, services or handles. Both use the same closed-frame evaluator,
+which executes only the selected arm and preserves its checkpoints and stops.
+The reader currently admits completing branch terminals; other terminal outcomes
+remain explicit refusals. Generated local ranges and computations are still
+outside this interpretation profile.
+
 The same carrier also retains the actual producer's owner-local service
 interface in `Participant.servicePorts`, separate from ordinary SSA inputs.
 `Operation.localService port request template coordinates` retains the admitted

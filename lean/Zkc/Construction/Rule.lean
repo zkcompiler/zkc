@@ -57,58 +57,74 @@ def isLocalValue : Option ValueSort → Bool
   | some (.data ty) => ty.isCustody || !ty.isHandle
   | _ => false
 
-/-- Admission of two closed arms from their independently checked body rows.
-The recursive traversal remains structurally recursive on instructions. -/
-def checkMathArmResults (results : List ValueSort) (yes no : InstructionRegion)
-    (checkedYes checkedNo : Except String (List ValueSort)) : Except String Unit := do
+/-- Diagnostics retain the distinction between pure Math and stopping local code. -/
+def closedDiagnostic (kind : Structured.HelperKind) (detail : String) : String :=
+  (if kind == .math then "construction-math-" else "construction-local-") ++ detail
+
+/-- Admission of two closed arms from their independently checked body rows. -/
+def checkClosedArmResults (kind : Structured.HelperKind) (results : List ValueSort)
+    (yes no : InstructionRegion) (checkedYes checkedNo : Except String (List ValueSort)) :
+    Except String Unit := do
   if yes.inputs != no.inputs || !yes.inputs.all (fun s => isData (some s)) ||
-      !results.all (fun s => isData (some s)) then throw "construction-math-captures"
+      !results.all (fun s => isData (some s)) then throw (closedDiagnostic kind "captures")
   let yesSorts ← checkedYes
   let noSorts ← checkedNo
   if yes.yielded.map (yesSorts[·]?) != results.map some ||
-      no.yielded.map (noSorts[·]?) != results.map some then throw "construction-math-yields"
+      no.yielded.map (noSorts[·]?) != results.map some then throw (closedDiagnostic kind "yields")
 
 mutual
-/-- Formation of a closed mathematical frame. Both arms are checked even when
-one selector is constant. Effects, guards and handles cannot enter Math. Helper
-admission is an explicit parameter: construction shape checks leave call linking
-to source connection; execution validates every arm against the actual source ABI. -/
-def checkMathFrom (admitCall : String → List ValueSort → List ValueSort → Bool) : List ValueSort → List Instruction → Except String (List ValueSort)
+/-- One formation walk for closed data frames. Both arms form, including dormant
+ones. Local frames may reject at guards; Math remains pure. The call predicate
+receives each nested frame's kind so a Math arm cannot inherit local call rights.
+Transcript, communication, service effects and handles remain excluded. -/
+def checkClosedFrom (kind : Structured.HelperKind)
+    (admitCall : Structured.HelperKind → String → List ValueSort → List ValueSort → Bool) :
+    List ValueSort → List Instruction → Except String (List ValueSort)
   | sorts, [] => .ok sorts
   | sorts, instruction :: rest => do
-      let next ← checkMathStep admitCall sorts instruction
-      checkMathFrom admitCall next rest
+      let next ← checkClosedStep kind admitCall sorts instruction
+      checkClosedFrom kind admitCall next rest
 
-def checkMathStep (admitCall : String → List ValueSort → List ValueSort → Bool) (sorts : List ValueSort) : Instruction → Except String (List ValueSort)
+def checkClosedStep (kind : Structured.HelperKind)
+    (admitCall : Structured.HelperKind → String → List ValueSort → List ValueSort → Bool)
+    (sorts : List ValueSort) : Instruction → Except String (List ValueSort)
   | ⟨.calculate calculation, operands, results, []⟩ =>
       if operands.map (sorts[·]?) = calculation.op.arguments.map (some ∘ .data) ∧
           results = calculation.op.results.map .data ∧ results.all (fun s => isData (some s)) then
         .ok (sorts ++ results)
-      else .error "construction-math-calculation"
+      else .error (closedDiagnostic kind "calculation")
   | ⟨.call name, operands, results, []⟩ => do
-      let some inputs := operands.mapM (sorts[·]?) | throw "construction-math-call"
+      let some inputs := operands.mapM (sorts[·]?) | throw (closedDiagnostic kind "call")
       if inputs.all (fun s => isData (some s)) ∧ results.all (fun s => isData (some s)) ∧
-          admitCall name inputs results then return sorts ++ results
-      else throw "construction-math-call"
-  | ⟨.mathBranch, selector :: captures, results, [⟨yesInputs, yesBody, yesYielded⟩, ⟨noInputs, noBody, noYielded⟩]⟩ => do
+          admitCall kind name inputs results then return sorts ++ results
+      else throw (closedDiagnostic kind "call")
+  | ⟨.guard _, [condition], [], []⟩ | ⟨.require _, [condition], [], []⟩ =>
+      if kind == .local && sorts[condition]? == some (.data .boolean) then .ok sorts
+      else .error (closedDiagnostic kind "operation")
+  | ⟨operation, selector :: captures, results,
+      [⟨yesInputs, yesBody, yesYielded⟩, ⟨noInputs, noBody, noYielded⟩]⟩ => do
+      if operation != .mathBranch && operation != .localBranch then
+        throw (closedDiagnostic kind "operation")
+      let bodyKind := if operation == .mathBranch then Structured.HelperKind.math else .local
+      if kind == .math && bodyKind == .local then throw (closedDiagnostic kind "operation")
       if sorts[selector]? != some (.data .boolean) ||
           captures.map (sorts[·]?) != yesInputs.map some || yesInputs != noInputs ||
           !yesInputs.all (fun s => isData (some s)) ||
-          !results.all (fun s => isData (some s)) then throw "construction-math-captures"
-      checkMathArmResults results ⟨yesInputs, yesBody, yesYielded⟩ ⟨noInputs, noBody, noYielded⟩
-        (checkMathFrom admitCall yesInputs yesBody) (checkMathFrom admitCall noInputs noBody)
+          !results.all (fun s => isData (some s)) then throw (closedDiagnostic bodyKind "captures")
+      checkClosedArmResults bodyKind results ⟨yesInputs, yesBody, yesYielded⟩ ⟨noInputs, noBody, noYielded⟩
+        (checkClosedFrom bodyKind admitCall yesInputs yesBody)
+        (checkClosedFrom bodyKind admitCall noInputs noBody)
       return sorts ++ results
-  | _ => .error "construction-math-operation"
-
+  | _ => .error (closedDiagnostic kind "operation")
 end
 
-/-- Shared closed-arm formation, independent of the caller's unrelated cells.
-The caller separately checks the selector and ordered capture boundary. -/
-def checkMathArms (admitCall : String → List ValueSort → List ValueSort → Bool)
+/-- Both closed arms form using the same kind-sensitive traversal as nested code. -/
+def checkClosedArms (kind : Structured.HelperKind)
+    (admitCall : Structured.HelperKind → String → List ValueSort → List ValueSort → Bool)
     (results : List ValueSort) (yes no : InstructionRegion) : Except String Unit :=
-  checkMathArmResults results yes no
-    (checkMathFrom admitCall yes.inputs yes.instructions)
-    (checkMathFrom admitCall no.inputs no.instructions)
+  checkClosedArmResults kind results yes no
+    (checkClosedFrom kind admitCall yes.inputs yes.instructions)
+    (checkClosedFrom kind admitCall no.inputs no.instructions)
 
 /-- The transcript occurrence carries exactly the enclosing induction values. -/
 def coordinatesValid (state : CheckState) (template : Template) (coordinates : Nat) : Bool :=
@@ -260,9 +276,13 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
           else .error "construction-call"
   | instruction@⟨.mathBranch, _, _, _⟩ => do
       if state.pending matches .observe .. then throw "construction-pending"
-      let sorts ← checkMathStep (fun _ _ _ => true) state.sorts instruction
+      let sorts ← checkClosedStep .math (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
-  | ⟨.guard _, [condition], [], []⟩ =>
+  | instruction@⟨.localBranch, _, _, _⟩ => do
+      if state.pending matches .observe .. then throw "construction-pending"
+      let sorts ← checkClosedStep .local (fun _ _ _ _ => true) state.sorts instruction
+      return { state with sorts := sorts }
+  | ⟨.guard _, [condition], [], []⟩ | ⟨.require _, [condition], [], []⟩ =>
       match state.pending with
       | .observe _ _ => .error "construction-pending"
       | _ =>
@@ -362,9 +382,12 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
         .ok { state with sorts := state.sorts ++ results }
       else .error "construction-plain-call"
   | instruction@⟨.mathBranch, _, _, _⟩ => do
-      let sorts ← checkMathStep (fun _ _ _ => true) state.sorts instruction
+      let sorts ← checkClosedStep .math (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
-  | ⟨.guard _, [condition], [], []⟩ =>
+  | instruction@⟨.localBranch, _, _, _⟩ => do
+      let sorts ← checkClosedStep .local (fun _ _ _ _ => true) state.sorts instruction
+      return { state with sorts := sorts }
+  | ⟨.guard _, [condition], [], []⟩ | ⟨.require _, [condition], [], []⟩ =>
       if state.sorts[condition]? = some (.data .boolean) then .ok state
       else .error "construction-plain-guard"
   | ⟨.localService port request template coordinates, operands, results, []⟩ =>

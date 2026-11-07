@@ -21,11 +21,10 @@ def reindexInstructions (rename : Nat → Nat) : Nat → List Zkc.Construction.I
         operands := instruction.operands.map rename
         operation := match instruction.operation with
           | .localService port request template coordinates =>
-              .localService port { request with operands := request.operands.map rename }
-                template (coordinates.map rename)
+              .localService port request template (coordinates.map rename)
           | operation => operation
         regions := match instruction.operation with
-          | .mathBranch => instruction.regions
+          | .mathBranch | .localBranch => instruction.regions
           | _ => instruction.regions.map fun region =>
               { region with instructions := reindexInstructions rename fuel region.instructions
                             yielded := region.yielded.map rename } }

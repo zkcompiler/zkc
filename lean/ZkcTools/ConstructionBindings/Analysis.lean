@@ -98,8 +98,11 @@ def analyzeWithContext (program : Program) (context : Zkc.Construction.Context)
         unless (count :: initial).all (· < offset) do throw "construction-binding-forward-reference"
         loops := loops ++ [⟨index, offset, site, maximum, count, initial, yielded, region.instructions, call⟩]
     | .mathBranch =>
-        unless (checkMathStep (fun _ _ _ => true) slots instruction).isOk do
+        unless (checkClosedStep .math (fun _ _ _ _ => true) slots instruction).isOk do
           throw "construction-binding-math-region"
+    | .localBranch =>
+        unless (checkClosedStep .local (fun _ _ _ _ => true) slots instruction).isOk do
+          throw "construction-binding-local-region"
     | _ =>
         unless instruction.regions.isEmpty do throw "construction-binding-unclaimed-region"
         unless instruction.operands.all (· < offset) do throw "construction-binding-forward-reference"

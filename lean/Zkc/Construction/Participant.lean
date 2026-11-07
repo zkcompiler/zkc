@@ -328,12 +328,18 @@ inductive Operation where
   | calculate (calculation : Calculation)
   | call (helper : String)
   | guard (site : String)
+  /-- Installed backend requirement. False is a kernel refusal, distinct from
+  the explicit rejection of a source protocol guard. -/
+  | require (site : String)
   /-- A loop of at most `maximum` iterations. Its single region owns the
   induction/carried arguments, body and yielded references. -/
   | loop (site : String) (maximum : Nat)
   /-- Pure Boolean selection. Both closed arms are retained and checked; only
   the selected arm executes. It does not select protocol interactions. -/
   | mathBranch
+  /-- Closed local selection may contain checked guards and local helper calls.
+  It cannot select transcript, communication or service interactions. -/
+  | localBranch
   | unsupported (name : String)
   deriving DecidableEq, Repr
 
