@@ -408,6 +408,19 @@ anchor and the provider-side registered word. It covers arbitrary row types,
 effectful network actions, and adaptive choosers. The proof combines the logical
 registry and provider store on the same record using the monad's exact support.
 
+At the compiled clear-store boundary, `ClearStorage.Encodes` relates an actual
+published word to its nominal record, including source coordinates, shape and
+payload. `Stored.transport` combines provider preservation with append-only
+physical storage. `RecordAllocator` proves the existing five instructions for
+arbitrary record fields and caller frames. Its checked recognizer recovers
+nominal types and SSA positions from the fragment, and the same execution rule
+specializes to both base and virtual FRI records. `Encodes.allocate` joins the
+physical allocation with the provider association. A different protocol reuses
+these rules when it uses this realization; a different realization must prove
+its own representation and execution laws. These local proofs do not supply
+source-event ownership, root capacity bounds or the complete query controller.
+No folded-word identity or FRI degree lemma is a premise of the allocator rule.
+
 FRI supplies the virtual table's captured parent, challenge and coset
 geometry. `CommitIngress.installed` follows the linked coset admission
 helper, assembles the receiver's shift, initializes both handle sequences,

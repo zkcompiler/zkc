@@ -1,13 +1,13 @@
 module
 
-public import Zkc.Realization.ClearStorageCalculations
+public import Zkc.Realization.ClearStorageAllocation
 
 @[expose] public section
 
 /-! Same-typed and equal-payload publications still retain different anchors.
 Storage ordinals do not replace the two actual nested iteration coordinates. -/
 namespace Tests.ClearStorage
-open Zkc.Source Zkc.Source.Structured Zkc.Realization.ClearStorage
+open Zkc Zkc.Source Zkc.Source.Structured Zkc.Realization.ClearStorage
 
 abbrev kind : OracleKind := .table .index none
 
@@ -27,6 +27,29 @@ def record (model : DomainModel) (outer inner : Nat) : model.Value layout.record
 theorem record_encodes (model : DomainModel) (outer inner : Nat) :
     Encodes layout (word model outer inner) (record model outer inner) :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- The actual allocator installs the same encoded word, for every nested
+source coordinate and any previously allocated records. -/
+theorem actual_allocation (model : DomainModel) (outer inner : Nat)
+    (prior : List (model.Value layout.recordType)) (bounded : prior.length < indexLimit)
+    (program : Program) (context : Construction.Context) :
+    let environment : Construction.Domain.Environment model.toCarriers :=
+      [.data ⟨.sequence layout.recordType, rfl, prior⟩, .data (.index outer),
+       .data (.index inner), .data (.index 2), .data (.index 1), .data ⟨.indices, rfl, [11, 22]⟩]
+    Stored layout [⟨kind.answer, word model outer inner⟩] (prior ++ [record model outer inner])
+      (layout.constructor, prior.length) (word model outer inner) ∧
+    Nonempty (Construction.Original.Simulation Eq (fun _ frame ↦ environment <+: frame)
+      (.done (Zkc.Realization.RecordAllocator.result model layout.allocator rfl environment prior
+        (record model outer inner)))
+      (Construction.Domain.evaluate model program context
+        (Zkc.Realization.RecordAllocator.instructions layout.allocator ⟨6, 0, [1, 2, 3, 4, 5]⟩)
+        environment)) := by
+  dsimp only
+  apply (record_encodes model outer inner).allocate [] prior program context rfl rfl
+  · rfl
+  · rfl
+  · decide
+  · exact bounded
 
 def words (model : DomainModel) : PublishedWords.Table model :=
   [⟨.index, word model 2 9⟩, ⟨.index, word model 2 7⟩]
@@ -123,4 +146,5 @@ example (model : DomainModel) :
 #print axioms Zkc.Realization.ClearStorage.Stored.transport
 #print axioms swapped_anchor_refused
 #print axioms first_stored
+#print axioms actual_allocation
 end Tests.ClearStorage

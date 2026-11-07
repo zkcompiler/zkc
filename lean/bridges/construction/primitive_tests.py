@@ -21,6 +21,22 @@ class CheckedPrimitives(unittest.TestCase):
                          [("index", None)] * 2, [("boolean", None)], [[], []]),
                          ".calculate .indexEqual")
 
+    def test_installed_index_constant_retains_checked_meaning(self):
+        binding = ["index.constant", [], "", [], [INDEX]]
+        for value in ("0", str((1 << 64) - 1)):
+            attrs = copy.deepcopy(ATTRS)
+            attrs["parameters"] = ("array", [["parameter", ["natural", value]]])
+            with self.subTest(value=value):
+                self.assertEqual(operation("exec.apply", attrs, binding, [],
+                    [("index", None)], [[], []]), f".execute (.indexConstant {value})")
+        self.assertEqual(operation("data.index", {"value": ("integer", ["unsigned", "64", "7"])},
+                         [], [], [("index", None)], [[], []]), ".calculate (.indexConstant 7)")
+        for value in ("-1", "01", str(1 << 64)):
+            attrs = copy.deepcopy(ATTRS)
+            attrs["parameters"] = ("array", [["parameter", ["natural", value]]])
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                operation("exec.apply", attrs, binding, [], [("index", None)], [[], []])
+
     def test_other_checked_scalars(self):
         for contract, constructor, inputs, output in [
                 ("index.less", "indexLess", [INDEX, INDEX], BOOL),

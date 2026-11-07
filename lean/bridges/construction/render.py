@@ -250,7 +250,7 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
             require(not arguments and not operand_kinds and result_kinds == [index]
                     and len(parameters) == 1, "index constant shape")
             value = int(parameters[0][1])
-            return f".calculate (.indexConstant {value})"
+            return f".execute (.indexConstant {value})"
         if contract == "indices.empty":
             require(not arguments and not parameters and not operand_kinds
                     and result_kinds == [("indices", None)], "indices empty shape")

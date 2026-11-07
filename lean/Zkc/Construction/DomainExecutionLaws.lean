@@ -89,6 +89,17 @@ theorem Value.encode_sort {ty : Structured.Ty} {input : carriers.Value ty}
     · cases found; rfl
     · cases found
 
+/-- Explicit equations for the dependent tuple encoder let importers use its
+constructors without regenerating matcher equations. -/
+theorem encodeValues_nil : encodeValues (carriers := carriers) .nil = some [] := rfl
+
+theorem encodeValues_cons {type : Structured.Ty} {types : List Structured.Ty}
+    (head : carriers.Value type) (tail : Values carriers.Value types) :
+    encodeValues (.cons head tail) = (do
+      let first ← Value.encode type head
+      let rest ← encodeValues tail
+      pure (first :: rest)) := rfl
+
 theorem encodeValues_sorts {tys : List Structured.Ty}
     {input : Values carriers.Value tys} {encoded : Environment carriers}
     (ok : encodeValues input = some encoded) :
