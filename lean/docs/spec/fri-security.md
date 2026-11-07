@@ -29,7 +29,7 @@ uniform field elements and positions. For every adaptive network and word
 chooser, the probability that the verifier returns true **and its first
 successfully published word is far** is bounded by the sum of the three
 unique-decoding folding errors and `(1 − min(1/4, δ))^8`. The word is read
-from the final physical publication history. An abort retains its mass,
+from the provider's final publication history. An abort retains its mass,
 post-state and observations. A later word can depend on earlier challenges.
 [Original source-event theorem](../../integrations/arklib/ZkcArkLibExamples/Fri/InteractiveSoundness.lean)
 
@@ -44,6 +44,21 @@ scalar verifier to its charged random-oracle queries are separate proof
 obligations. [Provider laws](../../Zkc/Source/Structured/PublishedWordsLaws.lean)
 · [Holder theorem](../../integrations/arklib/ZkcArkLibExamples/Fri/HonestMessages.lean)
 · [Paired source controls](../../security/TestsSecurity/FriHonestExchange.lean)
+
+The fixed-table access transport preserves both replies and the complete
+ordered query log. At the selected field and scalar sites, it recovers the
+same challenge values and charged keys used in the FRI experiment. The
+scalar segment reads eight positions even when values or keys repeat.
+The complete compiled endpoint additionally needs an admitted interpretation
+of the selected constructed participant and a realization correspondence
+for its generated clear-store helpers. The current constructed-participant
+export reaches an unsupported `exec.range` in that generated closure.
+The executable-byte reader also requires support for its nominal
+sequence-of-record storage representation. These are separate admission
+boundaries. Whole-run event transport and finite sampling-retry accounting
+remain required by the compiled theorem.
+[Access transport](../../security/ZkcSecurity/Bindings/Transcript/QueryTreeSource/Composition/AccessLog.lean)
+· [Scalar source path](../../integrations/arklib/ZkcArkLibExamples/Fri/ClearScalarPath.lean)
 
 ## Subject
 
