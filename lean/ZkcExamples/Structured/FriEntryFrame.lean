@@ -6,7 +6,7 @@ public import ZkcExamples.Structured.FriLowDegreeCall
 @[expose] public section
 
 /-! Discharge the original root entry checks once, for every private word,
-public shift, caller and service. The callee and mark come from the admitted
+public shift and service. The callee and mark come from the admitted
 source. The child still executes its own checks, including its exit. -/
 set_option autoImplicit false
 set_option maxRecDepth 6000
@@ -20,7 +20,15 @@ abbrev snapshot := subject.unit.snapshot
 def root : Frame :=
   let index := snapshot.definitions.findIdx (·.name == snapshot.entry)
   {invocation := ⟨index, []⟩, definition := index}
-abbrev labels := [(rootSite.site, rootSite.site)]
+/-- Pair each lexical mark from the retained region with its dynamic label. -/
+def markLabels (caller : FriPhaseCalls.Caller) (site : CallSite)
+    (found : (caller.callMarks site).isSome := by decide +kernel) : List (String × String) :=
+  ((caller.callMarks site).get found).map (fun label ↦
+    (label, qualifyProtocolSite caller.context.applicationPrefix label))
+
+def labels := markLabels ⟨{}, (FriPhaseCalls.schedule runBody.erase).get (by decide +kernel)⟩ rootSite
+
+private theorem rootLabels : labels = [(rootSite.site, rootSite.site)] := by kernel_rfl
 
 def checked : CheckedCall snapshot root (labels.map Prod.fst) protocol5Signature rootSite.site :=
   (CheckedCall.check snapshot root (labels.map Prod.fst) protocol5Signature rootSite.site).get (by decide +kernel)
@@ -39,8 +47,13 @@ theorem run (self : Fin 2) (privateWord : List (model.Field extension)) (shift :
         {state with frame := checked.entered, parents := [checked.marked]}
       pure {result with events := [.mark rootSite.site] ++ result.events}) := by
   intro state handler
-  exact CheckedCall.run subject.unit.oracles (PublishedWords.liftM network) PublishedWords.readM
+  have eqn := CheckedCall.run subject.unit.oracles (PublishedWords.liftM network) PublishedWords.readM
     (PublishedWords.publishM choose) state labels checked body
+  have logged : labels.map (fun p ↦ OracleProtocol.Event.mark (E := E) p.2) = [.mark rootSite.site] := by
+    rw [rootLabels]
+    rfl
+  rw [logged] at eqn
+  exact eqn
 
 /-- At the verifier entry the checked mark and application always reach the
 selected low-degree body. Keep its complete record, its exit, and the final
@@ -71,5 +84,33 @@ theorem verifier (shift : model.Field extension) (rounds queries service : Nat) 
   rw [eqn, bind_assoc]
   simp only [pure_bind]
   rfl
+
+abbrev commit := FriSourceCalls.commitment
+def commitLabels := markLabels FriLowDegreeCall.caller commit
+
+def commitEntry : CheckedCall snapshot checked.entered (commitLabels.map Prod.fst) commit.signature commit.site :=
+  (CheckedCall.check snapshot checked.entered (commitLabels.map Prod.fst) commit.signature commit.site).get
+    (by decide +kernel)
+
+/-- The actual first nested call in LowDegree reaches Commit. Its mark list
+and role substitution are read from that caller's region. The parent stack
+and the complete post-state of the selected body are visible to the suffix. -/
+theorem commitCall (network : PublishedWords.Table model →
+    PIR.MonadHandler m (participantInterfaceOn model.toCarriers) Aux E)
+    (choose : PublishedWords.Chooser m model Aux E)
+    (args : Values (FriBinding.Value model) commit.signature.inputs)
+    (store : OracleRuntimeState model snapshot subject.unit.domains subject.unit.math (PublishedWords.State model Aux))
+    (parents : List Frame) :
+    let state : OracleProtocol.State model snapshot subject.unit.domains subject.unit.math (PublishedWords.State model Aux) :=
+      ⟨store, checked.entered, parents⟩
+    let handler := PublishedWords.actionM subject.unit.oracles network choose
+    let child := invokeProtocol (verifierTable model) commit.signature (commit.childContext lowDegreeContext) 1 args
+    (FriLowDegreeCall.caller.call commit args).runM handler state = (do
+      let result ← (child.bind fun value ↦ .call .leave fun _ ↦ .done value).runM handler
+        {state with frame := commitEntry.entered, parents := commitEntry.marked :: parents}
+      pure {result with events := commitLabels.map (fun p ↦ OracleProtocol.Event.mark (E := E) p.2) ++ result.events}) := by
+  intro state handler child
+  exact CheckedCall.run subject.unit.oracles (PublishedWords.liftM network) PublishedWords.readM
+    (PublishedWords.publishM choose) state commitLabels commitEntry child
 
 end ZkcExamples.Structured.FriEntryFrame

@@ -8,6 +8,7 @@ import ZkcArkLibExamples.Fri.VirtualStore
 import ZkcArkLibExamples.Fri.HolderPadding
 import ZkcArkLibExamples.Fri.HonestMessages
 import ZkcExamples.Structured.FriEntryFrame
+import ZkcSecurityExamples.FriHonestExchange
 import ZkcExamples.Structured.FriBindingExecution
 import ZkcExamples.Structured.FriLowDegreeCall
 import ZkcExamples.Structured.FriQueryCall
@@ -408,5 +409,5 @@ run_cmd (ZkcTools.DeclarationAudit.check
 
 run_cmd (ZkcTools.DeclarationAudit.check
   [`Zkc.Source.Structured.CheckedFrames, `ZkcExamples.Structured.FriEntryFrame,
-   `ZkcArkLibExamples.Fri.HonestMessages]
+   `ZkcArkLibExamples.Fri.HonestMessages, `ZkcSecurityExamples.FriHonestExchange]
   "FRI-CHECKED-ENTRY-AND-HONEST-MESSAGES-PASS" (exactModules := true))

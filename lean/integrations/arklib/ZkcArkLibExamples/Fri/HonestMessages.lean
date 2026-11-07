@@ -81,4 +81,23 @@ theorem retained (I : PIR.Signature) (shift : Octic) (nonzero : shift ≠ 0)
     decide_true, Bool.true_and]
   exact walks
 
+/-- The mathematical check returns the cells of the original private word
+in sample order. Repeated positions therefore repeat their original value. -/
+theorem queryReadback (I : PIR.Signature) (shift : Octic) (nonzero : shift ≠ 0)
+    (word : Words 5) (code : word ∈ ReedSolomon.code (RetainedDomain.domain shift nonzero : Fin 32 ↪ Octic) 8)
+    (first second third : Octic) :
+    ∃ layers : Layers Octic 5 3, Computes I shift word [first, second, third] layers ∧
+      ∀ positions : Fin 8 → Fin 32, Phases.query RetainedDomain.root 0 layers shift positions =
+        .returned ⟨true, positions, fun i ↦ word (positions i)⟩ := by
+  obtain ⟨layers, runs, original, accepts⟩ := retained I shift nonzero word code first second third
+  refine ⟨layers, runs, fun positions ↦ ?_⟩
+  simp only [Phases.query, accepts, ↓reduceIte]
+  cases layers with
+  | fold sent beta rest =>
+    change sent = word at original
+    subst word
+    have cells : values (.fold sent beta rest) positions = fun i ↦ sent (positions i) :=
+      funext fun i ↦ firstValue_eq sent beta rest (positions i)
+    exact congrArg (fun vs ↦ PIR.Outcome.returned (Phases.Result.mk (n := 5) true positions vs)) cells
+
 end ZkcSecurity.ArkLib.Fri.HonestMessages
