@@ -170,6 +170,32 @@ theorem retained_context : OracleStore.Located later.state.entries
 
 def parentQuery : OracleRead := ⟨kind, anchor 9, 0, location 20, []⟩
 
+/-- The same reached installation exposes its open computation before any
+provider is selected. A later real construction cannot replace the older
+registry used by the two child continuations. -/
+theorem read_process_expands {E : Type} (state : Provider × Nat) :
+    OracleProcess.answer (E := E) model 1 later.state.entries parentQuery state =
+      let args : Values model.Value checked.declaration.inputs :=
+        (show checked.declaration.inputs = checked.declaration.inputs.dropLast ++ [.index]
+          by kernel_rfl).symm ▸ captures.append (.cons parentQuery.position .nil)
+      OracleProcess.mapResult (fun result ↦
+        ⟨match result.outcome with
+          | .stopped reason => .stopped reason
+          | .returned values => match values.get .here with
+            | none => .stopped .incomplete
+            | some value => .returned value,
+          result.state, .query parentQuery :: result.events⟩)
+        (OracleProcess.present (fun child current ↦
+            OracleProcess.answer model 1 before.entries (parentQuery.expand child) current)
+          (checked.denote model args.present) (state.1, state.2 + 1)) := by
+  refine (OracleProcess.answer_virtual checked parentQuery rfl 2 0 [1] captures retained_context
+    (by kernel_rfl) 1 (by decide) (by decide) (by decide) state).trans ?_
+  dsimp only
+  congr 1
+  funext result
+  split <;> simp_all
+  split <;> simp_all
+
 def readRetained (failure : Option (Nat × PIR.Stop)) :
     PIR.Execution (Provider × Nat) (OracleEvent ProviderEvent) Nat :=
   OracleStore.answer model (base failure) 1 later.state.entries parentQuery (({} : Provider), 0)
@@ -224,6 +250,8 @@ theorem second_child_stop (reason : PIR.Stop) :
   cases reason <;> decide +kernel
 
 #print axioms recovered_context
+#print axioms read_process_expands
+#print axioms VirtualStorage.Stored.source_process
 #print axioms read_expands
 #print axioms retained_read
 #print axioms first_child_stop

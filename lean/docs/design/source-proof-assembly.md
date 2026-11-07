@@ -218,6 +218,18 @@ of FRI-specific interpretations of its physical blocks. It relates:
 - ordered, typed prior child answers and the just-returned answer;
 - the live caller frame, source-relative identity and outstanding resource budget.
 
+`OracleProcessLocation` exposes the existing open source computation at its
+immutable installation. Fresh newer entries preserve that computation before
+choosing a provider. Base requests retain arbitrary outcomes, reached provider
+state and event order; failed admission still records and charges its logical
+query. Virtual requests run their original checked body and captures against
+the installation's older registry. `VirtualStorage.Stored.source_process`
+recovers that registry from the reached storage relation and source reachability.
+The actual two-query installation test consumes this equation after a later
+real construction. An additional same-anchor replacement control changes the
+open computation despite preserving its answer type. These are source-side
+equations for the controller proof, not a completed target simulation.
+
 The common proof must cover entry, child dispatch, save, return, resume, final
 answer, refusal and exhaustion. Each branch needs its reached-operand and
 capacity premises. A theorem for one physical fragment does not establish
