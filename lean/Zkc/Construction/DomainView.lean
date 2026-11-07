@@ -143,6 +143,16 @@ def require (condition : Nat) (declared : List ValueSort) : Block carriers := fu
     | _ => .halt .refused
   else .halt .refused
 
+/-- Checked primitive outcomes, separate from mathematical calculations. -/
+def execute (model : Structured.DomainModel) (primitive : Structured.Primitive)
+    (references : List Nat) (declared : List ValueSort) : Block model.toCarriers := fun env =>
+  match read env references with
+  | some arguments =>
+      match executePrimitive model primitive arguments with
+      | .returned results => append declared env results
+      | .stopped reason => .halt reason
+  | none => .halt .refused
+
 def finiteFold (model : Structured.DomainModel) (program : Structured.Program)
     (domain helper predicate : String) (references : List Nat) (declared : List ValueSort) :
     Block model.toCarriers := fun env =>

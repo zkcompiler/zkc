@@ -128,7 +128,12 @@ guards, bound requirements and closed local calls. `Operation.require` keeps
 installed `control.require` separate from a protocol guard: true continues,
 false is `.refused`, matching the executable model's kernel-failure projection.
 The native backend diagnostic remains `rejected:require`; this ideal carrier
-does not model native diagnostic strings. Nested Math retains its stricter helper admission;
+does not model native diagnostic strings. `Operation.execute` invokes the shared checked primitive evaluator. Installed
+index comparisons validate machine-index ingress; installed addition also
+checks overflow. These are distinct from total mathematical equality and
+wrapping arithmetic, even where their port types coincide. Boolean negation
+and vector length use the same checked adapter. Nested Math refuses installed
+local execution and retains its stricter helper admission;
 it does not inherit local call rights. Neither frame admits transcript operations,
 communication, services or handles. Both use the same closed-frame evaluator,
 which executes only the selected arm and preserves its checkpoints and stops.

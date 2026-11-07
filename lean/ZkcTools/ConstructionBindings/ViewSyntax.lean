@@ -58,6 +58,9 @@ def action (instruction : Instruction) (bodies : List (String × String)) : Exce
   | .call name, _, [], [] =>
       let args := [literal name, references, declared]
       .ok (app "View.helper" (["model", "program"] ++ args), app "Correspondence.helper" args)
+  | .execute primitive, _, [], [] =>
+      let args := [literal primitive, references, declared]
+      .ok (app "View.execute" (["model"] ++ args), app "Correspondence.execute" args)
   | .finiteFold domain helper predicate, _, [], [] =>
       let args := [literal domain, literal helper, literal predicate, references, declared]
       .ok (app "View.finiteFold" (["model", "program"] ++ args), app "Correspondence.finiteFold" args)

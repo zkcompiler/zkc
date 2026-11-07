@@ -123,6 +123,13 @@ theorem helper (name : String) (references : List Nat) (declared : List ValueSor
   intro env
   kernel_rfl
 
+theorem execute (primitive : Structured.Primitive) (references : List Nat) (declared : List ValueSort) :
+    Step (model := model) (program := program) (context := context)
+      ⟨.execute primitive, references, declared, []⟩
+      (View.execute model primitive references declared) := by
+  intro env
+  kernel_rfl
+
 theorem finiteFold (domain helper predicate : String) (references : List Nat) (declared : List ValueSort) :
     Step (model := model) (program := program) (context := context)
       ⟨.finiteFold domain helper predicate, references, declared, []⟩

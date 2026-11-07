@@ -127,7 +127,7 @@ def one_parameter(attrs):
 CONSTRUCTION_PRIMITIVES = frozenset((
     "index.constant", "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
     "transcript.native.indexed.index", "transcript.native.indexed.indices",
-    "transcript.native.indexed.challenge", "field.embed", "control.require", "index.equal", "vector.get"))
+    "transcript.native.indexed.challenge", "field.embed", "control.require", "index.equal", "index.less", "index.add", "bool.not", "vector.get", "vector.length"))
 
 
 def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_values=None):
@@ -201,10 +201,20 @@ def operation(name, attrs, binding, operand_kinds, result_kinds, rows, operand_v
         require([sort(value)[1] for value in inputs] == [logical_kind(k) for k in operand_kinds]
                 and [sort(value)[1] for value in outputs] == [logical_kind(k) for k in result_kinds],
                 "execution binding actual ports")
-        if contract == "index.equal":
+        if contract in ("index.equal", "index.less", "index.add"):
+            result = index if contract == "index.add" else boolean
             require(not arguments and not parameters and operand_kinds == [index, index]
-                    and result_kinds == [boolean], "index equality ports")
-            return ".calculate .indexEqual"
+                    and result_kinds == [result], "checked index ports")
+            constructor = {"index.equal": "indexEqual", "index.less": "indexLess", "index.add": "indexAdd"}[contract]
+            return f".execute .{constructor}"
+        if contract == "bool.not":
+            require(not arguments and not parameters and operand_kinds == [boolean]
+                    and result_kinds == [boolean], "Boolean negation ports")
+            return ".execute .booleanNot"
+        if contract == "vector.length":
+            require(not parameters and len(operand_kinds) == 1 and operand_kinds[0][0] == "vector"
+                    and result_kinds == [index], "checked vector length ports")
+            return f".execute (.vectorLength {text(operand_kinds[0][1])})"
         if contract == "vector.get":
             require(not parameters and len(operand_kinds) == 2 and operand_kinds[0][0] == "vector"
                     and operand_kinds[1] == index and result_kinds == [("field", operand_kinds[0][1])],

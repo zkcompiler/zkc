@@ -87,6 +87,20 @@ def calculate (model : Structured.DomainModel) (calculation : Calculation)
           | some encoded => .returned encoded
           | none => .stopped .refused
 
+/-- Installed local primitives use their checked structured outcome, including
+machine-index ingress and arithmetic overflow refusals. -/
+def executePrimitive (model : Structured.DomainModel) (primitive : Structured.Primitive)
+    (arguments : Environment model.toCarriers) : PIR.Outcome (Environment model.toCarriers) :=
+  match decodeValues primitive.arguments arguments with
+  | none => .stopped .refused
+  | some values =>
+      match primitive.evaluateOn model.toFieldModel values with
+      | .stopped reason => .stopped reason
+      | .returned results =>
+          match encodeValues results with
+          | some encoded => .returned encoded
+          | none => .stopped .refused
+
 /-- Helpers close over the exact admitted program's checked dependency prefix. -/
 def helperTable (model : Structured.DomainModel) (program : Structured.Program) :
     Structured.MeaningsOn model.toCarriers :=
@@ -469,7 +483,8 @@ def executeRange (program : Structured.Program) (conditional : Bool) (lower uppe
                   match (read final region.yielded).bind (rangeResult conditional declared) with
                   | some next => .done next
                   | none => .halt .refused
-            else .done current) (true, carried)).bind fun result => .done (env ++ result.2)
+            else .done current) (true, carried)).bind fun result =>
+            if sortsMatch declared result.2 then .done (env ++ result.2) else .halt .refused
       else .halt .refused
   | _, _, _ => .halt .refused
 
@@ -549,6 +564,13 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
         match read env references with
         | some arguments =>
             match calculate model calculation arguments with
+            | .returned results => append results
+            | .stopped reason => .halt reason
+        | none => .halt .refused
+    | .execute primitive, references, [] =>
+        match read env references with
+        | some arguments =>
+            match executePrimitive model primitive arguments with
             | .returned results => append results
             | .stopped reason => .halt reason
         | none => .halt .refused

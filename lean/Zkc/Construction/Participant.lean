@@ -326,6 +326,9 @@ inductive Operation where
   | localService (port : ServicePort) (request : Request)
       (template : Template) (coordinates : List Nat)
   | calculate (calculation : Calculation)
+  /-- Installed local primitives retain ingress checks and stopping outcomes.
+  These do not acquire mathematical calculation rights. -/
+  | execute (primitive : Structured.Primitive)
   | call (helper : String)
   /-- A Math fold resolves its named domain and callbacks against the original
   checked program, using the structured fold admission and evaluation. -/

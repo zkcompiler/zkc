@@ -235,6 +235,20 @@ example : RenderedMathCompute.participant.instructions = [
 '''
 
 
+def checked_primitive_controls():
+    attrs = [["binding", ["symbol", ["installed"]]], ["parameters", ["array", []]],
+             ["site", ["string", "comparison"]]]
+    instruction = ["exec.apply", attrs, ["index.equal", [], "", [INDEX, INDEX], [BOOLEAN]],
+                   [0, 1], [BOOLEAN], []]
+    data = export([INDEX, INDEX, TRANSCRIPT], [instruction], [3, 2])
+    data[6] = [BOOLEAN, TRANSCRIPT]
+    return strip(renderer.render(data, "RenderedCheckedPrimitive")) + '''
+open Zkc.Construction in
+example : RenderedCheckedPrimitive.participant.instructions =
+    [⟨.execute .indexEqual, [0, 1], [.data .boolean], []⟩] := by decide +kernel
+'''
+
+
 def check(output, lake):
     """Render controls; `lake=None` leaves all generated kernel checks pending."""
     output.mkdir(parents=True, exist_ok=True)
@@ -391,7 +405,7 @@ example : RenderedCaptures.participant.instructions =
         for namespace, _, _ in catalogue_cases) + \
         "] = [" + ", ".join(".ok ()" if code is None else f'.error "{code}"' for _, _, code in catalogue_cases) + \
         "] := by\n  decide +kernel\n"
-    source += product_controls() + local_branch_controls() + local_range_controls() + embedded_math_controls()
+    source += product_controls() + local_branch_controls() + local_range_controls() + embedded_math_controls() + checked_primitive_controls()
     path = output / "Rendered.lean"
     path.write_text("module\n\npublic import Zkc.Construction.Participant\npublic import Zkc.Construction.CatalogueAdmission\n\n"
                     "@[expose] public section\n" + source, encoding="utf-8")
@@ -463,7 +477,7 @@ example : RenderedCaptures.participant.instructions =
             export([base, TRANSCRIPT], [changed], [2, 1]), "UnsupportedBinding"):
         raise AssertionError("renderer treated another binding as field embedding")
     member_refusals = renderer_member_refusals()
-    report = {"status": "pass", "kernel_cases": 11, "catalogue_cases": len(catalogue_cases),
+    report = {"status": "pass", "kernel_cases": 12, "catalogue_cases": len(catalogue_cases),
               "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals) + len(policy_refusals)
               + member_refusals + len(selection_refusals), "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),

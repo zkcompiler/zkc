@@ -113,6 +113,12 @@ def checkClosedStep (kind : Structured.HelperKind)
           results = calculation.op.results.map .data ∧ results.all (fun s => isData (some s)) then
         .ok (sorts ++ results)
       else .error (closedDiagnostic kind "calculation")
+  | ⟨.execute primitive, operands, results, []⟩ =>
+      if kind == .local &&
+          operands.map (sorts[·]?) == primitive.arguments.map (some ∘ .data) &&
+          results == primitive.results.map .data && results.all (fun s => isData (some s)) then
+        .ok (sorts ++ results)
+      else .error (closedDiagnostic kind "primitive")
   | ⟨operation@(.call _), operands, results, []⟩
     | ⟨operation@(.finiteFold ..), operands, results, []⟩ => do
       let some inputs := operands.mapM (sorts[·]?) | throw (closedDiagnostic kind "call")
@@ -315,7 +321,8 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
       if state.pending matches .observe .. then throw "construction-pending"
       let sorts ← checkClosedStep .math (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
-  | instruction@⟨.localBranch, _, _, _⟩ | instruction@⟨.localRange _, _, _, _⟩ => do
+  | instruction@⟨.localBranch, _, _, _⟩ | instruction@⟨.localRange _, _, _, _⟩
+    | instruction@⟨.execute _, _, _, _⟩ => do
       if state.pending matches .observe .. then throw "construction-pending"
       let sorts ← checkClosedStep .local (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
@@ -422,7 +429,8 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
     | instruction@⟨.finiteFold .., _, _, _⟩ => do
       let sorts ← checkClosedStep .math (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
-  | instruction@⟨.localBranch, _, _, _⟩ | instruction@⟨.localRange _, _, _, _⟩ => do
+  | instruction@⟨.localBranch, _, _, _⟩ | instruction@⟨.localRange _, _, _, _⟩
+    | instruction@⟨.execute _, _, _, _⟩ => do
       let sorts ← checkClosedStep .local (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
   | ⟨.guard _, [condition], [], []⟩ | ⟨.require _, [condition], [], []⟩ =>
