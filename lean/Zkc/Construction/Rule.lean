@@ -72,6 +72,18 @@ def checkClosedArmResults (kind : Structured.HelperKind) (results : List ValueSo
   if yes.yielded.map (yesSorts[·]?) != results.map some ||
       no.yielded.map (noSorts[·]?) != results.map some then throw (closedDiagnostic kind "yields")
 
+/-- A closed range's body forms independently of the runtime interval. Its
+captures are immutable and its induction does not introduce protocol ancestry. -/
+def checkClosedRangeResults (conditional : Bool) (results captures : List ValueSort)
+    (region : InstructionRegion) (checked : Except String (List ValueSort)) : Except String Unit := do
+  if region.inputs != .data .index :: (results ++ captures) ||
+      !(results ++ captures).all (fun s => isData (some s)) then
+    throw "construction-local-range-inputs"
+  let final ← checked
+  let expected := (if conditional then [.data .boolean] else []) ++ results
+  if region.yielded.map (final[·]?) != expected.map some then
+    throw "construction-local-range-yields"
+
 mutual
 /-- One formation walk for closed data frames. Both arms form, including dormant
 ones. Local frames may reject at guards; Math remains pure. The call predicate
@@ -101,6 +113,16 @@ def checkClosedStep (kind : Structured.HelperKind)
   | ⟨.guard _, [condition], [], []⟩ | ⟨.require _, [condition], [], []⟩ =>
       if kind == .local && sorts[condition]? == some (.data .boolean) then .ok sorts
       else .error (closedDiagnostic kind "operation")
+  | ⟨.localRange conditional, lower :: upper :: values, results, [⟨inputs, body, yielded⟩]⟩ => do
+      if kind != .local then throw (closedDiagnostic kind "operation")
+      if sorts[lower]? != some (.data .index) || sorts[upper]? != some (.data .index) ||
+          (values.take results.length).map (sorts[·]?) != results.map some then
+        throw "construction-local-range-operands"
+      let some captures := (values.drop results.length).mapM (sorts[·]?)
+        | throw "construction-local-range-captures"
+      checkClosedRangeResults conditional results captures ⟨inputs, body, yielded⟩
+        (checkClosedFrom .local admitCall inputs body)
+      return sorts ++ results
   | ⟨operation, selector :: captures, results,
       [⟨yesInputs, yesBody, yesYielded⟩, ⟨noInputs, noBody, noYielded⟩]⟩ => do
       if operation != .mathBranch && operation != .localBranch then
@@ -278,7 +300,7 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
       if state.pending matches .observe .. then throw "construction-pending"
       let sorts ← checkClosedStep .math (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
-  | instruction@⟨.localBranch, _, _, _⟩ => do
+  | instruction@⟨.localBranch, _, _, _⟩ | instruction@⟨.localRange _, _, _, _⟩ => do
       if state.pending matches .observe .. then throw "construction-pending"
       let sorts ← checkClosedStep .local (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
@@ -384,7 +406,7 @@ def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
   | instruction@⟨.mathBranch, _, _, _⟩ => do
       let sorts ← checkClosedStep .math (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
-  | instruction@⟨.localBranch, _, _, _⟩ => do
+  | instruction@⟨.localBranch, _, _, _⟩ | instruction@⟨.localRange _, _, _, _⟩ => do
       let sorts ← checkClosedStep .local (fun _ _ _ _ => true) state.sorts instruction
       return { state with sorts := sorts }
   | ⟨.guard _, [condition], [], []⟩ | ⟨.require _, [condition], [], []⟩ =>

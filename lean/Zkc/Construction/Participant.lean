@@ -340,6 +340,10 @@ inductive Operation where
   /-- Closed local selection may contain checked guards and local helper calls.
   It cannot select transcript, communication or service interactions. -/
   | localBranch
+  /-- Closed local traversal of an exclusive index interval. Its region receives
+  induction, carried state and invariant captures. A conditional body yields a
+  continuation Boolean before its new state; false retains that state. -/
+  | localRange (conditional : Bool)
   | unsupported (name : String)
   deriving DecidableEq, Repr
 

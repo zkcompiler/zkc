@@ -75,6 +75,11 @@ def action (instruction : Instruction) (bodies : List (String × String)) : Exce
       let args := [toString selector, literal captures, declared, literal yes, literal no]
       .ok (app "View.mathBranch" (["program"] ++ args ++ [yesBody.1, noBody.1]),
         app "Correspondence.mathBranch" (args ++ [yesBody.2, noBody.2]))
+  | .localRange conditional, lower :: upper :: values, [region], [body] =>
+      let args := [literal conditional, toString lower, toString upper, literal values, declared,
+        literal region]
+      .ok (app "View.localRange" (["program"] ++ args ++ [body.1]),
+        app "Correspondence.localRange" (args ++ [body.2]))
   | .localBranch, selector :: captures, [yes, no], [yesBody, noBody] =>
       let args := [toString selector, literal captures, declared, literal yes, literal no]
       .ok (app "View.localBranch" (["program"] ++ args ++ [yesBody.1, noBody.1]),

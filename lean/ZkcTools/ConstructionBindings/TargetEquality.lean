@@ -21,6 +21,7 @@ private def view (expression : Expr) : Bool :=
 private def child (name : Name) (index : Nat) : Bool :=
   (name == ``Domain.View.sequence && (index == 1 || index == 2)) ||
   (name == ``Domain.View.loop && index == 6) ||
+  (name == ``Domain.View.localRange && index == 8) ||
   ((name == ``Domain.View.mathBranch || name == ``Domain.View.localBranch) && (index == 7 || index == 8))
 
 /-- Expose wrappers and aliases, stopping at the finite view vocabulary.

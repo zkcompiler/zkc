@@ -158,6 +158,12 @@ def localBranch (program : Structured.Program) (selector : Nat) (captures : List
     (yesBody noBody : Block carriers) : Block carriers :=
   selectClosed .local program selector captures declared yes no yesBody noBody
 
+/-- A local interval has a closed body and no protocol induction coordinate. -/
+def localRange (program : Structured.Program) (conditional : Bool) (lower upper : Nat)
+    (values : List Nat) (declared : List ValueSort) (region : InstructionRegion)
+    (body : Block carriers) : Block carriers :=
+  executeRange program conditional lower upper values declared region body
+
 /-- Immutable captures, induction coordinates and explicit yields use the
 existing generic loop. The body is an independently bound Process view. -/
 def loop (maximum : Nat) (yielded : List Nat) (count : Nat) (initial : List Nat)

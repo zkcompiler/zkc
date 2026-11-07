@@ -100,7 +100,7 @@ def analyzeWithContext (program : Program) (context : Zkc.Construction.Context)
     | .mathBranch =>
         unless (checkClosedStep .math (fun _ _ _ _ => true) slots instruction).isOk do
           throw "construction-binding-math-region"
-    | .localBranch =>
+    | .localBranch | .localRange _ =>
         unless (checkClosedStep .local (fun _ _ _ _ => true) slots instruction).isOk do
           throw "construction-binding-local-region"
     | _ =>

@@ -133,8 +133,18 @@ it does not inherit local call rights. Neither frame admits transcript operation
 communication, services or handles. Both use the same closed-frame evaluator,
 which executes only the selected arm and preserves its checkpoints and stops.
 The reader currently admits completing branch terminals; other terminal outcomes
-remain explicit refusals. Generated local ranges and computations are still
-outside this interpretation profile.
+remain explicit refusals.
+
+Generated `exec.range` uses `Operation.localRange`, with its own closed frame:
+induction, carried values, invariant captures. It traverses the same exclusive
+interval as the structured evaluator using `Finite.execute`. A conditional
+body's false continuation keeps its newly returned state and skips later bodies;
+empty or descending intervals retain the initial state. Formation checks the
+body, including yields and actual helper signatures, before traversal even for
+zero trips. The induction creates no protocol sampling ancestry. Checkpoints
+preserve the caller frame, and reached stops propagate. The reader admits
+`exec.complete` terminals and refuses other terminals. Embedded Math computations
+still require their interpretation rules.
 
 The same carrier also retains the actual producer's owner-local service
 interface in `Participant.servicePorts`, separate from ordinary SSA inputs.

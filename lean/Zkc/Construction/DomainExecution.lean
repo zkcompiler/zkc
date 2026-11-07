@@ -374,6 +374,43 @@ def selectClosed (kind : Structured.HelperKind) (program : Structured.Program)
   | _, _ => .halt .refused
 
 
+/-- Decode the exact conditional or unconditional range yield. -/
+def rangeResult (conditional : Bool) (declared : List ValueSort)
+    (values : Environment carriers) : Option (Bool × Environment carriers) := do
+  let (continuing, carried) ← if conditional then
+      match values with
+      | .data (.boolean continuing) :: carried => some (continuing, carried)
+      | _ => none
+    else some (true, values)
+  if sortsMatch declared carried then some (continuing, carried) else none
+
+/-- Local ranges use the same finite traversal as structured source loops.
+Both empty intervals and an early false continuation keep their carried values.
+The closed body forms before traversal, and its checkpoints retain the caller. -/
+def executeRange (program : Structured.Program) (conditional : Bool) (lower upper : Nat)
+    (values : List Nat) (declared : List ValueSort) (region : InstructionRegion)
+    (body : Environment carriers → PIR.Process (effects carriers) (Environment carriers))
+    (env : Environment carriers) : PIR.Process (effects carriers) (Environment carriers) :=
+  match env[lower]?, env[upper]?, read env values with
+  | some (.data (.index lo)), some (.data (.index hi)), some arguments =>
+      let carried := arguments.take declared.length
+      let captured := arguments.drop declared.length
+      if sortsMatch declared carried ∧
+          (checkClosedRangeResults conditional declared (captured.map Value.sort) region
+            (checkClosedFrom .local (closedCallMatches program)
+              region.inputs region.instructions)).isOk then
+        (Finite.execute (.elements (List.range' lo (hi - lo)))
+          (fun (current : Bool × Environment carriers) index =>
+            if current.1 then
+              ((body (.data (.index index) :: (current.2 ++ captured))).interpret
+                (withCallerFrame env)).bind fun final =>
+                  match (read final region.yielded).bind (rangeResult conditional declared) with
+                  | some next => .done next
+                  | none => .halt .refused
+            else .done current) (true, carried)).bind fun result => .done (env ++ result.2)
+      else .halt .refused
+  | _, _, _ => .halt .refused
+
 mutual
 /-- Structural evaluation of the retained constructed instruction tree. -/
 def evaluate (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
@@ -481,6 +518,9 @@ def step (model : Structured.DomainModel) (program : Structured.Program) (contex
         [yes@⟨_, yesBody, _⟩, no@⟨_, noBody, _⟩] =>
         selectClosed .local program selector captures declared yes no
           (evaluate model program context yesBody) (evaluate model program context noBody) env
+    | .localRange conditional, lower :: upper :: values, [region@⟨_, body, _⟩] =>
+        executeRange program conditional lower upper values declared region
+          (evaluate model program context body) env
     | .loop _ maximum, count :: initial, [⟨inputs, body, yielded⟩] =>
         executeLoop inputs maximum yielded count initial declared
           (evaluate model program context body) env

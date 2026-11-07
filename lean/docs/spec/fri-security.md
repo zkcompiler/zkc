@@ -59,8 +59,9 @@ projections now use the shared structured product calculations, with kernel
 laws for arbitrary fields and controls for same-typed ordering and nominal
 mismatches. Closed local tests use a kind-sensitive checker and evaluator that
 preserve guard rejection and exclude transcript effects. The independent
-construction renderer next refuses `exec.range`. Sequence operations, conditional
-ranges and mathematical bodies still need formal admission and execution
+construction renderer now admits closed conditional ranges using the structured
+finite traversal. It next refuses `exec.compute`. Sequence operations and
+embedded mathematical bodies still need formal admission and execution
 correspondence. Natural field constants already use the exact
 nominal field's catalogue characteristic.
 

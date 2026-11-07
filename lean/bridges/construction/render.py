@@ -427,6 +427,36 @@ def block(instructions, kinds, places, indent, rows, depth=0, ports=None, consta
             inputs = seq(arguments[:1 + carried], lambda v: sort(v)[0])
             region = f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩"
             rendered.append(f"{indent}⟨{term}, {seq(mapped[:1 + carried], nat)}, {result_terms}, [{region}]⟩")
+        elif name == "exec.range":
+            decoded = attributes(attrs)
+            require(set(decoded) == {"site"} and binding == [], "local range attributes")
+            string_attribute(decoded, "site")
+            require(len(regions) == 1 and len(mapped) >= 2 + len(results), "local range shape")
+            require([kinds[o] for o in mapped[:2]] == [("index", None)] * 2,
+                    "local range bounds")
+            carried = len(results)
+            require([kinds[o] for o in mapped[2:2 + carried]] == result_kinds,
+                    "local range initial state")
+            capture_kinds = [kinds[o] for o in mapped[2 + carried:]]
+            require(all(kind[0] in CAPTURED for kind in result_kinds + capture_kinds),
+                    "local range sorts")
+            arguments, nested, terminal, conditional = record(regions[0], 4)
+            require(type(conditional) is bool and record(terminal, 2)[0] == "exec.complete",
+                    "local range terminal")
+            argument_kinds = [sort(value)[1] for value in arguments]
+            require(argument_kinds == [("index", None)] + result_kinds + capture_kinds,
+                    "local range arguments")
+            inner, inner_kinds, inner_places = block(
+                nested, argument_kinds, list(range(len(arguments))), indent + "    ", rows, depth + 1, {})
+            yielded = references(terminal[1], inner_places, "local range yielded")
+            require([inner_kinds[o] for o in yielded] ==
+                    ([("boolean", None)] if conditional else []) + result_kinds,
+                    "local range yield sorts")
+            body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
+            inputs = seq(arguments, lambda v: sort(v)[0])
+            region = f"⟨{inputs}, {body}, {seq(yielded, nat)}⟩"
+            term = f".localRange {'true' if conditional else 'false'}"
+            rendered.append(f"{indent}⟨{term}, {seq(mapped, nat)}, {result_terms}, [{region}]⟩")
         elif name == "exec.match":
             decoded = attributes(attrs)
             require(set(decoded) == {"alternatives", "site"} and binding == []

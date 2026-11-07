@@ -61,7 +61,7 @@ def collect : Nat → List Zkc.Construction.Instruction → List ValueSort → L
       | .mathBranch =>
         unless (checkClosedStep .math (fun _ _ _ _ => true) slots instruction).isOk do
           throw "construction-binding-frame-math-region"
-      | .localBranch =>
+      | .localBranch | .localRange _ =>
         unless (checkClosedStep .local (fun _ _ _ _ => true) slots instruction).isOk do
           throw "construction-binding-frame-local-region"
       | _ =>

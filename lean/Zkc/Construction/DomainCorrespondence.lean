@@ -172,6 +172,21 @@ theorem localBranch (selector : Nat) (captures : List Nat) (declared : List Valu
   rw [yesMeaning, noMeaning]
   rfl
 
+/-- Closed range correspondence retains all iterations, early completion and stops. -/
+theorem localRange (conditional : Bool) (lower upper : Nat) (values : List Nat)
+    (declared : List ValueSort) (region : InstructionRegion) {view : View.Block model.toCarriers}
+    (same : Block (program := program) (context := context) region.instructions view) :
+    Step (program := program) (context := context)
+      ⟨.localRange conditional, lower :: upper :: values, declared, [region]⟩
+      (View.localRange program conditional lower upper values declared region view) := by
+  have bodyMeaning : evaluate model program context region.instructions = view := funext same
+  intro env
+  rcases region with ⟨inputs, body, yielded⟩
+  change executeRange program conditional lower upper values declared _
+    (evaluate model program context body) env = _
+  rw [bodyMeaning]
+  rfl
+
 theorem loop (site : String) (maximum : Nat) (yielded : List Nat) (count : Nat)
     (initial : List Nat) (declared : List ValueSort) {body : List Instruction}
     {view : View.Block model.toCarriers}
