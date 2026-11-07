@@ -2,6 +2,7 @@ module
 
 public import ZkcArkLibExamples.Fri.VirtualReads
 public import Zkc.Realization.QuerySourceExecution
+public import Zkc.Realization.QuerySourceWork
 
 @[expose] public section
 
@@ -74,6 +75,43 @@ def produced {I : PIR.Signature} {S E : Type}
     (initialState := initial) (initialPhase := initialPhase) arenas
   exact (start.resume leftExecution leftRead).resume rightExecution rightRead
 
+/-- The actual installed mathematical connection also determines the work
+schedule. Both original child occurrences remain, with their original source
+positions; no new FRI traversal or folded-word theorem is needed. The child
+expansion facts belong to their installed provider/virtual definitions. -/
+theorem scheduled (expansion : OracleRead → Zkc.Realization.QueryWork.Shape → Prop)
+    (childShape : Zkc.Realization.QueryWork.Shape)
+    (leftShape : expansion (leftRequest source (low position sourceRows)) childShape)
+    (rightShape : expansion (rightRequest source
+      (wrappingAdd (low position sourceRows) (logicalShiftRight sourceRows 1))) childShape) :
+    Zkc.Realization.QuerySourceWork.Body expansion
+      (FriVirtualBody.installed.denote model
+        (arguments model source beta sourceRows rows shift generator inverseShift
+          inverseGenerator inverseTwo position).present) [childShape, childShape] := by
+  rw [twoReads]
+  exact .call _ _ _ _ leftShape (fun _ ↦ .call _ _ _ _ rightShape (fun _ ↦ .done _))
+
+/-- Even identical child shapes cannot replace the two actual accesses by
+one. This checks the installed source, independently of its numerical result. -/
+theorem cannot_drop_child
+    (expansion : OracleRead → Zkc.Realization.QueryWork.Shape → Prop)
+    (childShape : Zkc.Realization.QueryWork.Shape) :
+    ¬ Zkc.Realization.QuerySourceWork.Body expansion
+      (FriVirtualBody.installed.denote model
+        (arguments model source beta sourceRows rows shift generator inverseShift
+          inverseGenerator inverseTwo position).present) [childShape] := by
+  rw [twoReads]
+  intro body
+  obtain ⟨first, rest, equal, _, following⟩ :=
+    Zkc.Realization.QuerySourceWork.Body.call_iff.mp body
+  have empty : rest = [] := (List.cons.inj equal).2.symm
+  have next := following (0 : model.Field extension)
+  rw [empty] at next
+  obtain ⟨_, _, impossible, _⟩ := Zkc.Realization.QuerySourceWork.Body.call_iff.mp next
+  contradiction
+
 #print axioms installed
 #print axioms produced
+#print axioms scheduled
+#print axioms cannot_drop_child
 end TestsArkLib.FriSourceContinuation

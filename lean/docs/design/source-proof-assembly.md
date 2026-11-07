@@ -532,6 +532,46 @@ relation. Their static selection, source expansion and ordered store tuple
 remain the enclosing controller's obligations. No new companion premise or
 alternative query evaluator is introduced.
 
+### Source schedules and actual guarded leaves
+
+`QuerySourceWork.Body` ties the finite child schedule to calls in the original
+source body. A stop may leave work unused; a successful return cannot skip a
+child. The saved cursor derives the remaining suffix, including ignored replies
+and repeated queries. `StackSchedule` retains that schedule at every installed
+parent, with its older registry and expanded source occurrence. Sibling return
+consumes the actual saved answer; parent completion restores the parent's shape;
+continuation zero derives an empty waiting stack. The current admission is a
+static query schedule, uniform over replies. This is a structural assertion
+about the existing process, not another oracle evaluator.
+
+The actual FRI source connection derives its two-child schedule from its existing
+`twoReads` law and rejects a one-child schedule. No additional FRI mathematical
+law or source traversal is required. Connecting each child's installed expansion
+and the root capacity remains common installation work.
+
+`QueryControllerPhase.Root` connects the complete emitted root-completion arm.
+It includes dispatch's zero-continuation guard, not only the Completed literal.
+It refuses a non-root selection and derives the complete output layout from the
+same carried state. `Returned.finish` joins this actual arm with the original
+root return and its final charged work transition. All four emitted FRI arms
+match; same-typed guard and output mutations are rejected.
+
+`QueryControllerEnter.BaseEntry` connects the complete emitted base-entry arm:
+kind check, immutable record lookup and projection, checked position comparison,
+and Request phase with the full state projection. It derives kind and position
+readback from that same header. Installation supplies stored-record membership
+and row meaning. Out-of-domain positions and oversized row bounds refuse before
+Request. All four actual FRI arms admit the common rule, with checked certificates
+derived from their bodies. The common domain-guard rule is also the entry prefix
+needed by virtual dispatch.
+
+These leaves do not establish the entire controller. Virtual entry and nested
+return dispatch must still connect their actual math slices, frame/answer stores
+and static selections to the source/work relation. Both enclosing ranges then
+consume that relation. These are enclosing proof obligations, not new companion
+assumptions. The strict generated-delivery and original endpoint/authoring gates
+remain unchanged.
+
 ## Disposition of the revised closing review
 
 The review at `62bb4ed39` was checked against the later implementation, rather
