@@ -52,6 +52,13 @@ def Values.get {Value : Ty → Type} {Γ : List Ty} {ty : Ty}
   | .here, .cons value _ => value
   | .there tail, .cons _ values => values.get tail
 
+@[simp] theorem Values.get_here {Value : Ty → Type} {Γ : List Ty} {ty : Ty}
+    (value : Value ty) (tail : Values Value Γ) : (Values.cons value tail).get .here = value := rfl
+
+@[simp] theorem Values.get_there {Value : Ty → Type} {Γ : List Ty} {ty result : Ty}
+    (value : Value ty) (tail : Values Value Γ) (reference : Var Γ result) :
+    (Values.cons value tail).get (.there reference) = tail.get reference := rfl
+
 abbrev Environment (Value : Ty → Type) (Γ : List Ty) :=
   {ty : Ty} → Var Γ ty → Value ty
 
@@ -59,6 +66,13 @@ def Environment.push {Value : Ty → Type} {Γ : List Ty} {ty : Ty}
     (env : Environment Value Γ) (value : Value ty) : Environment Value (ty :: Γ)
   | _, .here => value
   | _, .there v => env v
+
+@[simp] theorem Environment.push_here {Value : Ty → Type} {Γ : List Ty} {ty : Ty}
+    (env : Environment Value Γ) (value : Value ty) : env.push value .here = value := rfl
+
+@[simp] theorem Environment.push_there {Value : Ty → Type} {Γ : List Ty} {ty result : Ty}
+    (env : Environment Value Γ) (value : Value ty) (reference : Var Γ result) :
+    env.push value (.there reference) = env reference := rfl
 
 /-- Bind ordered results in front of the retained caller context. -/
 def Environment.prepend {Value : Ty → Type} {Γ Δ : List Ty}
@@ -80,6 +94,29 @@ def Var.weakenPrefix {Γ : List Ty} {ty : Ty} (extra : List Ty)
   induction values with
   | nil => rfl
   | cons _ _ ih => exact ih
+
+/-- Preserve a result variable while retaining a caller suffix. -/
+def Var.weakenSuffix {Γ : List Ty} {ty : Ty} (extra : List Ty)
+    (value : Var Γ ty) : Var (Γ ++ extra) ty :=
+  match value with
+  | .here => .here
+  | .there tail => .there (tail.weakenSuffix extra)
+
+@[simp] theorem Environment.prepend_weakenSuffix {Value : Ty → Type} {Γ Δ : List Ty}
+    {ty : Ty} (env : Environment Value Γ) (values : Values Value Δ) (value : Var Δ ty) :
+    env.prepend values (value.weakenSuffix Γ) = values.get value := by
+  induction values with
+  | nil => cases value
+  | cons head tail ih =>
+    cases value with
+    | here => rfl
+    | there value => exact ih value
+
+@[simp] theorem Environment.prepend_here {Value : Ty → Type} {Γ Δ : List Ty}
+    {ty : Ty} (env : Environment Value Γ) (values : Values Value (ty :: Δ)) :
+    env.prepend values .here = values.get .here := by
+  cases values
+  rfl
 
 /-- An explicit, ordered map of operands into the surrounding context. -/
 abbrev Operands (Γ : List Ty) := Values (Var Γ)

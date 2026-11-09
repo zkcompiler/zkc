@@ -92,6 +92,10 @@ that all native behavior already has a Lean model.
   boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
 - [Lean 4.35 adoption](development/lean-4.35-adoption.md): proof interfaces, upstream reuse and measured build choices.
+- [Common source construction](spec/source-construction.md): quantitative Region rules,
+  fixed requests, contextual laws and typed mathematical choices.
+- [Source-construction authoring](development/source-construction.md): complete model clients,
+  author responsibilities, named-law sharing and checking-cost reproduction.
 - [Weakest preconditions](spec/weakest-preconditions.md): local proof interpretations, adequacy, cost and honest-execution boundaries.
 - [Independent checking](development/independent-checking.md): exported locked statements, the comparator and paranoid checkers.
 - [Structured computations](design/structured-computations.md): canonical multi-result

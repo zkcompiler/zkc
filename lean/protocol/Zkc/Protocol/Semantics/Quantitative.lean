@@ -9,26 +9,30 @@ open PIR PFunctor MeasureTheory ProbabilityTheory
 
 namespace ProtocolProof
 
-/-- A local transformer sees every outcome and the complete reached state and event prefix. -/
+/-- A local transformer sees every outcome and the complete reached state and event prefix.
+Expose the function spine of the upstream `OpSpec` so that applying an operation does not
+require changing the imported synonym's reducibility status. -/
 @[expose, implicit_reducible] def OperationSpec (I : Signature) (S L : Type) :=
-  OpSpec (Internal.effects I) ((S × List L) → ENNReal)
+  (operation : (Internal.effects I).A) →
+    ((Internal.effects I).B operation → (S × List L) → ENNReal) →
+    (S × List L) → ENNReal
 
 /-- Monotonicity is the existing upstream order on continuation potentials. -/
 @[expose] def OperationSpec.Monotone {I : Signature} {S L : Type}
-    (spec : OperationSpec I S L) : Prop := OpSpec.Monotone spec
+    (spec : OperationSpec I S L) : Prop := OpSpec.Monotone (P := Internal.effects I) spec
 
 /-- The sole quantitative interpretation is the upstream fold of the failure-aware encoding. -/
 @[expose] noncomputable def wpFold {I : Signature} {S L A : Type}
     (spec : OperationSpec I S L) (program : Process I A)
     (post : Outcome A → (S × List L) → ENNReal) : (S × List L) → ENNReal :=
-  FreeM.wpFold spec (Internal.encode program) post
+  FreeM.wpFold (P := Internal.effects I) spec (Internal.encode program) post
 
 /-- Exact expectations of complete primitive replies and accumulated state. -/
 @[expose] noncomputable def opExpectation {I : Signature} {S L : Type}
     [∀ op, MeasurableSpace (I.Reply op)] [MeasurableSpace S] [MeasurableSpace L]
     (handler : (op : I.Op) → Kernel (S × List L)
       (Outcome (I.Reply op) × (S × List L))) : OperationSpec I S L :=
-  Internal.opExpectation handler
+  Internal.opExpectation (P := Internal.effects I) handler
 
 theorem opExpectation_monotone {I : Signature} {S L : Type}
     [∀ op, MeasurableSpace (I.Reply op)] [MeasurableSpace S] [MeasurableSpace L]

@@ -96,33 +96,33 @@ theorem challenge_probability (guess : Bool) :
     operations () () {out | out.outcome = .returned guess} = half := by
   cases guess <;> simp [operations]
 
-private def coinSpec : OperationSpec Challenge Unit Unit :=
+@[expose] def coinSpec : OperationSpec Challenge Unit Unit :=
   fun _ post state ↦ half * post (.returned false) ((), state.2) +
     half * post (.returned true) ((), state.2)
 
-private theorem coinSpec_mono : coinSpec.Monotone := by
+theorem coinSpec_mono : coinSpec.Monotone := by
   intro _ post post' hpost state
   exact add_le_add (mul_le_mul_right (hpost (.returned false) ((), state.2)) half)
     (mul_le_mul_right (hpost (.returned true) ((), state.2)) half)
 
 /-- Stops retain their execution state and receive zero acceptance reward. -/
-private def resultReward {A : Type} (post : A → ℝ≥0∞) : Outcome A → ℝ≥0∞
+@[expose] def resultReward {A : Type} (post : A → ℝ≥0∞) : Outcome A → ℝ≥0∞
   | .returned value => post value
   | .stopped _ => 0
 
-private def reward (accepted : Bool) (value : ℝ≥0∞) : ℝ≥0∞ :=
+@[expose] def reward (accepted : Bool) (value : ℝ≥0∞) : ℝ≥0∞ :=
   if accepted then value else 0
 
-private def factor (residual : Bool) : ℝ≥0∞ := if residual then half else 1
+@[expose] def factor (residual : Bool) : ℝ≥0∞ := if residual then half else 1
 
-private theorem primitive_upper (residual guess accepted : Bool) (value : ℝ≥0∞) :
+theorem primitive_upper (residual guess accepted : Bool) (value : ℝ≥0∞) :
     half * reward (accepted && (guess == (residual && false))) value +
       half * reward (accepted && (guess == (residual && true))) value ≤
         reward accepted (factor residual * value) := by
   cases residual <;> cases guess <;> cases accepted <;>
     simp [reward, factor, ← add_mul, half_add_half]
 
-private theorem primitive_lower (residual guess accepted : Bool) (value : ℝ≥0∞)
+theorem primitive_lower (residual guess accepted : Bool) (value : ℝ≥0∞)
     (honest : residual = false → guess = false) :
     reward accepted (factor residual * value) ≤
       half * reward (accepted && (guess == (residual && false))) value +

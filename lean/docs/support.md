@@ -1,5 +1,15 @@
 # Supported claims
 
+The [common quantitative Region constructor](spec/source-construction.md) assembles upper and
+lower contracts from checked contextual laws and typed invariants. Complete model roots cover
+history-adaptive finite rounds, guarded admission, persistent publications and adaptive decoded
+reads, a non-injective audited-store installation, and a multi-result shared-challenge client.
+The last client uses a frozen constructor and reuses the same query theorem at two actual
+Region calls. Request, state, stop and complete-history meanings remain fixed. Stored-proof
+controls verify sharing independently of tactic output. These results establish model-level
+construction and authoring reuse; native original-source association, generated-controller
+correspondence and complete compiled Sumcheck/FRI security remain open.
+
 The [independent STARK components](spec/stark-components.md) prove strict
 constraint/DEEP quotient laws, uniform polynomial batching and typed OOD bounds.
 Adaptive-candidate bounds additionally allow quotient lists fixed after batching
