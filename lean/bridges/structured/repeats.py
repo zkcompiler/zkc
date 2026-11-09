@@ -12,6 +12,8 @@ from pathlib import Path
 import sys
 import tomllib
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.packages import module_package, selected, package_directory, package_modules  # noqa: E402
 from check import FIELD, MODULUS, ROOT, definition, digest, fixture_source, fixture_stems, fixture_table, write_json
 from bridges.common.replacement import replace_exactly_once
 from bridges.common import source_format
@@ -41,32 +43,31 @@ class RepeatSuite(OpenSuite):
     """Use OpenSuite comparisons with immutable tools and Git-free receipts."""
 
     source_scope = (
-        "Git-free source owners: main Lake package namespaces; structured bridge, Lean checks/support, "
+        "Git-free source owners: maintained Lake packages; structured bridge, Lean checks/support, "
         "scripts and common test support; native compiler include/lib/tools/test/cmake, shared catalog and Unicode inputs; selected "
-        "authored project module closures and retained subjects. External packages, optional Lean "
-        "integrations, hidden/private/experiment directories and build caches excluded; "
+        "authored project module closures and retained subjects. External packages, hidden/private/experiment directories and build caches excluded; "
         "native executables are retained separately, not rebuilt from this archive.")
 
     def source_inventory(self):
         lean = ROOT / "lean"
-        paths = {lean / name for name in ("lean-toolchain", "lake-manifest.json", "lakefile.toml")}
-        config = tomllib.loads((lean / "lakefile.toml").read_text(encoding="utf-8"))
-        # Lake declarations own the namespaces, including executable roots
-        # outside a library's globs. Capture each whole namespace so new local
-        # imports are covered without a second per-module dependency list.
-        for target in [*config.get("lean_lib", []), *config.get("lean_exe", [])]:
-            directory = lean / target.get("srcDir", config.get("srcDir", "."))
-            roots = target.get("roots", [target.get("root", target["name"])])
-            if "root" in target:
-                paths.add(directory / (target["root"].replace(".", "/") + ".lean"))
-            for module in [*roots, *target.get("globs", [])]:
-                owner = directory / module.split(".")[0]
-                if not owner.with_suffix(".lean").exists() and not owner.is_dir():
-                    raise FileNotFoundError(f"missing Lake source namespace: {owner}")
-                if owner.with_suffix(".lean").exists():
-                    paths.add(owner.with_suffix(".lean"))
-                if owner.is_dir():
-                    paths.update(owned_sources(owner, {".lean"}))
+        paths = {lean / "lean-toolchain"}
+        for package in selected():
+            directory = package_directory(package)
+            paths.update(directory / name for name in ("lean-toolchain", "lake-manifest.json", "lakefile.toml"))
+            # Archive enumeration preserves its private/cache and symlink policy;
+            # the package inventory independently checks exact module ownership.
+            package_modules(package)
+            paths.update(owned_sources(directory, {".lean"}))
+            config = tomllib.loads((directory / "lakefile.toml").read_text())
+            for library in config.get("lean_lib", []):
+                for root in library.get("roots", [library["name"]]):
+                    source = directory.joinpath(*root.split("."))
+                    if not source.is_dir() and not source.with_suffix(".lean").is_file():
+                        raise FileNotFoundError(f"declared Lean source root is missing: {source}")
+            for executable in config.get("lean_exe", []):
+                source = directory.joinpath(*executable["root"].split(".")).with_suffix(".lean")
+                if not source.is_file():
+                    raise FileNotFoundError(f"declared Lean executable is missing: {source}")
         for tree in ("scripts", "common/tests/support", "lean/checks", "lean/support"):
             paths.update(owned_sources(ROOT / tree, {".py"}))
         bridge = ROOT / "lean/bridges/structured"
@@ -88,7 +89,7 @@ class RepeatSuite(OpenSuite):
             modules, manifests = source_modules(ROOT / source)
             paths.update(modules.values()); paths.update(manifests)
             paths.update(bridge / f"fixtures/{stem}.{suffix}" for suffix in ("json", "mlir"))
-            paths.add(ROOT / f"lean/ZkcExamples/Structured/{namespace}Data.lean")
+            paths.add(ROOT / f"lean/applications/Zkc/Applications/IR/Structured/{namespace}Data.lean")
         return sorted(paths)
 
     def tool_names(self):
@@ -880,7 +881,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--reference", type=Path, default=ROOT / "build/compiler/test/zkc-structured_reference-test")
-    parser.add_argument("--lean", type=Path, default=ROOT / "lean/.lake/build/bin/structured-source")
+    parser.add_argument("--lean", type=Path, default=module_package("Zkc.IR") / ".lake/build/bin/structured-source")
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--native-only", action="store_true", help="development only; report native-only, never paired pass")
     args = parser.parse_args()

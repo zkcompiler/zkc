@@ -1,6 +1,6 @@
 module
 
-public import TestsSecurity.RootComposition.FourSource
+public import Zkc.Tests.Applications.Verification.RootComposition.FourSource
 
 @[expose] public section
 

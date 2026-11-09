@@ -19,6 +19,8 @@ import hashlib
 import shutil
 import subprocess
 
+from support.packages import package_directory
+
 
 class Unavailable(Exception):
     """The selected Lake executable is not on this machine."""
@@ -42,13 +44,14 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def toolchain(lake):
+def toolchain(lake, cwd=None):
     """The Lean version behind this Lake, recorded beside every result.
 
     A check of a build is worth nothing without saying which toolchain built
     it, and these drivers each run against whichever one is installed.
     """
     return subprocess.run([lake, "env", "lean", "--version"],
+                          cwd=package_directory("program") if cwd is None else cwd,
                           capture_output=True, text=True, check=True).stdout.strip()
 
 

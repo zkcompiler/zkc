@@ -15,15 +15,15 @@ import sys
 import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from support.packages import PACKAGES, NAMES, FORBIDDEN_DEPENDENCIES, selected, check_closure
+from support.packages import PACKAGES, NAMES, FORBIDDEN_DEPENDENCIES, selected, check_closure, library_globs, add_selection, selection
 
 
-def check(integrations, lake):
+def check(packages, lake):
     rows = []
     absent_packages = []
-    for consumer in selected(integrations):
+    for consumer in selected(packages):
         directory = PACKAGES[consumer][0]
-        check_closure(consumer, directory)
+        reached = check_closure(consumer, directory) | {NAMES[consumer]}
         for dependency in sorted(FORBIDDEN_DEPENDENCIES[consumer]):
             result = subprocess.run([lake, 'query', f'@{dependency}/+PackageBoundarySentinel:lean'],
                                     cwd=directory, capture_output=True, text=True, timeout=30)
@@ -31,13 +31,12 @@ def check(integrations, lake):
             if result.returncode <= 0 or f'unknown package `{dependency}`' not in diagnostic:
                 raise ValueError(f'{consumer}: prohibited package available to Lake: {dependency}: {diagnostic}')
             absent_packages.append({'workspace': consumer, 'unavailable_package': dependency})
-        providers = selected([] if consumer == 'main' else [consumer])
+        providers = [name for name in PACKAGES if NAMES[name] in reached]
         for owner in providers:
             provider = PACKAGES[owner][0]
             config = tomllib.loads((provider / 'lakefile.toml').read_text())
-            globs = {glob for library in config.get('lean_lib', [])
-                     for glob in library.get('globs', library.get('roots', [library['name']]))}
-            for glob in sorted(globs):
+            globs = library_globs(owner, config)
+            for glob in sorted(set(globs)):
                 broad = glob.endswith(('.+', '.*'))
                 module = glob[:-2] + '.PackageBoundarySentinel' if broad else glob
                 source = provider.joinpath(*module.split('.')).with_suffix('.lean')
@@ -63,13 +62,10 @@ def check(integrations, lake):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    selection = parser.add_mutually_exclusive_group()
-    selection.add_argument('--main-only', action='store_true')
-    selection.add_argument('--integration', action='append', choices=('security', 'arklib', 'clean'))
+    add_selection(parser)
     parser.add_argument('--lake', default='lake')
     args = parser.parse_args()
-    integrations = [] if args.main_only else args.integration or ['arklib', 'clean']
-    print(json.dumps(check(integrations, args.lake), indent=2))
+    print(json.dumps(check(selection(args), args.lake), indent=2))
 
 
 if __name__ == '__main__':

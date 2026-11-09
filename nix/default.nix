@@ -164,32 +164,25 @@ let
     python3 = python;
     source = sources.llzk;
   };
-  lakeSources = lakeSourcesFor ../lean/lake-manifest.json;
-  lean = pkgs.callPackage ./lean.nix {
-    inherit leanToolchain lakeSources;
-    python3 = python;
-    source = sources.lean;
-  };
-  security =
+  leanInventory = import ./lean-packages.nix { inherit lib; };
+  formal = lib.mapAttrs (
+    name: entry:
     assert
-      lib.trim (builtins.readFile ../lean/lean-toolchain)
-      == lib.trim (builtins.readFile ../lean/security/lean-toolchain);
-    pkgs.callPackage ./security.nix {
-      inherit lean leanToolchain;
-      source = sources.security;
+      lib.trim (builtins.readFile (entry.directory + "/lean-toolchain"))
+      == lib.trim (builtins.readFile ../lean/program/lean-toolchain);
+    pkgs.callPackage ./lean.nix {
+      inherit leanToolchain;
+      package = name;
+      packageDirectory = lib.removePrefix "lean/" entry.relative;
+      dependencies = map (dependency: formal.${dependency}) entry.dependencies;
+      source = sources.${"lean-${name}"};
       python3 = python;
-      lakeSources = lakeSourcesFor ../lean/security/lake-manifest.json;
-    };
-  arklib =
-    assert
-      lib.trim (builtins.readFile ../lean/lean-toolchain)
-      == lib.trim (builtins.readFile ../lean/integrations/arklib/lean-toolchain);
-    pkgs.callPackage ./arklib.nix {
-      inherit security leanToolchain;
-      source = sources.arklib;
-      python3 = python;
-      lakeSources = lakeSourcesFor ../lean/integrations/arklib/lake-manifest.json;
-    };
+      lakeSources = lakeSourcesFor (entry.directory + "/lake-manifest.json");
+    }
+  ) leanInventory;
+  lean = formal.verification;
+  lakeSources = lakeSourcesFor ../lean/program/lake-manifest.json;
+
 in
 {
   packages = {
@@ -199,9 +192,16 @@ in
       zkc
       libraries
       lean
-      security
-      arklib
       llzk
+      ;
+    inherit (formal)
+      program
+      ir
+      protocol
+      verification
+      arklib
+      clean
+      applications
       ;
     lake-sources = lakeSources;
     default = zkc;
@@ -217,7 +217,8 @@ in
     compiler-domain-checks = domainCheck false;
     compiler-domain-shared-checks = domainCheck true;
     lean-checks = pkgs.callPackage ./checks/lean.nix {
-      inherit lean leanToolchain environment;
+      inherit leanToolchain environment;
+      lean = formal.applications;
       source = sources.leanChecks;
       python3 = python;
     };

@@ -12,6 +12,6 @@ zkc check
 ```
 
 See the source and construction bindings in
-`lean/ZkcExamples/Structured/Generated/Bindings/SchnorrAndAliasedData.lean` and the security controls
-in `lean/security/TestsSecurity/`. The check above establishes source admission,
+`lean/applications/Zkc/Applications/IR/Structured/Generated/Bindings/SchnorrAndAliasedData.lean` and the security controls
+in `lean/applications/Zkc/Tests/Applications/Verification/`. The check above establishes source admission,
 not independence of draws or a cryptographic security bound.

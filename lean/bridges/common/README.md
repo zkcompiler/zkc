@@ -60,7 +60,7 @@ interprets source instructions.
 
 ```sh
 python3 lean/bridges/common/verify.py \
-  --snapshot lean/ZkcExamples/NativePrograms/fixtures/factor-horner.json \
+  --snapshot lean/applications/Zkc/Applications/IR/NativePrograms/fixtures/factor-horner.json \
   --request lean/bridges/common/requests/factor-openings.json \
   --output build/factor-request
 ```

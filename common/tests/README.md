@@ -181,7 +181,7 @@ cases.
 
 ## Optional formal checks
 
-Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the independent package. Prepare optional dependencies with `just fetch-lean security`, `just fetch-lean arklib` or `just fetch-lean clean`, then use `just test-lean-security`, `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires
+Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the maintained packages. Select dependencies with `just fetch-lean --package verification`, `just fetch-lean --package arklib` or `just fetch-lean --package clean`, then use `just test-lean-verification`, `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires
 [its native control](fixtures/clean/air-control.json) and the
 [Bundle fixtures](../../compiler/adapters/clean/README.md) to be the producers'
 current outputs; the [native comparison](protocol/test_clean_air_conformance.py)
@@ -189,17 +189,17 @@ of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.
 
-`just test-lean-security` also runs the Lean-backed receipt reporting controls
-in `lean/security/checks/test_receipt_reporting.py`. They exercise the actual
+`just test-lean-integration` also runs the Lean-backed receipt reporting controls
+in `lean/verification/checks/test_receipt_reporting.py`. They exercise the actual
 kernel classifier and exported declarations, so they belong to this prepared
 formal lane; `just test-harness` requires no Lean installation. To run only these
 controls after preparing the packages, use
-`uv run --no-sync --locked pytest lean/security/checks/test_receipt_reporting.py`.
+`uv run --no-sync --locked pytest lean/verification/checks/test_receipt_reporting.py`.
 Generated constructed-view and structured-binding controls run in the core
 Lean lane through `lake env`. Local-service export/admission controls require
 the compiler and run in the `lean-native` bridges stage with its selected build.
 
-`just test-lean-native` prepares the native compiler, the runtime CLI, the main Lean package and the ArkLib integration, then
+`just test-lean-native` prepares the native compiler, the runtime CLI, the Applications package closure, then
 runs independent scalar and structured SSA/Lean comparisons, including primitive
 bindings and unchanged table helpers, the source/property
 request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
@@ -260,7 +260,7 @@ record-rendering time. The implementation uses the existing pinned Lean/Lake;
 see [Lake module targets and executables](https://lean-lang.org/doc/reference/4.34.0/Build-Tools-and-Distribution/Lake/)
 and [module import visibility](https://lean-lang.org/doc/reference/4.34.0/Source-Files-and-Modules/).
 
-Sandboxed optional packages are `.#lean`, `.#lean-checks`, `.#security`, `.#arklib` and
+Sandboxed optional packages are `.#lean` (Verification), `.#lean-checks`, `.#verification`, `.#arklib`, `.#clean`, `.#applications` and
 `.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.
 The retained research sources and their vectors do not establish correspondence
 or security for the current compiler merely because their checks pass.

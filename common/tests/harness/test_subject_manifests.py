@@ -54,21 +54,24 @@ def test_metadata_namespace_and_connection_have_separate_owners():
         if subject.generated("claims"):
             assert subject.generated("glue").stem.endswith("Artifact")
             assert subject.module_name("glue") != subject.construction_namespace
-            assert subject.get("construction", "connection") == subject.construction_namespace
+            from support.packages import module_path
+            assert module_path(subject.get("construction", "connection")).is_file()
+            assert subject.get("construction", "namespace") == subject.construction_namespace
         elif subject.name == "deferred-rounds":
-            assert subject.construction_namespace == subject.module_name("glue")
+            assert subject.construction_namespace == subject.namespace("glue")
+            assert subject.construction_namespace != subject.module_name("glue")
 
 
 @pytest.mark.parametrize("replacement,diagnostic", [
     ('', 'requires a maintained construction.connection'),
-    ('connection = "ZkcExamples.Construction.SchnorrArtifact"', 'must differ'),
+    ('connection = "Zkc.Applications.IR.Construction.SchnorrArtifact"', 'must differ'),
     ('connection = "bad-name"', 'must be a Lean name'),
 ])
 def test_claim_metadata_requires_a_distinct_connection(tmp_path, replacement, diagnostic):
     loader = manifests()
     subject = loader.load_all(["schnorr"])[0]
     source = subject.path.read_text().replace(
-        'connection = "ZkcExamples.Construction.SchnorrProof"', replacement)
+        'connection = "Zkc.Applications.IR.Construction.SchnorrProof"', replacement)
     path = tmp_path / "schnorr.toml"
     path.write_text(source)
     with pytest.raises(loader.Refused, match=diagnostic):
@@ -79,23 +82,27 @@ def test_executable_facts_import_metadata_and_reference_its_namespace():
     renderer = load("subject_glue_ownership", "lean/bridges/pipeline/glue.py")
     result = renderer.facts_module("Client.ByteFacts", {
         "names": [], "types": [], "glue": "Client.Protocol", "module": "Generated.Admission"
-    }, "Generated.Program", {"helpers": "[]", "calls": 0}, "values")
+    }, "Generated.Program", {"helpers": "[]", "calls": 0}, "values", program_namespace="Declared.Program")
     assert 'public import Generated.Admission' in result
     assert 'public import Client.Protocol' not in result
     assert 'Client.Protocol.participant' in result
     assert 'Client.Protocol.inputs' in result
+    assert 'public import Generated.Program' in result
+    assert 'Declared.Program.validator' in result
 
 
 @pytest.mark.parametrize("replacement,diagnostic", [
     ("", "executable claims require generated.lowering"),
-    ('lowering = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Artifacts.lean"',
+    ('lowering = "lean/applications/Zkc/Applications/Security/Subjects/Schnorr/Artifacts.lean"',
      "generated output paths must be distinct"),
 ])
 def test_byte_evidence_has_an_explicit_distinct_destination(tmp_path, replacement, diagnostic):
     loader = manifests()
     subject = loader.load_all(["schnorr"])[0]
     source = subject.path.read_text().replace(
-        'lowering = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Lowering.lean"', replacement)
+        'lowering = "lean/applications/Zkc/Applications/Security/Subjects/Schnorr/Lowering.lean"', replacement)
+    if not replacement:
+        source = source.replace('lowering = "ZkcSecurity.Examples.Subjects.Schnorr"', '')
     path = tmp_path / "schnorr.toml"
     path.write_text(source)
     with pytest.raises(loader.Refused, match=diagnostic):
@@ -103,14 +110,14 @@ def test_byte_evidence_has_an_explicit_distinct_destination(tmp_path, replacemen
 
 
 @pytest.mark.parametrize("spelling", [
-    "lean/ZkcExamples/./Construction/SchnorrProofData.lean",
-    "lean/ZkcExamples//Construction/SchnorrProofData.lean",
+    "lean/applications/Zkc/Applications/IR/./Construction/SchnorrProofData.lean",
+    "lean/applications/Zkc/Applications/IR//Construction/SchnorrProofData.lean",
 ])
 def test_distinct_outputs_compare_destinations_not_spelling(tmp_path, spelling):
     loader = manifests()
     subject = loader.load_all(["schnorr"])[0]
     source = subject.path.read_text().replace(
-        'glue = "lean/ZkcExamples/Construction/SchnorrArtifact.lean"',
+        'glue = "lean/applications/Zkc/Applications/IR/Construction/SchnorrArtifact.lean"',
         f'glue = "{spelling}"')
     path = tmp_path / "schnorr.toml"
     path.write_text(source)
@@ -122,17 +129,20 @@ def test_distinct_outputs_compare_destinations_not_spelling(tmp_path, spelling):
 def test_generated_symlinks_cannot_alias_or_escape(tmp_path, monkeypatch, outside):
     loader = manifests()
     root = tmp_path / "repo"
-    directory = root / "lean" / "ZkcExamples"
+    directory = root / "lean/applications/Zkc/Applications/IR"
     directory.mkdir(parents=True)
     target = (tmp_path if outside else directory) / "Data.lean"
     target.write_text("maintained data\n")
     (directory / "Glue.lean").symlink_to(target)
     monkeypatch.setattr(loader, "ROOT", root)
-    monkeypatch.setattr(loader, "PACKAGES", {"main": (root / "lean", ("ZkcExamples",))})
+    monkeypatch.setattr(loader, "PACKAGES", {"applications": (root / "lean/applications", ("Zkc.Applications",))})
+    from support.packages import module_path
+    monkeypatch.setattr(loader, "module_path", lambda module: module_path(module, root / "lean"))
     path = root / "probe.toml"
     path.write_text('schema = "zkc.subject/0"\nname = "probe"\n[generated]\n'
-                    'data = "lean/ZkcExamples/Data.lean"\n'
-                    'glue = "lean/ZkcExamples/Glue.lean"\n')
+                    'data = "lean/applications/Zkc/Applications/IR/Data.lean"\n'
+                    'glue = "lean/applications/Zkc/Applications/IR/Glue.lean"\n'
+                    '[namespaces]\ndata = "Declared.Data"\nglue = "Declared.Glue"\n')
     diagnostic = "must resolve inside" if outside else "generated output paths must be distinct"
     with pytest.raises(loader.Refused, match=diagnostic):
         loader.load(path)
@@ -142,17 +152,20 @@ def test_generated_symlinks_cannot_alias_or_escape(tmp_path, monkeypatch, outsid
 
 def test_generated_symlink_cannot_replace_maintained_connection(tmp_path, monkeypatch):
     loader = manifests()
-    directory = tmp_path / "lean" / "ZkcExamples"
+    directory = tmp_path / "lean/applications/Zkc/Applications/IR"
     directory.mkdir(parents=True)
     proof = directory / "Proof.lean"
     proof.write_text("maintained connection\n")
     (directory / "Generated.lean").symlink_to(proof)
     monkeypatch.setattr(loader, "ROOT", tmp_path)
-    monkeypatch.setattr(loader, "PACKAGES", {"main": (tmp_path / "lean", ("ZkcExamples",))})
+    monkeypatch.setattr(loader, "PACKAGES", {"applications": (tmp_path / "lean/applications", ("Zkc.Applications",))})
+    from support.packages import module_path
+    monkeypatch.setattr(loader, "module_path", lambda module: module_path(module, tmp_path / "lean"))
     path = tmp_path / "probe.toml"
     path.write_text('schema = "zkc.subject/0"\nname = "probe"\n[generated]\n'
-                    'glue = "lean/ZkcExamples/Generated.lean"\n[construction]\n'
-                    'connection = "ZkcExamples.Proof"\n')
+                    'glue = "lean/applications/Zkc/Applications/IR/Generated.lean"\n[construction]\n'
+                    'connection = "Zkc.Applications.IR.Proof"\n'
+                    '[namespaces]\nglue = "Declared.Glue"\n')
     with pytest.raises(loader.Refused, match="construction.connection must differ"):
         loader.load(path)
     assert proof.read_text() == "maintained connection\n"
@@ -186,7 +199,7 @@ def test_typed_library_declaration_name_is_validated(tmp_path, library):
 def test_pair_artifacts_require_construction(tmp_path):
     loader = manifests()
     subject = loader.load_all(["gkr"])[0]
-    assert subject.module_name("pair") == "ZkcExamples.Construction.Generated.GkrPair"
+    assert subject.module_name("pair") == "Zkc.Applications.IR.Construction.Generated.GkrPair"
     path = tmp_path / "gkr.toml"
     path.write_text(subject.path.read_text().replace("construction = true", "construction = false"))
     with pytest.raises(loader.Refused, match="generated.pair requires the construction profile"):
@@ -200,8 +213,11 @@ def test_pair_artifacts_require_construction(tmp_path):
 def test_generated_views_must_be_the_consumed_admission(tmp_path, replacement):
     loader = manifests()
     subject = loader.load_all(["gkr"])[0]
-    source = subject.path.read_text().replace(
-        'admission = "external"\nviews = "ZkcExamples.Structured.GkrSourceViews"', replacement)
+    original = ('admission = "external"\n'
+                'views_namespace = "ZkcExamples.Structured.GkrSourceViews"\n'
+                'views = "Zkc.Applications.IR.Structured.GkrSourceViews"')
+    assert original in subject.path.read_text()
+    source = subject.path.read_text().replace(original, replacement)
     path = tmp_path / "gkr.toml"
     path.write_text(source)
     with pytest.raises(loader.Refused, match="must be the construction admission module"):
@@ -212,7 +228,7 @@ def test_generated_views_requires_bodies():
     loader = manifests()
     with pytest.raises(loader.Refused, match="requires generated.bodies"):
         loader._validate({"schema": loader.SCHEMA, "name": "test",
-                          "generated": {"views": "lean/ZkcExamples/Views.lean"}}, "test.toml")
+                          "generated": {"views": "lean/applications/Zkc/Applications/IR/Views.lean"}}, "test.toml")
 
 
 @pytest.mark.parametrize("replacement,diagnostic", [

@@ -13,13 +13,17 @@ import json
 import os
 import shutil
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import subprocess
 import tempfile
 import time
 
-HEADER = '''import Tests.SourceConnectionPilot
-import Tests.ConnectionPlacementMetrics
-import Zkc.Construction.ConnectionTargetPlacement
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import package_directory  # noqa: E402
+HEADER = '''import Zkc.Tests.Applications.IR.SourceConnectionPilot
+import Zkc.Tests.IR.ConnectionPlacementMetrics
+import Zkc.IR.Construction.ConnectionTargetPlacement
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 12000000
@@ -157,7 +161,7 @@ def main():
         parser.error('--measure-memory requires GNU time on PATH')
     if args.repetitions < 1 or any(value < 1 for value in args.sizes + args.counts):
         parser.error('repetitions, body sizes and placement counts must be positive')
-    package = args.tree.resolve() / 'lean'
+    package = package_directory('applications', args.tree.resolve() / 'lean')
     records_path = (args.records or Path(tempfile.mkdtemp(prefix='zkc-target-placement-'))).resolve()
     generated = records_path / 'generated'
     sources = generated / 'PlacementCost'
@@ -174,7 +178,7 @@ def main():
         source = generated / (module.replace('.', '/') + '.lean')
         output = source.with_suffix('.olean')
         log_path = records_path / (module + f'-{repetition}.log')
-        command = ['lean', '-j2', '-M16384', '-DwarningAsError=true',
+        command = [*lean_command(package), '-j2', '-M16384', '-DwarningAsError=true',
                    '-DautoImplicit=false', '--root=' + str(generated),
                    '-o', str(output), str(source)]
         memory_path = records_path / (module + f'-{repetition}.rss')

@@ -120,7 +120,7 @@ def main():
         request = read_json(HERE / 'requests' / (request_name + '.json'))
         for form in forms:
             name = 'external-' + family + (form or '-original')
-            receipt = verify(read_json(ROOT / 'lean/ZkcExamples/NativePrograms/fixtures' / (family + form + '.json')),
+            receipt = verify(read_json(ROOT / 'lean/applications/Zkc/Applications/IR/NativePrograms/fixtures' / (family + form + '.json')),
                              request, output / name)
             if not (receipt['status'] == 'verified-in-model'):
                 raise AssertionError((name, receipt))

@@ -53,7 +53,8 @@ sys.path.append(str(ROOT / "scripts"))
 
 from bridges.common.lean_render import (  # noqa: E402
     ALLOWED_AXIOMS, Refused, Runner, axioms_allowed, digest, encode_tree, file_digest, now, printed_axioms,
-    regenerate, require, strip_header)
+    regenerate, require, source_package, strip_header)
+from support.packages import module_package, module_path, module_owner, add_selection, selection  # noqa: E402
 from bridges.common import policy as native_policy  # noqa: E402
 from bridges.construction import pair, render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
@@ -101,17 +102,17 @@ class Driver(Runner):
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def lake(self, *arguments, cwd=LEAN, name, expect=0):
+    def lake(self, *arguments, cwd, name, expect=0):
         return self.run([self.args.lake, *arguments], cwd=cwd, name=name, expect=expect)
 
-    def registry(self, package="security"):
+    def registry(self, package="verification"):
         """The assumption registry of the security integration: identifier to
         category and statement, read from the selected physical package registry."""
         if package not in self.registry_entries:
             optional = package == "arklib"
-            module = "ZkcArkLib.Registry" if optional else "ZkcSecurity.Claims.Registry"
+            module = "Zkc.Applications.ArkLib.Registry" if optional else "Zkc.Verification.Claims.Registry"
             table = "ZkcArkLib.Registry.reportTable" if optional else "ZkcSecurity.Registry.table"
-            cwd = LEAN / "integrations/arklib" if optional else LEAN / "security"
+            cwd = module_package(module)
             result = self.evaluate(
                 self.output / f"Registry-{package}.lean",
                 f"import {module}\n\n"
@@ -129,19 +130,20 @@ class Driver(Runner):
             self.registry_entries[package] = entries
         return self.registry_entries[package]
 
-    def build(self, *modules, cwd=LEAN):
-        """Build Lean modules of the package at `cwd`: their kernel checks."""
-        wanted = [module for module in modules if module and (str(cwd), module) not in self.built]
-        if wanted:
-            self.lake("build", *wanted, cwd=cwd, name="lake-build:" + ",".join(wanted))
-            self.built.update((str(cwd), module) for module in wanted)
+    def build(self, *modules, cwd=None):
+        """Build each selected module in its owning package."""
+        for module in dict.fromkeys(filter(None, modules)):
+            directory = cwd or module_package(module)
+            if (str(directory), module) not in self.built:
+                self.lake("build", "+" + module, cwd=directory, name="lake-build:" + module)
+                self.built.add((str(directory), module))
 
-    def evaluate(self, path, source, *, cwd, name, expect=0):
+    def evaluate(self, path, source, *, cwd=None, name, expect=0):
         """Lake builds the file's imports and applies its owning package options."""
         path.write_text(source, encoding="utf-8")
-        return self.lake("lean", path, cwd=cwd, name=name, expect=expect)
+        return self.lake("lean", path, cwd=cwd or source_package(source), name=name, expect=expect)
 
-    def lean(self, subject, name, source, cwd=LEAN, expect=0):
+    def lean(self, subject, name, source, cwd=None, expect=0):
         return self.evaluate(self.directory(subject) / name, source, cwd=cwd, name=f"{subject.name}:{name}",
                              expect=expect)
 
@@ -164,21 +166,23 @@ class Driver(Runner):
             self.generated(subject, "interactive_source", artifacts["source"], modules)
         if subject.generated("interactive_export"):
             self.generated(subject, "interactive_export", artifacts["export_text"], modules)
-        data = subject.module_name("interactive_data")
+        data = subject.namespace("interactive_data")
+        data_module = subject.module_name("interactive_data")
         if data:
             self.generated(subject, "interactive_data", structured.render(artifacts["snapshot"], data), modules)
-        bodies = subject.module_name("interactive_bodies")
+        bodies = subject.namespace("interactive_bodies")
         if bodies:
             names = glue.body_names(artifacts["snapshot"], subject.get("bodies", "interactive_entry"))
-            self.build(data)
-            text, helpers, protocols = printer.printed_module(data, bodies, subject.get("bodies", "closed", False),
+            self.build(data_module)
+            text, helpers, protocols = printer.printed_module(data_module, bodies, subject.get("bodies", "closed", False),
                                                               names, self, self.args.lake,
-                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"])
+                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"], data_namespace=data)
             self.generated(subject, "interactive_bodies", text, modules)
             views = subject.module_name("interactive_views")
             if views:
                 self.generated(subject, "interactive_views",
-                               glue.views_module(views, data, bodies, helpers, protocols), modules)
+                               glue.views_module(subject.namespace("interactive_views"), data_module, subject.module_name("interactive_bodies"),
+                                                 helpers, protocols, data_namespace=data, bodies_namespace=bodies), modules)
                 self.build(views)
                 record_accepted(record, "interactive-admission", module=views)
         record["artifacts"].update(interactive_source="sha256:" + digest(artifacts["source"].encode()),
@@ -197,27 +201,28 @@ class Driver(Runner):
             self.generated(subject, "original_source", artifacts["source"].decode("utf-8"), modules)
         if subject.generated("original_export"):
             self.generated(subject, "original_export", artifacts["original_text"], modules)
-        data, participant = subject.module_name("data"), subject.module_name("participant")
+        data, participant = subject.namespace("data"), subject.namespace("participant")
+        data_module = subject.module_name("data")
         self.generated(subject, "data", structured.render(artifacts["original"], data), modules)
         self.generated(subject, "participant", constructed.render(artifacts["exported"], participant), modules)
         if subject.generated("pair"):
-            self.generated(subject, "pair", pair.render(artifacts["pair"], subject.module_name("pair")), modules)
+            self.generated(subject, "pair", pair.render(artifacts["pair"], subject.namespace("pair")), modules)
         entry = glue.Entry(artifacts["original"], artifacts["exported"], artifacts["interface"])
         names = {"glue": subject.construction_namespace, "data": data, "participant": participant}
         admission = subject.get("construction", "admission", "views")
         if subject.generated("bodies"):
-            bodies = subject.module_name("bodies")
+            bodies = subject.namespace("bodies")
             body_names = glue.body_names(artifacts["original"], subject.get("bodies", "entry"),
                                          artifacts["source_inventory"], subject.get("bodies", "owners", {}))
-            self.build(data)
-            text, helpers, protocols = printer.printed_module(data, bodies, False, body_names, self, self.args.lake,
-                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"])
+            self.build(data_module)
+            text, helpers, protocols = printer.printed_module(data_module, bodies, False, body_names, self, self.args.lake,
+                                                              fresh=self.args.fresh_bodies, inventory=artifacts["source_inventory"], data_namespace=data)
             self.generated(subject, "bodies", text, modules)
             names.update(bodies=bodies, helpers=helpers, protocols=protocols)
             views = subject.module_name("views")
             if views:
-                self.generated(subject, "views", glue.views_module(views, data, bodies, helpers, protocols,
-                    max_rec_depth=50000, max_heartbeats=4000000), modules)
+                self.generated(subject, "views", glue.views_module(subject.namespace("views"), data_module, subject.module_name("bodies"), helpers, protocols,
+                    data_namespace=data, bodies_namespace=bodies, max_rec_depth=50000, max_heartbeats=4000000), modules)
                 self.build(views)
         # Presentations consume refreshed source, literal bodies and admission.
         self.source_views(subject, record)
@@ -261,7 +266,7 @@ class Driver(Runner):
         rule = subject.get("construction", "rule", "compiled")
         glue_module = subject.module_name("glue")
         glue_namespace = subject.construction_namespace
-        data = subject.module_name("data")
+        data = subject.namespace("data")
         library = subject.get("construction", "library")
         library_module = subject.get("construction", "library_module")
         connection_method = "derive_source_connection"
@@ -278,9 +283,9 @@ class Driver(Runner):
         imports = [f"import {glue_module}"]
         if library_module:
             imports.append(f"import {library_module}")
-        parts = [*imports, "import Zkc.Construction.Encoding",
-                 "import Zkc.Construction.CatalogueAdmission",
-                 "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",
+        parts = [*imports, "import Zkc.IR.Construction.Encoding",
+                 "import Zkc.IR.Construction.CatalogueAdmission",
+                 "import Zkc.Tools.IR.ConstructionBindings.Admission", "import Zkc.Tests.IR.ConnectionRefusal",
                  "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm",
                  "set_option maxRecDepth 50000", "set_option maxHeartbeats 16000000",
                  "set_option linter.unusedTactic false",
@@ -422,7 +427,7 @@ class Driver(Runner):
         deployment = artifacts["deployment"]
         modules = record
         program = subject.module_name("program")
-        self.generated(subject, "program", executable.render(deployment, program), modules)
+        self.generated(subject, "program", executable.render(deployment, subject.namespace("program")), modules)
         self.build(program)
         facts = self.lowering_rule(subject, artifacts, entry, record)
         if subject.generated("facts"):
@@ -431,8 +436,9 @@ class Driver(Runner):
                                 module=subject.module_name("glue"))
             # The facts are declared in the namespace the Entry's hand executable module
             # continues, so that its names are the facts' own declarations.
-            namespace = subject.get("executable", "namespace") or subject.module_name("facts")
-            self.generated(subject, "facts", glue.facts_module(namespace, construction, program, facts, form),
+            namespace = subject.get("executable", "namespace") or subject.namespace("facts")
+            self.generated(subject, "facts", glue.facts_module(namespace, construction, program, facts, form,
+                                                                program_namespace=subject.namespace("program")),
                            modules)
             self.build(subject.module_name("facts"))
         self.threshold(subject, facts, record)
@@ -449,7 +455,7 @@ class Driver(Runner):
         if charge:
             public = json.loads(subject.inputs(subject.get("entries", "proof"), "public").read_text())
             arguments = " ".join(str(int(public[name])) for name in subject.get("executable", "charge_arguments", []))
-            module = subject.get("executable", "completeness_module") or charge.rsplit(".", 1)[0]
+            module = subject.get("executable", "completeness_module")
             result = self.lean(subject, "FreshCharge.lean",
                                f"import {module}\n\n#eval IO.println (\"charge \" ++ toString ({charge} {arguments}))\n")
             found = [line.removeprefix("charge ") for line in result.stdout.splitlines() if line.startswith("charge ")]
@@ -469,8 +475,8 @@ class Driver(Runner):
         glue_namespace = subject.construction_namespace
         # Only the generated glue and the rules: the charge, whose module reads the
         # generated facts and the hand proofs, is evaluated after they are rebuilt.
-        parts = ["import Zkc.Executable.Installed", "import Zkc.Executable.Reading",
-                 "import Zkc.Executable.Helpers", "import Zkc.Construction.Participant", f"import {glue_module}"]
+        parts = ["import Zkc.IR.Executable.Installed", "import Zkc.IR.Executable.Reading",
+                 "import Zkc.IR.Executable.Helpers", "import Zkc.IR.Construction.Participant", f"import {glue_module}"]
         parts += ["set_option maxRecDepth 20000",
                   strip_header(constructed.render(exported, "Fresh.Constructed")),
                   strip_header(executable.render(deployment, "Fresh.Actual")),
@@ -728,7 +734,7 @@ class Driver(Runner):
         glue_namespace = subject.construction_namespace
         definitions = runtime.PREDICTION.replace("CONTEXT", f"{glue_namespace}.context").replace(
             "DATA", runtime.prediction_data(entry, public))
-        lines = ["import Zkc.Executable.Installed", "import Mathlib.Algebra.Field.ZMod", f"import {glue_module}",
+        lines = ["import Zkc.IR.Executable.Installed", "import Mathlib.Algebra.Field.ZMod", f"import {glue_module}",
                  strip_header(executable.render(artifacts["deployment"], "Fresh.Actual")),
                  "open Zkc.Construction Zkc.Executable",
                  "local instance : Fact (Nat.Prime 5) := ⟨by decide⟩",
@@ -761,7 +767,7 @@ class Driver(Runner):
                    for name in subject.get("receipt", "used", []) + subject.get("receipt", "unused", [])]
         prefixes = ", ".join(f"`{name}" for name in ENTRY_PREFIXES)
         meanings = ", ".join(f"`{name}" for name in COMPILED_MEANINGS)
-        source = ("".join(f"import {name}\n" for name in imports) + "import Zkc.Executable.Cleanup\n\n"
+        source = ("".join(f"import {name}\n" for name in imports) + "import Zkc.IR.Executable.Cleanup\n\n"
                   + CLASSIFICATION_CONTROL
                   + "".join(f"#print axioms {name}\n" for name in chain)
                   + RECEIPT_WALK.replace("MEANINGS", meanings).replace("PREFIXES", prefixes)
@@ -775,7 +781,7 @@ class Driver(Runner):
                   + (f"  for (name, evaluated, compiled) in ← processEquations `{control} do\n"
                      "    IO.println s!\"control-equation {name} evaluated={evaluated} compiled={compiled}\"\n"
                      if control else "  pure ()\n"))
-        result = self.evaluate(self.output / "ReceiptAxioms.lean", source, cwd=LEAN / "integrations/arklib",
+        result = self.evaluate(self.output / "ReceiptAxioms.lean", source,
                                name="receipt-axioms")
         found = printed_axioms(result.stdout)
         for name in chain:
@@ -931,7 +937,7 @@ class Driver(Runner):
             # Typed imports, not filename conventions, connect their meanings.
             self.generated(subject, key, source, record)
         module = subject.module_name("claims")
-        built = self.lake("build", module, cwd=subject.generated_package("claims"),
+        built = self.lake("build", "+" + module, cwd=subject.generated_package("claims"),
                           name=f"{subject.name}:claims-build")
         results = {}
         for line in built.stdout.splitlines():
@@ -975,7 +981,7 @@ class Driver(Runner):
         self.build(*modules)
         generated = {}
         for module in modules:
-            output = LEAN / (module.replace(".", "/") + ".lean")
+            output = module_path(module)
             generated[str(output.relative_to(ROOT))] = dict(
                 sha256=file_digest(output), role="source-views")
         record["generated"].update(generated)
@@ -993,11 +999,11 @@ class Driver(Runner):
         self.evidence[subject.name] = record
         requested = subject.get("assumptions", "requested", [])
         if requested:
-            optional = any(subject.generated_package(key) == LEAN / "integrations/arklib"
+            optional = any(subject.module_name(key).startswith("Zkc.Applications.ArkLib.")
                            for key in subject.table("generated")
                            if subject.generated(key).suffix == ".lean") or subject.get(
-                               "receipt", "security_module", "").startswith("ZkcArkLib.")
-            registry = self.registry("arklib" if optional else "security")
+                               "receipt", "security_module", "").startswith("Zkc.Applications.ArkLib.")
+            registry = self.registry("arklib" if optional else "verification")
             unknown = [name for name in requested if name not in registry]
             self.check(f"{subject.name}:assumptions-registered", not unknown, json.dumps(unknown))
             record["requested_assumptions"] = {name: registry[name] for name in requested}
@@ -1131,6 +1137,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="compare generated modules (the default)")
     mode.add_argument("--write", action="store_true", help="rewrite the generated modules the manifests own")
+    add_selection(parser)
     parser.add_argument("--subject", action="append", help="process only the named subjects (default: all)")
     parser.add_argument("--claim-entry", action="append",
                         help="report whole source Entries explicitly (default: the proof Entry); "
@@ -1162,6 +1169,14 @@ def main():
                   mode="write" if args.write else "check", runtime=args.runtime, subjects={})
     try:
         subjects = manifest.load_all(args.subject)
+        packages = set(selection(args))
+        eligible = [subject for subject in subjects if all(
+            module_owner(subject.module_name(key)) in packages
+            for key, value in subject.table("generated").items() if value.endswith(".lean"))]
+        require(not args.subject or len(eligible) == len(subjects),
+                "requested subjects require packages outside the selected closure")
+        subjects = eligible
+        require(bool(subjects), "selected packages have no configured subjects")
         bound = []
         for subject in subjects:
             result = driver.subject(subject)

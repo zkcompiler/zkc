@@ -485,7 +485,7 @@ end {namespace}
 
 
 def render(data, namespace):
-    return 'module\n\npublic import Zkc.Construction.Participant\n\n@[expose] public section\n\n/-! Constructor data from the retained `zkc.constructed-participant/0` export.\nRegenerate with bridges/construction/check.py --write; the Lean rule and its proofs are\nseparate. The bridge checks exact regeneration against the compiler. -/\n\n' + render_declaration(data, namespace)
+    return 'module\n\npublic import Zkc.IR.Construction.Participant\n\n@[expose] public section\n\n/-! Constructor data from the retained `zkc.constructed-participant/0` export.\nRegenerate with bridges/construction/check.py --write; the Lean rule and its proofs are\nseparate. The bridge checks exact regeneration against the compiler. -/\n\n' + render_declaration(data, namespace)
 
 
 if __name__ == "__main__":

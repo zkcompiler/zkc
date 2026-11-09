@@ -45,7 +45,7 @@ def render(data, namespace):
                          for role, child in (("Producer", producer), ("Validator", validator)))
     return f'''module
 
-public import Zkc.Construction.AuthoredPair
+public import Zkc.IR.Construction.AuthoredPair
 
 @[expose] public section
 

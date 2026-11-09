@@ -1,9 +1,12 @@
 # Dependency baseline
 
 The owning `lean-toolchain`, `lakefile.toml` and `lake-manifest.json` files are
-normative for exact sources. The core depends on Mathlib. Reusable security owns VCVio, PolyFun and CompPoly
-without ArkLib in its closure; optional packages own
-their external requirements and override shared transitive pins consistently.
+normative for exact sources. Program shares deterministic semantics and algebraic
+support with IR and Protocol. Its finite Interaction/Region core remains Lean/Std-only;
+its mathematical support uses Mathlib. IR depends on Program. Protocol additionally
+uses VCVio, PolyFun and CompPoly. Verification depends on IR and Protocol; optional
+adapters own ArkLib and Clean. Applications depend on the selected verification
+and adapter packages. See [architecture](architecture.md) for the enforced graph.
 
 | Component | Selected version or exact revision |
 |---|---|
@@ -54,7 +57,7 @@ Distributional state-restoration and adversary reasoning remain separate; the
 adapters do not extend a security claim.
 
 Clean's selected adapter and native example cone uses a declared compatibility
-patch at [the integration boundary](../integrations/clean/compatibility.json).
+patch at [the integration boundary](../adapters/clean/compatibility.json).
 Upstream still imports the renamed `Mathlib.Logic.Basic`, and a `ring_nf` call
 in `Clean.Air.Balance` now fails under the changed normalization order. The patch updates the
 import and proves the required reassociation directly with ring arithmetic; theorem

@@ -13,17 +13,28 @@ structured = true
 construction = true
 
 [generated]
-data = "lean/ZkcExamples/Construction/ChaumPedersenProofData.lean"
-bodies = "lean/ZkcExamples/Construction/ChaumPedersenProofBodies.lean"
-participant = "lean/ZkcExamples/Construction/ChaumPedersenProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/ChaumPedersenArtifact.lean"
-artifacts = "lean/security/ZkcSecurityExamples/Subjects/ChaumPedersen/Artifacts.lean"
-claims = "lean/security/ZkcSecurityExamples/Subjects/ChaumPedersen/Claims.lean"
-interactive_data = "lean/ZkcExamples/Structured/ChaumPedersenData.lean"
-interactive_bodies = "lean/ZkcExamples/Structured/ChaumPedersenBodies.lean"
-interactive_views = "lean/ZkcExamples/Structured/ChaumPedersenViews.lean"
+data = "lean/applications/Zkc/Applications/IR/Construction/ChaumPedersenProofData.lean"
+bodies = "lean/applications/Zkc/Applications/IR/Construction/ChaumPedersenProofBodies.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/ChaumPedersenProofParticipant.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/ChaumPedersenArtifact.lean"
+artifacts = "lean/applications/Zkc/Applications/Security/Subjects/ChaumPedersen/Artifacts.lean"
+claims = "lean/applications/Zkc/Applications/Security/Subjects/ChaumPedersen/Claims.lean"
+interactive_data = "lean/applications/Zkc/Applications/IR/Structured/ChaumPedersenData.lean"
+interactive_bodies = "lean/applications/Zkc/Applications/IR/Structured/ChaumPedersenBodies.lean"
+interactive_views = "lean/applications/Zkc/Applications/IR/Structured/ChaumPedersenViews.lean"
 interactive_export = "lean/bridges/structured/fixtures/chaum-pedersen.json"
 interactive_source = "lean/bridges/structured/fixtures/chaum-pedersen.mlir"
+
+[namespaces]
+data = "ZkcExamples.Construction.ChaumPedersenProofData"
+bodies = "ZkcExamples.Construction.ChaumPedersenProofBodies"
+participant = "ZkcExamples.Construction.ChaumPedersenProofParticipant"
+glue = "ZkcExamples.Construction.ChaumPedersenProof"
+artifacts = "ZkcSecurity.Examples.Subjects.ChaumPedersen"
+claims = "ZkcSecurity.Examples.Subjects.ChaumPedersen"
+interactive_data = "ZkcExamples.Structured.ChaumPedersenData"
+interactive_bodies = "ZkcExamples.Structured.ChaumPedersenBodies"
+interactive_views = "ZkcExamples.Structured.ChaumPedersenViews"
 
 [source_views]
 selections = ["ChaumPedersen"]
@@ -40,11 +51,11 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 [construction]
 omit = ["process_equation", "verifier_correspondence"]
 namespace = "ZkcExamples.Construction.ChaumPedersenProof"
-connection = "ZkcExamples.Construction.ChaumPedersenProof"
+connection = "Zkc.Applications.IR.Construction.ChaumPedersenProof"
 admission = "views"
 inputs = "values"
 model = "Zkc.Protocols.Schnorr.Variants.equality wiring"
-model_imports = ["ZkcExamples.Construction.ChaumPedersenProofModel"]
+model_imports = ["Zkc.Applications.IR.Construction.ChaumPedersenProofModel"]
 
 [bodies]
 entry = "proof"
@@ -52,4 +63,4 @@ interactive_entry = "interactive"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.ChaumPedersen"
-imports = ["ZkcSecurityExamples.Subjects.ChaumPedersen.Registration"]
+imports = ["Zkc.Applications.Security.Subjects.ChaumPedersen.Registration"]

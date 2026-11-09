@@ -24,8 +24,8 @@ stdenvNoCC.mkDerivation {
     runHook preCheck
     ${environment.checks}
     export LEAN_NUM_THREADS="$zkc_check_cores"
-    cp -R ${lean.library}/share/zkc/lean/.lake lean/
-    chmod -R u+w lean/.lake
+    cp -R ${lean.library}/share/zkc/lean/. lean/
+    chmod -R u+w lean
     python3 common/tests/run.py lean
     runHook postCheck
   '';

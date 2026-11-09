@@ -1,100 +1,98 @@
 #!/usr/bin/env python3
-"""Maintain exhaustive audit imports independently of the public root imports."""
+"""Maintain exhaustive private-body audits with isolated executable environments."""
 
 import argparse
 from pathlib import Path
 import sys
+import tomllib
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from support.packages import PACKAGES, selected as select_packages
+from support.packages import (LEAN, PACKAGES, OWNERS, add_selection, selection,
+                              package_directory, package_modules, below, tool_module)
+
+AUDITOR = tool_module('program', 'DeclarationAudit')
+SECURITY_SCOPES = ['Zkc.Applications.Security', 'Zkc.Protocol.Bindings', 'Zkc.Protocol.Library.Families', 'Zkc.Protocol.Library.Mathematics', 'Zkc.Protocol.Library.Security', 'Zkc.Protocol.Library.Transformations', 'Zkc.Protocol.Logic', 'Zkc.Tools.IR.SourceProperties', 'Zkc.Tools.IR.TableCapacity', 'Zkc.Tools.Protocol', 'Zkc.Tools.Verification.Bindings', 'Zkc.Tools.Verification.ClaimConstruction', 'Zkc.Tools.Verification.ComponentAuthoringReport', 'Zkc.Tools.Verification.ComponentBridge', 'Zkc.Tools.Verification.ComponentDerivation', 'Zkc.Tools.Verification.ComponentReadback', 'Zkc.Tools.Verification.ComponentView', 'Zkc.Tools.Verification.Components', 'Zkc.Tools.Verification.Generation', 'Zkc.Tools.Verification.InputLaws', 'Zkc.Tools.Verification.PairConstruction', 'Zkc.Tools.Verification.SigmaReadback', 'Zkc.Tools.Verification.SourceInputClauses', 'Zkc.Tools.Verification.SourceInputReadback', 'Zkc.Tools.Verification.SourceProperties', 'Zkc.Tools.Verification.SubjectABI', 'Zkc.Tools.Verification.Sumcheck', 'Zkc.Tools.Verification.TargetEvaluation', 'Zkc.Verification.Bindings', 'Zkc.Verification.Claims', 'Zkc.Verification.Families', 'Zkc.Verification.Mathematics', 'Zkc.Verification.ProgramLogic', 'Zkc.Verification.Transformations']
+ARKLIB_SCOPES = ['Zkc.Adapters.ArkLib', 'Zkc.Applications.ArkLib']
 
 
-ROOT = Path(__file__).resolve().parents[1]
+def generated_audit(module):
+    return module.startswith('Zkc.Tests.') and (
+        module.rsplit('.', 1)[-1] in {'Audit', 'LibraryImports', 'ProgramAudit'} or
+        '.CommandAudits.' in module)
 
 
-def modules(root, directory, excluded=()):
-    result = []
-    for path in sorted((root / directory).rglob("*.lean")):
-        if path.relative_to(root) in excluded:
-            continue
-        result.append(".".join(path.relative_to(root).with_suffix("").parts))
-    if (root / (directory + ".lean")).exists() and Path(directory + ".lean") not in excluded:
-        result.insert(0, directory.replace("/", "."))
-    return result
+def commands(name, root=LEAN):
+    config = tomllib.loads((package_directory(name, root) / 'lakefile.toml').read_text())
+    return sorted({entry['root'] for entry in config.get('lean_exe', [])})
 
 
-def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-AUDIT-PASS",
-             extra=(), audit_imports=()):
-    excluded = {Path(tests) / "Audit.lean", Path(tests) / "LibraryImports.lean"}
-    names = modules(root, library, excluded) + modules(root, tests, excluded)
-    for directory in examples:
-        names += modules(root, directory, excluded)
-    for directory in tools:
-        names += modules(root, directory, excluded)
-    imports = (
-        "-- Maintained by audit_imports.py; library, test, example and selected executable consumers are audited.\n"
-        if tools else
-        "-- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.\n"
-    )
-    imports += "".join(f"import {name}\n" for name in names)
-    families = [library, tests] + list(examples) + list(tools)
-    audit = f"import {tests}.LibraryImports\n"
-    audit += "".join(f"import {name}\n" for name in audit_imports)
-    audit += "import ZkcTools.DeclarationAudit\n\n"
-    # The widest audit names itself like the narrower ones do, so a build log
-    # says which scope passed rather than leaving the broadest one as the
-    # unlabelled default. Each library generated here gets its own name: two
-    # scopes emitting one marker would be no more legible than the default.
-    audit += ("run_cmd ZkcTools.DeclarationAudit.check ["
-              + ", ".join("`" + x.replace("/", ".") for x in families)
-              + f"] \"{marker}\"\n")
-    audit += "".join(extra)
-    return {root / tests / "LibraryImports.lean": imports,
-            root / tests / "Audit.lean": audit}
+def lean_names(roots):
+    return '[' + ', '.join('`' + prefix for prefix in roots) + ']'
 
 
-# Each optional integration package: its library, its tests and its audit marker.
-INTEGRATIONS = {
-    "security": ("ZkcSecurity", "TestsSecurity", "SECURITY-AUDIT-PASS"),
-    "arklib": ("ZkcArkLib", "TestsArkLib", "ARKLIB-AUDIT-PASS"),
-    "clean": ("ZkcClean", "TestsClean", "CLEAN-INTEGRATION-AUDIT-PASS"),
-}
-# Further audits of a package's whole library: the security library's registry
-# of named hypotheses, models and trusted links covers every proposition-valued
-# declaration that heads a premise of one of its theorems.
-EXTRA = {
-    "security": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry ZkcSecurity.Registry.audited "
-               "[`ZkcSecurity, `ZkcSecurityTools, `ZkcSecurityExamples] \"REGISTRY-AUDIT-PASS\"\n"],
-    "arklib": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry (ZkcSecurity.Registry.audited ++ ZkcArkLib.Registry.audited) "
-               "[`ZkcArkLib, `ZkcArkLibExamples] \"ARKLIB-REGISTRY-AUDIT-PASS\"\n"],
-}
+def audit_body(roots, marker):
+    return ('run_cmd do\n'
+            '  let env ← Lean.getEnv\n'
+            f'  let families : List Lean.Name := {lean_names(roots)}\n'
+            '  for imported in env.header.modules do\n'
+            '    if families.any (·.isPrefixOf imported.module) && !imported.importAll then\n'
+            '      throwError "audit requires private module data: {imported.module}"\n'
+            f'  ZkcTools.DeclarationAudit.check families "{marker}"\n')
+
+
+def expected(name, root=LEAN):
+    directory = package_directory(name, root)
+    tests = f'Zkc.Tests.{OWNERS[name]}'
+    modules = package_modules(name, root)
+    entries = commands(name, root)
+    # Commands define global main independently. Each has its own full audit;
+    # importing unrelated commands together would be an invalid Lean environment.
+    names = [module for module in modules if not generated_audit(module)
+             and module not in entries and module != 'Zkc.Applications.CleanAudit']
+    banner = '-- Maintained by audit_imports.py; legacy imports load private bodies.\n'
+    imports = banner + ''.join(f'import {module}\n' for module in names)
+    outputs = {directory.joinpath(*tests.split('.')) / 'LibraryImports.lean': imports}
+    audit = banner + f'import {tests}.LibraryImports\nimport {AUDITOR}\n'
+    if name == 'applications':
+        # Registry schemas include actual subjects. Validate the complete tables
+        # once at their assembly owner; core packages still audit every axiom.
+        for dependency in PACKAGES:
+            if dependency != name:
+                audit += f'import Zkc.Tests.{OWNERS[dependency]}.LibraryImports\n'
+    roots = [prefix for prefix in PACKAGES[name][1]
+             if any(below(module, prefix) for module in names)]
+    audit += '\n' + audit_body(roots, name.upper() + '-AUDIT-PASS')
+    if name == 'applications':
+        audit += ('\nrun_cmd ZkcTools.DeclarationAudit.checkRegistry '
+                  'ZkcSecurity.Registry.audited ' + lean_names(SECURITY_SCOPES) +
+                  ' "REGISTRY-AUDIT-PASS"\n')
+        audit += ('run_cmd ZkcTools.DeclarationAudit.checkRegistry '
+                  '(ZkcSecurity.Registry.audited ++ ZkcArkLib.Registry.audited) ' +
+                  lean_names(ARKLIB_SCOPES) + ' "ARKLIB-REGISTRY-AUDIT-PASS"\n')
+    outputs[directory.joinpath(*tests.split('.')) / 'Audit.lean'] = audit
+    for entry in entries:
+        suffix = entry.split('.')[2:]
+        target = directory.joinpath(*tests.split('.'), 'CommandAudits', *suffix).with_suffix('.lean')
+        text = banner + f'import {entry}\nimport {AUDITOR}\n\n'
+        outputs[target] = text + audit_body([entry], 'COMMAND-AUDIT-PASS')
+    return outputs
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--write", action="store_true")
-    selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--main-only", action="store_true")
-    selection.add_argument("--integration", action="append", choices=sorted(INTEGRATIONS),
-                           help="check only the named optional packages (default: all)")
+    parser.add_argument('--write', action='store_true')
+    add_selection(parser)
     args = parser.parse_args()
-    outputs = expected(ROOT, "Zkc", "Tests", ["ZkcExamples"],
-                       ["ZkcTools/Generation", "ZkcTools/JsonSupport", "ZkcTools/ProcessView", "ZkcTools/ProofAccount", "ZkcTools/Companions",
-                        "ZkcTools/StructuredSource", "ZkcTools/ConstructionBindings"], marker="CORE-AUDIT-PASS")
-    selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
-    for name in select_packages(selected)[1:]:
-        library, tests, marker = INTEGRATIONS[name]
-        examples = {"security": ["ZkcSecurityExamples"], "arklib": ["ZkcArkLibExamples"]}.get(name, [])
-        tools = ["ZkcSecurityTools"] if name == "security" else []
-        outputs.update(expected(PACKAGES[name][0], library, tests, examples=examples, tools=tools, marker=marker,
-                                extra=EXTRA.get(name, ()),
-                                audit_imports=("TestsSecurity.LibraryImports",) if name == "arklib" else ()))
+    outputs = {}
+    for name in selection(args):
+        outputs.update(expected(name))
     for path, text in outputs.items():
         if args.write:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
         elif not path.exists() or path.read_text() != text:
-            raise SystemExit(f"audit imports are stale: {path}; run audit_imports.py --write")
-    print(f"audit import coverage: {len(outputs)} files checked")
+            raise SystemExit(f'audit imports are stale: {path}; run audit_imports.py --write')
+    print(f'audit import coverage: {len(outputs)} files checked')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

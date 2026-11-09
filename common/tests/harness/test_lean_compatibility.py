@@ -130,33 +130,43 @@ def test_patch_refuses_unexpected_added_file(addition):
 
 def test_fresh_reproduction_records_arklib_patch():
     root = Path(__file__).resolve().parents[3]
-    integration = root / 'lean/integrations/arklib'
+    integration = root / 'lean/adapters/arklib'
     result = subprocess.run(['python3', '-c',
-        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, with_arklib=True)))'],
+        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, packages=["arklib"])))'],
         cwd=root / 'lean', capture_output=True, text=True, check=True)
     inputs = json.loads(result.stdout)
     for name in ['compatibility.json', 'compatibility.patch']:
         path = integration / name
         if path.is_file():
-            assert inputs['integrations/arklib/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
+            assert inputs['adapters/arklib/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
         else:
-            assert 'integrations/arklib/' + name not in inputs
+            assert 'adapters/arklib/' + name not in inputs
 
 
 def test_fresh_reproduction_records_clean_wrapper_and_patch():
     root = Path(__file__).resolve().parents[3]
     result = subprocess.run(['python3', '-c',
-        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, with_clean=True)))'],
+        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, packages=["applications"])))'],
         cwd=root / 'lean', capture_output=True, text=True, check=True)
     inputs = json.loads(result.stdout)
-    for name in ['CleanExamples.lean', 'compatibility.json', 'compatibility.patch',
-                 'CleanExamples/NativeClients.lean', 'ZkcClean/NativeExport.lean']:
-        path = root / 'lean/integrations/clean' / name
-        assert inputs['integrations/clean/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
+    for name in ['applications/Zkc/Applications/Clean.lean',
+                 'applications/Zkc/Applications/Clean/NativeClients.lean',
+                 'adapters/clean/Zkc/Adapters/Clean/NativeExport.lean',
+                 'adapters/clean/compatibility.json', 'adapters/clean/compatibility.patch']:
+        path = root / 'lean' / name
+        assert inputs[name] == hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_clean_control_runs_with_package_options_before_its_filename(tmp_path, monkeypatch):
     reproduce = load('lean_reproduce', 'lean/reproduce.py')
+    directory = tmp_path / 'lean/adapters/clean'
+    directory.mkdir(parents=True)
+    control = directory / 'Zkc/Tests/Clean/Control.lean'
+    control.parent.mkdir(parents=True)
+    control.write_text('def main : IO Unit := pure ()\n')
+    audit = directory / 'Zkc/Tests/Clean/CommandAudits/Clean/Control.lean'
+    audit.parent.mkdir(parents=True)
+    audit.write_text('import Zkc.Tests.Clean.Control\n')
     expected = tmp_path / 'expected.mlir'
     expected.write_bytes(b'control\n')
     commands = []
@@ -167,7 +177,53 @@ def test_clean_control_runs_with_package_options_before_its_filename(tmp_path, m
         return SimpleNamespace(returncode=0, stdout=expected.read_bytes())
 
     monkeypatch.setattr(reproduce.subprocess, 'run', run)
-    result = reproduce.clean_control('lake', tmp_path, expected, tmp_path / 'control.log', {})
+    result = reproduce.clean_control('lake', directory, expected, tmp_path / 'control.log', {})
     assert result['status'] == 'pass'
-    assert commands == [['lake', 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true',
-                         '--run', 'TestsClean/Control.lean']]
+    assert commands == [reproduce.lean_command(directory, '-DautoImplicit=false', '-DwarningAsError=true',
+                                                '--run', control, lake='lake')]
+
+
+def test_koala_bear_generator_keeps_fixture_and_output_owners_separate(tmp_path, monkeypatch):
+    generator = load('lean_koala_bear_generator', 'lean/verification/checks/generate_koala_bear_sumcheck.py')
+    fixture = generator.package_directory('verification') / 'fixtures/koala-bear-sumcheck-round.zkc'
+    assert fixture.is_file()
+    assert generator.source_format.of_source(fixture) == 'zkc'
+    seen = []
+
+    def formats(paths):
+        seen.extend(paths)
+        return 'zkc'
+
+    def generate(compiler, source, output, report, *, selection):
+        assert source == fixture
+        assert output == generator.module_package('Zkc.Applications')
+        assert selection == 'zkc'
+        raise StopIteration('checked the generation boundary')
+
+    monkeypatch.setattr(generator.source_format, 'of_sources', formats)
+    monkeypatch.setattr(generator, 'generate', generate)
+    monkeypatch.setattr(generator.sys, 'argv', ['generate', '--compiler', str(tmp_path / 'compiler'),
+                                               '--report-dir', str(tmp_path / 'report')])
+    with pytest.raises(StopIteration, match='generation boundary'):
+        generator.main()
+    assert seen[0] == fixture
+
+
+def test_koala_bear_candidate_uses_artifact_overlays_without_mirroring(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    generator = load('lean_koala_bear_overlay', 'lean/verification/checks/generate_koala_bear_sumcheck.py')
+    output, cache = tmp_path / 'candidate', tmp_path / 'cache'
+    (output / generator.MODULE).mkdir(parents=True)
+    commands = []
+
+    def run(command, cwd, report, *, env=None, expected=0):
+        commands.append((command, env))
+        return SimpleNamespace(stdout='/existing/artifacts', returncode=expected or 0)
+
+    monkeypatch.setattr(generator, 'run', run)
+    monkeypatch.setattr(generator, 'PRINTER_CACHE', cache)
+    generator.check_candidate(output, tmp_path, 'ordered-operands')
+    for command, env in commands[1:]:
+        assert env['LEAN_PATH'].split(generator.os.pathsep) == [str(output), str(cache), '/existing/artifacts']
+        assert command[:2] == generator.lean_command(generator.APPLICATIONS)[:2]
+    assert not any(path.is_symlink() for path in output.rglob('*'))

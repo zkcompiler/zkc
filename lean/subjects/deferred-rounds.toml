@@ -12,11 +12,18 @@ construction = true
 executable = true
 
 [generated]
-data = "lean/ZkcExamples/Construction/DeferredRoundsData.lean"
-participant = "lean/ZkcExamples/Construction/DeferredRoundsParticipant.lean"
-glue = "lean/ZkcExamples/Construction/DeferredRounds.lean"
-program = "lean/ZkcExamples/Executable/DeferredRoundsProgramData.lean"
-facts = "lean/ZkcExamples/Executable/DeferredRoundsFacts.lean"
+data = "lean/applications/Zkc/Applications/IR/Construction/DeferredRoundsData.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/DeferredRoundsParticipant.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/DeferredRounds.lean"
+program = "lean/applications/Zkc/Applications/IR/Executable/DeferredRoundsProgramData.lean"
+facts = "lean/applications/Zkc/Applications/IR/Executable/DeferredRoundsFacts.lean"
+
+[namespaces]
+data = "ZkcExamples.Construction.DeferredRoundsData"
+participant = "ZkcExamples.Construction.DeferredRoundsParticipant"
+glue = "ZkcExamples.Construction.DeferredRounds"
+program = "ZkcExamples.Executable.DeferredRoundsProgramData"
+facts = "ZkcExamples.Executable.DeferredRounds"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",
@@ -32,6 +39,7 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
          "lowering-function-duplicated"]
 
 [executable]
+module = "Zkc.Applications.IR.Executable.DeferredRounds"
 threshold = "derived"
 namespace = "ZkcExamples.Executable.DeferredRounds"
 variants = { Unbatched = ["--no-calculation-batching"] }
@@ -43,7 +51,7 @@ inputs = "values"
 
 [receipt]
 theorem = "ZkcExamples.Executable.DeferredRounds.executable_validate"
-security_module = "ZkcExamples.Executable.DeferredRounds"
+security_module = "Zkc.Applications.IR.Executable.DeferredRounds"
 chain = [
   "ZkcExamples.Executable.DeferredRounds.executable_validate",
   "ZkcExamples.Executable.DeferredRounds.executable_prunes",

@@ -183,8 +183,8 @@ def main():
         inspect("just", ["just", "--version"]),
     ])
     if args.lean:
-        lean = (ROOT / "lean/lean-toolchain").read_text().strip().split(":v")[-1]
-        records.append(inspect("lean", ["lean", "--version"], lean, ROOT / "lean"))
+        lean = (ROOT / "lean/program/lean-toolchain").read_text().strip().split(":v")[-1]
+        records.append(inspect("lean", ["lean", "--version"], lean, ROOT / "lean/program"))
     tested = re.search(r'set\(ZKC_TESTED_LLVM_VERSION\s+"([^"]+)"',
                        (ROOT / "compiler/CMakeLists.txt").read_text())[1]
     mlir = os.environ.get("MLIR_DIR", "").strip()

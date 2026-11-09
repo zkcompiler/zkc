@@ -23,10 +23,10 @@ def configured(tmp_path):
     audit = checker()
     root = tmp_path / 'lean'
     lock = {'format': 'zkc.claims-lock/0', 'theorems': {}}
-    for package, subdir in audit.PACKAGES.items():
+    for package, (_, roots) in audit.PACKAGES.items():
         name = f'{package}.locked'
-        lock['theorems'][name] = {'package': package, 'module': f'{package}.Module'}
-        write(root / subdir / 'comparator.json', {
+        lock['theorems'][name] = {'package': package, 'module': roots[0] + '.Module'}
+        write(audit.package_directory(package, root) / 'comparator.json', {
             'challenge_module': 'LockedStatements', 'solution_module': 'LockedStatements',
             'theorem_names': [name], 'definition_names': [], 'permitted_axioms': audit.AXIOMS})
     write(root / 'checks/claims.lock.json', lock)
@@ -61,14 +61,16 @@ def artifacts(audit, root, directory, legacy=False):
 
 def test_repository_covers_all_locked_declarations():
     groups = checker().configuration(ROOT / 'lean')
-    assert {p: len(g['theorems']) for p, g in groups.items()} == {
-        'main': 57, 'security': 40, 'arklib': 24, 'clean': 3}
+    assert sum(len(g['theorems']) for g in groups.values()) == 124
+    assert not {'main', 'proof', 'security'} & groups.keys()
+    locked = checker().read_json(ROOT / 'lean/checks/claims.lock.json')['theorems']
+    assert {name for group in groups.values() for name in group['theorems']} == set(locked)
 
 
 @pytest.mark.parametrize('defect', ['missing', 'extra', 'duplicate', 'hole', 'axiom', 'unknown-field', 'module'])
 def test_comparator_cannot_reduce_or_expand_policy(configured, defect):
     audit, root = configured
-    path = root / 'security/comparator.json'
+    path = root / 'verification/comparator.json'
     config = audit.read_json(path)
     if defect == 'missing': config['theorem_names'] = []
     if defect == 'extra': config['theorem_names'].append('unlocked')
@@ -87,10 +89,10 @@ def test_lock_validation(configured, defect):
     audit, root = configured
     path = root / 'checks/claims.lock.json'
     lock = audit.read_json(path)
-    if defect == 'unknown-package': lock['theorems']['main.locked']['package'] = 'other'
-    if defect == 'missing-module': del lock['theorems']['main.locked']['module']
+    if defect == 'unknown-package': lock['theorems']['ir.locked']['package'] = 'other'
+    if defect == 'missing-module': del lock['theorems']['ir.locked']['module']
     if defect == 'empty': lock['theorems'] = {}
-    if defect == 'wrong-type': lock['theorems'] = ['main.locked']
+    if defect == 'wrong-type': lock['theorems'] = ['ir.locked']
     write(path, lock)
     with pytest.raises(audit.CheckError):
         audit.configuration(root)
@@ -137,7 +139,7 @@ def test_loaded_exports_are_bounded_before_checking(configured, tmp_path):
     audit, root = configured
     path = artifacts(audit, root, tmp_path / 'capture')
     with pytest.raises(audit.CheckError, match='export output limit'):
-        audit.load_artifacts(path, audit.configuration(root), ['main'], export_limit=1)
+        audit.load_artifacts(path, audit.configuration(root), ['ir'], export_limit=1)
 
 
 @pytest.mark.parametrize('alias', ['manifest', 'symlink', 'hardlink'])
@@ -147,20 +149,20 @@ def test_self_comparisons_are_rejected_before_tools(configured, tmp_path, alias)
     candidate = artifacts(audit, root, tmp_path / 'candidate')
     if alias == 'manifest': candidate = base
     else:
-        target = candidate.parent / 'main.ndjson'
+        target = candidate.parent / 'ir.ndjson'
         target.unlink()
-        if alias == 'symlink': target.symlink_to(base.parent / 'main.ndjson')
-        else: target.hardlink_to(base.parent / 'main.ndjson')
+        if alias == 'symlink': target.symlink_to(base.parent / 'ir.ndjson')
+        else: target.hardlink_to(base.parent / 'ir.ndjson')
     with pytest.raises(audit.CheckError, match='independent artifacts'):
-        audit.compare(root, audit.configuration(root), ['main'], tmp_path, 'unavailable', None, base, candidate)
+        audit.compare(root, audit.configuration(root), ['ir'], tmp_path, 'unavailable', None, base, candidate)
 
 
 def test_every_export_explicitly_includes_primitives_and_axioms(configured):
     audit, root = configured
-    group = audit.configuration(root)['security']
-    command = audit.export_command('lake', Path('/toolchain/bin/leanexport'), group)
-    assert command[:3] == ['lake', 'env', '/toolchain/bin/leanexport']
-    assert command[3:command.index('--')] == ['security.Module']
+    group = audit.configuration(root)['verification']
+    command = audit.export_command(Path('/toolchain/bin/leanexport'), group)
+    assert command[0] == '/toolchain/bin/leanexport'
+    assert command[1:command.index('--')] == ['Zkc.Verification.Module']
     assert command[command.index('--') + 1:] == group['theorems'] + audit.AXIOMS + audit.PRIMITIVES
     assert {'Nat.xor', 'semiOutParam', 'Quot.sound'} <= set(command)
 
@@ -206,23 +208,23 @@ def test_export_only_wiring_and_failure_receipts(configured, tmp_path, monkeypat
             if label.endswith(f'-{failure}'):
                 raise audit.CheckError(f'{failure} rejection')
             if label.endswith('-paranoid') and failure == 'mutation':
-                (candidate.parent / 'main.ndjson').write_text('changed')
+                (candidate.parent / 'ir.ndjson').write_text('changed')
 
     runner = RecordingRunner()
     output = tmp_path / 'report'
     output.mkdir()
     if failure:
         with pytest.raises(audit.CheckError):
-            audit.compare(root, audit.configuration(root), ['main'], output, 'lake', runner, base, candidate)
+            audit.compare(root, audit.configuration(root), ['ir'], output, 'lake', runner, base, candidate)
     else:
-        audit.compare(root, audit.configuration(root), ['main'], output, 'lake', runner, base, candidate)
+        audit.compare(root, audit.configuration(root), ['ir'], output, 'lake', runner, base, candidate)
     report = audit.read_json(output / 'report.json')
     assert report['status'] == ('failed' if failure else 'passed')
-    assert runner.commands[0][1:] == ['comparator', '--config', str(output / 'main-comparator.json'),
-                                      '--challenge-from-export', str(base.parent / 'main.ndjson'),
-                                      '--solution-from-export', str(candidate.parent / 'main.ndjson')]
+    assert runner.commands[0][1:] == ['comparator', '--config', str(output / 'ir-comparator.json'),
+                                      '--challenge-from-export', str(base.parent / 'ir.ndjson'),
+                                      '--solution-from-export', str(candidate.parent / 'ir.ndjson')]
     if failure != 'comparator':
-        assert runner.commands[1][1:] == ['check', '--paranoid', '--from-export', str(candidate.parent / 'main.ndjson')]
+        assert runner.commands[1][1:] == ['check', '--paranoid', '--from-export', str(candidate.parent / 'ir.ndjson')]
     assert not any('build' in command or '--inadvisably-no-sandbox' in command for command in runner.commands)
 
 
@@ -390,15 +392,15 @@ def test_replay_has_separate_verdict_and_retains_full_lake_check(configured, tmp
     output.mkdir()
     if failure:
         with pytest.raises(audit.CheckError):
-            audit.replay(root, audit.configuration(root), ['main'], output, 'lake', runner, candidate)
+            audit.replay(root, audit.configuration(root), ['ir'], output, 'lake', runner, candidate)
     else:
-        audit.replay(root, audit.configuration(root), ['main'], output, 'lake', runner, candidate)
+        audit.replay(root, audit.configuration(root), ['ir'], output, 'lake', runner, candidate)
     report = audit.read_json(output / 'report.json')
     assert report['format'] == audit.REPLAY_FORMAT
     assert report['status'] == ('failed' if failure else 'passed')
     assert 'no model comparison or baseline acceptance' in report['scope']
     assert runner.commands == [['/bundled/bin/lake', 'check', '--paranoid', '--from-export',
-                                str(candidate.parent / 'main.ndjson')]]
+                                str(candidate.parent / 'ir.ndjson')]]
 
 
 def test_replay_requires_roots_in_export_not_only_manifest(tmp_path):
@@ -423,3 +425,33 @@ def test_replay_requires_roots_in_export_not_only_manifest(tmp_path):
     path.write_text(' ' * (8 * 1024**2 + 1))
     with pytest.raises(audit.CheckError, match='export record exceeds'):
         audit.require_export_roots(path, ['Locked.root'])
+
+
+def test_export_artifacts_join_split_roots_and_preserve_private_parts(tmp_path):
+    audit = checker()
+    roots = [tmp_path / 'program', tmp_path / 'ir']
+    for root, owner in zip(roots, ['Program', 'IR']):
+        directory = root / 'Zkc' / owner
+        directory.mkdir(parents=True)
+        for suffix in ['olean', 'olean.server', 'olean.private', 'ir.sig', 'ir']:
+            (directory / ('Control.' + suffix)).write_text(owner + suffix)
+    with audit.export_artifacts(roots, tmp_path) as (search, artifacts):
+        assert set(artifacts) == {'Zkc.Program.Control', 'Zkc.IR.Control'}
+        for root, owner in zip(roots, ['Program', 'IR']):
+            for suffix in ['olean', 'olean.server', 'olean.private', 'ir.sig', 'ir']:
+                relative = Path('Zkc') / owner / ('Control.' + suffix)
+                assert (search / relative).resolve() == root / relative
+    assert not search.exists()
+
+
+def test_export_artifacts_refuse_distinct_providers_but_allow_same_path(tmp_path):
+    audit = checker()
+    roots = [tmp_path / 'first', tmp_path / 'second']
+    for root in roots:
+        (root / 'Zkc').mkdir(parents=True)
+        (root / 'Zkc/Control.olean').write_text('same bytes are still distinct providers')
+    with audit.export_artifacts([roots[0], roots[0]], tmp_path) as (_, artifacts):
+        assert set(artifacts) == {'Zkc.Control'}
+    with pytest.raises(ValueError, match='ambiguous module provider'):
+        with audit.export_artifacts(roots, tmp_path):
+            pytest.fail('ambiguous module providers accepted')

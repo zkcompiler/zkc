@@ -974,7 +974,7 @@ and typed proof remain inputs to that execution.
   `example::Interactive` verifier. The construction bridge pins the source:
   the Proof Entry's fresh original export must render to `SumcheckSourceData`,
   the admitted source both readings use (the check
-  `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean` of its
+  `regenerated:lean/applications/Zkc/Applications/IR/Structured/SumcheckSourceData.lean` of its
   `sumcheck` subject). This scalar observation connection does not assert that
   the historical and current nominal random-oracle games are identical.
 - `soundness`: for a fixed well-formed statement (the raw values decode to a
@@ -1127,8 +1127,8 @@ for arbitrary typed inputs and replies. `CanonicalInstallation` consumes that
 same connection for completeness and soundness; neither property assumes a
 whole-program equality, helper success or an honest adversarial statement.
 
-The data-only GKR selections are in `lean/Tests/ConnectionGeneration.lean`;
-`lean/Tests/Constructed/Generate.lean` owns the producer and validator views.
+The data-only GKR selections are in `lean/ir/Zkc/Tests/IR/ConnectionGeneration.lean`;
+`lean/applications/Zkc/Tests/Applications/IR/Constructed/Generate.lean` owns the producer and validator views.
 Both use the common Lean printers, and each emitted declaration is kernel
 checked. No GKR-specific compiled-frame generator or callback proof template is
 needed. `TestsSecurity.GkrStructuralGeneration` retains pure alternate-layout

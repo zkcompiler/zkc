@@ -37,8 +37,14 @@ declarations are included transitively by `leanexport`.
 For each package, capture explicitly runs:
 
 ```text
-lake env <toolchain>/bin/leanexport <locked modules> -- <locked names> <standard axioms> <primitive targets>
+LEAN_SYSROOT=<toolchain> LEAN_PATH=<temporary artifact root> <toolchain>/bin/leanexport <locked modules> -- <locked names> <standard axioms> <primitive targets>
 ```
+
+The search root links the existing complete module artifact groups from the
+package's Lake environment. This lets the unmodified exporter resolve separate
+`Zkc` package subtrees, including transitive imports. Distinct physical providers
+of one module are refused. The links are removed after export; original artifact
+paths and hashes remain in the receipt. No source tree or proof is generated.
 
 The primitive targets match Lean 4.35.0's `Lake/CLI/Check.lean`
 `primitiveTargets`/`builtinTargets`, including `Nat.xor`, `semiOutParam`, and
@@ -127,7 +133,11 @@ The `zkc.independent-replay/0` report establishes only current proof/standard-ax
 validation. It does not compare models, exempt fingerprints, permit definition
 holes, certify source freshness or accept a baseline. Preserve the fixed-model
 comparison failure and complete the separate transition review. Default replay
-covers all four packages; repeated `--package` selects a narrower verdict.
+covers the four packages with protected statements in the lock; repeated
+`--package` selects a narrower verdict. The shared program and independent proof
+packages have no separately locked statements in that ledger. Their declarations
+can occur in the exported dependency closures, and their package audits remain
+separate checks.
 
 Comparison checks artifact hashes before and after checking, requires identical
 declaration coverage, and rejects shared manifest/export paths, symlinks, and
@@ -170,7 +180,7 @@ distinct proof terms, changed statements/dependencies, forbidden axioms, and a
 corrupted proof. They do not build the project:
 
 ```sh
-ZKC_INDEPENDENT_TOOLCHAIN="$(cd lean && lake env lean --print-prefix)" \
+ZKC_INDEPENDENT_TOOLCHAIN="$(cd lean/program && lake env lean --print-prefix)" \
   uv run --no-sync --locked pytest common/tests/harness/test_lean_independent_tools.py
 ```
 

@@ -1,4 +1,4 @@
-import ZkcArkLibExamples.CausalSumcheck.SourceVerifier
+import Zkc.Applications.ArkLib.CausalSumcheck.SourceVerifier
 
 /-! Standalone reuse of the concrete service with arbitrary network behavior. -/
 

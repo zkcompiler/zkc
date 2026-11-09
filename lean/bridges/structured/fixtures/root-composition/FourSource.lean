@@ -1,11 +1,11 @@
 module
 
-public import ZkcExamples.Structured.Generated.Bindings.FourSumsInputs
-public import ZkcSecurity.Bindings.Sumcheck.SourceFamilyRoots
-public import ZkcSecurity.Bindings.Sumcheck.SourceFamilyPair
-public meta import ZkcTools.StructuredSource.ReferenceInstallation
-public meta import ZkcTools.StructuredSource.InferReferenceInstallation
-public meta import ZkcTools.StructuredSource.NormalizedRoot
+public import Zkc.Applications.IR.Structured.Generated.Bindings.FourSumsInputs
+public import Zkc.Verification.Bindings.Sumcheck.SourceFamilyRoots
+public import Zkc.Verification.Bindings.Sumcheck.SourceFamilyPair
+public meta import Zkc.Tools.IR.StructuredSource.ReferenceInstallation
+public meta import Zkc.Tools.IR.StructuredSource.InferReferenceInstallation
+public meta import Zkc.Tools.IR.StructuredSource.NormalizedRoot
 
 @[expose] public section
 

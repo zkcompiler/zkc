@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.packages import module_package  # noqa: E402
 from check import FIELD, ROOT, definition, fixture, write_json
 from bridges.common.replacement import replace_exactly_once
 from open_protocol import FIELD_TYPE, SERVICE, OpenSuite, reply, returned, stopped
@@ -335,7 +337,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--reference", type=Path, default=ROOT / "build/compiler/test/zkc-structured_reference-test")
-    parser.add_argument("--lean", type=Path, default=ROOT / "lean/.lake/build/bin/structured-source")
+    parser.add_argument("--lean", type=Path, default=module_package("Zkc.IR") / ".lake/build/bin/structured-source")
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--cases", type=int, default=1)
     parser.add_argument("--seed", type=int, default=45617)

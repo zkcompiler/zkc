@@ -4,7 +4,13 @@ from copy import deepcopy
 
 import pytest
 
-from harness import load
+from harness import lean_imports, load
+
+
+@pytest.fixture(autouse=True)
+def isolated_lean_workspace():
+    with lean_imports():
+        yield
 
 
 def policy():
@@ -14,35 +20,35 @@ def policy():
 def legacy_policy(audit):
     data = deepcopy(audit.POLICY)
     data['exceptions'] = [{
-        'name': 'clean-subjects-to-tests',
+        'name': 'clean-to-applications',
         'reason': 'Synthetic legacy edge used only to test exception retirement.',
-        'edges': [['CleanExamples', 'TestsClean.NativeClients', True]],
+        'edges': [['Zkc.Adapters.Clean', 'Zkc.Applications.Clean.NativeClients', True]],
     }]
     return data
 
 
 def legacy_graph():
-    return {'CleanExamples': ['TestsClean.NativeClients'], 'TestsClean.NativeClients': []}
+    return {'Zkc.Adapters.Clean': ['Zkc.Applications.Clean.NativeClients'], 'Zkc.Applications.Clean.NativeClients': []}
 
 
 def test_existing_exception_and_unselected_packages():
     audit = policy()
-    result = audit.audit_graph(legacy_graph(), ['CleanExamples', 'TestsClean'],
+    result = audit.audit_graph(legacy_graph(), ['Zkc.Adapters.Clean', 'Zkc.Applications.Clean'],
                                legacy_policy(audit))
-    assert audit.audit_graph({}, ['Zkc'], legacy_policy(audit))['reachable_exceptions'] == 0
+    assert audit.audit_graph({}, ['Zkc.IR'], legacy_policy(audit))['reachable_exceptions'] == 0
     assert result['reachable_exceptions'] == result['direct_exceptions'] == 1
 
 
 @pytest.mark.parametrize('graph', [
     {},
-    {'CleanExamples': [], 'TestsClean.NativeClients': []},
-    {'CleanExamples': ['CleanExamples.Helper'],
-     'CleanExamples.Helper': ['TestsClean.NativeClients'], 'TestsClean.NativeClients': []},
+    {'Zkc.Adapters.Clean': [], 'Zkc.Applications.Clean.NativeClients': []},
+    {'Zkc.Adapters.Clean': ['Zkc.Adapters.Clean.Helper'],
+     'Zkc.Adapters.Clean.Helper': ['Zkc.Applications.Clean.NativeClients'], 'Zkc.Applications.Clean.NativeClients': []},
 ])
 def test_deleted_owner_removed_import_and_relocated_violation_are_refused(graph):
     with pytest.raises(ValueError, match='stale dependency exception|forbidden dependency'):
         audit = policy()
-        audit.audit_graph(graph, ['CleanExamples', 'TestsClean'], legacy_policy(audit))
+        audit.audit_graph(graph, ['Zkc.Adapters.Clean', 'Zkc.Applications.Clean'], legacy_policy(audit))
 
 
 def test_transitive_exception_does_not_authorize_new_direct_import():
@@ -50,44 +56,44 @@ def test_transitive_exception_does_not_authorize_new_direct_import():
     data = legacy_policy(audit)
     data['exceptions'][0]['edges'][0][2] = False
     with pytest.raises(ValueError, match='new direct dependency'):
-        audit.audit_graph(legacy_graph(), ['CleanExamples', 'TestsClean'], data)
+        audit.audit_graph(legacy_graph(), ['Zkc.Adapters.Clean', 'Zkc.Applications.Clean'], data)
 
 
 def test_current_policy_has_no_dependency_exceptions():
     audit = policy()
     assert audit.POLICY['exceptions'] == []
     with pytest.raises(ValueError, match='forbidden dependency'):
-        audit.audit_graph(legacy_graph(), ['CleanExamples', 'TestsClean'])
+        audit.audit_graph(legacy_graph(), ['Zkc.Adapters.Clean', 'Zkc.Applications.Clean'])
 
 
 def test_new_user_of_an_existing_violation_is_refused():
-    graph = legacy_graph() | {'CleanExamples.NewClient': ['CleanExamples']}
+    graph = legacy_graph() | {'Zkc.Adapters.Clean.NewClient': ['Zkc.Adapters.Clean']}
     with pytest.raises(ValueError, match='forbidden dependency'):
         audit = policy()
-        audit.audit_graph(graph, ['CleanExamples', 'TestsClean'], legacy_policy(audit))
+        audit.audit_graph(graph, ['Zkc.Adapters.Clean', 'Zkc.Applications.Clean'], legacy_policy(audit))
 
 
 def test_hard_guard_applies_through_an_otherwise_allowed_layer():
-    graph = {'Zkc.Source.Client': ['Zkc.Semantics.Middle'],
-             'Zkc.Semantics.Middle': ['Zkc.Compiler.Boundary']}
+    graph = {'Zkc.IR.Source.Client': ['Zkc.IR.Semantics.Middle'],
+             'Zkc.IR.Semantics.Middle': ['Zkc.IR.Compiler.Boundary']}
     with pytest.raises(ValueError, match='source-before-compiler'):
-        policy().audit_graph(graph, ['Zkc'])
+        policy().audit_graph(graph, ['Zkc.IR'])
 
 
-@pytest.mark.parametrize('uniform', ['Zkc.Construction.FiatShamir',
-                                   'ZkcSecurity.Transformations.FiatShamir.Soundness',
-                                   'ZkcSecurity.ProgramLogic.Transcript.Composition'])
+@pytest.mark.parametrize('uniform', ['Zkc.IR.Construction.FiatShamir',
+                                   'Zkc.Verification.Transformations.FiatShamir.Soundness',
+                                   'Zkc.Verification.ProgramLogic.Transcript.Composition'])
 def test_generic_certificates_refuse_transitive_uniform_dependencies(uniform):
-    graph = {'ZkcSecurity.ProgramLogic.Transcript.Reduction': ['ZkcSecurity.ProgramLogic.Transcript.Intermediate'],
-             'ZkcSecurity.ProgramLogic.Transcript.Intermediate': [uniform]}
+    graph = {'Zkc.Protocol.Logic.Transcript.Reduction': ['Zkc.Program.Intermediate'],
+             'Zkc.Program.Intermediate': [uniform]}
     with pytest.raises(ValueError, match='generic-certificates'):
-        policy().audit_graph(graph, ['ZkcSecurity'])
+        policy().audit_graph(graph, ['Zkc.Verification'])
 
 
 def test_uniform_adapter_may_consume_generic_certificates():
-    graph = {'ZkcSecurity.ProgramLogic.Transcript.Composition': [
-        'ZkcSecurity.Transformations.FiatShamir.Soundness', 'ZkcSecurity.ProgramLogic.Transcript.Reduction']}
-    policy().audit_graph(graph, ['ZkcSecurity'])
+    graph = {'Zkc.Verification.ProgramLogic.Transcript.Composition': [
+        'Zkc.Verification.Transformations.FiatShamir.Soundness', 'Zkc.Protocol.Logic.Transcript.Reduction']}
+    policy().audit_graph(graph, ['Zkc.Verification'])
 
 
 @pytest.mark.parametrize('defect', ['duplicate', 'shadowed', 'wrong-rule', 'unknown-target'])
@@ -99,7 +105,7 @@ def test_policy_refuses_ambiguous_or_unjustified_rows(tmp_path, defect):
     if defect == 'duplicate':
         data['exceptions'][0]['edges'] *= 2
     elif defect == 'shadowed':
-        data['layers'].insert(0, ['Zkc', 'core'])
+        data['layers'].insert(0, ['Zkc', 'ir'])
     elif defect == 'wrong-rule':
         data['exceptions'][0]['name'] = 'core-to-probability'
     else:
@@ -111,11 +117,11 @@ def test_policy_refuses_ambiguous_or_unjustified_rows(tmp_path, defect):
 
 
 @pytest.mark.parametrize('owner,dependency', [
-    ('Zkc.Source.Client', 'ZkcSecurity.Claims.Methods.KnowledgeEndpoint'),
-    ('ZkcSecurity.Transformations.FiatShamir.Client', 'ArkLib.ProofSystem.Sumcheck.Domain'),
-    ('ZkcSecurity.Families.Client', 'ZkcArkLib.FiatShamir.Upstream'),
-    ('ZkcSecurity.Transformations.HashChain.Client', 'ZkcSecurityExamples.Subjects.Schnorr.Evidence'),
-    ('ZkcArkLib.Sumcheck.Multilinear.Causal.Client', 'Zkc.Source.Structure'),
+    ('Zkc.IR.Source.Client', 'Zkc.Verification.Claims.Methods.KnowledgeEndpoint'),
+    ('Zkc.Verification.Transformations.FiatShamir.Client', 'ArkLib.ProofSystem.Sumcheck.Domain'),
+    ('Zkc.Protocol.Library.Client', 'Zkc.Adapters.ArkLib.FiatShamir.Upstream'),
+    ('Zkc.Protocol.Library.Transformations.HashChain.Client', 'Zkc.Applications.Security.Subjects.Schnorr.Evidence'),
+    ('Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Causal.Client', 'Zkc.IR.Source.Structure'),
 ])
 def test_separated_boundaries_are_enforced(owner, dependency):
     with pytest.raises(ValueError, match='forbidden dependency'):
@@ -123,64 +129,64 @@ def test_separated_boundaries_are_enforced(owner, dependency):
 
 
 @pytest.mark.parametrize('dependency', ['VCVio.Schemes.Schnorr.SigmaProtocol', 'VCVio.CryptoFoundations',
-                                       'Zkc.Protocols.Sumcheck.Verifier'])
+                                       'Zkc.Protocol.Library.Sumcheck.Verifier'])
 def test_generic_security_reuses_actual_vcvio_and_core_providers(dependency):
-    assert policy().permitted('ZkcSecurity.Families.Sigma.Schnorr', dependency)
+    assert policy().permitted('Zkc.Verification.Families.Sigma.Schnorr', dependency)
 
 
 
 def test_generic_elaborators_are_reusable_without_opening_generator_dependencies():
     audit = policy()
-    subject = 'ZkcExamples.Structured.Generated.Connections.Sample'
-    elaborator = 'ZkcTools.ConstructionBindings.Root'
-    audit.audit_graph({subject: [elaborator], elaborator: ['Zkc.Construction.ConnectionRoot']},
-                      ['ZkcExamples', 'ZkcTools', 'Zkc'])
+    subject = 'Zkc.Applications.IR.Structured.Generated.Connections.Sample'
+    elaborator = 'Zkc.Tools.IR.ConstructionBindings.Root'
+    audit.audit_graph({subject: [elaborator], elaborator: ['Zkc.IR.Construction.ConnectionRoot']},
+                      ['Zkc.Applications.IR', 'Zkc.Tools.IR', 'Zkc.IR'])
     assert audit.POLICY['exceptions'] == []
-    for forbidden in ['ZkcTools.ConstructionBindings.Generate',
-                      'ZkcTools.ConstructionBindings.Analysis', 'ZkcExamples.Structured.Sample']:
+    for forbidden in ['Zkc.Tools.IR.ConstructionBindings.Generate',
+                      'Zkc.Tools.IR.ConstructionBindings.Analysis', 'Zkc.Applications.IR.Structured.Sample']:
         with pytest.raises(ValueError, match='forbidden dependency'):
             audit.audit_graph({subject: [elaborator], elaborator: [forbidden]},
-                              ['ZkcExamples', 'ZkcTools'])
+                              ['Zkc.Applications.IR', 'Zkc.Tools.IR'])
     with pytest.raises(ValueError, match='forbidden dependency'):
-        audit.audit_graph({subject: ['ZkcTools.ConstructionBindings.Generate']}, ['ZkcExamples'])
+        audit.audit_graph({subject: ['Zkc.Tools.IR.ConstructionBindings.Generate']}, ['Zkc.Applications.IR'])
 
 
 @pytest.mark.parametrize('owner', [
-    'ZkcSecurity.Bindings.Source.Client',
-    'ZkcSecurity.Families.Sumcheck.Client',
-    'ZkcArkLibExamples.Subjects.Guess.Client',
+    'Zkc.Verification.Bindings.Source.Client',
+    'Zkc.Verification.Families.Sumcheck.Client',
+    'Zkc.Applications.ArkLib.Subjects.Guess.Client',
 ])
 @pytest.mark.parametrize('elaborator', [
-    'ZkcTools.StructuredSource.InferReferenceInstallation',
-    'ZkcTools.StructuredSource.NormalizedRoot',
-    'ZkcTools.StructuredSource.Composition',
+    'Zkc.Tools.IR.StructuredSource.InferReferenceInstallation',
+    'Zkc.Tools.IR.StructuredSource.NormalizedRoot',
+    'Zkc.Tools.IR.StructuredSource.Composition',
 ])
 def test_security_clients_share_restricted_checked_elaborators(owner, elaborator):
     audit = policy()
-    graph = {owner: [elaborator], elaborator: ['Zkc.Source.Structured.NormalizedRoot']}
-    audit.audit_graph(graph, ['ZkcSecurity', 'ZkcArkLib', 'ZkcTools', 'Zkc'])
-    for forbidden in ['ZkcTools.StructuredSource.Bindings', 'ZkcExamples.Structured.Sample',
-                      'ZkcSecurityExamples.Subjects.Sample']:
+    graph = {owner: [elaborator], elaborator: ['Zkc.IR.Source.Structured.NormalizedRoot']}
+    audit.audit_graph(graph, ['Zkc.Verification', 'Zkc.Adapters.ArkLib', 'Zkc.Tools.IR', 'Zkc.IR'])
+    for forbidden in ['Zkc.Tools.IR.StructuredSource.Bindings', 'Zkc.Applications.IR.Structured.Sample',
+                      'Zkc.Applications.Security.Subjects.Sample']:
         with pytest.raises(ValueError, match='forbidden dependency'):
             audit.audit_graph({owner: [elaborator], elaborator: [forbidden]},
-                              ['ZkcSecurity', 'ZkcArkLib', 'ZkcTools'])
+                              ['Zkc.Verification', 'Zkc.Adapters.ArkLib', 'Zkc.Tools.IR'])
 
 
 def test_source_realization_owns_concrete_programs_not_family_mathematics():
     audit = policy()
-    source = 'ZkcExamples.Structured.SumcheckSourceSelections'
-    realization = 'ZkcSecurityExamples.Sumcheck.SourceFamilySelections'
-    family = 'ZkcSecurity.Families.Sumcheck.Contract'
-    audit.audit_graph({realization: [source, family]}, ['ZkcSecurity', 'ZkcExamples'])
+    source = 'Zkc.Applications.IR.Structured.SumcheckSourceSelections'
+    realization = 'Zkc.Applications.Security.Sumcheck.SourceFamilySelections'
+    family = 'Zkc.Verification.Families.Sumcheck.Contract'
+    audit.audit_graph({realization: [source, family]}, ['Zkc.Verification', 'Zkc.Applications.IR'])
     for dependency in [source, realization]:
-        with pytest.raises(ValueError, match='security-families-to-'):
-            audit.audit_graph({family: [dependency]}, ['ZkcSecurity', 'ZkcExamples'])
+        with pytest.raises(ValueError, match='verification-to-applications'):
+            audit.audit_graph({family: [dependency]}, ['Zkc.Verification', 'Zkc.Applications.IR'])
 
 
-@pytest.mark.parametrize("missing", ["Zkc.Source.Retired", "ZkcTools.Retired",
-                                     "Tests.Retired", "ZkcSecurity.Retired"])
+@pytest.mark.parametrize("missing", ["Zkc.IR.Source.Retired", "Zkc.Tools.IR.Retired",
+                                     "Zkc.Tests.IR.Retired", "Zkc.Verification.Retired"])
 def test_missing_owned_import_fails_before_build(missing):
     audit = load("lean_library", "lean/checks/check_library.py")
-    with pytest.raises(AssertionError, match="unselected or missing owned import"):
-        audit.check_owned_imports({"Tests.Client": [missing]})
-    audit.check_owned_imports({"Tests.Client": [missing, "Mathlib.Data.Nat.Basic"], missing: []})
+    with pytest.raises(ValueError, match="unselected or missing owned import"):
+        audit.check_owned_imports({"Zkc.Tests.IR.Client": [missing]})
+    audit.check_owned_imports({"Zkc.Tests.IR.Client": [missing, "Mathlib.Data.Nat.Basic"], missing: []})

@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.packages import module_package  # noqa: E402
 from check import ROOT, Suite, definition, write_json
 from bridges.common.schema import interpreted_type
 
@@ -74,7 +76,7 @@ def run_cases(suite):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
-    parser.add_argument("--lean", type=Path, default=ROOT / "lean/.lake/build/bin/structured-source")
+    parser.add_argument("--lean", type=Path, default=module_package("Zkc.IR") / ".lake/build/bin/structured-source")
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--cases", type=int, default=16)
     parser.add_argument("--seed", type=int, default=91823)

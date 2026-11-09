@@ -1,10 +1,10 @@
 module
 
-public import TestsSecurity.RootComposition.FourProperties
-public import TestsSecurity.RootComposition.FourFormula
-public import ZkcSecurity.Bindings.Source.Installation
-public import ZkcSecurity.Bindings.Transcript.RootConnectionEndpoint
-public import ZkcSecurity.Claims.Methods.HonestReadbackCompleteness
+public import Zkc.Tests.Applications.Verification.RootComposition.FourProperties
+public import Zkc.Tests.Applications.Verification.RootComposition.FourFormula
+public import Zkc.Verification.Bindings.Source.Installation
+public import Zkc.Verification.Bindings.Transcript.RootConnectionEndpoint
+public import Zkc.Verification.Claims.Methods.HonestReadbackCompleteness
 
 @[expose] public section
 set_option autoImplicit false

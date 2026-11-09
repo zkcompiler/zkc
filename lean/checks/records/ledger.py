@@ -18,7 +18,7 @@ import re
 import tomllib
 
 from .declarations import forbidden_axioms
-from support.packages import PACKAGES as SOURCE_PACKAGES
+from support.packages import PACKAGES as SOURCE_PACKAGES, is_owned_module, module_owner, module_path, package_modules
 
 LEAN = Path(__file__).resolve().parents[2]
 LEDGER = LEAN / "checks/claims.toml"
@@ -154,14 +154,9 @@ def replace_region(text, name, content):
     return f"{head}{start}\n{content.rstrip(chr(10))}\n{stop}{tail}"
 
 
-# Documents whose prose cites Lean declarations by qualified name, and the
-# package that owns each root namespace.
-DOCUMENTS = ["docs/status.md", "lean/README.md", "lean/docs/**/*.md", "lean/security/README.md", "lean/integrations/*/README.md"]
-ROOTS = {"Zkc": "main", "ZkcExamples": "main", "ZkcTools": "main", "Tests": "main", "PIR": "main",
-         "ZkcSecurity": "security", "TestsSecurity": "security", "ZkcArkLib": "arklib", "TestsArkLib": "arklib", "ZkcClean": "clean", "TestsClean": "clean"}
-PACKAGE_DIRECTORIES = {"security": LEAN / "security", "main": LEAN, "arklib": LEAN / "integrations/arklib", "clean": LEAN / "integrations/clean"}
-QUALIFIED = re.compile(r"`((?:" + "|".join(ROOTS) + r")\.[A-Za-z0-9_.']+)`")
-
+# Documents whose prose cites Lean declarations by qualified name.
+DOCUMENTS = ["docs/status.md", "lean/README.md", "lean/docs/**/*.md", "lean/verification/README.md", "lean/adapters/*/README.md"]
+QUALIFIED = re.compile(r"`([A-Z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_']+)+)`")
 
 def namespace_packages(root):
     """Find full declared namespaces independently of renamed module roots.
@@ -171,14 +166,12 @@ def namespace_packages(root):
     A namespace shared across packages never hides a missing selected name.
     """
     owners = {}
-    for package, directory in PACKAGE_DIRECTORIES.items():
-        source = root / directory.relative_to(LEAN.parent)
-        files = [path for family in SOURCE_PACKAGES[package][1]
-                 for path in (source / family).rglob('*.lean')]
+    for package in SOURCE_PACKAGES:
+        files = package_modules(package, root / "lean").values()
         for path in files:
             # Independent nested namespaces have no reliable module ownership;
             # only explicit qualified namespace declarations supply this hint.
-            for namespace in re.findall(r'^namespace ([A-Za-z][A-Za-z0-9_\'.]*\.[A-Za-z0-9_\'.]+)\s*$',
+            for namespace in re.findall(r'^namespace ([A-Za-z][A-Za-z0-9_\'.]*)\s*$',
                                         path.read_text(), re.MULTILINE):
                 owners.setdefault(namespace, set()).add(package)
     return owners
@@ -207,14 +200,17 @@ def check_documents(records, root=LEAN.parent):
             if token not in names and token not in prefixes and owners and owners.isdisjoint(records.packages()):
                 skipped += 1
                 continue
-            package = (record["package"] if record else locked[token]['package'] if token in locked
-                       else ROOTS[token.split(".")[0]])
-            if package not in records.packages():
+            packages = ({record["package"]} if record else {locked[token]["package"]} if token in locked
+                        else {module_owner(token)} if is_owned_module(token) else owners)
+            if not packages:
+                continue
+            if packages.isdisjoint(records.packages()):
                 skipped += 1
                 continue
             checked += 1
-            module = PACKAGE_DIRECTORIES[package].joinpath(*token.split("."))
-            if token in names or token in prefixes or module.with_suffix(".lean").exists() or module.is_dir():
+            module = module_path(token, root / "lean") if is_owned_module(token) else None
+            if token in names or token in prefixes or (module and
+                    (module.exists() or module.with_suffix("").is_dir())):
                 continue
             findings.append(f"stale name: {path.relative_to(root)} cites {token}, which is not a declaration, "
                             "namespace or module")

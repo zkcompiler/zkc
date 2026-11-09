@@ -1,0 +1,21 @@
+{
+  "challenge_module": "LockedStatements",
+  "solution_module": "LockedStatements",
+  "theorem_names": [
+    "Zkc.Protocols.Sumcheck.Multilinear.check_of_residual",
+    "ZkcSecurity.Commitment.soundness",
+    "ZkcSecurity.Commitment.soundness_weighted",
+    "ZkcSecurity.Examples.CommittedOpeningBridge.soundness",
+    "ZkcSecurity.FiatShamir.Obligations.not_determines",
+    "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_charged",
+    "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_weighted",
+    "ZkcSecurity.HashChain.Encoding.frame_prefixFree",
+    "ZkcSecurity.HashChain.concrete_le_simulated"
+  ],
+  "definition_names": [],
+  "permitted_axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ]
+}

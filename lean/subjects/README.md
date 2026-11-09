@@ -28,6 +28,23 @@ requests. Nothing in a manifest is Lean source except a model term in
 `[construction] model`, which the generated glue states as a definitional
 equation that the kernel checks.
 
+## Module and declaration identity
+
+A generated file has two explicit identities. Its path in `[generated]` chooses
+its owning Lake package and import module; the matching key in `[namespaces]`
+chooses its Lean declaration namespace. Every generated Lean file must have a
+namespace entry. Entries for non-Lean JSON/MLIR fixtures are refused. The reader
+does not guess declaration names from a module path.
+
+For example, a generated path under
+`lean/applications/Zkc/Applications/IR/Construction/` imports as
+`Zkc.Applications.IR.Construction.…`, while its existing declarations can remain
+under `ZkcExamples.Construction.…`. The two names need not match.
+`construction.views` and `construction.views_namespace` follow the same split;
+`executable.module` selects an import, and `executable.namespace` selects the
+existing executable declarations. The source schema remains `zkc.subject/0`;
+these are explicit authoring metadata, not semantic or theorem substitutions.
+
 ## Schema `zkc.subject/0`
 
 Unknown tables and fields are refused. Paths are relative to the repository
@@ -71,7 +88,7 @@ separate owners. For example:
 
 ```toml
 [generated]
-glue = "lean/ZkcExamples/Construction/SchnorrArtifact.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/SchnorrArtifact.lean"
 
 [construction]
 namespace = "ZkcExamples.Construction.SchnorrProof"
@@ -174,7 +191,7 @@ another selected Entry has a valid receipt.
 
 Physical Lean file checks use `lake lean`, which applies package options and
 builds imported modules. No-build exporters and the already-built Clean control
-use `lake env lean` with the same `autoImplicit=false` and `warningAsError=true`
+use the shared `support.invocation.command` with the same `autoImplicit=false` and `warningAsError=true`
 options explicitly. Generated proof-view checks retain the module header and
 public exposure used by the installed generated modules.
 

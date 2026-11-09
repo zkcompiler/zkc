@@ -86,9 +86,11 @@ def test_every_lean_check_is_where_the_loop_that_runs_them_looks():
         "these sit in lean/ where the loop does not look; a check belongs in "
         "lean/checks/ and a tool belongs in the exception above"
     )
-    beside_lean = sorted(path.name for path in (formal / "Tests").glob("*.py"))
+    beside_lean = sorted(str(path.relative_to(formal))
+                         for directory in formal.rglob("Zkc/Tests")
+                         if ".lake" not in directory.parts for path in directory.rglob("*.py"))
     assert beside_lean == [], (
-        "lean/Tests/ is built by Lake, which does not run Python; a check "
+        "lean/ir/Zkc/Tests/IR/ is built by Lake, which does not run Python; a check "
         "that landed here would never run"
     )
 

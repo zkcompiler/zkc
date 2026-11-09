@@ -3,7 +3,7 @@
 These adapters consume exact mathematical experiments in the existing security
 and ArkLib packages. They introduce neither native codecs nor new compiler-stage
 correspondences. ArkLib remains pinned by
-[`integrations/arklib/lakefile.toml`](../../integrations/arklib/lakefile.toml).
+[`integrations/arklib/lakefile.toml`](../../adapters/arklib/lakefile.toml).
 
 ## KZG evaluation binding
 

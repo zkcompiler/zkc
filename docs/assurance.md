@@ -47,7 +47,7 @@ or native execution.
 | Claim | Owning definition | Additional native obligation |
 |---|---|---|
 | Preserve selected observations | [PIR semantics](../lean/docs/spec/semantics.md) | Implement the selected projection over actual releases, diagnostics and identifiers; disclose-only security needs its own property |
-| Authorize a retained continuation | [Continuation laws](../lean/Zkc/Semantics/Continuation.lean) | Actual identity, custody and publication adapter; the model's atomic single export is not distributed persistence |
+| Authorize a retained continuation | [Continuation laws](../lean/program/Zkc/Program/Semantics/Continuation.lean) | Actual identity, custody and publication adapter; the model's atomic single export is not distributed persistence |
 | Bind interpretation to the supplied subject | [Artifacts](spec/realization/artifacts.md), [representations](spec/realization/representations.md) | Resolver, loader, parser and backend correspondence |
 | Use a conditional checked result | [Judgments](spec/verification/judgments.md), [refinement](spec/verification/refinement.md) | Native checker correspondence and actual premise discharge |
 | Establish source adequacy | [Relation encoding](spec/relations.md#source-encoding-adequacy), [source translation](spec/language/translation.md) | Preserve the intended source, captures and actual target; import/type validity alone is insufficient |

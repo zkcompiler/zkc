@@ -36,7 +36,7 @@ not require global type-class search or a second interpreter.
 
 ## Define the mathematical boundary
 
-[`ClaimRelation`](../../Zkc/Obligations/ClaimRelation.lean) separates an
+[`ClaimRelation`](../../program/Zkc/Program/Obligations/ClaimRelation.lean) separates an
 affirmative witness relation from `No`. Exact relations can use the complement
 of validity. Proximity contracts instead retain a gap: a word can be outside the
 code without being far enough for the soundness theorem. Matching affirmative
@@ -113,7 +113,7 @@ an arbitrary helper table, so a dependency must be justified in that table.
 Applying `Gate.law` at an imported helper additionally requires its exact
 `BodyIn` association and the condition at the actual arguments.
 
-The implemented [GKR gate companion](../../ZkcExamples/Structured/GkrGateCompanion.lean)
+The implemented [GKR gate companion](../../applications/Zkc/Applications/IR/Structured/GkrGateCompanion.lean)
 uses the following form for its scalar mathematics:
 
 ```lean
@@ -189,7 +189,7 @@ carrier. New representation laws remain ordinary library or companion proofs.
 Use the full `Gate.law` interface when a smaller view would merely add work.
 
 The actual Sumcheck implementation is in
-[`MathematicalHelpers`](../../Zkc/Protocols/Sumcheck/Source/MathematicalHelpers.lean).
+[`MathematicalHelpers`](../../verification/Zkc/Verification/Installations/Sumcheck/Source/MathematicalHelpers.lean).
 Its reconstruction preserves the order of dimension, nonempty/even-length and
 admission checks. The restriction invariant is a separate mathematical fact:
 the current entries represent the original table restricted by the challenges
@@ -202,7 +202,7 @@ domain and the original body-law prerequisites.
 For effectful clients, `PIR.Process.run_of_reachable_view` transports the whole
 execution to the mathematical return view. The state and event-prefix laws
 apply to stopped runs too. See
-[`SchnorrAndExecution`](../../ZkcExamples/Construction/SchnorrAndExecution.lean)
+[`SchnorrAndExecution`](../../applications/Zkc/Applications/IR/Construction/SchnorrAndExecution.lean)
 for optional decisions, both nonces and a shared challenge. Acceptance is an
 observation of that complete execution. Paired witness recovery additionally
 needs the shared commitments, distinct challenges and the request-fixed
@@ -477,7 +477,7 @@ below. Root generation does not establish these security properties by itself.
 
 ## Bind one component
 
-[`ComponentInterface`](../../Zkc/Obligations/Component.lean) records:
+[`ComponentInterface`](../../protocol/Zkc/Protocol/Obligations/Component.lean) records:
 
 - the actual `PIR.Process` body and its runtime arguments;
 - logical parameters and input/output claim relations;
@@ -519,7 +519,7 @@ The caller must establish the next scope at the reached state. In a conjunction,
 the first component might process a true claim while only the second claim is
 false. Therefore frame and scope preservation cannot depend on the first
 claim's `No`. The generic
-[`Assembly`](../../Zkc/Obligations/Assembly.lean) rules retain this independent
+[`Assembly`](../../protocol/Zkc/Protocol/Obligations/Assembly.lean) rules retain this independent
 premise, both return values and the complete history. Honest composition likewise
 threads actual producer/verifier state and the shared cache; a cold-start success
 theorem for each component is insufficient.
@@ -635,7 +635,7 @@ introductions and the existing source normalization, component laws and
 composition proofs. The author does not repeat the root signature or import its
 consumer. Existing helper mathematics retains its public names.
 
-`checks/GenerateSourcePropertyModules.lean` imports the goals without the
+`Zkc.Tools.Applications.Commands.GenerateSourcePropertyModules` imports the goals without the
 companions or consumers. It uses `Companions.goalHeader` to print complete
 ordinary Lean declaration headers from their checked types, and the existing
 source-identity and stub tools to print initial companion scaffolding with
@@ -710,7 +710,7 @@ that the shared service, incoming history and complete return relations are unch
 After preparing the existing Lean packages, run from the repository root:
 
 ```sh
-python3 lean/security/checks/check_source_property_modules.py
+python3 lean/verification/checks/check_source_property_modules.py
 ```
 
 The focused driver builds into a private directory, reads existing dependency
@@ -726,10 +726,10 @@ goals and checks all six imported companions. The original standard-axiom checks
 remain in place.
 
 To print modules alone after building the goal and tool modules, run from
-`lean/security/`:
+`lean/applications/`:
 
 ```sh
-lake env lean --run checks/GenerateSourcePropertyModules.lean /tmp/source-property-modules
+lake exe command-generate-source-property-modules /tmp/source-property-modules
 ```
 
 The output contains the two installation modules and initial scaffolds under

@@ -192,7 +192,8 @@ def test_lean_reproduction_receives_the_selected_report_directory(monkeypatch, t
     assert all(output.is_relative_to(tmp_path / "reports/runs") for output in outputs)
     assert [output.joinpath("evidence").read_text() for output in outputs] == ["1", "2"]
     assert all(call[:-1] == [sys.executable, str(ROOT / "lean/reproduce.py"),
-                            "--with-arklib", "--with-clean", "--output"] for call in calls)
+                            *[arg for name in developer.lean_inventory().selection(__import__("argparse").Namespace(package=None, core_only=False))
+                              for arg in ("--package", name)], "--output"] for call in calls)
 
 
 def test_cleanup_refuses_symlink_before_resolving_reports(monkeypatch, tmp_path):

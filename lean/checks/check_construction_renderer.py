@@ -27,6 +27,7 @@ import sys
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
+from support.packages import module_package  # noqa: E402
 import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
 
@@ -114,7 +115,7 @@ def embedding_export(base_id, extension_id, catalogue):
 
 def strip(rendered):
     """A rendering without its module header, to share one Lean file."""
-    return rendered.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "").replace(
+    return rendered.replace("module\n\n", "", 1).replace("public import Zkc.IR.Construction.Participant\n", "").replace(
         "@[expose] public section\n", "")
 
 
@@ -210,12 +211,12 @@ def check(output, lake):
     # A validator that conjoins two Boolean checks, as a composed Sigma verifier does.
     conjunction = export([BOOLEAN, BOOLEAN, TRANSCRIPT], [["arith.andi", [], [], [0, 1], [BOOLEAN], []]], [3, 2])
     source = renderer.render(conjunction, "RenderedConjunction").replace("module\n\n", "", 1)
-    source = source.replace("public import Zkc.Construction.Participant\n", "")
+    source = source.replace("public import Zkc.IR.Construction.Participant\n", "")
     source = source.replace("@[expose] public section\n", "")
     source += index_source.replace("module\n\n", "", 1).replace(
-        "public import Zkc.Construction.Participant\n", "").replace("@[expose] public section\n", "")
+        "public import Zkc.IR.Construction.Participant\n", "").replace("@[expose] public section\n", "")
     source += field_source.replace("module\n\n", "", 1).replace(
-        "public import Zkc.Construction.Participant\n", "").replace("@[expose] public section\n", "")
+        "public import Zkc.IR.Construction.Participant\n", "").replace("@[expose] public section\n", "")
     source += '''
 open Zkc.Construction in
 example : RenderedIndex.participant.instructions =
@@ -263,7 +264,7 @@ example : RenderedSelection.participant.instructions =
         else:
             raise AssertionError("renderer accepted a malformed dormant selected arm")
     captured = renderer.render(export([FIELD, INDEX, TRANSCRIPT], CAPTURING, [4, 3]), "RenderedCaptures")
-    captured = captured.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "")
+    captured = captured.replace("module\n\n", "", 1).replace("public import Zkc.IR.Construction.Participant\n", "")
     source += captured.replace("@[expose] public section\n", "")
     base = ["apply", "field", [["domain", "Field", "koala-bear"]]]
     extension = ["apply", "field", [["domain", "Field", "koala-bear.ext4-binomial3"]]]
@@ -273,7 +274,7 @@ example : RenderedSelection.participant.instructions =
                  ["field.embed", [["domain", "Field", "koala-bear.ext4-binomial3"]], "", [base], [extension]], [0], [extension], []]
     quartic = rows(*extension_rows("koala-bear", "koala-bear.ext4-binomial3", "2130706433"))
     embedded = renderer.render(export([base, TRANSCRIPT], [embedding], [2, 1], quartic), "RenderedEmbedding")
-    embedded = embedded.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "")
+    embedded = embedded.replace("module\n\n", "", 1).replace("public import Zkc.IR.Construction.Participant\n", "")
     source += embedded.replace("@[expose] public section\n", "")
     source += '''
 open Zkc.Construction in
@@ -302,14 +303,14 @@ example : RenderedCaptures.participant.instructions =
                            ["runtime.site", ["string", "handler"]]], "RenderedScopedCall")):
         data = export([FIELD, TRANSCRIPT], [[name, attrs, [], [0], [BOOLEAN], []]], [2, 1])
         rendered = renderer.render(data, namespace).replace("module\n\n", "", 1)
-        source += rendered.replace("public import Zkc.Construction.Participant\n", "").replace(
+        source += rendered.replace("public import Zkc.IR.Construction.Participant\n", "").replace(
             "@[expose] public section\n", "")
         source += f"\nopen Zkc.Construction in\nexample : {namespace}.participant.instructions =\n" \
                   '    [⟨.call "source_helper", [0], [.data .boolean], []⟩] := by decide +kernel\n'
     boolean = export([TRANSCRIPT], [["exec.boolean", [["site", ["string", "literal"]],
                         ["value", ["bool", True]]], [], [], [BOOLEAN], []]], [1, 0])
     rendered = renderer.render(boolean, "RenderedBoolean").replace("module\n\n", "", 1)
-    source += rendered.replace("public import Zkc.Construction.Participant\n", "").replace(
+    source += rendered.replace("public import Zkc.IR.Construction.Participant\n", "").replace(
         "@[expose] public section\n", "")
     source += '\nopen Zkc.Construction in\nexample : RenderedBoolean.participant.instructions =\n' \
               '    [⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩] := by decide +kernel\n'
@@ -322,10 +323,10 @@ example : RenderedCaptures.participant.instructions =
         "] = [" + ", ".join(".ok ()" if code is None else f'.error "{code}"' for _, _, code in catalogue_cases) + \
         "] := by\n  decide +kernel\n"
     path = output / "Rendered.lean"
-    path.write_text("module\n\npublic import Zkc.Construction.Participant\npublic import Zkc.Construction.CatalogueAdmission\n\n"
+    path.write_text("module\n\npublic import Zkc.IR.Construction.Participant\npublic import Zkc.IR.Construction.CatalogueAdmission\n\n"
                     "@[expose] public section\n" + source, encoding="utf-8")
     if lake is not None:
-        run = subprocess.run([lake, "lean", path], cwd=HERE,
+        run = subprocess.run([lake, "lean", path], cwd=module_package("Zkc.IR"),
                              capture_output=True, encoding="utf-8", timeout=120)
         (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
         if run.returncode:

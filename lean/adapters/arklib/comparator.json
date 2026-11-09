@@ -1,0 +1,21 @@
+{
+  "challenge_module": "LockedStatements",
+  "solution_module": "LockedStatements",
+  "theorem_names": [
+    "ZkcArkLib.Kzg.averageSuccess_eq_bindingExperiment",
+    "ZkcArkLib.Kzg.scoped_bound",
+    "ZkcSecurity.ArkLib.Fri.RoundByRound.soundness",
+    "ZkcSecurity.ArkLib.Fri.soundness_generalizedJohnson",
+    "ZkcSecurity.ArkLib.Fri.soundness_uniqueDecoding",
+    "ZkcSecurity.ArkLib.Sumcheck.Multilinear.publicTable_soundness",
+    "ZkcSecurity.ArkLib.Sumcheck.Multilinear.residual_soundness",
+    "ZkcSecurity.FiatShamir.Upstream.worstCase_adaptive_soundness_weighted",
+    "ZkcSecurity.FiatShamir.Upstream.worstCase_soundness"
+  ],
+  "definition_names": [],
+  "permitted_axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ]
+}

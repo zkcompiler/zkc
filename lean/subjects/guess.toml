@@ -11,12 +11,20 @@ proof = "example::Proof"
 construction = true
 
 [generated]
-data = "lean/ZkcExamples/Construction/GuessProofData.lean"
-bodies = "lean/ZkcExamples/Construction/GuessProofBodies.lean"
-participant = "lean/ZkcExamples/Construction/GuessProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/GuessArtifact.lean"
-artifacts = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Guess/Artifacts.lean"
-claims = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Guess/Claims.lean"
+data = "lean/applications/Zkc/Applications/IR/Construction/GuessProofData.lean"
+bodies = "lean/applications/Zkc/Applications/IR/Construction/GuessProofBodies.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/GuessProofParticipant.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/GuessArtifact.lean"
+artifacts = "lean/applications/Zkc/Applications/ArkLib/Subjects/Guess/Artifacts.lean"
+claims = "lean/applications/Zkc/Applications/ArkLib/Subjects/Guess/Claims.lean"
+
+[namespaces]
+data = "ZkcExamples.Construction.GuessProofData"
+bodies = "ZkcExamples.Construction.GuessProofBodies"
+participant = "ZkcExamples.Construction.GuessProofParticipant"
+glue = "ZkcExamples.Construction.GuessProof"
+artifacts = "ZkcSecurity.Examples.Subjects.Guess"
+claims = "ZkcSecurity.Examples.Subjects.Guess"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",
@@ -29,15 +37,15 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 
 [construction]
 namespace = "ZkcExamples.Construction.GuessProof"
-connection = "ZkcExamples.Construction.GuessProof"
+connection = "Zkc.Applications.IR.Construction.GuessProof"
 admission = "views"
 inputs = "payloads"
 model = "experiment"
-model_imports = ["ZkcExamples.Construction.GuessProofModel"]
+model_imports = ["Zkc.Applications.IR.Construction.GuessProofModel"]
 
 [bodies]
 entry = "proof"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Guess"
-imports = ["ZkcArkLibExamples.Subjects.Guess.Registration"]
+imports = ["Zkc.Applications.ArkLib.Subjects.Guess.Registration"]

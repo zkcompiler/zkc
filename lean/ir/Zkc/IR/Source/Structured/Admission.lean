@@ -1,0 +1,700 @@
+module
+
+public import Zkc.IR.Source.Structured.Operations
+public import Zkc.IR.Source.Structured.Format
+public import Zkc.IR.Source.Structured.Provenance
+
+@[expose] public section
+
+/-! Independent static admission and lowering. Bound facts name exact SSA
+positions; prepending results shifts both ends. No equal-length substitution,
+callee premise, or loop-state invariant is silently assumed. -/
+
+namespace Zkc.Source.Structured
+
+def requireSome {α : Type} (value : Option α) (error : String) : Except String α :=
+  match value with | some value => .ok value | none => .error error
+
+abbrev Facts := List (Nat × Nat)
+
+def validString (value : String) (empty : Bool := false) : Bool :=
+  value.utf8ByteSize ≤ 512 && (empty || !value.isEmpty)
+mutual
+  def Ty.isService : Ty → Bool
+    | .service _ => true
+    | .sequence element => element.isService
+    | .product _ _ fields => fields.hasService
+    | _ => false
+  def ProductFields.hasService : ProductFields → Bool
+    | .nil => false
+    | .cons type rest => type.isService || rest.hasService
+end
+
+mutual
+  /-- Logical handles cannot acquire ordinary Math, message or codec rights
+  through a type added to the wire vocabulary. A custody permission is not a
+  payload either: it is never selected, packed, transmitted or encoded. -/
+  def Ty.isHandle : Ty → Bool
+    | .service _ | .oracle _ | .oracleSequence .. | .resourceUnit _ => true
+    | .sequence element => element.isHandle
+    | .product _ _ fields => fields.hasHandle
+    | _ => false
+  def ProductFields.hasHandle : ProductFields → Bool
+    | .nil => false
+    | .cons type rest => type.isHandle || rest.hasHandle
+end
+
+mutual
+  /-- Polynomial values may be computed locally, but have no common-value wire codec. -/
+  def Ty.containsPolynomial : Ty → Bool
+    | .polynomial _ => true
+    | .sequence element => element.containsPolynomial
+    | .product _ _ fields => fields.containsPolynomial
+    | _ => false
+  def ProductFields.containsPolynomial : ProductFields → Bool
+    | .nil => false
+    | .cons type rest => type.containsPolynomial || rest.containsPolynomial
+end
+
+/-- A custody permission: a nominal resource unit of one exact slot. -/
+def Ty.isCustody : Ty → Bool
+  | .resourceUnit _ => true
+  | _ => false
+
+/-- A logical handle other than a custody permission. -/
+def Ty.isForeignHandle (ty : Ty) : Bool := ty.isHandle && !ty.isCustody
+
+/-- Logical protocol families have structural transport, independently of closed Math
+values, services and affine custody. This predicate grants no wire codec. -/
+def Ty.isOracleFamily : Ty → Bool
+  | .oracle _ | .oracleSequence .. => true
+  | _ => false
+
+-- Materialize the admission equations in their defining module. Lazy generation
+-- in independent clients can produce different stored proofs for the same
+-- equation name; declaration provenance must have a single checked owner.
+section
+attribute [local simp] Ty.isService ProductFields.hasService Ty.isHandle ProductFields.hasHandle Ty.isCustody Ty.containsPolynomial ProductFields.containsPolynomial
+end
+
+/-- Native preparation identifiers have a stricter bound than helper symbols. -/
+def validPreparationName (name : String) : Bool :=
+  name.utf8ByteSize ≤ Limits.preparationNameBytes && match name.toList with
+    | [] => false
+    | first :: rest =>
+      let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
+      initial first && rest.all (fun c => initial c || ('0' ≤ c && c ≤ '9') || c == '.' || c == '-')
+
+/-- Native protocol role and site grammar, separate from flat symbols. -/
+def validProtocolIdentifier (name : String) : Bool :=
+  validString name && match name.toList with
+    | [] => false
+    | first :: rest =>
+      let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
+      initial first && rest.all (fun c => initial c || ('0' ≤ c && c ≤ '9'))
+
+/-- Signature length. Every stored type is admitted against the unit's
+catalogue rows by `Snapshot.checkCatalogue`. -/
+def validTypes (types : List Ty) : Bool := types.length ≤ Limits.listEntries
+
+/- An admitted sort instance: the exported rows give its identity the right
+sort, and the environment admits that instance. -/
+mutual
+  def Catalogue.checkType (exported environment : Catalogue) : Ty → Except String Unit
+    | .boolean | .index | .indices => pure ()
+    | .oracle (.table row extent) => do
+      if row.isHandle then throw "structured-oracle-row"
+      if extent.any (· ≥ indexLimit) then throw "structured-oracle-shape"
+      exported.checkType environment row
+    | .oracleSequence (.table row extent) maximum => do
+      if row.isHandle then throw "structured-oracle-row"
+      if maximum ≥ indexLimit || extent.any (· ≥ indexLimit) then
+        throw "structured-oracle-shape"
+      exported.checkType environment row
+    -- A slot is an exact nominal custody identity, independent of the catalogue.
+    | .resourceUnit slot =>
+      unless LogicalFormat.slotIdentityValid slot do throw "structured-slot-identity"
+    | .field d => do
+      discard <| exported.expect d .field
+      if !environment.types.contains ("field", d) then throw "structured-type-unadmitted"
+    | .polynomial d => do
+      discard <| exported.expect d .field
+      if !environment.types.contains ("polynomial", d) then throw "structured-type-unadmitted"
+    | .vector d => do
+      discard <| exported.expect d .field
+      if !environment.types.contains ("vector", d) then throw "structured-type-unadmitted"
+    | .group g => do
+      discard <| exported.expect g .group
+      if !environment.types.contains ("group", g) then throw "structured-type-unadmitted"
+    | .groups g => do
+      discard <| exported.expect g .group
+      if !environment.types.contains ("groups", g) then throw "structured-type-unadmitted"
+    | .service c => do
+      let service ← exported.findService c
+      discard <| exported.expect service.sampled .field
+      if !(environment.services.map (·.contract)).contains c then throw "structured-type-unadmitted"
+    | .sequence element => do
+      if element.isService then throw "structured-aggregate-service"
+      if element.isHandle then throw "structured-aggregate-handle"
+      exported.checkType environment element
+    | .product identity constructor fields => do
+      if !validString identity || !validString constructor || fields.toList.length > 512 then
+        throw "structured-product"
+      if fields.hasService then throw "structured-aggregate-service"
+      if fields.hasHandle then throw "structured-aggregate-handle"
+      exported.checkProductFields environment fields
+  def Catalogue.checkProductFields (exported environment : Catalogue) :
+      ProductFields → Except String Unit
+    | .nil => pure ()
+    | .cons type rest => do
+      exported.checkType environment type
+      exported.checkProductFields environment rest
+end
+
+def validRefs (refs : List Nat) : Bool := refs.length ≤ Limits.listEntries && refs.all (· ≤ Limits.instructions)
+
+/-- Remove empty instruction lists without charging an instruction. -/
+def nextInstruction : List (List Instruction) → Option (Instruction × List (List Instruction))
+  | [] => none
+  | [] :: rest => nextInstruction rest
+  | (instruction :: instructions) :: rest => some (instruction, instructions :: rest)
+
+/-- The types stored in instructions: results, selected types and region
+signatures, nested regions included, in the bounded worklist order of
+`instructionWorkWithin`. -/
+def instructionTypes : Nat → List (List Instruction) → List Ty
+  | 0, _ => []
+  | remaining + 1, work => match nextInstruction work with
+    | none => []
+    | some (.instruction descriptor _ results regions _, rest) =>
+      let children := regions.map fun (.region _ _ (.block instructions _)) => instructions
+      results ++ (match descriptor with | .select type => [type] | _ => []) ++
+        regions.flatMap (fun (.region inputs outputs _) => inputs ++ outputs) ++
+        instructionTypes remaining (children ++ rest)
+
+/-- Every type stored in the snapshot: declaration signatures and the types of
+every stored instruction, including dormant bodies. Admission computes it after
+the instruction budget holds, so the budget covers every instruction. -/
+def Snapshot.storedTypes (snapshot : Snapshot) : List Ty :=
+  snapshot.domains.flatMap (·.inputs) ++
+    snapshot.relations.flatMap (fun relation => relation.inputs ++ relation.outputs) ++
+    snapshot.definitions.flatMap (fun definition => definition.inputs ++ definition.outputs) ++
+    instructionTypes Limits.instructions (snapshot.definitions.filterMap fun definition =>
+      match definition with
+      | .function function => let .block instructions _ := function.body; some instructions
+      | .oracle f => let .block instructions _ := f.body; some instructions
+      | .finite _ | .collect _ | .realization _ | .map _ => none)
+
+/-- The unit's rows are consistent and are the environment's rows, and every
+stored type is an admitted instance. -/
+def Snapshot.checkCatalogue (snapshot : Snapshot) (environment : Catalogue) : Except String Unit := do
+  snapshot.catalogue.check
+  snapshot.catalogue.agrees environment
+  snapshot.storedTypes.forM (snapshot.catalogue.checkType environment)
+  snapshot.bindings.forM fun binding => discard <| binding.resolveRoot snapshot.catalogue
+
+/-- Bound a structural preflight before helper analysis. The budget counts
+stored instructions, including nested regions, rather than expanded calls. -/
+def instructionWorkWithin : Nat → List (List Instruction) → Bool
+  | 0, work => (nextInstruction work).isNone
+  | remaining + 1, work => match nextInstruction work with
+    | none => true
+    | some (.instruction _ _ _ regions _, rest) =>
+      let children := regions.map fun (.region _ _ (.block instructions _)) => instructions
+      instructionWorkWithin remaining (children ++ rest)
+
+def Snapshot.instructionsWithin (snapshot : Snapshot) (limit : Nat) : Bool :=
+  let derivedCount := snapshot.definitions.filterMap (fun definition =>
+    match definition with | .function _ | .oracle _ => none | _ => some ()) |>.length
+  let work := snapshot.definitions.filterMap fun definition =>
+    match definition with
+    | .function function => let .block instructions _ := function.body; some instructions
+    | .oracle f => let .block instructions _ := f.body; some instructions
+    | .finite _ | .collect _ | .realization _ | .map _ => none
+  let domainCount := (snapshot.domains.map (·.constructors.length)).sum
+  derivedCount + domainCount ≤ limit && instructionWorkWithin (limit - derivedCount - domainCount) work
+
+def domainCollection (inputs : List Ty) (index : Nat) :
+    Except String ((collection : Collection) × Var inputs collection.type) := do
+  let collection ← match inputs[index]? with
+    | some (.vector field) => pure (Collection.vector field)
+    | some (.sequence element) => pure (Collection.sequence element)
+    | _ => throw "structured-domain-container"
+  let container ← decodeVariable inputs collection.type index |>.mapError
+    fun _ => "structured-domain-container"
+  return ⟨collection, container⟩
+
+def DomainConstructor.resolve (inputs : List Ty) (context : List (List Ty)) :
+    DomainConstructor → Except String ((items : List Ty) × DomainNode inputs context items)
+  | .elements index => do
+      let ⟨collection, container⟩ ← domainCollection inputs index
+      return ⟨[collection.element], .elements collection container⟩
+  | .indices index axis => do
+      if axis != 0 then throw "structured-domain-axis"
+      let ⟨collection, container⟩ ← domainCollection inputs index
+      return ⟨[.index], .indices collection container⟩
+  | .range lower upper => do
+      let lower ← decodeVariable inputs .index lower |>.mapError fun _ => "structured-domain-bound"
+      let upper ← decodeVariable inputs .index upper |>.mapError fun _ => "structured-domain-bound"
+      return ⟨[.index], .range lower upper⟩
+  | constructor@(.zip references) | constructor@(.product references) => do
+      if references.isEmpty || references.length > 512 then throw "structured-domain-operands"
+      let types ← references.mapM fun index =>
+        requireSome context[index]? "structured-domain-reference"
+      if types.flatten.length > 512 then throw "structured-domain-items"
+      let operands ← decodeOperands context types references |>.mapError
+        fun _ => "structured-domain-reference"
+      match constructor with
+      | .zip _ => return ⟨types.flatten, .zip types operands⟩
+      | _ => return ⟨types.flatten, .product types operands⟩
+
+def resolveDomainBody (inputs : List Ty) (result : Nat) :
+    (context : List (List Ty)) → List DomainConstructor →
+      Except String ((items : List Ty) × DomainBody inputs context items)
+  | context, [] => do
+      let types ← requireSome context[result]? "structured-domain-reference"
+      let value ← decodeVariable context types result |>.mapError fun _ => "structured-domain-reference"
+      return ⟨types, .ret value⟩
+  | context, constructor :: rest => do
+      let ⟨types, node⟩ ← constructor.resolve inputs context
+      let ⟨items, next⟩ ← resolveDomainBody inputs result (types :: context) rest
+      return ⟨items, .letNode node next⟩
+
+def Domain.resolve (domain : Domain) : Except String DomainSpec := do
+  if !validString domain.name || !validTypes domain.inputs || domain.constructors.isEmpty ||
+      domain.constructors.length > 4096 then throw "structured-domain"
+  let ⟨items, body⟩ ← resolveDomainBody domain.inputs domain.result [] domain.constructors
+  return ⟨domain.name, domain.inputs, items, body⟩
+
+def Bound.valid (inputs : List Ty) (bound : Bound) : Bool :=
+  bound.axis == 0 && inputs[bound.index]? == some .index &&
+    (match inputs[bound.container]? with | some (.vector _) => true | _ => false)
+
+def Definition.headerValid (definition : Definition) : Bool :=
+  validString definition.name && validTypes definition.inputs && validTypes definition.outputs &&
+  definition.preconditions.length ≤ 512 &&
+  definition.preconditions.all (Bound.valid definition.inputs) &&
+  (match definition with
+  | .oracle declaration =>
+    validString declaration.admissibility &&
+      declaration.shapeArguments.length ≤ 16 && declaration.shapeBounds.length ≤ 16
+  | .function f =>
+    (match f.kind, f.interface with
+      | .protocol, some _ => f.visibility == .publicDef && validProtocolIdentifier f.name
+      | .math, none | .local, none => true
+      | _, _ => false) &&
+    -- Local frames may move custody permissions; Math never mentions one.
+    (f.kind == .protocol ||
+      !(f.inputs ++ f.outputs).any (if f.kind == .local then Ty.isForeignHandle else Ty.isHandle)) &&
+    !f.outputs.any Ty.isService &&
+    (f.kind != .math || f.visibility == .privateDef) &&
+    (f.kind == .math || f.preconditions.isEmpty) &&
+    (match f.kind, f.origin with
+    | .local, some value@(.local ..) => value.valid
+    | .protocol, some value@(.protocol ..) => value.valid
+    | .math, none => true
+    | _, _ => false)
+  | .finite f => !(f.inputs ++ f.outputs).any Ty.isHandle &&
+    validString f.domain && validString f.step && validString f.predicate true
+  | .collect f => !(f.inputs ++ f.outputs).any Ty.isHandle &&
+    validString f.domain && validString f.body && validString f.predicate true
+  | .realization f => validPreparationName f.name && validString f.helper &&
+    !(f.inputs ++ f.outputs).any Ty.isHandle
+  | .map f => validPreparationName f.name && validString f.helper &&
+    !(f.inputs ++ f.outputs).any Ty.isHandle && f.rowwise.length ≤ 512 &&
+    f.rowwise.length == f.inputs.length && f.rowwise.any id)
+
+/-- Edges are checked against retained variants before semantic helper lowering. -/
+inductive ReferenceEdge where
+  | call | apply | localCall | protocolApply | callback (kind : Kind)
+  deriving DecidableEq, Repr
+
+def Definition.acceptsEdge (definition : Definition) (edge : ReferenceEdge) : Bool :=
+  match edge, definition with
+  | .protocolApply, .function f => f.kind == .protocol && f.visibility == .publicDef
+  | .call, .function f => f.kind == .math && f.visibility == .privateDef
+  | .apply, .function f | .localCall, .function f => f.kind == .local
+  | .apply, .finite _ | .apply, .collect _ | .apply, .realization _ | .apply, .map _ => true
+  | .callback kind, .function f =>
+    kind != .protocol && f.kind == kind && f.visibility == .privateDef
+  | _, _ => false
+
+
+def lookupDefinition (snapshot : Snapshot) (name : String) : Except String Definition :=
+  requireSome (snapshot.definitions.find? (·.name == name)) "structured-unknown-helper"
+def lookupDomain (domains : List DomainSpec) (name : String) : Except String DomainSpec :=
+  requireSome (domains.find? (·.name == name)) "structured-unknown-domain"
+
+def typesAt (context : List Ty) (indices : List Nat) : Except String (List Ty) :=
+  indices.mapM fun index => requireSome context[index]? "structured-operand"
+
+def Facts.shift (facts : Facts) (count : Nat) : Facts :=
+  facts.map fun (index, container) => (index + count, container + count)
+
+def discharge (facts : Facts) (operands : List Nat) (premises : List Bound) : Bool :=
+  premises.all fun bound => match operands[bound.index]?, operands[bound.container]? with
+    | some index, some container => facts.contains (index, container)
+    | _, _ => false
+
+/-- State changes on each step. Only invariant A/C facts and the domain's exact
+item/container fact can discharge a helper premise for every iteration. -/
+def dischargeFold (facts : Facts) (spec : FoldSpec) (operands : List Nat)
+    (stateCount : Nat) (premises : List Bound) : Bool :=
+  let domainCount := spec.domain.inputs.length
+  let invariantArgs := operands.take domainCount ++ operands.drop (domainCount + spec.state.length)
+  let invariantStart := stateCount + spec.domain.items.length
+  premises.all fun bound =>
+    (spec.domain.bounds.any fun (item, selected) =>
+      bound.index == stateCount + item && bound.container ≥ invariantStart &&
+        match invariantArgs[bound.container - invariantStart]?, invariantArgs[selected]? with
+        | some container, some selected => container == selected
+        | _, _ => false) ||
+    (bound.index ≥ invariantStart && bound.container ≥ invariantStart &&
+      match invariantArgs[bound.index - invariantStart]?, invariantArgs[bound.container - invariantStart]? with
+      | some index, some container => facts.contains (index, container)
+      | _, _ => false)
+
+def resolveFold (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
+    (domainName stepName predicateName : String) (argumentTypes state : List Ty)
+    (operands : List Nat) (facts : Facts) : Except String FoldSpec := do
+  let domain ← lookupDomain domains domainName
+  if argumentTypes.length < domain.inputs.length + state.length then throw "structured-fold-arguments"
+  let captures := argumentTypes.drop (domain.inputs.length + state.length)
+  let helperKind ← match kind with
+    | .math => pure HelperKind.math
+    | .local => pure HelperKind.local
+    | .protocol | .oracle => throw "structured-fold-kind"
+  let spec : FoldSpec := ⟨domain, state, captures, stepName, predicateName, helperKind⟩
+  if argumentTypes != spec.arguments then throw "structured-fold-arguments"
+  let step ← lookupDefinition snapshot stepName
+  if !step.acceptsEdge (.callback kind) ||
+      step.inputs != spec.stepHelper.inputs || step.outputs != state then throw "structured-fold-step"
+  if !dischargeFold facts spec operands state.length step.preconditions then
+    throw "structured-fold-premise"
+  if !predicateName.isEmpty then
+    let predicate ← lookupDefinition snapshot predicateName
+    if !predicate.acceptsEdge (.callback kind) ||
+        predicate.inputs != spec.predicateHelper.inputs || predicate.outputs != [.boolean] then
+      throw "structured-fold-predicate"
+    if !dischargeFold facts spec operands 0 predicate.preconditions then
+      throw "structured-fold-premise"
+  return spec
+
+/-- Collection callbacks retain their actual Local bodies. No totality or scalar
+ring profile is inferred from a generated function name. -/
+def resolveCollect (snapshot : Snapshot) (domains : List DomainSpec)
+    (declaration : CollectDeclaration) : Except String CollectSpec := do
+  let domain ← lookupDomain domains declaration.domain
+  let collection ← match declaration.outputs with
+    | [.vector field] => pure (Collection.vector field)
+    | [.sequence element] => pure (Collection.sequence element)
+    | _ => throw "structured-collect-result"
+  let captures := declaration.inputs.drop domain.inputs.length
+  let spec : CollectSpec :=
+    ⟨domain, collection, captures, declaration.body, declaration.predicate, .local⟩
+  if declaration.inputs != spec.arguments then throw "structured-collect-arguments"
+  let body ← lookupDefinition snapshot declaration.body
+  if !body.acceptsEdge (.callback .local) || body.inputs != spec.bodyHelper.inputs ||
+      body.outputs != spec.bodyHelper.outputs then throw "structured-collect-body"
+  if !declaration.predicate.isEmpty then
+    let predicate ← lookupDefinition snapshot declaration.predicate
+    if !predicate.acceptsEdge (.callback .local) || predicate.inputs != spec.predicateHelper.inputs ||
+        predicate.outputs != [.boolean] then throw "structured-collect-predicate"
+  return spec
+
+structure LowerState where
+  sites : List String := []
+  oracleCursor : Nat := 0
+
+abbrev LowerM := StateT LowerState (Except String)
+
+def recordSite (site : String) (required : Bool) : LowerM Unit := do
+  if !validString site (!required) then throw "structured-site"
+  if !site.isEmpty then
+    let state ← get
+    if state.sites.contains site then throw "structured-duplicate-site"
+    modify fun state => { state with sites := site :: state.sites }
+
+/-- Instruction ownership is independent of which facts happen to be available.
+In particular, acquiring a bound cannot authorize a Protocol-level read. -/
+def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
+  match descriptor with
+  | .oracle _ => false
+  | .exec .. => kind == .local
+  | .booleanConstant _ => kind != .oracle
+  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
+    .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
+    .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+    .fieldEmbed .. | .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
+    .booleanNotEqual | .select .. | .call .. | .fold .. |
+    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind == .math || kind == .protocol
+  | .makeProduct .. | .getProduct .. => kind == .math || kind == .protocol
+  | .boundedAt .. | .mathBranch => kind == .math
+  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .sampleIndex .. | .sampleIndices .. | .statement .. =>
+    kind == .protocol
+  | .apply .. | .branch | .loop | .loopCondition => kind == .local
+
+/-- Resolve an actual invocation through its explicit binding, independently of
+wire parsing. Data ports are checked by ordinary formation after selection;
+native scope/outcome plumbing belongs to the export correspondence boundary. -/
+def resolvePrimitive (snapshot : Snapshot) (operation name : String)
+    (parameters : List PrimitiveParameter) : Except String Op := do
+  if operation != "exec.apply" then throw "structured-primitive-operation"
+  let binding ← requireSome (snapshot.bindings.find? (·.name == name)) "structured-unknown-binding"
+  if !binding.valid then throw "structured-binding"
+  let root ← binding.resolveRoot snapshot.catalogue
+  if binding.contract == "field.embed" then
+    if !parameters.isEmpty then throw "structured-primitive-parameters"
+    let nominal ← snapshot.catalogue.expect root .field
+    let some base := nominal.member "BaseField" | throw "structured-domain-member"
+    snapshot.catalogue.requireEmbedding root base
+    return .fieldEmbed root base
+  if binding.contract == "field.constant" then
+    let [parameter] := parameters | throw "structured-primitive-parameters"
+    match ← Format.fieldLiteral snapshot.catalogue root parameter with
+    | .natural value => return .fieldConstant root value
+    | .bits bits => return .exec (.binaryConstant root bits)
+  if binding.contract == "index.constant" then
+    let [.natural text] := parameters | throw "structured-primitive-parameters"
+    return .exec (.indexConstant (← Format.indexDecimal text))
+  if !parameters.isEmpty then throw "structured-primitive-parameters"
+  match binding.contract with
+  | "field.add" => return .fieldAdd root
+  | "field.sub" => return .fieldSubtract root
+  | "field.mul" => return .fieldMultiply root
+  | "bool.and" => return .booleanAnd
+  | "bool.or" => return .booleanOr
+  | "bool.not" => return .exec .booleanNot
+  | _ => pure ()
+  if let some numerical := Numerical.ofContract binding.contract then
+    let base ← if binding.contract == "vector.embed" then do
+      let nominal ← snapshot.catalogue.expect root .field
+      requireSome (nominal.member "BaseField") "structured-domain-member"
+    else pure ""
+    return .exec (.numerical numerical root base)
+  -- The custody transfers are effects, not pure primitives (`SiteObservations`).
+  match binding.contract with
+  | "resource_unit.create" => return .createUnit root
+  | "resource_unit.pass" => return .passUnit root
+  | "resource_unit.consume" => return .consumeUnit root
+  | _ => pure ()
+  let primitive ← match binding.contract with
+    | "index.equal" => pure Primitive.indexEqual
+    | "index.less" => pure Primitive.indexLess
+    | "index.add" => pure Primitive.indexAdd
+    | "index.mul" => pure Primitive.indexMul
+    | "index.sub" => pure Primitive.indexSub
+    | "index.div" => pure Primitive.indexDiv
+    | "index.mod" => pure Primitive.indexMod
+    | "vector.empty" => pure (Primitive.vectorEmpty root)
+    | "vector.length" => pure (Primitive.vectorLength root)
+    | "vector.sum" => pure (Primitive.vectorSum root)
+    | "vector.split" => pure (Primitive.vectorSplit root)
+    | "vector.append" => pure (Primitive.vectorAppend root)
+    | "vector.equal" => pure (Primitive.vectorEqual root)
+    | "field.equal" => pure (Primitive.fieldEqual root)
+    | _ => throw "structured-primitive-contract"
+  return .exec primitive
+
+def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
+    (context : List Ty) (facts : Facts) (identities : List Nat)
+    (descriptor : Descriptor) (operands : List Nat)
+    (results : List Ty) (site : String) : LowerM Op := do
+  if !validRefs operands || !validTypes results then throw "structured-instruction-limit"
+  if !descriptor.admittedIn kind then
+    throw (match kind with
+      | .local => "structured-local-operation"
+      | .math => "structured-math-operation"
+      | .protocol => "structured-protocol-operation"
+      | .oracle => "structured-oracle-profile")
+  let argumentTypes ← typesAt context operands
+  let factOperands := operands.map fun index => identities[index]?.getD index
+  let required := match descriptor with
+    | .exec .. | .apply _ | .localCall .. | .branch | .loop | .loopCondition | .guard _ => true
+    | .booleanConstant _ => kind == .local
+    | _ => false
+  if kind == .math && !site.isEmpty then throw "structured-math-site"
+  if !required && !site.isEmpty then throw "structured-pure-site"
+  recordSite site required
+  let resolveCall := fun (name : String) (expected : Kind) (edge : ReferenceEdge) => do
+    let callee ← lookupDefinition snapshot name
+    if !callee.acceptsEdge edge || callee.kind != expected || name == snapshot.entry then
+      throw "structured-call-kind"
+    if !discharge facts factOperands callee.preconditions then throw "structured-call-premise"
+    let helperKind ← match expected with
+      | .math => pure HelperKind.math
+      | .local => pure HelperKind.local
+      | .protocol | .oracle => throw "structured-call-kind"
+    pure (Op.invoke ⟨name, helperKind, callee.inputs, callee.outputs⟩)
+  let catalogue := snapshot.catalogue
+  let checkField := fun (d : String) =>
+    (catalogue.require d .field "Field" : Except String Unit)
+  match descriptor with
+  | .oracle _ => throw "structured-oracle-profile"
+  | .exec operation binding parameters =>
+    return ← resolvePrimitive snapshot operation binding parameters
+  | .indexConstant text => return .indexConstant (← Format.indexDecimal text)
+  | .indexEqual => return .indexEqual
+  | .indexLess => return .indexLess
+  | .indexPowerOfTwo => return .indexPowerOfTwo
+  | .indexWrappingAdd => return .indexWrappingAdd
+  | .indexWrappingSubtract => return .indexWrappingSubtract
+  | .indexBitAnd => return .indexBitAnd
+  | .indexLogicalShiftRight => return .indexLogicalShiftRight
+  | .multilinearRestrictPrefix d => checkField d; return .multilinearRestrictPrefix d
+  | .vectorLength d => checkField d; return .vectorLength d
+  | .fieldConstant d text =>
+    checkField d
+    let value ← Format.decimal text
+    catalogue.belowModulus d value
+    return .fieldConstant d value
+  | .fieldAdd d => checkField d; return .fieldAdd d
+  | .fieldSubtract d => checkField d; return .fieldSubtract d
+  | .fieldMultiply d => checkField d; return .fieldMultiply d
+  | .fieldEmbed extension base =>
+    catalogue.requireEmbedding extension base
+    return .fieldEmbed extension base
+  | .fieldEqual d => checkField d; return .fieldEqual d
+  | .groupIdentity d =>
+    catalogue.require d .group "ScalarAction"
+    return .groupIdentity d
+  | .groupAdd d =>
+    catalogue.require d .group "ScalarAction"
+    return .groupAdd d
+  | .groupScale g f =>
+    catalogue.requireScale g f
+    return .groupScale g f
+  | .groupEqual d =>
+    catalogue.require d .group "ScalarAction"
+    return .groupEqual d
+  | .booleanConstant value => return .booleanConstant value
+  | .booleanAnd => return .booleanAnd
+  | .booleanOr => return .booleanOr
+  | .booleanXor => return .booleanXor
+  | .booleanEqual => return .booleanEqual
+  | .booleanNotEqual => return .booleanNotEqual
+  | .select type =>
+    if type.isHandle then throw "structured-type-unsupported"
+    return .select type
+  | .makeProduct constructor =>
+    let [.product identity actual fields] := results | throw "structured-product-result"
+    if constructor != actual then throw "structured-product-constructor"
+    if fields.hasHandle then throw "structured-product-handle"
+    return .makeProduct identity actual fields
+  | .getProduct index =>
+    let [.product identity constructor fields] := argumentTypes | throw "structured-product-operand"
+    if fields.hasHandle then throw "structured-product-handle"
+    let some type := fields.toList[index]? | throw "structured-product-index"
+    let field ← decodeVariable fields.toList type index |>.mapError fun _ => "structured-product-index"
+    return .getProduct identity constructor fields type field
+  | .boundedAt d =>
+    discard <| catalogue.expect d .field
+    match factOperands with
+    | [container, index] =>
+      if !facts.contains (index, container) then throw "structured-bounded-at-premise"
+      return .boundedAt d
+    | _ => throw "structured-bounded-at-arguments"
+  | .call name => resolveCall name .math .call
+  | .apply name => resolveCall name .local .apply
+  | .protocolApply .. | .protocolRepeat .. | .localCall .. => throw "structured-open-operation"
+  | .fold domain step predicate =>
+    let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
+    return .fold spec
+  | .branch | .mathBranch => return .branch (argumentTypes.drop 1) results
+  | .loop | .loopCondition =>
+    if argumentTypes.length < 2 + results.length then throw "structured-loop-arguments"
+    let captures := argumentTypes.drop (2 + results.length)
+    return if descriptor == .loop then .loop results captures else .loopCondition results captures
+  | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .sampleIndex .. | .sampleIndices .. | .statement .. =>
+    throw "structured-open-operation"
+
+inductive ExitKind where
+  | function | yield | condition
+  deriving DecidableEq
+
+def lowerTerminator (kind : Kind) (expected : ExitKind) (terminal : Terminator) :
+    LowerM (RawRegion Ty Op) := do
+  match terminal with
+  | .stop reason site =>
+    if kind == .math then throw "structured-math-stop"
+    if kind != .local then throw "structured-local-stop"
+    if expected == .condition then throw "structured-terminator-kind"
+    recordSite site true
+    return .letOp (.mark site) [] [] .nil (.stop reason)
+  | .ret refs | .yield refs | .condition refs =>
+    if !validRefs refs then throw "structured-reference-limit"
+    let actual := match terminal with
+      | .ret _ => ExitKind.function
+      | .condition _ => ExitKind.condition
+      | _ => ExitKind.yield
+    if actual != expected then throw "structured-terminator-kind"
+    return .ret refs
+
+/-- A continuing LocalFor returns each original capture at its exact input
+position, shifted by all body results. Same-typed substitutes are refused. -/
+def forwardsCaptures (stateCount captureCount : Nat) (conditional : Bool) (body : Block) : Bool :=
+  let .block instructions terminal := body
+  let added := instructions.foldl (fun n instruction =>
+    match instruction with | .instruction _ _ results _ _ => n + results.length) 0
+  let expected := (List.range captureCount).map (· + added + 1 + stateCount)
+  match terminal with
+  | .stop .. => true
+  | .yield values => !conditional && values.drop stateCount == expected
+  | .condition values => conditional && values.drop (stateCount + 1) == expected
+  | .ret _ => false
+
+/-- Structural list traversal is separate from region-depth recursion. Keeping
+these recursors separate makes successful admission reduce in the kernel without
+unfolding a generated well-founded mutual recursion over both dimensions. -/
+def lowerInstructions (snapshot : Snapshot) (domains : List DomainSpec)
+    (summaries : IdentitySummaries) (kind : Kind)
+    (child : List Ty → Facts → ExitKind → Block → LowerM (RawRegion Ty Op))
+    (exitKind : ExitKind) (terminal : Terminator) :
+    List Ty → Facts → List Nat → List Instruction → LowerM (RawRegion Ty Op)
+  | _, _, _, [] => lowerTerminator kind exitKind terminal
+  | context, facts, identities, .instruction descriptor operands results regions site :: rest => do
+    let op ← resolveOp snapshot domains kind context facts identities descriptor operands results site
+    if regions.length > 2 then throw "structured-region-count"
+    let bodies ← regions.mapM fun (.region inputs outputs body) => do
+      if !validTypes inputs || !validTypes outputs then throw "structured-region-signature"
+      let (bodyFacts, bodyExit) ← match op with
+        | .branch .. =>
+          -- Closed captures retain proven index/container relations. A
+          -- duplicate capture is an alias, not a fresh independent value.
+          let captures := operands.drop 1 |>.map fun index => identities[index]?.getD index
+          let nestedFacts := captures.zipIdx.flatMap fun (index, position) =>
+            captures.zipIdx.filterMap fun (container, containerPosition) =>
+              if facts.contains (index, container) then some (position, containerPosition)
+              else none
+          pure (if kind == .math then nestedFacts else [], ExitKind.yield)
+        | .loop state captures | .loopCondition state captures => do
+          let conditional := match op with | .loopCondition .. => true | _ => false
+          if !forwardsCaptures state.length captures.length conditional body then
+            throw "structured-capture-forwarding"
+          pure ([],
+            if conditional then ExitKind.condition else ExitKind.yield)
+        | _ => throw "structured-unexpected-region"
+      let raw ← child inputs bodyFacts bodyExit body
+      pure (inputs, outputs, raw)
+    let rawBodies := bodies.foldr (fun (inputs, outputs, body) rest =>
+      RawRegions.cons inputs outputs body rest) .nil
+    let operandOrigins := operands.map fun index => identities[index]?
+    let resultOrigins := (resultIdentities summaries descriptor operandOrigins results.length).zipIdx.map
+      fun (source, result) => match source with
+        | some original => original + results.length
+        | none => result
+    let next ← lowerInstructions snapshot domains summaries kind child exitKind terminal
+      (results ++ context) (facts.shift results.length)
+      (resultOrigins ++ identities.map (· + results.length)) rest
+    let node := RawRegion.letOp op operands results rawBodies next
+    return if kind == .math then node else .letOp (.mark site) [] [] .nil node
+
+def lowerBlock (snapshot : Snapshot) (domains : List DomainSpec)
+    (summaries : IdentitySummaries) (kind : Kind) :
+    Nat → List Ty → Facts → ExitKind → Block → LowerM (RawRegion Ty Op)
+  | 0, _, _, _, _ => throw "structured-region-depth"
+  | depth + 1, context, facts, exitKind, .block instructions terminal =>
+    lowerInstructions snapshot domains summaries kind (lowerBlock snapshot domains summaries kind depth)
+      exitKind terminal context facts (List.range context.length) instructions
+
+end Zkc.Source.Structured

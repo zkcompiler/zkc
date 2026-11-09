@@ -21,13 +21,16 @@ vacuously.
 """
 
 import copy
+from functools import partial
 import hashlib
 import json
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
 from . import ledger, reports
 from .declarations import Records
+from support.packages import PACKAGES, module_path
 
 PROPERTY = "soundness"
 EVIDENCE = "ZkcSecurity.Endpoint.SoundnessEvidence"
@@ -75,7 +78,7 @@ def registry_entries():
 
 
 def records(*, endpoint_axioms=("propext",), instance_premises=None, extra=(), application=None,
-            instance=None, hypotheses=None, module=f"{NAMESPACE}.Claims"):
+            instance=None, hypotheses=None, module="Zkc.Applications.Sample.Claims"):
     """The registered endpoint, the subject's application and its evidence.
     `application` and `instance` override fields of their details."""
     endpoint_detail = {"statement": "∀ e, Sample.Endpoint.Soundness e", "premises": ["Evidence"],
@@ -130,7 +133,7 @@ def subject(directory, *, endpoint="executable-bytes", recorded=None, evidence_d
     digest = "a" * 64
     module = directory / "SampleData.lean"
     module.write_text(f'def snapshot : String := "x"\n  source := "sha256:{recorded or digest}"\n')
-    folder_path = directory.joinpath(*NAMESPACE.split("."))
+    folder_path = directory / "lean/applications/Zkc/Applications/Sample"
     folder_path.mkdir(parents=True, exist_ok=True)
     artifacts_module, claims_module = folder_path / "Artifacts.lean", folder_path / "Claims.lean"
     artifacts_module.write_text("def artifacts : Nat := 0\n")
@@ -139,6 +142,7 @@ def subject(directory, *, endpoint="executable-bytes", recorded=None, evidence_d
     manifest.write_text(
         'schema = "zkc.subject/0"\nname = "sample"\n[entries]\nproof = "example::Proof"\n'
         f'[generated]\ndata = "{module}"\nartifacts = "{artifacts_module}"\nclaims = "{claims_module}"\n'
+        f'[namespaces]\ndata = "SampleData"\nartifacts = "{NAMESPACE}"\nclaims = "{NAMESPACE}"\n'
         '[family]\nkind = "certificate"\n'
         f'[claims]\nnamespace = "{namespace}"\nendpoint = "{endpoint}"\nproperties = ["{PROPERTY}"]\n'
         f'statement = "fixed"\nregime = "exact-uniform challenges"\n{overrides}unknown_future_field = 1\n'
@@ -148,7 +152,7 @@ def subject(directory, *, endpoint="executable-bytes", recorded=None, evidence_d
     if evidence:
         rows = [{"name": name, "outcome": outcome} for name, outcome in checks]
         if claim_application:
-            rows.append({"name": "claim-application", "outcome": "accepted", "module": f"{NAMESPACE}.Claims",
+            rows.append({"name": "claim-application", "outcome": "accepted", "module": "Zkc.Applications.Sample.Claims",
                          "application": APPLICATION})
         (folder / "sample.json").write_text(json.dumps({
             "format": reports.EVIDENCE_FORMAT, "subject": "sample",
@@ -162,7 +166,8 @@ def subject(directory, *, endpoint="executable-bytes", recorded=None, evidence_d
 
 def report(directory, data, **options):
     manifest, folder = subject(directory, **options)
-    return reports.endpoint_audit_report(manifest, data, evidence_directory=folder)
+    with patch.object(reports, "generated_module", partial(reports.generated_module, root=Path(directory))):
+        return reports.endpoint_audit_report(manifest, data, evidence_directory=folder)
 
 
 def mentions(report_value, text):
@@ -279,7 +284,8 @@ def run():
         expect("report-application-elsewhere", elsewhere["outcome"] == "unresolved" and
                mentions(elsewhere, "is declared in Sample.Elsewhere"), elsewhere)
         manifest, folder = subject(fresh("reused"))
-        reused = reports.endpoint_audit_report(manifest, records(), evidence_directory=folder, reused_records="saved-records")
+        with patch.object(reports, "generated_module", partial(reports.generated_module, root=manifest.parent)):
+            reused = reports.endpoint_audit_report(manifest, records(), evidence_directory=folder, reused_records="saved-records")
         row = reports.render_subjects([reused]).splitlines()[-1]
         expect("report-reused-records", reused["outcome"] == "unresolved" and reused["claims"] and
                all(item["outcome"] == "unresolved" and
@@ -393,7 +399,12 @@ def run_ledger_controls(rows, expect):
         root = Path(temporary)
         (root / "docs").mkdir()
         (root / "docs/status.md").write_text("Cites `Zkc.Sample.present` and `Zkc.Sample.renamed`.\n")
-        cited = Records({"main": {}}, [dict(record("Zkc.Sample.present"), package="main")])
+        for package, (_, roots) in PACKAGES.items():
+            path = module_path(roots[0] + '.Fixture', root / 'lean')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('namespace Zkc.Sample\nend Zkc.Sample\n' if package == 'ir'
+                            else 'namespace Fixture\nend Fixture\n')
+        cited = Records({"ir": {}}, [dict(record("Zkc.Sample.present"), package="ir")])
         findings, checked, _ = ledger.check_documents(cited, root)
         expect("document-stale-name", checked == 2 and len(findings) == 1 and "Zkc.Sample.renamed" in findings[0],
                findings)
@@ -602,7 +613,7 @@ def run_emitted_receipts(data):
             rows.append(label)
         else:
             failures.append(f"receipt control {label} failed: {reasons}")
-    if "security" in data.packages():
+    if "applications" in data.packages():
         stage_rows, stage_failures = run_emitted_stage_receipts(data)
         rows += stage_rows
         failures += stage_failures

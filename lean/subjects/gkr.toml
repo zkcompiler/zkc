@@ -13,17 +13,26 @@ construction = true
 [generated]
 original_source = "lean/bridges/structured/fixtures/gkr-source.mlir"
 original_export = "lean/bridges/structured/fixtures/gkr-source.json"
-data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
-bodies = "lean/ZkcExamples/Structured/GkrSourceBodies.lean"
-views = "lean/ZkcExamples/Structured/GkrSourceViews.lean"
-participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
-pair = "lean/ZkcExamples/Construction/Generated/GkrPair.lean"
-glue = "lean/ZkcExamples/Construction/GkrArtifact.lean"
-claims = "lean/security/ZkcSecurityExamples/Gkr/Generated/SubjectSoundnessClaims.lean"
+data = "lean/applications/Zkc/Applications/IR/Structured/GkrSourceData.lean"
+bodies = "lean/applications/Zkc/Applications/IR/Structured/GkrSourceBodies.lean"
+views = "lean/applications/Zkc/Applications/IR/Structured/GkrSourceViews.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/GkrProofParticipant.lean"
+pair = "lean/applications/Zkc/Applications/IR/Construction/Generated/GkrPair.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/GkrArtifact.lean"
+claims = "lean/applications/Zkc/Applications/Security/Gkr/Generated/SubjectSoundnessClaims.lean"
+
+[namespaces]
+data = "ZkcExamples.Structured.GkrSourceData"
+bodies = "ZkcExamples.Structured.GkrSourceBodies"
+views = "ZkcExamples.Structured.GkrSourceViews"
+participant = "ZkcExamples.Construction.GkrProofParticipant"
+pair = "ZkcExamples.Construction.Generated.GkrPair"
+glue = "ZkcExamples.Construction.GkrProof"
+claims = "ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessClaims"
 
 [lean]
 namespace = "ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessClaims"
-imports = ["ZkcSecurityExamples.Gkr.Generated.SubjectSoundnessRegistration"]
+imports = ["Zkc.Applications.Security.Gkr.Generated.SubjectSoundnessRegistration"]
 library = "ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessRegistration.library"
 
 [source_views]
@@ -40,11 +49,12 @@ kinds = ["observe-repeats-value", "challenge-reads-host", "challenge-names-deliv
 
 [construction]
 namespace = "ZkcExamples.Construction.GkrProof"
-connection = "ZkcExamples.Construction.GkrProof"
-library_module = "ZkcExamples.Structured.Generated.Connections.Gkr"
+connection = "Zkc.Applications.IR.Construction.GkrProof"
+library_module = "Zkc.Applications.IR.Structured.Generated.Connections.Gkr"
 library = "ZkcExamples.Structured.Generated.Connections.Gkr.sourceLibrary"
 admission = "external"
-views = "ZkcExamples.Structured.GkrSourceViews"
+views_namespace = "ZkcExamples.Structured.GkrSourceViews"
+views = "Zkc.Applications.IR.Structured.GkrSourceViews"
 inputs = "values"
 
 [bodies]

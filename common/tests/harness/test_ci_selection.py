@@ -46,7 +46,7 @@ def check_output(output, expected):
     ("pyproject.toml", False, True),
     ("uv.lock", False, True),
     ("zkc.workspace.toml", False, True),
-    ("lean/Zkc.lean", False, False),
+    ("lean/ir/Zkc/IR.lean", False, False),
     ("compiler/CMakeLists.txt", False, True),
     ("crates/zkc/build.rs", False, True),
     ("crates/zkc/README.md", False, True),

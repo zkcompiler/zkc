@@ -1,7 +1,7 @@
 # Exact finite table predicates
 
 `PIR.Relation.Table` in
-[`TableRelation.lean`](../../Zkc/Semantics/TableRelation.lean) is an independent
+[`TableRelation.lean`](../../program/Zkc/Program/Semantics/TableRelation.lean) is an independent
 model over any type with decidable equality. Tables are lists, queries retain a
 Boolean active flag, and coordinates are natural numbers.
 
@@ -19,7 +19,7 @@ admit the complete original units, including nominal queries, both finite-fold
 callbacks, checked-read premises and the original Local realizations. Exact
 body associations connect each equation to those admitted helper definitions.
 
-[`TableMembershipLaws`](../../ZkcExamples/Structured/TableMembershipLaws.lean)
+[`TableMembershipLaws`](../../applications/Zkc/Applications/IR/Structured/TableMembershipLaws.lean)
 proves the actual membership formula returns the complete Boolean decision on
 exactly this source-model domain:
 
@@ -32,14 +32,14 @@ are eager: an inactive query still invokes the inner table scan. Empty queries
 invoke no callback and require no table-length premise. Ordered query fields,
 including inactive values, remain in the nominal source and statement carriers.
 
-[`TableIndexedReadLaws`](../../ZkcExamples/Structured/TableIndexedReadLaws.lean)
+[`TableIndexedReadLaws`](../../applications/Zkc/Applications/IR/Structured/TableIndexedReadLaws.lean)
 proves the indexed-read formula returns its complete decision when the table
 length is below `2^64`, and stops exhausted otherwise. Every reached read is in
 range because the loop enumerates table indices. The requested natural position
 can be arbitrary; an absent coordinate returns false. A native index port has
 its separate representation admission.
 
-[`TableContractBindings`](../../ZkcExamples/Structured/TableContractBindings.lean)
+[`TableContractBindings`](../../applications/Zkc/Applications/IR/Structured/TableContractBindings.lean)
 selects the actual `selected_rows` and `selected_read` clauses, their ordered
 applications and retained formula symbols. It discharges both `FormulaLaw`
 obligations under these domains against the mathematical predicates above.
@@ -103,5 +103,5 @@ meanings and closes their required construction/source links at zero error;
 it also supplies an empty charged receipt. The generic random-oracle interface
 remains available to the adversary, while the actual plain validator makes no
 query. These receipts cover the compiled ideal model, without a native runtime
-or byte-codec correspondence claim. The [focused driver](../../security/checks/check_table_membership.py)
+or byte-codec correspondence claim. The [focused driver](../../verification/checks/check_table_membership.py)
 regenerates the ABI and endpoint and checks the receipts and refusal controls.

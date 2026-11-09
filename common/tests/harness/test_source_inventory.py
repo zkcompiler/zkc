@@ -233,11 +233,11 @@ def test_body_printer_rejects_stale_data_before_running_lean(tmp_path, monkeypat
     from bridges.structured import bodies
     inventory = SimpleNamespace(snapshot=["zkc.structured-source/0", "original", digest(b"source"),
         "entry", [], [], [], [], [], [[], []], [[], [], []]])
-    monkeypatch.setattr(bodies, "LEAN", tmp_path)
+    monkeypatch.setattr(bodies, "module_path", lambda _: tmp_path / "Example/Data.lean")
     (tmp_path / "Example").mkdir()
     (tmp_path / "Example/Data.lean").write_text("stale retained data")
     with pytest.raises(Refused, match="data differs"):
-        bodies.printed_module("Example.Data", "Example.Bodies", inventory=inventory)
+        bodies.printed_module("Example.Data", "Example.Bodies", data_namespace="Declared.Data", inventory=inventory)
 
 
 @pytest.mark.parametrize("names,diagnostic", [
@@ -251,4 +251,4 @@ def test_body_printer_rejects_invalid_presentations(tmp_path, monkeypatch, names
     monkeypatch.setattr(bodies, "elaborate", lambda *_: (
         "HELPER\tentry\t.local\t[]\t[]\nHELPER\tcallee\t.local\t[]\t[]\n"))
     with pytest.raises(Refused, match=diagnostic):
-        bodies.printed_module("Example.Data", "Example.Bodies", names=names, fresh=True)
+        bodies.printed_module("Example.Data", "Example.Bodies", data_namespace="Declared.Data", names=names, fresh=True)

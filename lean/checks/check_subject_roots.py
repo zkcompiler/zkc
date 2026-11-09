@@ -28,7 +28,7 @@ from bridges.pipeline import evidence, source_claims  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 from bridges.structured.generate_component_roots import Generation  # noqa: E402
 from support.lean_headers import HeaderParser  # noqa: E402
-from support.packages import is_owned_module  # noqa: E402
+from support.packages import is_owned_module, module_path  # noqa: E402
 
 
 def export_metadata(rows: list[tuple[str, str, str, str]]) -> str:
@@ -54,8 +54,8 @@ def freeze_dependencies(generation: Generation) -> None:
     unlink a dependency between two commands. External package caches are reused.
     Only symlinked artifacts in our private overlay are replaced.
     """
-    pending = ["ZkcSecurityExamples.Generation.Roots.Stages", "ZkcSecurityExamples.Generation.Roots.Subjects",
-               "TestsSecurity.GenerateRootControls", "ZkcSecurity.Claims.CanonicalAuthorityPair"]
+    pending = ["Zkc.Applications.Security.Generation.Roots.Stages", "Zkc.Applications.Security.Generation.Roots.Subjects",
+               "Zkc.Tests.Applications.Verification.GenerateRootControls", "Zkc.Verification.Claims.CanonicalAuthorityPair"]
     seen = set()
     # Lean owns the grammar, including `public meta import` and `import all`.
     # Missing one of those dependencies could leave a supposedly frozen closure
@@ -122,15 +122,15 @@ def main() -> None:
     options.output, options.check = options.records, not options.write
     generation = Generation(options)
     freeze_dependencies(generation)
-    for module in ["ZkcTools.StructuredSource.Root", "ZkcSecurityExamples.Generation.Roots.Catalogue",
-                   "ZkcSecurityExamples.Generation.Roots.ExportMetadata"]:
+    for module in ["Zkc.Tools.IR.StructuredSource.Root", "Zkc.Applications.Security.Generation.Roots.Catalogue",
+                   "Zkc.Applications.Security.Generation.Roots.ExportMetadata"]:
         generation.compile(module)
-    manifest = json.loads(generation.printer("RootManifest", '''import ZkcSecurityExamples.Generation.Roots.Catalogue
+    manifest = json.loads(generation.printer("RootManifest", '''import Zkc.Applications.Security.Generation.Roots.Catalogue
 
 def main : IO Unit := IO.println ZkcSecurity.Generation.Roots.catalogueManifest
 '''))
     retained_rows = json.loads(generation.printer("RetainedRootExports", '''import Lean
-import ZkcSecurityExamples.Generation.Roots.ExportMetadata
+import Zkc.Applications.Security.Generation.Roots.ExportMetadata
 
 def main : IO Unit := IO.println (Lean.Json.arr
   (ZkcSecurity.Generation.Roots.exportDigests.map fun (name, original, producer, validator) =>
@@ -162,27 +162,27 @@ def main : IO Unit := IO.println (Lean.Json.arr
         metadata.append((name, digest, *identities))
         for module, text, imports, equation in [
             (source_module, source_text, row["sourceModule"],
-             f"{source_module}.snapshot = {row['sourceModule']}.program.snapshot"),
+             f"{source_module}.snapshot = {row['sourceNamespace']}.program.snapshot"),
             (pair_module, pair_text, row["pairModule"],
-             f"{pair_module}.artifacts = {row['pairModule']}.artifacts"),
+             f"{pair_module}.artifacts = {row['pairNamespace']}.artifacts"),
         ]:
             text = text.replace("module\n", f"module\n\npublic import {imports}\n", 1)
             text += f"\nexample : {equation} := by rfl\n"
             path = generation.directory / (module + ".lean")
             path.write_text(text)
             generation.compile(module, path)
-    metadata_path = generation.module_path("ZkcSecurityExamples.Generation.Roots.ExportMetadata")
+    metadata_path = generation.module_path("Zkc.Applications.Security.Generation.Roots.ExportMetadata")
     if options.write:
         metadata_path.write_text(export_metadata(metadata))
     elif metadata_path.read_text() != export_metadata(metadata):
         raise AssertionError("stale generated export metadata")
-    for module in ["ZkcSecurityExamples.Generation.Roots.ExportMetadata", "ZkcSecurityExamples.Generation.Roots.Subjects",
-                   "TestsSecurity.GenerateSubjects"]:
+    for module in ["Zkc.Applications.Security.Generation.Roots.ExportMetadata", "Zkc.Applications.Security.Generation.Roots.Subjects",
+                   "Zkc.Tests.Applications.Verification.GenerateSubjects"]:
         generation.compile(module)
 
     run_directory = generation.directory / "runs" / generation.run_id
     regenerated = run_directory / "regenerated"
-    generation.printer("GenerateRootSubjects", f'''import TestsSecurity.GenerateSubjects
+    generation.printer("GenerateRootSubjects", f'''import Zkc.Tests.Applications.Verification.GenerateSubjects
 
 def main : IO Unit := TestsSecurity.GenerateSubjects.main [{json.dumps(str(regenerated))}]
 ''')
@@ -196,17 +196,17 @@ def main : IO Unit := TestsSecurity.GenerateSubjects.main [{json.dumps(str(regen
     subject_paths = sorted(regenerated.rglob("*.lean"))
     expected_subjects = {row["subjectModule"] for row in manifest}
     expected_subjects.update(row["aliasesModule"] for row in manifest)
-    expected_subjects.add("ZkcSecurityExamples.Generation.Roots.SubjectImports")
+    expected_subjects.add("Zkc.Applications.Security.Generation.Roots.SubjectImports")
     actual_subjects = {".".join(path.relative_to(regenerated).with_suffix("").parts) for path in subject_paths}
     if actual_subjects != expected_subjects:
         raise AssertionError("production subject output inventory differs from catalogue")
-    generated = ["ZkcSecurityExamples.Generation.Roots.ExportMetadata"]
+    generated = ["Zkc.Applications.Security.Generation.Roots.ExportMetadata"]
     for path in subject_paths:
         module = ".".join(path.relative_to(regenerated).with_suffix("").parts)
         generation.retain(module, path.read_text())
         generated.append(module)
-    generation.compile("ZkcSecurityExamples.Generation.Roots.Stages")
-    generation.printer("GenerateRootStages", f'''import ZkcSecurityExamples.Generation.Roots.Stages
+    generation.compile("Zkc.Applications.Security.Generation.Roots.Stages")
+    generation.printer("GenerateRootStages", f'''import Zkc.Applications.Security.Generation.Roots.Stages
 
 def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(regenerated))}
   (ZkcSecurity.Generation.Roots.stageSources.map fun (_, name, source) => (name, source))
@@ -225,34 +225,34 @@ def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(
     drivers = ["ClaimLibraries", "CompletenessClaims", "SubjectABI",
                "SumcheckCompleteness", "SumcheckSoundness"]
     for name in drivers:
-        generation.compile("TestsSecurity.Generate" + name)
+        generation.compile("Zkc.Tests.Applications.Verification.Generate" + name)
     default_output = run_directory / "default-regenerated"
-    generation.execute([generation.lean, "--run", "checks/RunGenerators.lean", "subjects", default_output], generation.package)
+    generation.execute([generation.lean, "--run", module_path("Zkc.Tools.Applications.Commands.RunClaimGenerators"), "subjects", default_output], generation.package)
     default_paths = sorted(default_output.rglob("*.lean"))
     if {path.relative_to(default_output) for path in default_paths} != {path.relative_to(regenerated) for path in subject_paths}:
         raise AssertionError("default subject output inventory differs")
     for path in default_paths:
         if path.read_bytes() != (regenerated / path.relative_to(default_output)).read_bytes():
             raise AssertionError(f"default generation differs: {path}")
-    imports = "\n".join("import TestsSecurity.Generate" + name for name in drivers)
+    imports = "\n".join("import Zkc.Tests.Applications.Verification.Generate" + name for name in drivers)
     calls = "\n".join("  TestsSecurity.Generate" + name + ".main [" + json.dumps(str(default_output)) + "]"
                       for name in drivers)
     generation.printer("GenerateRootDrivers", imports + "\n\ndef main : IO Unit := do\n" + calls + "\n")
-    generation.execute([generation.lean, "--run", "checks/RunGenerators.lean", "bindings", default_output], generation.package)
+    generation.execute([generation.lean, "--run", module_path("Zkc.Tools.Applications.Commands.RunClaimGenerators"), "bindings", default_output], generation.package)
     default_paths = sorted(default_output.rglob("*.lean"))
     if {path.relative_to(default_output) for path in default_paths} != {path.relative_to(regenerated) for path in regenerated.rglob("*.lean")}:
         raise AssertionError("default downstream output inventory differs")
     for path in default_paths:
         if path.read_bytes() != (regenerated / path.relative_to(default_output)).read_bytes():
             raise AssertionError(f"default downstream generation differs: {path}")
-    generation.compile("TestsSecurity.GenerateRootControls")
+    generation.compile("Zkc.Tests.Applications.Verification.GenerateRootControls")
 
     for row in manifest:
         module, source = source_request_module(row["subjectModule"], row["subjectNamespace"], options.exports / row["name"])
         generation.retain(module, source)
         generated.append(module)
 
-    preservation = ["import ZkcSecurity.Claims.CanonicalAuthorityPair"]
+    preservation = ["import Zkc.Verification.Claims.CanonicalAuthorityPair"]
     for row in manifest:
         module = "RootBaseline" + row["name"]
         text = (baseline / (row["name"] + ".lean")).read_text().replace(row["subjectNamespace"], module)

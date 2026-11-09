@@ -7,6 +7,11 @@ typed Lean exports alone select claim meanings and proof methods. The schema is
 `zkc.subject/0`; `lean/subjects/README.md` documents it. Unknown tables and
 fields are refused, so a misspelt field never silently changes what is checked.
 
+Generated file paths select physical modules through the package inventory.
+The namespaces table explicitly selects their declaration namespaces. Existing
+namespace fields must agree, and external admission views carry their own
+views_namespace independently of their import module.
+
 The loader only reads and validates. It resolves paths against the repository
 root and project manifests through the test projects' resolver; it runs
 nothing.
@@ -19,7 +24,7 @@ import tomllib
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import NAMESPACE, ROOT, Refused, require  # noqa: E402
-from support.packages import PACKAGES  # noqa: E402
+from support.packages import PACKAGES, module_owner, module_path  # noqa: E402
 
 sys.path.append(str(ROOT / "common/tests/support"))
 from project import project_inputs  # noqa: E402
@@ -56,15 +61,18 @@ FIELDS = {
                   "interactive_bodies": STRING, "interactive_views": STRING,
                   "interactive_export": STRING, "interactive_source": STRING,
                   "original_source": STRING, "original_export": STRING, "artifacts": STRING, "claims": STRING, "lowering": STRING},
+    "namespaces": {key: STRING for key in ("data", "bodies", "views", "participant", "pair", "glue",
+                   "program", "facts", "interactive_data", "interactive_bodies", "interactive_views",
+                   "artifacts", "claims", "lowering")},
     "source_views": {"selections": STRINGS},
     "lean": {"namespace": STRING, "imports": STRINGS, "library": STRING},
     "assumptions": {"requested": STRINGS},
     "mutations": {"kinds": STRINGS},
-    "executable": {"threshold": {STRING, INTEGER}, "public": STRING, "witness": STRING, "variants": TABLE,
+    "executable": {"module": STRING, "threshold": {STRING, INTEGER}, "public": STRING, "witness": STRING, "variants": TABLE,
                    "exact": TABLE, "charge": STRING, "charge_arguments": STRINGS, "completeness_module": STRING,
                    "namespace": STRING},
     # Optional extensions (lean/subjects/README.md).
-    "construction": {"namespace": STRING, "connection": STRING, "admission": STRING, "views": STRING, "inputs": STRING, "names": STRINGS,
+    "construction": {"namespace": STRING, "connection": STRING, "admission": STRING, "views": STRING, "views_namespace": STRING, "inputs": STRING, "names": STRINGS,
                      "model": STRING, "model_imports": STRINGS, "rule": STRING, "doc": STRING,
                      "library": STRING, "library_module": STRING,
                      "omit": STRINGS},
@@ -139,10 +147,10 @@ class Subject:
         path = self.generated(key)
         if path is None:
             return None
-        for directory, roots in PACKAGES.values():
+        for directory, _ in PACKAGES.values():
             if path.is_relative_to(directory):
-                relative = path.relative_to(directory)
-                if relative.parts and relative.parts[0] in roots:
+                module = ".".join(path.relative_to(directory).with_suffix("").parts)
+                if module_path(module) == path:
                     return directory
         raise Refused(f"{self.name}: generated.{key} is not owned by a Lean package")
 
@@ -153,10 +161,14 @@ class Subject:
             return None
         return ".".join(path.relative_to(self.generated_package(key)).with_suffix("").parts)
 
+    def namespace(self, key):
+        """The explicit declaration namespace of a generated Lean output."""
+        return self.get("namespaces", key)
+
     @property
     def construction_namespace(self):
         """Declaration owner, independent of the generated metadata module."""
-        return self.get("construction", "namespace", self.module_name("glue"))
+        return self.get("construction", "namespace", self.namespace("glue"))
 
     def module_arguments(self):
         return ([f"--module={name}={source.relative_to(ROOT)}" for name, source in sorted(self.modules.items())]
@@ -209,10 +221,28 @@ def load(path):
         module = subject.module_name(key)
         require(module is None or __import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: generated.{key} is not a Lean module path")
+    lean_outputs = {key for key, value in subject.table("generated").items() if Path(value).suffix == ".lean"}
+    require(set(subject.table("namespaces")) == lean_outputs,
+            f"{path}: namespaces must name exactly the generated Lean outputs")
+    for key, namespace in subject.table("namespaces").items():
+        require(__import__("re").fullmatch(NAMESPACE, namespace) is not None,
+                f"{path}: namespaces.{key} must be a Lean namespace")
+    for key, table in (("glue", "construction"), ("facts", "executable"),
+                       ("artifacts", "lean"), ("claims", "lean"), ("lowering", "lean")):
+        require(key not in lean_outputs or not subject.get(table, "namespace") or
+                subject.namespace(key) == subject.get(table, "namespace"),
+                f"{path}: namespaces.{key} must agree with {table}.namespace")
     if subject.generated("views"):
         require(subject.get("construction", "admission") == "external" and
                 subject.get("construction", "views") == subject.module_name("views"),
                 f"{path}: generated.views must be the construction admission module")
+        require(subject.get("construction", "views_namespace") == subject.namespace("views"),
+                f"{path}: construction.views_namespace must agree with namespaces.views")
+    views_namespace = subject.get("construction", "views_namespace")
+    require(subject.get("construction", "admission") != "external" or
+            (subject.get("construction", "views") and isinstance(views_namespace, str) and
+             __import__("re").fullmatch(NAMESPACE, views_namespace) is not None),
+            f"{path}: external admission requires construction.views and construction.views_namespace")
     paths = [subject.generated(key) for key in subject.table("generated")]
     require(len(paths) == len(set(paths)), f"{path}: generated output paths must be distinct")
     require(not (subject.generated("claims") and subject.profile("executable")
@@ -247,6 +277,30 @@ def load(path):
     for module in subject.get("lean", "imports", []):
         require(__import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: lean.imports must contain Lean module names")
+    module_selections = [*subject.get("lean", "imports", []),
+                         *subject.get("construction", "model_imports", [])]
+    for table, key in (("construction", "connection"), ("construction", "views"),
+                       ("construction", "library_module"), ("executable", "module"),
+                       ("executable", "completeness_module"),
+                       ("receipt", "security_module"), ("receipt", "completeness_module"),
+                       ("scalar", "module")):
+        if subject.get(table, key):
+            module_selections.append(subject.get(table, key))
+    for name, value in subject.get("scalar", "properties", {}).items():
+        require(isinstance(value, dict), f"{path}: scalar.properties.{name} must be a table")
+        if "module" in value:
+            module_selections.append(value["module"])
+    for module in module_selections:
+        require(isinstance(module, str) and __import__("re").fullmatch(NAMESPACE, module) is not None,
+                f"{path}: module selections must be Lean module names")
+        try:
+            module_owner(module)
+        except ValueError as error:
+            raise Refused(f"{path}: {error}") from error
+    require(not subject.generated("lowering") or subject.get("executable", "module"),
+            f"{path}: generated.lowering requires executable.module")
+    require(not subject.get("executable", "charge") or subject.get("executable", "completeness_module"),
+            f"{path}: executable.charge requires executable.completeness_module")
     library = subject.get("lean", "library")
     require(library is None or __import__("re").fullmatch(NAMESPACE, library) is not None,
             f"{path}: lean.library must be a Lean declaration name")

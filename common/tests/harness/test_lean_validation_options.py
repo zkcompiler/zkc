@@ -21,8 +21,9 @@ def test_incomplete_package_targets_are_refused_even_under_optimization(tmp_path
 from pathlib import Path
 from checks import check_library as audit
 audit.ROOT = Path(__import__('sys').argv[1])
-audit.PACKAGES = {'main': (audit.ROOT, [])}
-audit.select_packages = lambda _: ['main']
+audit.PACKAGES = {'program': (audit.ROOT, [])}
+audit.selected = lambda _: ['program']
+audit.package_directory = lambda _: audit.ROOT
 audit.check_closure = lambda *_: None
 audit.check([], 'lake')
 """
@@ -30,7 +31,7 @@ audit.check([], 'lake')
                             env=os.environ | {"PYTHONPATH": str(ROOT / "lean")},
                             capture_output=True, text=True)
     assert result.returncode > 0
-    assert "default targets omit maintained code" in result.stderr
+    assert "default targets omit maintained libraries" in result.stderr
 
 
 def test_assurance_drivers_have_no_optimization_sensitive_assertions():

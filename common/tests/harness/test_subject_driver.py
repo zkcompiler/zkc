@@ -63,9 +63,12 @@ def test_source_views_require_every_fresh_module_build(driver_module, tmp_path, 
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
     monkeypatch.setattr(driver_module, "LEAN", tmp_path / "lean")
     modules = driver_module.source_views.modules("Gkr")
+    from support.packages import module_path, package_directory, module_owner
+    monkeypatch.setattr(driver_module, "module_path", lambda module: module_path(module, tmp_path / "lean"))
+    monkeypatch.setattr(driver_module, "module_package", lambda module: package_directory(module_owner(module), tmp_path / "lean"))
     outputs = {}
     for module in modules:
-        output = tmp_path / "lean" / (module.replace(".", "/") + ".lean")
+        output = driver_module.module_path(module)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text("module\n")
         outputs[str(output.relative_to(tmp_path))] = output
@@ -75,7 +78,8 @@ def test_source_views_require_every_fresh_module_build(driver_module, tmp_path, 
     record = {"generated": {}, "checks": []}
     driver.source_views(subject, record)
     assert calls[0][0][-1] == ("Gkr" if write else "--check")
-    assert [call[0] for call in calls[1:]] == [["lake", "build", *modules]]
+    assert calls[1:] == [(["lake", "build", "+" + module], str(driver_module.module_package(module)))
+                         for module in modules]
     assert set(record["generated"]) == set(outputs)
     for path, output in outputs.items():
         assert record["generated"][path]["sha256"] == driver_module.file_digest(output)
@@ -93,6 +97,7 @@ def test_construction_views_follow_fresh_source_and_precede_consumers(driver_mod
         profile=lambda name: name == "construction", table=lambda name: {},
         get=lambda table, key, default=None: default,
         generated=lambda key: key == "glue" or (with_pair and key == "pair"),
+        namespace=lambda key: "Declared." + key.capitalize(),
         module_name=lambda key: {"data": "Example.Data", "participant": "Example.Participant",
                                  "glue": "Example.Glue", "pair": "Example.Pair"}.get(key))
     artifacts = dict(source=b"source", original_text="original", original=[], exported=[None, None, "candidate"],
@@ -145,36 +150,38 @@ def test_source_views_late_build_failure_cannot_record_acceptance(driver_module,
 
 def test_threshold_is_evaluated_after_the_generated_facts(driver_module, tmp_path, monkeypatch):
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
+    monkeypatch.setattr(driver_module, "module_package", lambda _: tmp_path / "lean/applications")
     public = tmp_path / "public.json"
     public.write_text(json.dumps({"rounds": "2"}))
     settings = {("executable", "charge"): "Example.Charges.charge",
                 ("executable", "charge_arguments"): ["rounds"],
-                ("executable", "completeness_module"): "Example.Completeness",
+                ("executable", "completeness_module"): "Zkc.Applications.Control.Completeness",
                 ("entries", "proof"): "example::Proof"}
     subject = SimpleNamespace(
         name="example", construction_namespace="Example.Glue",
         get=lambda table, key, default=None: settings.get((table, key), default),
-        module_name=lambda key: f"Example.{key.capitalize()}", generated=lambda key: tmp_path / f"{key}.lean",
+        module_name=lambda key: f"Zkc.Applications.Control.{key.capitalize()}", generated=lambda key: tmp_path / f"{key}.lean",
+        namespace=lambda key: f"Declared.{key.capitalize()}",
         inputs=lambda entry, kind: public)
     entry = SimpleNamespace(names=[], types=[])
     record = {"generated": {}, "kernel": {}}
 
     def lowering_rule(subject, artifacts, entry, record):
         # The rule's own evaluation reads only the generated glue and the rules.
-        driver.lean(subject, "FreshLowering.lean", "import Example.Glue\n")
+        driver.lean(subject, "FreshLowering.lean", "import Zkc.Applications.Control.Glue\n")
         record["kernel"]["lowering"] = {"threshold": None}
         return {"total": None}
 
     monkeypatch.setattr(driver_module.executable, "render", lambda deployment, namespace: "program\n")
-    monkeypatch.setattr(driver_module.glue, "facts_module", lambda *arguments: "facts\n")
+    monkeypatch.setattr(driver_module.glue, "facts_module", lambda *arguments, **keywords: "facts\n")
     driver, calls = recording(driver_module, tmp_path, outputs={"example:FreshCharge.lean": "charge 186\n"},
                               write=True)
     monkeypatch.setattr(driver, "lowering_rule", lowering_rule)
     facts = driver.executable(subject, {"deployment": None}, entry, record)
     commands = [arguments[1:] if arguments[1] == "build" else [arguments[1], arguments[2].rsplit("/", 1)[-1]]
                 for arguments, _ in calls]
-    assert commands == [["build", "Example.Program"], ["lean", "FreshLowering.lean"],
-                        ["build", "Example.Facts"],
+    assert commands == [["build", "+Zkc.Applications.Control.Program"], ["lean", "FreshLowering.lean"],
+                        ["build", "+Zkc.Applications.Control.Facts"],
                         ["lean", "FreshCharge.lean"]]
     assert facts["threshold"] == record["kernel"]["lowering"]["threshold"] == 186
 
@@ -246,17 +253,21 @@ def test_claim_records_preserve_semantic_status_and_every_source_node(
 
 def test_security_registry_does_not_import_the_optional_integration(driver_module, tmp_path):
     driver, calls = recording(driver_module, tmp_path, outputs={
-        "registry:security": "ENTRY\tgeneric\tmodel\tstatement\n",
+        "registry:verification": "ENTRY\tgeneric\tmodel\tstatement\n",
         "registry:arklib": "ENTRY\toptional\tmodel\tstatement\n"})
     driver.output.mkdir()
     assert set(driver.registry()) == {"generic"}
-    source = (driver.output / "Registry-security.lean").read_text()
-    assert "import ZkcSecurity.Claims.Registry" in source
+    source = (driver.output / "Registry-verification.lean").read_text()
+    assert "import Zkc.Verification.Claims.Registry" in source
     assert "in ZkcSecurity.Registry.table" in source
     assert "ZkcArkLib" not in source
     assert all("arklib" not in cwd for _, cwd in calls)
+    assert calls[-1][1] == str(driver_module.LEAN / "verification")
     assert set(driver.registry("arklib")) == {"optional"}
-    assert "import ZkcArkLib.Registry" in (driver.output / "Registry-arklib.lean").read_text()
+    optional = (driver.output / "Registry-arklib.lean").read_text()
+    assert "import Zkc.Applications.ArkLib.Registry" in optional
+    assert "in ZkcArkLib.Registry.reportTable" in optional
+    assert calls[-1][1] == str(driver_module.LEAN / "applications")
 
 
 def test_missing_physical_configuration_retains_open_source_requests(driver_module, tmp_path):
@@ -430,6 +441,7 @@ def test_fresh_connection_and_mutations_use_the_same_library(driver_module, tmp_
     subject = SimpleNamespace(
         name="example", construction_namespace="Example",
         get=lambda table, key, default=None: configuration.get((table, key), default),
+        namespace=lambda key: "Declared." + key,
         module_name=lambda key: "Example." + key)
     kind = SimpleNamespace(stage="connection", property="schedule", expected="refused",
                            construction_accepts=False, refusing_rule="alignment-")

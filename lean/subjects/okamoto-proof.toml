@@ -12,12 +12,20 @@ instantiation = "Okamoto<G1>"
 construction = true
 
 [generated]
-data = "lean/ZkcExamples/Construction/OkamotoProofData.lean"
-bodies = "lean/ZkcExamples/Construction/OkamotoProofBodies.lean"
-participant = "lean/ZkcExamples/Construction/OkamotoProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/OkamotoArtifact.lean"
-artifacts = "lean/security/ZkcSecurityExamples/Subjects/Okamoto/Artifacts.lean"
-claims = "lean/security/ZkcSecurityExamples/Subjects/Okamoto/Claims.lean"
+data = "lean/applications/Zkc/Applications/IR/Construction/OkamotoProofData.lean"
+bodies = "lean/applications/Zkc/Applications/IR/Construction/OkamotoProofBodies.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/OkamotoProofParticipant.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/OkamotoArtifact.lean"
+artifacts = "lean/applications/Zkc/Applications/Security/Subjects/Okamoto/Artifacts.lean"
+claims = "lean/applications/Zkc/Applications/Security/Subjects/Okamoto/Claims.lean"
+
+[namespaces]
+data = "ZkcExamples.Construction.OkamotoProofData"
+bodies = "ZkcExamples.Construction.OkamotoProofBodies"
+participant = "ZkcExamples.Construction.OkamotoProofParticipant"
+glue = "ZkcExamples.Construction.OkamotoProof"
+artifacts = "ZkcSecurity.Examples.Subjects.Okamoto"
+claims = "ZkcSecurity.Examples.Subjects.Okamoto"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
@@ -33,10 +41,10 @@ entry = "proof"
 
 [construction]
 namespace = "ZkcExamples.Construction.OkamotoProof"
-connection = "ZkcExamples.Construction.OkamotoProof"
+connection = "Zkc.Applications.IR.Construction.OkamotoProof"
 model = "Zkc.Protocols.Schnorr.Variants.representation wiring"
-model_imports = ["ZkcExamples.Construction.OkamotoProofModel"]
+model_imports = ["Zkc.Applications.IR.Construction.OkamotoProofModel"]
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Okamoto"
-imports = ["ZkcSecurityExamples.Subjects.Okamoto.Registration"]
+imports = ["Zkc.Applications.Security.Subjects.Okamoto.Registration"]

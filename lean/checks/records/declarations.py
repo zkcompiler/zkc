@@ -1,6 +1,6 @@
 """Run the declaration-record emitter and read its output.
 
-The emitter (`lean/checks/DeclarationRecords.lean`) writes one JSON line per
+The emitter (`lean/ir/Zkc/Tools/IR/DeclarationRecords.lean`) writes one JSON line per
 declaration written in the source of a package's module families, after a
 header line. A package is selected by name; its families mirror the
 declaration audit's scopes.
@@ -9,61 +9,174 @@ declaration audit's scopes.
 import json
 from pathlib import Path
 import subprocess
+import sys
+import tempfile
+import tomllib
 
-LEAN = Path(__file__).resolve().parents[2]
-EMITTER = LEAN / "checks/DeclarationRecords.lean"
+from support.lean_headers import HeaderParser
+from support.packages import LEAN as LEAN, PACKAGES, package_directory, package_modules, selected
+
+EMITTER = package_directory("ir") / "Zkc/Tools/IR/DeclarationRecords.lean"
 ALLOWED_AXIOMS = ("propext", "Classical.choice", "Quot.sound")
 FORMAT = "zkc.declarations/0"
+REGISTRY = {"verification": ("ZkcSecurity.Registry.table", "ZkcSecurity.Registry.endpoints"),
+            "applications": ("ZkcArkLib.Registry.reportTable", "ZkcArkLib.Registry.reportEndpoints")}
 
-# Each package: its directory and the source directories or files it owns,
-# as the declaration audit selects them. Executable roots, which define
-# `main`, are selected by their library directories.
-PACKAGES = {
-    "main": (LEAN, ["Zkc", "ZkcExamples", "Tests", "ZkcTools/ProcessView.lean", "ZkcTools/Companions.lean",
-                    "ZkcTools/Companions",
-                    "ZkcTools/Generation",
-                    "ZkcTools/JsonSupport.lean", "ZkcTools/ProofAccount.lean",
-                    "ZkcTools/StructuredSource",
-                    "ZkcTools/ConstructionBindings"]),
-    "security": (LEAN / "security", ["ZkcSecurity", "ZkcSecurityTools", "ZkcSecurityExamples", "TestsSecurity"]),
-    "arklib": (LEAN / "integrations/arklib", ["ZkcArkLib", "ZkcArkLibExamples", "TestsArkLib"]),
-    "clean": (LEAN / "integrations/clean", ["ZkcClean", "TestsClean", "CleanExamples"]),
-}
-# The registry tables the emitter evaluates where the package defines them.
-REGISTRY = {"security": ("ZkcSecurity.Registry.table", "ZkcSecurity.Registry.endpoints"),
-            "arklib": ("ZkcArkLib.Registry.reportTable", "ZkcArkLib.Registry.reportEndpoints")}
+
+def emission_groups(package, headers):
+    """Partition all owned sources by the executable root their imports load.
+
+    Lake's explicit lean_exe roots are the authority, including tools outside
+    Commands. Follow imports through maintained dependencies so an isolated
+    executable audit goes with its command, rather than the common inventory.
+    An aggregate importing independent commands is invalid and must be repaired by
+    its owner; dropping it from declaration coverage would conceal the failure.
+    """
+    modules, commands = {}, set()
+    for name in selected([package]):
+        owned = package_modules(name)
+        modules.update(owned)
+        config = tomllib.loads((PACKAGES[name][0] / 'lakefile.toml').read_text())
+        for executable in config.get('lean_exe', []):
+            root = executable['root']
+            if root not in owned:
+                raise ValueError(f'{name}: executable root has no owned source: {root}')
+            commands.add(root)
+    graph = {module: headers.imports(path.read_text(), path) for module, path in modules.items()}
+    cache, active = {}, set()
+
+    def roots(module):
+        if module in cache:
+            return cache[module]
+        if module in active:
+            raise ValueError(f'cyclic maintained imports during record emission: {module}')
+        active.add(module)
+        found = set()
+        for dependency in graph[module]:
+            if dependency in graph:
+                found.update(roots(dependency))
+        # A declared executable can forward an imported main (for example the
+        # data-anchor control imports DeclarationRecords). Such a root belongs
+        # to that same environment, rather than defining a second main provider.
+        # A source redefining the imported main is rejected by the fresh build.
+        if module in commands and not found:
+            found.add(module)
+        active.remove(module)
+        cache[module] = frozenset(found)
+        return cache[module]
+
+    groups = {}
+    for module in package_modules(package):
+        reached = roots(module)
+        if len(reached) > 1:
+            raise ValueError(f'{module}: imports multiple executable roots: {sorted(reached)}')
+        key = next(iter(reached), '')
+        groups.setdefault(key, []).append(module)
+    return [groups[key] for key in sorted(groups)], groups.get('', [])
+
+
+def merge_emissions(parts, output):
+    """Validate each shard's complete source selection, retaining each owner once.
+
+    Common sources provide registry/property context in isolated environments.
+    Their repeated records are context, not additional declarations. Keep all
+    rows of the assigned modules, including private rows with the same rendered
+    name and global mains whose owning modules distinguish their identities.
+    """
+    header, rows, covered = None, [], set()
+    for path, context, assigned in parts:
+        context_set, assigned_set = set(context), set(assigned)
+        with path.open() as stream:
+            current = json.loads(next(stream))
+            if (current.get('format') != FORMAT or current.get('families') != context or
+                    type(current.get('modules')) is not int or current['modules'] != len(context) or
+                    type(current.get('declarations')) is not int or current['declarations'] < 0 or
+                    current.get('axiom_provenance') != 'resolved-constant-info/0' or
+                    current.get('reference_provenance') != 'checked-stored-module/0'):
+                raise ValueError(f'{path}: invalid declaration shard or source coverage')
+            if header is None:
+                header = current.copy()
+            elif ({k: v for k, v in current.items() if k not in ('families', 'modules', 'declarations')} !=
+                  {k: v for k, v in header.items() if k not in ('families', 'modules', 'declarations')}):
+                raise ValueError(f'{path}: inconsistent declaration shard metadata')
+            if covered.intersection(assigned_set) or not assigned_set <= context_set:
+                raise ValueError(f'{path}: duplicate or unselected declaration source coverage')
+            covered.update(assigned)
+            count = 0
+            for line in stream:
+                row = json.loads(line)
+                if row.get('module') not in context_set or not isinstance(row.get('name'), str):
+                    raise ValueError(f'{path}: record outside the selected source modules')
+                count += 1
+                if row['module'] in assigned_set:
+                    rows.append(row)
+            if count != current['declarations']:
+                raise ValueError(f'{path}: declaration shard count mismatch')
+    if header is None:
+        raise ValueError('no declaration sources selected')
+    header.update(families=sorted(covered), modules=len(covered), declarations=len(rows))
+    rows.sort(key=lambda row: (row['name'], row['module']))
+    with output.open('w') as stream:
+        for row in [header, *rows]:
+            stream.write(json.dumps(row, sort_keys=True, separators=(',', ':')) + '\n')
 
 
 def emit(package, output, *, lake="lake", baseline=None, details=(), log=None):
-    """Run the emitter for one package; return the completed process."""
-    directory, sources = PACKAGES[package]
+    """Read fresh stored proofs in isolated environments and publish atomically."""
+    directory, _ = PACKAGES[package]
+    output = Path(output).resolve()
     # Lake invalidates the tool when its sources or imports change. Its output
     # is never cached: each invocation reads the actual stored proof bodies in
     # the audited package's environment, including private/opaque declarations.
-    built = subprocess.run([lake, "build", "declaration-records"], cwd=LEAN,
+    built = subprocess.run([lake, "build", "declaration-records"], cwd=package_directory("ir"),
                            stdout=log, stderr=subprocess.STDOUT if log else None, text=True)
-    success = built.returncode == 0
-    if not success:
+    if built.returncode != 0:
         return built
     # Dynamic imports are outside the executable's own import graph. Refresh
     # the audited package as well, so fresh records cannot describe stale proofs.
     built = subprocess.run([lake, "build"], cwd=directory, stdout=log,
                            stderr=subprocess.STDOUT if log else None, text=True)
-    success = built.returncode == 0
-    if not success:
+    if built.returncode != 0:
         return built
-    command = [lake, "env", str(LEAN / ".lake/build/bin/declaration-records")]
-    if baseline is not None:
-        command += ["--check", str(baseline)]
+    with HeaderParser(lake=lake) as headers:
+        groups, common = emission_groups(package, headers)
+    # Default targets may omit a command or a source without weakening its
+    # ownership. Refresh every enumerated module, including isolated audits.
+    modules = package_modules(package)
+    if set(modules) != {module for group in groups for module in group}:
+        raise ValueError('package source inventory changed during declaration selection')
+    built = subprocess.run([lake, 'build', *['+' + module for module in modules]], cwd=directory,
+                           stdout=log, stderr=subprocess.STDOUT if log else None, text=True)
+    if built.returncode != 0:
+        return built
+    command = [lake, "env", str(package_directory("ir") / ".lake/build/bin/declaration-records")]
     if package in REGISTRY:
         table, endpoints = REGISTRY[package]
         command += ["--registry", table, "--endpoints", endpoints]
     for name in details:
         command += ["--detail", name]
-    command += [str(output), *sources]
     output.parent.mkdir(parents=True, exist_ok=True)
-    return subprocess.run(command, cwd=directory, stdout=log, stderr=subprocess.STDOUT if log else None,
-                          text=True)
+    with tempfile.TemporaryDirectory(prefix='declaration-records-', dir=output.parent) as temporary:
+        temporary = Path(temporary)
+        parts = []
+        for index, assigned in enumerate(groups):
+            context = sorted(set(common) | set(assigned))
+            sources = [str(modules[module].relative_to(directory)) for module in context]
+            path = temporary / f'{index}.jsonl'
+            result = subprocess.run([*command, str(path), *sources], cwd=directory, stdout=log,
+                                    stderr=subprocess.STDOUT if log else None, text=True)
+            if result.returncode != 0:
+                return result
+            parts.append((path, context, assigned))
+        combined = temporary / 'complete.jsonl'
+        merge_emissions(parts, combined)
+        # Compare the complete package, never a shard against a package baseline.
+        differs = baseline is not None and Path(baseline).read_bytes() != combined.read_bytes()
+        combined.replace(output)
+    if differs:
+        print(f'declaration records differ from {baseline}', file=log or sys.stderr)
+        return subprocess.CompletedProcess(command, 1)
+    return result
 
 
 class Records:

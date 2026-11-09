@@ -42,7 +42,7 @@ def port(name, index, native, shape, roles):
 
 
 def scalar_fixture(form='schnorr'):
-    data = read(LEAN / 'ZkcExamples/NativePrograms/fixtures' / (form + '.json'))
+    data = read(LEAN / 'applications/Zkc/Applications/IR/NativePrograms/fixtures' / (form + '.json'))
     root = next(row for row in data[7] if row[1] == data[3])
     declaration = data[5][0] if data[5] else None
     group = schema('group', '1' * 64, 'group:bls12-381.g1')

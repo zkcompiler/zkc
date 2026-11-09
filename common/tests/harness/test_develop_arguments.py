@@ -16,6 +16,9 @@ from harness import load
     ("scripts/develop.py", ["compiler", "--deps", "clean"]),
     ("scripts/develop.py", ["configure", "--output", "unused"]),
     ("scripts/develop.py", ["fetch-lean", "--profile", "release"]),
+    ("scripts/develop.py", ["fetch-lean", "--deps", "main"]),
+    ("scripts/develop.py", ["lean", "--deps", "arklib"]),
+    ("scripts/develop.py", ["lean", "--main-only"]),
     ("scripts/develop.py", ["clean-reports", "--output", "unused"]),
     ("common/tests/run.py", ["rust", "--profile", "dev"]),
     ("common/tests/run.py", ["integration", "--profile", "dev"]),
@@ -46,9 +49,12 @@ def test_unused_options_fail_before_environment_or_output_changes(entrypoint, ar
 @pytest.mark.parametrize("entrypoint,arguments,expected", [
     ("scripts/develop.py", ["configure"], {"profile": "release"}),
     ("scripts/develop.py", ["compiler", "--profile", "dev"], {"profile": "dev"}),
-    ("scripts/develop.py", ["fetch-lean"], {"deps": "main"}),
-    ("scripts/develop.py", ["lean", "--deps", "arklib"], {"deps": "arklib"}),
-    ("scripts/develop.py", ["fetch-lean", "--deps", "clean"], {"deps": "clean"}),
+    ("scripts/develop.py", ["fetch-lean"], {"package": None, "core_only": False}),
+    ("scripts/develop.py", ["lean", "--package", "arklib"], {"package": ["arklib"]}),
+    ("scripts/develop.py", ["fetch-lean", "--package", "clean"], {"package": ["clean"]}),
+    ("scripts/develop.py", ["fetch-lean", "--core-only"], {"core_only": True}),
+    ("scripts/develop.py", ["lean", "--package", "ir", "--package", "protocol"],
+     {"package": ["ir", "protocol"]}),
     ("common/tests/run.py", ["compiler", "--profile", "shared"], {"profile": "shared"}),
     ("common/tests/run.py", ["install", "--profile", "shared", "--output", "installed"],
      {"profile": "shared", "output": "installed"}),
@@ -69,7 +75,7 @@ def test_valid_options_reach_the_selected_operation(entrypoint, arguments, expec
 
 @pytest.mark.parametrize("entrypoint,operation,present,absent", [
     ("scripts/develop.py", "rust", [], ["--profile", "--deps", "--output"]),
-    ("scripts/develop.py", "fetch-lean", ["--deps"], ["--profile", "--output"]),
+    ("scripts/develop.py", "fetch-lean", ["--package", "--core-only"], ["--deps", "--profile", "--output"]),
     ("common/tests/run.py", "install", ["--profile", "--output"], ["--deps", "--skip-build"]),
     ("common/tests/run.py", "rust", [], ["--profile", "--output"]),
 ])

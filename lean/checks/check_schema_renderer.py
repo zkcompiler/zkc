@@ -517,7 +517,8 @@ class MutationControls(unittest.TestCase):
 
         selection = SimpleNamespace(
             name="fixture", construction_namespace="Fixture.Construction",
-            module_name=lambda key: "Fixture." + key.title(),
+            module_name=lambda key: "Zkc.Applications.Fixture." + key.title(),
+            namespace=lambda key: "Fixture." + key.title(),
             get=lambda _section, _key, default=None: default)
         driver = object.__new__(subject.Driver)
         with patch.object(driver, "lean", capture), self.assertRaises(RenderedOnly):

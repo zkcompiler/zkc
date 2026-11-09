@@ -1,13 +1,18 @@
-# Force source reconstruction without deleting the persistent CI store or
-# requiring bit-for-bit equality of packages that retain test timing records.
-{ packages, runId }:
+# Force source reconstruction throughout the actual Lake dependency graph.
+{
+  packages,
+  runId,
+  lib,
+}:
 assert runId != "";
 let
-  fresh = package: package.overrideAttrs { ZKC_CI_FRESH_RUN = runId; };
-  lean = fresh packages.lean;
-  security = fresh (packages.security.override { inherit lean; });
-  arklib = fresh (packages.arklib.override { inherit security; });
+  inventory = import ./lean-packages.nix { inherit lib; };
+  fresh = lib.mapAttrs (
+    name: entry:
+    (packages.${name}.override {
+      dependencies = map (dependency: fresh.${dependency}) entry.dependencies;
+    }).overrideAttrs
+      { ZKC_CI_FRESH_RUN = runId; }
+  ) inventory;
 in
-{
-  inherit lean security arklib;
-}
+fresh

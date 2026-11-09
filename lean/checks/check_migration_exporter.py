@@ -15,11 +15,12 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from support.invocation import command as lean_command  # noqa: E402
 from support.migration import capture_records, compare, name_key, read_records  # noqa: E402
 
 
 def run(package, *args):
-    return subprocess.run(['lake', 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true', *map(str, args)], cwd=package,
+    return subprocess.run([*lean_command(package), '-DautoImplicit=false', '-DwarningAsError=true', *map(str, args)], cwd=package,
                           stdin=subprocess.DEVNULL, check=True, capture_output=True, text=True)
 
 

@@ -12,16 +12,22 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import subprocess
 import tempfile
 import time
+
+
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package, module_path  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--records", type=Path)
     options = parser.parse_args()
-    package = Path(__file__).resolve().parents[1]
+    package = module_package("Zkc.Applications")
     records = (options.records or Path(tempfile.mkdtemp(prefix="zkc-connection-layout-"))).resolve()
     records.mkdir(parents=True, exist_ok=True)
     generated = records / "generated"
@@ -35,7 +41,7 @@ def main() -> None:
     commands = []
 
     def run(label: str, arguments: list[str]) -> None:
-        command = ["lean", "-j2", "-M16384", "-DwarningAsError=true", *arguments]
+        command = [*lean_command(package), "-j2", "-M16384", "-DwarningAsError=true", *arguments]
         started = time.monotonic()
         result = subprocess.run(command, cwd=package, env=environment,
                                 text=True, capture_output=True, timeout=600)
@@ -49,7 +55,7 @@ def main() -> None:
             raise AssertionError(f"{label}: checking failed; see {records / (label + '.log')}")
         print("PASS " + label, flush=True)
 
-    run("generate", ["--run", "Tests/ConnectionLayoutGeneration.lean", str(generated)])
+    run("generate", ["--run", str(module_path("Zkc.Tests.Applications.IR.ConnectionLayoutGeneration")), str(generated)])
 
     def compile_module(module: str) -> None:
         source = generated / (module.replace(".", "/") + ".lean")
@@ -60,7 +66,7 @@ def main() -> None:
         compile_module("ConnectionLayoutControl." + role)
     audit = generated / "ConnectionLayoutControl/Audit.lean"
     audit.write_text('''import ConnectionLayoutControl.Connection
-import ZkcTools.DeclarationAudit
+import Zkc.Tools.Program.DeclarationAudit
 
 run_cmd ZkcTools.DeclarationAudit.check [
   `Tests.ConnectionLayout, `ConnectionLayoutControl.Producer,

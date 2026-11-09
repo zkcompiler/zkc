@@ -207,7 +207,7 @@ These requirements concern the chosen types and predicates; they impose no
 universal metadata record. Cryptographic assumptions about the derivation remain
 separate from acceptance adequacy.
 
-[`Zkc.Realization.Acceptance`](../../../lean/Zkc/Realization/Acceptance.lean)
+[`Zkc.Realization.Acceptance`](../../../lean/ir/Zkc/IR/Realization/Acceptance.lean)
 implements these laws. They do not imply the complete-result relation above,
 cryptographic soundness, honest protocol completeness or outer-proof security.
 The one-direction [reduction contract](../relations.md#soundness-direction-reduction)
@@ -254,7 +254,7 @@ uniformity requires an additional probability argument.
 Reuse of a deterministic encoding or provider computation preserves the
 selected absorption order, draw order and observer. Equality of an arithmetic
 return alone does not justify removing or moving provider transitions. The
-[probability specification](../../../lean/docs/architecture.md#reuse-and-composition) supplies the relevant law operands;
+[probability specification](../../../lean/docs/architecture.md#adding-reusable-mathematics-and-actual-clients) supplies the relevant law operands;
 a deterministic same-provider equation does not create a fresh-coin theorem.
 
 ## Storage and ownership

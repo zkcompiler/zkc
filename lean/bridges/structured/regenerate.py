@@ -108,7 +108,7 @@ def main():
                 source, symbol, module = authored(runner, compiler, stem)
             exported, data = export(runner, compiler, args.output / stem, source, symbol)
             targets = [(FIXTURES / f"{stem}.json", exported),
-                       (ROOT / f"lean/ZkcExamples/Structured/{module}Data.lean",
+                       (ROOT / f"lean/applications/Zkc/Applications/IR/Structured/{module}Data.lean",
                         snapshot.render(data, f"ZkcExamples.Structured.{module}Data"))]
             if stem not in ("total-state", "unit-state"):
                 targets.append((FIXTURES / f"{stem}.mlir", source))

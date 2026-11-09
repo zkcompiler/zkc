@@ -12,6 +12,7 @@ import sys
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
+from support.packages import module_package  # noqa: E402
 import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
 from bridges.common import catalogue as catalogue_rows  # noqa: E402
@@ -557,7 +558,7 @@ private def renderedRepeatHeaders (snapshot : Snapshot) :=
         data = json.loads((artifact_root / f"bridges/structured/fixtures/{stem}.json").read_text())
         namespace = f"ZkcExamples.Structured.{name}Data"
         rendered = renderer.render(data, namespace)
-        maintained = artifact_root / f"ZkcExamples/Structured/{name}Data.lean"
+        maintained = artifact_root / f"applications/Zkc/Applications/IR/Structured/{name}Data.lean"
         if not (rendered.encode("utf-8") == maintained.read_bytes()):
             raise AssertionError(maintained)
         roster = [f"role{i:08x}" for i in range(role_count)]
@@ -588,13 +589,13 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
         raise AssertionError("renderer accepted a malformed protocol repeat")
     # Imports/section commands from each rendering are legal at the file top
     # only. One import serves all independently named data declarations.
-    header = "module\n\npublic import Zkc.Source.Structured.Import\n\n@[expose] public section\nset_option maxRecDepth 4096\n"
-    bodies = [source.replace("public import Zkc.Source.Structured.Import\n", "")
+    header = "module\n\npublic import Zkc.IR.Source.Structured.Import\n\n@[expose] public section\nset_option maxRecDepth 4096\n"
+    bodies = [source.replace("public import Zkc.IR.Source.Structured.Import\n", "")
               .replace("@[expose] public section\n", "") for source in modules]
     path = output / "Rendered.lean"
     path.write_text(header + "\n".join(bodies), encoding="utf-8")
     if lake is not None:
-        run = subprocess.run([lake, "lean", path], cwd=HERE,
+        run = subprocess.run([lake, "lean", path], cwd=module_package("Zkc.IR"),
                              capture_output=True, encoding="utf-8", timeout=60)
         (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
         if run.returncode:

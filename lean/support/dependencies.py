@@ -5,9 +5,9 @@ invalidate compiled audits. This reader extracts data, not Lean syntax.
 """
 
 import json
-from pathlib import Path
+from support.packages import module_path, tool_module
 
-POLICY_SOURCE = Path(__file__).resolve().parents[1] / 'ZkcTools/DeclarationAudit.lean'
+POLICY_SOURCE = module_path(tool_module('program', 'DeclarationAudit'))
 BEGIN = '-- BEGIN DEPENDENCY POLICY\nprivate def dependencyPolicyJson : String := r##"'
 END = '"##\n-- END DEPENDENCY POLICY'
 

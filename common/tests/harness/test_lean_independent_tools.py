@@ -54,8 +54,8 @@ def exports(tmp_path_factory):
         with pytest.MonkeyPatch.context() as environment:
             environment.setenv("LEAN_PATH", str(directory))
             environment.setenv("PATH", str(prefix / "bin") + os.pathsep + os.environ.get("PATH", ""))
-            command = audit.export_command(str(prefix / "bin/lake"), prefix / "bin/leanexport", group)
-            runner.run(command[2:], directory, f"{label}-export", export=root / f"{label}.ndjson")
+            command = audit.export_command(prefix / "bin/leanexport", group)
+            runner.run(command, directory, f"{label}-export", export=root / f"{label}.ndjson")
     # Keep the theorem's statement and dependencies, corrupt only its proof.
     rows = [json.loads(line) for line in (root / "base.ndjson").read_text().splitlines()]
     identifiers = {0: ""}
@@ -222,3 +222,36 @@ def test_patched_comparator_keeps_strict_dependency_comparison(exports, patched_
                     '--solution-from-export', str(root / 'helper-proof.ndjson')], root, 'patched-helper-compare')
     assert "Const does not match between challenge and target 'Independent.helper'" in (
         root / 'patched-helper-compare.log').read_text()
+
+
+def test_real_export_resolves_split_package_roots(tmp_path):
+    """Import a private proof transitively across two packages sharing Zkc."""
+    audit = load('independent_split_roots', 'lean/checks/check_independent.py')
+    prefix = Path(PREFIX)
+    runner = audit.Runner(tmp_path, timeout=60, export_mb=32)
+    roots = [tmp_path / 'program', tmp_path / 'ir']
+    bodies = [
+        ('Program', 'module\n@[expose] public section\nnamespace ExportControl\n'
+         'private theorem helper : True := True.intro\n'
+         'theorem base : True := helper\nend ExportControl\n'),
+        ('IR', 'module\npublic import Zkc.Program.Control\n@[expose] public section\n'
+         'theorem ExportControl.locked : True := ExportControl.base\n'),
+    ]
+    for root, (owner, text) in zip(roots, bodies):
+        source = root / 'Zkc' / owner / 'Control.lean'
+        source.parent.mkdir(parents=True)
+        source.write_text(text)
+        relative = source.relative_to(root)
+        runner.run([str(prefix / 'bin/lean'), '-j2', '-o', str(relative.with_suffix('.olean')),
+                    str(relative)], root, f'{owner}-compile', env={'LEAN_PATH': str(roots[0])})
+    group = {'modules': ['Zkc.IR.Control'], 'theorems': ['ExportControl.locked']}
+    command = audit.export_command(prefix / 'bin/leanexport', group)
+    with pytest.raises(audit.CheckError):
+        runner.run(command, tmp_path, 'split-lookup-refused',
+                   env={'LEAN_PATH': os.pathsep.join(map(str, reversed(roots))), 'LEAN_SYSROOT': str(prefix)})
+    with audit.export_artifacts(roots, tmp_path) as (search, _):
+        path = tmp_path / 'joined.ndjson'
+        runner.run(command, tmp_path, 'joined-export', export=path, env={'LEAN_PATH': str(search), 'LEAN_SYSROOT': str(prefix)})
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    assert any('thm' in row for row in rows)
+    runner.run([str(prefix / 'bin/leanchecker'), '--from-export', str(path)], tmp_path, 'joined-kernel-check')

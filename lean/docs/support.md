@@ -1019,7 +1019,7 @@ covered.
 The layer Sumcheck and whole GKR Entry use the shared Lean role-view printer
 (`ZkcTools.StructuredSource.Bindings.RoleViews`).
 `Generated.Presentations.Gkr` is selected by
-[`GenerateGkrPresentations.lean`](../checks/GenerateGkrPresentations.lean) from the
+[`GenerateGkrPresentations.lean`](../applications/Zkc/Tools/Applications/Commands/GenerateGkrPresentations.lean) from the
 retained admitted [`gkr-source.json`](../bridges/structured/fixtures/gkr-source.json).
 The source determines input visibility, complete return masks, callback state
 and captures, and actual callee arguments. The GKR catalogue supplies names;
@@ -1270,7 +1270,7 @@ installed Keccak-256 kernels implement the chain model remains an obligation. `z
 bridge fixture. The construction bridge pins this for `example::Proof`: its
 `sumcheck` subject requires the Entry's fresh original export to render to the
 committed `SumcheckSourceData` (check
-`regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).
+`regenerated:lean/applications/Zkc/Applications/IR/Structured/SumcheckSourceData.lean`).
 
 `TestsArkLib.CompiledSumcheckFiatShamir` instantiates the compiled Entry's
 theorems on the same instance. The premises of `soundness` hold together with

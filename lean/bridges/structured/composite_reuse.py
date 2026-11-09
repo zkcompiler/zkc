@@ -16,6 +16,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package, module_path  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
     ROOT, CheckFailed, Runner, axioms_allowed, printed_axioms, regenerate,
 )
@@ -26,8 +28,10 @@ from bridges.structured import bodies, snapshot  # noqa: E402
 
 LEAN = ROOT / "lean"
 FIXTURE = Path(__file__).parent / "fixtures/composite-reuse.zkc"
-DATA = "Tests.Generated.CompositeReuseData"
-BODIES = "Tests.Generated.CompositeReuseBodies"
+DATA = "Zkc.Tests.IR.Generated.CompositeReuseData"
+DATA_NAMESPACE = "Tests.Generated.CompositeReuseData"
+BODIES = "Zkc.Tests.IR.Generated.CompositeReuseBodies"
+BODIES_NAMESPACE = "Tests.Generated.CompositeReuseBodies"
 CONTRACTS = "Tests.CompositeReuseContracts."
 CHECKS = "Tests.CompositeReuse."
 SYMBOLS = {
@@ -49,13 +53,13 @@ AUDITED = [
 
 
 def lean(runner, path, *, output=None):
-    command = ["lake", "env", "lean", "-DwarningAsError=true"]
+    command = [*lean_command(module_package("Zkc.Applications")), "-DwarningAsError=true"]
     if output is not None:
         if not output.resolve().is_relative_to(LEAN.resolve()) or output.is_symlink():
             raise CheckFailed(f"refuse nonlocal output: {output}")
         output.parent.mkdir(parents=True, exist_ok=True)
         command += ["-o", output]
-    return runner.run([*command, path], cwd=LEAN, expect=None)
+    return runner.run([*command, path], cwd=module_package("Zkc.Applications"), expect=None)
 
 
 def export(runner, compiler, directory, source):
@@ -93,9 +97,9 @@ def refusal(runner, compiler, directory, name, source):
         return
     _, data = export(runner, compiler, selected, source_path)
     module = replace_exactly_once(snapshot.render(data, "Mutant"),
-        "public import Zkc.Source.Structured.Import\n", """public import Zkc.Source.Structured.Import
-public import Zkc.Source.Structured.UnitViews
-public import Tests.Generated.CompositeReuseBodies
+        "public import Zkc.IR.Source.Structured.Import\n", """public import Zkc.IR.Source.Structured.Import
+public import Zkc.IR.Source.Structured.UnitViews
+public import Zkc.Tests.IR.Generated.CompositeReuseBodies
 """) + """
 open Zkc.Source Zkc.Source.Structured Tests.Generated.CompositeReuseBodies
 namespace Mutant
@@ -129,20 +133,20 @@ def main():
     try:
         exported, data = export(runner, args.compiler.resolve(), directory, FIXTURE)
         regenerate(runner, FIXTURE.with_suffix(".json"), exported, args.write_fixtures)
-        data_path = LEAN / "Tests/Generated/CompositeReuseData.lean"
-        regenerate(runner, data_path, snapshot.render(data, DATA), args.write_fixtures)
-        compiled = lean(runner, data_path, output=LEAN / ".lake/build/lib/lean/Tests/Generated/CompositeReuseData.olean")
+        data_path = module_path(DATA)
+        regenerate(runner, data_path, snapshot.render(data, DATA_NAMESPACE), args.write_fixtures)
+        compiled = lean(runner, data_path, output=module_package(DATA) / ".lake/build/lib/lean/Zkc/Tests/IR/Generated/CompositeReuseData.olean")
         if compiled.returncode:
             raise CheckFailed(compiled.stdout + compiled.stderr)
-        printed = bodies.generate(DATA, BODIES, names=SYMBOLS, runner=runner, fresh=True)
-        regenerate(runner, LEAN / "Tests/Generated/CompositeReuseBodies.lean", printed, args.write_fixtures)
-        result = lean(runner, LEAN / "Tests/CompositeReuse.lean")
+        printed = bodies.generate(DATA, BODIES_NAMESPACE, data_namespace=DATA_NAMESPACE, names=SYMBOLS, runner=runner, fresh=True)
+        regenerate(runner, LEAN / "ir/Zkc/Tests/IR/Generated/CompositeReuseBodies.lean", printed, args.write_fixtures)
+        result = lean(runner, LEAN / "verification/Zkc/Tests/Verification/IR/CompositeReuse.lean")
         (directory / "contracts.log").write_text(result.stdout + result.stderr)
         runner.check("source-contract-clients", result.returncode == 0, result.stdout + result.stderr)
         runner.check("opaque-reuse", "COMPOSITE-OPAQUE-REUSE-PASS" in result.stdout)
         for name in AUDITED:
             runner.check("axioms:" + name, axioms_allowed(result.stdout, name))
-        audited = lean(runner, LEAN / "Tests/CompositeReuseAudit.lean")
+        audited = lean(runner, LEAN / "verification/Zkc/Tests/Verification/IR/CompositeReuseAudit.lean")
         (directory / "audit.log").write_text(audited.stdout + audited.stderr)
         runner.check("all-owned-declarations", audited.returncode == 0 and
                      "COMPOSITE-REUSE-AUDIT-PASS" in audited.stdout, audited.stdout + audited.stderr)

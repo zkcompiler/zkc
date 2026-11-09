@@ -243,7 +243,7 @@ def construction_glue(subject, entry, modules):
     require(form == "values" or all(scalar(ty) for ty in entry.types),
             "the payload form needs scalar published inputs")
     model = subject.get("construction", "model")
-    data, participant_module = modules["data"], modules["participant"]
+    data, participant_namespace = modules["data"], modules["participant"]
     names, types = entry.names, entry.types
     args = " ".join(names)
     typed = binders(names, types)
@@ -267,11 +267,11 @@ def construction_glue(subject, entry, modules):
     draws = "[" + ", ".join(f"({text(query)}, {text(delivery)})" for query, delivery in entry.draws) + "]"
     context_literal = (f"Context.fiatShamir {data}.snapshot.entry {roles} {entry.producer} {validator} {entry.service} "
                        f"{text(entry.contract)} ({entry.request}) participant.policy.suite {draws}")
-    module_imports = ["Zkc.Construction.Compiled", "Zkc.Construction.Uniform.DomainHandler", "Zkc.Source.Structured.CommonAdapter", data,
-                      participant_module]
+    module_imports = ["Zkc.IR.Construction.Compiled", "Zkc.IR.Construction.Uniform.DomainHandler", "Zkc.IR.Source.Structured.CommonAdapter", subject.module_name("data"),
+                      subject.module_name("participant")]
     if admission == "views":
-        module_imports.insert(0, "Zkc.Source.Structured.UnitViews")
-        module_imports.append(modules["bodies"])
+        module_imports.insert(0, "Zkc.IR.Source.Structured.UnitViews")
+        module_imports.append(subject.module_name("bodies"))
     elif admission == "external":
         module_imports.append(subject.get("construction", "views"))
     module_imports += subject.get("construction", "model_imports", [])
@@ -287,11 +287,11 @@ def construction_glue(subject, entry, modules):
                    f"structured_views {data}.snapshot\n  helpers [{helpers}]\n  protocols [{protocols}]\n\n"
                    f"theorem admitted : Structured.check {data}.snapshot = .ok program := kernel_admission\n")
     elif admission == "external":
-        views = subject.get("construction", "views")
+        views = subject.get("construction", "views_namespace")
         out.append(f"abbrev program := {views}.program\n/-- The admitted original. -/\n"
                    f"abbrev imported : Structured.Imported {data}.snapshot :=\n  {views}.imported\n")
     out.append(f"""abbrev snapshot := {data}.snapshot
-abbrev participant := {participant_module}.participant
+abbrev participant := {participant_namespace}.participant
 
 /-! ## The constructed validator and its checked selection -/
 
@@ -460,17 +460,17 @@ def omit_declarations(source, names):
 
 def construction_only_glue(subject, entry, modules):
     """The glue of an Entry checked by the construction rule alone."""
-    namespace, data, participant_module = modules["glue"], modules["data"], modules["participant"]
+    namespace, data, participant_namespace = modules["glue"], modules["data"], modules["participant"]
     names, types = entry.names, entry.types
     typed = binders(names, types)
     inputs_body = "[" + ", ".join(value_term(ty, name) for name, ty in zip(names, types)) + "]"
     doc = subject.get("construction", "doc") or default_glue_doc(subject, modules)
-    return HEADER.format(imports=imports([data, participant_module, "Zkc.Construction.Structured",
-                                         "Zkc.Construction.Scalar"]), doc=doc) + f"""
+    return HEADER.format(imports=imports([subject.module_name("data"), subject.module_name("participant"), "Zkc.IR.Construction.Structured",
+                                         "Zkc.IR.Construction.Scalar"]), doc=doc) + f"""
 namespace {namespace}
 open Zkc.Construction
 
-abbrev participant := {participant_module}.participant
+abbrev participant := {participant_namespace}.participant
 
 set_option smartUnfolding true in
 /-- The per-compile construction check accepts the actual export. -/
@@ -520,11 +520,12 @@ def default_glue_doc(subject, modules):
 
 
 
-def views_module(namespace, data, bodies, helpers, protocols, *, max_rec_depth=None, max_heartbeats=None):
+def views_module(namespace, data, bodies, helpers, protocols, *, data_namespace, bodies_namespace,
+                 max_rec_depth=None, max_heartbeats=None):
     """The Views module of an interactive unit admitted from its printed Bodies."""
     helper_entries = ", ".join(helpers)
     protocol_entries = ", ".join(protocols)
-    data_short = data.rsplit(".", 1)[-1]
+    data_short = data_namespace.rsplit(".", 1)[-1]
     settings = ["set_option smartUnfolding false"]
     for option, value in (("maxRecDepth", max_rec_depth), ("maxHeartbeats", max_heartbeats)):
         if value is not None:
@@ -533,7 +534,7 @@ def views_module(namespace, data, bodies, helpers, protocols, *, max_rec_depth=N
     settings = "\n".join(settings)
     return f"""module
 
-public import Zkc.Source.Structured.UnitViews
+public import Zkc.IR.Source.Structured.UnitViews
 public import {data}
 public import {bodies}
 
@@ -546,7 +547,7 @@ open Zkc.Source Zkc.Source.Structured
 
 {settings}
 
-open {bodies} in
+open {bodies_namespace} in
 structured_views {data_short}.snapshot
   helpers [{helper_entries}]
   protocols [{protocol_entries}]
@@ -578,7 +579,7 @@ def body_names(snapshot, entry_name, inventory=None, owners=None):
     return names
 
 
-def facts_module(namespace, construction, program_module, facts, form):
+def facts_module(namespace, construction, program_module, facts, form, *, program_namespace):
     """The executable facts of a validator program the lowering rule accepts.
 
     `facts` holds the values Lean evaluated for the accepted reading: its static
@@ -589,8 +590,8 @@ def facts_module(namespace, construction, program_module, facts, form):
     glue = construction["glue"]
     data = f"({glue}.inputs (F := F) (G := G) {args}).map .data" if form == "payloads" else \
         f"{glue}.inputs (F := F) (G := G) {args}"
-    out = [HEADER.format(imports=imports([program_module, construction["module"], "Zkc.Executable.Reading",
-                                          "Zkc.Executable.Installed"]),
+    out = [HEADER.format(imports=imports([program_module, construction["module"], "Zkc.IR.Executable.Reading",
+                                          "Zkc.IR.Executable.Installed"]),
                          doc=f"Generated facts of the executable validator `{program_module.rsplit('.', 1)[-1]}`.\n"
                              "Regenerate with `lean/bridges/subject.py --write`. The per-compile lowering\n"
                              "rule accepts the validator against the constructed validator (`accepted`);\n"
@@ -598,7 +599,7 @@ def facts_module(namespace, construction, program_module, facts, form):
     out.append(f"""namespace {namespace}
 open Zkc.Construction Zkc.Executable
 
-abbrev validator : Validator := {program_module}.validator
+abbrev validator : Validator := {program_namespace}.validator
 
 set_option maxRecDepth 20000 in
 /-- The reading of the executable validator. -/

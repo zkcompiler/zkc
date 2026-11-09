@@ -54,6 +54,20 @@ let
     "compiler/adapters/accumulator-machine/fixtures"
     "compiler/adapters/plonky3/fixtures/recurrence"
   ];
+  leanInventory = import ./lean-packages.nix { inherit lib; };
+  formal = lib.mapAttrs' (
+    name: entry:
+    lib.nameValuePair "lean-${name}" {
+      paths = [
+        entry.relative
+        "lean/checks"
+        "lean/support"
+        "lean/clients"
+        "lean/lean-toolchain"
+        "lean/bridges/common/lean_render.py"
+      ];
+    }
+  ) leanInventory;
   definitions = {
     compiler.paths = compiler;
     compilerTests.paths =
@@ -135,51 +149,12 @@ let
           "compiler/adapters/clean"
           "compiler/adapters/ring_arena.py"
           "compiler/adapters/plonky3/fixtures"
-          "lean/integrations/clean/lake-manifest.json"
+          "lean/adapters/clean/lake-manifest.json"
           "docs/getting-started.md"
           "docs/runtime/bundles.md"
         ];
       markdown = true;
     };
-    lean.paths = [
-      "lean/lakefile.toml"
-      "lean/lake-manifest.json"
-      "lean/lean-toolchain"
-      "lean/Zkc.lean"
-      "lean/Zkc"
-      "lean/Tests"
-      "lean/ZkcExamples"
-      "lean/ZkcTools"
-      "lean/checks/DeclarationRecords.lean"
-    ];
-    security.paths = [
-      "lean/security"
-      "lean/checks/check_clients.py"
-      "lean/clients"
-      "lean/support/lake.py"
-      "lean/support/evidence.py"
-      "lean/support/compatibility.py"
-      "lean/support/packages.py"
-      "lean/support/dependencies.py"
-      "lean/support/lean_headers.py"
-      "lean/checks/check_library.py"
-      "lean/checks/check_package_ownership.py"
-      "lean/checks/audit_imports.py"
-    ];
-    arklib.paths = [
-      "lean/integrations/arklib"
-      "lean/checks/check_clients.py"
-      "lean/clients"
-      "lean/support/lake.py"
-      "lean/support/evidence.py"
-      "lean/support/compatibility.py"
-      "lean/support/packages.py"
-      "lean/support/dependencies.py"
-      "lean/support/lean_headers.py"
-      "lean/checks/check_library.py"
-      "lean/checks/check_package_ownership.py"
-      "lean/checks/audit_imports.py"
-    ];
     leanChecks.paths = [
       "lean"
     ]
@@ -197,6 +172,7 @@ let
       paths = builtins.attrNames (builtins.readDir ../.);
       markdown = true;
     };
-  };
+  }
+  // formal;
 in
 lib.mapAttrs (name: definition: source (definition // { inherit name; })) definitions

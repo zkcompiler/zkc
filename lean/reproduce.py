@@ -22,56 +22,44 @@ import shutil
 import subprocess
 import time
 import tomllib
+from support.invocation import command as lean_command
 from support.compatibility import prepare
+from support.packages import (PACKAGES, NAMES, DIRECTORIES, add_selection, selection,
+                              selected, package_directory, package_modules, module_path, check_closure)
 
 
 HERE = Path(__file__).resolve().parent
-INTEGRATION = Path('integrations/arklib')
-CLEAN = Path('integrations/clean')
-SECURITY = Path('security')
-# The Clean producer's maintained output, consumed by the native integration tests.
+# The Clean producer's maintained output, consumed by native integration tests.
 CLEAN_CONTROL = Path('../common/tests/fixtures/clean/air-control.json')
 
 
-
-
-def build_inputs(root, with_arklib=False, with_clean=False, with_security=False):
-    files = [root / name for name in (
-        'lakefile.toml', 'lake-manifest.json', 'lean-toolchain',
-        'reproduce.py', 'Zkc.lean')]
-    # The checks and what they share, by looking rather than by a list: these
-    # named five of them and went stale the moment the checks moved together.
-    files.extend((root / 'checks').glob('*.py'))
-    files.extend((root / 'support').glob('*.py'))
-    for directory in ('Zkc', 'Tests', 'ZkcExamples', 'ZkcTools'):
-        files.extend((root / directory).rglob('*.lean'))
-    files.append(root / 'clients/Main.lean')
-    if with_security or with_arklib:
-        optional = root / SECURITY
-        files.extend(root / 'clients' / name for name in
-                     ('Security.lean', 'SecurityTheory.lean', 'SecurityTools.lean'))
-        files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcSecurity', 'ZkcSecurityTools', 'ZkcSecurityExamples', 'TestsSecurity'):
-            files.extend((optional / directory).rglob('*.lean'))
-    if with_arklib:
-        files.append(root / 'clients/ArkLib.lean')
-        files.append(root / 'clients/UniformComposition.lean')
-        optional = root / INTEGRATION
-        # A declared dependency patch is present only while an upstream change is pending.
-        files.extend(path for name in ('compatibility.json', 'compatibility.patch')
-                     if (path := optional / name).is_file())
-        files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcArkLib', 'ZkcArkLibExamples', 'TestsArkLib'):
-            files.extend((optional / directory).rglob('*.lean'))
-    if with_clean:
-        optional = root / CLEAN
-        files.extend(optional.glob('*.lean'))
-        files.extend(optional / name for name in ('compatibility.json', 'compatibility.patch'))
-        files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcClean', 'TestsClean', 'CleanExamples'):
-            files.extend((optional / directory).rglob('*.lean'))
-        files.append(root / CLEAN_CONTROL)
-    return {str(p.relative_to(root)): support.lake.sha(p) for p in sorted(files)}
+def build_inputs(root, packages=None):
+    """Hash selected source scopes and the complete shared checking harness."""
+    files = {root / 'reproduce.py', root / 'bridges/common/lean_render.py'}
+    for directory in ('checks', 'support', 'clients'):
+        files.update(path for path in (root / directory).rglob('*')
+                     if path.suffix in ('.py', '.lean') and
+                     not any(part.startswith('.') for part in path.relative_to(root).parts))
+    # A shared toolchain selector may exist for harness consumers, but no root
+    # lakefile, root manifest or broad Zkc library is a maintained build input.
+    if (root / 'lean-toolchain').is_file():
+        files.add(root / 'lean-toolchain')
+    names = selected(packages)
+    for name in names:
+        package = package_directory(name, root)
+        files.update(package / filename for filename in
+                     ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
+        files.update(package_modules(name, root).values())
+        declaration = package / 'compatibility.json'
+        if declaration.is_file():
+            config = json.loads(declaration.read_text())
+            patch = Path(config['patch'])
+            if patch.is_absolute() or '..' in patch.parts:
+                raise ValueError(f'nonlocal dependency patch: {declaration}')
+            files.update((declaration, package / patch))
+    if 'clean' in names:
+        files.add(root / CLEAN_CONTROL)
+    return {str(path.relative_to(root)): support.lake.sha(path) for path in sorted(files)}
 
 
 def materialize(package, packages, caches):
@@ -92,40 +80,37 @@ def materialize(package, packages, caches):
         raise ValueError(f'source/build precondition failed: {name}')
 
 
-def prepare_dependencies(work, caches, integrations=()):
-    manifest = json.loads((work / 'lake-manifest.json').read_text())
-    packages = work / '.lake/packages'
-    packages.mkdir(parents=True)
+def prepare_dependencies(work, caches, packages=None):
     pins, sources = {}, {}
-    for package in manifest['packages']:
-        if package['type'] != 'git':
-            raise ValueError('main package dependency must be an exact Git source')
-        materialize(package, packages, caches)
-        pins[package['name']] = package['rev']
-        sources[package['name']] = packages / package['name'].removeprefix('«').removesuffix('»')
-    # A source shared by the main package or an earlier integration is linked,
-    # never materialized twice, and must have the same revision everywhere.
-    for integration in integrations:
-        optional = work / integration
-        other = json.loads((optional / 'lake-manifest.json').read_text())
+    providers = {NAMES[name]: package_directory(name, work).resolve() for name in PACKAGES}
+    for name in selected(packages):
+        optional = package_directory(name, work)
+        check_closure(name, optional)
+        manifest = json.loads((optional / 'lake-manifest.json').read_text())
         targets = optional / '.lake/packages'
         targets.mkdir(parents=True)
-        for package in other['packages']:
+        for package in manifest['packages']:
             if package['type'] == 'path':
-                if package['name'] not in {'zkc', 'zkc_security'} or (optional / package['dir']).resolve() != (work if package['name'] == 'zkc' else work / SECURITY).resolve():
-                    raise ValueError('unexpected integration path dependency')
+                target = (optional / package['dir']).resolve()
+                if package['name'] not in providers or target != providers[package['name']]:
+                    raise ValueError('unexpected maintained path dependency')
+                config = tomllib.loads((target / 'lakefile.toml').read_text())
+                if config['name'] != package['name']:
+                    raise ValueError('maintained path provider mismatch')
                 continue
-            name = package['name'].removeprefix('«').removesuffix('»')
+            dependency = package['name'].removeprefix('«').removesuffix('»')
+            pin = (package['url'].removesuffix('.git'), package['rev'])
             if package['name'] in pins:
-                if pins[package['name']] != package['rev']:
-                    raise ValueError(f'incompatible shared dependency: {name}')
-                (targets / name).symlink_to(sources[package['name']])
+                if pins[package['name']] != pin:
+                    raise ValueError(f'incompatible shared dependency: {dependency}')
+                (targets / dependency).symlink_to(sources[package['name']])
             else:
                 materialize(package, targets, caches)
-                pins[package['name']] = package['rev']
-                sources[package['name']] = targets / name
+                pins[package['name']] = pin
+                sources[package['name']] = targets / dependency
+        # Retain exact-revision and per-file digest validation for declared patches.
         prepare(optional)
-    return pins
+    return {name: {'url': url, 'revision': rev} for name, (url, rev) in pins.items()}
 
 
 def checked_build(lake, directory, log_path, env, required):
@@ -165,8 +150,8 @@ def checked_build(lake, directory, log_path, env, required):
 def clean_control(lake, directory, expected, log_path, env):
     """The fresh Clean producer must print exactly the maintained control."""
     with log_path.open('w') as log:
-        result = subprocess.run([lake, 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true',
-                                 '--run', 'TestsClean/Control.lean'],
+        result = subprocess.run(lean_command(directory, '-DautoImplicit=false', '-DwarningAsError=true',
+                                             '--run', control_source(directory), lake=lake),
                                 cwd=directory, env=env, stdout=subprocess.PIPE, stderr=log)
     produced = hashlib.sha256(result.stdout).hexdigest()
     return {'status': 'pass' if result.returncode == 0 and result.stdout == expected.read_bytes() else 'fail',
@@ -174,87 +159,108 @@ def clean_control(lake, directory, expected, log_path, env):
             'expected': str(CLEAN_CONTROL), 'expected_sha256': support.lake.sha(expected)}
 
 
-def run_clients(lake, work, output, with_arklib, env, with_security=False):
-    subprocess.run(['python3', 'checks/check_clients.py', '--lake', lake, '--output', str(output),
-                    *(['--with-arklib'] if with_arklib else ['--with-security'] if with_security else [])], cwd=work, env=env, check=False)
+def control_source(directory):
+    # Select the producer exactly; its generated audit module also ends in Control.
+    source = module_path('Zkc.Tests.Clean.Control', directory.parents[1])
+    if not source.is_file():
+        raise ValueError(f'missing maintained Clean control producer: {source}')
+    return source
+
+
+def run_clients(lake, work, output, packages, env):
+    options = [option for name in packages for option in ('--package', name)]
+    result = subprocess.run(['python3', 'checks/check_clients.py', '--lake', lake,
+                             '--output', str(output), *options], cwd=work, env=env, check=False)
     receipt = output / 'result.json'
-    return json.loads(receipt.read_text()) if receipt.is_file() else {'status': 'not-run'}
+    if result.returncode != 0 or not receipt.is_file():
+        return {'status': 'fail', 'exit_code': result.returncode}
+    return json.loads(receipt.read_text())
+
+
+def required_markers(name):
+    markers = [name.upper() + '-AUDIT-PASS', 'DEPENDENCY-AUDIT-PASS']
+    if name == 'arklib':
+        markers.extend(['STARK-POWER-UPSTREAM-AXIOMS-PASS',
+                        'STARK-EXCLUDED-COMBINATION-CONTROL-PASS', 'STARK-ARKLIB-BOUNDARY-PASS',
+                        'FRI-JOHNSON-UPSTREAM-BOUNDARY-PASS'])
+    if name == 'applications':
+        markers.extend(['REGISTRY-AUDIT-PASS', 'ARKLIB-REGISTRY-AUDIT-PASS'])
+    if name == 'clean':
+        markers.append('CLEAN-UPSTREAM-BOUNDARY-PASS')
+    return markers
 
 
 def run(args):
+    names = selection(args)
+    if not names:
+        raise ValueError('no packages selected for reproduction')
+    # Source enumeration fails before output creation if migration is incomplete.
+    inputs = build_inputs(HERE, names)
     output = args.output.resolve()
     if output == HERE or HERE in output.parents:
-        raise ValueError('the independent output must be outside the formal package')
+        raise ValueError('the independent output must be outside the formal harness')
     output.mkdir(parents=True, exist_ok=False)
     work = output / 'lean'
-    inputs = build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security)
     for name in inputs:
         target = work / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(HERE / name, target)
     caches = [path.resolve() for path in [args.dependency_cache, *args.integration_dependency_cache] if path]
-    integrations = [path for path, chosen in ((SECURITY, args.with_security or args.with_arklib), (INTEGRATION, args.with_arklib), (CLEAN, args.with_clean))
-                    if chosen]
-    pins = prepare_dependencies(work, caches, integrations)
-    options = [option for path in integrations for option in ('--integration', path.name)] or ['--main-only']
+    pins = prepare_dependencies(work, caches, names)
+    options = [option for name in names for option in ('--package', name)]
     env = dict(os.environ)
     for key in ['LEAN_PATH', 'LEAN_SRC_PATH', 'LEAN_SYSROOT', 'LAKE_HOME']:
         env.pop(key, None)
-    lake = support.lake.resolve(args.lake)
-    lake = str(Path(lake).absolute())
-    version = subprocess.check_output([lake, 'env', 'lean', '--version'], cwd=work, env=env, text=True).strip()
-    expected = (work / 'lean-toolchain').read_text().strip().split(':v')[-1]
+    lake = str(Path(support.lake.resolve(args.lake)).absolute())
+    program = package_directory('program', work)
+    toolchain = (program / 'lean-toolchain').read_text().strip()
+    env['ELAN_TOOLCHAIN'] = toolchain
+    version = subprocess.check_output([lake, 'env', 'lean', '--version'],
+                                      cwd=program, env=env, text=True).strip()
+    expected = toolchain.split(':v')[-1]
     found = re.search(r'version (\d+\.\d+\.\d+)', version)
     if found is None or found[1] != expected:
         raise ValueError(f'wrong Lean toolchain: {version}; expected {expected}')
-    with (output / 'boundaries.json').open('w') as stream:
-        subprocess.run(['python3', 'checks/check_library.py', '--lake', lake, *options], cwd=work, env=env, check=True, stdout=stream)
-    with (output / 'package-ownership.json').open('w') as stream:
-        subprocess.run(['python3', 'checks/check_package_ownership.py', '--lake', lake, *options], cwd=work, env=env, check=True, stdout=stream)
+    for script, filename in (('check_library.py', 'boundaries.json'),
+                             ('check_package_ownership.py', 'package-ownership.json')):
+        with (output / filename).open('w') as stream:
+            subprocess.run(['python3', 'checks/' + script, '--lake', lake, *options],
+                           cwd=work, env=env, check=True, stdout=stream)
     subprocess.run(['python3', 'checks/audit_imports.py', *options], cwd=work, env=env, check=True)
     start = time.monotonic()
-    runs = {'main': checked_build(lake, work, output / 'main-build.log', env,
-            ['DEPENDENCY-AUDIT-PASS', 'CORE-AUDIT-PASS'])}
-    if (args.with_security or args.with_arklib) and runs['main']['status'] == 'pass':
-        runs['security'] = checked_build(lake, work / SECURITY, output / 'security-build.log', env,
-            ['DEPENDENCY-AUDIT-PASS', 'SECURITY-AUDIT-PASS'])
-    if args.with_arklib and runs.get('security', {}).get('status') == 'pass':
-        runs['arklib'] = checked_build(lake, work / INTEGRATION, output / 'arklib-build.log', env,
-            ['DEPENDENCY-AUDIT-PASS', 'ARKLIB-AUDIT-PASS'])
+    runs = {}
+    for name in names:
+        runs[name] = checked_build(lake, package_directory(name, work),
+                                   output / f'{name}-build.log', env, required_markers(name))
+        if runs[name]['status'] != 'pass':
+            break
     control = {'status': 'not-run'}
-    if args.with_clean and runs['main']['status'] == 'pass':
-        runs['clean'] = checked_build(lake, work / CLEAN, output / 'clean-build.log', env,
-            ['CLEAN-INTEGRATION-AUDIT-PASS', 'DEPENDENCY-AUDIT-PASS',
-             'CLEAN-UPSTREAM-BOUNDARY-PASS'])
-        if runs['clean']['status'] == 'pass':
-            control = clean_control(lake, work / CLEAN, work / CLEAN_CONTROL, output / 'clean-control.log', env)
+    if runs.get('clean', {}).get('status') == 'pass':
+        control = clean_control(lake, package_directory('clean', work), work / CLEAN_CONTROL,
+                                output / 'clean-control.log', env)
     clients = {'status': 'not-run'}
-    if all(run['status'] == 'pass' for run in runs.values()):
-        clients = run_clients(lake, work, output / 'clients', args.with_arklib, env, args.with_security)
-    changed = (build_inputs(work, args.with_arklib, args.with_clean, args.with_security) != inputs
-               or build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security) != inputs)
-    passed = (all(run['status'] == 'pass' for run in runs.values()) and not changed
-              and (not (args.with_security or args.with_arklib) or 'security' in runs)
-              and (not args.with_arklib or 'arklib' in runs) and clients['status'] == 'pass'
-              and (not args.with_clean or control['status'] == 'pass'))
+    complete = set(runs) == set(names) and all(run['status'] == 'pass' for run in runs.values())
+    if complete:
+        clients = run_clients(lake, work, output / 'clients', names, env)
+    changed = build_inputs(work, names) != inputs or build_inputs(HERE, names) != inputs
+    passed = (complete and not changed and clients['status'] == 'pass'
+              and ('clean' not in names or control['status'] == 'pass'))
     record = {
         'format': 'zkc.formal-reproduction.v0', 'status': 'pass' if passed else 'fail',
-        'with_security': args.with_security or args.with_arklib,
-        'with_arklib': args.with_arklib, 'with_clean': args.with_clean, 'source_drift': changed,
-        'elapsed_seconds': round(time.monotonic() - start, 2),
-        'lake_executable': lake,
-        'toolchain': (work / 'lean-toolchain').read_text().strip(), 'lean_version': version,
+        'packages': names, 'source_drift': changed,
+        'elapsed_seconds': round(time.monotonic() - start, 2), 'lake_executable': lake,
+        'toolchain': toolchain, 'lean_version': version,
         'build_inputs': inputs, 'builds': runs, 'clean_control': control, 'clients': clients,
         'external_source_pins': pins,
         'dependency_compatibility': {
-            str(path): json.loads((work / path / 'compatibility.json').read_text())
-            for path in integrations if (work / path / 'compatibility.json').is_file()},
+            DIRECTORIES[name]: json.loads((package_directory(name, work) / 'compatibility.json').read_text())
+            for name in names if (package_directory(name, work) / 'compatibility.json').is_file()},
         'allowed_axioms': ['propext', 'Classical.choice', 'Quot.sound'],
         'prior_lean_build_objects': False,
         'dependency_source_transport': 'local Git objects' if caches else 'manifest URLs',
-        'audit_scope': 'all stored declarations in library, tests and examples; '
-                       'tool wrappers are compiled and linked, not included in the axiom inventory',
-        'scope': 'declared owned source packages and pinned dependencies; installed Lean/Std toolchain; '
+        'audit_scope': {name: list(PACKAGES[name][1]) for name in names},
+        'scope': 'all stored declarations including private bodies in selected library, tools and tests; '
+                 'exact pinned dependencies and installed Lean/Std toolchain; '
                  'no native correctness or protocol claim beyond the checked propositions',
     }
     (output / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
@@ -268,9 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('--dependency-cache', type=Path)
     parser.add_argument('--integration-dependency-cache', type=Path, action='append', default=[],
                         help='Git source cache of an optional package; repeat for each')
-    parser.add_argument('--with-security', action='store_true')
-    parser.add_argument('--with-arklib', action='store_true')
-    parser.add_argument('--with-clean', action='store_true')
+    add_selection(parser)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--lake', default='lake')
     args = parser.parse_args()

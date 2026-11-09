@@ -9,5 +9,5 @@
 "lean/bridges/common/fixtures" = "zkc"
 "lean/bridges/construction/fixtures" = "zkc"
 "lean/bridges/structured/fixtures" = "zkc"
-"lean/security/fixtures" = "zkc"
+"lean/verification/fixtures" = "zkc"
 "lean/subjects/fixtures" = "zkc"

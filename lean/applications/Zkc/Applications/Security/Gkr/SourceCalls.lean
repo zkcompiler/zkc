@@ -1,0 +1,19 @@
+module
+
+public import Zkc.Applications.IR.Structured.Generated.Presentations.Gkr
+public import Zkc.Tools.IR.StructuredSource.SourceCalls
+public meta import Zkc.Tools.IR.StructuredSource.SourceCalls
+
+@[expose] public section
+
+/-! The terminal application header comes from its unique retained occurrence.
+The selector checks the complete callee signature; names carry no authority. -/
+namespace ZkcSecurity.Realizations.Gkr.SourceCalls
+open Zkc.Source Zkc.Source.Structured
+open ZkcExamples.Structured
+
+set_option maxRecDepth 50000 in
+protocol_call inputCall from Generated.Presentations.Gkr.Root.gkrBody
+  to GkrSourceBodies.inputSignature
+
+end ZkcSecurity.Realizations.Gkr.SourceCalls

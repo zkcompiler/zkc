@@ -35,7 +35,7 @@ own version rules.
 | Main LLVM/MLIR and C++ packages | Compiler CMake requirements and Nix inputs |
 | Rust workspace | Cargo manifests, lockfile, toolchain selection and `nix/rust.nix` vendor hash |
 | Python tooling | `pyproject.toml` and `uv.lock` |
-| Independent Lean package | `lean/lean-toolchain`, Lake manifests and lockfiles |
+| Independent Lean package | `lean/program/lean-toolchain`, package Lake manifests and lockfiles |
 | Optional integrations | Their own manifests, source pins and compatible toolchains |
 
 `rust-toolchain.toml` selects the exact Rust release for rustup, Nix and CI.
@@ -52,9 +52,10 @@ these are compatibility constraints, not accidental duplicate pins.
 
 ## Lean dependency sets
 
-The main package owns the Lean and Mathlib selection. ArkLib and Clean remain
-separate Lake packages so their dependencies do not enter ordinary native or
-main Lean builds. All maintained packages use one Lean toolchain and identical
+The Program package owns the Lean and Mathlib selection. IR and Protocol
+depend on Program; Verification joins their dependency branches. ArkLib and
+Clean are separate adapters, and concrete clients live in Applications.
+Adapter dependencies do not enter ordinary native or core Lean builds. All maintained packages use one Lean toolchain and identical
 revisions for every shared dependency, including dependencies shared only by
 integrations such as CompPoly. Separate packages do not make incompatible
 Lean libraries composable.
@@ -66,12 +67,12 @@ python3 scripts/update-lean-pins.py --mathlib MATHLIB_COMMIT --arklib ARKLIB_COM
 ```
 
 Omitted integration arguments retain their current revisions. Mathlib selects
-the Lean release. The helper updates the three toolchain files, the direct
+the Lean release. The helper updates all seven package toolchain files and the shared harness selector, the direct
 requirements and Lake manifests, verifies the resolved dependency set, and
 refreshes Nix source hashes. It does not build proofs or download Mathlib's
 compiled cache. A failed resolution leaves its changes for inspection.
 
-The integration lakefiles explicitly select the main Mathlib revision after
+The upstream-consuming lakefiles explicitly select the Program Mathlib revision after
 other requirements. Clean also selects the CompPoly revision shared with
 ArkLib. When upstream requirements change, reconcile these ordinary Lake
 requirements before accepting the upgrade. The helper refuses conflicting
@@ -82,7 +83,7 @@ An integration may apply a declared patch to one dependency at its exact pinned
 revision (`compatibility.json` beside its manifest). Preparation refuses the
 patch once the pin changes, so a pin change also updates or removes the patch.
 
-Run the main build, both integration builds, independent consumers and
+Run the four core builds, both adapters, Applications, independent consumers and
 reached-axiom audits after changing this set. A successful resolution alone is
 not compatibility evidence. If a current stable release cannot build a
 maintained integration without changing its meaning, retain the newest

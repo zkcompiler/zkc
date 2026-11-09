@@ -1,6 +1,6 @@
 # Development guide
 
-CMake/Ninja owns C++, Cargo owns Rust, Lake owns the independent Lean package,
+CMake/Ninja owns C++, Cargo owns Rust, Lake owns the independent Lean packages,
 and uv owns Python tools. Nix supplies pinned toolchains and packages; the
 [justfile](../../justfile) coordinates checkout commands. Default builds and
 execution tests target the C++/Rust path. Formal work is optional and standalone.

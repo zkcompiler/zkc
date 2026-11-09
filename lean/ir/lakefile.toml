@@ -1,0 +1,113 @@
+name = "zkc_ir"
+version = "0.0.0"
+defaultTargets = ["ZkcIR", "ZkcIRTools", "ZkcIRTests", "declaration-records"]
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[require]]
+name = "zkc_program"
+path = "../program"
+
+[[lean_lib]]
+name = "ZkcIR"
+roots = ["Zkc.IR"]
+globs = ["Zkc.IR", "Zkc.IR.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcIRTools"
+roots = ["Zkc.Tools.IR"]
+globs = ["Zkc.Tools.IR.+"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "ZkcIRTests"
+roots = ["Zkc.Tests.IR"]
+globs = ["Zkc.Tests.IR.+"]
+allowNonModules = true
+
+[[lean_exe]]
+name = "declaration-records"
+root = "Zkc.Tools.IR.DeclarationRecords"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "structured-source"
+root = "Zkc.Tools.IR.Commands.StructuredSource"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-check-repeat-occurrences"
+root = "Zkc.Tools.IR.Commands.CheckRepeatOccurrences"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-check-source-configuration-selection"
+root = "Zkc.Tools.IR.Commands.CheckSourceConfigurationSelection"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-component-boundaries"
+root = "Zkc.Tools.IR.Commands.ComponentBoundaries"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-component-continuations"
+root = "Zkc.Tools.IR.Commands.ComponentContinuations"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-component-effects"
+root = "Zkc.Tools.IR.Commands.ComponentEffects"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-component-exports"
+root = "Zkc.Tools.IR.Commands.ComponentExports"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-component-library-admission"
+root = "Zkc.Tools.IR.Commands.ComponentLibraryAdmission"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-generate-reusable-aggregate"
+root = "Zkc.Tools.IR.Commands.GenerateReusableAggregate"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-generate-role-views"
+root = "Zkc.Tools.IR.Commands.GenerateRoleViews"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-oracle-source"
+root = "Zkc.Tools.IR.Commands.OracleSource"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-receipt-status"
+root = "Zkc.Tools.IR.Commands.ReceiptStatus"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-test-data-anchors"
+root = "Zkc.Tools.IR.Commands.TestDataAnchors"
+supportInterpreter = true
+allowNonModules = true

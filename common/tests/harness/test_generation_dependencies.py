@@ -43,6 +43,7 @@ def test_failure_summary_keeps_first_error_and_full_log(tmp_path, monkeypatch):
     generation = module.Generation.__new__(module.Generation)
     generation.directory, generation.run_id = tmp_path, 'failure-control'
     generation.environment, generation.commands = {}, []
+    generation.lean = 'lean'
     with pytest.raises(RuntimeError, match='Missing.signature') as failure:
         generation.execute(['lean', 'Example.lean'])
     assert 'last secondary failure' not in str(failure.value)

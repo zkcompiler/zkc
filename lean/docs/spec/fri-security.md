@@ -10,7 +10,7 @@ Entry or native execution. Before [committed words](#committed-words) it reads
 every commitment as the vector it commits to. The modules are
 `ZkcArkLib.Fri.*`, `ZkcArkLibExamples.FriFiatShamir` and
 `ZkcArkLibExamples.CommittedFri` in the
-[security integration](../../integrations/arklib/README.md).
+[security integration](../../adapters/arklib/README.md).
 
 The current library has separate commitment, query and checking phases. In
 particular, its `Check` requires exactly `2^TerminalLog` padded coefficients;

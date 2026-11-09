@@ -3,7 +3,7 @@
 
 Select an exact Mathlib commit and, when needed, exact ArkLib/Clean commits.
 Mathlib selects the Lean release; each package keeps its own Lake manifest.
-Resolve all four packages with that toolchain, verify common revisions, and
+Resolve all maintained packages with that toolchain, verify common revisions, and
 refresh Nix source hashes. Builds and proof audits remain separate checks.
 A failed resolution leaves its edits available for inspection.
 """
@@ -14,14 +14,18 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
+import shlex
 import tempfile
 import tomllib
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-MAIN = ROOT / "lean"
-INTEGRATIONS = {"Arklib": MAIN / "integrations/arklib", "Clean": MAIN / "integrations/clean"}
-SECURITY = MAIN / "security"
+LEAN = ROOT / "lean"
+sys.path.insert(0, str(LEAN))
+from support.packages import PACKAGES, selected as select_packages  # noqa: E402
+
+UPSTREAM_OWNERS = {"mathlib": "program", "Arklib": "arklib", "Clean": "clean"}
 NIX_LEAN = ROOT / "nix/lean-toolchain.nix"
 TOOLCHAIN = re.compile(r"leanprover/lean4:v(\d+\.\d+\.\d+(?:-rc\d+)?)")
 
@@ -109,13 +113,14 @@ def git_revisions(manifest):
 
 
 def check(toolchain, selected):
-    main_pins = git_revisions(json.loads((MAIN / "lake-manifest.json").read_text()))
+    base_pins = git_revisions(json.loads((PACKAGES["program"][0] / "lake-manifest.json").read_text()))
     shared = {}
     origins = {}
-    for directory, expected in [(MAIN, {"mathlib": selected["mathlib"]}),
-                                (SECURITY, {"mathlib": selected["mathlib"]}),
-                                *((path, {name: selected[name], "mathlib": selected["mathlib"]})
-                                  for name, path in INTEGRATIONS.items())]:
+    for package in select_packages():
+        directory = PACKAGES[package][0]
+        expected = {"mathlib": selected["mathlib"]}
+        expected.update({name: selected[name] for name, owner in UPSTREAM_OWNERS.items()
+                         if owner == package})
         if (directory / "lean-toolchain").read_text().strip() != toolchain:
             raise ValueError(f"{directory}: toolchain differs from the selected Mathlib release")
         manifest = json.loads((directory / "lake-manifest.json").read_text())
@@ -130,9 +135,9 @@ def check(toolchain, selected):
         for name, rev in expected.items():
             if resolved.get(name) != rev:
                 raise ValueError(f"{directory}: {name} did not resolve to {rev}")
-        missing = main_pins.keys() - resolved.keys()
+        missing = base_pins.keys() - resolved.keys()
         if missing:
-            raise ValueError(f"{directory}: missing main dependencies: {sorted(missing)}")
+            raise ValueError(f"{directory}: missing program dependencies: {sorted(missing)}")
         for name, rev in resolved.items():
             if name in shared and shared[name] != rev:
                 raise ValueError(f"{directory}: incompatible shared dependency: {name}")
@@ -142,7 +147,7 @@ def check(toolchain, selected):
 
 def detach_dependency_links():
     """Lake update replaces changed checkouts; do not let it traverse shared sources."""
-    for directory in [SECURITY, *INTEGRATIONS.values()]:
+    for directory, _ in PACKAGES.values():
         packages = directory / ".lake/packages"
         if packages.is_dir():
             for package in packages.iterdir():
@@ -158,7 +163,7 @@ def main():
     parser.add_argument("--clean", help="full Clean commit (default: current requirement)")
     args = parser.parse_args()
     selected = {"mathlib": args.mathlib, "Arklib": args.arklib, "Clean": args.clean}
-    packages = {"mathlib": MAIN, **INTEGRATIONS}
+    packages = {name: PACKAGES[owner][0] for name, owner in UPSTREAM_OWNERS.items()}
     requirements = {name: required(path / "lakefile.toml", name) for name, path in packages.items()}
     for name, rev in selected.items():
         if rev is None:
@@ -170,21 +175,22 @@ def main():
     if version is None:
         raise ValueError(f"unexpected Mathlib toolchain: {toolchain}")
     record_lean_hash(version.group(1), lean_archive_hash(version.group(1)))
-    for name, directory in packages.items():
-        (directory / "lean-toolchain").write_text(toolchain + "\n")
-        set_required_rev(directory / "lakefile.toml", name, requirements[name][1], selected[name])
-    for directory in [SECURITY, *INTEGRATIONS.values()]:
+    # Update every direct declaration of a selected upstream, including adapters.
+    for directory, _ in PACKAGES.values():
         (directory / "lean-toolchain").write_text(toolchain + "\n")
         lakefile = directory / "lakefile.toml"
-        _, old_mathlib = required(lakefile, "mathlib")
-        set_required_rev(lakefile, "mathlib", old_mathlib, selected["mathlib"])
+        for requirement in tomllib.loads(lakefile.read_text()).get("require", []):
+            name = requirement["name"]
+            if name in selected and "git" in requirement:
+                set_required_rev(lakefile, name, requirement["rev"], selected[name])
+    # The harness selector is tooling metadata, not a root Lake package.
+    (LEAN / "lean-toolchain").write_text(toolchain + "\n")
     detach_dependency_links()
+    commands = ["export MATHLIB_NO_CACHE_ON_UPDATE=1"]
+    commands.extend(f"(cd {shlex.quote(str(PACKAGES[name][0]))} && lake --keep-toolchain update)"
+                    for name in select_packages())
     run(["nix", "develop", f"{ROOT}#lean", "--command", "bash", "-e", "-c",
-         "export MATHLIB_NO_CACHE_ON_UPDATE=1; "
-         "cd lean; lake --keep-toolchain update; "
-         "cd security; lake --keep-toolchain update; "
-         "cd ../integrations/arklib; lake --keep-toolchain update; "
-         "cd ../clean; lake --keep-toolchain update"])
+         "; ".join(commands)])
     check(toolchain, selected)
     run(["nix", "develop", f"{ROOT}#maintenance", "--command",
          "python3", ROOT / "scripts/update-nix-sources.py", "--root", ROOT])

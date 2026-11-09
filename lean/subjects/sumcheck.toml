@@ -14,15 +14,26 @@ construction = true
 executable = true
 
 [generated]
-pair = "lean/ZkcExamples/Construction/Generated/SmallSumcheckPair.lean"
-data = "lean/ZkcExamples/Structured/SumcheckSourceData.lean"
-participant = "lean/ZkcExamples/Construction/SumcheckProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/SumcheckArtifact.lean"
-program = "lean/ZkcExamples/Executable/SumcheckProofProgramData.lean"
-facts = "lean/ZkcExamples/Executable/SumcheckProofFacts.lean"
-artifacts = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Sumcheck/Artifacts.lean"
-lowering = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Sumcheck/Lowering.lean"
-claims = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Sumcheck/Claims.lean"
+pair = "lean/applications/Zkc/Applications/IR/Construction/Generated/SmallSumcheckPair.lean"
+data = "lean/applications/Zkc/Applications/IR/Structured/SumcheckSourceData.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/SumcheckProofParticipant.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/SumcheckArtifact.lean"
+program = "lean/applications/Zkc/Applications/IR/Executable/SumcheckProofProgramData.lean"
+facts = "lean/applications/Zkc/Applications/IR/Executable/SumcheckProofFacts.lean"
+artifacts = "lean/applications/Zkc/Applications/ArkLib/Subjects/Sumcheck/Artifacts.lean"
+lowering = "lean/applications/Zkc/Applications/ArkLib/Subjects/Sumcheck/Lowering.lean"
+claims = "lean/applications/Zkc/Applications/ArkLib/Subjects/Sumcheck/Claims.lean"
+
+[namespaces]
+pair = "ZkcExamples.Construction.Generated.SmallSumcheckPair"
+data = "ZkcExamples.Structured.SumcheckSourceData"
+participant = "ZkcExamples.Construction.SumcheckProofParticipant"
+glue = "ZkcExamples.Construction.SumcheckProof"
+program = "ZkcExamples.Executable.SumcheckProofProgramData"
+facts = "ZkcExamples.Executable.SumcheckProof"
+artifacts = "ZkcSecurity.Examples.Subjects.Sumcheck"
+lowering = "ZkcSecurity.Examples.Subjects.Sumcheck"
+claims = "ZkcSecurity.Examples.Subjects.Sumcheck"
 
 [source_views]
 selections = ["SumcheckSource", "SumcheckReduction", "SumcheckRepacked"]
@@ -46,22 +57,24 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
          "helper-rebound", "helper-binding"]
 
 [executable]
+module = "Zkc.Applications.IR.Executable.SumcheckProof"
 threshold = "derived"
 namespace = "ZkcExamples.Executable.SumcheckProof"
 charge = "ZkcExamples.Executable.SumcheckCharges.charge"
 charge_arguments = ["rounds"]
-completeness_module = "ZkcExamples.Executable.SumcheckCompleteness"
+completeness_module = "Zkc.Applications.IR.Executable.SumcheckCompleteness"
 
 [construction]
 namespace = "ZkcExamples.Construction.SumcheckProof"
-connection = "ZkcExamples.Construction.SumcheckProof"
+connection = "Zkc.Applications.IR.Construction.SumcheckProof"
 admission = "external"
-views = "ZkcExamples.Structured.SumcheckSourceViews"
+views_namespace = "ZkcExamples.Structured.SumcheckSourceViews"
+views = "Zkc.Applications.IR.Structured.SumcheckSourceViews"
 inputs = "values"
 
 [receipt]
 theorem = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness"
-security_module = "ZkcArkLibExamples.ExecutableSumcheckFiatShamir"
+security_module = "Zkc.Applications.ArkLib.ExecutableSumcheckFiatShamir"
 chain = [
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness",
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.reduced_soundness",
@@ -106,4 +119,4 @@ used = [
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Sumcheck"
-imports = ["ZkcArkLibExamples.Subjects.Sumcheck.Registration"]
+imports = ["Zkc.Applications.ArkLib.Subjects.Sumcheck.Registration"]

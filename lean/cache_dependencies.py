@@ -19,20 +19,12 @@ from support.compatibility import prepare
 import subprocess
 
 from support.lean_headers import HeaderParser
-from support.packages import PACKAGES, selected as select_packages
-
-
-ROOT = Path(__file__).resolve().parent
-# Optional packages: owned source directories and a standalone client, if any.
-INTEGRATIONS = {
-    "security": (("ZkcSecurity", "TestsSecurity"), "clients/Security.lean"),
-    "arklib": (("ZkcArkLib", "TestsArkLib"), "clients/ArkLib.lean"),
-    "clean": (("ZkcClean", "TestsClean"), None),
-}
+from support.packages import (LEAN, PACKAGES, add_selection, selection, package_modules,
+                              selected, is_owned_module, module_owner)
 
 
 def share_dependencies(main, optional):
-    """Share exact common sources/objects and keep standalone main clients usable."""
+    """Share only common Git providers with the same source identity and pin."""
     base = json.loads((main / "lake-manifest.json").read_text())
     extra = json.loads((optional / "lake-manifest.json").read_text())
     shared = {p["name"]: p for p in base["packages"] if p["type"] == "git"}
@@ -40,7 +32,9 @@ def share_dependencies(main, optional):
     for package in extra["packages"]:
         if package["type"] != "git" or package["name"] not in shared:
             continue
-        if package["rev"] != shared[package["name"]]["rev"]:
+        provider = shared[package["name"]]
+        if (package["rev"] != provider["rev"] or
+                package["url"].removesuffix(".git") != provider["url"].removesuffix(".git")):
             raise ValueError(f"incompatible shared dependency: {package['name']}")
         name = package["name"].removeprefix("«").removesuffix("»")
         source = main / base["packagesDir"] / name
@@ -75,12 +69,21 @@ def collect(headers, seeds, search):
     return sorted(mathlib), seen
 
 
+def client_sources(headers, package):
+    """Retain standalone consumers in a package that supplies all their imports."""
+    available = set(selected([package]))
+    result = []
+    for path in sorted((LEAN / 'clients').glob('*.lean')):
+        owners = {module_owner(module) for module in headers.imports(path.read_text(), path)
+                  if is_owned_module(module)}
+        if owners and owners <= available:
+            result.append(path)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--with-security", action="store_true")
-    selection.add_argument("--with-arklib", action="store_true")
-    selection.add_argument("--with-clean", action="store_true")
+    add_selection(parser)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--lake", default="lake")
@@ -90,41 +93,39 @@ def main():
     except support.lake.Unavailable as absent:
         raise SystemExit(str(absent)) from None
     lake = str(Path(lake).absolute())
-    integration = "arklib" if args.with_arklib else "clean" if args.with_clean else "security" if args.with_security else None
-    work = ROOT
-    raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
-    for name in select_packages([integration] if integration else [])[1:]:
-        work = PACKAGES[name][0]
-        share_dependencies(ROOT, work)
-        raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
-        prepare(work)
-    search = [(work / path).resolve() for path in raw.split(os.pathsep) if path]
-    seeds = [ROOT / "Zkc.lean", ROOT / "clients/Main.lean"]
-    for directory in ("Zkc", "Tests", "ZkcExamples", "ZkcTools"):
-        seeds.extend((ROOT / directory).rglob("*.lean"))
-    for name in select_packages([integration] if integration else [])[1:]:
-        directory = PACKAGES[name][0]
-        directories, client = INTEGRATIONS[name]
-        if client:
-            seeds.append(ROOT / client)
-        for family in directories:
-            entry = directory / f"{family}.lean"
-            if entry.is_file():
-                seeds.append(entry)
-            seeds.extend((directory / family).rglob("*.lean"))
-    with HeaderParser(root=work, lake=lake) as headers:
-        roots, sources = collect(headers, seeds, search)
-    # Never turn an empty selection into Mathlib's implicit "download all".
-    command = [lake, "exe", "cache", "get", *roots] if roots else None
+    packages = selection(args)
+    roots, sources, runs, resolved = set(), {}, [], []
     exit_code = 0
-    if command and not args.dry_run:
-        exit_code = subprocess.run(command, cwd=work, check=False).returncode
+    with HeaderParser(lake=lake) as headers:
+        for name in packages:
+            work = PACKAGES[name][0]
+            for provider in resolved:
+                share_dependencies(provider, work)
+            raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
+            prepare(work)
+            resolved.append(work)
+            search = [(work / path).resolve() for path in raw.split(os.pathsep) if path]
+            seeds = [*package_modules(name).values(), *client_sources(headers, name)]
+            reached, parsed = collect(headers, seeds, search)
+            roots.update(reached)
+            for path, digest in parsed.items():
+                if path in sources and sources[path] != digest:
+                    raise ValueError(f"source changed during cache root selection: {path}")
+                sources[path] = digest
+            # Each package resolves its own upstream providers. A sibling's Lake
+            # search path cannot stand in for this package's declared closure.
+            command = [lake, "exe", "cache", "get", *reached] if reached else None
+            code = subprocess.run(command, cwd=work, check=False).returncode if command and not args.dry_run else 0
+            runs.append({"package": name, "directory": str(work), "command": command,
+                         "mathlib_roots": reached, "exit_code": code})
+            if code and not exit_code:
+                exit_code = code
     drift = [path for path, digest in sources.items()
              if not Path(path).is_file() or hashlib.sha256(Path(path).read_bytes()).hexdigest() != digest]
     record = {
         "status": "pass" if exit_code == 0 and not drift else "fail",
-        "with_security": args.with_security or args.with_arklib, "with_arklib": args.with_arklib, "with_clean": args.with_clean, "dry_run": args.dry_run,
-        "command": command, "mathlib_roots": roots, "parsed_sources": sources,
+        "packages": packages, "dry_run": args.dry_run, "runs": runs,
+        "mathlib_roots": sorted(roots), "parsed_sources": sources,
         "source_drift": drift, "exit_code": exit_code,
         "scope": "cache root selection only; builds and proof audits remain separate",
     }

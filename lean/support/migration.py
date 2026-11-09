@@ -14,6 +14,9 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_path, tool_module
+
 FORMAT = 'zkc.migration-declarations/0'
 NAME_ENCODING = 'lean-name-components/0'
 AXIOM_PROVENANCE = 'resolved-constant-info/0'
@@ -58,7 +61,7 @@ def capture_records(package, modules, output):
         any(not isinstance(m, str) or not m for m in modules) or len(set(modules)) != len(modules)):
         raise ValueError('capture requires nonempty, unique module names')
     package, output = Path(package).resolve(), Path(output).resolve()
-    emitter = Path(__file__).resolve().parents[1] / 'checks/MigrationRecords.lean'
+    emitter = module_path(tool_module('program', 'MigrationRecords'))
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='migration-capture-', dir=output.parent) as temporary:
         temporary = Path(temporary)
@@ -67,7 +70,7 @@ def capture_records(package, modules, output):
             for module in sorted(modules):
                 path = temporary / 'module.jsonl'
                 path.unlink(missing_ok=True)
-                subprocess.run(['lake', 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true', '--run', str(emitter), str(path), module],
+                subprocess.run([*lean_command(package), '-DautoImplicit=false', '-DwarningAsError=true', '--run', str(emitter), str(path), module],
                                cwd=package, env=os.environ | {'LEAN_NUM_THREADS': os.environ.get('LEAN_NUM_THREADS', '2')},
                                stdin=subprocess.DEVNULL, check=True)
                 # Validate coverage and all identities before combining records.

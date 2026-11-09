@@ -1,0 +1,65 @@
+module
+
+public import Zkc.Applications.IR.NativePrograms.Schnorr
+public import Zkc.Program.Specification
+
+@[expose] public section
+
+/-! A downstream consumer adds a property without changing the compiler,
+contract, source certificate, or Python registry. The typed API is extensible;
+the bounded command-line generator deliberately has a reviewed registry. -/
+
+noncomputable section
+namespace ZkcExamples.NativePrograms.CustomProperty
+open Zkc.Verification Zkc.Source Zkc.Source.Structured
+open Zkc.Protocols.Schnorr.Common
+
+def source : Zkc.Verification.Imported check SchnorrData.snapshot :=
+  ⟨Schnorr.program, SchnorrInputs.kernel_admission⟩
+
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G]
+  [Module F G] [DecidableEq G]
+
+def denote (program : Program) : Verifier F G :=
+  fun base key service =>
+    if same : program.payload.entry.inputs = Schnorr.program.payload.entry.inputs then
+      if result : program.payload.entry.outputs = [.boolean] then
+        ((program.participant F G 1
+          (cast (congrArg (Values (Component (assignment F G))) same.symm)
+            (Schnorr.verifierInputs base key service))).bind fun values =>
+          .done ((cast (congrArg (Values (Component (assignment F G))) result) values).get .here)).interpret
+            CommonAdapter.project
+      else .halt .refused
+    else .halt .refused
+
+theorem sourceCertificate : Certificate source (denote (F := F) (G := G))
+    (VerifierContract Schnorr.wiring) := by
+  constructor
+  exact Schnorr.contract
+
+/-- An extension selects a precisely stated property, not a theorem name inferred
+from the source text. Here an invalid response equation must not accept. -/
+def rejectionProperty (base key : G) (service : Nat) (prover : Strategy F G)
+    (challenge : F) : Property (Verifier F G) where
+  assumptions _ := prover.response challenge • base ≠ prover.commitment + challenge • key
+  conclusion program :=
+    (run program base key service prover challenge).outcome ≠ .returned (some true)
+
+omit [DecidableEq F] in
+theorem rejectionConsumer (wiring : Wiring) (base key : G) (service : Nat)
+    (prover : Strategy F G) (challenge : F) :
+    Consumer (VerifierContract wiring) (rejectionProperty base key service prover challenge) := by
+  constructor
+  intro program contract different accepts
+  exact different ((contract.accepted_iff base key service prover challenge).mp accepts)
+
+/-- The generic certificate API composes source admission with a new consumer. -/
+theorem imported_rejects (base key : G) (service : Nat) (prover : Strategy F G)
+    (challenge : F) :
+    (rejectionProperty base key service prover challenge).assumptions (denote source.program) →
+    (rejectionProperty base key service prover challenge).conclusion (denote source.program) :=
+  sourceCertificate.verify (rejectionConsumer Schnorr.wiring base key service prover challenge)
+
+end ZkcExamples.NativePrograms.CustomProperty
+
+end

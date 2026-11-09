@@ -497,7 +497,7 @@ class Suite(structured.Suite):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name,default in (("compiler","build/compiler/zkc-compile"),("optimizer","build/compiler/zkc-opt"),
-                         ("reference","build/compiler/test/zkc-structured_reference-test"),("lean","lean/.lake/build/bin/structured-source"),
+                         ("reference","build/compiler/test/zkc-structured_reference-test"),("lean","lean/ir/.lake/build/bin/structured-source"),
                          ("native","target/release/participant_correspondence")):
         parser.add_argument("--"+name,type=Path,default=ROOT/default)
     parser.add_argument("--compiler-source",type=Path,default=ROOT)

@@ -7,7 +7,10 @@
 | `libraries/` | Reusable `.zkc` libraries, their public interfaces and protocol contracts |
 | `examples/projects/` | Separately authored Entries and invocation inputs |
 | `examples/relations/` | Relation data JSON |
-| `lean/` | Independent Lean research library, model-specific tools and optional integrations |
+| `lean/` | Shared formal documentation and tooling; no root Lake package |
+| `lean/program/`, `lean/ir/`, `lean/protocol/`, `lean/verification/` | Independent semantic packages with a Program → IR/Protocol → Verification dependency diamond |
+| `lean/adapters/arklib/`, `lean/adapters/clean/` | Pure upstream adapters |
+| `lean/applications/` | Concrete clients downstream of Verification and the adapters |
 | [`common/`](../../common/README.md) | Shared build inputs and project-level validation |
 | `common/unicode/` | Pinned source-name data and generation shared by C++ and Rust |
 | `common/tests/` | Native execution integration, installed consumers and documentation/build checks |

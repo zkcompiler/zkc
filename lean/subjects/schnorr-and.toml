@@ -16,17 +16,28 @@ structured = true
 construction = true
 
 [generated]
-data = "lean/ZkcExamples/Construction/SchnorrAndProofData.lean"
-bodies = "lean/ZkcExamples/Construction/SchnorrAndProofBodies.lean"
-participant = "lean/ZkcExamples/Construction/SchnorrAndProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/SchnorrAndArtifact.lean"
-artifacts = "lean/security/ZkcSecurityExamples/Subjects/SchnorrAnd/Artifacts.lean"
-claims = "lean/security/ZkcSecurityExamples/Subjects/SchnorrAnd/Claims.lean"
-interactive_data = "lean/ZkcExamples/Structured/SchnorrAndData.lean"
-interactive_bodies = "lean/ZkcExamples/Structured/SchnorrAndBodies.lean"
-interactive_views = "lean/ZkcExamples/Structured/SchnorrAndViews.lean"
+data = "lean/applications/Zkc/Applications/IR/Construction/SchnorrAndProofData.lean"
+bodies = "lean/applications/Zkc/Applications/IR/Construction/SchnorrAndProofBodies.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/SchnorrAndProofParticipant.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/SchnorrAndArtifact.lean"
+artifacts = "lean/applications/Zkc/Applications/Security/Subjects/SchnorrAnd/Artifacts.lean"
+claims = "lean/applications/Zkc/Applications/Security/Subjects/SchnorrAnd/Claims.lean"
+interactive_data = "lean/applications/Zkc/Applications/IR/Structured/SchnorrAndData.lean"
+interactive_bodies = "lean/applications/Zkc/Applications/IR/Structured/SchnorrAndBodies.lean"
+interactive_views = "lean/applications/Zkc/Applications/IR/Structured/SchnorrAndViews.lean"
 interactive_export = "lean/bridges/structured/fixtures/schnorr-and.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-and.mlir"
+
+[namespaces]
+data = "ZkcExamples.Construction.SchnorrAndProofData"
+bodies = "ZkcExamples.Construction.SchnorrAndProofBodies"
+participant = "ZkcExamples.Construction.SchnorrAndProofParticipant"
+glue = "ZkcExamples.Construction.SchnorrAndProof"
+artifacts = "ZkcSecurity.Examples.Subjects.SchnorrAnd"
+claims = "ZkcSecurity.Examples.Subjects.SchnorrAnd"
+interactive_data = "ZkcExamples.Structured.SchnorrAndData"
+interactive_bodies = "ZkcExamples.Structured.SchnorrAndBodies"
+interactive_views = "ZkcExamples.Structured.SchnorrAndViews"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
@@ -40,11 +51,11 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 [construction]
 omit = ["process_equation", "verifier_correspondence"]
 namespace = "ZkcExamples.Construction.SchnorrAndProof"
-connection = "ZkcExamples.Construction.SchnorrAndProof"
+connection = "Zkc.Applications.IR.Construction.SchnorrAndProof"
 admission = "views"
 inputs = "values"
 model = "Zkc.Protocols.Schnorr.Variants.conjunction wiring"
-model_imports = ["ZkcExamples.Construction.SchnorrAndProofModel"]
+model_imports = ["Zkc.Applications.IR.Construction.SchnorrAndProofModel"]
 
 [bodies]
 entry = "proof"
@@ -52,4 +63,4 @@ interactive_entry = "interactive"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.SchnorrAnd"
-imports = ["ZkcSecurityExamples.Subjects.SchnorrAnd.Registration"]
+imports = ["Zkc.Applications.Security.Subjects.SchnorrAnd.Registration"]

@@ -1,8 +1,8 @@
 # Module ownership and reusable installations
 
 Choose a module by the facts it depends on, not by the first protocol that used
-it. The [architecture](../architecture.md) defines the four package boundaries
-and six security responsibilities. These boundaries are enforced by
+it. The [architecture](../architecture.md) defines the package boundaries
+and their responsibility boundaries. These boundaries are enforced by
 `ZkcTools.DeclarationAudit`; Lean and Python consume the same dependency policy.
 No dependency exception is needed for the module layout.
 
@@ -10,17 +10,17 @@ No dependency exception is needed for the module layout.
 
 1. **Family mathematics.** A theorem quantifies over a field, abstract verifier,
    relation or reference calculation. Put deterministic mathematics in
-   `Zkc.Protocols`; probability and family security contracts belong in
-   `ZkcSecurity.Families`. For example,
-   `ZkcSecurity.Families.Sumcheck.Contract` imports no concrete source artifact.
+   `Zkc.Protocol.Library`; probability and family security contracts belong in
+   `Zkc.Protocol.Library.Families`. For example,
+   `Zkc.Protocol.Library.Families.Sumcheck.Contract` imports no concrete source artifact.
 2. **Source-template installation.** A theorem accepts checked definitions, a
    body-membership law, domain interpretation, representation relation or layout.
    It installs the mathematical result on that source template. Deterministic
-   Sumcheck helper equations live in `Zkc.Protocols.Sumcheck.Source`; security
-   installations live in `ZkcSecurity.Bindings.Sumcheck`. Reusable GKR encodings,
-   layout relations and round installations live in `ZkcSecurity.Bindings.Gkr`.
+   Sumcheck helper equations live in `Zkc.Verification.Installations.Sumcheck.Source`; security
+   installations live in `Zkc.Verification.Bindings.Sumcheck`. Reusable GKR encodings,
+   layout relations and round installations live in `Zkc.Verification.Bindings.Gkr`.
 3. **Concrete application.** A proof selects an exact exported payload, Entry,
-   model or claim. Put it in `ZkcExamples` or `ZkcSecurityExamples`. Generated
+   model or claim. Put it in `Zkc.Applications`. Generated
    payloads, catalogue selections and receipts are applications too.
 
 A familiar algorithm is not automatically an application. A helper equation
@@ -38,28 +38,27 @@ merely because a source template has been recognized. The
 
 ## Tools and import phases
 
-Place elaborators, tactics, printers and certificate builders in `ZkcTools` or
-`ZkcSecurityTools`. Their proof output is checked against ordinary definitions
+Place elaborators, tactics, printers and certificate builders in the owning package's `Zkc.Tools.<Owner>` root. Their proof output is checked against ordinary definitions
 and theorems owned by the reusable libraries. An ordinary law needed by both
 execution and a tactic belongs in the reusable library, not inside the tactic
 module.
 
 Lean's `public import`, `public meta import` and `import all` have distinct
 purposes. Export ordinary theorem APIs with `public import`; export tactic
-implementations with `public meta import`. An audit traversing stored private
-proof bodies must load each owning module with `import all`. A public import
+implementations with `public meta import`. A module-system audit traversing
+stored private proof bodies must load each owning module with `import all`. A public import
 of a facade does not replace this requirement. The header audit records all
 three modifiers using Lean's own parser.
 
-`ZkcSecurity.Families.Sumcheck` is a small theorem facade.
-`ZkcSecurityTools.Components` exports the component tactics. Standalone Lake
+`Zkc.Protocol.Library.Families.Sumcheck` is a small theorem facade.
+`Zkc.Tools.Verification.Components` exports the component tactics. Standalone Lake
 consumers in `lean/clients/` check both phases through real path dependencies.
 These facades expose current owners; they do not retain retired import paths.
 
 ## Module identity and declaration identity
 
 A Lean declaration's namespace and its owning module are independent. For
-example, declarations in `ZkcSecurity.Bindings.Models.PrimeField` keep their
+example, declarations in `Zkc.Verification.Bindings.Models.PrimeField` keep their
 `ZkcSecurity.Domains.PrimeField` namespace. Existing theorem identities and
 statements therefore remain unchanged without aliases.
 
@@ -68,6 +67,22 @@ Generators carry import identities and declaration identities separately:
 Lean namespace. Subject, ABI and model selections follow the same rule. A
 consumer imports the current module and refers to the existing declaration.
 There is no forwarding file under the retired module path.
+
+`Zkc.Program.Execution`, `Interpretation`, `MonadExecution` and `Interaction`
+own the shared execution declarations in namespace `PIR`.
+`Zkc.Program.Region.Context`, `Operations` and `Basic` own the generic typed
+context and Region declarations in namespace `Zkc.Source`. Concrete dialects,
+readers, operation meanings and compiler correspondence stay in `Zkc.IR`.
+The finite Process/Region core depends only on Lean/Std. Shared algebra support
+in the same package can use Mathlib; neither IR nor Protocol introduces a second
+definition of these execution carriers.
+
+Each package's `Zkc.Tests.<Owner>.LibraryImports` inventories every ordinary module
+with private bodies, and `Audit` checks its stored declarations. Independent
+command entry points have separate `CommandAudits` modules because unrelated
+global `main` declarations cannot share a Lean environment. The complete registry
+schema and consumer audit runs in Applications, where the referenced concrete
+subjects exist. Every core package independently checks axioms and dependencies.
 
 Ownership, declaration-record coverage and author-cost classification use the
 module recorded by Lean, not the declaration namespace. This matters for helper
@@ -90,7 +105,7 @@ every recovered owner must still satisfy the dependency policy.
 - Add an endpoint method above the fixed claim and operational interfaces.
   A knowledge method may justify the request's registered recovery function;
   it cannot replace that function with one chosen by evidence.
-- Add an optional library adapter in its integration package. Core and security
+- Add an optional library adapter in its adapter package. IR, Protocol and Verification
   stay usable without ArkLib or Clean.
 
 Update the package's exhaustive audit imports with

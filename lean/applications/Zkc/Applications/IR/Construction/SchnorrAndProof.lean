@@ -1,0 +1,52 @@
+module
+
+public import Zkc.Applications.IR.Construction.SchnorrAndDomainConnection
+public import Zkc.IR.Construction.ScalarVerifier
+
+@[expose] public section
+
+/-! The maintained endpoint over separate generated admission metadata and the
+checked all-reply connection of the actual Domain artifact to its source. -/
+set_option autoImplicit false
+set_option backward.isDefEq.respectTransparency false
+set_option smartUnfolding false
+namespace ZkcExamples.Construction.SchnorrAndProof
+open Zkc.Source Zkc.Source.Structured Zkc.Construction
+
+/-- The endpoint stores the same complete generic connection used by execution transport. -/
+theorem sourceConnected : ConnectionAdmission.Required program context .validator participant :=
+  SchnorrAndDomainConnection.requiredConnection
+
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+/-- Actual Domain execution with the fixed scalar ABI and oracle mapping. -/
+def compiledVerifier {m : Type → Type} [Monad m] (challenge : History F G → m F)
+    (firstBase firstPoint secondBase secondPoint : G) (initial : History F G) (proof : Proof F G) :
+    m (PIR.Outcome (Option Bool) × Proof F G) :=
+  ScalarVerifier.verify program context participant acceptancePosition challenge
+    (inputs firstBase firstPoint secondBase secondPoint) initial proof
+
+/-- All public inputs, replies, initial histories and exact unread suffixes.
+This theorem is derived from the actual artifact binding, never from admission. -/
+theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
+    (challenge : History F G → m F) (firstBase firstPoint secondBase secondPoint : G) (handle : Nat)
+    (initial : History F G) (proof : Proof F G) :
+    compiledVerifier challenge firstBase firstPoint secondBase secondPoint initial proof =
+      transform context challenge (verifier firstBase firstPoint secondBase secondPoint handle) initial proof := by
+  rw [compiledVerifier, ScalarVerifier.verify_eq_runK program context participant acceptancePosition
+    challenge (inputs firstBase firstPoint secondBase secondPoint) (SchnorrAndDomainConnection.inputs firstBase firstPoint secondBase secondPoint) (by rfl) initial proof]
+  have origin : ScalarVerifier.origin participant = Uniform.SourceProcess.legacyOrigin := by
+    funext key
+    rfl
+  have accepts (result : Domain.Result (uniformCarriers F G)) :
+      ScalarVerifier.acceptance acceptancePosition result = Uniform.SourceProcess.acceptance result.values := by
+    rw [acceptancePosition_eq]
+    exact ScalarConnection.acceptance_first result
+  rw [origin]
+  simp only [accepts]
+  have connected := SchnorrAndDomainConnection.domain_transform challenge firstBase firstPoint secondBase secondPoint handle initial proof
+  rw [SchnorrAndDomainConnection.source_equation] at connected
+  rw [verifier_correspondence]
+  exact connected
+
+end ZkcExamples.Construction.SchnorrAndProof

@@ -12,7 +12,8 @@ unchanged printer output; --fresh uses direct elaboration without replay.
 Usage, from the repository root inside the development shell, after building
 the data module:
   python3 lean/bridges/structured/bodies.py \\
-    --data ZkcExamples.Structured.SchnorrHelpersData \\
+    --data Zkc.Applications.IR.Structured.SchnorrHelpersData \\
+    --data-namespace ZkcExamples.Structured.SchnorrHelpersData \\
     --namespace ZkcExamples.Structured.SchnorrHelpersBodies \\
     [--closed] [--name DECLARATION=localName ...] --output PATH [--check]
 
@@ -29,14 +30,15 @@ import sys
 import tempfile
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common.lean_render import ROOT, CheckFailed, Runner, require  # noqa: E402
+from bridges.common.lean_render import ROOT, CheckFailed, Runner, require, source_package  # noqa: E402
 from bridges.structured import printer_build  # noqa: E402
+from support.packages import module_path  # noqa: E402
 
 LEAN = ROOT / "lean"
 
 PRINTER = r'''
-import Zkc.Source.Structured.ClosedProfile
-import ZkcTools.StructuredSource.Presentation
+import Zkc.IR.Source.Structured.ClosedProfile
+import Zkc.Tools.IR.StructuredSource.Presentation
 import {data}
 
 set_option maxRecDepth 20000
@@ -51,7 +53,7 @@ abbrev showTys := typesText
 def showRoles (roles : List String) : String := listText (roles.map quoted)
 
 #eval show IO Unit from do
-  let program ← match check {data}.snapshot with
+  let program ← match check {data_namespace}.snapshot with
     | .ok program => pure program
     | .error code => throw (IO.userError ("source admission: " ++ code))
   IO.println "ZKC_BODY_OUTPUT_BEGIN"
@@ -67,7 +69,7 @@ def showRoles (roles : List String) : String := listText (roles.map quoted)
     for (protocol, index) in program.payload.protocols.zipIdx do
       IO.println s!"def Printed.protocol{{index}} : Region protocolDialect {{showTys protocol.inputs}} {{showTys protocol.outputs}} :=\n{{regionText protocol.body}}"
     if {closed} then
-      let closedProgram ← match checkClosed {data}.snapshot with
+      let closedProgram ← match checkClosed {data_namespace}.snapshot with
         | .ok program => pure program
         | .error code => throw (IO.userError ("closed admission: " ++ code))
       IO.println s!"def Printed.root : Region dialect {{showTys closedProgram.payload.entry.inputs}} {{showTys closedProgram.payload.entry.outputs}} :=\n{{helperRegionText closedProgram.payload.entry.body}}"
@@ -194,28 +196,28 @@ def printed(output, name):
 
 def elaborate(runner, path, lake="lake"):
     """Elaborate a scratch module; on failure, show Lean's diagnostics."""
-    result = runner.run([lake, "lean", path], cwd=LEAN, expect=None, name=f"bodies:{path.name}")
+    result = runner.run([lake, "lean", path], cwd=source_package(path.read_text()), expect=None, name=f"bodies:{path.name}")
     if result.returncode != 0:
         raise CheckFailed(f"elaborating {path.name} failed:\n{result.stdout}{result.stderr}")
     return printer_build.messages(result.stdout)
 
 
-def generate(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False, inventory=None):
+def generate(data, namespace, closed=False, names=None, runner=None, lake="lake", *, data_namespace, fresh=False, inventory=None):
     """The printed bodies module of the admitted snapshot `data.snapshot`."""
-    return printed_module(data, namespace, closed, names, runner, lake, fresh=fresh, inventory=inventory)[0]
+    return printed_module(data, namespace, closed, names, runner, lake, data_namespace=data_namespace, fresh=fresh, inventory=inventory)[0]
 
 
-def printed_module(data, namespace, closed=False, names=None, runner=None, lake="lake", *, fresh=False, inventory=None):
+def printed_module(data, namespace, closed=False, names=None, runner=None, lake="lake", *, data_namespace, fresh=False, inventory=None):
     """The printed bodies module and the local names of its helpers and
     protocols, in the checked program's order."""
     runner = runner or Runner()
     names = names or {}
     # The independent checker owns the order of the typed definitions.
-    printer_inventory = PRINTER.format(data=data, views="false", closed="false")
+    printer_inventory = PRINTER.format(data=data, data_namespace=data_namespace, views="false", closed="false")
     if inventory is not None:
         from bridges.structured import snapshot
-        data_path = LEAN.joinpath(*data.split(".")).with_suffix(".lean")
-        require(data_path.read_text(encoding="utf-8") == snapshot.render(inventory.snapshot, data),
+        data_path = module_path(data)
+        require(data_path.read_text(encoding="utf-8") == snapshot.render(inventory.snapshot, data_namespace),
                 "body printer data differs from bound source inventory")
     (ROOT / "build").mkdir(exist_ok=True)
     scratch = (tempfile.TemporaryDirectory(dir=ROOT / "build") if fresh else
@@ -243,9 +245,9 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
         require(len(selected_names) == len(set(selected_names)), "duplicate body presentation name")
         require(all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name) for name in selected_names),
                 "invalid body presentation name")
-        output = evaluate("Bodies", PRINTER.format(data=data, views="true", closed=str(closed).lower()))
-    parts = [f"module\n\npublic import Zkc.Source.Structured.ProtocolOperations\n\n@[expose] public section\n\n"
-             f"/-! Literal typed bodies printed from the admitted snapshot of\n`{data}`. -/\n"
+        output = evaluate("Bodies", PRINTER.format(data=data, data_namespace=data_namespace, views="true", closed=str(closed).lower()))
+    parts = [f"module\n\npublic import Zkc.IR.Source.Structured.ProtocolOperations\n\n@[expose] public section\n\n"
+             f"/-! Literal typed bodies printed from the admitted snapshot of\n`{data_namespace}`. -/\n"
              f"namespace {namespace}\nopen Zkc.Source Zkc.Source.Structured\n"]
     for index, (name, kind, inputs, outputs) in enumerate(helpers):
         local = names.get(name, f"helper{index}").strip("«»")
@@ -273,6 +275,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", required=True)
     parser.add_argument("--namespace", required=True)
+    parser.add_argument("--data-namespace", required=True)
     parser.add_argument("--closed", action="store_true")
     parser.add_argument("--name", action="append", default=[], help="DECLARATION=localName")
     parser.add_argument("--output", type=Path, required=True)
@@ -282,7 +285,7 @@ def main():
     args = parser.parse_args()
     names = dict(item.split("=", 1) for item in args.name)
     try:
-        text = generate(args.data, args.namespace, args.closed, names, fresh=args.fresh)
+        text = generate(args.data, args.namespace, args.closed, names, data_namespace=args.data_namespace, fresh=args.fresh)
     except CheckFailed as error:
         raise SystemExit(str(error))
     if args.check:
