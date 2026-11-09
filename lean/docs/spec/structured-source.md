@@ -90,30 +90,16 @@ lexical cursor, including unnamed instructions; application and repeat callbacks
 restore their caller cursor on successful exit.
 The carrier of polynomial rows is the existing `PolynomialValue`.
 
-`NormalForm.Actions` composes per-operation `RegionMeaning.OperationLaw`s,
-callback derivations and suffix derivations into the existing `PIR.Process`.
-It performs pure substitution and retains effects and stopping prefixes.
-`OracleNormalForm.operationLaw` covers all twelve logical action signatures;
-`normalize_run` preserves values, ordered logical audit events and stopped
-poststates for arbitrary handlers. `ProtocolAlgebra.denote` consumes this residual
-normalizer. The older symbolic `NormalForm.Form` remains an ordinary-value
-presentation and refuses Oracle nodes; it is not the Oracle execution path.
-Its existing normalization and soundness claims are retained.
-`NormalForm.ActionPresentation.normalizeActions_form` proves that successful
-ordinary symbolic forms and residual action forms denote the same process,
-under every original symbolic soundness premise.
+`Zkc.Source.Structured.ProtocolAlgebra.denote` interprets the admitted body directly with `Region.denote`.
+Its ordinary-instance theorem identifies that meaning with the existing domain
+participant semantics. The residual/symbolic normalizers and their presentation
+APIs have been retired; neither is an execution prerequisite.
 
-`Imported.oracleSubject` selects the exact admitted unit. `OracleSubject.start`
-derives literal root bindings from the checked source and constructs input base
-tables from ordinary inputs and explicit row counts, beginning with an empty
-store. It checks canonical input anchors, holder data length, family and bounds;
-it accepts no installed virtual body or arbitrary initial store. Root sequence
-inputs and bindings through a lexical region bind remain located profile refusals.
-`OracleStore.Reachable` records fresh immutable insertions and capture validity
-against their actual strict older prefix. The preservation theorem covers every
-logical operation, the complete effect handler and arbitrary Process execution,
-including stopped poststates. `OracleStart.run_reachable` discharges its initial
-premise using the source-derived construction.
+The underlying Oracle operation and store meanings remain. The former canonical
+Oracle-subject selector, common-coordinate certificate and generated subject
+pipeline are retired. Complete source-root and generated-controller installation
+must be established by the new common path before an actual protocol root is
+claimed. An available operation meaning is not that complete connection.
 
 ### Effectful provider interpretation
 
@@ -127,8 +113,8 @@ including stopped poststates, query counts, source cursors and ordered events.
 
 Each external reply carries its complete provider execution record. This internal
 representation retains state and events from failed calls, whose continuation an
-ordinary `Process.call` would skip. The wrapper is not a public transcript.
-`sourceRunM_envelope` identifies the monadic source API with generic `Process.runM`;
+ordinary `PIR.Process.call` would skip. The wrapper is not a public transcript.
+`sourceRunM_envelope` identifies the monadic source API with generic `PIR.Process.runM`;
 outer totality proves that unwrapping cannot discard a source stop or use a fallback.
 A monad's own failure or missing probability mass remains an outer effect. The
 source API requires an `OracleStart` of the exact selected `OracleSubject`.
@@ -146,7 +132,7 @@ action. It does not assume a coupling of whole source runs.
 
 Provider invariants use Lean's `Std.Do.Internal.Ensures`, a proof-carrying
 postcondition whose refinement erases through every continuation. `OracleProviderFrame`
-proves local preservation through the existing source presentation and `Process.runM`.
+proves local preservation through the existing source presentation and `PIR.Process.runM`.
 The conclusion constrains every returned complete execution record, including source
 stops and their poststates; it does not require the outer monad to return a result.
 `Zkc.MonadicPostcondition` supplies erasure construction and continuation transport,
@@ -162,7 +148,7 @@ return-or-stop equation. `BodyIn` fixes which declaration in the retained depend
 table has that body. The installer cannot substitute a different helper because it
 has the same name, output or intended mathematics.
 
-`ReferenceLaw.invokeOracleConcrete` transports that same law into the selected
+`Zkc.Source.Structured.ReferenceLaw.invokeOracleConcrete` transports that same law into the selected
 unit's lazy helper table. Its premises are the actual dependency table's linkage,
 ordinary-Math fragment certificate, exact `BodyIn` association and the law's original
 mathematical preconditions. Its input boundary consists of concrete values; lazy
@@ -170,71 +156,19 @@ oracle handles elsewhere in the enclosing protocol do not change those premises.
 The conclusion is a free-process equation, so later provider choices preserve all
 stops. No second Oracle-specific mathematical law is required.
 
-For repeats, `ProtocolLoopPresentation.present` reuses the existing counted-fold
+For repeats, `Zkc.Source.Structured.ProtocolLoopPresentation.present` reuses the existing counted-fold
 invariant theorem. A companion supplies its mathematical state representation,
 invariant, one body equation and invariant preservation. The library instance supplies
 the iteration wrapper; the source connection supplies role masks, actual count,
-maximum and initial-state association. `OracleProtocol.iteration_eq` identifies that
+maximum and initial-state association. `Zkc.Source.Structured.OracleProtocol.iteration_eq` identifies that
 wrapper with the existing enter/leave effects. A stopped body never acquires a leave
 event. These laws establish correspondence and can be reused by completeness and
 security proofs; a protocol's probability bound still needs its own mathematical
 argument and provider assumptions.
 
-### Common-coordinate selection
-
-`Imported.oracleSubject` additionally requires a `CommonCoordinate.UnitCertificate`
-for every stored protocol and role pair, including dormant definitions. The bounded
-proposer reads the actual typed Region, substitutes ordered application operands
-and role maps, and introduces separate lexical repeat-counter binders. It uses
-existing `NormalForm.Term` values, with no supplied helper-law interpretation or
-semantic equality callback. Availability continues to check presence and scopes;
-it no longer decides coordinate agreement. Raw per-role functions remain available
-outside this canonical subject profile and retain their exact original behavior.
-
-The supported coordinate slice contains index literals, the actual reached repeat
-counter, common ordinary index inputs, restriction, and the listed total index
-word calculations. Word arithmetic keeps its modulo-2^64 meaning. A no-overflow
-or sequence-range conclusion needs separate bounds. Calls substitute actual
-parameters into their checked bodies. Call results and carried repeat state are
-unknown in this profile; equality of their initial values is insufficient.
-Local results, received values, service replies and role assembly cannot supply
-multi-role coordinate provenance. Single-role selection retains its local meaning.
-The refusal diagnostic names the exact definition and structural instruction row.
-
-The certificate inventory requests full value observations of actual source input
-ports and names actual counter binders under their lexical application paths.
-It does not replace a value observation with an extent, tag, nominal type or host
-carrier. Runtime input agreement is an explicit premise, never a consequence of
-admission. Counter observations require the same reached structural application
-and repeat prefix. Both-reached agreement does not equate loop counts, prove
-progress, discard earlier work, or justify continuing after any stop.
-
-Source-prefix readback follows successful paths of the actual optional-value
-operation processes. It preserves argument order, call input masks and repeat
-captures, and reads the certified term back from the coordinate operand at that
-reached source operation. `RootPlan.reached_agreement` starts from actual root
-input components and a finite `Prefix` derivation for each role. Both derivations
-end at the same checked operation and dynamic application/iteration boundary list;
-they need not have equal external replies or loop counts. `rootFrame_process`
-connects the initial frame to the existing normalized Oracle function process.
-The common-observation premise is exactly `coordinateDemands` of the checked
-operand. `Selection.demanded_requirement` proves that the reported inventory
-does not discard any demanded typed binder. Unknown symbolic entries make no assertion about value
-presence. A missing runtime value remains missing. This coordinate result neither
-pairs independently ordered data/handle families nor equates holder data, virtual
-captures or provider answers. Those relations require separate source association
-and honest-delivery or authentication obligations; an adversarial security theorem
-must not assume an honest peer coordinate.
-
-The complete scalar/block FRI source and wrapper snapshots pass structural admission
-and canonical Oracle-subject selection, including their distributed declarations.
-These executable admission controls do not themselves install a kernel-checked FRI
-root constant or prove its security. Source-to-constructed simulation and commitment
-realization remain separate connections. Logical audit events are not a public transcript.
-
 ## Checked subject
 
-`Structured.Snapshot` retains source identity, selected entry, all domains,
+`Zkc.Source.Structured.Snapshot` retains source identity, selected entry, all domains,
 relations, bindings, definitions and protocol contracts, exact function kinds, per-protocol rosters and port
 scopes, visibility, origins, preconditions, sites and ordered operands/results.
 There is one strict wire schema. The reader rejects unknown tags, extra
@@ -283,7 +217,7 @@ exact signature/purposes and the absence of a formula link. Formula and captured
 row against a registry fixed before evidence, including unused declarations.
 `ContractMeaning` and `DomainContract` consume this environment. Their predicates
 are derived from lookup rather than supplied independently by evidence;
-`Binding.unique_meaning` and `RegisteredRelations.meanings_exact` prove the exact
+`Binding.unique_meaning` and `Zkc.Source.Structured.RegisteredRelations.meanings_exact` prove the exact
 adapter law. Structural `check` alone does not supply registered meaning or a
 security theorem. Formula helpers and captured assets retain their own meaning
 owners. A caller must supply its actual family registry and any protocol theorem.
@@ -341,7 +275,7 @@ not reproduce the native static-identity registry.
 Generated source aliases retain the Local/protocol distinction. Their names
 hex-encode canonical tagged JSON arrays, preserving every constructor, nominal
 kind and argument position without using `Repr` as identity. Protocol selectors
-come from the actual admitted `UnitPayload.protocols` dependency order, and
+come from the actual admitted `Zkc.Source.Structured.UnitPayload.protocols` dependency order, and
 generated associations select `imported.program.payload.protocols`; Local
 selectors continue to use the checked helper table. The generated symbol and
 raw-origin equations establish metadata association only. The source body's
@@ -353,7 +287,7 @@ with no clauses. Missing, duplicate and non-protocol owners are refused.
 `ContractAdmission` checks all clauses, including dormant components: clause
 names, input/output direction, relation ABI, available role-local selectors,
 residuals and Boolean decisions. Admission infers no property or theorem from
-the presence of a clause. The [verification specification](verification.md#structured-contracts)
+the presence of a clause. The [verification specification](verification.md)
 defines the independent semantic interpretation and proof obligations.
 
 `check` resolves kinds, signatures, exact bound provenance, capture forwarding,
@@ -404,7 +338,7 @@ and it does not normalize admission of the whole unit. `BodyIn.perm` transports
 association across a declaration permutation; valid linking of the reordered
 calls is a separate obligation.
 
-`checkFormedPayload`, provided by the `Structured.ModelAdmission` module, is an
+`checkFormedPayload`, provided by the `Zkc.IR.Source.Structured.ModelAdmission` module, is an
 opt-in bounded checker returning the same `UnitPayload` without native
 application-expansion budgets. It retains stored-source limits, role and
 service rules, linking, availability, effective-site identity and that traversal's
@@ -468,13 +402,13 @@ passed to helpers or used in statements. Same-owner aliases are legal;
 executable alias validation precedes root masking. Service independence or
 uniform sampling does not follow from handle identity.
 
-`UnitPayload.available` records `checkUnitAvailability ... = .ok ()`, which is
+`Zkc.Source.Structured.UnitPayload.available` records `checkUnitAvailability ... = .ok ()`, which is
 computational admission evidence. Denotation alone never licenses admission.
 
 ## Domain catalogue
 
 Every identity a unit names resolves against catalogue rows
-(`Structured.Catalogue`): the field and group identities of types and
+(`Zkc.Source.Structured.Catalogue`): the field and group identities of types and
 operations, binding roots, map fields and random-service contracts. Admission
 never compares an identity with a fixed name. The last envelope slot is
 `[nominal-rows, service-rows]`, the rows of the identities the unit uses, with
@@ -482,7 +416,7 @@ the spelling and meaning of the [native export contract](../../../docs/spec/form
 A nominal row is `["nominal", identity, sort, members, capabilities, modulus]`
 and a service row is `["service", contract, sampled-field, methods]`.
 
-`Catalogue.check` applies the rules of the native catalogue constructor to the
+`Zkc.Source.Structured.Catalogue.check` applies the rules of the native catalogue constructor to the
 exported rows: identities are valid and unique; a modulus appears only on a
 field row and is at least two, and the decoder reads it as a canonical decimal
 string of at most 1024 digits; members
@@ -496,7 +430,7 @@ prime field and for an extension alike. No rule assumes a characteristic: a
 characteristic-two prime field and an extension field without `PrimeField` are
 well-formed rows.
 
-`Catalogue.agrees` requires every exported row to equal the installed row for
+`Zkc.Source.Structured.Catalogue.agrees` requires every exported row to equal the installed row for
 its identity. The installed rows are generated from the catalog's declarations
 into `InstalledCatalogue.lean`, one definition per domain row and random
 service, with each service's methods those its sampled field's capabilities
@@ -524,7 +458,7 @@ whose challenges constructed participants draw: `merlin3.bls12-381.fr64be/0`,
 whose `ChallengeField` is the BLS12-381 scalar field, and
 `merlin3.koala-bear.ext8-binomial3.rejection31le/0`, whose `ChallengeField` is
 the KoalaBear octic extension, with their capability facts in native order
-([constructed programs](fiat-shamir.md#constructed-programs)). A suite row is
+([constructed programs](fiat-shamir.md)). A suite row is
 metadata; its sponge, encoding and decoder belong to the model that interprets
 it.
 
@@ -544,7 +478,7 @@ sort instance outside the environment; `structured-field-canonical` for a
 constant at or above the modulus; and `structured-service-contract` for
 services.
 
-`Catalogue.Justified` states the data facts that meanings rely on: the modulus
+`Zkc.Source.Structured.Catalogue.Justified` states the data facts that meanings rely on: the modulus
 of a field row is prime, and the modulus of a `CharacteristicNotTwo` row is not
 two. `blsCatalogue_justified` proves it for the BLS subcatalogue, with the
 BLS12-381 scalar modulus prime by a Lucas certificate whose modular powers the
@@ -629,13 +563,13 @@ characteristic, a prime field or a particular identity. Which identities exist,
 which pairs are related and which laws a theorem may assume are facts of the
 catalogue rows that admission checks.
 
-The evaluator over models (`Primitive.evaluateOn`, `Evaluation.operationOn`,
-`Evaluation.meaningOn`) gives each field operation the ring of its own field
+The evaluator over models (`Zkc.Source.Structured.Primitive.evaluateOn`, `Zkc.Source.Structured.Evaluation.operationOn`,
+`Zkc.Source.Structured.Evaluation.meaningOn`) gives each field operation the ring of its own field
 identity, each group operation the group of its own group identity and scaling
 the model's action of the named field on the named group. The nominal operation
 `Op.fieldEmbed extension base` takes `[.field base]` to `[.field extension]`
 and applies `model.embed extension base`. Its direct descriptor is
-`["field.embed", extension, base]`. Admission calls `Catalogue.requireEmbedding`:
+`["field.embed", extension, base]`. Admission calls `Zkc.Source.Structured.Catalogue.requireEmbedding`:
 the extension must have `ExtensionField` and `Field`, the base must have `Field`,
 the extension's `BaseField` member must name that exact base, and both rows must
 carry the same present modulus. Algebraic embedding laws remain separate from
@@ -646,7 +580,7 @@ by its own embedding function. Helper tables,
 component tables (`ComponentTablesOn`), the participant interface and site
 observations (`participantInterfaceOn`, `ObservedActionOn`), protocol
 operations, retained repeats, protocol tables and participant views
-(`protocolOperationWithOn`, `Program.participantOn`), and relation and contract
+(`protocolOperationWithOn`, `Zkc.Source.Structured.Program.participantOn`), and relation and contract
 interpretations (`RelationInterpretationOn`, `ContractInterpretationOn`) are
 defined over carriers or models in the same way. Definitions that only name
 values take carriers; definitions that compute take a model.
@@ -656,19 +590,19 @@ G` reads every field identity as `F` and every group identity as `G`, and
 `ringModel F G` adds the instance structures, the module action of `F` on `G`
 for every pair and no inverse. `assignment F G` and `(uniformCarriers F G).Value`
 share one case analysis and are equal by reducible unfolding. Primitive
-evaluation is the exact ring-only specialization of `Primitive.evaluateOn`.
+evaluation is the exact ring-only specialization of `Zkc.Source.Structured.Primitive.evaluateOn`.
 Equations also relate the uniform structural definitions to their generic
-versions at the uniform model: `Primitive.evaluate_eq_evaluateOn`,
-`Evaluation.operation_eq_operationOn`,
-`Evaluation.componentOperation_eq_componentOperationOn`,
+versions at the uniform model: `Zkc.Source.Structured.Primitive.evaluate_eq_evaluateOn`,
+`Zkc.Source.Structured.Evaluation.operation_eq_operationOn`,
+`Zkc.Source.Structured.Evaluation.componentOperation_eq_componentOperationOn`,
 `protocolOperationWith_eq_protocolOperationWithOn` for every effect interface,
-`UnitPayload.plainProtocolTable_eq_plainProtocolTableOn`,
-`Program.participant_eq_participantOn`, and the `toOn` readings of relation
+`Zkc.Source.Structured.UnitPayload.plainProtocolTable_eq_plainProtocolTableOn`,
+`Zkc.Source.Structured.Program.participant_eq_participantOn`, and the `toOn` readings of relation
 environments and interpretations with the same truth of every application. The
 uniform site-observation interface is its own inductive type; `observedToOn`
 translates it, and the observed views agree after that translation.
 
-`Evaluation.denote_inverse_free` transfers denotations between models that
+`Zkc.Source.Structured.Evaluation.denote_inverse_free` transfers denotations between models that
 differ only in the inverse, under the explicit premise that each stored
 operation has `Op.usesInverse = false`. Inverse, interpolation, folding and
 opening operations can violate that premise; there is no universal
@@ -683,7 +617,7 @@ values, the fixed FRI and STARK numerical operations, exact field literals,
 optional capability laws and the distinction between logical u64 bounds and
 native allocation policy.
 
-`Evaluation.inline_invoke` replaces a helper invocation by
+`Zkc.Source.Structured.Evaluation.inline_invoke` replaces a helper invocation by
 `Region.bind (body.rename arguments.get) next` under an explicit equation
 between lookup and body denotation for every actual argument tuple. It applies
 to the shared scalar/group evaluator, any effect interface and site observations.
@@ -691,7 +625,7 @@ Binding retains ordered helper results above the caller environment. Equality
 concerns the complete `PIR.Process`: a stopping body bypasses the suffix, and a
 returning body runs that same suffix, including its stops. Empty result lists
 are supported. The premise is a process equation, not a totality assumption.
-The closed `Structured.inline_invoke` wrapper and `Payload.inline_body_view`
+The closed `Zkc.Source.Structured.inline_invoke` wrapper and `Payload.inline_body_view`
 reuse this law, exact declaration membership, linking and table-frame laws.
 
 `Descriptor.multilinearRestrictPrefix` reads the exact two-slot wire descriptor
@@ -765,7 +699,7 @@ Static admission keeps every permission to one use:
   permission; local calls and applications carry permissions at their holder.
 
 Three theorems justify the erasure on admitted bodies
-(`Zkc.Source.Structured.CustodySoundness`). `custody_erasure`: the erased
+(`Zkc.IR.Source.Structured.CustodySoundness`). `custody_erasure`: the erased
 meaning is the checked meaning with its custody requests interpreted away
 (`PIR.Custody.forget`). `Region.custodySound`: on a custody frame whose
 available custody inputs are distinct live entries of the holder, the checked
@@ -829,11 +763,11 @@ for `vector.equal`.
 | `field.embed` | field:base | field:extension |
 
 For `field.embed`, the sole binding argument is the extension identity. Its
-`BaseField` member selects the base, and `Catalogue.requireEmbedding` validates
+`BaseField` member selects the base, and `Zkc.Source.Structured.Catalogue.requireEmbedding` validates
 the pair, including for unused bindings. The Local `exec` descriptor lowers to
 `Op.fieldEmbed`, preserving the source observation site through the usual
 lowering. No additional primitive interpreter or wire record is introduced.
-`Construction.Calculation.fieldEmbed` maps to this same operation; constructed
+The former constructed-calculation adapter is retired. Native
 participant rendering recognizes `exec.apply` with the `field.embed` contract
 and ordered base/extension ports. Its implementation field must be the empty
 string: an explicit implementation or a malformed field refuses the export,
@@ -1084,7 +1018,7 @@ query and Local-call sites share the resulting namespace; helper internals do
 not enter it. Limits are 100000 visits, stack depth 64 including the root,
 4096 UTF-8 bytes per generated label and 16 MiB cumulative rendered labels.
 These checks are independent of self, input values, replies and observer capacity.
-The collision collection is `ApplicationMetadata.SiteSet`, a standard balanced
+The collision collection is `Zkc.Source.Structured.ApplicationMetadata.SiteSet`, a standard balanced
 set with an exposed ordinary less/equal string comparator. Empty and insertion
 laws preserve exact duplicate membership; module-level kernel controls ensure
 concrete admissions can reduce without importing private library bodies.
@@ -1197,7 +1131,7 @@ nested callback; signature equality alone is insufficient.
 
 ## Participant meaning and observations
 
-`Program.participant` interprets the selected root for a chosen roster index.
+`Zkc.Source.Structured.Program.participant` interprets the selected root for a chosen roster index.
 Input scopes mask supplied values before evaluation; output scopes filter
 returned values after all work. Shared scopes do not equate participant copies.
 `Participant.exchange` sends and retains the sender's value, receives an
@@ -1212,7 +1146,7 @@ not used for protocol dispatch.
 
 `Op.mark` and `ProtocolOp.mark` retain internal site observations before protocol/Local
 instructions and explicit Local stops. Math bodies do not insert marks; their
-source operations have no nonempty stop sites in the admitted profile. `Program.observed` exposes these to the
+source operations have no nonempty stop sites in the admitted profile. `Zkc.Source.Structured.Program.observed` exposes these to the
 scripted observer. `forgetSites` erases only those observations to obtain the
 ordinary participant process; `PIR.Stop` itself does not carry a site. Provider
 requests, replies and stops remain ordered. Internal marks consume no scripted
@@ -1231,249 +1165,26 @@ callback tuple and refuses earlier with `structured-protocol-region`, including
 maximum zero. A selected body free of applications and repeats retains its
 closed projection even if other dormant protocol declarations contain them;
 the projected body is independent of the unused table.
-`Program.participant_direct` derives the plain interpreter from the observed
+`Zkc.Source.Structured.Program.participant_direct` derives the plain interpreter from the observed
 one through generic operation, Region and table-fold interpretation laws.
-
-`CommonAdapter` embeds the Common effect fragment and proves that
-projection after embedding preserves the entire process. Projection of extra
-index/vector/product/sequence messages refuses explicitly. Concrete contract use must establish
-that its actual process lies in the supported fragment; the adapter supplies no
-relation binding or security assumption.
-
-## Checked source connections
-
-`ConnectionRoot.RootCertificate` is indexed by an admitted structured program,
-a construction routing, a source role and an actual constructed participant.
-Its fields contain finite input/output layouts, a reachable source library,
-the existing instruction correspondence and an `Alignment` derivation. The
-shared `RootCertificate.simulation` theorem produces `Original.Simulation`
-against the actual `Domain.participant`. It quantifies over nominal domain
-models, all physical input rows, typed external replies and stopping outcomes.
-Malformed input rows refuse; they do not acquire invented source values.
-
-The return relation is `Original.CompleteReturns`. It retains the entire
-role-visible nominal result row, its sorts and arity, the selected profile
-history and the empty root occurrence stack. Acceptance is a later projection
-of that relation. Each physical checkpoint retains the input frame and the
-source components decoded by the input ABI.
-
-The simulation is relative to the certificate's explicit source input ABI.
-Scope preservation alone does not fix the order of visible public inputs or
-require every visible component to be present. The common generator derives
-source-order data locations and service associations from the source signature.
-`SourceConnection.Connected` requires equality with `canonicalABI`, which fixes
-the source-order input selection for the actual role and artifact.
-`ConnectionAdmission.Required` selects that ABI and routing from the subject,
-context and mode before accepting a connection proof. A low-level root
-certificate alone does not discharge this independently fixed admission boundary.
-
-`RootCertificate.facts` supplies three consequences of the same certificate:
-the exact source equation before construction, full simulation and reached-action
-coverage of the occurrence source. Coverage is a separate induction over the
-alignment derivation, before a missing route could turn construction into a
-refusal. It is not inferred from a simulation of two refusing processes, and
-it is not an additional protocol-author obligation.
-
-### Source libraries and symbolic composition
-
-A `ConnectionLibrary.SourceTemplate` fixes an actual declaration, its complete
-signature, role, input pattern and checked normalization. The library contains
-reachable declaration/role pairs in dependency order. The common proposer
-finds these from typed applications, including applications under repeats;
-author code supplies no declaration indices, per-call slot maps or reduced
-source process. Helpers execute their actual admitted bodies. Mathematical
-reference equations remain separate library laws.
-
-Library construction runs the existing normalizer in compiled Lean meta code
-and prints its result with the existing literal printer. It reduces the closed
-input data first; proposal generation does not repeatedly unfold the complete
-normalizer call in the elaborator. The resulting `SourceTemplate` retains the
-same kernel-checked normalization equation, call identities, role and visibility
-obligations. Native evaluation supplies no proof or admitted equation. Normalized
-bodies and the checked template records are shared through ordinary declarations.
-
-An application derivation checks a finite prefix of the actual flat target,
-its physical extent, every projected result and the caller continuation.
-A repeat checks its body/header interface with a symbolic count; no runtime
-iteration count is unrolled. The same constructors serve producer and validator
-roles, plain delivery, Fiat–Shamir delivery and supported private services.
-Unknown shapes refuse rather than become semantic assumptions.
-
-`ConnectionTargetPlacement.CheckedBody` supports a body checked once with
-placement parameters. It retains the existing alignment and physical-extent
-judgments, indexed by the exact library entry and selected earlier library.
-Its `Placement` fixes typed inputs, caller layout, static application context,
-symbolic dynamic frames, selected returns, output/history locations and actual
-target prefix. A registered family can admit different physical offsets,
-input read aliases and enclosing scopes through finite typed readbacks and
-occurrence checks. Fresh writes and immutable captures follow the original
-alignment rules. The existing substitution and frame-renaming laws retain their
-authority; this adds no semantic callback or alternative simulation rule.
-
-The proposer matches all those indices and supplies the shared family's
-alignment and extent projections to the existing `application` or
-`applicationRetainedHistory` constructor. It separately checks exact source-entry
-identity because equality of normalized forms is insufficient. The family body
-is referenced, rather than re-created at each occurrence.
-
-With `zkc.connection.generateReusableBodies`, the first actual placement supplies
-untrusted constructor choices. The proposer generalizes its finite layout,
-arguments, occurrence context and return selection, then checks a new open body
-against the existing alignment rules. Only this checked declaration is installed;
-the concrete trial body is not retained as evidence. Nested applications refer
-to the checked child family, using that same value for alignment and extent.
-There is no protocol-name dispatch or historical-root input.
-
-Every parameter of the closed family type is audited before installation and
-use. Parameters may contain finite typed syntax and the existing structural
-readback/routing certificates. The exact source entry, routing, selected earlier
-library and actual placement context may be indexed owners. Arbitrary propositions,
-function/process equalities, semantic callbacks and hidden proposition containers
-are refused as telescope parameters. Finite equations additionally undergo a
-bounded inspection of computation dependencies through transparent wrappers;
-the controls reject classical proposition reflection, including reflection hidden
-in Boolean or natural-number results. Compiled computations, runtime primitives,
-typed syntax and the fixed indexed owners are explicit inspection boundaries.
-This policy does not classify all possible encodings into finite data or trace
-the provenance of plain finite parameters. The kernel checks the complete family
-application independently of this authoring policy.
-
-`zkc.connection.requireReusableBodies` refuses an application if a matching
-family cannot be checked. Once an exact entry has an installed family, a
-mismatching placement cannot silently fall back to reconstructing its body.
-A different source entry requires its own checked association. The strict tests
-cover nonempty transitive calls, repeated placements separated by a target
-calculation, nested symbolic loops, read-only aliases and retained current
-history. Negative controls change operand sorts, required cells, history suites,
-pins and transitive libraries. These tests check correspondence and reuse;
-cryptographic properties remain separate consumers.
-
-Internal applications carry a finite typed return selection. The
-`ConnectionReturnProjection.form_denote` theorem proves that projecting a
-callee changes only its successful return leaves: sends, queries, helper and
-partial calculation invocations, reached stops, nested applications and repeat
-callbacks remain unchanged. An omitted pure returned expression needs no
-physical cell. Each selected component still requires exact nominal readback.
-The application also checks the finite syntax equality
-`continuation selection next = next`. The shared `bind_continuation` theorem
-then proves composition with the actual caller for every model and typed reply;
-no semantic equation is assumed from an author. The ordinary library template
-and full nominal signature stay shared by reference. Root return relations,
-ABI assembly and independent route coverage remain complete and unchanged.
-
-A returned history occupies either a fresh cell separate from selected data
-outputs, or a checked incoming current-history cell disjoint from those outputs.
-The latter case still checks the exact suite, returned history and immutable
-caller captures. Layouts keep one logical designation per physical cell, so an
-alias-sensitive continuation may still be refused. Return selection supports
-any finite subset whose substitution passes the syntax equality; it does not
-prove algebraic equivalence of different continuations. The simple helper rules cover a return projection or one total primitive with
-present or statically absent operands. A multi-step Math body uses the checked
-region alignment described below; arbitrary helper inlining is not claimed. These are
-proposer/derivation coverage limits, not restrictions added to the theorem's
-runtime quantifiers.
-
-Normalized source syntax and templates are checked constants. Compatible
-argument, frame, SSA and occurrence placements use the same checked family,
-with finite interface facts discharged at each use. This is a checked
-parameterized body, rather than an arbitrary relocation theorem for every
-closed certificate. The proposer may cache closed syntax or discover a prefix
-from residual target syntax. Those hints do not authorize evidence: the ordinary
-alignment, extent, readback and continuation rules check every accepted proposal.
-
-The pure input-layout and routing proposal functions belong to the core
-construction package because generated certificate types can mention them.
-They confer no authority without the checked certificate fields. Meta-level
-search and printing remain in the tooling package. Auxiliary declarations use
-Lean's ordinary expression-sharing operation before `addDecl`; their types and
-values still receive the same kernel checks.
-
-### Property consumers and remaining admission
-
-The security package derives public source reading, observation coherence,
-full-value transport and selected acceptance agreement from a root certificate.
-Its public Fiat–Shamir reading requires the selected replacement profile and
-no local service routes. Runtime simulation and sampled honest-pair consumers
-have their own interfaces and premises. A connection alone supplies neither
-soundness nor successful honest execution, a sampling law, an extractor law or
-a security receipt.
-
-`Construction.checkCompiled` checks transcript construction and exact source
-occurrences. The unproved projection walker has been removed. Receipt admission
-requires `ConnectionAdmission.Required` separately, with its canonical source ABI
-and routing fixed before proof selection. Missing connection evidence keeps the
-claim open. The typed root certificate is the default proof method; a direct
-proof of the same fixed proposition remains admissible. See
-[the correspondence contract](participant-projection.md).
 
 ## Mathematical reference installation
 
 A reference library supplies formulas and dependency laws separately from the
 source connection. `BodyIn` associates a complete nominal helper signature and
-its exact typed body with an admitted source definition. The optional
-`infer_reference_installation` proposer fills finite library-binding data and
-constructs ordinary body-association proofs. It does not supply a mathematical
-law or change a requested relation. A source-selected relation can anchor the
-association record so two matching helper chains cannot be confused. Shared
-library theorems then consume that record for the actual helper table.
-
-Search may refuse. An incomplete association record, an unbound data field or a
-rigid body mismatch does not create an assumption. Records that require a
-premise instead of a body association are outside this proposer. A completed
-association that leaves data undetermined is refused without enumerating other
-witnesses for that partial interface. This is an authoring diagnostic, not a
-completeness claim about inference. The kernel checks successful installations;
-receipt meaning, stage links and security proofs retain their separate owners.
-
-## Participant normal forms
-
-`Structured.NormalForm.normalize` computes one role's form of a typed protocol
-body by symbolic evaluation under the participant rules above. A form lists the
-role's ordered sends, receives and queries; presence splits on an optional
-input or on a component of a returned tuple, where an operation first needs it;
-guards on equalities, including arbitrary Boolean conditions compared with
-`true`; exact Math invocations on optional components; kept helper invocations
-and helper laws; repeats
-of callback regions; and callee applications at child contexts. It ends in
-returned components or a stop. Every step is structural, and a body outside the
-fragment is refused with a named reason. A form is indexed by a signature: the
-helper laws it may use, keyed by the helper's sorts and pinned to inputs or
-literals, and the callee forms it may apply, keyed by callee signature and role.
-
-A Math call can use a checked passing law on components. Otherwise `Form.math`
-invokes the exact component helper table and binds its optional output tuple.
-It neither sequences all operands before the call nor infers a law from the
-helper's name. A closed returning or stopping law is insufficient to replace
-this component invocation. Absent inputs, ignored inputs, stops and events
-therefore follow the existing component meaning. An arbitrary present Boolean
-guard uses `Equality.boolean`; false rejects and an absent condition stops as
-incomplete. No premise asserts that a helper result or received Boolean is true.
-
-`NormalForm.normalize_soundOn` proves this equation for arbitrary action
-interpretations and iteration observations. Actual source call sites and dynamic
-repeat coordinates are retained in that interpretation. `normalize_sound` is its
-silent-observation specialization: when normalization returns a form whose law
-uses call their laws' own helpers (`CallsMatch`), the body's participant process
-at the role is the form's process, in every model, for
-every context whose mapped roster roles are distinct from the role
-(`RosterDistinct`), on every input the pattern describes, under every helper
-table whose invocations satisfy the signature's laws (`LawsHold`) and every
-protocol table whose invocations of the signature's callees are the given
-callee processes (`CalleesHold`). `sound_uniform`, `callback_sound_uniform` and
-`participant_sound_uniform` restate it for the uniform participant meaning, for
-a repeat callback's carried state and for an entry's `Program.participant`.
-Each generated participant normal form is an instance: the kernel checks by
-evaluation that the normalizer returns the printed form and that the form's
-process is the readable one.
+its exact typed body with an admitted source definition. A library theorem can consume checked body association under its declared
+mathematical premises. This is not automatic installation of a law on arbitrary
+source. The former source-specific proposer and assembly route are retired;
+actual-source association through the common constructor remains open.
 
 ## Component declaration context
 
-`SourceDeclarations.check` admits the last structured-source slot against all
+`Zkc.Source.Structured.SourceDeclarations.check` admits the last structured-source slot against all
 protocol headers and their retained contracts. It reconstructs only the bounded
 source layout fragment in the [shared wire specification](../../../docs/spec/formats/structured-source.md#retained-source-declarations).
 It does not infer linearity from a Boolean/field carrier or invent missing
 source/static declarations. `Import.checkUnitHeaders` runs this check before
-body admission. `DeclarationFormat.decode` reads only the current three-table
+body admission. `Zkc.Source.Structured.DeclarationFormat.decode` reads only the current three-table
 carrier `[records, protocols, authorities]`; the former two-table carrier and
 old ten-slot snapshots have no compatibility reader. `checkShape` also checks
 directly constructed data: exact nominal coverage (including phantom and
@@ -1483,7 +1194,7 @@ are not recomputed from source bytes; frontend correspondence remains a named
 trust boundary. Protocol rosters and record telescopes have separate limits,
 currently 1,024 each; the roster bound also applies in semantic admission.
 
-`SourceDeclarations.leaves` reconstructs each port's ordered leaves: what each
+`Zkc.Source.Structured.SourceDeclarations.leaves` reconstructs each port's ordered leaves: what each
 holds (data of an exact type, or the custody permission of a closed resource
 record), and its path of field names, array positions and tuple positions. A
 record's fields expand in declaration order after its custody prefix when it is
@@ -1530,103 +1241,3 @@ coverage of every linear port, consistently across each closed source type.
 `EntryContractBinding` separately requires the actual selected root, its unique
 named target statement and the target's exact acceptance output. Component
 association does not supply that binding or prove its relation.
-
-## Pointwise role assembly
-
-`assemble` selects, at each named role, that role's component of its ordered
-operand. Components at different roles may differ. Admission requires a nonempty
-list of distinct known roles, one operand of the exact result type per role,
-availability of that component, no site and an ordinary data type. An unselected
-component cannot suppress the selected component. Outside the selected roles the
-result is absent; a selected absent component stays absent.
-
-`ProtocolOp.assemble`, the Domain participant meaning and NormalForm normalization
-share this rule. Assembly adds no effect or outcome check. The existing
-`normalize_soundOn` and `normalize_occurrence_sound` theorems preserve the full
-process, including surrounding effects and stops, with the same roster premises.
-The current connection route and return machinery consumes that normal form;
-internal checked partial return selection and complete root returns are unchanged.
-Product construction and projection follow the native Math/Protocol profile and
-retain ordinary availability checks. No deleted projection walker is involved.
-
-### Mathematical region admission and constructed regions
-
-The Math descriptor `data_branch` lowers to the existing typed Boolean branch.
-Both closed arms are formed; bound facts travel through their explicit captures.
-Availability summarizes both arms and adds selector dependencies to intermediate
-requirements and results. The region interpreter evaluates only the chosen arm.
-Realization totality is derived recursively from both arm totality premises;
-finite computations with possible stops remain a distinct admission profile.
-
-Constructed `Instruction` stores ordered `InstructionRegion` records containing
-input sorts, instructions and yielded references. There is no loop-only body
-field or yield list on `Operation.loop`. Loops extend their outer frame with an
-index and carried values. Math selection starts a fresh capture-only frame.
-The structural rule checks every Math arm and rejects protocol operations or
-non-data values. The Domain evaluator also checks actual helper kinds against
-the admitted source and returns the complete declared tuple from the selected
-arm. Correspondence requires both arm equations; neither static admission nor
-a digest establishes the source connection. Helper, catalogue and occurrence
-inventories traverse all stored regions, including dormant ones.
-
-A participant can lack a helper operand that another participant has. For a
-one-step helper whose source is a strict total operation or a Boolean branch
-followed by a return, the connection checks the operands of that exact step.
-If any is absent, the step produces absent components for its result slots.
-The helper still evaluates its original return positions over those slots
-and its original arguments. Thus returning an available argument preserves
-it even when the step was skipped. The checked participant needs no physical
-instruction for that step. This rule requires a proof from the component
-interpreter and cannot erase an arbitrary call, event or stop.
-
-An oracle unit's checked Math environment admits a Boolean branch with exactly
-two pure, formed arms and a pure continuation. Calls in either arm must resolve
-to the associated Math environment; a dormant Local call or stop refuses this
-profile. The evaluator still selects only the reached arm. Output dependency
-analysis may conservatively include the selector and all explicit captures;
-admission does not prove exact query locality or cryptographic security.
-
-### Canonical execution selection at property consumers
-
-An imported unit containing an Oracle declaration or logical Oracle type selects its checked
-Oracle runtime, including dormant declarations and nested callback types. This is fixed by the
-retained snapshot. The ordinary `SourceConnection` ABI and ordinary compiled-property selector
-refuse such units; a certificate cannot reinterpret an Oracle action as the ordinary signature's
-refusal branch. Structural construction admission remains independent of this execution choice.
-
-`Imported.oracleSubject` and its source-derived `OracleStart` retain the selected unit and input
-store construction. Oracle property connections must consume that execution, with their own
-provider and data-association obligations. Ordinary field and typed index services retain their
-existing source and transcript meanings. No Oracle security claim follows from the ordinary
-selector or from structural export admission alone.
-
-### Reusing ordinary mathematics in logical-oracle execution
-
-`ProtocolEmbedding.program_embedding` relates the actual lazy participant to the
-ordinary participant for the checked ordinary fragment of the entire retained unit.
-It preserves all optional inputs, public requests, reply continuations and stops.
-Its interpretation erases only structural application/iteration/mark bookkeeping.
-`checkOrdinarySource` constructs the source-bound fragment witness; the source
-runtime guard and the retained-body check are both required. This result does not
-identify an arbitrary ordinary provider with the canonical Oracle store or cursor.
-
-The Math fragment includes selected Boolean regions. Both callback bodies must
-pass the recursive fragment check. A missing selector or capture returns absent
-results. When all operands are present the Boolean chooses one callback, which
-receives its captures with their structural Oracle values intact. The embedding
-relates the chosen callback to the closed ordinary callback on present inputs and
-retains its entire process, including every stop. The dormant arm contributes
-formation obligations without issuing actions.
-
-A protocol containing logical oracles can still reuse ordinary Math companion laws.
-`ReferenceLaw.invokeOracleConcrete` combines exact `BodyIn` association, the original
-helper premises and the actual helper-table embedding for concrete operands. It
-requires the Math fragment only, not an ordinary enclosing protocol. Deferred
-table data requires its separate demand/representation law.
-
-`ProtocolLoopPresentation.present` lifts a companion's one-step equation and counted
-invariant through the existing finite executor for any `ProtocolAlgebra` value type.
-The state representation may depend on the reached index. Role masks, count bounds,
-entry/exit observations and every stopped prefix are preserved. The logical-oracle
-instance supplies its boundary law once in `OracleLoopPresentation`; protocol
-authors do not prove another loop executor or erase effects to use the theorem.

@@ -260,7 +260,7 @@ Both premises use the same actual `r` and the same predicate `middle`.
 Equality of type names or identifiers is insufficient. The rule follows by
 applying the second implication and, on its valid-middle branch, the first.
 The exceptional events remain a disjunction; any probability estimate uses
-their [actual joint experiment](../../lean/docs/architecture.md#adding-reusable-mathematics-and-actual-clients).
+their [actual joint experiment](../../lean/docs/architecture.md).
 
 ## Finite obligation derivations
 

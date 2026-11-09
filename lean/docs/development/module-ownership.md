@@ -12,13 +12,13 @@ No dependency exception is needed for the module layout.
    relation or reference calculation. Put deterministic mathematics in
    `Zkc.Protocol.Library`; probability and family security contracts belong in
    `Zkc.Protocol.Library.Families`. For example,
-   `Zkc.Protocol.Library.Families.Sumcheck.Contract` imports no concrete source artifact.
+   `Zkc.Protocol.Library.Families.Sumcheck` imports no concrete source artifact.
 2. **Source-template installation.** A theorem accepts checked definitions, a
    body-membership law, domain interpretation, representation relation or layout.
-   It installs the mathematical result on that source template. Deterministic
-   Sumcheck helper equations live in `Zkc.Verification.Installations.Sumcheck.Source`; security
-   installations live in `Zkc.Verification.Bindings.Sumcheck`. Reusable GKR encodings,
-   layout relations and round installations live in `Zkc.Verification.Bindings.Gkr`.
+   It installs the mathematical result on that source template. The shared constructor lives in `Zkc.Tools.Protocol.Construction`.
+   Actual-source law installation is an open boundary; the previous concrete
+   installation route has been retired. Mathematical source bindings in
+   `Zkc.Verification.Bindings` remain reusable under their explicit premises.
 3. **Concrete application.** A proof selects an exact exported payload, Entry,
    model or claim. Put it in `Zkc.Applications`. Generated
    payloads, catalogue selections and receipts are applications too.
@@ -51,15 +51,15 @@ of a facade does not replace this requirement. The header audit records all
 three modifiers using Lean's own parser.
 
 `Zkc.Protocol.Library.Families.Sumcheck` is a small theorem facade.
-`Zkc.Tools.Verification.Components` exports the component tactics. Standalone Lake
+`Zkc.Tools.Protocol.Construction` exports the common constructor. Standalone Lake
 consumers in `lean/clients/` check both phases through real path dependencies.
 These facades expose current owners; they do not retain retired import paths.
 
 ## Module identity and declaration identity
 
 A Lean declaration's namespace and its owning module are independent. For
-example, declarations in `Zkc.Verification.Bindings.Models.PrimeField` keep their
-`ZkcSecurity.Domains.PrimeField` namespace. Existing theorem identities and
+example, declarations in `Zkc.Verification.Bindings.Models.KoalaBearModel` keep their
+`ZkcSecurity.Domains.KoalaBearModel` namespace. Existing theorem identities and
 statements therefore remain unchanged without aliases.
 
 Generators carry import identities and declaration identities separately:
@@ -81,8 +81,9 @@ Each package's `Zkc.Tests.<Owner>.LibraryImports` inventories every ordinary mod
 with private bodies, and `Audit` checks its stored declarations. Independent
 command entry points have separate `CommandAudits` modules because unrelated
 global `main` declarations cannot share a Lean environment. The complete registry
-schema and consumer audit runs in Applications, where the referenced concrete
-subjects exist. Every core package independently checks axioms and dependencies.
+schema and consumer audit runs in Verification, loading the stored declarations
+of its permitted dependencies. Applications does not aggregate another registry.
+Every core package independently checks axioms and dependencies.
 
 Ownership, declaration-record coverage and author-cost classification use the
 module recorded by Lean, not the declaration namespace. This matters for helper

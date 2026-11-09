@@ -12,18 +12,5 @@ the first draw. The compiler's calculation batching computes it, with every
 other product, in one calculation call after the second draw, before the
 comparison that consumes it. The program is therefore not the constructed
 validator instruction for instruction, and the
-[executable lowering rule](../../../../../lean/docs/spec/executable.md#normalization)
-accepts it by comparing normal forms. The
-[executable bridge](../../../../../lean/bridges/executable/README.md) checks the
-pair in the Lean kernel, refuses mutated programs, and compares the runtime with
-the Lean meaning on the honest and mutated proofs.
-
-With built tools on `PATH`, run from the repository root:
-
-```sh
-zkc prove example::Proof --project=common/tests/fixtures/projects/deferred-rounds/zkc.toml \
-  --output=proof.bin
-```
-
-The supplied [public input](inputs/example.Proof/public.json) is `x = 5` and the
-[witness](inputs/example.Proof/witness.json) is `w = 3`.
+The native scheduling fixture remains maintained. Its former generated Lean
+byte correspondence is retired; see [formal support](../../../../../lean/docs/support.md).

@@ -53,7 +53,7 @@ theorem foldTransition_unfiltered (table : HelperTable (assignment F G) interfac
     (item : Values (assignment F G) spec.domain.items) :
     foldTransition table spec arguments captures state item =
       invoke table spec.stepHelper (state.append (item.append (arguments.append captures))) := by
-  simp [foldTransition, absent, PIR.Process.bind, Values.get]
+  simp [foldTransition, absent, PIR.Process.bind]
   rfl
 
 theorem foldTransition_false (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
@@ -65,7 +65,7 @@ theorem foldTransition_false (table : HelperTable (assignment F G) interface) (s
     (predicate : invoke table spec.predicateHelper (item.append (arguments.append captures)) =
       .done (.cons false .nil)) :
     foldTransition table spec arguments captures state item = .done state := by
-  simp [foldTransition, present, predicate, PIR.Process.bind, Values.get]
+  simp [foldTransition, present, predicate, PIR.Process.bind]
 
 theorem foldTransition_true (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (present : spec.predicate.isEmpty = false)
@@ -77,7 +77,7 @@ theorem foldTransition_true (table : HelperTable (assignment F G) interface) (sp
       .done (.cons true .nil)) :
     foldTransition table spec arguments captures state item =
       invoke table spec.stepHelper (state.append (item.append (arguments.append captures))) := by
-  simp [foldTransition, present, predicate, PIR.Process.bind, Values.get]
+  simp [foldTransition, present, predicate, PIR.Process.bind]
   rfl
 
 theorem foldTransition_predicate_stops (table : HelperTable (assignment F G) interface) (spec : FoldSpec)

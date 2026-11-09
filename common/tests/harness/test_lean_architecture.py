@@ -35,10 +35,9 @@ class LeanArchitecture(unittest.TestCase):
         self.addCleanup(lambda: sys.path.__setitem__(slice(None), original_path))
         sys.path.insert(0, str(self.root))
         for relative in ('support/packages.py', 'support/dependencies.py', 'support/lean_headers.py',
-                         'support/responsibility.py', 'support/lake.py', 'support/compatibility.py',
+                         'support/responsibility.py', 'support/lake.py', 'support/compatibility.py', 'support/invocation.py',
                          'checks/check_library.py', 'checks/check_package_ownership.py',
-                         'checks/audit_imports.py', 'checks/records/declarations.py', 'reproduce.py',
-                         'bridges/common/lean_render.py'):
+                         'checks/audit_imports.py', 'checks/records/declarations.py', 'reproduce.py'):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPOSITORY / 'lean' / relative, target)
@@ -76,7 +75,7 @@ class LeanArchitecture(unittest.TestCase):
         self.source('Zkc.Tools.Program.IR.ImportHeaders', 'import Lean\n')
         self.source('Zkc.Tools.IR.DeclarationRecords', 'import Lean\n')
         self.source('Zkc.Verification.Claims.Registry', 'module\nnamespace ZkcSecurity.Registry\nend ZkcSecurity.Registry\n')
-        self.source('Zkc.Applications.ArkLib.Registry', 'module\nnamespace ZkcArkLib.Registry\nend ZkcArkLib.Registry\n')
+        self.source('Zkc.Applications.MathConsumer', 'module\nnamespace Client\nend Client\n')
         for name, (directory, roots) in p.PACKAGES.items():
             # Explicit executable roots, including one outside a Commands directory.
             # Each defines its own global main and needs an isolated environment.
@@ -269,54 +268,32 @@ class LeanArchitecture(unittest.TestCase):
             self.assertIn('!imported.importAll', generated)
             self.assertIn('ZkcTools.DeclarationAudit.check families', generated)
             self.assertNotIn('module\n', generated)
-            if name != 'applications':
+            if name != 'verification':
                 self.assertNotIn('checkRegistry', generated)
             for path, text in outputs.items():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(text)
             self.assertEqual(audit.expected(name), outputs)
         applications = next(v for k, v in audit.expected('applications').items() if k.name == 'Audit.lean')
-        self.assertIn('ZkcSecurity.Registry.audited ++ ZkcArkLib.Registry.audited', applications)
+        self.assertNotIn('checkRegistry', applications)
         self.assertIn('`Zkc.Applications', applications)
-        for name in p.PACKAGES:
-            self.assertIn(f'import Zkc.Tests.{p.OWNERS[name]}.LibraryImports\n', applications)
+        self.assertIn('import Zkc.Tests.Applications.LibraryImports\n', applications)
         verification_imports = next(v for k, v in audit.expected('verification').items() if k.name == 'LibraryImports.lean')
-        applications_imports = next(v for k, v in audit.expected('applications').items() if k.name == 'LibraryImports.lean')
         self.assertIn('import Zkc.Verification.Claims.Registry\n', verification_imports)
-        self.assertIn('import Zkc.Applications.ArkLib.Registry\n', applications_imports)
 
-    def test_registry_validation_preserves_exact_security_and_arklib_scope_families(self):
+    def test_registry_validation_lives_with_its_verification_owner(self):
         audit = importlib.import_module('checks.audit_imports')
-        # Migrated old scope families, not whole package roots: widening or
-        # narrowing this list changes which theorem premises require registration.
-        security_scopes = [
-            'Zkc.Applications.Security', 'Zkc.Protocol.Bindings', 'Zkc.Protocol.Library.Families',
-            'Zkc.Protocol.Library.Mathematics', 'Zkc.Protocol.Library.Security',
-            'Zkc.Protocol.Library.Transformations', 'Zkc.Protocol.Logic',
-            'Zkc.Tools.IR.SourceProperties', 'Zkc.Tools.IR.TableCapacity', 'Zkc.Tools.Protocol',
-            'Zkc.Tools.Verification.Bindings', 'Zkc.Tools.Verification.ClaimConstruction',
-            'Zkc.Tools.Verification.ComponentAuthoringReport', 'Zkc.Tools.Verification.ComponentBridge',
-            'Zkc.Tools.Verification.ComponentDerivation', 'Zkc.Tools.Verification.ComponentReadback',
-            'Zkc.Tools.Verification.ComponentView', 'Zkc.Tools.Verification.Components',
-            'Zkc.Tools.Verification.Generation', 'Zkc.Tools.Verification.InputLaws',
-            'Zkc.Tools.Verification.PairConstruction', 'Zkc.Tools.Verification.SigmaReadback',
-            'Zkc.Tools.Verification.SourceInputClauses', 'Zkc.Tools.Verification.SourceInputReadback',
-            'Zkc.Tools.Verification.SourceProperties', 'Zkc.Tools.Verification.SubjectABI',
-            'Zkc.Tools.Verification.Sumcheck', 'Zkc.Tools.Verification.TargetEvaluation',
-            'Zkc.Verification.Bindings', 'Zkc.Verification.Claims', 'Zkc.Verification.Families',
-            'Zkc.Verification.Mathematics', 'Zkc.Verification.ProgramLogic',
-            'Zkc.Verification.Transformations',
-        ]
-        ark_scopes = ['Zkc.Adapters.ArkLib', 'Zkc.Applications.ArkLib']
-        generated = next(v for k, v in audit.expected('applications').items() if k.name == 'Audit.lean')
-        for registry, scopes, marker in (
-            ('ZkcSecurity.Registry.audited', security_scopes, 'REGISTRY-AUDIT-PASS'),
-            ('(ZkcSecurity.Registry.audited ++ ZkcArkLib.Registry.audited)', ark_scopes,
-             'ARKLIB-REGISTRY-AUDIT-PASS'),
-        ):
-            names = '[' + ', '.join('`' + prefix for prefix in scopes) + ']'
-            self.assertIn(f'checkRegistry {registry} {names} "{marker}"', generated)
-        self.assertEqual(generated.count('checkRegistry'), 2)
+        for prefix in audit.SECURITY_SCOPES:
+            self.source(prefix + '.Example', 'module\n')
+        generated = next(v for k, v in audit.expected('verification').items() if k.name == 'Audit.lean')
+        names = '[' + ', '.join('`' + prefix for prefix in audit.SECURITY_SCOPES) + ']'
+        self.assertIn(f'checkRegistry ZkcSecurity.Registry.audited {names} "REGISTRY-AUDIT-PASS"', generated)
+        self.assertEqual(generated.count('checkRegistry'), 1)
+        for name in ('Program', 'IR', 'Protocol'):
+            self.assertIn(f'import Zkc.Tests.{name}.LibraryImports\n', generated)
+        self.assertNotIn('Zkc.Tests.ArkLib', generated)
+        application = next(v for k, v in audit.expected('applications').items() if k.name == 'Audit.lean')
+        self.assertNotIn('checkRegistry', application)
 
     def test_audit_freshness_refuses_missing_command_and_registry_coverage(self):
         audit = importlib.import_module('checks.audit_imports')
@@ -325,7 +302,7 @@ class LeanArchitecture(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
         command = next(path for path in outputs if 'CommandAudits' in path.parts)
-        registry = next(path for path in outputs if path.name == 'Audit.lean' and 'applications' in path.parts)
+        registry = next(path for path in outputs if path.name == 'Audit.lean' and 'verification' in path.parts)
         for path, changed in ((command, None), (registry, outputs[registry].replace('checkRegistry', 'removedRegistry'))):
             with self.subTest(path=path):
                 if changed is None:
@@ -336,6 +313,23 @@ class LeanArchitecture(unittest.TestCase):
                     audit.main()
                 path.write_text(outputs[path])
 
+    def test_retired_audit_cleanup_requires_generated_ownership(self):
+        audit = importlib.import_module('checks.audit_imports')
+        stale = self.source('Zkc.Tests.IR.CommandAudits.Retired',
+                            '-- Maintained by audit_imports.py; generated audit.\n')
+        with patch.object(sys, 'argv', ['audit_imports.py', '--package', 'ir']):
+            with self.assertRaisesRegex(SystemExit, 'obsolete generated audit'):
+                audit.main()
+        with patch.object(sys, 'argv', ['audit_imports.py', '--package', 'ir', '--write']):
+            audit.main()
+        self.assertFalse(stale.exists())
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text('-- Handwritten audit: do not delete.\n')
+        with patch.object(sys, 'argv', ['audit_imports.py', '--package', 'ir', '--write']):
+            with self.assertRaisesRegex(SystemExit, 'unrecognized audit'):
+                audit.main()
+        self.assertTrue(stale.exists())
+
     def test_record_emitter_uses_shared_inventory_ir_executable_and_preserves_names(self):
         d = importlib.import_module('checks.records.declarations')
         self.assertIs(d.PACKAGES, self.packages.PACKAGES)
@@ -343,7 +337,7 @@ class LeanArchitecture(unittest.TestCase):
             if command[1] == 'env':
                 index = next(i for i, arg in enumerate(command) if str(arg).endswith('.jsonl'))
                 families = ['.'.join(Path(arg).with_suffix('').parts) for arg in command[index + 1:]]
-                rows = [{'name': module + '.fixture', 'module': module} for module in families]
+                rows = [{'name': module + '.fixture', 'module': module, 'axioms': []} for module in families]
                 header = dict(format=d.FORMAT, families=families, modules=len(families), declarations=len(rows),
                               axiom_provenance='resolved-constant-info/0', reference_provenance='checked-stored-module/0')
                 Path(command[index]).write_text(''.join(json.dumps(row) + '\n' for row in [header, *rows]))
@@ -359,11 +353,10 @@ class LeanArchitecture(unittest.TestCase):
         for command in commands:
             self.assertIn(str(self.packages.PACKAGES['ir'][0] / '.lake/build/bin/declaration-records'), command)
             self.assertIn('Zkc/Applications.lean', command)
-            self.assertIn('Zkc/Tools/Applications/Example.lean', command)
             self.assertIn('Zkc/Tests/Applications/Example.lean', command)
-            self.assertIn('ZkcArkLib.Registry.reportTable', command)
+            self.assertNotIn('--registry', command)
             self.assertLessEqual(sum(source in command for source in (
-                'Zkc/Tools/Applications/Commands/First.lean', 'Zkc/Tools/Applications/Standalone.lean')), 1)
+                'Zkc/Tests/Applications/Commands/First.lean', 'Zkc/Tests/Applications/Standalone.lean')), 1)
         merged = d.Records.load({'applications': self.root / 'records.jsonl'})
         self.assertEqual({row['module'] for row in merged.declarations},
                          set(self.packages.package_modules('applications')))
@@ -385,7 +378,7 @@ class LeanArchitecture(unittest.TestCase):
             with self.subTest(defect=defect):
                 if defect == 'multiple':
                     paths.append(self.source('Zkc.Tests.Applications.Conflicting',
-                        'import Zkc.Tools.Applications.Commands.First\nimport Zkc.Tools.Applications.Standalone\n'))
+                        'import Zkc.Tests.Applications.Commands.First\nimport Zkc.Tests.Applications.Standalone\n'))
                 elif defect == 'cycle':
                     paths.append(self.source('Zkc.Tests.Applications.FirstCycle', 'import Zkc.Tests.Applications.SecondCycle\n'))
                     paths.append(self.source('Zkc.Tests.Applications.SecondCycle', 'import Zkc.Tests.Applications.FirstCycle\n'))
@@ -519,14 +512,13 @@ class LeanArchitecture(unittest.TestCase):
         self.assertIn('STARK-ARKLIB-BOUNDARY-PASS', reproduce.required_markers('arklib'))
         self.assertEqual(reproduce.control_source(self.packages.PACKAGES['clean'][0]), self.packages.module_path('Zkc.Tests.Clean.Control'))
 
-    def test_reproduction_requires_registry_markers_at_applications_owner(self):
+    def test_reproduction_requires_registry_marker_at_verification_owner(self):
         reproduce = importlib.import_module('reproduce')
-        markers = {'REGISTRY-AUDIT-PASS', 'ARKLIB-REGISTRY-AUDIT-PASS'}
-        self.assertTrue(markers <= set(reproduce.required_markers('applications')))
+        self.assertIn('REGISTRY-AUDIT-PASS', reproduce.required_markers('verification'))
         for name in self.packages.PACKAGES:
-            if name != 'applications':
-                with self.subTest(package=name):
-                    self.assertFalse(markers & set(reproduce.required_markers(name)))
+            if name != 'verification':
+                self.assertNotIn('REGISTRY-AUDIT-PASS', reproduce.required_markers(name))
+            self.assertNotIn('ARKLIB-REGISTRY-AUDIT-PASS', reproduce.required_markers(name))
 
     def test_source_checker_rejects_missing_imports_and_unknown_targets(self):
         checker = importlib.import_module('checks.check_library')

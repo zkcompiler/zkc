@@ -254,7 +254,7 @@ uniformity requires an additional probability argument.
 Reuse of a deterministic encoding or provider computation preserves the
 selected absorption order, draw order and observer. Equality of an arithmetic
 return alone does not justify removing or moving provider transitions. The
-[probability specification](../../../lean/docs/architecture.md#adding-reusable-mathematics-and-actual-clients) supplies the relevant law operands;
+[probability specification](../../../lean/docs/architecture.md) supplies the relevant law operands;
 a deterministic same-provider equation does not create a fresh-coin theorem.
 
 ## Storage and ownership

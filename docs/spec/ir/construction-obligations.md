@@ -9,7 +9,7 @@ model and under which equivalence notions claims are stated. The installed
 native construction is one instance ([transcript construction](construction.md));
 request operands are defined with [service queries](../runtime/services.md#operands-fixed-before-sampling);
 commitments and openings are [authenticated finite tables](../domains/oracles.md).
-The [formal model](../../../lean/docs/spec/fiat-shamir-security.md#construction-obligations)
+The [formal model](../../../lean/docs/spec/fiat-shamir-security.md)
 states the experiments these obligations feed.
 
 An obligation is a property of an actual construction, provider or verifier

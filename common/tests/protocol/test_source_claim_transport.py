@@ -1,15 +1,14 @@
-"""Bind genuine native claim exports through the formal bridge transport."""
+"""Bind genuine native claim exports through the native transport checker."""
 import json
 from pathlib import Path
 
 import pytest
 
-from harness import load
+import source_claims
 
 
 @pytest.mark.parametrize('proof', [False, True])
 def test_native_claim_admission_shape(toolchain, journal, directory, proof):
-    bridge = load('native_source_claim_transport', 'lean/bridges/pipeline/source_claims.py')
     root = Path(__file__).resolve().parents[3]
     parser_fixture = root / 'compiler/test/fixtures/source-claims/sumcheck.zkc'
     # Native proof construction requires each verifier draw to be delivered.
@@ -40,7 +39,7 @@ def test_native_claim_admission_shape(toolchain, journal, directory, proof):
         participant = journal.run([toolchain.compiler, 'protocol-constructed-participant',
                                    path, policy, candidate])
         program = bundle[4].encode()
-    bound = bridge.bind_export(export, entry=interface['entry'], source=source.encode(),
+    bound = source_claims.bind_export(export, entry=interface['entry'], source=source.encode(),
         interface_text=interface_text, original_text=original,
         participant_text=participant, program=program)
     assert len(bound['claims']) == (2 if proof else 0)

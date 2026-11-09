@@ -1,13 +1,13 @@
 module
 
 public import Zkc.IR.Source.Structured.ProtocolLinking
-public import Zkc.IR.Source.Structured.NormalForm.Observation
+public import Zkc.IR.Source.Structured.Occurrence
 public import Zkc.IR.Source.Structured.OpenLaws
 
 @[expose] public section
 
 /-! Declaration closure laws over arbitrary carriers and effects, followed by
-nominal-domain body and normalized-root laws. A declaration stores the actual
+nominal-domain body laws. A declaration stores the actual
 earlier table. Linking proves that extending it does not change any dependency
 used by its body. Neither helper outcomes nor root process equations are assumed.
 -/
@@ -189,36 +189,5 @@ theorem invoke_body (model : DomainModel) (payload : UnitPayload)
   protocol_invoke_bodyOn model (.silent _) actions (helpers model payload) iterations
     payload.protocols payload.protocolsLinked definition member context self args
 end Occurrence
-
-namespace NormalForm
-/-- Normalize the actual program root, including both visibility masks. Helper
-and callee equations remain explicit, input-pinned premises of normalization;
-the root equation itself follows from admitted declaration lookup. -/
-theorem normalize_program_occurrence {model : DomainModel}
-    (program : Program) (sig : Signature) (role : Nat)
-    (pattern : InputPattern program.payload.entry.inputs)
-    (form : Form sig.laws sig.callees pattern.scope program.payload.entry.outputs)
-    (normalized : normalize sig program.payload.entry.body role
-      program.payload.entry.roles.length pattern = .ok form)
-    (matched : form.CallsMatch) (distinct : RosterDistinct {} role program.payload.entry.roles.length)
-    (results : LawResults model sig.laws)
-    (processes : CalleeProcesses model sig.callees (Occurrence.signature model.toCarriers))
-    (inputs : Values (Component model.Value) program.payload.entry.inputs)
-    (binders : Binders model pattern.scope)
-    (environment : maskValues role program.payload.entry.inputScopes inputs = pattern.environment model binders)
-    (lawsHold : LawsHold (Occurrence.helpers model program.payload) results (pattern.environment model binders))
-    (calleesHold : CalleesHold (Occurrence.table model program.payload) processes (pattern.environment model binders)) :
-    Occurrence.participant model program role inputs =
-      (form.denoteOn model Occurrence.actions (Occurrence.helpers model program.payload) results {}
-        (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model program.payload)
-          (Occurrence.table model program.payload) {} role) processes binders).bind fun values =>
-            .done (maskValues role program.payload.entry.outputScopes values) := by
-  rw [Occurrence.participant, Occurrence.invoke_body model program.payload _ program.payload.entry_mem]
-  simpa only [ProtocolContext.mapScopes_root, id_eq] using
-    normalize_checkedProtocol_soundOn Occurrence.actions Occurrence.iterations
-    (Occurrence.helpers model program.payload) (Occurrence.table model program.payload) {}
-    program.payload.entry sig role pattern form normalized matched distinct results processes inputs binders
-    (by simpa [ProtocolContext.mapScopes] using environment) lawsHold calleesHold
-end NormalForm
 
 end Zkc.Source.Structured

@@ -35,6 +35,6 @@ audit.check([], 'lake')
 
 
 def test_assurance_drivers_have_no_optimization_sensitive_assertions():
-    for directory in (ROOT / "lean/checks", ROOT / "lean/bridges"):
+    for directory in (ROOT / "lean/checks", ROOT / "lean/support"):
         for path in directory.rglob("*.py"):
             assert not any(isinstance(node, ast.Assert) for node in ast.walk(ast.parse(path.read_text()))), path

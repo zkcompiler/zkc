@@ -5,12 +5,9 @@ import json
 
 import pytest
 
-from harness import language_interface, load
-
-# The common bridge import establishes the package root for script consumers.
-load("inventory_claims", "lean/bridges/pipeline/source_claims.py")
-from bridges.common.lean_render import Refused  # noqa: E402
-from bridges.pipeline.source_inventory import Inventory, decode, digest  # noqa: E402
+from harness import language_interface
+from source_transport import Refused
+from source_correspondence import Inventory, decode, digest
 
 
 def fixture():
@@ -204,51 +201,3 @@ def test_protocol_origin_and_static_selection_must_agree():
     document["instances"]["instances"][0]["statics"] = [["N", ["nat", "2"]]]
     with pytest.raises(Refused, match="protocol origin differs"):
         Inventory(document, **args)
-
-
-
-def test_body_aliases_use_exact_source_owners():
-    from bridges.pipeline.glue import body_names
-    document, args = fixture()
-    inventory = Inventory(document, **args)
-    assert body_names(inventory.snapshot, "run", inventory,
-                      {"m::Run": "run", "m::Child": "child"}) == {"entry": "run", "callee": "child"}
-    with pytest.raises(Refused, match="conflicts"):
-        body_names(inventory.snapshot, "run", inventory, {"m::Run": "different"})
-    with pytest.raises(Refused, match="no unique closed instance"):
-        body_names(inventory.snapshot, "run", inventory, {"missing": "child"})
-    with pytest.raises(Refused, match="require the bound identity inventory"):
-        body_names(inventory.snapshot, "run", owners={"m::Run": "run"})
-    document["instances"]["instances"][1]["template"]["owner"] = "m::Run"
-    document["snapshot"][7][1][8] = ["m::Run", []]
-    args["original_text"] = json.dumps(document["snapshot"])
-    inventory = Inventory(document, **args)
-    with pytest.raises(Refused, match="no unique closed instance"):
-        body_names(inventory.snapshot, "run", inventory, {"m::Run": "run"})
-
-
-
-def test_body_printer_rejects_stale_data_before_running_lean(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    from bridges.structured import bodies
-    inventory = SimpleNamespace(snapshot=["zkc.structured-source/0", "original", digest(b"source"),
-        "entry", [], [], [], [], [], [[], []], [[], [], []]])
-    monkeypatch.setattr(bodies, "module_path", lambda _: tmp_path / "Example/Data.lean")
-    (tmp_path / "Example").mkdir()
-    (tmp_path / "Example/Data.lean").write_text("stale retained data")
-    with pytest.raises(Refused, match="data differs"):
-        bodies.printed_module("Example.Data", "Example.Bodies", data_namespace="Declared.Data", inventory=inventory)
-
-
-@pytest.mark.parametrize("names,diagnostic", [
-    ({"entry": "same", "callee": "same"}, "duplicate body presentation"),
-    ({"missing": "unused"}, "absent definition"),
-    ({"entry": "bad.name"}, "invalid body presentation"),
-])
-def test_body_printer_rejects_invalid_presentations(tmp_path, monkeypatch, names, diagnostic):
-    from bridges.structured import bodies
-    monkeypatch.setattr(bodies, "ROOT", tmp_path)
-    monkeypatch.setattr(bodies, "elaborate", lambda *_: (
-        "HELPER\tentry\t.local\t[]\t[]\nHELPER\tcallee\t.local\t[]\t[]\n"))
-    with pytest.raises(Refused, match=diagnostic):
-        bodies.printed_module("Example.Data", "Example.Bodies", data_namespace="Declared.Data", names=names, fresh=True)

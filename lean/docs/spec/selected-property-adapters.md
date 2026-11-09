@@ -7,7 +7,7 @@ correspondences. ArkLib remains pinned by
 
 ## KZG evaluation binding
 
-`ZkcArkLib.Kzg.EvaluationBinding` selects the pinned KZG evaluation-binding
+`Zkc.Adapters.ArkLib.Kzg.EvaluationBinding` selects the pinned KZG evaluation-binding
 experiment. Setup samples a nonzero trapdoor privately, generates the two SRS
 vectors and gives only those vectors to the adversary. The adversary chooses
 one commitment, one point, two field values and two private opening states.
@@ -33,7 +33,7 @@ no runtime property. The upstream `Groups.tSdhAssumption`, which quantifies over
 all functions of its adversary type, is not used. These theorems make no
 unconditional or efficient-adversary security headline.
 
-`ZkcArkLib.Kzg.OpeningClient` supplies a concrete group/field consumer: a client
+`Zkc.Adapters.ArkLib.Kzg.OpeningClient` supplies a concrete group/field consumer: a client
 returns a commitment, point, two values and two group proofs. Its opening prover
 sends exactly the selected proof and makes no opening-phase oracle queries.
 `experiment_openingAdversary` equates the whole adapter computation to a direct
@@ -85,7 +85,7 @@ relation, access handler, algorithm or proposition.
 The typed evaluator takes the original `Commitment.FiniteRecovery.Request F`
 directly and requires the resource coordinate to be exactly two cell queries
 before selecting evidence. It checks the canonical identifier and schema even
-when a caller supplies the registry. `Evaluation.meaning_eq` pins every successful
+when a caller supplies the registry. `ZkcSecurity.Claims.FiniteRecovery.Evaluation.meaning_eq` pins every successful
 evaluation to `Guarantee request queries`. That proposition requires recovery of
 the actual ordered pair for every input, the exact operational query law
 `IsQueryBoundP request.extract (fun _ => True) bound ↔ 2 ≤ bound`, and equality of

@@ -18,5 +18,5 @@ not make witnesses shared; one response checked at both bases does.
 
 The [example project](../../../../examples/projects/sigma/README.md) selects BLS12-381 G1
 and the installed Merlin transcript suite. The
-[formal support](../../../../lean/docs/support.md#sigma-compositions) states what is proved
+[formal support](../../../../lean/docs/support.md) states what is proved
 about the retained exports.

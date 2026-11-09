@@ -12,12 +12,12 @@ models.
 
 | Module | Owned interface |
 |---|---|
-| `Zkc.Polynomial.Multilinear.Restriction` | Ordered `half` and `booleanSum` over `Table`, `fixFirst`, exact-length `ofList?`, extension and vector-sum laws |
-| `Zkc.Polynomial.Multilinear.Prefix` | `fixPrefix`, ordered extension and remaining-sum laws, complete restriction |
-| `Zkc.Polynomial.Multilinear.Marginal` | `sumRemaining`, total preservation, commutation with restriction, extension as residual sum |
-| `Zkc.Protocols.Sumcheck.Multilinear.Round` | `Message = F × F`, `boundary`, `evaluate`, `honestMessage`, explicit delivery laws |
-| `Zkc.Protocols.Sumcheck.Multilinear.Reduction` | `ResidualClaim`, mathematical `check`, complete discharge and public-input agreement |
-| `Zkc.Protocols.Sumcheck.Multilinear.Fold` | `PartialEvaluation`, `roundEndpoint` and the prover's flat-list fold laws |
+| `Zkc.Program.Polynomial.Multilinear.Restriction` | Ordered `half` and `booleanSum` over `Table`, `fixFirst`, exact-length `ofList?`, extension and vector-sum laws |
+| `Zkc.Program.Polynomial.Multilinear.Prefix` | `fixPrefix`, ordered extension and remaining-sum laws, complete restriction |
+| `Zkc.Program.Polynomial.Multilinear.Marginal` | `sumRemaining`, total preservation, commutation with restriction, extension as residual sum |
+| `Zkc.Protocol.Library.Sumcheck.Multilinear.Round` | `Message = F × F`, `boundary`, `evaluate`, `honestMessage`, explicit delivery laws |
+| `Zkc.Protocol.Library.Sumcheck.Multilinear.Reduction` | `ResidualClaim`, mathematical `check`, complete discharge and public-input agreement |
+| `Zkc.Protocol.Library.Sumcheck.Multilinear.Fold` | `PartialEvaluation`, `roundEndpoint` and the prover's flat-list fold laws |
 
 `Table F n` is the function type `(Fin n → Bool) → F` of
 `Zkc.Polynomial.Multilinear`. Its first coordinate is the most significant bit
@@ -32,7 +32,7 @@ For tail vertex `b`, it returns `(1-r)*T(false::b) + r*T(true::b)`.
 `low + (high-low)*r`. `fixFirst_zero` and `fixFirst_one` select the two halves.
 
 `fixPrefix k : Table F (n+k) → (Fin k → F) → Table F n` consumes the point
-from first coordinate to last. `Quadratic.point` is used solely as the
+from first coordinate to last. `Zkc.Polynomial.Quadratic.point` is used solely as the
 generic coordinate concatenation operation: its `k` coordinates come
 before the `n` suffix coordinates, despite the arity being written `n+k`.
 `extension_fixPrefix_coordinates` identifies this operation with list append
@@ -42,7 +42,7 @@ clients may normalize it with `Nat.zero_add`.
 
 The optional raw adapter `ofList? n values` succeeds exactly when
 `values.length = 2^n`. `ofList?_entry` relates each decoded vertex to an actual
-list lookup, and `booleanSum_ofList?` identifies its sum with `List.sum`.
+list lookup, and `booleanSum_ofList?` identifies its sum with the list sum.
 It neither pads nor truncates. This is a scalar mathematical shape check:
 source dimensions below 64, positive column width, checked machine indices,
 allocation limits, and repeat bounds are separate native premises.
@@ -123,7 +123,7 @@ The exact results are `partialEvaluation_restrict`, `partialEvaluation_fold`,
 `partialEvaluation_endpoints`, `partialEvaluation_complete` and
 `restrictValues_sum`; `partialEvaluation_sum` gives the residual sum for any
 prefix. They use a commutative ring and assume no interaction, delivery or
-challenge distribution. The [structured honest prover](../support.md#honest-sumcheck-prover)
+challenge distribution. The [structured honest prover](../support.md)
 applies them to the actual imported prover.
 
 ## Installing the same mathematics in different source programs
@@ -174,7 +174,7 @@ point appends, service identity and successor state. The
 [structured import](structured-source.md) admits
 the complete library `Sumcheck` and `Reduce` sources, including vector
 operations, helper composition, folds, protocol applications and repetition;
-[formal support](../support.md#source-only-sumcheck-verifier) records their
+[formal support](../support.md) records their
 verifier equations. No whole-Sumcheck kernel is assumed.
 
 ## Optional security integration
@@ -182,8 +182,8 @@ verifier equations. No whole-Sumcheck kernel is assumed.
 The [optional multilinear security package](multilinear-sumcheck-security.md)
 proves the degree-one endpoint interpretation, explicit Boolean-assignment
 MLE/table agreement, ordered restriction and table-oracle realization. It uses
-ArkLib `Native.Core.execute_transport` with arbitrary effectful continuations
-and public abort, then applies `Native.execute_soundness` for the complete
+ArkLib `Sumcheck.Interaction.Native.Core.execute_transport` with arbitrary effectful continuations
+and public abort, then applies `Sumcheck.Interaction.Native.execute_soundness` for the complete
 `N / |F|` bound. Honest completeness allows arbitrary challenges. A proved
 marginal table gives partial residual soundness `k / |F|` without a separate partial
 executor or padding the challenge point. These security results belong to the
@@ -193,7 +193,7 @@ optional package; core imports are independent of it.
 The linked security document specifies the exact quantitative assumptions and
 oracle/observation boundaries.
 
-[Uniform queries](uniform-query-service.md#actual-imported-roots) connect these
+[Uniform queries](uniform-query-service.md) connect these
 bounds to the admitted `Sumcheck` and `Reduce` roots. The connection keeps the
 two ordered scalar receives, boundary guard, reached fresh challenge,
 role-local delivery, counts and stops, and it relates only selected

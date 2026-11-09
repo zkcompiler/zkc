@@ -30,15 +30,15 @@ theorem above_maximum : ¬ tablePolicy.Holds (inputs (List.replicate 8 ()) 3) :=
   norm_num [tablePolicy, InputPolicy.Holds, InputRule.Holds, inputs, Values.get, indexLimit]
 
 theorem illegal_index : ¬ tablePolicy.Holds (inputs [] indexLimit) := by
-  simp [tablePolicy, InputPolicy.Holds, InputRule.Holds, inputs, Values.get]
+  simp [tablePolicy, InputPolicy.Holds, InputRule.Holds, inputs]
 
 theorem absent_rounds : ¬ tablePolicy.Holds
     (.cons (some [(), (), (), ()]) (.cons none .nil) : Values (Component carriers.Value) Types) := by
-  simp [tablePolicy, InputPolicy.Holds, InputRule.Holds, Values.get]
+  simp [tablePolicy, InputPolicy.Holds, InputRule.Holds]
 
 theorem zero_width : ¬ (InputPolicy.mk [.cubeTable .here (.there .here) 0]).Holds
     (inputs [] 0) := by
-  simp [InputPolicy.Holds, InputRule.Holds, inputs, Values.get]
+  simp [InputPolicy.Holds, InputRule.Holds, inputs]
 
 -- A narrower bound is explicit claim data, and changes the admitted domain.
 theorem changed_contract : ¬ (InputPolicy.mk [.boundedIndex (.there .here) 1]).Holds

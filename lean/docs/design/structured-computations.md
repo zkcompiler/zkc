@@ -92,7 +92,7 @@ program. A higher-order implementation can inspect callback process shape, so
 this compatibility does not follow from the callback type. The scalar/control
 adapter supplies a proved instance through `Interpretation.regionTranslation`.
 
-Totality means the process equals an immediate `Process.done`, without interactions
+Totality means the process equals an immediate `PIR.Process.done`, without interactions
 or a stop. `Region.Total` is a sufficient structural predicate over the same
 carrier, backed by per-operation semantic contracts and total callbacks.
 `Region.returns_of_total` proves the resulting property. Its uniform operation
@@ -124,8 +124,8 @@ equation alone does not justify deleting an admission or reordering failures.
 ## Reference profiles and their consumers
 
 `Source.Program` is retained as the single-result structured reference profile.
-`Program.toRegion` lowers every reference term to the canonical carrier with
-explicit captures. `Program.denote_toRegion` proves equality of the complete open
+`Zkc.Source.Program.toRegion` lowers every reference term to the canonical carrier with
+explicit captures. `Zkc.Source.Program.denote_toRegion` proves equality of the complete open
 process with its scalar result wrapped as a singleton tuple. The maintained
 AlgebraicRounds and complete Sumcheck verifier references expose canonical
 `structuredProgram` forms and named denotation bridges.
@@ -138,12 +138,10 @@ partly resolves locality while constructing a term. Its equation pairs a project
 for a role with that role's input environment. The mathematical meaning itself
 is role-independent: the projected restrictions record the selection.
 
-The former Common flat AST and its lowering theorem have been retired. Scalar
-native-import consumers now use the same Structured admission and typed
-participant semantics as the other maintained clients. A checked normal-form
-presentation supplies each complete source equation at its stated input
-availability pattern, and a derived scalar view feeds the existing mathematical
-contracts. This view is not another admission or execution authority.
+Structured admission retains the typed participant semantics of original
+source. The former Common AST, normal-form presentation and scalar-view proof
+generators are retired. The generic Region constructor is retained; complete
+actual-source law installation is the next boundary.
 
 The participant operation type and dialect retain the selected role as a
 nominal parameter. The importer admits the external role assignment, while
@@ -165,7 +163,7 @@ arities throughout the syntax, including callbacks a runtime operation may skip.
 Universal `elaborate_erase` theorems cover every typed region and callback list.
 The converse laws require successful formation to preserve all raw structure and
 annotations exactly. Shared operand lookup lives in `ContextDecoding`; the
-bounded native `Common` schema is separate.
+external structured-source schema is separate.
 This checks Lean structural formation. Operation descriptors and their selected
 meanings still need resolution at the external boundary.
 
@@ -228,7 +226,7 @@ Native frame entry/cleanup, affine services and instruction capacity can require
 an execution relation over actual state and observations. Those policies must not
 be silently erased by translating an abstract callback. Likewise, changing an
 admission requires a proof about its stop behavior, even for unused values.
-In particular, appending cleanup with `Process.bind` skips it on a stop. Catching
+In particular, appending cleanup with `PIR.Process.bind` skips it on a stop. Catching
 syntactic halts still does not catch a stop produced by a handler. Native cleanup
 and its failure precedence therefore belong to the execution adapter, rather
 than an assumed meaning of lexical binding.

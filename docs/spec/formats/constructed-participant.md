@@ -25,7 +25,7 @@ selection options, and refuses a role option because both roles are required.
 
 The export is the input of the formal
 [transcript-construction](../../../lean/docs/spec/fiat-shamir.md) and
-[participant projection](../../../lean/docs/spec/participant-projection.md) rules.
+[participant projection](../../../lean/docs/spec/components.md) rules.
 It neither constructs a validator nor assigns a meaning to any operation.
 
 ## Envelope
@@ -311,25 +311,11 @@ original source's helper of the same name and checked signature. That the
 candidate's helper of that name computes the same function belongs to the
 native construction and its independent postcondition; the export does not
 establish it. The logical carrier also does not prove preservation of native
-scope, resource accounting, failure timing or cleanup. The [formal
-bridge](../../../lean/bridges/construction/README.md) regenerates its retained
-data from this export and checks the exact bytes.
-
-The independent pair reader in `lean/bridges/construction/pair.py` also checks
-the exact paired envelope and shared identities/policy. The formal
-`Zkc.Construction.AuthoredPair` selection fixes the complete participant trees,
-source helper dependencies, input contract, role maps and retained target before
-admission. Its producer structural check and whole-artifact equality do not
-establish original-source-to-constructed-producer correspondence. That theorem,
-export/read-back correspondence and domain interpretation remain separate
-obligations; a native check or a matching digest is not their proof.
-
-Local-service admission additionally compares the complete interface with the
-original input scopes and contracts, resolves each request through source
-applications, restrictions, repeat captures and selected captures to its original
-root, and checks exact owner, request, nominal result and static/dynamic occurrence.
-Only the installed field `draw` is admitted. Unsupported methods refuse.
-The existing validator construction rule continues to refuse local requests.
+scope, resource accounting, failure timing or cleanup. The previous formal constructed-participant reader and endpoint installations
+are retired. This native format remains unchanged. A future formal consumer must
+establish exact source association, complete execution correspondence and its
+chosen domain interpretation; native validation or a matching digest proves none
+of those obligations. See [formal support](../../../lean/docs/support.md).
 
 ### Formal checkpoint frames for closed Math arms
 

@@ -227,6 +227,8 @@ def main():
         # Compile actual dependency bodies, then demand rejection by the auditor;
         # also keep the source-import guard in sync with the declaration policy.
         ownership_cases = [
+            ('client-own-helper', 'Client.GuardFixture', 'Client.Helper', 'body', True),
+            ('program-client-refused', 'Zkc.Program.GuardFixture', 'Client.Helper', 'body', False),
             ('program-core-body', 'Zkc.Program.GuardFixture',
              'Zkc.IR.Source.GuardFixture', 'body', False),
             ('program-proof-type', 'Zkc.Program.GuardFixture',
@@ -247,8 +249,6 @@ def main():
              'Zkc.Applications.Security.GuardFixture', 'body', False),
             ('reusable-binding-example', 'Zkc.Verification.Bindings.GuardFixture',
              'Zkc.Applications.Security.GuardFixture', 'type', False),
-            ('fixed-knowledge-method', 'Zkc.Verification.Claims.Knowledge',
-             'Zkc.Verification.Claims.Methods.GuardFixture', 'body', False),
             ('family-binding', 'Zkc.Verification.Families.GuardFixture',
              'Zkc.Verification.Bindings.GuardFixture', 'body', False),
             ('security-upstream-arklib', 'Zkc.Verification.GuardFixture',
@@ -261,7 +261,7 @@ def main():
              'Zkc.Protocol.Library.Mathematics.Probability.GuardFixture', 'body', False),
             ('probability-source-type', 'Zkc.Protocol.Library.Mathematics.Probability.GuardFixture',
              'Zkc.IR.Source.GuardFixture', 'type', False),
-            ('security-example-type', 'Zkc.Verification.Transformations.HashChain.GuardFixture',
+            ('security-example-type', 'Zkc.Verification.Bindings.Source.GuardFixture',
              'Zkc.Applications.Security.GuardFixture', 'type', False),
             ('clean-example-test-body', 'Zkc.Applications.Clean.GuardFixture',
              'Zkc.Tests.Applications.Clean.GuardFixture', 'body', False),
@@ -281,8 +281,6 @@ def main():
              'Zkc.Applications.Security.GuardFixture', 'body', False),
             ('causal-source-type', 'Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Causal.Phase',
              'Zkc.IR.Source.GuardFixture', 'type', False),
-            ('schnorr-protocol-allowed', 'Zkc.Verification.Families.Sigma.Schnorr',
-             'Zkc.Verification.Installations.Schnorr.Common', 'body', True),
             ('execution-semantics-allowed', 'Zkc.Protocol.Logic.Oracle.Execution',
              'Zkc.Program.Semantics.GuardFixture', 'body', True),
             ('causal-protocol-allowed', 'Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Causal.Soundness',

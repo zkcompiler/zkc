@@ -860,12 +860,9 @@ C++ projects an `InstalledSignature` variant and immutable `SchemeId` join;
 Rust projects its own `FrontendSignature`, `ContractPattern`, `SchemePort` and
 `SchemeId` models. Dumps retain the exact authored alternatives.
 
-The independent reader `lean/bridges/common/installed_catalogue.py` still
-refuses these shell alternatives with `missing catalog fields`; its exact
-source-row and closed type/origin vocabularies require Lean-owner migration.
-No common independent Python catalogue reader outside `lean/` consumes these
-fields. The common Python module here is the production generator, not an
-independent reader. No compatibility reader is provided.
+The former Lean bridge catalog reader is retired. Independent formal admission
+must interpret these logical rows against its own environment before using them;
+native catalog publication does not install a formal meaning.
 
 ### Installed notations
 

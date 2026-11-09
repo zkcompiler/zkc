@@ -1,7 +1,6 @@
 module
 
 public import Zkc.IR.Source.Structured.DomainParticipant
-public import Zkc.IR.Source.Structured.NormalForm.Actions
 
 @[expose] public section
 
@@ -73,8 +72,8 @@ abbrev meaning (algebra : ProtocolAlgebra V I) (protocols : ProtocolTable V I)
 def denote (algebra : ProtocolAlgebra V I) (definition : CheckedProtocol)
     (protocols : ProtocolTable V I) : ProtocolFunction V I definition.signature :=
   fun context self inputs ↦
-    (NormalForm.normalizeActions (algebra.meaning protocols context self) definition.body
-      (maskValues self (context.mapScopes definition.inputScopes) inputs).get).process.bind fun results ↦
+    (definition.body.denote (algebra.meaning protocols context self)
+      (maskValues self (context.mapScopes definition.inputScopes) inputs).get).bind fun results ↦
         .done (maskValues self (context.mapScopes definition.outputScopes) results)
 
 def extend (algebra : ProtocolAlgebra V I) (captured : ProtocolTable V I)
@@ -168,7 +167,6 @@ theorem ordinaryProtocolAlgebra_denote (model : DomainModel) {I : PIR.Signature}
   unfold ProtocolAlgebra.denote CheckedProtocol.denoteWithOn
   funext context self inputs
   dsimp only [CheckedProtocol.signature] at inputs ⊢
-  rw [NormalForm.normalizeActions_process]
   have operations := funext fun op ↦ funext fun args ↦ funext fun callbacks ↦
     ordinaryProtocolAlgebra_operation model observations actions tables iterations
       protocols context self op args callbacks

@@ -31,15 +31,3 @@ name = "ZkcVerificationTests"
 roots = ["Zkc.Tests.Verification"]
 globs = ["Zkc.Tests.Verification.+"]
 allowNonModules = true
-
-[[lean_exe]]
-name = "command-generate-scalar-presentations"
-root = "Zkc.Tools.Verification.Commands.GenerateScalarPresentations"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-root-assembly"
-root = "Zkc.Tools.Verification.Commands.RunRootAssembly"
-supportInterpreter = true
-allowNonModules = true

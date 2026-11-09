@@ -182,28 +182,11 @@ def entries : List Entry := [
     some `ZkcSecurity.Commitment.BatchVerification.ValidShape,
     "The selected table has positive width and height, admissible height, and a representable \
     element count within the fixed resource ceiling."⟩,
-
   ⟨"model.history-oracle", .model, some `OracleSpec.randomOracle,
     "The transcript challenge on an absorbed history is a uniformly random function of the \
     typed history, shared by the prover and verification (a lazily sampled random oracle)."⟩,
-  ⟨"model.exact-uniform-challenges", .model, some `ZkcSecurity.FiatShamir.FieldOracle,
-    "The oracle answers field challenges directly, as exactly uniform elements; the suite's \
-    reduction of squeezed bytes to a field element is treated as exact."⟩,
   ⟨"model.ideal-commitments", .model, some `ZkcSecurity.Commitment.withTables,
     "Committed tables are received in the clear and reads return their entries."⟩,
-  ⟨"model.exact-uniform-regime", .model, some `ZkcSecurity.Endpoint.Regime.exact,
-    "The endpoints' challenge regime in which the oracle answers field elements and a challenge is \
-    the answer itself, exactly uniform."⟩,
-  ⟨"model.history-oracle-replay", .model, some `ZkcSecurity.Endpoint.Sigma.historyOracle,
-    "The transcript challenge on a typed history is a lazily sampled, exactly uniform field \
-    element, shared by the prover and verification, drawn through VCVio's replay oracle."⟩,
-  ⟨"law.compiled-source-connection", .law,
-    some `ZkcSecurity.Endpoint.Compiled.SourceConnection,
-    "The actual selected compiled verifier equals the admitted source transform for every \
-    lawful challenge computation, typed statement, initial history and proof."⟩,
-  ⟨"law.byte-pruning", .law, some `ZkcSecurity.Endpoint.BytePruning,
-    "At every budget and for every decoder, framed proof and typed statement, actual byte \
-    validation can only remove acceptance from the selected compiled verifier."⟩,
   ⟨"law.balanced-decoding", .law, some `ZkcSecurity.FiatShamir.Balanced,
     "Every event of the decoded challenge is at most a stated loss likelier than under the \
     uniform field."⟩,
@@ -248,20 +231,6 @@ def entries : List Entry := [
     some `Zkc.Transcript.Determined,
     "The initial transcript of a statement, followed by any events, determines the \
     statement, malformed statements included."⟩,
-  ⟨"binding.statement-determination.participant", .binding .statementDetermination,
-    some `ZkcSecurity.FiatShamir.Determined,
-    "Statement determination over the histories of the common participant actions."⟩,
-  ⟨"binding.statement-coverage", .binding .statementDetermination,
-    some `ZkcSecurity.FiatShamir.StatementBinding.Covers,
-    "Every policy statement false for the application is false in the model or denotes no \
-    model statement. Rejection of the latter is the separate obligation \
-    binding.unmapped-rejection."⟩,
-  ⟨"binding.unmapped-rejection", .binding .statementDetermination,
-    some `ZkcSecurity.FiatShamir.StatementBinding.RejectsUnmapped,
-    "The validator of every policy statement that denotes no model statement is doomed."⟩,
-  ⟨"binding.event-implication", .binding .statementDetermination,
-    some `ZkcSecurity.FiatShamir.EventImplication,
-    "The application's false-acceptance event implies the modeled event."⟩,
   ⟨"binding.serialization", .binding .serialization,
     some `ZkcSecurity.FiatShamir.Obligations.PrefixFreeEncoding,
     "The serialization of the typed public representation is injective and prefix-free."⟩,
@@ -286,8 +255,6 @@ def entries : List Entry := [
   ⟨"budget.weighted-cost", .budget, some `WorstCaseCostBound,
     "The adversary's oracle queries cost at most the stated budget on every path, each query the \
     weight of its key, repeats and cache hits included."⟩,
-  ⟨"budget.participant-queries", .budget, some `ZkcSecurity.FiatShamir.QueryBound,
-    "At most a budget of challenge queries on every path of a participant validator."⟩,
   ⟨"budget.typed-queries", .budget, some `ZkcSecurity.FiatShamir.Typed.QueryBound,
     "At most a budget of queries on every path of a validator over a typed interface."⟩,
   ⟨"budget.typed-cost", .budget, some `ZkcSecurity.FiatShamir.Typed.CostBound,
@@ -308,18 +275,6 @@ def entries : List Entry := [
     the width plus one per query."⟩,
   ⟨"budget.provider-family-queries", .budget, some `ZkcSecurity.FiatShamir.Provider.FamilyQueryBound,
     "At most a budget of calls of each primitive family on every path."⟩,
-  ⟨"family.private-producer-wp", .familyProperty,
-    some `ZkcSecurity.FiatShamir.PrivatePairWP.producerWP,
-    "Every supported private-coin producer execution returns and its generated proof \
-    satisfies the deterministic validator's success WP under the fixed answer table."⟩,
-  ⟨"family.private-validator-wp", .familyProperty,
-    some `ZkcSecurity.FiatShamir.PrivatePairWP.validatorWP,
-    "The actual validator under the fixed answer table returns true and consumes the \
-    complete proof; a stopped execution cannot satisfy this WP."⟩,
-  ⟨"family.participant-step", .familyProperty, some `ZkcSecurity.FiatShamir.Step,
-    "The local obligation of a doomed set at one residual of a participant validator."⟩,
-  ⟨"family.participant-step-to", .familyProperty, some `ZkcSecurity.FiatShamir.StepTo,
-    "The local obligation of a doomed set of sub-validator residuals with a postcondition."⟩,
   ⟨"family.typed-step", .familyProperty, some `ZkcSecurity.FiatShamir.Typed.Step,
     "The local obligation of a doomed set over a typed interface, with an error per event."⟩,
   ⟨"family.typed-charged-step", .familyProperty, some `ZkcSecurity.FiatShamir.Typed.ChargedStep,
@@ -352,9 +307,6 @@ def entries : List Entry := [
     first match for every predicate extract the same tables."⟩,
   ⟨"family.sigma-special-hvzk", .familyProperty, some `ZkcSecurity.VCVio.SigmaAnd.SpecialHVZK,
     "Special honest-verifier zero knowledge of a Sigma protocol."⟩,
-  ⟨"family.sigma-correspondence", .familyProperty, some `ZkcSecurity.Endpoint.Sigma.Corresponds,
-    "A verifier asks one challenge, at the initial transcript followed by the commitment's events \
-    and the challenge occurrence, and returns the Sigma protocol's verification of the answer."⟩,
   ⟨"event.accepted", .event, some `Zkc.Transcript.Accepted,
     "A returned value satisfies the acceptance predicate; stops never accept."⟩,
   ⟨"event.returned-satisfies", .event, some `ZkcSecurity.VCVio.Execution.returnedSatisfies,
@@ -362,35 +314,9 @@ def entries : List Entry := [
   ⟨"event.committed-false-acceptance", .event, some `ZkcSecurity.Commitment.FalseAcceptance,
     "The verifier accepts and the statement is false for its tables extracted at the \
     checkpoint of one of its transcript queries."⟩,
-  ⟨"event.committed-pinned-failure", .event,
-    some `ZkcSecurity.Commitment.Application.PinnedFailure,
-    "Acceptance with the application's bad-table predicate at its fixed transcript key, \
-    using extraction before the first query by either party."⟩,
-  ⟨"event.adaptive-paths-far", .event,
-    some `ZkcSecurity.Commitment.AdaptiveOpening.FarPaths,
-    "At least the requested fraction of starts reject after the complete adaptive walk \
-    on one fixed total table."⟩,
-  ⟨"event.adaptive-opening-error", .event,
-    some `ZkcSecurity.Commitment.AdaptiveOpening.ApplicationError,
-    "Actual acceptance while the normalized, default-completed checkpoint extraction \
-    has the requested fraction of rejecting adaptive paths."⟩,
-  ⟨"event.unmapped-policy", .event, some `ZkcSecurity.FiatShamir.StatementBinding.Unmapped,
-    "A policy statement denotes no model statement."⟩,
-  ⟨"event.domain-false-statement", .event,
-    some `ZkcSecurity.Claims.Domain.Subject.FalseStatement,
-    "No witness satisfies the fixed Domain subject's retained relation on this statement."⟩,
   ⟨"event.finite-selection-bad", .event,
     some `ZkcSecurity.Probability.FiniteSelection.SelectedBad,
     "The first admitted value in the complete bounded attempt history satisfies the bad event."⟩,
-  ⟨"event.false-statement", .event, some `ZkcSecurity.Endpoint.ApplicationFalse,
-    "A policy statement the claim's application contract counts as false."⟩,
-  ⟨"event.unmapped-statement", .event, some `ZkcSecurity.Endpoint.ModelRelation.Unmapped,
-    "A policy statement that denotes no model statement under the evidence's statement relation."⟩,
-  ⟨"event.committed-opening-accepts-far", .event,
-    some `ZkcSecurity.Examples.CommittedOpening.AcceptsFar,
-    "The validator accepts and the frozen extraction at its checkpoint key is far."⟩,
-  ⟨"event.committed-opening-far", .event, some `ZkcSecurity.Examples.CommittedOpening.Far,
-    "No table was extracted, or a fraction of the extracted table's rows is not accepted."⟩,
   ⟨"event.committed-opening-far-rows", .event,
     some `ZkcSecurity.Examples.CommittedOpeningBridge.FarRows,
     "A table a fraction of whose rows are rejected."⟩,
@@ -413,8 +339,6 @@ def entries : List Entry := [
     "Two distinct complete hash queries in the recorded execution have the same answer."⟩,
   ⟨"wellformed.hash-chain-agrees", .wellFormedness, some `ZkcSecurity.HashChain.Agrees,
     "Trace and tables are consistent, and unrouted cache entries are the auxiliary cell."⟩,
-  ⟨"wellformed.hash-chain-caches-agree", .wellFormedness, some `ZkcSecurity.HashChain.CachesAgree,
-    "Two caches answer the bytes of each classification alike."⟩,
   ⟨"wellformed.hash-chain-consistent", .wellFormedness, some `ZkcSecurity.HashChain.Consistent,
     "A trace and the simulator's tables agree on what the validator can read."⟩,
   ⟨"wellformed.hash-chain-generating", .wellFormedness, some `ZkcSecurity.HashChain.Generating,
@@ -446,12 +370,6 @@ def entries : List Entry := [
   ⟨"wellformed.renaming-related", .wellFormedness, some `ZkcSecurity.Oracle.Renaming.Related,
     "Two caches agree through a renaming of oracle cells: a source key with a target cell \
     holds that cell's answer read back, and cells no source key reaches are empty."⟩,
-  ⟨"wellformed.obligation-discharged", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.ObligationStatus.Discharged,
-    "An obligation's status is a proof."⟩,
-  ⟨"wellformed.claim-endpoint-hypotheses", .wellFormedness,
-    some `ZkcSecurity.Claims.HypothesesProved,
-    "Every legacy Evidence hypothesis admitted by a claims endpoint adapter carries its actual proof."⟩,
   ⟨"wellformed.provider-constituents", .wellFormedness,
     some `ZkcSecurity.FiatShamir.Provider.Simulator.Constituents,
     "Calls that belong to one concrete attempt of a provider simulator."⟩,
@@ -489,14 +407,6 @@ def entries : List Entry := [
     some `ZkcSecurity.Families.Sumcheck.Representation.No,
     "The represented reference state is admissible and the implementation's scalar claim \
     differs from its reference total."⟩,
-  ⟨"event.honest-pair-relation", .event,
-    some `ZkcSecurity.Claims.HonestPair.Subject.Relation,
-    "The retained target's selectors read the subject's source inputs and its selected \
-    formula returns true on those arguments; a stopped formula does not satisfy this relation."⟩,
-  ⟨"event.honest-pair-success", .event,
-    some `ZkcSecurity.Claims.HonestPair.Subject.Success,
-    "Input preparation produces an observed pair execution in which both phases return, \
-    the validator consumes the entire generated proof, and its selected Boolean result is true."⟩,
   ⟨"wellformed.sumcheck-admissible", .wellFormedness,
     some `ZkcSecurity.Families.Sumcheck.Representation.Allowed,
     "The mathematical reference state represented by the implementation state is admissible."⟩,
@@ -504,100 +414,6 @@ def entries : List Entry := [
     some `ZkcSecurity.Families.Sumcheck.FactorReference.ActiveIndependent,
     "At every Boolean vertex, the caller's weight is independent of the active field \
     challenge, including challenges outside the Boolean cube."⟩,
-  ⟨"wellformed.domain-reading", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.DomainReduction.ReadingTo,
-    "A derivation relates an actual Domain process to its typed transcript presentation \
-    at the given history, retaining query keys, typed replies and decoding, and establishing \
-    the specified postcondition on returned values."⟩,
-  ⟨"wellformed.domain-reading-unrestricted", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.DomainReduction.Reading,
-    "A derivation relates the actual Domain process to its typed transcript presentation \
-    at the given history, retaining query keys, typed replies and decoding, without a \
-    return-value postcondition. Independent history coherence is a separate obligation."⟩,
-  ⟨"wellformed.domain-coherence", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.DomainReduction.CoherentTo,
-    "Every actual Domain query uses the reached observation history and a supported draw \
-    request; the derivation establishes the specified postcondition at each returned value."⟩,
-  ⟨"wellformed.domain-bridge", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.DomainReduction.Bridge,
-    "The actual Domain process has both the specified typed reading with its return \
-    postcondition and observation-history coherence with that same postcondition; \
-    source-to-artifact binding is separate."⟩,
-  ⟨"family.sumcheck-readback-helpers", .familyProperty,
-    some `ZkcSecurity.Families.Sumcheck.TableComponent.ReadbackRound.HelperLaws,
-    "The actual admitted message, fold, projection and append helpers compute their \
-    specified mathematical results on every input admitted by their stated laws."⟩,
-  ⟨"wellformed.sumcheck-readback-loop", .wellFormedness,
-    some `ZkcSecurity.Families.Sumcheck.TableComponent.ReadbackRound.loopInvariant,
-    "Both carried environments encode the same dimension-indexed prefix state and \
-    original table, with the remaining dimension bounded and the scalar equal to the residual sum."⟩,
-  ⟨"wellformed.sumcheck-source-helper-bodies", .wellFormedness,
-    some `ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies,
-    "The admitted source program contains the exact sumcheck, prefix, terminal-check \
-    and table-check helper bodies with their complete checked dependencies."⟩,
-  ⟨"wellformed.gkr-round-boundary-bodies", .wellFormedness,
-    some `ZkcSecurity.Bindings.Gkr.RoundsBoundaryInstallation.Bodies,
-    "The linked source contains the exact empty, append and Pending boundary bodies \
-    with their full typed interfaces; this association is proved from the selected source."⟩,
-  ⟨"wellformed.gkr-round-helper-bodies", .wellFormedness,
-    some `ZkcSecurity.Bindings.Gkr.RoundsHelperInstallation.Bodies,
-    "The linked source contains the exact quadratic-round helper closure, including \
-    all helper signatures, typed bodies and transitive helper associations."⟩,
-  ⟨"wellformed.gkr-factor-restriction-bodies", .wellFormedness,
-    some `ZkcSecurity.Bindings.Gkr.RoundsHelperInstallation.RestrictionBodies,
-    "The linked source contains the exact factor-restriction helper bodies used by \
-    the reusable interpretation theorem; source changes must re-establish the association."⟩,
-  ⟨"wellformed.gkr-readback-bodies", .wellFormedness,
-    some `ZkcSecurity.Realizations.Gkr.HonestHelpers.ReadbackGoals.Bodies,
-    "The linked source contains every selected readback helper body with its complete \
-    typed interface; the installation proves its laws in that same helper table."⟩,
-  ⟨"wellformed.gkr-collection-bodies", .wellFormedness,
-    some `ZkcSecurity.Realizations.Gkr.HonestHelpers.CollectionGoals.Bodies,
-    "The linked source contains the selected repetition, replication, append and tile \
-    helper bodies; their exact dependency associations are checked before installation."⟩,
-  ⟨"wellformed.gkr-line-scalar-bodies", .wellFormedness,
-    some `ZkcSecurity.Realizations.Gkr.HonestLine.Goals.ScalarBodies,
-    "The linked source contains the selected line scalar helpers and wrappers, including \
-    all ordered argument and output interfaces used by their mathematical laws."⟩,
-  ⟨"family.gkr-circuit-helper-laws", .familyProperty,
-    some `ZkcSecurity.Realizations.Gkr.HonestCircuit.Companion.Dependencies,
-    "The circuit's selected block, power, replication, tiling and gate helpers \
-    satisfy their complete mathematical contracts in one common helper table; \
-    the actual source installation discharges these dependencies."⟩,
-  ⟨"wellformed.honest-pair-pointwise-wp", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.HonestCompiled.pairWP,
-    "On one fixed shared answer table, the actual producer and validator both return, \
-    the validator consumes exactly the generated proof and accepts at the selected position. \
-    This pointwise runner property supplies no probabilistic or adversarial assumption."⟩,
-  ⟨"wellformed.honest-readback", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.Readback,
-    "A derivation aligns producer sends with typed validator receives and identical \
-    history/origin queries for every shared reply, retaining checkpoints and observations \
-    and requiring both processes to return values satisfying the paired postcondition."⟩,
-  ⟨"wellformed.honest-sampling-prefix", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.SamplingPrefix,
-    "Every authorized private reply follows the actual producer prefix to its stated \
-    postcondition, retaining checkpoints and ordered local requests."⟩,
-  ⟨"wellformed.honest-sampled-readback", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.SampledReadback,
-    "An authorized producer-private prefix aligns with the actual deterministic paired \
-    continuation for every reply, including its exact public transcript and returned values."⟩,
-  ⟨"law.honest-private-service-return", .law,
-    some `ZkcSecurity.FiatShamir.SampledReadback.Returns,
-    "Every supported outcome of an allowed producer-local service invocation returns a \
-    reply; this handler law does not restrict the sampled value or honest input."⟩,
-  ⟨"wellformed.honest-private-service-allowed", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.SampledReadback.Allowed,
-    "The reached local request is authorized by the fixed subject context and actual \
-    admitted participant service ports."⟩,
-  ⟨"wellformed.honest-pair-input", .wellFormedness,
-    some `ZkcSecurity.Claims.HonestPair.Subject.HonestInput,
-    "The fixed request input policy and all retained source input clauses hold, and the \
-    exact source input projections encode both selected runtime ABIs with matching sorts."⟩,
-  ⟨"wellformed.honest-pair-nonvacuous", .wellFormedness,
-    some `ZkcSecurity.Claims.HonestPair.Nonvacuous,
-    "Some source input satisfies both the subject's retained target relation and its \
-    fixed honest input contract."⟩,
   ⟨"event.proximity-far", .event,
     some `ZkcSecurity.Families.Proximity.Far,
     "The word has at least the fixed normalized Hamming distance from every codeword; the \
@@ -618,26 +434,10 @@ def entries : List Entry := [
     some `ZkcSecurity.Realizations.Gkr.CircuitEncoding.Outputs,
     "The shaped circuit encoding decodes the claimed outputs to the mathematical evaluation \
     of the circuit at its final layer."⟩,
-  ⟨"event.gkr-combination-claim", .event,
-    some `ZkcSecurity.Realizations.Gkr.Combination.gateClaim,
-    "The carried claim equals the wiring polynomial applied to the two lower-layer \
-    evaluations at the selected left and right points."⟩,
-  ⟨"wellformed.gkr-stacked-encoding", .wellFormedness,
-    some `ZkcSecurity.Realizations.Gkr.HonestCircuit.StackedEncoding,
-    "The raw wiring stack has the declared size, and every active layer block decodes to \
-    the specified mathematical wiring table."⟩,
   ⟨"event.gkr-residual-relation", .event,
     some `ZkcSecurity.Realizations.Gkr.Relations.Residual,
     "The raw factors decode at one common dimension, and the claim equals their Boolean sum \
     after the retained prefix restriction."⟩,
-  ⟨"wellformed.gkr-anchored-round", .wellFormedness,
-    some `ZkcSecurity.Realizations.Gkr.Rounds.Anchored,
-    "The remaining dimension matches the retained point, and every suffix evaluation agrees \
-    with the original reference at that prefix."⟩,
-  ⟨"event.gkr-returned-false-residual", .event,
-    some `ZkcSecurity.Realizations.Gkr.Rounds.Residual,
-    "The returned point and scalar encode an anchored admissible round state whose claim \
-    differs from its mathematical total."⟩,
   ⟨"wellformed.gkr-source-representation", .wellFormedness,
     some `ZkcSecurity.Realizations.Gkr.Source.Represents,
     "The invocation dimensions, input and output tables, wiring blocks and source index \
@@ -659,54 +459,6 @@ def entries : List Entry := [
     some `ZkcSecurity.Examples.Components.GkrRoundsLayout.CallerLayout,
     "The retained left and right wire factors are respectively a replicated table on the \
     leading variables and a tiled table on the trailing variables at the stated split."⟩,
-  ⟨"wellformed.gkr-rounds-decoding", .wellFormedness,
-    some `ZkcSecurity.Examples.Components.GkrRoundsRealization.Decodes,
-    "The four raw vectors decode at the exact remaining dimension to the retained add, \
-    multiply, left-wire and right-wire factors separately."⟩,
-  ⟨"wellformed.gkr-rounds-representation", .wellFormedness,
-    some `ZkcSecurity.Examples.Components.GkrRoundsGateRealization.Represents,
-    "All four raw vectors decode to the retained factors, the reference is admissible for \
-    every future challenge prefix, and its cube size is below the logical index limit."⟩,
-  ⟨"wellformed.canonical-model-admission", .wellFormedness,
-    some `ZkcSecurity.Claims.CanonicalModelAdmission,
-    "The request selects the authority's complete model entry and model elaboration \
-    succeeds for the same subject and application."⟩,
-  ⟨"wellformed.canonical-property-admission", .wellFormedness,
-    some `ZkcSecurity.Claims.CanonicalAdmission,
-    "Subject admission succeeds and the resolved property entry is exactly the \
-    authority's entry for the selected canonical property key."⟩,
-  ⟨"wellformed.author-extension-admission", .wellFormedness,
-    some `ZkcSecurity.Claims.AuthorExtensionAdmission,
-    "Subject admission succeeds and the requested author property identifier is not \
-    reserved by the canonical security authority."⟩,
-  ⟨"wellformed.gkr-rounds-prefix", .wellFormedness,
-    some `ZkcSecurity.Examples.Components.GkrRoundsResidual.Prefix,
-    "The state is reached from the fixed caller state by successive factor restrictions \
-    under arbitrary received coefficient triples and challenges."⟩,
-  ⟨"wellformed.gkr-finite-call-contexts", .wellFormedness,
-    some `ZkcSecurity.Examples.Components.GkrFiniteCalls.Valid,
-    "Each selected gate call maps its two local roles to distinct participants; \
-    every call retains its own immutable protocol context."⟩,
-  ⟨"event.gkr-rounds-false-residual", .event,
-    some `ZkcSecurity.Examples.Components.GkrRoundsResidual.NoReturn,
-    "The complete returned ABI encodes a state at the fixed residual dimension that \
-    retains the caller-anchored prefix, factor representation and false residual."⟩,
-  ⟨"wellformed.original-presentation-alignment", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.Original.Alignment,
-    "The source and target presentations have the same operations and all reply branches, \
-    retain stops, and satisfy the fixed relation at every return."⟩,
-  ⟨"law.original-lossless-interface", .law,
-    some `ZkcSecurity.FiatShamir.Original.LosslessInterface,
-    "Receive and query reply maps are bijective with representable payloads, and send \
-    operations have only the selected reply, permitting full-result presentation transport."⟩,
-  ⟨"family.source-honest-pair", .familyProperty,
-    some `ZkcSecurity.Source.Pair,
-    "The selected producer and validator exchange matching ordinary messages, share each \
-    arbitrary challenge, preserve source occurrence frames and return the stated residual relation."⟩,
-  ⟨"law.source-pair-fold", .law,
-    some `ZkcSecurity.Source.Pair.FoldLaws,
-    "Covered matching message and challenge actions preserve the full construction state \
-    and occurrence stack under the selected producer and validator routing."⟩,
   ⟨"budget.repeated-component-step", .budget,
     some `ZkcSecurity.Obligations.RepeatedComponent.CostContract,
     "One component step retains the continuation's history-dependent budget under its \
@@ -715,41 +467,6 @@ def entries : List Entry := [
     some `ZkcSecurity.Obligations.WeakestPrecondition.costWP,
     "The process satisfies its successful and stopping postconditions for all recovered \
     replies while accounting for history-dependent charges and the available budget."⟩,
-  ⟨"wellformed.sumcheck-source-honest-state", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.SourceIteration.honest,
-    "The runtime encodes a caller-anchored admissible true reference state and satisfies \
-    the selected synchronization relation with the actual handler state and history."⟩,
-  ⟨"wellformed.sumcheck-source-representation", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.SourceIteration.represented,
-    "The runtime encodes a reference prefix with the fixed original table and caller frame."⟩,
-  ⟨"wellformed.sumcheck-source-pair-invariant", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.SourcePair.invariant,
-    "The two source states encode the same caller-anchored reference prefix, whose scalar \
-    equals the remaining table sum and whose table and remaining count satisfy the index bounds."⟩,
-  ⟨"wellformed.sumcheck-source-producer-bodies", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.SourceProducerReduction.Bodies,
-    "The selected source definitions contain the exact typed width, dimension, comparison \
-    and empty-point bodies required by the producer reduction installation."⟩,
-  ⟨"event.sumcheck-source-false-residual", .event,
-    some `ZkcSecurity.Realizations.Sumcheck.SourceRound.residual,
-    "The complete returned state retains the caller frame and extended point, with its \
-    interpolated claim different from the restricted mathematical table total."⟩,
-  ⟨"wellformed.source-reading-data-operation", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.DomainSourceReading.DataOperation,
-    "A source receive uses a data type with a proof-payload representation; \
-    service queries and other source effects retain their existing semantics."⟩,
-  ⟨"wellformed.nominal-data-operation", .wellFormedness,
-    some `ZkcSecurity.FiatShamir.NominalDomain.DataOperation,
-    "A nominal presentation receives only representable data; deliveries and \
-    queries retain their complete reply types."⟩,
-  ⟨"law.original-lossless-support", .law,
-    some `ZkcSecurity.FiatShamir.Original.LosslessOn,
-    "Every reached presentation operation, under every typed reply, has bijective \
-    receive/query readback and representable payloads; this is not a probability-one claim."⟩,
-  ⟨"wellformed.sumcheck-original-security-routes", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.OriginalSecurity.Routes,
-    "At every reached source loop index and outer frame, source messages, draw and \
-    delivery resolve to the selected schedule and service handle in validator mode."⟩,
   ⟨"law.hash-decoder-consistency", .law,
     some `ZkcSecurity.Commitment.DecoderConsistent,
     "Equal recorded labels within one decoding role determine the same decoded value; cross-role aliases are allowed."⟩,
@@ -828,17 +545,8 @@ constant and whether the schema must be proposition-valued. -/
 def audited : List (String × Option Name × Bool) :=
   entries.map fun entry => (entry.identifier, entry.schema, entry.category.proposition)
 
-/-- Registered endpoints: covered semantic endpoint (`ideal-meaning` or
-`executable-bytes`), property, statement form (`fixed` or `adaptive`) and the
-endpoint theorem over artifact-indexed evidence (`ZkcSecurity.Endpoint`).
-Knowledge soundness is registered for fixed statements only. -/
-def endpoints : List (String × String × String × Name) := [
-  ("ideal-meaning", "soundness", "fixed", `ZkcSecurity.Endpoint.fixed_soundness),
-  ("ideal-meaning", "soundness", "adaptive", `ZkcSecurity.Endpoint.adaptive_soundness),
-  ("executable-bytes", "soundness", "fixed", `ZkcSecurity.Endpoint.fixed_soundness_bytes),
-  ("executable-bytes", "soundness", "adaptive", `ZkcSecurity.Endpoint.adaptive_soundness_bytes),
-  ("ideal-meaning", "knowledge-soundness", "fixed", `ZkcSecurity.Endpoint.knowledge_soundness),
-  ("executable-bytes", "knowledge-soundness", "fixed", `ZkcSecurity.Endpoint.knowledge_soundness_bytes)
-]
+/-- No concrete source or byte endpoint is currently installed. Independent mathematical
+theorems do not certify an admitted native artifact. Actual-source installation is separate. -/
+def endpoints : List (String × String × String × Name) := []
 
 end ZkcSecurity.Registry

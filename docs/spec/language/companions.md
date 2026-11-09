@@ -3,8 +3,11 @@
 A companion is an ordinary Lean theorem or definition selected for an already
 fixed obligation. Source identity supports discovery; only checking the exact
 expected Lean type, premises, axioms and subject can discharge the obligation.
-This contract is frontend-owned. Lean's resolver and existing declaration,
-bound-request and receipt pipeline own elaboration and proof admission.
+This contract is frontend-owned. Lean owns elaboration and proof admission.
+The source inventory and lookup addresses remain supported; the former native
+subject/receipt connection pipeline is retired. The current common framework
+checks typed companions, but installation against actual exported source is
+still open. See [formal support](../../../lean/docs/support.md).
 
 ## Lookup identity
 
@@ -115,14 +118,14 @@ The expected type contains no unresolved metavariables before lookup. Instantiat
 the selected declaration, elaborate its supplied arguments, synthesize obligations
 and kernel-check the resulting term against that type. Roll back failed
 elaboration. `sorryAx`, unsolved metavariables and proof/definition-wanted stubs
-are incomplete, never proof evidence. A matched theorem still passes the owning
-receipt's assumption and stage-link policy; lookup does not bypass that audit.
+are incomplete, never proof evidence. A matched theorem must still satisfy the owning claim's assumption and
+stage-link policy; lookup does not bypass that audit.
 
 Resolver results are `matched`, `missing`, `incomplete` or `refused`. These describe
 lookup, not assurance. Missing/incomplete obligations remain open in the inventory;
-refusal reports its cause. The receipt pipeline alone emits assurance states
-such as `certified`, `open`, `incomplete` and `no-claim`, with outcomes
-`established` or `unresolved` for its exact audited scope.
+refusal reports its cause. A claim's checked proof and complete required coverage must be established
+separately. The retained declaration-record audit reports neither native
+certification nor a source/security connection.
 
 ## Generated modules and author files
 
@@ -138,40 +141,26 @@ paths and editor navigation are metadata, not semantic identities. Generated
 files live in a replaceable build directory. Ordinary Lean tooling handles proof
 editing in the captured Lean project.
 
-No parallel `zkc.lean-interface/0` pipeline is introduced. Exported declaration
-metadata extends `zkc.declarations/0`; requests use `zkc.bound-source-claims/0`;
-subjects and receipts use their existing independent readers and
-`lean/checks/check_records.py`. Metadata and companion registration never
+The maintained `zkc.declarations/0` records audit stored Lean declarations,
+axioms and locked theorem statements. They are not a bound source-request or
+receipt format, and `lean/checks/check_records.py` does not take native subject
+or consumer-requirement inputs. Metadata and companion registration never
 manufacture proof authority.
 
-## Consumer requirements transport
+## Independent required coverage
 
-`lean/checks/check_records.py --subject NAME --requirements PATH` passes an
-independently supplied JSON object into the existing fresh Lean receipt audit.
-The file is not read from a provider's subject manifest and is never synthesized
-from the receipts under inspection. Lean's
-[assurance report contract](../../../lean/docs/spec/assurance-report.md) owns
-the exact `zkc.consumer-requirements/0` envelope, admission and coverage result.
-The frontend consumes that contract rather than defining another audit format.
+A consumer fixes its expected obligations independently of the proofs supplied
+by a provider. That set must retain the exact selected subject, source
+occurrences, interpreted propositions and dependency context. Names and digests
+alone cannot replace these records or prove source correspondence.
 
-A frontend consumer supplies the complete selected subject, manifest and checker
-context, together with exact source occurrences and complete interpreted
-requests. Property names, display labels and request digests alone cannot replace
-those records. It fixes this set independently of the candidate's supplied
-receipts and refreshes it deliberately when changing accepted artifacts.
-Pinning a manifest does not prove its source correspondence or establish that
-the consumer selected every desired property.
+A valid theorem and complete declaration coverage are distinct judgments.
+Missing or unproved requirements keep coverage open without invalidating an
+otherwise valid theorem. A direct kernel-checked proof of a fixed claim does
+not need a registered-law route, and cannot silently discharge unrelated
+public promises. Author-only coverage does not establish security.
 
-Lean classifies receipt validity before comparing requirement coverage. Missing,
-changed, ambiguous or unproved requirements keep coverage open without changing
-a valid supplied receipt's type-level status. Every required item must be
-certified before the selected security aggregate can be certified. Successful
-author-only coverage does not create a security claim; trials cannot cover the
-selected subject. Extra claims retain the ordinary audit rules.
-
-The final report retains the independent requirement input and its separately
-classified coverage. Without that input, an established outcome concerns only
-the provider's declared scope. Frontend tools must display coverage separately
-from receipt validity and must not treat either as proof of the source-to-program
-connection. Unknown fields and invalid ingress data are refused under Lean's
-owning contract; no frontend compatibility reader changes that admission.
+Actual-source installation and coverage reporting are future consumers of this
+contract. The retired receipt transport and command-line interface are not
+retained as compatibility routes. Frontend tools must not present pending
+inventory, successful lookup or declaration metadata as native certification.

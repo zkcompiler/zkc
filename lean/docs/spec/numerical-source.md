@@ -19,9 +19,9 @@ The other twenty cover the STARK numerical vocabulary: `field.add`,
 Admission selects exact contract names, static roots, capabilities and ordered
 ports. Existing scalar arithmetic and binary Boolean operations reuse `Op`.
 The new fixed `Numerical` enum supplies the remaining equations through
-`Primitive.evaluateOn`, `PIR.Outcome`, and the existing region/process meaning.
+`Zkc.Source.Structured.Primitive.evaluateOn`, `PIR.Outcome`, and the existing region/process meaning.
 There is no evaluator selected by an unknown contract or catalogue tag.
-`Primitive.evaluate` is precisely the specialization at `ringFieldModel`.
+`Zkc.Source.Structured.Primitive.evaluate` is precisely the specialization at `ringFieldModel`.
 
 ## Polynomial values
 

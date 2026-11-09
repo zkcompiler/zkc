@@ -19,8 +19,7 @@ from support.packages import LEAN as LEAN, PACKAGES, package_directory, package_
 EMITTER = package_directory("ir") / "Zkc/Tools/IR/DeclarationRecords.lean"
 ALLOWED_AXIOMS = ("propext", "Classical.choice", "Quot.sound")
 FORMAT = "zkc.declarations/0"
-REGISTRY = {"verification": ("ZkcSecurity.Registry.table", "ZkcSecurity.Registry.endpoints"),
-            "applications": ("ZkcArkLib.Registry.reportTable", "ZkcArkLib.Registry.reportEndpoints")}
+REGISTRY = {"verification": ("ZkcSecurity.Registry.table", "ZkcSecurity.Registry.endpoints")}
 
 
 def emission_groups(package, headers):
@@ -132,12 +131,6 @@ def emit(package, output, *, lake="lake", baseline=None, details=(), log=None):
                            stdout=log, stderr=subprocess.STDOUT if log else None, text=True)
     if built.returncode != 0:
         return built
-    # Dynamic imports are outside the executable's own import graph. Refresh
-    # the audited package as well, so fresh records cannot describe stale proofs.
-    built = subprocess.run([lake, "build"], cwd=directory, stdout=log,
-                           stderr=subprocess.STDOUT if log else None, text=True)
-    if built.returncode != 0:
-        return built
     with HeaderParser(lake=lake) as headers:
         groups, common = emission_groups(package, headers)
     # Default targets may omit a command or a source without weakening its
@@ -195,12 +188,26 @@ class Records:
         headers, declarations = {}, []
         for package, path in paths.items():
             lines = Path(path).read_text().splitlines()
+            if not lines:
+                raise ValueError(f"{path}: empty declaration document")
             header = json.loads(lines[0])
-            if header.get("format") != FORMAT:
-                raise ValueError(f"{path}: not a {FORMAT} document")
+            families = header.get("families")
+            if (header.get("format") != FORMAT or not isinstance(families, list) or
+                    any(not isinstance(name, str) or not name for name in families) or
+                    len(set(families)) != len(families) or
+                    type(header.get("modules")) is not int or header["modules"] != len(families) or
+                    type(header.get("declarations")) is not int or header["declarations"] != len(lines) - 1 or
+                    header.get("axiom_provenance") != "resolved-constant-info/0" or
+                    header.get("reference_provenance") != "checked-stored-module/0"):
+                raise ValueError(f"{path}: invalid declaration counts, coverage or provenance")
             headers[package] = header
             for line in lines[1:]:
                 record = json.loads(line)
+                if (record.get("module") not in families or
+                        not isinstance(record.get("name"), str) or not record["name"] or
+                        not isinstance(record.get("axioms"), list) or
+                        any(not isinstance(name, str) for name in record["axioms"])):
+                    raise ValueError(f"{path}: malformed or unselected stored declaration")
                 record["package"] = package
                 declarations.append(record)
         return cls(headers, declarations)

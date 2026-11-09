@@ -89,8 +89,8 @@ test-lean-integration: (build-lean "--package" "applications")
 test-lean-clean: (build-lean "--package" "applications")
     python3 common/tests/run.py lean-clean
 
-# Compare native and Lean semantics and check authored security claims and refusals.
-test-lean-native profile="release": (build-compiler profile) build-rust (build-lean "--package" "applications")
+# Compare actual structured source admission and execution with native SSA.
+test-lean-native profile="release": (build-compiler profile)
     python3 common/tests/run.py lean-native --profile "$1"
 
 # Test the optional AIR adapter, including independent native comparisons.

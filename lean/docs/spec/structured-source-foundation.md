@@ -9,7 +9,7 @@ Wire decoding supplies data, not a source connection or security theorem.
 the exact JSON data. Constructor argument kinds, domain sorts, nominal identity
 trees, ordered variant alternatives, duplicate labels and oracle arguments are
 checked. Traversal has bounded depth, expanded work and metadata. This data
-vocabulary grants no interpreter support. `Structured.Format.type` separately
+vocabulary grants no interpreter support. `Zkc.Source.Structured.Format.type` separately
 lowers only the existing Boolean, index, field, vector, group, group-vector,
 indices, sequence, single-alternative product, service and logical-oracle types.
 Existing semantic admission continues to refuse logical oracle execution and

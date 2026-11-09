@@ -5,7 +5,7 @@ public import Zkc.IR.Source.Structured.Catalogue
 @[expose] public section
 
 /-! Installed catalogue rows, generated from `common/catalog/declarations.json`.
-Regenerate with bridges/common/installed_catalogue.py --write;
+Regenerate with support/installed_catalogue.py --write;
 checks/check_installed_catalogue.py refuses a module that differs from a fresh
 rendering.
 

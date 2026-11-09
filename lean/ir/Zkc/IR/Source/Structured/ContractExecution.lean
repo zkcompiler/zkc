@@ -37,7 +37,7 @@ end BoundaryValuation
 
 private theorem absent_get {Value : Ty → Type} {types : List Ty} {type : Ty}
     (ref : Var types type) : (Values.absent Value types).get ref = none := by
-  induction ref <;> simp_all [Values.absent, Values.get]
+  induction ref <;> simp_all [Values.absent]
 
 namespace BoundarySelector
 variable {signature : ProtocolSignature} {Value : Ty → Type} {type : Ty}

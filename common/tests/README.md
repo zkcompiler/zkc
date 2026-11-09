@@ -189,78 +189,19 @@ of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.
 
-`just test-lean-integration` also runs the Lean-backed receipt reporting controls
-in `lean/verification/checks/test_receipt_reporting.py`. They exercise the actual
-kernel classifier and exported declarations, so they belong to this prepared
-formal lane; `just test-harness` requires no Lean installation. To run only these
-controls after preparing the packages, use
-`uv run --no-sync --locked pytest lean/verification/checks/test_receipt_reporting.py`.
-Generated constructed-view and structured-binding controls run in the core
-Lean lane through `lake env`. Local-service export/admission controls require
-the compiler and run in the `lean-native` bridges stage with its selected build.
+The core lane checks maintained source ownership, declaration/axiom records and
+external consumers. The optional integration lane includes the retained ArkLib and
+Clean mathematical adapters. These checks no longer generate protocol subjects or
+assemble native security receipts.
 
-`just test-lean-native` prepares the native compiler, the runtime CLI, the Applications package closure, then
-runs independent scalar and structured SSA/Lean comparisons, including primitive
-bindings and unchanged table helpers, the source/property
-request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
-also has a standalone command and optional production Runner comparisons.
-The separate [participant probe](../../lean/bridges/structured/participant.md)
-compares actual Schnorr endpoints, native G1 codecs, pending actions and provider
-state; build its test driver explicitly and run the documented standalone command.
-It requires the structured open replay executable and is not a default native check.
-`lean-native` also runs the [transcript-construction bridge](../../lean/bridges/construction/README.md),
-which checks the validators of the compiled Schnorr, Sumcheck, composed Sumcheck,
-Schnorr AND and Chaum–Pedersen proof Entries with the Lean rules, and the
-[executable bridge](../../lean/bridges/executable/README.md), which checks the validator
-program the runtime admits with the Lean lowering rule and compares the runtime CLI
-selected by `ZKC_NATIVE_BIN` with the Lean executable meaning.
-To use an existing build, run
-`python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
-This scope exercises wrong-program, wrong-relation and unproved-certificate
-refusals as well as successful claims. Reports are retained under
-`build/reports/lean/native` (or the selected report root).
+`just test-lean-native` prepares the native compiler; its driver incrementally builds
+only the structured reader it uses. It compares actual frontend exports and selected
+service fixtures against independent SSA and Lean execution, retaining returned rows,
+reached stops, ordered replies and failures. Capacity is sufficient for both
+interpreters and does not claim identical step accounting. See
+[formal support](../../lean/docs/support.md).
 
-For Lean development, select the affected stages explicitly:
-
-```sh
-python3 common/tests/run.py lean-native --stage subjects --subject schnorr
-python3 common/tests/run.py lean-native --stage subjects --stage reports --subject sumcheck
-python3 common/tests/run.py lean-native --stage normal-forms
-```
-
-The stages are `bridges`, `subjects`, `normal-forms` and `reports`, in that order.
-Omitting `--stage` still runs every stage and every subject. Each invocation
-retains `lean/native/selection.json` with its requested coverage, completed
-stages, failures and timings. A selected subject still runs its kernel checks,
-mutations, runtime differential and receipt-dependency audit. Selected reports
-require a fresh subject run in the same invocation and compare their rows with
-the maintained expectations, including intentionally unresolved claims.
-Unselected subject rows are not compared. Partial runs do not replace the full scope.
-
-Every native run checks dependency pins, path providers, compatibility sources
-and toolchain agreement before expensive work. Declaration capture builds the
-audited package and uses the Lake-built `declaration-records` executable. It
-still reads actual stored proof bodies, including private and opaque proofs,
-on every capture; declaration records and assurance status are not cached.
-
-Body printers use small Lake workspaces under `lean/.lake/body-printers`.
-Lake tracks their generated source and imports and replays their output when
-unchanged. The result remains a candidate: comparison with tracked source and
-kernel admission through the structured views still run. `--fresh-bodies`
-on a subjects run bypasses printer replay for a fresh comparison. Standalone
-`lean/bridges/structured/bodies.py --fresh` does the same. A malformed printer
-log fails; after inspecting the failure, remove only that regenerable scratch
-workspace while no process uses it and retry. No proof or status is recovered
-from an earlier validation run.
-
-For profiling, use Lean's `--profile` and `-Dtrace.profiler=true` on a selected
-file; these measure elaboration rather than a tool's `main` IO. Declaration
-capture separately logs import, provider indexing, stored-proof traversal and
-record-rendering time. The implementation uses the existing pinned Lean/Lake;
-see [Lake module targets and executables](https://lean-lang.org/doc/reference/4.34.0/Build-Tools-and-Distribution/Lake/)
-and [module import visibility](https://lean-lang.org/doc/reference/4.34.0/Source-Files-and-Modules/).
-
-Sandboxed optional packages are `.#lean` (Verification), `.#lean-checks`, `.#verification`, `.#arklib`, `.#clean`, `.#applications` and
-`.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.
-The retained research sources and their vectors do not establish correspondence
-or security for the current compiler merely because their checks pass.
+The old `--stage`, `--subject` and `--fresh-bodies` generator switches are removed.
+Use focused Lake modules while repairing proofs, then run required affected package
+checks once. Reuse declaration records only with the checker's exact current input
+receipt. A timeout or signal death is not a semantic refusal.

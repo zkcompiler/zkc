@@ -1,7 +1,6 @@
-# Applications
+# Formal applications
 
-Maintained actual subjects, retained generated artifacts, companions, concrete library consumers and receipts. This is a downstream client package, not a foundation for reusable protocol proofs.
-
-See [architecture](../docs/architecture.md) for ownership, dependencies and extension rules.
-
-Run `lake build` from this directory. Focused module builds use the package's full `Zkc.Applications` import prefix. Tools and tests are separate targets in this package.
+This package contains the retained Clean native-export consumer and mathematical
+adapter controls. It depends on Verification, ArkLib and Clean through explicit Lake
+dependencies. The old generated source/compiled/byte protocol endpoint tree is retired.
+See [formal support](../docs/support.md); an adapter control is not native security.

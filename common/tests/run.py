@@ -7,19 +7,16 @@ prepares isolated base/domain builds unless existing builds are selected.
 """
 
 import argparse
-from contextlib import contextmanager
-import json
 import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from workspace import compiler_directory, output_directory, reports_root, validate_environment  # noqa: E402
+from workspace import compiler_directory, reports_root, validate_environment  # noqa: E402
 from processes import Interrupted, checked  # noqa: E402
-from reporting import new_directory, run_report  # noqa: E402
+from reporting import run_report  # noqa: E402
 
 
 def run(arguments, *, cwd=ROOT, env=None, stdout=None):
@@ -32,140 +29,22 @@ def run(arguments, *, cwd=ROOT, env=None, stdout=None):
 
 
 def lean_checks():
-    # These tools require explicitly selected snapshots, exports, or build destinations.
-    # They have no default input selection for checking the current checkout.
-    snapshot_tools = {"build_replay_tools.py", "check_independent.py", "check_migration.py", "check_subject_roots.py",
+    # These tools operate on explicitly supplied snapshots or prepared sources.
+    snapshot_tools = {"build_replay_tools.py", "check_independent.py", "check_migration.py",
                       "source_responsibility.py", "check_source_construction_cost.py"}
-    # These checks need the native compiler and run in lean-native instead.
-    native_checks = {"check_local_service_admission.py"}
     return sorted(path for path in (ROOT / "lean/checks").glob("*.py")
-                  if path.name not in snapshot_tools | native_checks) + sorted(
-        (ROOT / "lean/consumers").glob("*/check.py"))
-
-
-NATIVE_STAGES = ("bridges", "subjects", "normal-forms", "reports")
-
-
-@contextmanager
-def native_stage(selection, name):
-    """Retain completed work and timing even when a later stage fails."""
-    started = time.monotonic()
-    selection["running"] = name
-    path = Path(selection["path"])
-    path.write_text(json.dumps(selection, indent=2) + "\n")
-    try:
-        yield
-    except BaseException:
-        selection["failed"] = name
-        raise
-    else:
-        selection["completed"].append(name)
-    finally:
-        selection["timings"][name] = time.monotonic() - started
-        selection["running"] = None
-        path.write_text(json.dumps(selection, indent=2) + "\n")
+                  if path.name not in snapshot_tools | {"check_source_admission.py"})
 
 
 def lean_native(args):
     compiler = Path(args.compiler_build).resolve() if args.compiler_build else compiler_directory(args.profile)
-    bridge = ROOT / "lean/bridges/common"
     output = reports_root() / "lean/native"
-    # The structured suites of this run share one executable store. Each child is
-    # given the store; this process's environment is left unchanged.
-    # The Lean bridges select a package's source format through the SDK and
-    # the compiler this run builds, so the suites receive both.
-    store = {"ZKC_TOOL_STORE": str(output / "tool-store"), "ZKC_COMPILER_BIN": str(compiler),
-             "ZKC_NATIVE_BIN": str(output_directory("native"))}
-    stages = [stage for stage in NATIVE_STAGES if stage in (args.stage or NATIVE_STAGES)]
-    selection = dict(format="zkc.validation-selection/0", stages=stages, subjects=args.subject,
-                     coverage="full" if set(stages) == set(NATIVE_STAGES) and not args.subject else "partial",
-                     completed=[], timings={})
-    output.mkdir(parents=True, exist_ok=True)
-    selection["path"] = str(output / "selection.json")
-    with native_stage(selection, "preflight"):
-        run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "applications",
-             "--preflight"], env=store)
-    if "bridges" in stages:
-        with native_stage(selection, "bridges"):
-            run([sys.executable, bridge / "check.py", "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source", "--cases", "80",
-                 "--report", output / "differential.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/check.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/open_protocol.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-open/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/primitives.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-primitives/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/maps.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-maps/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/aggregates.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-aggregates/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/scoped.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-scoped/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/tables.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-tables/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/applications.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-applications/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/repeats.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-repeats/report.json"], env=store)
-            run([sys.executable, ROOT / "lean/bridges/structured/inlining.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--optimizer", compiler / "zkc-opt",
-                 "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
-                 "--report", output / "structured-inlining/report.json"], env=store)
-            run([sys.executable, bridge / "verify_tests.py", "--compiler", compiler / "zkc-compile",
-                 "--output", output / "requests"], env=store)
-            run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
-                 "--output", output / "intent"], env=store)
-            run([sys.executable, ROOT / "lean/checks/check_local_service_admission.py",
-                 "--compiler", compiler / "zkc-compile",
-                 "--output", output / "local-services"], env=store)
-    if "subjects" in stages:
-        with native_stage(selection, "subjects"):
-            # Every subject manifest: exports, generated modules, kernel checks, generic
-            # mutations, the runtime differential and the per-subject evidence records.
-            subjects = new_directory(output, "subjects")
-            run([sys.executable, ROOT / "lean/bridges/subject.py", "--check", "--runtime",
-                 "--compiler", compiler / "zkc-compile", "--native", output_directory("native") / "zkc",
-                 "--output", subjects, *[arg for name in args.subject for arg in ("--subject", name)],
-                 *(["--fresh-bodies"] if args.fresh_bodies else [])], env=store)
-            evidence = subjects / "evidence"
-    if "normal-forms" in stages:
-        with native_stage(selection, "normal-forms"):
-            run([sys.executable, ROOT / "lean/checks/check_source_views.py"], env=store)
-    if "reports" in stages:
-        with native_stage(selection, "reports"):
-            # The assurance reports join the declaration records with this run's evidence.
-            run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "applications",
-                 "--evidence", evidence,
-                 *[arg for name in args.subject for arg in ("--subject", name)]], env=store)
+    # Admission and execution comparisons are distinct from declaration/security
+    # checks. This lane never synthesizes or installs protocol proofs.
+    run([sys.executable, ROOT / "lean/checks/check_source_admission.py",
+         "--compiler", compiler / "zkc-compile",
+         "--reference", compiler / "test/zkc-structured_reference-test",
+         "--output", output])
 
 
 def execute(scope, args):
@@ -197,13 +76,7 @@ def execute(scope, args):
         run(["ctest", "--preset", args.profile, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
     elif scope == "lean":
         for check in lean_checks():
-            if check.name in {"check_constructed_views.py", "check_structured_bindings.py"}:
-                # The generated syntax and its refusal controls import the
-                # prepared package and must see Lake's dependency search path.
-                run(["lake", "env", sys.executable, check,
-                     "--records", reports / "lean" / check.stem], cwd=ROOT / "lean/applications")
-                continue
-            selection = ["--core-only"] if check.name in {"audit_imports.py", "check_library.py", "check_package_ownership.py"} else []
+            selection = ["--core-only"] if check.name in {"audit_imports.py", "check_library.py", "check_package_ownership.py", "check_records.py", "check_clients.py"} else []
             if check.name == "check_migration_exporter.py":
                 selection = ["--package", ROOT / "lean/program", "--output", reports / "lean/migration-exporter"]
             run([sys.executable, check, *selection])
@@ -221,12 +94,6 @@ def execute(scope, args):
         run([sys.executable, ROOT / "lean/checks/check_clients.py", "--package", "applications",
              "--output", reports / "lean/clients-arklib"], cwd=ROOT / "lean")
         run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "applications"])
-        run(["lake", "env", sys.executable,
-             ROOT / "lean/verification/checks/check_abi_installations.py",
-             reports / "lean/abi-installations"], cwd=ROOT / "lean/applications")
-        run(["uv", "run", "--no-sync", "--locked", "pytest",
-             "lean/verification/checks/test_receipt_reporting.py",
-             f"--junit-xml={reports / 'lean/receipt-reporting.xml'}"])
     elif scope == "lean-clean":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--package", "applications"])
         run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--package", "applications"])
@@ -287,12 +154,6 @@ def main():
             command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
         if scope == "lean-native":
             command.add_argument("--compiler-build", help="explicit prepared compiler build directory")
-            command.add_argument("--stage", action="append", choices=NATIVE_STAGES,
-                                 help="run selected stages (default: all; partial runs are recorded)")
-            command.add_argument("--subject", action="append", default=[],
-                                 help="select subjects and their reports; requires explicit --stage subjects")
-            command.add_argument("--fresh-bodies", action="store_true",
-                                 help="regenerate bodies without replaying Lake printer output")
         if scope in {"install", "install-domain"}:
             command.add_argument("--output", help="fresh installation output directory")
         if scope == "install-domain":
@@ -301,16 +162,6 @@ def main():
             command.add_argument("--skip-build", action="store_true",
                                  help="install already built, cache-checked directories without rebuilding")
     args = parser.parse_args()
-    if args.scope == "lean-native":
-        stages = args.stage or list(NATIVE_STAGES)
-        if len(stages) != len(set(stages)):
-            parser.error("each --stage may be selected only once")
-        if args.subject and (not args.stage or "subjects" not in stages):
-            parser.error("--subject requires explicit --stage subjects")
-        if "reports" in stages and "subjects" not in stages:
-            parser.error("reports requires --stage subjects in the same run")
-        if args.fresh_bodies and "subjects" not in stages:
-            parser.error("--fresh-bodies requires the subjects stage")
     validate_environment()
     if os.environ.get("CARGO_TARGET_DIR"):
         os.environ["CARGO_TARGET_DIR"] = str(Path(os.environ["CARGO_TARGET_DIR"]).resolve())

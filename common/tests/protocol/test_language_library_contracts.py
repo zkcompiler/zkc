@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from entry import joint_package
-from harness import load
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "compiler/test/fixtures/layout/library-contracts"
@@ -144,10 +143,9 @@ def test_claim_custody_cannot_replace_final_check_or_be_duplicated(toolchain, jo
 def test_neutral_inventory_reaches_existing_exact_artifact_reader(
         toolchain, journal, directory, client):
     # This transport reader owns address and exact-subject checks, not formal
-    # elaboration. Import the existing bridge instead of another frontend reader.
-    load("library_contract_inventory", "lean/bridges/pipeline/source_claims.py")
-    from bridges.common.lean_render import Refused
-    from bridges.pipeline.source_inventory import Inventory
+    # elaboration. Its native test-support owner has no Lean dependency.
+    from source_transport import Refused
+    from source_correspondence import Inventory
 
     capture, _ = sources(directory, client)
     flags = [*capture, f"--subject={subject(client)}"]

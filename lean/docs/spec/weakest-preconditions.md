@@ -24,13 +24,13 @@ stop boundary. `triple_iff_derivation` proves equivalence to the existence of th
 existing `Derivation`; `ofTriple` retrieves that proof object. This use of choice
 selects a proof of an already fixed proposition, never a knowledge extractor.
 
-`costWP_iff` proves equivalence to `Typed.ChargedCostBound` at the trivial return
+`costWP_iff` proves equivalence to `ZkcSecurity.FiatShamir.Typed.ChargedCostBound` at the trivial return
 and stop predicates. `reserve` gives a continuation arbitrary returned values and
 reached histories with its reserved credit. It assumes neither independent calls
 nor finite costs and uses no subtraction of infinities. Query prices are assessed
 at the reached history. The bound covers every admitted path, not expected cost.
 
-The core `PIR.WeakestPrecondition` instead interprets the actual `Process.run`.
+The core `PIR.WeakestPrecondition` instead interprets the actual `PIR.Process.run`.
 Its adequacy includes state, ordered events and all terminal reasons. Setting its
 stop predicate to `False` requires an actual return. This is suitable for a
 pointwise honest-completeness proof under a fixed answer table.

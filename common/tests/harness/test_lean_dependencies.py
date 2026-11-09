@@ -135,41 +135,8 @@ def test_generic_security_reuses_actual_vcvio_and_core_providers(dependency):
 
 
 
-def test_generic_elaborators_are_reusable_without_opening_generator_dependencies():
-    audit = policy()
-    subject = 'Zkc.Applications.IR.Structured.Generated.Connections.Sample'
-    elaborator = 'Zkc.Tools.IR.ConstructionBindings.Root'
-    audit.audit_graph({subject: [elaborator], elaborator: ['Zkc.IR.Construction.ConnectionRoot']},
-                      ['Zkc.Applications.IR', 'Zkc.Tools.IR', 'Zkc.IR'])
-    assert audit.POLICY['exceptions'] == []
-    for forbidden in ['Zkc.Tools.IR.ConstructionBindings.Generate',
-                      'Zkc.Tools.IR.ConstructionBindings.Analysis', 'Zkc.Applications.IR.Structured.Sample']:
-        with pytest.raises(ValueError, match='forbidden dependency'):
-            audit.audit_graph({subject: [elaborator], elaborator: [forbidden]},
-                              ['Zkc.Applications.IR', 'Zkc.Tools.IR'])
-    with pytest.raises(ValueError, match='forbidden dependency'):
-        audit.audit_graph({subject: ['Zkc.Tools.IR.ConstructionBindings.Generate']}, ['Zkc.Applications.IR'])
 
 
-@pytest.mark.parametrize('owner', [
-    'Zkc.Verification.Bindings.Source.Client',
-    'Zkc.Verification.Families.Sumcheck.Client',
-    'Zkc.Applications.ArkLib.Subjects.Guess.Client',
-])
-@pytest.mark.parametrize('elaborator', [
-    'Zkc.Tools.IR.StructuredSource.InferReferenceInstallation',
-    'Zkc.Tools.IR.StructuredSource.NormalizedRoot',
-    'Zkc.Tools.IR.StructuredSource.Composition',
-])
-def test_security_clients_share_restricted_checked_elaborators(owner, elaborator):
-    audit = policy()
-    graph = {owner: [elaborator], elaborator: ['Zkc.IR.Source.Structured.NormalizedRoot']}
-    audit.audit_graph(graph, ['Zkc.Verification', 'Zkc.Adapters.ArkLib', 'Zkc.Tools.IR', 'Zkc.IR'])
-    for forbidden in ['Zkc.Tools.IR.StructuredSource.Bindings', 'Zkc.Applications.IR.Structured.Sample',
-                      'Zkc.Applications.Security.Subjects.Sample']:
-        with pytest.raises(ValueError, match='forbidden dependency'):
-            audit.audit_graph({owner: [elaborator], elaborator: [forbidden]},
-                              ['Zkc.Verification', 'Zkc.Adapters.ArkLib', 'Zkc.Tools.IR'])
 
 
 def test_source_realization_owns_concrete_programs_not_family_mathematics():
@@ -190,3 +157,10 @@ def test_missing_owned_import_fails_before_build(missing):
     with pytest.raises(ValueError, match="unselected or missing owned import"):
         audit.check_owned_imports({"Zkc.Tests.IR.Client": [missing]})
     audit.check_owned_imports({"Zkc.Tests.IR.Client": [missing, "Mathlib.Data.Nat.Basic"], missing: []})
+
+
+def test_external_client_can_use_its_own_helpers_without_reverse_library_edges():
+    audit = policy()
+    audit.audit_graph({'Client': ['Client', 'Zkc.Protocol.Claims.Assembly']}, ['Client'])
+    with pytest.raises(ValueError, match='forbidden dependency'):
+        audit.audit_graph({'Zkc.Protocol.Claims.Assembly': ['Client']}, ['Zkc.Protocol'])

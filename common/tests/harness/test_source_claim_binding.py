@@ -5,12 +5,13 @@ import json
 
 import pytest
 
-from harness import PROOF_POLICY, language_interface, load
+from harness import PROOF_POLICY, language_interface
+import source_claims
 
 
 @pytest.fixture
 def claims():
-    return load("source_claim_binding", "lean/bridges/pipeline/source_claims.py")
+    return source_claims
 
 
 def fixture(claims, stage="compiled-ideal"):
@@ -189,35 +190,20 @@ def test_site_attribution_never_falls_back_to_a_first_leaf(claims, mutation):
         claims.resolve_sites(original, policy, bindings)
 
 
-def test_subject_export_preserves_raw_interface_and_rejects_reserialization(claims):
-    bridge = load("explicit_native_subject", "lean/bridges/common/native_entry.py")
+def test_raw_interface_bytes_reject_reserialization(claims):
     export, arguments = fixture(claims, "interactive")
     interface = language_interface("test::Proof", "protocol",
                                    claims.digest(arguments["source"]).split(":")[1])
     raw = json.dumps(interface, indent=3) + "\n"
     export["admission"]["interface_sha256"] = claims.digest(raw.removesuffix("\n").encode())
-    emitted = {"language-emit": arguments["source"].decode(), "language-interface": raw}
-    source, exact, parsed = bridge.native_subject(
-        lambda command: emitted[command[1]], "compiler",
-        ["--source-format=zkc", "--subject=test::Protocol"])
-    arguments.update(source=source.encode(), interface_text=exact)
+    arguments["interface_text"] = raw
     claims.bind_export(export, **arguments)
-    assert exact == raw and parsed == interface
+    parsed = json.loads(raw)
     arguments["interface_text"] = json.dumps(parsed) + "\n"
     with pytest.raises(claims.Refused, match="another native interface"):
         claims.bind_export(export, **arguments)
 
 
-@pytest.mark.parametrize("flags", [[], ["--entry=demo::Wrapper"],
-                                   ["--subject=demo::P", "--entry=demo::Wrapper"],
-                                   ["--subject=demo::P", "--subject=demo::Q"]])
-def test_protocol_bridge_does_not_discover_a_child_from_a_host(flags):
-    bridge = load("explicit_native_subject_refusal", "lean/bridges/common/native_entry.py")
-    def unexpected(_command):
-        pytest.fail("ambiguous subject reached the compiler")
-    # The source format is selected, so the refusal is about the subject.
-    with pytest.raises(ValueError, match="one explicit --subject"):
-        bridge.native_subject(unexpected, "compiler", ["--source-format=zkc", *flags])
 
 
 def test_component_proposals_remain_unresolved_and_separate_from_request(claims):

@@ -1,18 +1,16 @@
 # Optional ArkLib adapters
 
-The `zkc_arklib` Lake package owns `Zkc.Adapters.ArkLib`,
-`Zkc.Tools.ArkLib` and `Zkc.Tests.ArkLib`. It depends on Protocol and pinned
-upstream mathematics. Actual IR clients and the report registry are owned by
-`Zkc.Applications.ArkLib` in the downstream Applications package.
+The `zkc_arklib` Lake package owns the adapter library and its tests. It depends
+on Protocol and pinned upstream mathematics. The previous source-specific
+Applications registry and generated IR clients are retired.
 [Shared pins](../../docs/dependencies.md) are unchanged. Import module paths
 and declaration namespaces are distinct; existing theorem names are preserved.
 
 `ZkcArkLib.Sumcheck` connects the deterministic zkc verifier to ArkLib and
 preserves arbitrary causal strategies and complete executions.
 `Sumcheck.Multilinear.Causal` owns stop-aware joint phases and their bounds,
-independently of authored source syntax. `ZkcArkLibExamples.CausalSumcheck`
-connects these laws to the maintained admitted programs, including the exact
-round-count refusal behavior and residual observations.
+independently of authored source syntax. Their previous generated actual-source
+connections are retired; new installations must supply that association.
 
 `ZkcArkLib.Fri` and `ZkcArkLib.Gkr` adapt the upstream family theorems.
 `ZkcArkLib.Stark` adapts the proved STIR list-collision and quotienting results,
@@ -23,11 +21,11 @@ typed common-degree quotient words and an explicit ENNReal error.
 The [STARK component contracts](../../docs/spec/stark-components.md) identify the
 admitted dependency of general upstream combination, which these adapters avoid.
 `ZkcArkLib.FiatShamir.Upstream` imports ArkLib's round-by-round security;
-actual-verifier realization and its dependent clients live in Applications.
-The Applications `Subjects.Guess` and `Subjects.Sumcheck` modules keep their artifact,
-contract, evidence and claim files together. `Zkc.Applications.ArkLib.Registry` owns the `ZkcArkLib.Registry` declarations and registers
-optional schemas; record readers combine it with `ZkcSecurity.Claims.Registry` and
-reject collisions. Protocol and Verification do not depend on this adapter.
+the concrete verifier installations and Applications registry from the previous
+route are retired. This adapter retains independent mathematics and downstream
+consumer checks. Protocol and Verification do not depend on ArkLib. The
+Verification-owned registry contains only maintained generic schemas; optional
+adapter results do not imply a compiled endpoint.
 
 From the repository root:
 
@@ -46,7 +44,7 @@ closures. These are model-specific results; [formal support](../../docs/support.
 states their premises and open implementation links.
 
 The [selected property adapters](../../docs/spec/selected-property-adapters.md)
-include `ZkcArkLib.Kzg.EvaluationBinding` and its concrete group/field
+include `Zkc.Adapters.ArkLib.Kzg.EvaluationBinding` and its concrete group/field
 `OpeningClient`, plus `ZkcArkLib.Knowledge.FiniteRecovery`. KZG bounds use the
 pinned intermediate reduction results with explicit admissibility closure;
 they do not invoke the upstream all-functions hardness assumption. Finite
