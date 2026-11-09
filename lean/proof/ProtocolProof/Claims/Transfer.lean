@@ -77,3 +77,60 @@ def identity (request : UpperRequest E O) : UpperTransfer request request where
 end UpperTransfer
 
 end ProtocolProof
+
+namespace ProtocolProof
+
+universe u v w x y z
+
+/-- Lower-bound transport keeps lost mass explicit. Truncated subtraction is intentional:
+loss greater than the guaranteed mass yields no positive completeness guarantee. -/
+structure LowerTransfer {E : Type u} {O : Type v} [MeasurableSpace O]
+    {F : Type w} {P : Type x} [MeasurableSpace P]
+    (actual : LowerRequest E O) (model : LowerRequest F P) where
+  translate : E → F
+  admitted : ∀ e, actual.admissible e → model.admissible (translate e)
+  loss : E → ℝ≥0∞
+  compare : ∀ e, actual.admissible e →
+    model.experiment.run (translate e) model.event - loss e ≤
+      actual.experiment.run e actual.event
+  budget : ∀ e, actual.admissible e → actual.bound e ≤ model.bound (translate e) - loss e
+
+namespace LowerTransfer
+
+variable {E : Type u} {O : Type v} [MeasurableSpace O]
+  {F : Type w} {P : Type x} [MeasurableSpace P]
+  {G : Type y} {Q : Type z} [MeasurableSpace Q]
+  {actual : LowerRequest E O} {middle : LowerRequest F P} {model : LowerRequest G Q}
+
+/-- Close exactly the requested unconditional lower bound. -/
+theorem establish (transfer : LowerTransfer actual middle) (proof : middle.Holds) :
+    actual.Holds := by
+  intro e he
+  exact (transfer.budget e he).trans
+    ((tsub_le_tsub_right (proof _ (transfer.admitted e he)) _).trans (transfer.compare e he))
+
+/-- Compose lower-bound losses without cancelling a possibly infinite quantity. -/
+def comp (first : LowerTransfer actual middle) (second : LowerTransfer middle model) :
+    LowerTransfer actual model where
+  translate e := second.translate (first.translate e)
+  admitted e he := second.admitted _ (first.admitted e he)
+  loss e := second.loss (first.translate e) + first.loss e
+  compare e he := by
+    rw [← tsub_tsub]
+    exact (tsub_le_tsub_right (second.compare _ (first.admitted e he)) _).trans
+      (first.compare e he)
+  budget e he := by
+    rw [← tsub_tsub]
+    exact (first.budget e he).trans
+      (tsub_le_tsub_right (second.budget _ (first.admitted e he)) _)
+
+/-- Identity preserves the initial and terminal probability mass. -/
+def identity (request : LowerRequest E O) : LowerTransfer request request where
+  translate := id
+  admitted _ h := h
+  loss _ := 0
+  compare _ _ := by simp
+  budget _ _ := by simp
+
+end LowerTransfer
+end ProtocolProof
