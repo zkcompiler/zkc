@@ -73,6 +73,21 @@ not give them concrete-IR ownership. There are no aliases or compatibility
 imports. Sharing this carrier changes neither a theorem's meaning nor the
 native correspondence it requires.
 
+## Shared proof responsibilities
+
+`ProtocolProof` owns complete probability interpretation, local component contracts,
+exact installation, property-directed transfer and fixed request closure over the shared
+Process carrier. FreeM is an internal upstream interpretation, not another program an
+author must write. `ProtocolProofExamples` contains complete small model clients and
+negative controls, not imported compiler artifacts. Its interfaces and authoring boundary
+are documented in the [proof package](../proof/README.md).
+
+The concrete security modules below retain their existing protocol mathematics and
+artifact bindings. Packages 1–2 establish the common proof APIs and dependency diamond;
+they do not yet migrate those existing integration proofs. Library consolidation and
+concrete adoption are separate later work. This distinction prevents a package extraction
+or model theorem from being reported as a new theorem about a compiled verifier.
+
 ## Six security responsibilities
 
 `ZkcSecurity` has six areas. These are responsibility groups, not six indivisible

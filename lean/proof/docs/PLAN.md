@@ -4,7 +4,7 @@ The accepted architecture separates the shared program foundation, proof core, r
 mathematics and concrete IR integration. Complete the framework before attaching imported
 Sumcheck, FRI or another production protocol.
 
-## Packages 1 and 2: current unit
+## Packages 1 and 2: completed
 
 1. Extract the existing generic Region/Process substrate once into `zkc_program`, with
    Std-only dependencies. Move the proof package to `lean/proof`; preserve exact shared
@@ -17,6 +17,9 @@ Sumcheck, FRI or another production protocol.
 4. Validate complete adaptive/nested, shared-state, oracle/proximity and decoder clients,
    including refused malformed inputs, stopped mass, wrong observations and false
    independence assumptions. Audit all owned declarations and review the frozen unit.
+
+The implementation, affected checks and independent sol 6.1 xhigh source review are complete.
+See VALIDATION.md and REVIEW.md for exact scope.
 
 These are proof and program foundation packages. They do not connect actual protocol
 artifacts or implement the proof search/construction engine.

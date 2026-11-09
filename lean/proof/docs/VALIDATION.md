@@ -7,7 +7,9 @@ Current combined unit, 9 November 2026. Lean is pinned to 4.35.0.
 | Complete proof package | `lake build` from `lean/proof` passed (2,815 jobs including cached dependencies). Public core and every model/control module compiled with strict implicit arguments and warnings-as-errors. |
 | Exhaustive axiom audit | After strengthening private-data coverage, `lake build ProtocolProofChecks` passed for 1,912 owned declarations, including private/generated declarations. Only `propext`, `Classical.choice`, `Quot.sound` are allowed transitively. The coverage guard rejects importing public module data alone. |
 | Shared program | Full shared package build passed; original generic declarations are preserved exactly apart from imports/module paths. Focused concrete Region/derivation/compatibility/context consumers passed in the extraction worker. |
-| Package boundaries | Program/core/proof closure and import check passed for 1,596 modules; Lake ownership passed 23 provider checks. Eight package/reproduction controls passed. Exhaustive audit-import maintenance checks ten files. |
+| Package boundaries | Program/core/proof closure and import check passed for 1,596 modules; Lake ownership passed 23 provider and 25 forbidden-provider checks. Eight package/reproduction controls passed. Exhaustive audit-import maintenance checks ten files. |
+| Stored-declaration policy | Final shared-program audit checked 670 declarations and 247 theorems. All 56 policy controls and 10,816 Lean/Python policy pairs passed. |
+| Independent source review | `gpt-6.1-sol/xhigh` reviewed frozen `6966b52ba`; no actionable findings or missing Package 1–2 source gates. No source changed after review. |
 | Claim preservation | The existing `lean/checks/claims.lock.json` is byte-identical to the pre-extraction base. No fresh concrete-security claim capture is asserted. |
 | Model scope | Arbitrary adaptive/nested finite checks, frozen oracle sampling, shared state/challenge, total decoding including malformed failure, all five stops, initial mixtures, property access and upper/lower transfer refusals. |
 
