@@ -1,3 +1,8 @@
+> Historical validation records for the named commits below. Package names,
+> paths and reproduction commands refer to those checkpoints. For the current
+> migrated layout and commands, use [Protocol](../README.md) and the
+> [formal architecture](../../docs/architecture.md).
+
 # Packages 1 and 2 validation
 
 Current combined unit, 9 November 2026. Lean is pinned to 4.35.0.

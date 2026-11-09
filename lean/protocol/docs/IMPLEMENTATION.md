@@ -2,15 +2,16 @@
 
 Packages 1 and 2 of the selected architecture are implemented on
 `codex/program-proof-foundation`. This is the common foundation before imported-protocol
-adoption and the Package 3 construction engine.
+adoption and the Package 3 construction engine. The current physical/module owners
+follow [the formal architecture](../../docs/architecture.md).
 
 ## Package ownership
 
 `lean/program` owns the canonical Process, Outcome, Execution, Stop and generic Region
-with Lean/Std dependencies only. Existing `PIR` and `Zkc.Source` declaration namespaces
+with Lean/Std-only core imports; shared mathematical support may use Mathlib. Existing `PIR` and `Zkc.Source` declaration namespaces
 are retained for the original definitions; no forwarding modules or aliases remain.
-The concrete IR package and `lean/proof` depend independently on this foundation.
-`lean/security` is the integration consumer of both. Package locks, ownership checks,
+The concrete `lean/ir` and mathematical `lean/protocol` packages depend independently
+on this foundation. `lean/verification` is the integration consumer of both. Package locks, ownership checks,
 import policy and source-only reproduction use this same dependency graph.
 
 ## One public execution model

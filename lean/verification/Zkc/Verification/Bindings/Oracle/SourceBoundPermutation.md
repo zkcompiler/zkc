@@ -15,7 +15,7 @@ evidence. A Boolean relation does not specify a distance gap: the separate
 also participates in registry selection, so coincident Yes predicates cannot
 reuse a differently configured request's binding or No adapter.
 
-`TestsSecurity/SourceBoundOraclePermutation.lean` admits two authored Snapshots
+`Zkc.Tests.Verification.SourceBoundOraclePermutation` admits two authored Snapshots
 through `structured_views`, including exact raw/typed helper association and a
 continuation contract's input and output relation applications. The clients are
 reversal of a nonconstant fixed reference at gap `1/2`, and swapping two
@@ -56,14 +56,12 @@ boundary. Application-to-farness, FRI, native execution and hash/leaf-layout
 correspondence remain separate obligations.
 
 After integrating the shared relation-meaning seam and building its dependencies,
-run from `lean/security`:
+run from `lean/verification`:
 
 ```sh
-LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true \
-  -o .lake/build/lib/lean/ZkcSecurity/Bindings/Oracle/SourceBoundPermutation.olean \
-  ZkcSecurity/Bindings/Oracle/SourceBoundPermutation.lean
-LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true \
-  TestsSecurity/SourceBoundOraclePermutation.lean
+LEAN_NUM_THREADS=2 lake build \
+  +Zkc.Verification.Bindings.Oracle.SourceBoundPermutation \
+  +Zkc.Tests.Verification.SourceBoundOraclePermutation
 ```
 
 The test executes the structural/registry controls and prints the axiom closures

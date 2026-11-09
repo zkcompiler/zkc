@@ -40,7 +40,7 @@ nonempty positional domains.
 
 ## Reuse and controls
 
-`TestsSecurity/OraclePermutation.lean` contains two parametric reuse clients:
+`Zkc.Tests.Verification.OraclePermutation` contains two parametric reuse clients:
 reversal of a singleton reference code, and a coordinate swap on a repetition
 code. The latter also proves the image code equals the original repetition
 code. Both instantiate the same access and farness theorems. Concrete controls
@@ -92,21 +92,14 @@ The parent retains those separately owned paper and implementation obligations.
 
 ## Focused validation
 
-With the pinned dependencies and seeded project caches, run from
-`lean/security`:
+With the pinned dependencies, run from `lean/verification`:
 
 ```sh
-for module in \
-  ZkcSecurity/Families/Proximity/Permutation \
-  ZkcSecurity/Bindings/Oracle/Permutation \
-  ZkcSecurity/Bindings/Oracle/AuthenticatedPermutation
-do
-  mkdir -p ".lake/build/lib/lean/$(dirname "$module")"
-  LEAN_NUM_THREADS=2 lake env lean -DwarningAsError=true \
-    -o ".lake/build/lib/lean/$module.olean" "$module.lean" || exit
-done
-LEAN_NUM_THREADS=2 lake env lean -DwarningAsError=true \
-  TestsSecurity/OraclePermutation.lean
+LEAN_NUM_THREADS=2 lake build \
+  +Zkc.Protocol.Library.Families.Proximity.Permutation \
+  +Zkc.Protocol.Bindings.Oracle.Permutation \
+  +Zkc.Protocol.Bindings.Oracle.AuthenticatedPermutation \
+  +Zkc.Tests.Verification.OraclePermutation
 ```
 
 These commands compile only the new modules, write only the isolated project's
