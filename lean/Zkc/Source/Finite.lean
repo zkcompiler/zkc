@@ -1,8 +1,8 @@
 module
 
 public import Zkc.Semantics.ExactRefinement
-public import Zkc.Semantics.Interpretation
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interpretation
+public import ZkcProgram.Interaction
 
 @[expose] public section
 

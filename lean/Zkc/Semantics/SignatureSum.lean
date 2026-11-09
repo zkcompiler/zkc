@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.Interpretation
+public import ZkcProgram.Interpretation
 
 @[expose] public section
 

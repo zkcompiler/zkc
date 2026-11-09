@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 public import Zkc.Semantics.SignatureSum
 
 @[expose] public section

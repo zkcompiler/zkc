@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Context
+public import ZkcProgram.Region.Context
 
 @[expose] public section
 

@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structure
+public import ZkcProgram.Region.Basic
 public meta import Lean.Elab.Tactic
 
 @[expose] public section

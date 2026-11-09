@@ -3,7 +3,7 @@ module
 public import ZkcArkLib.Sumcheck.Message
 public import Zkc.Protocols.Sumcheck.Common
 public import ZkcSecurity.Families.Sumcheck.Common
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 
 @[expose] public section
 

@@ -49,3 +49,7 @@ allowNonModules = true
 name = "declaration-records"
 root = "checks.DeclarationRecords"
 supportInterpreter = true
+
+[[require]]
+name = "zkc_program"
+path = "program"

@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Region
-public import Zkc.Semantics.Interpretation
+public import ZkcProgram.Interpretation
 
 @[expose] public section
 

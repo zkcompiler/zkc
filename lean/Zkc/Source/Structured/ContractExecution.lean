@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Structured.ContractMeaning
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 
 @[expose] public section
 

@@ -3,7 +3,7 @@ module
 meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
-public import Zkc.Semantics.Execution
+public import ZkcProgram.Execution
 
 @[expose] public section
 

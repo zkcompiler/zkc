@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Semantics.OperationSupport
-public import Zkc.Source.Structure
+public import ZkcProgram.Region.Basic
 public import Zkc.Source.Finite
 
 @[expose] public section

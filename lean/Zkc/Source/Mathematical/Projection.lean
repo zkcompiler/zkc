@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Mathematical
 public import Zkc.Source.ScalarRegion
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 
 @[expose] public section
 

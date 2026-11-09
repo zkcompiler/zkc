@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Transformations.Commitment.BatchOpening
 public import ZkcSecurity.Transformations.Commitment.TableLog
-public import Zkc.Semantics.Execution
+public import ZkcProgram.Execution
 public import Mathlib.Data.List.Sort
 public import Mathlib.Data.Nat.Log
 

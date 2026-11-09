@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 public import VCVio.ProgramLogic.Relational.Basic
 
 @[expose] public section

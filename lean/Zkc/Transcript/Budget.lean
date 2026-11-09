@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Transcript.Interface
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interaction
 public import Mathlib.Algebra.Order.Monoid.Defs
 public import Mathlib.Algebra.Order.Monoid.Prod
 public import Mathlib.Algebra.Order.Pi

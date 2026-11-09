@@ -1,0 +1,11 @@
+name = "zkc_program"
+defaultTargets = ["ZkcProgram"]
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[lean_lib]]
+name = "ZkcProgram"
+globs = ["ZkcProgram", "ZkcProgram.+"]
+requiresModuleSystem = true

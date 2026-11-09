@@ -2,7 +2,7 @@ module
 
 public import Zkc.Specification
 public import Zkc.Source.Structured.ProtocolContext
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interaction
 
 @[expose] public section
 

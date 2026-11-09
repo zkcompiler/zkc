@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Structured.ProtocolContext
 public import Zkc.Source.Component
-public import Zkc.Source.Structure
+public import ZkcProgram.Region.Basic
 
 @[expose] public section
 

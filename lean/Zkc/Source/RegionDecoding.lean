@@ -3,7 +3,7 @@ module
 meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
-public import Zkc.Source.Structure
+public import ZkcProgram.Region.Basic
 public import Zkc.Source.ContextDecoding
 
 @[expose] public section

@@ -3,8 +3,8 @@ module
 meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
-public import Zkc.Source.ContextOperations
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Region.Operations
+public import ZkcProgram.Interaction
 
 @[expose] public section
 

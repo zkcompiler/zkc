@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 public import VCVio.OracleComp.EvalDist.Measure
 public import VCVio.OracleComp.Constructions.SampleableType.Measure
 

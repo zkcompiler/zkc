@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Operations
-public import Zkc.Source.Structure
+public import ZkcProgram.Region.Basic
 
 @[expose] public section
 

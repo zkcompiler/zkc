@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Families.Proximity.Permutation
 public import ZkcSecurity.Transformations.Commitment.Verifier
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interaction
 
 @[expose] public section
 

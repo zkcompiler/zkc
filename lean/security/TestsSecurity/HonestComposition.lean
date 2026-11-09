@@ -1,5 +1,5 @@
 import ZkcSecurity.ProgramLogic.HonestComposition
-import Zkc.Semantics.MonadExecution
+import ZkcProgram.MonadExecution
 import VCVio.OracleComp.Constructions.SampleableType.Measure
 import VCVio.OracleComp.EvalDist.Sum
 import TestsSecurity.PrivateProducerWP

@@ -1,7 +1,7 @@
 module
 
-public import Zkc.Semantics.Interaction
-public import Zkc.Semantics.Interpretation
+public import ZkcProgram.Interaction
+public import ZkcProgram.Interpretation
 public import Mathlib.Order.Basic
 
 public section

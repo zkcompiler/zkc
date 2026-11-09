@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.Execution
+public import ZkcProgram.Execution
 
 /-! Open machines and finite observations of possibly unbounded execution.
 

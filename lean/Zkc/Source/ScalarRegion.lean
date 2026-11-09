@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structure
+public import ZkcProgram.Region.Basic
 public import Zkc.Source.Interpretation
 public import Zkc.Source.Finite
 public import Zkc.Source.RegionInterpretation

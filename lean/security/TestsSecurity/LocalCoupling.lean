@@ -1,6 +1,6 @@
 import ZkcSecurity.Mathematics.Oracle.Coupling
 import ZkcSecurity.ProgramLogic.Oracle.Execution
-import Zkc.Source.Structure
+import ZkcProgram.Region.Basic
 
 /-! Finite controls and two typed Region clients for local execution coupling.
 These are protocol shapes, not cryptographic security theorems. -/

@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interaction
 public import Zkc.Source.Decidable
 public import Lean.Data.Json
 

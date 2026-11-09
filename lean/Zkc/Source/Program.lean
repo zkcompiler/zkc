@@ -1,7 +1,7 @@
 module
 
-public import Zkc.Source.Context
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Region.Context
+public import ZkcProgram.Interaction
 
 @[expose] public section
 

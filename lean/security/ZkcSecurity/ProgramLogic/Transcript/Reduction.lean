@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interaction
 public import ZkcSecurity.ProgramLogic.Transcript.Typed
 public import ZkcSecurity.ProgramLogic.Transcript.Lifting
 

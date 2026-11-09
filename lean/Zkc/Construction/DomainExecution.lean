@@ -3,7 +3,7 @@ module
 public import Zkc.Construction.DomainTranscript
 public import Zkc.Construction.Rule
 public import Zkc.Source.Structured.DomainEvaluation
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 
 @[expose] public section
 

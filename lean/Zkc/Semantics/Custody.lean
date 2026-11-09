@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Semantics.Execution
+public import ZkcProgram.Execution
 
 @[expose] public section
 

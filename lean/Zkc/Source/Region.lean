@@ -1,8 +1,8 @@
 module
 
-public import Zkc.Source.Structure
+public import ZkcProgram.Region.Basic
 public import Zkc.Semantics.ExactRefinement
-public import Zkc.Semantics.MonadExecution
+public import ZkcProgram.MonadExecution
 
 @[expose] public section
 

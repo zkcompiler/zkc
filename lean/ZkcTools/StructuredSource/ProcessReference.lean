@@ -7,7 +7,7 @@ public meta import Lean.Elab.Command
 public meta import Lean.Elab.Term
 public meta import Lean.Meta.Tactic.Simp.Main
 public meta import Lean.Meta.Transform
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interaction
 
 public meta section
 

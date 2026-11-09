@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Component
-public import Zkc.Semantics.Execution
+public import ZkcProgram.Execution
 
 @[expose] public section
 

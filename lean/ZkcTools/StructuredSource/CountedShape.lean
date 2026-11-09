@@ -1,7 +1,7 @@
 module
 
 public meta import Lean.Elab.Tactic
-public import Zkc.Semantics.Interaction
+public import ZkcProgram.Interaction
 public import Zkc.Source.Structured.ObservedLoop
 
 public meta section

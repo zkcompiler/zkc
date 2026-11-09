@@ -1,5 +1,5 @@
-import Zkc.Semantics.Execution
-import Zkc.Semantics.MonadExecution
+import ZkcProgram.Execution
+import ZkcProgram.MonadExecution
 import ZkcTools.DeclarationAudit
 
 /-! Standard monadic notation preserves the open tree, adversarial branches,

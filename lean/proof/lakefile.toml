@@ -28,3 +28,7 @@ name = "ProtocolProofExamples"
 
 [[lean_lib]]
 name = "ProtocolProofChecks"
+
+[[require]]
+name = "zkc_program"
+path = "../program"
