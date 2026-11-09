@@ -46,7 +46,7 @@ def main():
             raise RuntimeError(f"command failed; see {log}")
         return result.stdout.strip()
 
-    lean = execute([args.lake, "env", "which", "lean"])
+    execute([args.lake, "env", "which", "lean"])
     environment["LEAN_PATH"] = execute([args.lake, "env", "printenv", "LEAN_PATH"])
     records = []
     for name, artifact_module, artifact_namespace in SELECTIONS:

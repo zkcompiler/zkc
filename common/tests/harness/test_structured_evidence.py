@@ -138,8 +138,8 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
             files.setdefault(str(relative / name), (directory / name).read_text())
         for prefix in roots:
             files.setdefault(str(relative.joinpath(*prefix.split('.')).with_suffix('.lean')), "-- owned source root\n")
-        for executable in tomllib.loads((directory / "lakefile.toml").read_text()).get("lean_exe", []):
-            source = relative.joinpath(*executable["root"].split('.')).with_suffix('.lean')
+        for entry in tomllib.loads((directory / "lakefile.toml").read_text()).get("lean_exe", []):
+            source = relative.joinpath(*entry["root"].split('.')).with_suffix('.lean')
             files.setdefault(str(source), "-- declared executable root\n")
     for name in ("scripts/reporting.py", "common/tests/support/project.py", "common/catalog/declarations.json",
                  "common/catalog/installation.json", "lean/bridges/structured/fixtures.toml"):

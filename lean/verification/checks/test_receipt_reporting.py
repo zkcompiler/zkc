@@ -902,7 +902,6 @@ def test_transport_failure_never_falls_back_to_resolution(api, scoped_report, mo
 @pytest.fixture(scope="module")
 def kernel_records(tmp_path_factory):
     """Capture only the affected Lean control module, without a package build."""
-    root = Path(__file__).resolve().parents[3] / "lean"
     subprocess.run(["lake", "build", "declaration-records", "+Zkc.Tests.IR.ClaimReporting"], cwd=module_package("Zkc.IR"),
                    check=True, capture_output=True, text=True)
     path = tmp_path_factory.mktemp("receipt-kernel") / "main.jsonl"
@@ -947,7 +946,6 @@ def test_python_verified_flag_cannot_override_kernel_audit(kernel_records):
 
 @pytest.fixture(scope="module")
 def security_kernel_records(tmp_path_factory):
-    root = Path(__file__).resolve().parents[3] / "lean"
     subprocess.run(["lake", "build", "+Zkc.Tests.Applications.Verification.ClaimReporting"], cwd=module_package("Zkc.Applications"),
                    check=True, capture_output=True, text=True)
     prefix = "TestsSecurity.ClaimReporting."
@@ -1090,7 +1088,6 @@ def test_production_report_consumes_final_lean_scope_status(security_kernel_reco
 @pytest.fixture(scope="module")
 def source_kernel_records():
     """Audit real pair and heterogeneous-domain receipts, not mock metadata."""
-    root = Path(__file__).resolve().parents[3] / "lean"
     subjects = [
         ('Zkc.Applications.Security.Generated.SmallSumcheckCompletenessClaims',
          "ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims", "complete"),

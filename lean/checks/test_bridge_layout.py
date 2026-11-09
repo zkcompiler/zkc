@@ -11,11 +11,11 @@ from unittest.mock import Mock, patch
 
 LEAN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LEAN))
-from bridges.common.lean_render import Refused, source_package
-from bridges import subject as subject_driver
-from bridges.pipeline import evidence, glue, manifest
-from bridges.structured import bodies, snapshot
-from support.packages import module_owner, module_path, package_directory
+from bridges.common.lean_render import Refused, source_package  # noqa: E402 -- local harness import path
+from bridges import subject as subject_driver  # noqa: E402 -- local harness import path
+from bridges.pipeline import evidence, glue, manifest  # noqa: E402 -- local harness import path
+from bridges.structured import bodies, snapshot  # noqa: E402 -- local harness import path
+from support.packages import module_owner, module_path, package_directory  # noqa: E402 -- local harness import path
 
 
 class BridgeLayout(unittest.TestCase):

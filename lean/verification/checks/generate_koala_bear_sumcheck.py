@@ -212,7 +212,7 @@ def render_snapshot(snapshot: Path, output: Path, report: Path) -> bool:
     command = [*lean_command(module_package("Zkc.Applications"))]
     environment = None
     if PRINTER_CACHE is not None:
-        lean = run(["lake", "env", "which", "lean"], SECURITY, report).stdout.strip()
+        run(["lake", "env", "which", "lean"], SECURITY, report).stdout.strip()
         search = run(["lake", "env", "printenv", "LEAN_PATH"], SECURITY, report).stdout.strip()
         paths = [str((SECURITY / path).resolve()) for path in search.split(os.pathsep)]
         environment = dict(os.environ, LEAN_PATH=str(PRINTER_CACHE) + os.pathsep + os.pathsep.join(paths))
@@ -223,7 +223,7 @@ def render_snapshot(snapshot: Path, output: Path, report: Path) -> bool:
 
 
 def check_candidate(output: Path, report: Path, control: str) -> subprocess.CompletedProcess:
-    lean = run(["lake", "env", "which", "lean"], SECURITY, report).stdout.strip()
+    run(["lake", "env", "which", "lean"], SECURITY, report).stdout.strip()
     search = run(["lake", "env", "printenv", "LEAN_PATH"], SECURITY, report).stdout.strip()
     paths = [str((SECURITY / path).resolve()) for path in search.split(os.pathsep)]
     env = dict(os.environ, LEAN_PATH=str(output) + os.pathsep + os.pathsep.join(paths))
