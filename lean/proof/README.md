@@ -1,61 +1,36 @@
-# Process-facing protocol-proof framework
+# Protocol proof core
 
-This Lean package provides fixed requests, top-level proof closure, exact component installation
-and quantitative composition over canonical `PIR.Process`. It shares `PIR.Signature`,
-`PIR.Outcome`, `PIR.Execution` and the generic `Zkc.Source.Region` foundation with the concrete
-IR through `ZkcProgram`. It has no dependency on concrete IR, source readers, generated subjects
-or production protocol clients.
-
-The proof-owned Process migration is implemented and checked. The selected architecture and
-remaining integration boundaries are described in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
-[VALIDATION.md](docs/VALIDATION.md) records the final package build and 1,542-declaration
-standard-axiom audit, separately from historical evidence.
-
-- [Fixed property meanings and receipts](docs/CLAIMS.md)
-- [Architecture and research decisions](docs/DESIGN.md)
-- [Scope and acceptance plan](docs/PLAN.md)
-- [Implementation interfaces](docs/INTERFACES.md)
-- [Authoring path and complete examples](docs/AUTHORING.md)
-- [Validation and exact claims](docs/VALIDATION.md)
-- [Independent review and disposition](docs/REVIEW.md)
-
-The package requires **Lean 4.35.0** (`leanprover/lean4:v4.35.0`) and the relative Lake
-dependency `zkc_program` at **`../program`**. Keep `lean/program` beside `lean/proof`;
-copying the proof directory alone is insufficient. VCVio, PolyFun and Mathlib revisions
-are pinned by the package. Run from `lean/proof` so its toolchain is selected:
-
-```sh
-lake build
-```
-
-During development, select a changed module with `lake build +ProtocolProof.Claims.Closure`.
-The package gate checks all complete models and controls. Cross-package wiring and concrete
-integration require their own affected checks.
-
-The framework proves model-game claims. Compiler/source integration is a later, separate step
-and remains unclaimed here.
-
-The dependency structure is:
+`protocol_proof` owns fixed security meanings, complete probabilistic execution, local
+component contracts, installation and property-directed root closure. Its public program
+is `PIR.Process`, defined once in the shared `zkc_program` package. Generic Region syntax
+lives in that same shared package; concrete dialects and readers remain in `zkc`.
 
 ```text
-ZkcProgram                  pinned VCVio / PolyFun / Mathlib
-    │                                      │
-    └── Semantics/Execution ── Internal/* ───┘
-                                  │
-                  Semantics/System, Quantitative
-                           │              │
-                  Semantics/Access    Components/*
-                           │              │
-                  Claims/property requests, Closure, Assembly
-                           │
-                  Claims/Receipt, Diagnostics, Transfer
+                 zkc_program (Std only)
+                   /               \
+       zkc (concrete IR)       protocol_proof
+                   \               /
+                       zkc_security
 ```
 
-`Claims/Request.lean` is a public import module for the unary requests and view comparison.
-The extraction and simulation profiles use `Semantics/Access`; `System` does not import claims.
-Built-in claim meanings and custom propositions are distinct constructors of `Claim`.
+The probability interpreter uses pinned VCVio/PolyFun kernels through an internal,
+failure-aware encoding. Authors write Process programs and mathematical obligations;
+they do not maintain a second FreeM program. Every public execution retains its terminal
+outcome, reached state and ordered events. Claims select a fixed measurable observation
+of that complete law; they never condition on successful execution.
 
-`System.experiment` returns complete `Execution` records: outcome, reached state and ordered
-events. Internally, `Internal.effects` and `Internal.encode` feed one stop-aware interpretation
-to upstream `FreeM.runKernel`; authors use Process. Exact `Installation` reuses VCVio couplings,
-and Process contracts and root closures reuse the existing backend proofs and PolyFun fold.
+- [Architecture and responsibility boundaries](docs/DESIGN.md)
+- [Public interfaces](docs/INTERFACES.md)
+- [Authoring and complete model clients](docs/AUTHORING.md)
+- [Fixed property meanings and receipts](docs/CLAIMS.md)
+- [Package plan and remaining work](docs/PLAN.md)
+- [Validation evidence](docs/VALIDATION.md)
+- [Review record](docs/REVIEW.md)
+
+Run `lake build` here for the package and its declaration/axiom audit. During development,
+use a changed target, such as `lake build +ProtocolProof.Components.ServiceInstallation`.
+The separate shared program package is built from `../program`.
+
+This package includes complete mathematical model clients. Actual imported protocol
+adoption and the common proof-construction/companion engine are later packages, not
+inferred from those model results.

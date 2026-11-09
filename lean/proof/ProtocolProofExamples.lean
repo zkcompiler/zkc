@@ -6,3 +6,8 @@ public import ProtocolProofExamples.ClaimBoundaries
 
 public import ProtocolProofExamples.ExecutionControls
 public import ProtocolProofExamples.ContractControls
+
+public import ProtocolProofExamples.InterpretationModels
+public import ProtocolProofExamples.OracleProximity
+public import ProtocolProofExamples.ServiceDecoding
+public import ProtocolProofExamples.TransferControls

@@ -66,6 +66,9 @@ class ProgramPackages(unittest.TestCase):
                 ('ZkcProgram.Execution', 'Zkc.Source.Structured'),
                 ('ZkcProgram.Execution', 'ProtocolProof.Claims'),
                 ('Zkc.Source.Structured', 'ProtocolProof.Claims'),
+                ('Zkc.Semantics.Meaning', 'Mathlib.Probability.Kernel.Basic'),
+                ('Zkc.Semantics.Meaning', 'Mathlib.MeasureTheory.Measure.Basic'),
+                ('ZkcProgram.Execution', 'VCVio.EvalDist.PFunctorKernel'),
                 ('ProtocolProof.Claims', 'Zkc.Source.Structured'),
                 ('ProtocolProof.Claims', 'ZkcSecurityExamples.Client'),
                 ('ProtocolProof.Claims', 'ZkcTools.Generation.Commands')]:

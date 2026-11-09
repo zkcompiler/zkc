@@ -1,3 +1,28 @@
+# Packages 1 and 2 validation
+
+Current combined unit, 9 November 2026. Lean is pinned to 4.35.0.
+
+| Gate | Result and scope |
+|---|---|
+| Complete proof package | `lake build` from `lean/proof` passed (2,815 jobs including cached dependencies). Public core and every model/control module compiled with strict implicit arguments and warnings-as-errors. |
+| Exhaustive axiom audit | After strengthening private-data coverage, `lake build ProtocolProofChecks` passed for 1,912 owned declarations, including private/generated declarations. Only `propext`, `Classical.choice`, `Quot.sound` are allowed transitively. The coverage guard rejects importing public module data alone. |
+| Shared program | Full shared package build passed; original generic declarations are preserved exactly apart from imports/module paths. Focused concrete Region/derivation/compatibility/context consumers passed in the extraction worker. |
+| Package boundaries | Program/core/proof closure and import check passed for 1,596 modules; Lake ownership passed 23 provider checks. Eight package/reproduction controls passed. Exhaustive audit-import maintenance checks ten files. |
+| Claim preservation | The existing `lean/checks/claims.lock.json` is byte-identical to the pre-extraction base. No fresh concrete-security claim capture is asserted. |
+| Model scope | Arbitrary adaptive/nested finite checks, frozen oracle sampling, shared state/challenge, total decoding including malformed failure, all five stops, initial mixtures, property access and upper/lower transfer refusals. |
+
+The first combined invocation accidentally selected the root default Lean 4.34.1 and
+failed in dependencies. That run is excluded. The passing combined build and subsequent
+private-data audit used the package's pinned Lean 4.35.0. Reproduction commands must run
+from the package directory or specify the toolchain explicitly.
+
+The final independent source review and its disposition are recorded in REVIEW.md.
+Worker evidence below is retained as historical scope, not substituted for this combined
+gate. No actual imported protocol, compiler/native pipeline, fresh security reports or
+independent-kernel replay was part of these bounded framework packages.
+
+---
+
 # Process-facing proof-core validation
 
 Date: 9 November 2026. Scope: `lean/proof`, consuming the shared `ZkcProgram`

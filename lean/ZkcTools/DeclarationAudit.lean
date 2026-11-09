@@ -1241,6 +1241,21 @@ private def dependencyPolicyJson : String := r##"
       "dependencies": [
         "ZkcSecurity.Claims.Methods"
       ]
+    },
+    {
+      "name": "deterministic-program-probability-boundary",
+      "owners": [
+        "ZkcProgram",
+        "Zkc"
+      ],
+      "exact": false,
+      "dependencies": [
+        "VCVio",
+        "PolyFun",
+        "Mathlib.Probability",
+        "Mathlib.MeasureTheory",
+        "ProtocolProof"
+      ]
     }
   ],
   "exceptions": []

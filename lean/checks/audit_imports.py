@@ -53,6 +53,46 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
             root / tests / "Audit.lean": audit}
 
 
+def proof_audit(root):
+    """Load every proof-owned body, independent of the public authoring roots."""
+    names = modules(root, "ProtocolProof") + modules(root, "ProtocolProofExamples")
+    header = "module\n\n-- Maintained by audit_imports.py; private bodies are required.\n"
+    header += "".join(f"import all {name}\n" for name in names)
+    header += "import Lean.Util.CollectAxioms\n"
+    return header + """
+
+/-!
+Audit every declaration owned by this package, including generated and private declarations.
+Dependencies are traversed by Lean's axiom collector; only the standard logical axioms are
+allowed. The package's ordinary build separately kernel-checks each theorem.
+-/
+
+open Lean Elab Command
+
+run_cmd do
+  let environment ← getEnv
+  let owned := fun moduleName : Name ↦
+    (`ProtocolProof).isPrefixOf moduleName || (`ProtocolProofExamples).isPrefixOf moduleName
+  for imported in environment.header.modules do
+    if owned imported.module && !imported.importAll then
+      throwError "Proof audit requires private module data: {imported.module}"
+  let allowed : Array Name := #[``propext, ``Classical.choice, ``Quot.sound]
+  let mut checked : Nat := 0
+  for (name, _) in environment.constants.toList do
+    let some index := environment.getModuleIdxFor? name | continue
+    let owner := environment.header.moduleNames[index.toNat]!
+    unless owned owner do continue
+    let axioms ← collectAxioms name
+    for axiomName in axioms do
+      unless allowed.contains axiomName do
+        throwError "Nonstandard axiom {axiomName} in {name} (module {owner})"
+    checked := checked + 1
+  if checked == 0 then
+    throwError "No proof declarations were audited"
+  logInfo m!"Axiom audit passed: {checked} package declarations; only propext, Classical.choice, Quot.sound."
+"""
+
+
 # Each optional integration package: its library, its tests and its audit marker.
 INTEGRATIONS = {
     "security": ("ZkcSecurity", "TestsSecurity", "SECURITY-AUDIT-PASS"),
@@ -99,8 +139,12 @@ def main():
                             extra_modules=("Tests.ProgramAudit",)))
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
     for name in select_packages(selected):
+        if name == "proof":
+            root = PACKAGES[name][0]
+            outputs[root / "ProtocolProofChecks.lean"] = proof_audit(root)
+            continue
         if name not in INTEGRATIONS:
-            continue  # The proof package owns its standalone ProtocolProofChecks audit.
+            continue
         library, tests, marker = INTEGRATIONS[name]
         examples = {"security": ["ZkcSecurityExamples"], "arklib": ["ZkcArkLibExamples"]}.get(name, [])
         tools = ["ZkcSecurityTools"] if name == "security" else []

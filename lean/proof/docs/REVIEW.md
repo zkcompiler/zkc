@@ -1,3 +1,22 @@
+# Packages 1 and 2 integration review
+
+The combined candidate is frozen for an independent `gpt-6.1-sol/xhigh` source review.
+Implementation workers are not counted as independent reviewers. The final disposition
+will be recorded here when that review returns.
+
+Central integration review found and fixed an audit-coverage gap: module-system public
+imports did not expose every private declaration. The standalone proof audit now imports
+every owned module with `import all`, independently of the public roots, and rejects any
+owned module whose private data is missing. The final audit checks 1,912 declarations.
+The existing audit-import maintenance tool detects future omitted modules.
+
+The complete combined proof package, shared extraction consumers and package boundaries
+have separate evidence in VALIDATION.md. Generic differing-interface probabilistic
+installation is included in this combined unit; it was still pending in the worker-only
+review below.
+
+---
+
 # Process migration review scope
 
 The implementation was checked against the selected shared-program/proof architecture

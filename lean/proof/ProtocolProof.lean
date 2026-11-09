@@ -7,3 +7,6 @@ public import ProtocolProof.Claims.Diagnostics
 public import ProtocolProof.Components.Adequacy
 
 public import ProtocolProof.Internal.Resource
+
+public import ProtocolProof.Components.Interpretation
+public import ProtocolProof.Components.ServiceInstallation

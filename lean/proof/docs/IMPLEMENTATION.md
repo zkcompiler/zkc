@@ -1,45 +1,65 @@
-# Shared program and proof migration
+# Shared program and proof implementation
 
-The selected design and plan are
-`/ethereum/wonjae/archives/zkc/unified-proof-architecture-2026-11-09/{DESIGN,PLAN}.md`.
-This unit implements Package 1's Process-facing proof core. Package 2 and cross-package
-wiring/integration remain separate work.
+Packages 1 and 2 of the selected architecture are implemented on
+`codex/program-proof-foundation`. This is the common foundation before imported-protocol
+adoption and the Package 3 construction engine.
 
-`lean/program` owns the canonical `PIR.Signature`, `PIR.Process`, `PIR.Outcome`,
-`PIR.Execution`, `PIR.Stop` and generic `Zkc.Source.Region` definitions. Their declaration
-namespaces are retained without compatibility aliases. `lean/proof` consumes `ZkcProgram`
-through `../program`; it does not import concrete IR or generated subjects. This proof-only
-unit does not change tracked shared-program sources.
+## Package ownership
 
-## Implemented proof boundary
+`lean/program` owns the canonical Process, Outcome, Execution, Stop and generic Region
+with Lean/Std dependencies only. Existing `PIR` and `Zkc.Source` declaration namespaces
+are retained for the original definitions; no forwarding modules or aliases remain.
+The concrete IR package and `lean/proof` depend independently on this foundation.
+`lean/security` is the integration consumer of both. Package locks, ownership checks,
+import policy and source-only reproduction use this same dependency graph.
 
-The public surface includes measurable complete execution, `System E I S L`, Process-indexed
-operation specifications and upper/lower contracts, exact same-interface `Installation`,
-contextual transports and both root evidence records. The former public connection and FreeM
-contracts are retired without aliases. The checked backend remains internal implementation.
+## One public execution model
 
-Probability execution uses `Internal.effects`/`Internal.encode` and upstream `FreeM.runKernel`
-with accumulated state and ordered events. The general monadic correspondence, normalized
-probability laws, complete bind equation and deterministic Dirac agreement preserve every stop.
-Existing backend contract, coupling and root closure proofs are reused. Public adequacy covers
-measurable complete rewards and whole initial experiments. The structural Process resource
-bound is proved equal to upstream charge semantics.
+All public programs, contracts, extraction and simulation access use Process. The internal
+encoding reuses upstream FreeM kernel execution and quantitative reasoning. The encoding
+preserves monadic execution, returned and stopped outcomes, reached state and ordered events.
+Probability laws are normalized on the whole initial measure; failure is not conditioned away.
+Public execution equations, expectation adequacy and deterministic Dirac agreement connect the
+probability interpretation to the shared execution meaning.
 
-Extractor and simulator access, both complete model clients and all existing property/refusal
-controls use the public carrier. New execution and contract controls exercise full records,
-mixed returned/stopped laws, both roots and the explicit stopped-branch obligations.
-[VALIDATION.md](VALIDATION.md) records the final Lean 4.35 package build and
-1,542-declaration standard-axiom audit. [REVIEW.md](REVIEW.md) distinguishes source review
-from the independent review of earlier checkpoints.
+## Installation, representation and composition
 
-## Remaining integration boundary
+Same-interface `Installation` requires local joint-law coupling and initial coverage.
+`InterpretationContract` covers deterministic operation-to-Process implementation and transitive
+full-record correspondence. `ServiceInstallation` extends this to probabilistic implementations
+at a different interface, using one local law for each operation and a whole-initial-law coupling.
+Its substitution theorem applies to arbitrary adaptive callers, including repeated and nested
+calls. The implementation is fixed before checking the client.
 
-Package 2 owns broader composition, differing-interface decoding and security transformations.
-Same-interface installation and canonical Process operation substitution do not establish
-those contracts. The shared-state model's arbitrary Process inlining law uses its deterministic
-component meanings; a generic differing-interface probability transport remains separate.
+Upper/lower contracts provide bind, branch, consequence and finite/nested iteration. They expose
+stopped-branch obligations explicitly. The common root evidence combines fixed subject binding,
+installation, mathematics, initial budget and terminal observation implication. UpperTransfer and
+LowerTransfer separately compose proved statistical game changes with explicit losses.
 
-Cross-package wiring and concrete-subject validation belong to integration. The checked
-construction/proposer path, broader family-library migration and actual protocol adoption
-belong to later architecture units. No automatic constructor, production protocol security
-result or runtime/PPT adequacy is claimed here.
+## Complete model clients
+
+- AdaptiveChecks: finite algebraic challenge checks, adaptive histories, nested round counts,
+  soundness bounds and honest completeness through the common roots.
+- OracleProximity: a frozen two-cell table and arbitrary repeated sampling, exact accepting
+  probability, canonical soundness and completeness requests through those same roots.
+- SharedState: persistent challenge/counter state and observation-sensitive representation;
+  independent-round reasoning is not assumed.
+- ServiceDecoding: a probabilistic word service, total bit decoder and malformed-input failure;
+  one installed local law covers two call sites and arbitrary nested callers.
+- InterpretationModels and property/execution/contract/transfer controls: full-record composition,
+  request-fixed access, unconditional mass, every stop reason and rejected weakened obligations.
+
+These are complete small model claims, not claims about imported Sumcheck, FRI or GKR artifacts.
+Companions still supply mathematical operation laws, representations, invariants and terminal
+facts. The generic theorems remove repeated structural proofs; selecting and applying them is
+ordinary Lean authoring until Package 3 provides checked construction.
+
+## Validation and next boundary
+
+See VALIDATION.md for the exact build, exhaustive private-body audit, boundary checks and
+independent review. Shared-program extraction preserves the original declaration bodies and
+existing protected-statement lock. Concrete semantic-consumer checks cover the moved imports;
+no new native/compiled protocol assurance is inferred from model validation.
+
+Package 3 supplies the constructor and companion obligation reporting. Package 4 consolidates
+mathematical libraries and concrete integration ownership. Neither is included in this unit.
