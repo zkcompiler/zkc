@@ -47,7 +47,8 @@ variable {language : Language} (meaning : Interpretation language I)
   simpa only [Interpretation.regionMeaning, bind, pure] using
     (Triple.bind (m := Process I) (meaning.operation op arguments)
       (fun value => pure (Values.singleton value)) (fun value => post (.singleton value))
-      ⟨Lean.Order.PartialOrder.rel_refl⟩ (fun value => Spec.pure (m := Process I) (post := post) (epost := stopped) (Values.singleton value)))
+      ⟨Lean.Order.PartialOrder.rel_refl⟩ (fun value =>
+        Spec.pure (m := Process I) (post := post) (epost := stopped) (Values.singleton value)))
 
 @[spec] theorem selectedOperation {captures : List language.Ty} {result : language.Ty}
     (condition : meaning.Value language.condition) (values : Values meaning.Value captures)
@@ -77,6 +78,7 @@ variable {language : Language} (meaning : Interpretation language I)
       (repeatN count
         (fun value => (body (.cons value values)).bind fun out => .done (out.get .here)) initial)
       (fun value => pure (Values.singleton value)) (fun value => post (.singleton value))
-      ⟨Lean.Order.PartialOrder.rel_refl⟩ (fun value => Spec.pure (m := Process I) (post := post) (epost := stopped) (Values.singleton value)))
+      ⟨Lean.Order.PartialOrder.rel_refl⟩ (fun value =>
+        Spec.pure (m := Process I) (post := post) (epost := stopped) (Values.singleton value)))
 
 end ProtocolProof.Construction

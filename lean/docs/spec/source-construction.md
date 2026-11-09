@@ -93,6 +93,18 @@ Complete model tests include:
   registrations and assembly; malformed choices, false initialization, changed meanings and
   invalid explicit selections are rejected.
 
-These are independent model clients, not completed native Sumcheck/FRI connections. The held-out
-client and author/sharing audit are acceptance gates for the construction package. They do not
-waive the separate actual-source, controller, security and authoring requirements of later work.
+- A held-out multi-result Region that recovers a private Boolean challenge from the first
+  equality reply and checks it at a second call. Both whole-experiment bounds are one, while
+  the stronger observation requiring both checks to accept is proved impossible. Its local
+  laws preserve the private challenge, advance the retained counter by two and retain history.
+
+The held-out client was selected after the common rules and constructor were frozen. It
+requires no new constructor or semantic rule. Stored-proof audits check both query-law
+applications, repeated/nested calls and count-independent finite-loop theorem references.
+See the [authoring and measurement guide](../development/source-construction.md) for the
+complete scope, author inputs and reproduction commands.
+
+These are independent model clients, not completed native Sumcheck/FRI connections. Actual
+source association, generated-controller correspondence and the original security endpoints
+remain separate obligations. The constructor does not certify an arbitrary native operation
+or infer the intended security property from executable code.

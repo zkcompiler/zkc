@@ -52,6 +52,7 @@ example (count x : Nat) :
 example (count x : Nat) (post : Nat → (Potential Unit Unit)ᵒᵈ)
     (stopped : (Stop → Potential Unit Unit)ᵒᵈ) :
     ⦃post x⦄ repeatN count (fun x => Process.done (I := Service) x) x ⦃post; stopped⦄ := by
+  fail_if_success construct_region
   fail_if_success construct_region with_invariants [true]
   construct_region with_invariants [fun _ value => post value]
 
@@ -69,5 +70,24 @@ example : ¬ UpperBound spec ((helper.rename swapped).denote meaning.regionMeani
     (fun _ => 0) := by
   change ¬ ∀ _ : Unit × List Unit, (1 : ENNReal) ≤ 0
   simp
+
+-- Named interpretations need not be reducible abbreviations.
+def namedMeaning : Interpretation language Service := meaning
+
+example (env : Environment namedMeaning.Value [(), ()])
+    (post : Values namedMeaning.Value [()] → (Potential Unit Unit)ᵒᵈ)
+    (stopped : (Stop → Potential Unit Unit)ᵒᵈ) :
+    ⦃post (.singleton ((show Nat from env .here) - (show Nat from env (.there .here))))⦄
+      caller.denote namedMeaning.regionMeaning env ⦃post; stopped⦄ := by
+  unfold caller
+  construct_region
+
+-- No operation theorem means a common-rule gap, not an exported wpFold premise.
+example (unknown : Process Service Nat) (post : Nat → (Potential Unit Unit)ᵒᵈ)
+    (stopped : (Stop → Potential Unit Unit)ᵒᵈ)
+    (law : ⦃post 0⦄ unknown ⦃post; stopped⦄) :
+    ⦃post 0⦄ unknown ⦃post; stopped⦄ := by
+  fail_if_success construct_region
+  exact law
 
 end ProtocolProofExamples.ConstructionControls

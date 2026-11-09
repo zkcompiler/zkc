@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Protocol.Semantics.System
 
 /-!
@@ -89,3 +92,7 @@ end OperationCost
   ⟨Execution.outcome, Execution.measurable_outcome⟩
 
 end ProtocolProof
+
+-- Materialize the unfolding equation here so consumers share its stored provider.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``ProtocolProof.OperationCost.bound

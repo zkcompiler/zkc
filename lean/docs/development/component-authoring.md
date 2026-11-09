@@ -19,6 +19,11 @@ flowchart TD
   D --> R
 ```
 
+For quantitative proofs over the shared typed Region, use the
+[common source-construction path](source-construction.md). It constructs structural composition
+from named checked laws and leaves fixed mathematical obligations. Its complete model examples
+are separate from the native source-binding and compiled-security boundaries described below.
+
 ## Choose what is new
 
 | Change | Author-owned mathematics | Reused infrastructure |

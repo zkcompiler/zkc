@@ -27,6 +27,10 @@ import Zkc.Protocol.Components.Installation
 import Zkc.Protocol.Components.Interpretation
 import Zkc.Protocol.Components.Representation
 import Zkc.Protocol.Components.ServiceInstallation
+import Zkc.Protocol.Construction.Control
+import Zkc.Protocol.Construction.Process
+import Zkc.Protocol.Construction.Region
+import Zkc.Protocol.Construction.WP
 import Zkc.Protocol.Internal.Closure
 import Zkc.Protocol.Internal.Contract
 import Zkc.Protocol.Internal.Installation
@@ -174,6 +178,19 @@ import Zkc.Protocol.Semantics.Experiment
 import Zkc.Protocol.Semantics.Probability
 import Zkc.Protocol.Semantics.Quantitative
 import Zkc.Protocol.Semantics.System
+import Zkc.Tests.Protocol.Construction.AdaptiveSource
+import Zkc.Tests.Protocol.Construction.Choices.Assembly
+import Zkc.Tests.Protocol.Construction.Choices.Companions
+import Zkc.Tests.Protocol.Construction.Choices.Templates
+import Zkc.Tests.Protocol.Construction.Controls
+import Zkc.Tests.Protocol.Construction.GuardedAdaptive
+import Zkc.Tests.Protocol.Construction.OracleInstallation
+import Zkc.Tests.Protocol.Construction.Pilot
+import Zkc.Tests.Protocol.Construction.ProcessContinuations
+import Zkc.Tests.Protocol.Construction.SharedChallengeSource
+import Zkc.Tests.Protocol.Construction.Sharing
+import Zkc.Tests.Protocol.Construction.SharingAudit
+import Zkc.Tests.Protocol.Construction.StatefulOracle
 import Zkc.Tests.Protocol.Models
 import Zkc.Tests.Protocol.Models.AdaptiveChecks
 import Zkc.Tests.Protocol.Models.BoundaryControls
@@ -187,3 +204,4 @@ import Zkc.Tests.Protocol.Models.ServiceDecoding
 import Zkc.Tests.Protocol.Models.SharedState
 import Zkc.Tests.Protocol.Models.TransferControls
 import Zkc.Tools.Protocol.ComponentCost
+import Zkc.Tools.Protocol.Construction

@@ -157,7 +157,8 @@ def finishDerived (goal : MVarId) (derived : Array MVarId) : MetaM Bool := goal.
   goal.assign (← mkAppOptM ``Lean.Order.PartialOrder.rel_refl #[none, none, some right])
   return true
 
-def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) : TacticM (Option (List MVarId)) := goal.withContext do
+def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) :
+    TacticM (Option (List MVarId)) := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let .app _ rhs := target | return none
   let some info := isWPApp? rhs | return none
@@ -167,7 +168,8 @@ def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) : TacticM (O
       return some [← simpIfTarget yes.mvarId (useNewSemantics := true),
         ← simpIfTarget no.mvarId (useNewSemantics := true)]
   if info.prog.isAppOf ``Zkc.Source.Region.denote then
-    trace[Zkc.construction] "region body head {info.prog.getAppArgs[info.prog.getAppNumArgs - 2]!.getAppFn}"
+    trace[Zkc.construction]
+      "region body head {info.prog.getAppArgs[info.prog.getAppNumArgs - 2]!.getAppFn}"
   let database ← SpecAttr.getSpecTheorems
   let indexed ← Sym.SymM.run (database.findSpecs info.prog)
   -- Definitional expansion of a dependent meaning can change discrimination-tree keys.
@@ -238,9 +240,11 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
     setGoals [goal]
     evalTactic (← `(tactic| all_goals simp (config := { failIfUnchanged := false }) only
       [binderNameHint, Zkc.Source.Regions.denote, Zkc.Source.Operands.eval,
-       Zkc.Source.Values.get_here, Zkc.Source.Values.get_there, Zkc.Source.Values.get, Zkc.Source.Values.singleton,
+       Zkc.Source.Values.get_here, Zkc.Source.Values.get_there,
+       Zkc.Source.Values.get, Zkc.Source.Values.singleton,
        Zkc.Source.Environment.push_here, Zkc.Source.Environment.push_there,
-       Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here, Zkc.Source.Environment.prepend_weakenSuffix,
+       Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here,
+       Zkc.Source.Environment.prepend_weakenSuffix,
        Zkc.Source.Environment.prepend, Zkc.Source.Environment.push]))
     if (← getGoals).isEmpty then continue
     let goal ← getMainGoal
@@ -288,9 +292,11 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
         continue
       saved.restore
     evalTactic (← `(tactic| all_goals try simp only [Zkc.Source.Regions.denote,
-      Zkc.Source.Operands.eval, Zkc.Source.Values.get_here, Zkc.Source.Values.get_there, Zkc.Source.Values.get, Zkc.Source.Values.singleton,
+      Zkc.Source.Operands.eval, Zkc.Source.Values.get_here, Zkc.Source.Values.get_there,
+       Zkc.Source.Values.get, Zkc.Source.Values.singleton,
       Zkc.Source.Environment.push_here, Zkc.Source.Environment.push_there,
-       Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here, Zkc.Source.Environment.prepend_weakenSuffix,
+       Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here,
+       Zkc.Source.Environment.prepend_weakenSuffix,
       Zkc.Source.Environment.prepend, Zkc.Source.Environment.push]))
     evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
     for current in ← getGoals do
@@ -321,7 +327,8 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
     ProtocolProof.OperationSpec.outcomePost, ProtocolProof.upper_entailment,
     ProtocolProof.lower_entailment, OrderDual.ofDual_toDual, OrderDual.toDual_ofDual, binderNameHint,
     Zkc.Source.Regions.denote,
-    Zkc.Source.Values.get_here, Zkc.Source.Values.get_there, Zkc.Source.Values.get, Zkc.Source.Values.singleton,
+    Zkc.Source.Values.get_here, Zkc.Source.Values.get_there,
+       Zkc.Source.Values.get, Zkc.Source.Values.singleton,
     Zkc.Source.Operands.eval, Zkc.Source.Environment.push_here, Zkc.Source.Environment.push_there,
        Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here,
     Zkc.Source.Environment.prepend_weakenSuffix, Zkc.Source.Environment.prepend,

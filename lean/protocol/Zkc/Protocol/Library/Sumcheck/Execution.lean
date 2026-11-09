@@ -101,7 +101,6 @@ theorem source_outcome (send : S → Message F × S) (react : S → F → S)
   | none => rfl
   | some value =>
       simp [Source.terminal, Process.run, tapeList_ofFn, coordinates_ofFn]
-      rfl
 
 theorem accepted_iff (send : S → Message F × S) (react : S → F → S)
     {n : Nat} (p : Quadratic F n) (claim : F) (prover : S) (coins : Tape F n) :
