@@ -97,25 +97,30 @@ def test_lake_printer_replay_tracks_source_private_proofs_and_printer(monkeypatc
     root = tmp_path / "lean"
     root.mkdir()
     (root / "lean-toolchain").write_bytes((ROOT / "lean/lean-toolchain").read_bytes())
-    (root / "lakefile.toml").write_text('name = "zkc"\n[[lean_lib]]\nname = "Datum"\n'
-                                      'globs = ["Datum", "Provider"]\n')
+    (root / "lakefile.toml").write_text('name = "zkc_ir"\n[[lean_lib]]\nname = "Fixture"\n'
+                                      'roots = ["Zkc.IR.Fixture"]\nglobs = ["Zkc.IR.Fixture.+"]\n')
     (root / "lake-manifest.json").write_text(json.dumps(dict(
-        version="1.2.0", name="zkc", packagesDir=".lake/packages", packages=[], lakeDir=".lake")))
+        version="1.2.0", name="zkc_ir", packagesDir=".lake/packages", packages=[], lakeDir=".lake")))
     monkeypatch.setattr(api, "LEAN", root)
-    source = root / "Datum.lean"
-    provider = root / "Provider.lean"
+    data = "Zkc.IR.Fixture.Datum"
+    monkeypatch.setattr(api, "module_package", lambda _: root)
+    monkeypatch.setattr(api, "module_path",
+                        lambda module: root.joinpath(*module.split(".")).with_suffix(".lean"))
+    source = api.module_path(data)
+    source.parent.mkdir(parents=True)
+    provider = api.module_path("Zkc.IR.Fixture.Provider")
     provider.write_text("module\npublic theorem fact : True := True.intro\n")
     def write(value):
-        source.write_text(f"module\npublic import Provider\n@[expose] public section\n"
+        source.write_text(f"module\npublic import Zkc.IR.Fixture.Provider\n@[expose] public section\n"
                           f"def value : Nat := {value}\n")
     write(2)
-    program = ('import Datum\n#eval IO.println "ZKC_BODY_OUTPUT_BEGIN"\n'
+    program = ('import Zkc.IR.Fixture.Datum\n#eval IO.println "ZKC_BODY_OUTPUT_BEGIN"\n'
                '#eval IO.println value\n#print axioms fact\n'
                '#eval IO.println "ZKC_BODY_OUTPUT_END"\n')
     driver = Runner()
-    with api.workspace("Datum") as directory:
+    with api.workspace(data) as directory:
         def run(text=program):
-            return api.elaborate(driver, directory, "Inventory", text, "Datum", "lake")
+            return api.elaborate(driver, directory, "Inventory", text, data, "lake")
         first = run()
         artifact = directory / ".lake/build/lib/lean/Inventory.olean"
         timestamp = artifact.stat().st_mtime_ns

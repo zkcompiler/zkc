@@ -12,6 +12,7 @@ from harness import ROOT, lean_imports
 
 with lean_imports():
     from support.packages import module_path, tool_module, package_directory, selected
+    from support.invocation import command as lean_command
 
 LEAN = ROOT / "lean"
 IR = package_directory('ir')
@@ -47,7 +48,7 @@ def capture(tmp_path, request):
     if request.param == "native":
         command = [native_tool(env)]
     else:
-        command = ["lean", "--run", str(EMITTER)]
+        command = lean_command(IR, "--run", EMITTER)
 
     def build(name, text):
         source = tmp_path / (name + ".lean")
@@ -128,7 +129,8 @@ def test_native_registry_capture_matches_interpreted(package, module, namespace,
             ".lake/build/lib/lean", *module.split(".")).with_suffix(".olean").is_file():
         pytest.skip("the selected registry dependencies must already be built")
     outputs = []
-    for mode, command in [("native", [native_tool()]), ("interpreted", ["lean", "--run", str(EMITTER)])]:
+    for mode, command in [("native", [native_tool()]),
+                          ("interpreted", lean_command(directory, "--run", EMITTER))]:
         output = tmp_path / f"{mode}.jsonl"
         subprocess.run(["lake", "env", *command, "--registry", namespace + "." + table,
                         "--endpoints", namespace + "." + endpoints, str(output),
