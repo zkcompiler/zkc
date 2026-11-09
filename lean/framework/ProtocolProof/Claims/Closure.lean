@@ -1,6 +1,7 @@
 module
 
 public import ProtocolProof.Semantics.System
+public import ProtocolProof.Claims.Request
 public import ProtocolProof.Components.Contract
 public import ProtocolProof.Components.Installation
 

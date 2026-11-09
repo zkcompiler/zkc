@@ -4,6 +4,7 @@ This independent Lean package implements fixed requests, top-level proof closure
 component installation, quantitative composition and complete small-model tests. It deliberately
 has no imports from zkc's execution model, source readers or production protocol clients.
 
+- [Fixed property meanings and receipts](docs/CLAIMS.md)
 - [Architecture and research decisions](docs/DESIGN.md)
 - [Scope and acceptance plan](docs/PLAN.md)
 - [Implementation interfaces](docs/INTERFACES.md)
@@ -26,17 +27,21 @@ and remains unclaimed here.
 The core dependency structure is:
 
 ```text
-Claims/Request                Semantics/Quantitative
-      │                              │
-Semantics/System              Components/Contract
-      └─────────────┬────────────────┘
-Components/Installation ──────┤
-                       Claims/Closure
-Components/Representation ───┤
-                       Claims/Assembly
-
-Claims/Request ──────── Claims/Transfer
+Semantics/Experiment             Semantics/Quantitative (upstream WP/kernels)
+       │                                   │
+       ├────────── Semantics/System ────────┤
+       │                 │                 └── Components/*
+       │          Semantics/Access                  │
+       │                 │                         │
+       └──── Claims/property requests ───── Claims/Closure, Assembly, Transfer
+                         │
+                Claims/Receipt, Diagnostics
 ```
+
+`Claims/Request.lean` is a public import module for the unary requests and view comparison.
+The extraction and simulation profiles use `Semantics/Access`; `System` does not import claims.
+Built-in claim meanings and custom propositions are distinct constructors of `Claim`.
+
 
 The component installation and representation modules reuse VCVio's stateful kernel coupling.
 The contract rules reuse PolyFun's specification fold. The framework proves their connection

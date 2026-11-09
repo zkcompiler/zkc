@@ -214,7 +214,7 @@ private theorem batches_lower (count width : Nat) (residual : Bool) (strategy : 
   admissible _ := True
   accepts out := out.1.2 = true
   statement out := out.1.1
-  trueStatement residual := residual = false
+  problem := PromiseProblem.ofPredicate (fun residual ↦ residual = false)
   measurable_bad := MeasurableSet.of_discrete
   error _ := (half ^ width) ^ count
 
@@ -397,7 +397,7 @@ theorem honest_zero_response_accepts (count width : Nat) :
   admissible _ := True
   accepts out := out.1.2 = true
   statement out := out.1.1
-  trueStatement residual := residual = false
+  problem := PromiseProblem.ofPredicate (fun residual ↦ residual = false)
   measurable_bad := MeasurableSet.of_discrete
   error _ := half
 

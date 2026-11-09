@@ -1,4 +1,65 @@
-# Standalone validation record
+# Current property-interface validation
+
+Date: 9 November 2026. Scope: the independent `lean/framework` package. This is not a
+production migration, source/IR correspondence result, or complete cryptographic client.
+The original standalone checkpoint remains preserved at `276b6314647b8ba63b2b71a5ec5c46d68eaed749`.
+
+## Current gate
+
+The final incremental `lake build` passed with `autoImplicit = false` and
+`warningAsError = true`, including all five example/control modules and `ProtocolProofChecks`.
+The transitive axiom audit covered **1,109 package declarations**, allowing only `propext`,
+`Classical.choice` and `Quot.sound`. All 29 owned modules, including the three package roots,
+are reachable from the audit root. No proof source changed after this passing gate.
+
+The passing command took **23.75 seconds** wall time, with **1,461,936 KiB** maximum resident
+memory. Lake reported 2,789 jobs, including cached dependencies. This is one incremental gate
+measurement, not a cold-build benchmark or a speedup claim. An earlier gate found a tactic
+failure in the new adaptive-cost control; the correction reran only its dependency cone and
+reused the already-passing core modules. Focused checks preceded the final gate.
+
+The actual dependency worktrees were clean and matched the manifest exactly:
+
+| Dependency | Revision |
+| --- | --- |
+| Lean | `v4.35.0` |
+| VCVio | `96754a37e739270ac5bb8fe7deaeafef6964b688` |
+| PolyFun | `a5edfe2dd24d9d76f9a13cc1f131b220617ad534` |
+| Mathlib | `56a005855ea17e0b0958f73ec801ae140b0a1679` |
+
+Local dependency caches were shared with the existing proof-foundation workspace. The package
+manifest contains pinned git dependencies, not those local paths; no upstream source or pin
+was changed. No new independent external review was available. The current central review and
+its fixes are recorded in [REVIEW.md](REVIEW.md); the earlier independent review is historical.
+
+## Current acceptance evidence
+
+| Schema or boundary | Positive evidence | Refused mutation or diagnostic |
+| --- | --- | --- |
+| Promise soundness | `ClaimBoundaries.soundness_receipt`; both migrated complete clients | Negative and adaptive statements; promise gap explicitly separate |
+| Honest completeness | `ClaimBoundaries.completeness_receipt`; both migrated complete clients | Perfect acceptance refused for the half-abort client |
+| Fixed recovery | `ClaimBoundaries.recovery_receipt` | Wrong recovery with an existing valid witness |
+| Fixed bounded extraction | `PropertyProfiles.extraction_receipt` | Wrong extractor, wrong public target, zero call budget, zero success above a useful threshold |
+| Statistical simulation | `PropertyProfiles.statistical_receipt` | Witness-leaking real view |
+| Selected-observer simulation | `PropertyProfiles.distinguishing_receipt` | The same leak observed by an admitted identity test |
+| Resources | One-call and adaptive two-call bounds using upstream charge | Zero-call request refused; finite/infinite assessments separate |
+| Complete observations | `ClaimBoundaries.observed_abort_preserved` | Abort mass cannot establish perfect completeness |
+| Receipts | Direct wrapper and explicitly discharged premise | Impossible premise does not yield a closed false claim |
+| Classification/admission | Custom meaning stays custom; witnessed population and useful error examples | Empty-admission theorem explicitly marked vacuous; unchecked diagnostics remain available |
+
+The framework now has 21 core modules (1,855 lines) and five example/control modules
+(1,353 lines), including comments. Some new modules split previously colocated definitions;
+there is one current definition of each meaning. These inventory figures do not measure
+production authoring cost or automatic proof construction.
+
+Reproduce from this directory with `lake build`. Focused development can use, for example,
+`lake build +ProtocolProofExamples.ClaimBoundaries`. Production builds, imported protocol
+reports, alternative kernels, fresh dependency rebuilds and runtime benchmarks were not run.
+The archive `framework-claims-2026-11-09` contains the exact source/config hashes and final log.
+
+---
+
+# Original checkpoint validation (`276b63146`)
 
 Scope: the independent protocol-proof framework and complete model clients. No production zkc
 source, compiler, runtime, imported protocol, or existing formal pipeline was rebuilt or claimed
@@ -22,7 +83,7 @@ The package pins Lean 4.35.0 and the exact VCVio, PolyFun, Mathlib and inherited
 in its manifest. There are no path dependencies or imports from an existing zkc Lean package.
 `autoImplicit = false` and `warningAsError = true` are enabled.
 
-## Performed checks
+## Original performed checks
 
 The complete incremental package build passed on 9 November 2026. It includes the changed
 examples, both root closure theorems, operation-to-program adequacy, state representation,
@@ -95,7 +156,8 @@ interpreter or structural induction, but theorem selection and invariant authori
 explicit Lean work. Production author cost and checking cost require the later adapter gate.
 
 Full knowledge extraction and computational zero knowledge are not inferred from unary bounds.
-`RecoveryRequest` and `ViewRequest` test fixed semantic boundaries, as explained in the design.
+`RecoveryRequest` and the then-named view request tested fixed semantic boundaries. The current
+property interfaces and their additional evidence are recorded above.
 The package provides statistical upper game transfer with explicit losses, not an unproved
 computational reduction or Fiat–Shamir/Merkle realization theorem.
 

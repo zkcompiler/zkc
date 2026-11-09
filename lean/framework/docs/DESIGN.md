@@ -57,11 +57,11 @@ There are three different judgments:
 - **Game transfer:** a proved change of the security experiment/admissible environment with an
   explicit loss. It is not an extra instruction in the execution interpreter.
 
-Upper and lower contracts are separate because the implication directions differ. A soundness
-upper bound cannot be read as completeness. A recovery request fixes its recovery function;
-a view request fixes one simulator before quantifying over private witnesses. Those two request
-forms check the semantic boundary, rather than claiming a complete general knowledge or
-computational zero-knowledge metatheorem.
+Upper and lower contracts are separate because the implication directions differ. Canonical
+property meanings are separately typed: promise soundness, honest completeness, fixed recovery,
+bounded extraction, statistical simulation, and selected-observer simulation. Their detailed
+quantifiers and resource boundaries are in [CLAIMS.md](CLAIMS.md). They share execution and
+mathematical proof infrastructure without pretending to be the same property.
 
 ## The common construction path
 
@@ -99,12 +99,14 @@ both permit it. A later call that reads an erased log invalidates the local law.
 ## Requests and assumptions
 
 `Experiment`, each request's admissibility, its relation, observation and budget are fixed
-before constructing evidence. `SoundnessRequest` computes false acceptance from the accepted
-statement and its truth predicate, including when the statement is chosen adaptively.
-`CompletenessRequest` computes the lower accepting-mass claim `1 - error`.
-`UpperRequest`/`LowerRequest` also support distinct quantitative properties: for example a
-proximity promise has separate Yes and No regions and need not identify No with the complement
-of Yes. A library can define that property-specific request without changing the core algebra.
+before constructing evidence. `SoundnessRequest` computes negative-instance acceptance from
+its output-selected statement and its fixed `PromiseProblem`. Positive and negative regions
+are disjoint but need not exhaust all statements. Ordinary relation soundness uses
+`PromiseProblem.ofPredicate`. A `WitnessRelation` optionally connects returned witnesses to
+positive instances. `CompletenessRequest` computes the unconditional lower accepting-mass
+claim `1 - error`; its admitted environments select the honest strategies and valid inputs.
+The generic `UpperRequest`/`LowerRequest` remain mathematical reasoning interfaces beneath the
+property-specific meanings.
 
 Evidence is indexed by the request. It cannot replace the event, recovery algorithm, simulator
 quantifier order, experiment or numerical budget. Assumptions appear as explicit theorem

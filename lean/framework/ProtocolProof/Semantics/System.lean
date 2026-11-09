@@ -1,6 +1,6 @@
 module
 
-public import ProtocolProof.Claims.Request
+public import ProtocolProof.Semantics.Experiment
 public import ProtocolProof.Semantics.Quantitative
 
 /-!

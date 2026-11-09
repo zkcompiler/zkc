@@ -221,7 +221,7 @@ The adversary can adapt to the complete first component reply, including its cou
   admissible _ := True
   accepts out := out.1 = true
   statement _ := ()
-  trueStatement _ := False
+  problem := PromiseProblem.ofPredicate (fun _ ↦ False)
   measurable_bad := MeasurableSet.of_discrete
   error _ := half
 

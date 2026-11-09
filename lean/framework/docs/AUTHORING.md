@@ -9,7 +9,7 @@ counter, and components containing several primitive operations.
 ## Fix the claim before selecting its proof
 
 A request fixes the experiment, the admitted environments, the observation and the bound. The
-soundness constructor computes acceptance of a false statement. The completeness constructor
+soundness constructor computes acceptance in the request's negative promise region. The completeness constructor
 requires unconditional accepting mass at least `1 - error`. Neither proof method chooses those
 facts. For example, the adaptive client's exact requests are `soundnessRequest count width`
 and `completenessRequest count width`; both use `system.experiment (game count width)`.
@@ -114,3 +114,27 @@ The shared-state soundness and honest-completeness clients intentionally have di
 interactions: the honest client reveals the private bit before checking; the adversarial client
 only receives previous check replies. They validate contextual composition and state handling.
 They are not presented as a proof of knowledge, or as Schnorr AND security.
+
+## Selecting another property
+
+[PropertyProfiles](../ProtocolProofExamples/PropertyProfiles.lean) supplies complete extraction
+and simulation examples; [ClaimBoundaries](../ProtocolProofExamples/ClaimBoundaries.lean)
+supplies promise-gap, abort, conditional-receipt and nonvacuity examples. See [CLAIMS.md](CLAIMS.md)
+for the complete author-facing fields and quantifiers.
+
+For extraction, fix the algorithm, service access, public target, witness relation and success
+function first. Prove `successRequest environment` for every admitted environment, using the
+ordinary lower-bound methods or a direct probability argument, and prove `CallsBounded`.
+`ExtractionRequest.establish` assembles these two facts. It is an interface-closing theorem,
+not a proof of a forking lemma or an automatic extractor constructor.
+
+For simulation, fix the real view, one simulator with allowed public input/services, the valid
+context/witness pairs, error and call budget. Prove the real/simulated view comparison and the
+resource bound. `establish_exact` reuses an exact-law equality when available. A statistical
+argument can instead prove the fixed two-sided comparison directly. Restricted observers use
+their own request; proving a restricted family does not imply all-event statistical privacy.
+
+The final value is `Receipt (.soundness request)` or the corresponding property constructor.
+An arbitrary lemma uses `Receipt (.custom proposition)` and stays custom even if its proposition
+happens to equal a built-in meaning. If a mathematical premise is still open, use
+`ConditionalReceipt claim Premise`; close it only after that premise is proved.

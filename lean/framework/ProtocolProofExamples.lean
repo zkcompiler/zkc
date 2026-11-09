@@ -2,4 +2,4 @@ module
 
 public import ProtocolProofExamples.AdaptiveChecks
 public import ProtocolProofExamples.SharedState
-public import ProtocolProofExamples.BoundaryControls
+public import ProtocolProofExamples.ClaimBoundaries

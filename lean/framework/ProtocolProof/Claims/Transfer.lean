@@ -76,15 +76,4 @@ def identity (request : UpperRequest E O) : UpperTransfer request request where
 
 end UpperTransfer
 
-/-- Exact equality of each permitted view establishes the statistical request at any nonnegative error.
-The same simulator is fixed outside the private-witness quantifier. -/
-theorem ViewRequest.establish_exact {P : Type u} {W : Type v} {V : Type w}
-    [MeasurableSpace V] (request : ViewRequest P W V)
-    (equalViews : ∀ publicInput witness, request.valid publicInput witness →
-      request.real.run (publicInput, witness) = request.simulated.run publicInput) :
-    request.Holds := by
-  intro publicInput witness hvalid event _
-  rw [equalViews publicInput witness hvalid]
-  exact ⟨le_add_right le_rfl, le_add_right le_rfl⟩
-
 end ProtocolProof

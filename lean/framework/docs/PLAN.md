@@ -21,7 +21,7 @@ This package implements the top-level proof architecture independently. It impor
 
 Production connections and migration require a later reviewed unit. The old implementation worktree is preserved.
 
-## Completed checkpoint
+## Original completed checkpoint (`276b63146`)
 
 The fixed requests, both root closure theorems, the generic component and contract rules, the
 two complete model clients and the refusal controls are implemented and checked. Independent
@@ -29,5 +29,24 @@ xhigh review accepted the bounded package; its documentation finding is resolved
 incremental package build and all-declaration axiom audit passed. See [VALIDATION.md](VALIDATION.md)
 and [REVIEW.md](REVIEW.md) for the exact evidence and limits.
 
-The next action is review of this standalone architecture. Connecting existing zkc execution or
+That checkpoint was followed by the framework-completion research and the property-interface unit below. Connecting existing zkc execution or
 starting protocol-specific migration is not part of this completed checkpoint.
+
+## Property-interface completion unit
+
+This unit implements the semantic/property surface from the accepted completion plan:
+
+1. Preserve one `FreeM`/kernel execution substrate and the existing installation/closure proofs.
+2. Add promise regions, optional witness relations and complete measurable observations.
+3. Separate fixed recovery, bounded extraction and operational simulation profiles; expose the
+   selected access, quantifiers, observations, guarantee and resource scope in their requests.
+4. Index receipts by built-in request constructors or an explicitly custom proposition. Keep
+   conditional premises and nonvacuity assessments explicit.
+5. Migrate both complete model clients without a compatibility path. Exercise every built-in
+   property kind with a closed receipt and a relevant refused mutation.
+6. Review semantics, imports, names and source ownership; validate changed modules, then run
+   one final incremental package build and all-declaration standard-axiom audit.
+
+Production connections, imported protocols, runtime/PPT adequacy, a report generator and the
+later construction/transport packages are outside this unit. The next unit is reusable contracts
+and property-appropriate transport; no production client must be connected to accept this one.

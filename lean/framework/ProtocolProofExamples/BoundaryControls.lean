@@ -31,7 +31,7 @@ local instance : MeasurableSpace Bool := ⊤
   admissible _ := True
   accepts output := output = true
   statement _ := ()
-  trueStatement _ := False
+  problem := PromiseProblem.ofPredicate (fun _ ↦ False)
   measurable_bad := MeasurableSet.of_discrete
   error _ := 0
 
@@ -84,7 +84,7 @@ theorem differentRecovery_has_different_meaning :
   · exact wrongRecovery_refused
 
 /-- The real observation leaks the private witness; the fixed simulator sees only Unit. -/
-@[expose] noncomputable def leakingView : ViewRequest Unit Bool Bool where
+@[expose] noncomputable def leakingView : ViewComparison Unit Bool Bool where
   real := { run := fun input ↦ Measure.dirac input.2, normalized := fun _ ↦ inferInstance }
   simulated := constantExperiment false
   valid _ _ := True
