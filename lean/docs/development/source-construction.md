@@ -5,6 +5,10 @@ The program is an existing typed `Region`; the tool emits an ordinary Lean proof
 actual `RegionMeaning`. The [specification](../spec/source-construction.md) fixes the meaning.
 No global default provider or second interpreter is installed.
 
+The pinned toolchain marks `vcgen` experimental. Put
+`set_option experimental.vcgen true` in the client module to acknowledge this and avoid its
+warning, especially when the package treats warnings as errors.
+
 ## The author boundary
 
 A definition law fixes the actual body, ordered operands, interpretation, returned/stopped
