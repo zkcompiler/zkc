@@ -37,8 +37,14 @@ declarations are included transitively by `leanexport`.
 For each package, capture explicitly runs:
 
 ```text
-lake env <toolchain>/bin/leanexport <locked modules> -- <locked names> <standard axioms> <primitive targets>
+LEAN_SYSROOT=<toolchain> LEAN_PATH=<temporary artifact root> <toolchain>/bin/leanexport <locked modules> -- <locked names> <standard axioms> <primitive targets>
 ```
+
+The search root links the existing complete module artifact groups from the
+package's Lake environment. This lets the unmodified exporter resolve separate
+`Zkc` package subtrees, including transitive imports. Distinct physical providers
+of one module are refused. The links are removed after export; original artifact
+paths and hashes remain in the receipt. No source tree or proof is generated.
 
 The primitive targets match Lean 4.35.0's `Lake/CLI/Check.lean`
 `primitiveTargets`/`builtinTargets`, including `Nat.xor`, `semiOutParam`, and

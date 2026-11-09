@@ -7,6 +7,7 @@ bundled paranoid checker. See ../docs/development/independent-checking.md.
 """
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -20,11 +21,13 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 
 LEAN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LEAN))
+from support.invocation import module_artifacts  # noqa: E402
 from support.packages import PACKAGES, add_selection, selection, module_owner, package_directory  # noqa: E402
 
 AXIOMS = ["propext", "Classical.choice", "Quot.sound"]
@@ -401,8 +404,31 @@ def select_replay_toolset(path, prefix, toolchain, output, runner):
                                                   "provenance": receipt}}
 
 
-def export_command(lake, exporter, group):
-    return [lake, "env", str(exporter), *group["modules"], "--",
+@contextmanager
+def export_artifacts(roots, output):
+    """Give the stock exporter exact module paths without rebuilding or patching it.
+
+    leanexport has no ModuleSetup option. Its first-component lookup cannot
+    read sibling Zkc packages from separate roots. Link complete existing
+    artifact groups into one temporary search root; reject ambiguous providers.
+    No source aliases or proof bodies are synthesized.
+    """
+    artifacts = module_artifacts(roots, reject_ambiguous=True)
+    with tempfile.TemporaryDirectory(prefix="export-artifacts-", dir=output) as temporary:
+        directory = Path(temporary)
+        for module, groups in artifacts.items():
+            stem = directory.joinpath(*module.split("."))
+            stem.parent.mkdir(parents=True, exist_ok=True)
+            for group in groups:
+                for original in group:
+                    path = Path(original)
+                    suffix = path.name[len(stem.name):]
+                    Path(str(stem) + suffix).symlink_to(path.resolve())
+        yield directory, artifacts
+
+
+def export_command(exporter, group):
+    return [str(exporter), *group["modules"], "--",
             *group["theorems"], *AXIOMS, *PRIMITIVES]
 
 
@@ -421,21 +447,20 @@ def capture(root, groups, selected, output, lake, runner):
         directory = package_directory(package, root)
         group = groups[package]
         search = runner.run([lake, "env", "printenv", "LEAN_PATH"], directory, f"{package}-search-path").strip()
-        inputs = {}
-        for module in group["modules"]:
-            relative = Path(*module.split("."))
-            candidates = [(directory / part / relative).with_suffix(".olean")
-                          for part in search.split(os.pathsep) if part]
-            olean = next((p.resolve() for p in candidates if p.is_file()), None)
-            if olean is None:
-                raise CheckError(f"{package}: missing existing olean for {module}; build separately before capture")
-            inputs[module] = {str(p): digest(p) for p in sorted(olean.parent.glob(olean.name + "*")) if p.is_file()}
-        inputs_before = {p: h for row in inputs.values() for p, h in row.items()}
+        roots = [(directory / part).resolve() for part in search.split(os.pathsep) if part]
         path = output / f"{package}.ndjson"
-        command = export_command(lake, prefix / "bin/leanexport", group)
-        runner.run(command, directory, f"{package}-export", export=path)
-        if any(digest(p) != h for p, h in inputs_before.items()):
-            raise CheckError(f"{package}: selected oleans changed during capture; retry after the build finishes")
+        command = export_command(prefix / "bin/leanexport", group)
+        with export_artifacts(roots, output) as (search_root, artifacts):
+            inputs = {}
+            for module in group["modules"]:
+                if module not in artifacts:
+                    raise CheckError(f"{package}: missing existing olean for {module}; build separately before capture")
+                inputs[module] = {p: digest(p) for parts in artifacts[module] for p in parts}
+            inputs_before = {p: h for row in inputs.values() for p, h in row.items()}
+            runner.run(command, directory, f"{package}-export", export=path,
+                       env={"LEAN_PATH": str(search_root), "LEAN_SYSROOT": str(prefix)})
+            if any(digest(p) != h for p, h in inputs_before.items()):
+                raise CheckError(f"{package}: selected oleans changed during capture; retry after the build finishes")
         manifest["packages"][package] = {
             "file": path.name, "sha256": digest(path), "bytes": path.stat().st_size,
             "theorems": group["theorems"], "modules": group["modules"], "inputs": inputs,

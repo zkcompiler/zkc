@@ -27,8 +27,8 @@ def command(package, *arguments, lake="lake"):
             "--", *map(str, arguments)]
 
 
-def _artifacts(roots):
-    """Keep each winning module's complete artifact group from a single root."""
+def module_artifacts(roots, *, reject_ambiguous=False):
+    """Keep complete artifact groups; optionally refuse distinct module providers."""
     result = {}
     for root in roots:
         # Lake lists optional library directories before they have any objects.
@@ -52,6 +52,8 @@ def _artifacts(roots):
                     continue
                 module = ".".join(path.relative_to(root).with_suffix("").parts)
                 if module in result:
+                    if reject_ambiguous and Path(result[module][0][0]).resolve() != path.resolve():
+                        raise ValueError(f"ambiguous module provider: {module}")
                     continue
                 stem = path.with_suffix("")
                 parts = [str(path)]
@@ -106,7 +108,7 @@ def elaborate(package, arguments, lake):
     # Always select the owning package's pin, even when launched from /tmp.
     environment["ELAN_TOOLCHAIN"] = (package / "lean-toolchain").read_text().strip()
     overlays = [Path(entry).resolve() for entry in environment.get("LEAN_PATH", "").split(os.pathsep) if entry]
-    overlay_arts = _artifacts(overlays) if overlays else {}
+    overlay_arts = module_artifacts(overlays) if overlays else {}
     header = None
     if overlay_arts:
         with HeaderParser(lake=lake) as parser:
@@ -139,7 +141,7 @@ def elaborate(package, arguments, lake):
         roots = [(package / entry).resolve() for entry in search.split(os.pathsep) if entry]
         # Include transitive dependencies of generated modules too. An overlay
         # may import a second Zkc package absent from the top-level source header.
-        setup["importArts"] = _artifacts(roots) | setup["importArts"] | overlay_arts
+        setup["importArts"] = module_artifacts(roots) | setup["importArts"] | overlay_arts
     environment = json.loads(subprocess.check_output(
         [lake, "env", sys.executable, "-c", "import json, os; print(json.dumps(dict(os.environ)))"],
         cwd=package, env=environment, text=True))

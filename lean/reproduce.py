@@ -22,9 +22,10 @@ import shutil
 import subprocess
 import time
 import tomllib
+from support.invocation import command as lean_command
 from support.compatibility import prepare
 from support.packages import (PACKAGES, NAMES, DIRECTORIES, add_selection, selection,
-                              selected, package_directory, package_modules, check_closure)
+                              selected, package_directory, package_modules, module_path, check_closure)
 
 
 HERE = Path(__file__).resolve().parent
@@ -149,8 +150,8 @@ def checked_build(lake, directory, log_path, env, required):
 def clean_control(lake, directory, expected, log_path, env):
     """The fresh Clean producer must print exactly the maintained control."""
     with log_path.open('w') as log:
-        result = subprocess.run([lake, 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true',
-                                 '--run', str(control_source(directory))],
+        result = subprocess.run(lean_command(directory, '-DautoImplicit=false', '-DwarningAsError=true',
+                                             '--run', control_source(directory), lake=lake),
                                 cwd=directory, env=env, stdout=subprocess.PIPE, stderr=log)
     produced = hashlib.sha256(result.stdout).hexdigest()
     return {'status': 'pass' if result.returncode == 0 and result.stdout == expected.read_bytes() else 'fail',
@@ -159,12 +160,11 @@ def clean_control(lake, directory, expected, log_path, env):
 
 
 def control_source(directory):
-    modules = package_modules('clean', directory.parents[1])
-    candidates = [path for module, path in modules.items()
-                  if module.startswith('Zkc.Tests.Clean.') and module.endswith('.Control')]
-    if len(candidates) != 1:
-        raise ValueError('expected exactly one maintained Clean control producer')
-    return candidates[0]
+    # Select the producer exactly; its generated audit module also ends in Control.
+    source = module_path('Zkc.Tests.Clean.Control', directory.parents[1])
+    if not source.is_file():
+        raise ValueError(f'missing maintained Clean control producer: {source}')
+    return source
 
 
 def run_clients(lake, work, output, packages, env):

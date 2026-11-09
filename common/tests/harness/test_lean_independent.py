@@ -160,9 +160,9 @@ def test_self_comparisons_are_rejected_before_tools(configured, tmp_path, alias)
 def test_every_export_explicitly_includes_primitives_and_axioms(configured):
     audit, root = configured
     group = audit.configuration(root)['verification']
-    command = audit.export_command('lake', Path('/toolchain/bin/leanexport'), group)
-    assert command[:3] == ['lake', 'env', '/toolchain/bin/leanexport']
-    assert command[3:command.index('--')] == ['Zkc.Verification.Module']
+    command = audit.export_command(Path('/toolchain/bin/leanexport'), group)
+    assert command[0] == '/toolchain/bin/leanexport'
+    assert command[1:command.index('--')] == ['Zkc.Verification.Module']
     assert command[command.index('--') + 1:] == group['theorems'] + audit.AXIOMS + audit.PRIMITIVES
     assert {'Nat.xor', 'semiOutParam', 'Quot.sound'} <= set(command)
 
@@ -425,3 +425,33 @@ def test_replay_requires_roots_in_export_not_only_manifest(tmp_path):
     path.write_text(' ' * (8 * 1024**2 + 1))
     with pytest.raises(audit.CheckError, match='export record exceeds'):
         audit.require_export_roots(path, ['Locked.root'])
+
+
+def test_export_artifacts_join_split_roots_and_preserve_private_parts(tmp_path):
+    audit = checker()
+    roots = [tmp_path / 'program', tmp_path / 'ir']
+    for root, owner in zip(roots, ['Program', 'IR']):
+        directory = root / 'Zkc' / owner
+        directory.mkdir(parents=True)
+        for suffix in ['olean', 'olean.server', 'olean.private', 'ir.sig', 'ir']:
+            (directory / ('Control.' + suffix)).write_text(owner + suffix)
+    with audit.export_artifacts(roots, tmp_path) as (search, artifacts):
+        assert set(artifacts) == {'Zkc.Program.Control', 'Zkc.IR.Control'}
+        for root, owner in zip(roots, ['Program', 'IR']):
+            for suffix in ['olean', 'olean.server', 'olean.private', 'ir.sig', 'ir']:
+                relative = Path('Zkc') / owner / ('Control.' + suffix)
+                assert (search / relative).resolve() == root / relative
+    assert not search.exists()
+
+
+def test_export_artifacts_refuse_distinct_providers_but_allow_same_path(tmp_path):
+    audit = checker()
+    roots = [tmp_path / 'first', tmp_path / 'second']
+    for root in roots:
+        (root / 'Zkc').mkdir(parents=True)
+        (root / 'Zkc/Control.olean').write_text('same bytes are still distinct providers')
+    with audit.export_artifacts([roots[0], roots[0]], tmp_path) as (_, artifacts):
+        assert set(artifacts) == {'Zkc.Control'}
+    with pytest.raises(ValueError, match='ambiguous module provider'):
+        with audit.export_artifacts(roots, tmp_path):
+            pytest.fail('ambiguous module providers accepted')

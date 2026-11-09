@@ -20,8 +20,8 @@ import time
 REPOSITORY = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPOSITORY / "lean"))
 from support.invocation import command as lean_command  # noqa: E402
-from support.packages import module_package, module_path  # noqa: E402
-SECURITY = module_package("Zkc.Applications")
+from support.packages import module_package, module_path, package_directory  # noqa: E402
+APPLICATIONS = module_package("Zkc.Applications")
 from bridges.common import source_format  # noqa: E402
 NAMESPACE = "ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated"
 MODULE = "Zkc/Applications/Security/Components/KoalaBearSumcheckGenerated"
@@ -212,37 +212,26 @@ def render_snapshot(snapshot: Path, output: Path, report: Path) -> bool:
     command = [*lean_command(module_package("Zkc.Applications"))]
     environment = None
     if PRINTER_CACHE is not None:
-        run(["lake", "env", "which", "lean"], SECURITY, report).stdout.strip()
-        search = run(["lake", "env", "printenv", "LEAN_PATH"], SECURITY, report).stdout.strip()
-        paths = [str((SECURITY / path).resolve()) for path in search.split(os.pathsep)]
+        search = run(["lake", "env", "printenv", "LEAN_PATH"], APPLICATIONS, report).stdout.strip()
+        paths = [str((APPLICATIONS / path).resolve()) for path in search.split(os.pathsep)]
         environment = dict(os.environ, LEAN_PATH=str(PRINTER_CACHE) + os.pathsep + os.pathsep.join(paths))
-        command = [*lean_command(module_package("Zkc.Applications"))]
     result = run(command + ["--run", str(module_path("Zkc.Tools.Applications.Commands.GenerateKoalaBearSumcheck")), str(snapshot), str(output)],
-                 SECURITY, report, env=environment, expected=None)
+                 APPLICATIONS, report, env=environment, expected=None)
     return result.returncode == 0
 
 
 def check_candidate(output: Path, report: Path, control: str) -> subprocess.CompletedProcess:
-    run(["lake", "env", "which", "lean"], SECURITY, report).stdout.strip()
-    search = run(["lake", "env", "printenv", "LEAN_PATH"], SECURITY, report).stdout.strip()
-    paths = [str((SECURITY / path).resolve()) for path in search.split(os.pathsep)]
-    env = dict(os.environ, LEAN_PATH=str(output) + os.pathsep + os.pathsep.join(paths))
-    # Lean resolves a package at the first matching directory. Mirror the
-    # existing security library with read-only links, keeping candidate modules.
-    library = PRINTER_CACHE or SECURITY / ".lake/build/lib/lean"
-    for original in library.rglob("*"):
-        if original.is_file() and not str(original.relative_to(library)).startswith(MODULE + "/"):
-            linked = output / original.relative_to(library)
-            if not linked.exists():
-                linked.parent.mkdir(parents=True, exist_ok=True)
-                linked.symlink_to(original)
+    search = run(["lake", "env", "printenv", "LEAN_PATH"], APPLICATIONS, report).stdout.strip()
+    paths = [str((APPLICATIONS / path).resolve()) for path in search.split(os.pathsep)]
+    overlays = [str(output), *([str(PRINTER_CACHE)] if PRINTER_CACHE else []), *paths]
+    env = dict(os.environ, LEAN_PATH=os.pathsep.join(overlays))
     for module in MODULES:
         target = output / module.removesuffix(".lean")
         run([*lean_command(module_package("Zkc.Applications")), "-DwarningAsError=true", "-o", str(target) + ".olean", str(output / module)],
             output, report, env=env)
     relative = 'Zkc/Applications/Security/Components/KoalaBearSumcheckSource.lean'
     source = output / relative
-    text = (SECURITY / relative).read_text()
+    text = (APPLICATIONS / relative).read_text()
     if control == "helper-body":
         text = text[:text.index("\ndef results")] + "\nend ZkcSecurity.Examples.Components.KoalaBearSumcheckSource\n"
     source.write_text(text)
@@ -252,7 +241,7 @@ def check_candidate(output: Path, report: Path, control: str) -> subprocess.Comp
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, required=True)
-    parser.add_argument("--output-root", type=Path, default=SECURITY)
+    parser.add_argument("--output-root", type=Path, default=APPLICATIONS)
     parser.add_argument("--report-dir", type=Path, default=REPOSITORY / "build/experiments/mixed-integration/generation")
     parser.add_argument("--negative-controls", action="store_true")
     parser.add_argument("--controls", nargs="+", choices=["ordered-operands", "helper-body", "nominal-domain", "wrong-role"])
@@ -261,7 +250,7 @@ def main() -> None:
     global PRINTER_CACHE
     PRINTER_CACHE = args.printer_cache.resolve() if args.printer_cache else None
     compiler, output, report = args.compiler.resolve(), args.output_root.resolve(), args.report_dir.resolve()
-    fixture = SECURITY / "fixtures/koala-bear-sumcheck-round.zkc"
+    fixture = package_directory("verification") / "fixtures/koala-bear-sumcheck-round.zkc"
     # Mutations retain the declared grammar of the original fixture and its modules.
     selection = source_format.of_sources([fixture, REPOSITORY / "libraries/core/primitives/collections/vector.zkc"])
     if not generate(compiler, fixture, output, report, selection=selection):
