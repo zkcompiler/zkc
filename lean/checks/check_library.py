@@ -12,11 +12,11 @@ import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from support.lean_headers import HeaderParser
-from support.packages import PACKAGES, selected as select_packages, check_closure
+from support.packages import PACKAGES, NAMES, OPTIONAL, selected as select_packages, check_closure
 from support.dependencies import audit_graph, permitted  # noqa: F401 -- enforcement controls
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATIONS = {name: roots for name, (_, roots) in PACKAGES.items() if name != 'main'}
+INTEGRATIONS = {name: PACKAGES[name][1] for name in OPTIONAL}
 
 
 def check_owned_imports(graph):
@@ -46,8 +46,10 @@ def check(selected, lake):
                 raise AssertionError(f'duplicate dependency: {dep["name"]}')
             names.add(dep['name'])
             if dep['type'] == 'path':
-                if not (any(dep['name'] == package_name and (directory / dep['dir']).resolve() == provider for package_name, provider in [('zkc', ROOT), ('zkc_security', ROOT / 'security')])):
-                    raise AssertionError("checks/check_library.py:37: any(dep['name'] == package_name and (directory / dep['dir']).resolve() == provider for package_name, provider in [('zkc', ROOT), ('zkc_security', ROOT / 'security')])")
+                if not any(dep['name'] == NAMES[name] and
+                           (directory / dep['dir']).resolve() == provider
+                           for name, (provider, _) in PACKAGES.items()):
+                    raise AssertionError(f"unexpected maintained path dependency: {directory}: {dep}")
                 continue
             if not (dep['type'] == 'git' and re.fullmatch('[0-9a-f]{40}', dep['rev'])):
                 raise AssertionError(dep)
@@ -71,7 +73,7 @@ def check(selected, lake):
                 import_edges[owner] = headers.details(source, path)
                 graph[owner] = [entry['module'] for entry in import_edges[owner]]
                 source_hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
-                if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.', 'ZkcSecurityTools.', 'ZkcSecurityExamples.', 'ZkcArkLib.', 'ZkcArkLibExamples.')):
+                if owner == 'ZkcProgram' or owner.startswith(('ZkcProgram.', 'Zkc.', 'ZkcExamples.', 'ZkcSecurity.', 'ZkcSecurityTools.', 'ZkcSecurityExamples.', 'ZkcArkLib.', 'ZkcArkLibExamples.')):
                     if not (source.startswith('module\n')):
                         raise AssertionError(f'{path}: expected module-system source')
     ownership = []

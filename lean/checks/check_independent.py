@@ -24,6 +24,9 @@ import time
 
 
 LEAN = Path(__file__).resolve().parents[1]
+# Comparator packages are the owners of protected statements in claims.lock.json,
+# not the complete source-package inventory. Program and proof declarations are
+# audited separately and can occur in these exports' dependency closures.
 PACKAGES = {"main": "", "security": "security", "arklib": "integrations/arklib",
             "clean": "integrations/clean"}
 AXIOMS = ["propext", "Classical.choice", "Quot.sound"]
@@ -619,7 +622,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["capture", "compare", "replay"])
     parser.add_argument("--lean-root", type=Path, default=LEAN)
-    parser.add_argument("--package", choices=list(PACKAGES), action="append", help="repeatable; default: all four")
+    parser.add_argument("--package", choices=list(PACKAGES), action="append", help="repeatable; default: all locked-statement packages")
     parser.add_argument("--output", type=Path, required=True, help="new directory, never overwritten")
     parser.add_argument("--base-manifest", type=Path)
     parser.add_argument("--candidate-manifest", type=Path)

@@ -23,29 +23,43 @@ import subprocess
 import time
 import tomllib
 from support.compatibility import prepare
+from support.packages import PACKAGES, NAMES
 
 
 HERE = Path(__file__).resolve().parent
 INTEGRATION = Path('integrations/arklib')
 CLEAN = Path('integrations/clean')
 SECURITY = Path('security')
+PROGRAM = Path('program')
+PROOF = Path('proof')
 # The Clean producer's maintained output, consumed by the native integration tests.
 CLEAN_CONTROL = Path('../common/tests/fixtures/clean/air-control.json')
 
 
 
 
-def build_inputs(root, with_arklib=False, with_clean=False, with_security=False):
+def build_inputs(root, with_arklib=False, with_clean=False, with_security=False, with_proof=False):
     files = [root / name for name in (
         'lakefile.toml', 'lake-manifest.json', 'lean-toolchain',
         'reproduce.py', 'Zkc.lean')]
     # The checks and what they share, by looking rather than by a list: these
     # named five of them and went stale the moment the checks moved together.
-    files.extend((root / 'checks').glob('*.py'))
+    files.extend((root / 'checks').rglob('*.py'))
+    files.extend((root / 'checks').rglob('*.lean'))
     files.extend((root / 'support').glob('*.py'))
     for directory in ('Zkc', 'Tests', 'ZkcExamples', 'ZkcTools'):
         files.extend((root / directory).rglob('*.lean'))
     files.append(root / 'clients/Main.lean')
+    for relative, chosen in ((PROGRAM, True),
+                             (PROOF, with_proof or with_security or with_arklib)):
+        if chosen:
+            package = root / relative
+            files.extend(package / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
+            files.extend(package.glob('*.lean'))
+            for directory in ('ZkcProgram', 'ProtocolProof', 'ProtocolProofExamples',
+                              'ProtocolProofChecks', 'ProtocolProofLibrary',
+                              'ProtocolProofTools', 'ProtocolProofTests'):
+                files.extend((package / directory).rglob('*.lean'))
     if with_security or with_arklib:
         optional = root / SECURITY
         files.extend(root / 'clients' / name for name in
@@ -93,27 +107,24 @@ def materialize(package, packages, caches):
 
 
 def prepare_dependencies(work, caches, integrations=()):
-    manifest = json.loads((work / 'lake-manifest.json').read_text())
-    packages = work / '.lake/packages'
-    packages.mkdir(parents=True)
     pins, sources = {}, {}
-    for package in manifest['packages']:
-        if package['type'] != 'git':
-            raise ValueError('main package dependency must be an exact Git source')
-        materialize(package, packages, caches)
-        pins[package['name']] = package['rev']
-        sources[package['name']] = packages / package['name'].removeprefix('«').removesuffix('»')
     # A source shared by the main package or an earlier integration is linked,
     # never materialized twice, and must have the same revision everywhere.
-    for integration in integrations:
+    providers = {NAMES[name]: work / directory.relative_to(HERE)
+                 for name, (directory, _) in PACKAGES.items()}
+    for integration in (PROGRAM, Path('.'), *integrations):
         optional = work / integration
         other = json.loads((optional / 'lake-manifest.json').read_text())
         targets = optional / '.lake/packages'
         targets.mkdir(parents=True)
         for package in other['packages']:
             if package['type'] == 'path':
-                if package['name'] not in {'zkc', 'zkc_security'} or (optional / package['dir']).resolve() != (work if package['name'] == 'zkc' else work / SECURITY).resolve():
-                    raise ValueError('unexpected integration path dependency')
+                target = (optional / package['dir']).resolve()
+                if package['name'] not in providers or target != providers[package['name']].resolve():
+                    raise ValueError('unexpected maintained path dependency')
+                config = tomllib.loads((target / 'lakefile.toml').read_text())
+                if config['name'] != package['name']:
+                    raise ValueError('maintained path provider mismatch')
                 continue
             name = package['name'].removeprefix('«').removesuffix('»')
             if package['name'] in pins:
@@ -187,13 +198,14 @@ def run(args):
         raise ValueError('the independent output must be outside the formal package')
     output.mkdir(parents=True, exist_ok=False)
     work = output / 'lean'
-    inputs = build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security)
+    with_proof = args.with_proof or args.with_security or args.with_arklib
+    inputs = build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security, with_proof)
     for name in inputs:
         target = work / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(HERE / name, target)
     caches = [path.resolve() for path in [args.dependency_cache, *args.integration_dependency_cache] if path]
-    integrations = [path for path, chosen in ((SECURITY, args.with_security or args.with_arklib), (INTEGRATION, args.with_arklib), (CLEAN, args.with_clean))
+    integrations = [path for path, chosen in ((PROOF, with_proof), (SECURITY, args.with_security or args.with_arklib), (INTEGRATION, args.with_arklib), (CLEAN, args.with_clean))
                     if chosen]
     pins = prepare_dependencies(work, caches, integrations)
     options = [option for path in integrations for option in ('--integration', path.name)] or ['--main-only']
@@ -213,16 +225,21 @@ def run(args):
         subprocess.run(['python3', 'checks/check_package_ownership.py', '--lake', lake, *options], cwd=work, env=env, check=True, stdout=stream)
     subprocess.run(['python3', 'checks/audit_imports.py', *options], cwd=work, env=env, check=True)
     start = time.monotonic()
-    runs = {'main': checked_build(lake, work, output / 'main-build.log', env,
-            ['DEPENDENCY-AUDIT-PASS', 'CORE-AUDIT-PASS'])}
-    if (args.with_security or args.with_arklib) and runs['main']['status'] == 'pass':
+    runs = {'program': checked_build(lake, work / PROGRAM, output / 'program-build.log', env, [])}
+    if runs['program']['status'] == 'pass':
+        runs['main'] = checked_build(lake, work, output / 'main-build.log', env,
+            ['DEPENDENCY-AUDIT-PASS', 'PROGRAM-AUDIT-PASS', 'CORE-AUDIT-PASS'])
+    if with_proof and runs.get('main', {}).get('status') == 'pass':
+        runs['proof'] = checked_build(lake, work / PROOF, output / 'proof-build.log', env,
+                                      ['Axiom audit passed:'])
+    if (args.with_security or args.with_arklib) and runs.get('proof', {}).get('status') == 'pass':
         runs['security'] = checked_build(lake, work / SECURITY, output / 'security-build.log', env,
             ['DEPENDENCY-AUDIT-PASS', 'SECURITY-AUDIT-PASS'])
     if args.with_arklib and runs.get('security', {}).get('status') == 'pass':
         runs['arklib'] = checked_build(lake, work / INTEGRATION, output / 'arklib-build.log', env,
             ['DEPENDENCY-AUDIT-PASS', 'ARKLIB-AUDIT-PASS'])
     control = {'status': 'not-run'}
-    if args.with_clean and runs['main']['status'] == 'pass':
+    if args.with_clean and runs.get('main', {}).get('status') == 'pass':
         runs['clean'] = checked_build(lake, work / CLEAN, output / 'clean-build.log', env,
             ['CLEAN-INTEGRATION-AUDIT-PASS', 'DEPENDENCY-AUDIT-PASS',
              'CLEAN-UPSTREAM-BOUNDARY-PASS'])
@@ -231,15 +248,16 @@ def run(args):
     clients = {'status': 'not-run'}
     if all(run['status'] == 'pass' for run in runs.values()):
         clients = run_clients(lake, work, output / 'clients', args.with_arklib, env, args.with_security)
-    changed = (build_inputs(work, args.with_arklib, args.with_clean, args.with_security) != inputs
-               or build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security) != inputs)
+    changed = (build_inputs(work, args.with_arklib, args.with_clean, args.with_security, with_proof) != inputs
+               or build_inputs(HERE, args.with_arklib, args.with_clean, args.with_security, with_proof) != inputs)
     passed = (all(run['status'] == 'pass' for run in runs.values()) and not changed
+              and 'main' in runs and (not with_proof or 'proof' in runs)
               and (not (args.with_security or args.with_arklib) or 'security' in runs)
               and (not args.with_arklib or 'arklib' in runs) and clients['status'] == 'pass'
               and (not args.with_clean or control['status'] == 'pass'))
     record = {
         'format': 'zkc.formal-reproduction.v0', 'status': 'pass' if passed else 'fail',
-        'with_security': args.with_security or args.with_arklib,
+        'with_proof': with_proof, 'with_security': args.with_security or args.with_arklib,
         'with_arklib': args.with_arklib, 'with_clean': args.with_clean, 'source_drift': changed,
         'elapsed_seconds': round(time.monotonic() - start, 2),
         'lake_executable': lake,
@@ -268,6 +286,7 @@ if __name__ == '__main__':
     parser.add_argument('--dependency-cache', type=Path)
     parser.add_argument('--integration-dependency-cache', type=Path, action='append', default=[],
                         help='Git source cache of an optional package; repeat for each')
+    parser.add_argument('--with-proof', action='store_true')
     parser.add_argument('--with-security', action='store_true')
     parser.add_argument('--with-arklib', action='store_true')
     parser.add_argument('--with-clean', action='store_true')

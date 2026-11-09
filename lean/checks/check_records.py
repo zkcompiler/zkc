@@ -17,7 +17,7 @@
    complete runs. `--subject` reports retain every live receipt check but omit
    this global regression suite; the result records that partial test coverage.
 
-Without `--integration`, only the main package is emitted; a ledger row whose
+Without `--integration`, the program and main packages are emitted; a ledger row whose
 theorem lives in an unselected package is skipped and counted. `--write`
 rewrites the lock and the generated regions instead of failing on them.
 """
@@ -34,7 +34,7 @@ import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
 from records import controls, ledger, reports  # noqa: E402
 from records.declarations import Records, emit, forbidden_axioms  # noqa: E402
-from support.packages import selected as select_packages  # noqa: E402
+from support.packages import OPTIONAL, selected as select_packages  # noqa: E402
 
 LEAN = HERE.parent
 ROOT = LEAN.parent
@@ -75,7 +75,7 @@ def compare(document, region, rendered, write, failures, notes, subjects=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--integration", action="append", choices=["security", "arklib", "clean"], default=[])
+    parser.add_argument("--integration", action="append", choices=OPTIONAL, default=[])
     parser.add_argument("--records", type=Path, help="reuse emitted records from this directory")
     parser.add_argument("--output", type=Path, default=support.evidence.records("records", ""))
     parser.add_argument("--manifests", type=Path, help="subject manifests (default: lean/subjects)")

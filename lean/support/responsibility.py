@@ -40,7 +40,7 @@ def module_name(path):
     parts = path.parts
     if parts[:3] in (("lean", "integrations", "arklib"), ("lean", "integrations", "clean")):
         parts = parts[3:]
-    elif parts[:2] == ("lean", "security"):
+    elif parts[:2] in (("lean", "program"), ("lean", "proof"), ("lean", "security")):
         parts = parts[2:]
     elif parts[:1] == ("lean",) and len(parts) > 1 and parts[1] != "integrations":
         parts = parts[1:]
@@ -60,6 +60,11 @@ def classify(value, policy=POLICY):
     if module is not None:
         owner = layer(module, policy)
         rules = {
+            "program": ("language-and-compiler", ("X",), "shared deterministic program semantics"),
+            "protocol-core": ("general-methods", ("S",), "shared proof semantics and fixed property contracts"),
+            "protocol-library": ("family-packages", ("M", "S"), "reusable mathematical proof contracts"),
+            "protocol-tools": ("support-infrastructure", ("X",), "checked proof construction tooling"),
+            "protocol-examples": ("support-infrastructure", ("X",), "proof model clients and controls"),
             "core": ("language-and-compiler", ("X",), "semantic or admission foundation"),
             "probability": ("general-methods", ("S",), "probability support; deterministic splits need declaration review"),
             "families": ("family-packages", ("M", "S"), "family mathematics; reuse context determines the edit category"),

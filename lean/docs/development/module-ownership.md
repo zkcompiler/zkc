@@ -1,7 +1,7 @@
 # Module ownership and reusable installations
 
 Choose a module by the facts it depends on, not by the first protocol that used
-it. The [architecture](../architecture.md) defines the four package boundaries
+it. The [architecture](../architecture.md) defines the package boundaries
 and six security responsibilities. These boundaries are enforced by
 `ZkcTools.DeclarationAudit`; Lean and Python consume the same dependency policy.
 No dependency exception is needed for the module layout.
@@ -46,8 +46,8 @@ module.
 
 Lean's `public import`, `public meta import` and `import all` have distinct
 purposes. Export ordinary theorem APIs with `public import`; export tactic
-implementations with `public meta import`. An audit traversing stored private
-proof bodies must load each owning module with `import all`. A public import
+implementations with `public meta import`. A module-system audit traversing
+stored private proof bodies must load each owning module with `import all`. A public import
 of a facade does not replace this requirement. The header audit records all
 three modifiers using Lean's own parser.
 
@@ -68,6 +68,21 @@ Generators carry import identities and declaration identities separately:
 Lean namespace. Subject, ABI and model selections follow the same rule. A
 consumer imports the current module and refers to the existing declaration.
 There is no forwarding file under the retired module path.
+
+`ZkcProgram.Execution`, `Interpretation`, `MonadExecution` and `Interaction`
+own the shared execution declarations in namespace `PIR`.
+`ZkcProgram.Region.Context`, `Operations` and `Basic` own the generic typed
+context and Region declarations in namespace `Zkc.Source`. Concrete dialects,
+readers, operation meanings and compiler correspondence stay in `Zkc`.
+The shared package depends only on Lean/Std; neither concrete IR nor the proof
+framework may introduce a second definition of these carriers.
+
+`Tests.ProgramAudit` imports every shared module in Lean's legacy private-data
+mode, asserts that each effective import includes private data, and checks its
+stored declarations through the core's audit tool. This downstream audit
+does not add a dependency to the shared package. Package inventories and record
+emission select the `ZkcProgram` modules even when their declarations use an
+older namespace. The proof package retains its standalone `ProtocolProofChecks`.
 
 Ownership, declaration-record coverage and author-cost classification use the
 module recorded by Lean, not the declaration namespace. This matters for helper

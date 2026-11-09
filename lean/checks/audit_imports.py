@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from support.packages import PACKAGES, selected as select_packages
+from support.packages import PACKAGES, OPTIONAL, selected as select_packages
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,13 +23,14 @@ def modules(root, directory, excluded=()):
 
 
 def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-AUDIT-PASS",
-             extra=(), audit_imports=()):
+             extra=(), audit_imports=(), extra_modules=()):
     excluded = {Path(tests) / "Audit.lean", Path(tests) / "LibraryImports.lean"}
     names = modules(root, library, excluded) + modules(root, tests, excluded)
     for directory in examples:
         names += modules(root, directory, excluded)
     for directory in tools:
         names += modules(root, directory, excluded)
+    names = [name for name in names if name not in extra_modules] + list(extra_modules)
     imports = (
         "-- Maintained by audit_imports.py; library, test, example and selected executable consumers are audited.\n"
         if tools else
@@ -74,14 +75,32 @@ def main():
     parser.add_argument("--write", action="store_true")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--main-only", action="store_true")
-    selection.add_argument("--integration", action="append", choices=sorted(INTEGRATIONS),
+    selection.add_argument("--integration", action="append", choices=OPTIONAL,
                            help="check only the named optional packages (default: all)")
     args = parser.parse_args()
-    outputs = expected(ROOT, "Zkc", "Tests", ["ZkcExamples"],
+    # Audit the shared package from this downstream package. The foundation
+    # itself stays Lean/Std-only and never depends on the core audit tool.
+    program = PACKAGES['program'][0]
+    # A legacy audit can import the non-module audit tool. Lean loads legacy
+    # imports at the private level; assert that fact before traversing bodies.
+    program_audit = '-- Maintained by audit_imports.py; legacy imports load full private module data.\n'
+    program_audit += ''.join(f'import {name}\n' for name in modules(program, 'ZkcProgram'))
+    program_audit += ('import ZkcTools.DeclarationAudit\n\n'
+                      'run_cmd do\n'
+                      '  let env ← Lean.getEnv\n'
+                      '  for imported in env.header.modules do\n'
+                      '    if (`ZkcProgram).isPrefixOf imported.module && !imported.importAll then\n'
+                      '      throwError "shared program audit requires private module data: {imported.module}"\n'
+                      '  ZkcTools.DeclarationAudit.check [`ZkcProgram] "PROGRAM-AUDIT-PASS"\n')
+    outputs = {ROOT / 'Tests/ProgramAudit.lean': program_audit}
+    outputs.update(expected(ROOT, "Zkc", "Tests", ["ZkcExamples"],
                        ["ZkcTools/Generation", "ZkcTools/JsonSupport", "ZkcTools/ProcessView", "ZkcTools/ProofAccount", "ZkcTools/Companions",
-                        "ZkcTools/StructuredSource", "ZkcTools/ConstructionBindings"], marker="CORE-AUDIT-PASS")
+                        "ZkcTools/StructuredSource", "ZkcTools/ConstructionBindings"], marker="CORE-AUDIT-PASS",
+                            extra_modules=("Tests.ProgramAudit",)))
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
-    for name in select_packages(selected)[1:]:
+    for name in select_packages(selected):
+        if name not in INTEGRATIONS:
+            continue  # The proof package owns its standalone ProtocolProofChecks audit.
         library, tests, marker = INTEGRATIONS[name]
         examples = {"security": ["ZkcSecurityExamples"], "arklib": ["ZkcArkLibExamples"]}.get(name, [])
         tools = ["ZkcSecurityTools"] if name == "security" else []

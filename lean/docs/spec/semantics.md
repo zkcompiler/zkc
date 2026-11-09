@@ -6,6 +6,21 @@ process equations concern the imported Lean constructors; the
 [bridges](../../bridges/common/README.md) test their agreement with native
 execution, and [formal support](../support.md) records the scope of each claim.
 
+## Shared program ownership
+
+The single definitions of `PIR.Process`, `PIR.Execution`, effect interpretation
+and interaction bounds live in the Lean/Std-only `lean/program` package under
+`ZkcProgram`. Its `Region.Context`, `Region.Operations` and `Region.Basic`
+modules own the dialect-parametric typed context and Region definitions in
+namespace `Zkc.Source`. These existing namespaces retain their exact meanings;
+module ownership does not introduce another mathematical carrier or an alias.
+
+The concrete `Zkc` IR package and independent `ProtocolProof` framework both
+consume this foundation. Concrete operation meanings and compiler
+correspondence remain in `Zkc`; probability and proof contracts are above the
+foundation. Package extraction itself establishes no new security or native
+correspondence claim.
+
 ## Local structured computations
 
 `Source.Dialect` declares operand types, ordered result types and closed region

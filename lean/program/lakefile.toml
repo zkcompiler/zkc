@@ -1,4 +1,5 @@
 name = "zkc_program"
+version = "0.0.0"
 defaultTargets = ["ZkcProgram"]
 
 [leanOptions]

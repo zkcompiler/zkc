@@ -158,8 +158,9 @@ def replace_region(text, name, content):
 # package that owns each root namespace.
 DOCUMENTS = ["docs/status.md", "lean/README.md", "lean/docs/**/*.md", "lean/security/README.md", "lean/integrations/*/README.md"]
 ROOTS = {"Zkc": "main", "ZkcExamples": "main", "ZkcTools": "main", "Tests": "main", "PIR": "main",
+         "ZkcProgram": "program", "ProtocolProof": "proof", "ProtocolProofExamples": "proof", "ProtocolProofChecks": "proof",
          "ZkcSecurity": "security", "TestsSecurity": "security", "ZkcArkLib": "arklib", "TestsArkLib": "arklib", "ZkcClean": "clean", "TestsClean": "clean"}
-PACKAGE_DIRECTORIES = {"security": LEAN / "security", "main": LEAN, "arklib": LEAN / "integrations/arklib", "clean": LEAN / "integrations/clean"}
+PACKAGE_DIRECTORIES = {name: directory for name, (directory, _) in SOURCE_PACKAGES.items()}
 QUALIFIED = re.compile(r"`((?:" + "|".join(ROOTS) + r")\.[A-Za-z0-9_.']+)`")
 
 

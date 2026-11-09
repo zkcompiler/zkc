@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Challenge the proof audit, Lean header parser and executable input boundary."""
+import argparse
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,10 @@ from support.dependencies import POLICY, audit_graph, exceptions  # noqa: E402
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--policy-only', action='store_true',
+                        help='check headers, stored declarations and policy parity without executable input controls')
+    args = parser.parse_args()
     rows = []
     with HeaderParser(root=ROOT, lake='lake') as headers:
         source = ('module\n/- import Wrong /- nested -/ -/\n'
@@ -217,6 +222,22 @@ def main():
         # Compile actual dependency bodies, then demand rejection by the auditor;
         # also keep the source-import guard in sync with the declaration policy.
         ownership_cases = [
+            ('program-core-body', 'ZkcProgram.GuardFixture',
+             'Zkc.Source.GuardFixture', 'body', False),
+            ('program-proof-type', 'ZkcProgram.GuardFixture',
+             'ProtocolProof.GuardFixture', 'type', False),
+            ('program-mathlib-body', 'ZkcProgram.GuardFixture',
+             'Mathlib.GuardFixture', 'body', False),
+            ('core-proof-body', 'Zkc.Source.GuardFixture',
+             'ProtocolProof.GuardFixture', 'body', False),
+            ('proof-core-type', 'ProtocolProof.GuardFixture',
+             'Zkc.Source.GuardFixture', 'type', False),
+            ('proof-subject-body', 'ProtocolProof.GuardFixture',
+             'ZkcSecurityExamples.GuardFixture', 'body', False),
+            ('core-program-allowed', 'Zkc.Source.GuardFixture',
+             'ZkcProgram.GuardFixture', 'body', True),
+            ('proof-program-allowed', 'ProtocolProof.GuardFixture',
+             'ZkcProgram.GuardFixture', 'type', True),
             ('reusable-tools-example', 'ZkcSecurityTools.GuardFixture',
              'ZkcSecurityExamples.GuardFixture', 'body', False),
             ('reusable-binding-example', 'ZkcSecurity.Bindings.GuardFixture',
@@ -300,18 +321,20 @@ def main():
         representatives += ['Client']
         pairs = sorted({(owner, dependency) for owner in representatives
                         for dependency in representatives} | set(exceptions(POLICY)))
-        literals = ',\n'.join(f'({json.dumps(owner)}, {json.dumps(dependency)})'
-                              for owner, dependency in pairs)
+        # Parse the complete table as runtime data. A growing policy must not
+        # turn thousands of pairs into one deeply nested elaborated literal.
+        literals = json.dumps(pairs)
         (directory / 'Parity.lean').write_text(
             'import ZkcTools.DeclarationAudit\n'
             'example : ZkcTools.DeclarationAudit.permitted `Zkc.Source.GuardFixture '
             '`ZkcSecurity.Mathematics.Probability.GuardFixture = false := by decide +kernel\n'
             'example : ZkcTools.DeclarationAudit.permitted `Zkc.Protocols.Sumcheck.Verifier '
             '`ZkcSecurity.Mathematics.Probability.UniformTape = false := by decide +kernel\n'
-            'set_option maxRecDepth 20000\n'
-            f'def pairs : List (String × String) := [{literals}]\n'
-            '#eval IO.println (Lean.toJson (pairs.map fun (owner, dependency) => '
-            'ZkcTools.DeclarationAudit.permitted owner.toName dependency.toName)).compress\n')
+            '#eval do\n'
+            f'  let pairs : Array (String × String) ← IO.ofExcept (Lean.Json.parse r##"{literals}"## >>= '
+            'Lean.fromJson? (α := Array (String × String)))\n'
+            '  IO.println (Lean.toJson (pairs.map fun (owner, dependency) => '
+            'ZkcTools.DeclarationAudit.permitted (String.toName owner) (String.toName dependency))).compress\n')
         result = compile_module('Parity')
         if not (result.returncode == 0):
             raise AssertionError((result.stdout, result.stderr))
@@ -329,19 +352,22 @@ def main():
                 raise AssertionError((name, result))
             rows.append(name)
 
-        invoke('arity', [], 'structured-source-arguments')
-        invoke('missing-file', ['check', directory / 'missing.json'], 'structured-source-io')
-        for name, raw, diagnostic in [
-            ('invalid-utf8', b'[\xff]', 'invalid-utf8'),
-            ('byte-limit', b' ' * (16 * 1024 * 1024 + 1), 'byte-limit'),
-            ('large-number', b'[' + b'9' * 1025 + b']', 'number-limit'),
-        ]:
-            path = directory / (name + '.json')
-            path.write_bytes(raw)
-            invoke(name, ['check', path], diagnostic)
+        if not args.policy_only:
+            invoke('arity', [], 'structured-source-arguments')
+            invoke('missing-file', ['check', directory / 'missing.json'], 'structured-source-io')
+            for name, raw, diagnostic in [
+                ('invalid-utf8', b'[\xff]', 'invalid-utf8'),
+                ('byte-limit', b' ' * (16 * 1024 * 1024 + 1), 'byte-limit'),
+                ('large-number', b'[' + b'9' * 1025 + b']', 'number-limit'),
+            ]:
+                path = directory / (name + '.json')
+                path.write_bytes(raw)
+                invoke(name, ['check', path], diagnostic)
     output = evidence.records('enforcement', '.json')
     output.parent.mkdir(parents=True, exist_ok=True)
-    result = {'status': 'pass', 'cases': rows}
+    result = {'status': 'pass', 'cases': rows,
+              'scope': 'policy' if args.policy_only else 'policy-and-executable-inputs',
+              'not_run': ['structured-source-input-controls'] if args.policy_only else []}
     output.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result))
 

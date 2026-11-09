@@ -127,7 +127,11 @@ The `zkc.independent-replay/0` report establishes only current proof/standard-ax
 validation. It does not compare models, exempt fingerprints, permit definition
 holes, certify source freshness or accept a baseline. Preserve the fixed-model
 comparison failure and complete the separate transition review. Default replay
-covers all four packages; repeated `--package` selects a narrower verdict.
+covers the four packages with protected statements in the lock; repeated
+`--package` selects a narrower verdict. The shared program and independent proof
+packages have no separately locked statements in that ledger. Their declarations
+can occur in the exported dependency closures, and their package audits remain
+separate checks.
 
 Comparison checks artifact hashes before and after checking, requires identical
 declaration coverage, and rejects shared manifest/export paths, symlinks, and

@@ -23,14 +23,19 @@ responsibility boundaries.
 
 | Package | Reusable theory | Proof construction | Concrete applications | Dependencies |
 |---|---|---|---|---|
-| `lean/` (`zkc`) | `Zkc` | `ZkcTools` | `ZkcExamples` | Mathlib |
-| `lean/security/` (`zkc_security`) | `ZkcSecurity` | `ZkcSecurityTools` | `ZkcSecurityExamples` | Core, VCVio, PolyFun, CompPoly, Mathlib |
+| `lean/program/` (`zkc_program`) | `ZkcProgram` | None | None | Lean/Std only |
+| `lean/` (`zkc`) | `Zkc` | `ZkcTools` | `ZkcExamples` | Program, Mathlib |
+| `lean/proof/` (`protocol_proof`) | `ProtocolProof` | Checked proof APIs | `ProtocolProofExamples` model clients | Program, VCVio, PolyFun, Mathlib |
+| `lean/security/` (`zkc_security`) | `ZkcSecurity` | `ZkcSecurityTools` | `ZkcSecurityExamples` | Core, proof, VCVio, PolyFun, CompPoly, Mathlib |
 | `lean/integrations/arklib/` (`zkc_arklib`) | `ZkcArkLib` | Its adapter modules | `ZkcArkLibExamples` | Core, security, ArkLib and coherent shared pins |
 | `lean/integrations/clean/` (`zkc_clean`) | `ZkcClean` | Its adapter modules | `CleanExamples` | Core, Clean and coherent shared algebra pins |
 
 Each package also owns its tests. All maintained libraries, tools, examples and
-tests remain default targets. Core does not require the security ecosystem;
-security does not require ArkLib or Clean. Integration packages stay optional.
+tests remain default targets. Program is the shared bottom of a diamond: concrete
+IR and the proof framework depend on it independently; security integrates both.
+Core does not require probability or the proof framework. The proof framework
+does not require concrete IR or actual subjects. Security does not require
+ArkLib or Clean. Integration packages stay optional.
 There is no additional `Security` directory inside `ZkcSecurity`, and no package
 per protocol family.
 
@@ -44,7 +49,8 @@ modules for the retired paths.
 
 | Area | Owns |
 |---|---|
-| `Zkc.Semantics` | `Process`, outcomes, execution, observations, refinement and continuation laws |
+| `ZkcProgram` | `Process`, outcomes, complete execution, effect interpretation, interaction bounds and dialect-parametric typed Region/context definitions |
+| `Zkc.Semantics` | Concrete observations, refinement, admission and additional deterministic continuation laws |
 | `Zkc.Source` | Typed retained source, participant operations, domain meanings, admission and verified normal forms |
 | `Zkc.Construction` | Compiled participants and exact source/participant correspondence certificates |
 | `Zkc.Executable` | The admitted program representation, executable meaning and checked lowering rules |
@@ -60,6 +66,12 @@ coordinates remain in their semantics. A source template is reusable when its
 interface accepts arbitrary checked definitions or body-membership laws. A
 proof fixed to a closed exported payload belongs to the application, even when
 its source algorithm is familiar.
+
+The extracted declarations retain their `PIR` and `Zkc.Source` namespaces.
+Their single defining modules belong to `ZkcProgram`; namespace spelling does
+not give them concrete-IR ownership. There are no aliases or compatibility
+imports. Sharing this carrier changes neither a theorem's meaning nor the
+native correspondence it requires.
 
 ## Six security responsibilities
 

@@ -184,6 +184,38 @@ private def dependencyPolicyJson : String := r##"
 {
   "layers": [
     [
+      "ZkcProgram",
+      "program"
+    ],
+    [
+      "ProtocolProofExamples",
+      "protocol-examples"
+    ],
+    [
+      "ProtocolProofChecks",
+      "protocol-examples"
+    ],
+    [
+      "ProtocolProofTests",
+      "protocol-examples"
+    ],
+    [
+      "ProtocolProofLibrary",
+      "protocol-library"
+    ],
+    [
+      "ProtocolProofTools",
+      "protocol-tools"
+    ],
+    [
+      "ProtocolProof",
+      "protocol-core"
+    ],
+    [
+      "Mathlib",
+      "mathlib-upstream"
+    ],
+    [
       "TestsArkLib",
       "tests"
     ],
@@ -509,7 +541,12 @@ private def dependencyPolicyJson : String := r##"
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -521,7 +558,9 @@ private def dependencyPolicyJson : String := r##"
         "clean-subjects",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -547,7 +586,12 @@ private def dependencyPolicyJson : String := r##"
         "security-subjects",
         "adapters",
         "optional-subjects",
-        "arklib-upstream"
+        "arklib-upstream",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -570,7 +614,12 @@ private def dependencyPolicyJson : String := r##"
         "algebra-upstream",
         "security-tools",
         "adapters",
-        "arklib-upstream"
+        "arklib-upstream",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -594,7 +643,12 @@ private def dependencyPolicyJson : String := r##"
         "security-tools",
         "subjects",
         "security-subjects",
-        "tools"
+        "tools",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -616,7 +670,12 @@ private def dependencyPolicyJson : String := r##"
         "security-upstream",
         "algebra-upstream",
         "security-tools",
-        "tools"
+        "tools",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -626,7 +685,9 @@ private def dependencyPolicyJson : String := r##"
         "families",
         "proof-tools",
         "upstream",
-        "subjects"
+        "subjects",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -634,7 +695,9 @@ private def dependencyPolicyJson : String := r##"
       [
         "core",
         "proof-tools",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -644,7 +707,9 @@ private def dependencyPolicyJson : String := r##"
         "families",
         "proof-tools",
         "upstream",
-        "tools"
+        "tools",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -653,7 +718,9 @@ private def dependencyPolicyJson : String := r##"
         "core",
         "families",
         "upstream",
-        "proof-tools"
+        "proof-tools",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -661,7 +728,9 @@ private def dependencyPolicyJson : String := r##"
       [
         "core",
         "probability",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -674,7 +743,9 @@ private def dependencyPolicyJson : String := r##"
         "probability",
         "security-mathematics",
         "security-upstream",
-        "algebra-upstream"
+        "algebra-upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -689,7 +760,9 @@ private def dependencyPolicyJson : String := r##"
         "security-logic",
         "security-transformations",
         "security-upstream",
-        "algebra-upstream"
+        "algebra-upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -705,7 +778,9 @@ private def dependencyPolicyJson : String := r##"
         "security-families",
         "security-transformations",
         "security-upstream",
-        "algebra-upstream"
+        "algebra-upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -722,7 +797,9 @@ private def dependencyPolicyJson : String := r##"
         "security-transformations",
         "security-claims",
         "security-upstream",
-        "algebra-upstream"
+        "algebra-upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -743,7 +820,12 @@ private def dependencyPolicyJson : String := r##"
         "security",
         "security-upstream",
         "algebra-upstream",
-        "security-tools"
+        "security-tools",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -764,7 +846,12 @@ private def dependencyPolicyJson : String := r##"
         "security",
         "security-upstream",
         "algebra-upstream",
-        "security-tools"
+        "security-tools",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -785,7 +872,12 @@ private def dependencyPolicyJson : String := r##"
         "security",
         "security-upstream",
         "algebra-upstream",
-        "security-tools"
+        "security-tools",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -806,7 +898,12 @@ private def dependencyPolicyJson : String := r##"
         "security",
         "security-upstream",
         "algebra-upstream",
-        "security-tools"
+        "security-tools",
+        "program",
+        "mathlib-upstream",
+        "protocol-core",
+        "protocol-library",
+        "protocol-tools"
       ]
     ],
     [
@@ -817,14 +914,18 @@ private def dependencyPolicyJson : String := r##"
         "clean",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
       "core",
       [
         "core",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -855,7 +956,9 @@ private def dependencyPolicyJson : String := r##"
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -886,7 +989,9 @@ private def dependencyPolicyJson : String := r##"
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -917,7 +1022,9 @@ private def dependencyPolicyJson : String := r##"
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -948,7 +1055,9 @@ private def dependencyPolicyJson : String := r##"
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "program",
+        "mathlib-upstream"
       ]
     ],
     [
@@ -979,6 +1088,72 @@ private def dependencyPolicyJson : String := r##"
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
+        "upstream",
+        "program",
+        "mathlib-upstream"
+      ]
+    ],
+    [
+      "program",
+      [
+        "program",
+        "upstream"
+      ]
+    ],
+    [
+      "protocol-core",
+      [
+        "program",
+        "protocol-core",
+        "security-upstream",
+        "algebra-upstream",
+        "mathlib-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "protocol-library",
+      [
+        "program",
+        "protocol-core",
+        "protocol-library",
+        "security-upstream",
+        "algebra-upstream",
+        "mathlib-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "protocol-tools",
+      [
+        "program",
+        "protocol-core",
+        "protocol-library",
+        "security-upstream",
+        "algebra-upstream",
+        "mathlib-upstream",
+        "upstream",
+        "protocol-tools"
+      ]
+    ],
+    [
+      "protocol-examples",
+      [
+        "program",
+        "protocol-core",
+        "protocol-library",
+        "security-upstream",
+        "algebra-upstream",
+        "mathlib-upstream",
+        "upstream",
+        "protocol-tools",
+        "protocol-examples"
+      ]
+    ],
+    [
+      "mathlib-upstream",
+      [
+        "mathlib-upstream",
         "upstream"
       ]
     ]

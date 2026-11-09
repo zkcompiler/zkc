@@ -5,17 +5,25 @@ import tomllib
 
 LEAN = Path(__file__).resolve().parents[1]
 PACKAGES = {
+    "program": (LEAN / "program", ("ZkcProgram",)),
     "main": (LEAN, ("Zkc", "ZkcExamples", "ZkcTools", "Tests")),
+    "proof": (LEAN / "proof", ("ProtocolProof", "ProtocolProofExamples", "ProtocolProofChecks")),
     "security": (LEAN / "security", ("ZkcSecurity", "ZkcSecurityTools", "ZkcSecurityExamples", "TestsSecurity")),
     "arklib": (LEAN / "integrations/arklib", ("ZkcArkLib", "ZkcArkLibExamples", "TestsArkLib")),
     "clean": (LEAN / "integrations/clean", ("ZkcClean", "TestsClean", "CleanExamples", "CleanExamplesAudit")),
 }
-NAMES = {"main": "zkc", "security": "zkc_security", "arklib": "zkc_arklib", "clean": "zkc_clean"}
+NAMES = {"program": "zkc_program", "main": "zkc", "proof": "protocol_proof",
+         "security": "zkc_security", "arklib": "zkc_arklib", "clean": "zkc_clean"}
+OPTIONAL = ("proof", "security", "arklib", "clean")
 FORBIDDEN_DEPENDENCIES = {
-    'main': {'Arklib', 'zkc_arklib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly', 'zkc_security'},
+    'program': {'mathlib', 'VCVio', 'PolyFun', 'CompPoly', 'Arklib', 'Clean',
+                'zkc', 'protocol_proof', 'zkc_security', 'zkc_arklib', 'zkc_clean'},
+    'main': {'Arklib', 'zkc_arklib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly',
+             'zkc_security', 'protocol_proof'},
+    'proof': {'zkc', 'zkc_security', 'Arklib', 'zkc_arklib', 'Clean', 'zkc_clean'},
     'security': {'Arklib', 'zkc_arklib', 'Clean'},
     'arklib': {'Clean', 'zkc_clean'},
-    'clean': {'Arklib', 'zkc_arklib', 'VCVio', 'PolyFun', 'zkc_security'},
+    'clean': {'Arklib', 'zkc_arklib', 'VCVio', 'PolyFun', 'zkc_security', 'protocol_proof'},
 }
 
 def is_owned_module(module):
@@ -34,7 +42,9 @@ def module_package(module):
 
 
 def selected(integrations):
-    result = ["main"]
+    result = ["program", "main"]
+    if any(name in integrations for name in ("proof", "security", "arklib")):
+        result.append("proof")
     if "security" in integrations or "arklib" in integrations:
         result.append("security")
     return result + [name for name in integrations if name not in result]
@@ -46,11 +56,15 @@ def closure(directory, ancestors=()):
         raise ValueError(f"cyclic path dependency: {directory}")
     manifest = json.loads((directory / "lake-manifest.json").read_text())
     config = tomllib.loads((directory / "lakefile.toml").read_text())
+    if manifest['name'] != config['name']:
+        raise ValueError(f"manifest package mismatch: {directory}")
     locks = {entry["name"]: entry for entry in manifest["packages"]}
     if len(locks) != len(manifest["packages"]):
         raise ValueError(f"duplicate locked dependency in {directory}")
     for dep in config.get("require", []):
-        locked = locks[dep["name"]]
+        locked = locks.get(dep["name"])
+        if locked is None:
+            raise ValueError(f"missing locked dependency: {directory}: {dep['name']}")
         if "path" in dep:
             target = (directory / dep["path"]).resolve()
             if locked["type"] != "path" or (directory / locked["dir"]).resolve() != target:
@@ -64,6 +78,9 @@ def closure(directory, ancestors=()):
     for dep in manifest["packages"]:
         if dep["type"] == "path":
             target = (directory / dep["dir"]).resolve()
+            provider = tomllib.loads((target / "lakefile.toml").read_text())
+            if provider['name'] != dep['name']:
+                raise ValueError(f"locked path provider mismatch: {dep['name']}")
             names |= closure(target, (*ancestors, directory))
     return names
 
@@ -71,6 +88,8 @@ def closure(directory, ancestors=()):
 def check_closure(package, directory):
     """Reject forbidden dependencies even when no source currently imports them."""
     reached = closure(directory)
+    if package == 'program' and reached:
+        raise ValueError(f'program: the Lean/Std foundation must have no package dependencies: {sorted(reached)}')
     forbidden = FORBIDDEN_DEPENDENCIES[package]
     if reached & forbidden:
         raise ValueError(f'{package}: prohibited package closure: {sorted(reached & forbidden)}')

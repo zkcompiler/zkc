@@ -10,6 +10,11 @@ and local mathematical laws. The reusable security package applies VCVio and
 quantitative security results; optional ArkLib adapters supply additional family
 theorems. Their module and package roots are disjoint.
 
+The Lean/Std-only [shared program package](program/README.md) owns the single
+Process and generic typed Region definitions. The concrete IR package here and
+the independent proof framework in `proof/` depend on it; `security/` integrates
+both. Declaration namespaces remain unchanged across that ownership boundary.
+
 The [formal reference](docs/README.md) defines the models, and
 [support](docs/support.md) states the exact scope and assumptions of each claim.
 Native compilation below the original stage is outside these claims except
@@ -101,7 +106,7 @@ with independent execution and negative controls.
 
 ## Build and use
 
-The [toolchain](lean-toolchain) and the four owning Lake manifests pin a coherent
+The [toolchain](lean-toolchain) and the owning Lake manifests pin a coherent
 Lean 4.35.0 dependency closure. See the [dependency rationale](docs/dependencies.md).
 From `lean/`, `lake build` builds all maintained core libraries, examples, controls,
 executables and declaration audits. The optional packages each use `lake build`
@@ -111,6 +116,14 @@ Nix and the `just fetch-lean`, `just test-lean`, `just test-lean-security`, `jus
 
 `just test-lean-native` additionally checks the native import and authored
 specification boundary, including differential execution and negative controls.
+
+The shared foundation builds independently with `cd program && lake build`.
+From `lean/`, `lake build +Tests.ProgramAudit` checks every shared declaration,
+and `python3 checks/test_program_packages.py` checks extraction and reproduction
+boundaries without downloads. `python3 checks/check_enforcement.py --policy-only`
+challenges the import and stored-declaration policy with accepted and refused
+controls. Omit that flag to also run the built `structured-source` executable's
+input controls.
 
 Lean 4.35 also provides independent checking of a selected theorem's exported
 dependency closure. For example, after building the core, from `lean/`:
@@ -164,6 +177,9 @@ python3 reproduce.py --with-arklib --with-clean \
 Use a fresh output directory. The reproducer records source drift, toolchains,
 builds, audits, standalone consumers and the Clean fixture comparison. Omit cache
 arguments to fetch exact sources. The installed Lean/Std toolchain is trusted.
+The reproducer always includes `program/`. `--with-proof` additionally selects
+`proof/`; security and ArkLib selections include it transitively. Core-only
+reproduction has no proof or probability dependencies.
 
 ## Further reading
 
