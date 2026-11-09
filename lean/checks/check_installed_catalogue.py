@@ -2,7 +2,7 @@
 """The installed catalogue rows of the Lean readers are generated from the catalog.
 
 `Zkc.IR.Source.Structured.InstalledCatalogue` must equal a fresh rendering of
-`common/catalog/declarations.json` by `bridges/common/installed_catalogue.py`.
+`common/catalog/declarations.json` by `support/installed_catalogue.py`.
 A changed catalog row changes the generated facts, service methods follow the
 sampled field's capabilities, and the generator's check refuses a module it
 did not render from the current declarations.
@@ -17,13 +17,13 @@ import unittest
 
 LEAN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LEAN))
-from bridges.common import installed_catalogue, schema  # noqa: E402
-from bridges.common.lean_render import Refused  # noqa: E402
+from support import installed_catalogue  # noqa: E402
+from support.installed_catalogue import Refused  # noqa: E402
 
 sys.path.insert(0, str(LEAN.parent / "common/catalog"))
 import validation_cases  # noqa: E402
 
-GENERATOR = LEAN / "bridges/common/installed_catalogue.py"
+GENERATOR = LEAN / "support/installed_catalogue.py"
 
 
 def row(declarations, identity):
@@ -36,7 +36,7 @@ class Generated(unittest.TestCase):
         directory = tempfile.TemporaryDirectory(prefix="zkc-installed-catalogue-")
         self.addCleanup(directory.cleanup)
         self.directory = Path(directory.name)
-        self.declarations = schema.declarations()
+        self.declarations = installed_catalogue.read_declarations()
 
     def generator(self, *arguments):
         return subprocess.run([sys.executable, GENERATOR, *map(str, arguments)],
@@ -254,6 +254,19 @@ class Generated(unittest.TestCase):
         result = self.generator("--check", "--declarations", source)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("duplicate JSON member", result.stderr)
+
+    def test_descriptor_declarations_are_data_only_but_still_well_formed(self):
+        original = installed_catalogue.render(self.declarations)
+        for kind in ("ContractConstructor", "View"):
+            changed = copy.deepcopy(self.declarations)
+            declaration = next(row for row in changed["frontendDeclarations"] if row["kind"] == kind)
+            changed["frontendDeclarations"].remove(declaration)
+            with self.subTest(kind=kind, mutation="removed"):
+                self.assertEqual(installed_catalogue.render(changed), original)
+            changed["frontendDeclarations"].append(declaration)
+            declaration["association"]["kind"] = "rule"
+            with self.subTest(kind=kind, mutation="association"), self.assertRaises(Refused):
+                installed_catalogue.render(changed)
 
     def test_freshness_requires_identical_bytes(self):
         output = self.directory / "rendered-catalogue.txt"

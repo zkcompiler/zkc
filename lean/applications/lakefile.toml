@@ -1,6 +1,6 @@
 name = "zkc_applications"
 version = "0.0.0"
-defaultTargets = ["ZkcApplications", "ZkcApplicationsTools", "ZkcApplicationsTests"]
+defaultTargets = ["ZkcApplications", "ZkcApplicationsTests"]
 
 [leanOptions]
 autoImplicit = false
@@ -25,12 +25,6 @@ globs = ["Zkc.Applications.+"]
 requiresModuleSystem = true
 
 [[lean_lib]]
-name = "ZkcApplicationsTools"
-roots = ["Zkc.Tools.Applications"]
-globs = ["Zkc.Tools.Applications.+"]
-allowNonModules = true
-
-[[lean_lib]]
 name = "ZkcApplicationsTests"
 roots = ["Zkc.Tests.Applications"]
 globs = ["Zkc.Tests.Applications.+"]
@@ -40,87 +34,3 @@ allowNonModules = true
 name = "command-clean"
 root = "Zkc.Applications.Clean"
 supportInterpreter = true
-
-[[lean_exe]]
-name = "command-generate-gkr-presentations"
-root = "Zkc.Tools.Applications.Commands.GenerateGkrPresentations"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-generate-structured-bindings"
-root = "Zkc.Tools.Applications.Commands.GenerateStructuredBindings"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-claim-generators"
-root = "Zkc.Tools.Applications.Commands.RunClaimGenerators"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-derivation-accounts"
-root = "Zkc.Tools.Applications.Commands.DerivationAccounts"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-generate-gkr-canonical"
-root = "Zkc.Tools.Applications.Commands.GenerateGkrCanonical"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-generate-koala-bear-sumcheck"
-root = "Zkc.Tools.Applications.Commands.GenerateKoalaBearSumcheck"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-generate-source-property-modules"
-root = "Zkc.Tools.Applications.Commands.GenerateSourcePropertyModules"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-abi-installations"
-root = "Zkc.Tools.Applications.Commands.RunABIInstallations"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-component-roots"
-root = "Zkc.Tools.Applications.Commands.RunComponentRoots"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-parametric-bindings"
-root = "Zkc.Tools.Applications.Commands.RunParametricBindings"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-subject-abi"
-root = "Zkc.Tools.Applications.Commands.RunSubjectABI"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-table-membership-abi"
-root = "Zkc.Tools.Applications.Commands.RunTableMembershipABI"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "connection-layout-controls"
-root = "Zkc.Tests.Applications.IR.ConnectionLayoutGeneration"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-run-structural-generators"
-root = "Zkc.Tools.Applications.Commands.RunStructuralGenerators"
-supportInterpreter = true
-allowNonModules = true

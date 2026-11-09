@@ -8,7 +8,7 @@ context is instantiated at an actual call.
 
 ## Carrier
 
-`Zkc.Source.Structured.LogicalContext` defines a typed context of binders. A
+`Zkc.IR.Source.Structured.LogicalContext` defines a typed context of binders. A
 binder's sort is a native type or a library sort, such as a multilinear table of
 fixed arity, that has no native port. A library supplies a vocabulary: sort,
 predicate and view codes, each with an identity made of its declaration and its
@@ -65,7 +65,7 @@ vocabulary and interpretation as boundary atoms. The loop never chooses or
 changes a binder.
 
 Execution records actions, not frames. A frame invariant is therefore
-established by `Repeat.loop_frames`: an obligation on the actual masked
+established by `Zkc.Source.Structured.Repeat.loop_frames`: an obligation on the actual masked
 callback step, for every reply, gives the invariant at the frame the loop
 reaches after any number of iterations. The obligation may also relate each
 frame to an interaction phase, such as the challenges received so far. The
@@ -76,36 +76,10 @@ an unknown site, a role outside the repeat, a slot of another type, a slot
 outside the observed role's scope and a misplaced index, each with its own
 reason.
 
-`ZkcExamples.Structured.SumcheckFoldInvariant` states the prover's fold
-invariant on the Reduce callback. The original table is one binder; the
-prover's entries, remaining dimension, width and received point are carried
-slots. At every frame the loop reaches, the carried point is exactly the
-challenges the prover has received, the entries represent the partial
-evaluation of the original table at that point, and their two half sums are the
-endpoints of the correct round polynomial. As for the verifier, the theorems are
-stated on the typed callback whose erasure is each unit's checked Reduce body.
-The binder is the decoding of the prover's own input table; this agreement is an
-explicit premise.
-
-## Example
-
-`ZkcExamples.Structured.SumcheckLogicalContext` expresses the Sumcheck residual
-request with one table binder shared by the initial sum and the residual
-evaluation; only the verifier's claim, point and value are observed. The same
-atoms apply to the retained Reduction export and to an export whose root ports
-are reordered. The security integration proves the `count / |F|` bound on both
-roots with the unchanged `repeat_uniform_residual_soundness`.
-
-`ZkcExamples.Structured.SigmaLogicalContexts` states the witness sharing of two
-composed protocols with atoms of the `DLog` relation retained by the Interactive
-Schnorr subject, observing the composed verifier's bases and keys. The
-Chaum–Pedersen context uses one witness binder in both atoms and the Schnorr AND
-context two. At the observed boundary of an actual verifier run, each holds
-exactly when the composed protocol's own retained formula holds at the observed
-values, and the shared one fails on an AND statement whose transcripts are
-accepted. The atoms observe bases that the contract layer reads as `parameter`
-keys, so they agree with the retained target for assignments equal to those
-inputs.
+The previous concrete Sumcheck and Sigma context installations are retired.
+These logical-context and frame laws remain generic source mathematics. An
+actual protocol must still establish its binder, source and invariant association
+through the common construction path.
 
 ## Limits
 
@@ -114,6 +88,5 @@ remaining dimension of a folded table, stays inside a predicate's meaning.
 Frames observe carried state only: actions inside an iteration are not frame
 terms, and the process events carry no iteration coordinate. Honest-agreement
 consumers, which would derive a binder's agreement with a participant's input,
-are not part of these modules: the Sumcheck fold and completeness theorems take
-that agreement as an explicit premise. Identity keying of opaque relations,
+are not part of these modules; agreement is an explicit proof obligation. Identity keying of opaque relations,
 native export and source syntax are not part of these modules either.

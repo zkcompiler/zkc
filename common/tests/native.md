@@ -79,12 +79,10 @@ selected contract. It must not use the transformation under test as its oracle.
 Two interpreters agreeing on an already wrong exported plan cannot detect the
 source-to-plan error. Unsupported cases and timeouts are not agreement.
 
-C++/Rust checks remain bounded native evidence. Lean source/direct-plan models
-have their own interpretations and proofs. A connection to `zkc.program/0` needs an
-explicit interpretation; the [executable bridge](../../lean/bridges/executable/README.md)
-supplies one for straight-line proof validators and compares it with the runtime.
-Native semantics and differential/formal connections remain separate work under
-[assurance](../../docs/assurance.md).
+C++/Rust checks remain bounded native evidence. Independent Lean source admission
+and scripted execution have their own selected interpretations. The former
+executable-byte connection route is retired; no current byte-level formal
+correspondence is claimed. See [formal support](../../lean/docs/support.md).
 
 
 The source machine tests cover both interaction reductions through separate proof

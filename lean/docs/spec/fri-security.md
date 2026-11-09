@@ -257,7 +257,7 @@ commitment through a [typed transcript interface](fiat-shamir-security.md#typed-
   most `factor · (1 - min θ δ)^s + slack`. The verifier charges each folding
   round once and the block once (`costBound_foldPhase`).
 
-`fiatShamir_soundness` applies `Typed.adaptive_soundness_weighted`. For initial
+`fiatShamir_soundness` applies `ZkcSecurity.FiatShamir.Typed.adaptive_soundness_weighted`. For initial
 words the prover chooses after its queries, the transform accepts with an
 initial word at relative distance at least `δ` from the code with probability
 at most `proverCost + ∑ r < R, foldError r + (factor · (1 - min θ δ)^s + slack)`,

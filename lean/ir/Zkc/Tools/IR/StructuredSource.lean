@@ -1,68 +1,12 @@
 module
 
 public import Zkc.Tools.IR.StructuredSource.OpenEvaluation
-public import Zkc.Tools.IR.StructuredSource.NormalForm
-public import Zkc.Tools.IR.StructuredSource.Presentation
-public import Zkc.Tools.IR.StructuredSource.Bindings.Generate
-public import Zkc.Tools.IR.StructuredSource.Bindings.Inputs
-public import Zkc.Tools.IR.StructuredSource.Bindings.PresentInputs
-public import Zkc.Tools.IR.StructuredSource.Bindings.Ledger
 public import Zkc.Tools.Program.JsonSupport
 public import Zkc.Tools.IR.SourceClaims.Components
 
 @[expose] public section
 
 namespace ZkcTools.StructuredSource
-
-/-- This CLI accepts declaration names, not executable Lean expressions. The
-typed printer API separately supports library-owned expression hints. -/
-def declarationName (name : String) : Bool :=
-  name.splitOn "." |>.all fun part => match part.toList with
-    | [] => false
-    | first :: rest =>
-      let letter := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
-      letter first && rest.all (fun c => letter c || c.isDigit || c == '\'')
-
-/-- Printer configuration names declarations in the generated Lean module.
-The array is [moduleName, namespaceName, sourceModule, programExpression, importedExpression].
-It supplies no interpretation or proof: the emitted source is kernel checked
-against the named admitted source and its exact protocol bodies. -/
-def bindings (program : Zkc.Source.Structured.Program) (input : Lean.Json) :
-    Except String Lean.Json := do
-  let [.str moduleName, .str namespaceName, .str sourceModule,
-      .str programExpression, .str importedExpression] ←
-      Zkc.Source.Structured.Format.array input | throw "bindings-configuration"
-  unless [moduleName, namespaceName, sourceModule, programExpression, importedExpression].all declarationName do
-    throw "bindings-declaration-name"
-  let output : Bindings.Output := {
-    moduleName, namespaceName, sourceModule, programExpression, importedExpression }
-  let source ← Bindings.source program output
-  return Lean.Json.mkObj [
-    ("format", .str "zkc.component-bindings/0"),
-    ("source", .str program.snapshot.source),
-    ("entry", .str program.snapshot.entry),
-    ("lean_source", .str source),
-    ("obligations", Bindings.obligationLedger program output)]
-
-/-- Configuration is [inputsModule, inputsNamespace, dataModule, snapshotExpression,
-viewModule, viewNamespace, role]. Each emitted admission phase and source equation is
-checked when the generated modules are compiled. -/
-def scalarViews (program : Zkc.Source.Structured.Program) (input : Lean.Json) :
-    Except String Lean.Json := do
-  let [.str inputsModule, .str inputsNamespace, .str dataModule, .str snapshotExpression,
-      .str viewModule, .str viewNamespace, role] ←
-      Zkc.Source.Structured.Format.array input | throw "scalar-view-configuration"
-  unless [inputsModule, inputsNamespace, dataModule, snapshotExpression, viewModule, viewNamespace].all declarationName do
-    throw "bindings-declaration-name"
-  let role ← Zkc.Source.Structured.Format.natural role 16
-  let view ← Bindings.PresentInputs.source program {
-    moduleName := viewModule, namespaceName := viewNamespace, sourceModule := inputsModule
-    programExpression := inputsNamespace ++ ".program"
-    importedExpression := inputsNamespace ++ ".imported" } role
-  return Lean.Json.mkObj [
-    ("inputs", .str (Bindings.inputsSource program inputsModule dataModule
-      inputsNamespace snapshotExpression)),
-    ("view", .str view)]
 
 /-- Bound bytes before UTF-8 decoding and lexical JSON preflight. -/
 def read (path : System.FilePath) (byteLimit : Nat := 16 * 1024 * 1024) :
@@ -80,8 +24,7 @@ def read (path : System.FilePath) (byteLimit : Nat := 16 * 1024 * 1024) :
 def run (args : List String) : IO UInt32 := do
   let mode := args.headD ""
   if (mode != "check" || args.length != 2) &&
-      ((mode != "run" && mode != "open" && mode != "normal-form" && mode != "presentation" &&
-        mode != "bindings" && mode != "scalar-views" && mode != "components") || args.length != 3) then
+      ((mode != "run" && mode != "open" && mode != "components") || args.length != 3) then
     return ← Zkc.Tools.refused "structured-source-arguments"
   let json ← read args[1]!
   let decoded := do
@@ -104,11 +47,8 @@ def run (args : List String) : IO UInt32 := do
     match ← read args[2]! (1024 * 1024) with
     | .error code => Zkc.Tools.refused code
     | .ok inputs =>
-      let result := if mode == "bindings" then bindings program inputs
-        else if mode == "scalar-views" then scalarViews program inputs
-        else if mode == "presentation" then Presentation.run program inputs
-        else if mode == "normal-form" then NormalForms.run program inputs
-        else if mode == "open" then evaluateOpen program inputs else evaluate program inputs
+      let result := if mode == "open" then evaluateOpen program inputs
+        else evaluate program inputs
       match result with
       | .error code => Zkc.Tools.refused code
       | .ok result => Zkc.Tools.emit result; return 0

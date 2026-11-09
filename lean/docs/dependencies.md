@@ -29,7 +29,7 @@ Admission decisions expose their Boolean computation to the kernel, including
 equality of `Except` results. Recursive instruction equality uses
 `decidable_of_iff`; primality certificates use Lean's `Nat.powMod` and its
 correctness theorem without an artificial exponent-fuel bound. Constructed
-view normalization opts into `Construction.reduceTransport`, which asks Lean
+view normalization opts into `Zkc.Construction.reduceTransport`, which asks Lean
 to reduce equality recursors at default transparency. It does not identify
 nominal domains or discard unresolved transports.
 

@@ -65,7 +65,6 @@ theorem protocol_definition_embed (payload : UnitPayload) (model : DomainModel) 
           (fun result ↦ .done (ProtocolValue.embedComponents result)) := by
   unfold ProtocolAlgebra.denote CheckedProtocol.denoteWithOn
   dsimp only [CheckedProtocol.signature] at args ⊢
-  rw [NormalForm.normalizeActions_process]
   simp only [PIR.Process.interpret_bind, PIR.Process.interpret, mask_embed]
   have environment := mapValues_environment component
     (maskValues self (context.mapScopes definition.inputScopes) args)

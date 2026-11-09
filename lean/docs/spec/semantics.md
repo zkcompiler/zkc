@@ -3,7 +3,7 @@
 These semantics define the typed mathematics, participants, effects,
 observations and refinement shared by every imported model. Admission and
 process equations concern the imported Lean constructors; the
-[bridges](../../bridges/common/README.md) test their agreement with native
+[formal support](../support.md) test their agreement with native
 execution, and [formal support](../support.md) records the scope of each claim.
 
 ## Shared program ownership
@@ -59,7 +59,7 @@ types and exact closed region signatures, including dormant bodies. Typed erasur
 roundtrips for all regions; successful formation preserves all raw structure.
 Each import profile supplies its own operation resolution.
 The single-result `Source.Program` is an independent reference
-profile with the exact bridge `Program.denote_toRegion`. The former Common flat-AST lowering and its theorems are retired. Common scalar
+profile with the exact bridge `Zkc.Source.Program.denote_toRegion`. The former Common flat-AST lowering and its theorems are retired. Common scalar
 clients now derive their process equations from Structured participant meanings,
 retaining final output-role restriction, actions and stops.
 Structured protocol roots use a role-agnostic dialect: role indices are
@@ -167,7 +167,7 @@ probabilistic handlers. Rejection, refusal, incompleteness and a returned false
 Boolean remain distinct. A statement annotation has no runtime proof effect.
 
 `Process` implements Lean's `Monad` and `LawfulMonad` interfaces using exactly
-`done` for `pure` and the existing `Process.bind` for sequencing. Standard `do`
+`done` for `pure` and the existing `PIR.Process.bind` for sequencing. Standard `do`
 notation therefore constructs the same open effect tree, including every
 reply-dependent branch and terminal stop; it introduces no additional evaluator.
 The monad laws preserve the whole tree. They neither select a handler nor supply

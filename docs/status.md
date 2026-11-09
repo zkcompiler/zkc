@@ -37,39 +37,11 @@ cover this boundary and capacity exhaustion.
 Selected polynomial observations retain their existing admission restriction.
 Checked source-selected Math emission, actual native comparison and CPU
 execution are covered by the [selected source tests](../common/tests/protocol/test_selected_source.py).
-The independent [formal connection](../lean/docs/support.md#checked-connection-certificates)
-also retains both Boolean Math arms. The Schnorr conjunction and Chaum–Pedersen
-proof entries use this rule on actual generated participants. Their scalar
-presentations connect the admitted source to the existing mathematical verifiers;
-the connection checks physical operations and results separately. This does not
-extend the independent program-byte lowering profile.
-The maintained full FRI and multi-round Sumcheck proof entries export and pass
-independent structured-source admission, including selected Math helpers. FRI
-selects the logical oracle execution contract; Sumcheck selects the ordinary
-one. Admission alone supplies neither a compiled FRI connection nor a security
-or terminal-discharge theorem for either entry.
-Common-input requirements remain obligations on entry admission; no public bit,
-availability set or native formation result supplies input agreement.
-[Native control fixtures](../compiler/test/protocol_control.cpp) exercise this
-boundary independently of source emission.
-The [native recurrence controls](../compiler/test/common_control_recurrence.cpp)
-exercise demanded base/transition induction, separate tag/payload/extent
-requirements, nested invocation identity, zero/one paths and exact work
-exhaustion. The [source recurrence tests](../compiler/test/language_common_recurrence.cpp)
-independently derive source requirements and compare complete inventories with
-the emitted native original. Actual completed send components now forward their
-sender's immutable subject on the normal continuing path, including private
-configuration, helper results and delivered opaque Local/service results.
-Congruent total computations and typed projections preserve that agreement
-without inventing external common inputs. Nonreceivers, changed values and
-distinct opaque occurrences retain their separate subjects; selected joins and
-initial/step/zero-trip checks remain in force. This native control coverage adds
-no formal correspondence, statement authority or adversarial-honesty result.
-The selected-source Host tests also exercise fresh service draws and delivery
-inside zero- and multiple-iteration loops, including exact service transitions,
-wire counts, carried-result agreement and cleanup.
-Recursive schema/component mapping and actual
-SDK input admission are covered separately below.
+The independent structured-source reader retains Boolean Math selection.
+The previous generated Schnorr, Chaum–Pedersen, Sumcheck and FRI connection
+route has been retired. Native admission and execution remain supported;
+complete actual-source installation on the shared Region/Process framework
+remains open. [Formal support](../lean/docs/support.md) records that boundary.
 
 Oracle capacity, observation and storage inventories retain alternative arm
 coordinates. Native Oracle realization materializes selected common bodies and
@@ -201,12 +173,11 @@ association. The original is retained through preparation and realization.
 `zkc.program/0` bytes, reached invocation order, outcomes, stops, charging and
 cleanup keep their existing meanings. The foundation changes internal carriers
 and shared export schemas, not the execution backend. Native support and formal
-interpretation remain separate. The maintained Lean readers and retained subjects
-use the current source, declaration, numerical and participant contracts; their
-exact supported profiles and connection theorems are recorded in
-[formal support](../lean/docs/support.md). Native admission does not establish
-formal correspondence, and these selected connections do not prove the whole
-native compiler correct.
+interpretation remain separate. Maintained Lean source readers check their
+explicit admitted profiles; the former participant/byte connection and concrete
+subject route is retired. [Formal support](../lean/docs/support.md) identifies
+retained source semantics and independent mathematical results. Native admission
+is not formal correspondence or a proof of the native compiler.
 
 | Interface | Contract |
 |---|---|
@@ -410,8 +381,8 @@ mathematical preparation now expands scoped helpers and creates scoped
 calculations with typed mathematical requests and explicit guard outcomes.
 Ordinary role components can be joined by `protocol.assemble_roles`; preparation
 retains exact ordered role/operand selection and projection selects each role's
-own operand without communication. Independent native comparison and the Lean
-structured participant normalizer cover the operation. It excludes service,
+own operand without communication. Independent native comparison covers the
+operation; its former Lean participant normalizer is retired. It excludes service,
 affine and logical oracle values; it adds no claim of agreement between roles.
 The normalization frontier now shares polynomial-generated coefficients across
 those scoped calculation cuts through actual participant ports. Its independent
@@ -630,7 +601,7 @@ The explicit development entry `--source-format=zkc-layout` now connects the
 name/type/role/resource/effect checking, specialization, actual IR comparison and
 the Rust Host. Project manifests and explicit SDK and CLI module maps state their
 source format, so a `zkc-layout` project builds through `zkc.toml`; the Lean
-bridges take a package's format from the SDK's project inspection. Nominal home-module methods, including generic aliases, use the
+tests take a package's format from the SDK's project inspection. Nominal home-module methods, including generic aliases, use the
 ordinary invocation binder and resolved mode/effects. Imports do not extend
 method eligibility. Protocol methods derive their complete role substitution
 from an exact fixed-roster receiver map; legacy direct logical families still
@@ -1067,9 +1038,9 @@ bounds failures through checked preparation. Virtual query declarations check
 answer-independent position maps, closed total helpers, actual polynomial bounds,
 explicit admissibility references and fresh occurrence anchors. Their generated
 condition templates and ordered query footprints have native export/check
-commands. The independent Lean derivation is supplied for Lean-owned integration,
-with the logical wire reader and recursive handle exclusion. The main Lean
-profile does not yet accept these oracle rows or the new assembly operation.
+commands. The retained logical Lean wire reader and oracle meanings do not
+establish correspondence for these generated controllers. Complete actual-source
+installation and controller correspondence remain open.
 These proposals retain exact occurrences and actual operands; they do
 not discharge their predicates. A conservative scheduling analysis reads actual
 prepared bodies and role substitution, separates participant-local stops, and
@@ -1350,16 +1321,11 @@ reader checks actual edges, carried values and terminal propagation. The
 finite membership and indexed-read consumers through the current VM, including
 masks and duplicate/empty cases. Its AIR reciprocal control is a verifier-equation
 comparison, not a new lookup proof system. The independent Lean evaluator laws
-do not establish a native correspondence theorem. The actual plain
-CheckMembership artifacts also have checked aggregate preparation and
-constructed-model completeness and deterministic rejection proofs. Their
-explicit resource bounds and remaining native/codec boundary are recorded in
-[formal support](../lean/docs/support.md). The structured Lean
-import admits the complete table subjects, including nominal queries and
-finite-fold realizations. Exact retained formula laws state the full Boolean
-result under reached length bounds and exhaustion otherwise; the
-[formal scope](../lean/docs/spec/table-relations.md) separates these source-model
-laws from native execution correspondence.
+do not establish a native correspondence theorem. Earlier concrete table
+subject and constructed-model proofs are retired. The retained
+[mathematical evaluator laws](../lean/docs/spec/table-relations.md) state the
+finite membership and indexed-read properties independently of native execution.
+New source installation must connect actual exported operations to those laws.
 
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
@@ -1398,7 +1364,7 @@ entries, integration and protocol-specific theorems.
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/protocols/polynomial/sumcheck/README.md) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |
 | Source clients of imported AIR | The [imported AIR client](../common/tests/fixtures/projects/imported-air/README.md) checks actual trace, configuration and public inputs. The [AIR STARK client](../common/tests/fixtures/projects/air-stark/README.md) adds base-field trace commitments, scoped extension-field quotient chunks, OOD/DEEP equations and FRI through ordinary source libraries and separate proof Hosts. The single-table profile covers one present table's assertions; the three-table profile adds whole-Bundle Boolean multisets and signed field balance through LogUp. Security reductions for both remain separate work. |
 | Pointwise vector maps | Source `map` applies one static scalar `math fn` over installed field vectors through [checked numerical realization](spec/ir/protocols.md#checked-pointwise-maps): complete domain admission first, with bulk and ordered scoped alternatives. A common semantic reader independently interprets source and candidate payloads, admitting sharing and commuted field arithmetic; helper calls are interpreted from the original source and installed contract laws remain a shared foundation. Shape mismatches are backend failures (`rejected:require`); optional extraction of field constants, addition, subtraction and multiplication obeys Ring depth 1,024; other admitted callbacks retain ordered execution. The [KoalaBear/Ext8/Ext4 comparison](../common/tests/kernels/test_pointwise_polynomials.py) checks maps, Ring rows and coefficients, and coset kernels against integer arithmetic, including the off-domain interpolation distinction. Installed numerical expression calls support map, sum and product over borrowed columns and scalar captures; bulk vector alternatives remain available. No first-class function value or foreign memory ABI is introduced. |
-| Finite vector reductions | [Source binders](spec/language/definitions.md#finite-reduction-binders) use general scoped consumers and finite IR. Arbitrary vector reducers collect first and call once. Native `vector.product` has empty identity one across the installed field families, with independent C++/Rust admission and normal resource charges. The default scoped route retains the collection and reducer. Default-false [collection/native-sum fusion](spec/ir/protocols.md#optional-vector-reduction-fusion) selects dot or summed numerical expressions on actual scoped occurrences, independently of finite bulk selection. Every original domain guard remains ordered, including unused rows. The independent reader checks the original callback, actual scalar result and reducer occurrence; explicit sum selections remain fixed. Physical alternatives retain checked map/sum or ordered collection endpoints. The migrated public-coin consumer distinguishes all four finite/vector policy combinations in emitted artifacts. These checks establish values and ordered shape refusals under sufficient resources, without claiming equal exhaustion or a memory bound. The scalar Lean bridge does not cover vector-map/reduction correctness. |
+| Finite vector reductions | [Source binders](spec/language/definitions.md#finite-reduction-binders) use general scoped consumers and finite IR. Arbitrary vector reducers collect first and call once. Native `vector.product` has empty identity one across the installed field families, with independent C++/Rust admission and normal resource charges. The default scoped route retains the collection and reducer. Default-false [collection/native-sum fusion](spec/ir/protocols.md#optional-vector-reduction-fusion) selects dot or summed numerical expressions on actual scoped occurrences, independently of finite bulk selection. Every original domain guard remains ordered, including unused rows. The independent reader checks the original callback, actual scalar result and reducer occurrence; explicit sum selections remain fixed. Physical alternatives retain checked map/sum or ordered collection endpoints. The migrated public-coin consumer distinguishes all four finite/vector policy combinations in emitted artifacts. These checks establish values and ordered shape refusals under sufficient resources, without claiming equal exhaustion or a memory bound. No maintained formal native vector-map/reduction correspondence is claimed. |
 | Mathematical shape and bounds | A shared MLIR-free [fact kernel](spec/domains/mathematical-facts.md) supplies exact origin/axis equality, strict bounds and exact/upper cardinalities. Independent source and SSA adapters replace duplicate closure rules. Helper observations are scoped to immutable symbol closures, with explicit rebuild and pass-manager invalidation controls. Nested work is cumulative and distinguishes absence from capacity. Source symbolic naturals retain their interpretation; guards and nominal types remain unchanged. Core scope intersection is available, while production reached-guard and loop-invariant propagation remain unsupported. |
 | General finite IR | [Typed domains and total/scoped fold and collect](spec/ir/finite.md) retain static helpers, complete entry admission, exact bound provenance and state dependency closure. Declaration-owned laws, structural SSA views, separate transient equation matches and shared producer emission support checked loop fallback, native sum/product/dot/MSM, elementwise fields and sum/product reductions of accumulator-independent pointwise field expressions. Selected matrix rows and columns use scalar contractions; admitted nested collections use one whole matvec, preserving empty-outer admission. Total callbacks expose ordinary helper calls and fixed pack/projection pairs remaining after canonicalization before optional bulk selection, while retaining the source of that selection for comparison. Nested indexed helpers preserve callback extent/bound premises and exact positional argument identities, including selected matrix axes. Independent readers check actual candidates, including checked original-helper normalization for total finite recipes and `exec.compute`. Bounded DAG sizing and a per-callback structural ceiling preserve later small opportunities without refunding spent work. Optional lane or payload-comparison capacity retains checked ordered fallback; required-reader exhaustion is diagnosed separately. Checked candidate publication is shared. Opt-in decision records distinguish missing evidence, actual capacity, policy and recipe restrictions, ordered retries and nested publication boundaries; preparation and total Math lowering also expose remarks and IR dumps. These observations supply no checking evidence. Generic canonicalization/CSE preserve domain admission. [Handwritten controls](../compiler/test/fixtures/finite/README.md) cover mutations, failures and 2^17 field workloads. Full fixed-array/matrix fallback additionally requires the native checked-access contracts; the source frontend now uses checked adapters into this IR. No Lean-to-native bridge is claimed. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
@@ -1410,17 +1376,17 @@ entries, integration and protocol-specific theorems.
 | Resident BLS12-381 provider | `blst/resident/` scalar, vector, G1/G2 and pairing bindings consume typed `blst/fr`, `blst/g1` and `blst/g2` ports. [Automatic Target preferences](compiler/representation.md#resident-providers) select G2 scaling and pairing checks; canonical ports and Contracts defaults remain Arkworks. Direct conversions are separate reached calls. Complete nested sequences, variants, resident field arrays and fixed vectors retain selected children; fixed vectors are local-only. Canonical selected codecs preserve existing encodings. Known variable-time MSM requires trusted execution permission. [Provider scope and resource boundary](../crates/zkc-kernels/README.md#alternative-bls12-381-provider); no resident GT/PCS output or whole-runtime timing guarantee. |
 | Resident BN254 provider | Explicit `halo2curves-axiom/resident/` field/vector, G1/G2, MSM and `pairing.check` bindings consume six typed flat ports at `halo2curves-axiom/bn254.fr`, `/bn254.g1` and `/bn254.g2`. Native and compiler author positive operation inventories independently. Checked mathematical-byte conversions preserve canonical ports and BN254 codecs, including readable JSON. MSM requires variable-time authority for operands `[0,1]`; pairing preparation is invocation-local with kernel work/workspace admission. No automatic Target preference, Halo GT/PCS/FFT/matrix/field-array route, recoverable upstream OOM claim or whole-runtime timing guarantee. Provider selection uses existing physical proposals; compiled source controls cover canonical, resident, mixed-provider, G2 and bulk paths. |
 | General numerical composition | Installed field/group/vector/matrix, polynomial, pairing and oracle kernels with [composed clients](compiler/mathematics.md) and [changing numeric state](compiler/mathematics.md). The [linear-expression library](../libraries/core/README.md#linear-group-expressions) composes ordered scalar/point terms and evaluates one equation through an ordinary MSM; authors combine shared-basis coefficients explicitly. Complete Groth16 applications remain separate work. The [weighted inner-product argument](../libraries/arguments/bulletproofs/README.md) supplies reusable rounds, and the [Monero Bulletproofs+ construction](../libraries/constructions/monero/bulletproofs_plus/README.md) implements 64-bit aggregated range proofs for 1..16 commitments; pinned upstream controls compare exact bytes at every count. Full transaction integration, batch verification and security proofs remain outside this library. The [KZG library](../libraries/commitments/kzg/README.md) provides checked evaluation domains, evaluations and opening equations. The [Ethereum EIP-4844 construction](../libraries/constructions/ethereum/eip4844/README.md) supplies commitment, proof, challenge, batch-verification and precompile functions. Its constructions reproduce c-kzg-4844's explicit challenge hash inputs, tagged `FSBLOBVERIFY_V1_` and `RCKZGBATCH___V1_`, and all 262 c-kzg-4844 v2.1.8 vectors and 57 derived reference cases agree; no Fiat–Shamir security theorem covers these constructions. The source bound permits 1..64 blobs; admissible execution also depends on the selected capacity. Bit-reversed evaluation domains use a checked two-adic constructor without pairwise root validation. Earlier measured execution limits do not characterize this implementation. Asset formats carry relation data only, so the prover receives the setup's G1 Lagrange points as an ordinary input that the library admits only with their pinned SHA-256, and the verifier key is a library constant. The batch transcript construction recomputes each blob's evaluation point and value from the statement, because a construction observes only messages and start inputs. No KZG security proof is claimed. |
-| GKR source library | The [GKR library](../libraries/protocols/polynomial/gkr/README.md) verifies layered arithmetic circuits of uniform width with public stacked add and mul wiring: degree-two Sumcheck rounds per layer, a line restriction to the next layer and the input check, with an honest prover in the same unit. Lean proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md#the-compiled-gkr-proof-entry) of the plain verifier and of the compiled example Entry for fixed well-formed statements. Non-uniform widths, succinct or private wiring and commitments to the inputs are outside the library. |
-| Sigma source library | The [Sigma library](../libraries/protocols/sigma/compositions/README.md) composes the Schnorr pattern into an AND of two discrete-logarithm statements with one shared challenge and a Chaum–Pedersen proof of one discrete logarithm at two bases; the [example project](../examples/projects/sigma/README.md) selects BLS12-381 G1 and the Merlin suite. Maintained checks cover declaration checking, native SSA/Lean replay of the Interactive Entries and construction checking of the compiled proof Entries; no maintained test runs, proves or verifies its Entries through the Host or refuses a wrong witness or proof. Formal results are in [support](../lean/docs/support.md#sigma-compositions). |
+| GKR source library | The [GKR library](../libraries/protocols/polynomial/gkr/README.md) verifies layered arithmetic circuits of uniform width with public stacked add and mul wiring: degree-two Sumcheck rounds per layer, a line restriction to the next layer and the input check, with an honest prover in the same unit. Independent GKR mathematics remains in Lean, but the previous plain/compiled source connections are retired; no current native Entry security theorem is claimed. Non-uniform widths, succinct or private wiring and commitments to the inputs are outside the library. |
+| Sigma source library | The [Sigma library](../libraries/protocols/sigma/compositions/README.md) composes the Schnorr pattern into an AND of two discrete-logarithm statements with one shared challenge and a Chaum–Pedersen proof of one discrete logarithm at two bases; the [example project](../examples/projects/sigma/README.md) selects BLS12-381 G1 and the Merlin suite. Native checks cover declaration and construction checking of the proof Entries. The former generated Lean replay and endpoint connections are retired; [formal support](../lean/docs/support.md) separates retained mathematical results from open source installation. |
 | Checked element access | `matrix.get` preserves BLS12-381 Fr, BN254 Fr, Ristretto255 scalar and the [registered residue fields](spec/domains/values.md#registered-residue-fields); missing in-range sparse cells yield zero. `field_array.get` accepts a dynamic index over native BLS12-381 Fr arrays; static `field_array.at` remains available. Both check bounds, including empty shapes and huge indices. The libraries also expose total `at` access under checked input conditions; finite domain indices and matrix views can discharge these bounds. |
 | Relations | Bounded R1CS/AIR data import and Assets, exact [relation bindings](compiler/relations.md), a [native R1CS reduction adapter](compiler/relations.md), and an isolated [Plonky3 AIR adapter](../compiler/adapters/plonky3/README.md) checked differentially against its pinned upstream. Import does not prove upstream source adequacy. |
 | Multi-table relations | [Relation bundles](spec/domains/relation-bundles.md) have independent C++ and Rust admission and evaluation of deterministic data and challenge-dependent staged predicates. Captured Bundles retain an explicit source relation ABI, table/public/channel counts, polynomial facts, interaction descriptors and simultaneous record substitution. The external [accumulator-machine adapter](../compiler/adapters/accumulator-machine/README.md) supplies a CPU/program/memory relation and independent staged LogUp/grand-product references. The [source machine proof](../common/tests/fixtures/projects/accumulator-machine/README.md) commits base, auxiliary and quotient columns, checks OOD identities and composes one FRI instance. Its selected profile has three tables with independent two-adic heights, optional presence, global all-row Boolean multisets, and signed field balance through LogUp. Native immutable table-width metadata is independent of height and presence; polynomial references admit table/carrier structure, and reached height-taking operations retain actual domain and window checks. Source admission uses these widths for absent configuration and reserves polynomial shape checks for present tables. Complete proof controls cover absent fixed/configured heights 1, 3 and beyond the active profile, exact configuration lengths, and present-table refusal. Arbitrary table counts and other interaction profiles remain library work; relation adequacy and cryptographic soundness are not established by these executions. |
 | OpenVM relation comparison | The optional [OpenVM adapter](../compiler/adapters/openvm/README.md) captures five upstream AIRs for a KoalaBear RV32 branch slice. Upstream recorder/DAG/debug checks, the adapter evaluator and both native Bundle evaluators agree on selected traces and mutations. Its memory-bus test partner permits inconsistent reads, so these checks establish neither execution nor termination under VM semantics, nor authentication of initial memory. Deployed BabyBear, persistent memory, full ISA and OpenVM proof compatibility are outside this selection. Its five-table layout is outside the current three-table source argument; admitting signed field balance alone does not supply the missing execution semantics. |
 | Clean export comparison | A [pinned Clean flat AIR export](../lean/adapters/clean/README.md) is compared with native finite-AIR evaluation and the KoalaBear/Ext8 ring provider on fixed honest, invalid and mutated rows. This checks native agreement on those rows; it does not prove the native decoders correct. |
 | Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/construction.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/0`. |
-| Native hash-chain suites | [BLS12-381, KoalaBear quartic and KoalaBear octic Keccak suites](spec/ir/construction.md#native-hash-chain-suites): Keccak-256 chains with full-digest states, framed events, counter-expanded requests and the decoders of the Merlin suites over the same challenge fields; the quartic and octic instances have UniformIndex transitions. States are host-owned affine capabilities, as for the other suites, implemented by the field backends. Known-answer vectors from an [independent Python reference](../common/tests/support/hash_chain_reference.py), whose Keccak-f[1600] is checked against published Keccak-256 answers and Python's SHA3-256, fix the backend's states, request answers and decoded challenges. Independent replays of compiled native proofs (Schnorr, DLEQ and Sumcheck families, octic index rounds), the maintained Schnorr, Sumcheck and FRI examples and managed transcript methods prove and verify under them. The base-field KoalaBear has no random service or transcript instance. The quartic installation does not extend the independent Lean byte table. Lean proves the reduction of the existing BLS and octic suites' chain to the history oracle, with the byte hash as a random oracle and loss `(q + V)² / \|S\|` for `q` adversary and `V` verifier calls ([provider simulations](../lean/docs/spec/fiat-shamir-security.md#provider-simulations)). The hash-chain theorem is about the construction's byte-level chain model; that the compiled transcript handlers and the installed Keccak-256 kernels implement that model, and that the suites' decoders are modelled ones, remain obligations. |
+| Native hash-chain suites | [BLS12-381, KoalaBear quartic and KoalaBear octic Keccak suites](spec/ir/construction.md#native-hash-chain-suites): Keccak-256 chains with full-digest states, framed events, counter-expanded requests and the decoders of the Merlin suites over the same challenge fields; the quartic and octic instances have UniformIndex transitions. States are host-owned affine capabilities, as for the other suites, implemented by the field backends. Known-answer vectors from an [independent Python reference](../common/tests/support/hash_chain_reference.py), whose Keccak-f[1600] is checked against published Keccak-256 answers and Python's SHA3-256, fix the backend's states, request answers and decoded challenges. Independent replays of compiled native proofs (Schnorr, DLEQ and Sumcheck families, octic index rounds), the maintained Schnorr, Sumcheck and FRI examples and managed transcript methods prove and verify under them. The base-field KoalaBear has no random service or transcript instance. The quartic installation does not extend the independent Lean byte table. Lean proves the reduction of the existing BLS and octic suites' chain to the history oracle, with the byte hash as a random oracle and loss `(q + V)² / \|S\|` for `q` adversary and `V` verifier calls ([provider simulations](../lean/docs/spec/fiat-shamir-security.md)). The hash-chain theorem is about the construction's byte-level chain model; that the compiled transcript handlers and the installed Keccak-256 kernels implement that model, and that the suites' decoders are modelled ones, remain obligations. |
 | Programmable constructions | [Labelled messages and queries](spec/language/entries.md) select ordinary typed scoped handlers, one inherited base and whole-rule overrides. Checked plans preserve state, actual payloads and loop order through participant lowering and independent runtime admission. Providers use private copyable data or an authorized managed transcript with explicit byte-labelled methods. Finite authority sets retain each query's actual service contract; unselected verifier services remain private, with checked dependencies and explicit budgets. Whole-call delegation preserves one live root, actual child-start inputs and root codec coverage across nested, repeated and empty children. Iterated Sumcheck and Schnorr exercise execution and malformed-input order; record codecs support sequential and disjoint round chunks, original-byte observations and conditional completion. |
-| Structured participant comparison | The optional [source-bound native probe](../lean/bridges/structured/participant.md) compares both actual Interactive Schnorr endpoints and generic service fixtures with original-SSA and Lean replay. It checks sampled generator-multiple G1 values, independent inputs/receives, pending prefixes, canonical codec failures and provider residual state. Native cleanup and failure adapters are explicit additional observations; this is bounded evidence, not Rust refinement or arbitrary-point decoding correctness. |
+| Structured source comparison | The optional Lean native-admission lane compares actual exported source with independent SSA and Lean interpreters, including stops and ordered service replies. It is bounded evidence, not Rust or lowering refinement. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
 | Retained storage and work | [Runtime ledgers](spec/runtime/capacity.md#retained-values-and-logical-work) count each shared immutable allocation once while retained and once when produced, with a separate logical-work ceiling charged at every kernel use. The [invocation root](spec/runtime/capacity.md#invocation-ledgers) bounds the bytes of the Host and of every participant runner together in Run, Proof and Function invocations, and each of its charges reports its item's own [refusal code](spec/runtime/capacity.md#root-refusals); each Run and Proof runner keeps its own instruction and iteration fuel, a Function's children charge only its pooled meter, and every execution report renders the root's [usage](spec/runtime/capacity.md#reported-usage) as `invocation`. 65,536 extension-field rows committed once and opened 64 times complete within default budgets. Only row openings, accessors and length queries declare partial read extents. These are retained-payload charges, not peak-memory measurements. |
 | Authored transcripts | Explicit external initialization, trial/live checks and snapshots under [authored transcript contracts](compiler/construction.md). Source libraries have bounded `Bytes`, repetition and fragment joining, private copyable SHAKE128 snapshots and shortest unsigned LEB128 index encoding, scalar/collection BLS12-381 Fr/G1/G2 and Edwards/scalar byte codecs, whole-vector big-endian BLS12-381 Fr decoding, plus raw Keccak-256 and SHA-256. A format-only construction selects native framing or one raw `Bytes` message. Pinned Spongefish Schnorr tests cover both directions, the fixed 80-byte vector and ordered decoder failures; they do not establish complete parser equivalence or soundness. Admission does not prove transcript completeness or snapshot reachability. |
@@ -1478,248 +1444,18 @@ exact methods and static domains. Shared helper/repeat summaries retain
 verifier observations and the selected checked realization. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
-The [transcript-construction bridge](../lean/bridges/construction/README.md)
-exports the checked validators of the compiled proof Entries of the Schnorr,
-Sumcheck, composed Sumcheck, Sigma and GKR examples and of a guessing fixture
-([format](spec/formats/constructed-participant.md)). Lean checks their transcript
-construction and their [participant projection](../lean/docs/spec/participant-projection.md)
-against the original exports and proves that each compiled verifier's ideal
-meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
-transform of its original verifier; other Entries, suites and programmable
-constructions have no such check. The composed Sumcheck Entry is covered by the
-generated `TwoSums` root, with exact scalar and charged soundness requests and a
-compiled-ideal completeness receipt. These are independent of native execution
-correspondence. The compiled Sigma proof
-Entries (Chaum–Pedersen, two-proof AND, Okamoto) also have fixed-statement
-knowledge soundness through the registered endpoints. The
-exporter repeats the native proof check before printing the validator; it is
-reviewed native code, not a proved component. For Schnorr it proves
-fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, under
-the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Lean also
-proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md) of the
-transform of any validator over the common participant actions with a
-round-by-round soundness certificate, and of the imported Sumcheck verifier's
-transform. These are instances of a theorem over typed query sites: any
-validator signature with a transcript interface whose sites decode
-key-dependent raw answers, possibly refusing, with an error per site. Realized
-sampling laws (exact decodings, masking with refusal, low-bit masking of
-KoalaBear elements, reduction modulo the BLS12-381 scalar order as in EIP-4844),
-grinding-gated sites, compound sites and role separation at one key are proved
-for it. Native construction now emits checked index blocks and grinding-gated blocks
-under explicit native policies. The formal compiled-verifier connection still
-uses the narrower field-challenge participant instance: the new native sites
-have no independent Lean interpretation or compiled-verifier theorem yet. Composed with the Sumcheck Entry's checked transform equation, this
-bounds the compiled Sumcheck verifier's ideal interpretation in the random-oracle
-model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
-fixed well-formed statement with `n` rounds (the Entry admits at most two), and
-at most `(Q + 2) (1 / |F| + loss)` for adaptively chosen well-formed statements,
-`loss` being the challenge decoding's excess, when the initial
-transcript determines the statement. The adaptive premise is discharged by one
-typed public-value binding event whose row holds the table values as a vector,
-the claim as a scalar and the round count as a count. The typed public-value
-binding establishes statement determination only; that the native transcript
-absorbs the encoded rows, in order, remains assumed.
-For the GKR Entry, Lean proves that the
-admitted original validator, through its generated normal form (an instance of
-the participant normalizer's soundness theorem,
-`Zkc.Source.Structured.NormalForm.normalize_sound`, checked by kernel
-evaluation), is the plain GKR verifier on well-formed statements within the Entry's maxima, and bounds the
-compiled verifier's acceptance of claimed outputs other than the circuit's for a
-fixed statement through the composed check's transform of that original, with a
-charge per phase: against a weighted adversary budget whose oracle keys are
-charged their challenge site's error, and by
-`(Q + width + layers (2 width + 1)) max 2 width / |F|` against `Q` queries.
-The [executable bridge](../lean/bridges/executable/README.md) reads the validators
-of the `zkc.program/0` candidates of the Schnorr and Sumcheck Entries and of a
-deferred-rounds fixture, which the runtime admits. Lean checks each against its constructed validator with a
-[lowering rule](../lean/docs/spec/executable.md) whose meaning covers proof
-framing, decoding failures, instruction budgets, loops, local calls with frames,
-helper calls and transcript custody. The rule compares instructions up to checked
-normalization of pure total calculations, so a schedule that computes values
-before their first consumer, as the compiler's calculation batching does, is
-accepted when its anchors and their operand terms agree with the export's. The
-compiled Schnorr and Sumcheck programs equal their exports; the two-round
-deferred-rounds fixture, whose program defers the first round's product past
-the second draw, is accepted through normalization, and compiled with `--no-calculation-batching`, which
-computes values where the source defines them, by equality. That fixture's
-theorems stop at the constructed validator, since the participant projection
-rule is not applied to it. For Sumcheck the program's helper functions are proved to
-implement the source's checked helpers: the Pending constructor, openClaim,
-point extension and atPrefix by the general helper rule, whose soundness is
-proved once, and the terminal
-check, whose body iterates and is outside the rule's recipes, by a proof of its
-own. Honest-prover completeness of the executable holds for every round count up
-to the Entry's static maximum, at every budget of at least `76 + 59 · rounds`
-instructions, a charge derived from the program's reading, which at two rounds
-is the runtime's acceptance threshold; the proofs are the Sumcheck family's and
-do not depend on the value of the maximum. A current limitation: the compiler
-accepts a Sumcheck Entry with any static maximum, but the library's terminal
-check bounds the point at 64 coordinates, so honest proofs of 64 or more rounds
-are rejected, and the executable theorems require a maximum below 64.
-The security bounds
-transfer to provers of proof bytes through the general construction, projection
-and lowering rules, with no equation specific to an Entry about the compiled
-program: Schnorr knowledge soundness for a fixed statement, and Sumcheck soundness
-for fixed and adaptively chosen statements, the latter from the typed
-public-value binding of the transcript model, one event whose row holds the
-table values as a vector, the claim as a scalar and the round count as a count,
-and determines the statement. The typed public-value binding establishes
-statement determination only; that the native transcript absorbs the encoded
-rows of the invocation root, in order, remains assumed. The bridge compares the
-runtime's stops and observations with that meaning, at every budget up to the
-acceptance threshold and on mutated proofs, and checks that the runtime executes
-the program a verification receipt names, with the acceptance output and public
-inputs of the Lean statement. The runtime's execution, kernels and codec, the
-program renderer and the structured exporter remain trusted; the runtime refuses
-some inputs the meaning classifies differently, listed in
-[support](../lean/docs/support.md).
+The maintained Lean libraries use one typed Region/Process foundation and shared
+quantitative construction rules. Independent structured-source admission and its
+interpreter remain; native source admission/execution checks compare compiler
+exports with that interpretation. The former generated source/constructed/byte
+connection route and concrete security endpoints are retired. No current compiled
+Schnorr, Sumcheck, GKR, FRI or STARK security claim follows from those removed proofs.
 
-The [construction obligations](spec/ir/construction-obligations.md) specify
-query identities, construction classes, realized laws, observation classes with
-certified openings, blocks, gates, cryptographic effects, binding, provider and
-explicit-input obligations, equivalence notions and the model of claims. The
-native construction implements the profile that absorbs every message, over the
-installed Merlin, spongefish and hash-chain suites. Scalar `index` requests use
-bounds defined by `data.index` constants. Explicit `indices` blocks and gated
-blocks are also implemented for their installed native profiles, with static
-bound/count parameters, authenticated gate policy, witness framing and independent
-actual-body checks; see [native index blocks](spec/ir/construction.md#native-index-blocks).
-Source proof declarations select gates through authored query labels and checked
-application paths, including explicit zero difficulty. The separate
-[construction-binding views](spec/ir/construction-binding.md) check installed
-native history, canonical hash-history handlers and explicit hash inputs against
-the actual candidate. They retain exact encoding/state coverage, complete public
-inputs and terminal-message distinctions. Unsupported handler, codec, omission
-and query-law forms refuse the requested profile; admitted execution alone
-carries no binding judgment. General hash-role independence, certified omissions
-and salt remain outside these closed checks. Lean states
-formal readings of the obligations, refutes each with a model counterexample
-([support](../lean/docs/support.md#construction-obligation-counterexamples)),
-fixes the type of provider simulations and proves one for the hash-chain
-suites' byte-level chain model (the duplex providers' simulations remain
-named), and states the joint experiment of a committed opening with its
-extraction checkpoint convention and proves its bound for a total straight-line
-extractor; a general bound for verifiers with committed tables, read in one
-random oracle with their hash calls, also applies to it. The committed opening
-is a model protocol, not a compiled Entry. It also states law records with their five constructors and the gated
-accepted-value decoder, per-key charges in the typed Fiat–Shamir theorems,
-raw answer types by the last event and the lifting of uniform-sort certificates,
-binding codecs over typed public-value binding events, and the data shape of the
-interaction pattern with the reserved salt kind. The construction model carries
-typed draw requests on its challenge occurrences and a typed public-value
-binding event, from which the compiled and executable Sumcheck theorems derive
-their statement binding; the exported query key and the native occurrence
-template keep their draw spelling until the first method with operands. ArkLib's
-worst-case round-by-round soundness imports into the typed engine for verifiers
-with a guarded verdict, each challenge round charged its own error, and a
-process-form certificate transports to a participant validator that realizes the
-process form: a worst-case round-by-round proof stated in ArkLib's framework
-(written for the example) bounds the compiled verifier of a guessing fixture
-Entry, and the bound is attained at zero queries. The import of ArkLib's
-interaction-stack soundness is outstanding adapter and instance work: the
-attempted implementation met its execution prefixes in `Type 1`, its challenge
-models that sample arbitrary distributions and its private Sumcheck instance,
-and a restricted route through a propositional realization relation is proposed
-but unchecked
-([imports](../lean/docs/spec/fiat-shamir-security.md#imports-from-arklibs-round-by-round-soundness)).
-
-The security results share one probabilistic endpoint and one composition rule.
-Lean states keyed bad-event certificates over any key space of the lazily
-sampled oracle, with an all-table resampling and a trace obligation, and its
-soundness theorem is the endpoint that typed certificates and the commitment
-bridge reach through transformers; charged reductions compose sub-validators
-whose returned values satisfy a postcondition
-([composing certificates](../lean/docs/spec/fiat-shamir-security.md#composing-certificates)).
-Renamings of oracle cells transport executions, query bounds and weighted costs
-between key forms, including the commitment bridge's joint keys and history
-keys. [Stage relations](../lean/docs/spec/fiat-shamir-security.md#stage-relations)
-compose with budget transport, bounding against the worst adversary in a
-translation's support; the construction, projection and pruning equalities, the
-typed theorem, provider simulations and the commitment bridge are stages. The
-[joint stage](../lean/docs/spec/fiat-shamir-security.md#the-joint-stage-of-a-commitment-and-a-provider)
-of a commitment and a transcript provider that share one primitive is a
-contract with jointly injective namespaces, a checkpoint extraction, the
-checkpoint event and an implication from the intended event, and its frame
-records a provider simulation with namespace, hash-answer, state-separation and
-joint-loss obligations; the contract composes, and a frame is constructed for a
-provider whose primitive inputs are the joint oracle's own tagged keys. The
-[hash-chain frame](../lean/docs/spec/fiat-shamir-security.md#the-hash-chain-frame)
-passes the commitment's tagged row calls through to their own cells while the
-chain realizes the transcript on the same byte hash; every frame obligation and
-the provider's budget map are proved, and the abstract committed-opening
-verifier over the Keccak-256 hash chain is bounded by the collision and
-prediction loss over the joint trace, `(q + depth + 4)² / 2^256`, plus the
-commitment stage's loss at `q`. The bound is about the model's deployed reading:
-its event encoding is a model encoding rather than the native frames, its index
-is one digest modulo `2^depth` rather than the installed index request, and no
-compiled Entry, native transcript reading or executable is connected. Statement
-bindings relate policy statements to model statements, with the coverage of the
-application's false statements and the rejection of unmapped statements as
-separate registered obligations.
-[Registered endpoints](../lean/docs/spec/fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)
-state ordinary soundness, for fixed and adaptive statements, of a compiled
-verifier's ideal meaning and of host validation of program bytes, and
-fixed-statement knowledge soundness through a generic Sigma bridge, for evidence
-indexed by a compiled Entry's artifacts and by the claim its retained contract
-states. The subject driver generates each claim as the registered endpoint
-applied to a subject's evidence: knowledge soundness of the compiled Schnorr
-(ideal meaning and program bytes), Chaum–Pedersen, two-proof AND and Okamoto
-proof Entries, and ordinary soundness of the guessing Entry (ideal meaning) and
-of the Sumcheck proof Entry (ideal meaning and program bytes, fixed and adaptive
-statements, every round count up to the static maximum, malformed vectors
-included). A records run given the subject pipeline's evidence establishes the
-assurance reports of Schnorr, Chaum–Pedersen, AND, Okamoto, the guessing Entry
-and Sumcheck. Composed Sumcheck retains `target public_sums`; its maintained
-claims use the generated `TwoSums` root rather than that manifest report.
-GKR retains `target circuit_outputs` and has separate canonical scalar and
-charged source-claim receipts, plus perfect compiled-ideal completeness. They
-share the full nominal source-to-participant connection and fix width and layer
-maxima at four. The adaptive scalar bound is `4 * (Q + 40) / |F|`; the charged
-request assigns `4 / |F|` to each selected site and validator cost `160 / |F|`.
-These receipts include malformed adversarial statements. They are distinct from
-the fixed-statement GKR bound above and from the six manifest assurance reports.
-Neither route proves native GKR execution security.
-
-The [scalar Lean bridge](../lean/bridges/common/README.md) consumes the actual
-Structured export, derives scalar open-process contracts, and applies selected
-ArkLib/VCVio security results. The independent Common source format, admission
-and native exporter are retired. Its named DSL target path also checks an authored relation body.
-Native SSA/Lean differential tests cover the admitted finite scalar profile.
-The separate [structured import](spec/formats/structured-source.md) exports
-original protocol-stage units: shared helpers, protocol roots, retained contracts
-and formula links, checked primitives, maps and realizations, protocol
-applications and repeats, with the native catalogue rows of every domain
-identity and random service they use. The native exporter and an independent C++ SSA
-reference check this profile, including the 4096-instruction admission budget,
-reference depth 64 and effective-site collisions. The
-[structured bridge](../lean/bridges/structured/README.md) compares native SSA
-evaluation, Lean replay and selected Runner cases; it does not prove native
-transformations. Native affine resources, conditional entry completion and
-construction-start selection are outside this profile.
-
-Lean independently checks each structured export's metadata, signatures, helper
-linking, role scopes, service provenance and computational availability, and
-proves its process equations on the shared Region carrier: each generated
-participant normal form is an instance of one soundness theorem of a verified
-normalizer (`Zkc.Source.Structured.NormalForm.normalize_sound`), checked by
-kernel evaluation. It resolves every
-domain identity against the exported catalogue rows and admits the rows that
-agree with its environment: the BLS12-381 scalar field, its pairing groups and
-its random service, at field, vector, G1 and service types. Other installed
-identities export their rows and are refused by Lean admission.
-[Formal support](../lean/docs/support.md) states exact experiments and premises,
-including: the Interactive Schnorr verifier contracts, an honest prover derived
-from the checked source's sends and the Sigma properties; the Schnorr AND and
-Chaum–Pedersen compositions with their Sigma properties and fixed-statement
-random-oracle knowledge soundness of the Fiat–Shamir transforms of their
-imported interactive verifiers (not of the compiled proof Entries); two inlining pairs checked
-against actual prepared exports; `n / |F|` Sumcheck bounds on the actual
-admitted roots under a uniform query service; and honest-prover completeness of
-both imported Sumcheck pairs with the prover's per-round fold invariant. No general
-availability-soundness or native execution-correspondence theorem is claimed.
-Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
-backend correctness and complete protocol security remain open.
-[Assurance](assurance.md) distinguishes these evidence boundaries.
+Independent protocol mathematics, model-level construction clients, mathematical
+adapters and stored-declaration/axiom audits remain supported. Complete actual-source
+law installation, generated-controller correspondence and new protocol endpoints
+remain open. [Formal support](../lean/docs/support.md) records this deliberately
+narrower boundary; [assurance](assurance.md) separates it from native execution.
 
 ## Scope of the supported package
 
@@ -1764,13 +1500,12 @@ repeats. Repeat boundaries retain ordinary carried, captured, count and yielded
 action dependencies, including carried backedges and maximum-zero alternatives.
 The producer explicitly refuses more than 512 deduplicated logical slots
 across a call's subject and residual clauses.
-The independent Lean reader admits the original and recomputes these routes;
-Boolean, guarded-stop and vector fixtures exercise actual repeated calls and
-zero iterations. Unsupported control and effects refuse explicitly. Typed
-assignment, formula, readback and mathematical-law obligations remain for the
-consumer; this adds no independent acceptance of authored mathematics or
-protocol security result. Root generator and protocol-library migration is
-separate integration work.
+These native proposals do not supply checked mathematical-law installation.
+The former concrete binding/receipt route is retired. The current Lean framework
+will require exact admitted-definition association, actual call substitution,
+representation laws and complete outcomes before consuming such proposals.
+That source installation remains separate from native comparison and from a
+protocol security result.
 
 
 The native declaration foundation retains one immutable canonical declaration

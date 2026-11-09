@@ -35,7 +35,7 @@ CLEAN_CONTROL = Path('../common/tests/fixtures/clean/air-control.json')
 
 def build_inputs(root, packages=None):
     """Hash selected source scopes and the complete shared checking harness."""
-    files = {root / 'reproduce.py', root / 'bridges/common/lean_render.py'}
+    files = {root / 'reproduce.py'}
     for directory in ('checks', 'support', 'clients'):
         files.update(path for path in (root / directory).rglob('*')
                      if path.suffix in ('.py', '.lean') and
@@ -183,10 +183,10 @@ def required_markers(name):
         markers.extend(['STARK-POWER-UPSTREAM-AXIOMS-PASS',
                         'STARK-EXCLUDED-COMBINATION-CONTROL-PASS', 'STARK-ARKLIB-BOUNDARY-PASS',
                         'FRI-JOHNSON-UPSTREAM-BOUNDARY-PASS'])
-    if name == 'applications':
-        markers.extend(['REGISTRY-AUDIT-PASS', 'ARKLIB-REGISTRY-AUDIT-PASS'])
     if name == 'clean':
         markers.append('CLEAN-UPSTREAM-BOUNDARY-PASS')
+    if name == 'verification':
+        markers.append('REGISTRY-AUDIT-PASS')
     return markers
 
 

@@ -54,7 +54,7 @@ structure Receipt {Subject : Type u} {registry : Registry (PropertyExport Subjec
   proof : meaning.proposition
   provenance : Provenance
   /-- Annotation consistency only: membership does not prove source correspondence.
-  The assurance report independently retains that external boundary. -/
+  Consumers must independently retain that external boundary. -/
   sourceRecorded : sourcePremise ∈ provenance.premises
   /-- Required links come from the registered request, never from a route. -/
   linkProofs : (index : Fin resolved.requiredLinks.length) →
@@ -65,19 +65,12 @@ variable {Subject : Type u} {registry : Registry (PropertyExport Subject)}
   {reference : Subject → SubjectRef} {subject : Subject} {request : Wire.Request}
   {resolved : Resolved registry reference subject request} {meaning : Evaluated resolved}
 
-/-- Every product here is a verifier product. Authored-pair completeness and
-native/source correspondence require their own later links. -/
-def product (_receipt : Receipt meaning) : String := "certified_verifier"
-
-/-- Completeness of this receipt's registered link proofs, not final assurance
-report certification. Reporting also checks subject/model admission, canonical
-meaning, the remaining statement binders, axioms, and independently required
-stage links. A generic receipt does not perform those security-layer audits. -/
+/-- Completeness of the registered link proofs only. This is not certification
+of subject admission, security assumptions or native implementation. The old
+assurance-report reader is retired; those are separate consumer obligations. -/
 def status (receipt : Receipt meaning) : Status :=
   if (List.finRange resolved.requiredLinks.length).all (fun index => (receipt.linkProofs index).isSome)
   then .certified else .open
-
-def scope (_receipt : Receipt meaning) : String := "ir-relative"
 
 def ofTheorem (proof : meaning.proposition) (provenance : Provenance)
     (links : (index : Fin resolved.requiredLinks.length) →

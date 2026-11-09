@@ -52,71 +52,12 @@ including repeated calls at one site and handle. Shared handles may share all
 of `S`. No survival normalization, capacity assumption, or retry occurs.
 Sampling does not invent a logging event; such an event belongs to a callback.
 
-## General-count process transport
+## Source connection boundary
 
-`ZkcArkLibExamples.CausalSumcheck.Iteration` imports the shared module
-`Zkc.Protocols.Sumcheck.Source.VerifierProcess` and its
-`SumcheckVerifierLaws.roundPresent` definition. It constructs a `Causal.Strategy` from the
-two actual qualified receives and the actual send. HIGH receives LOW's updated
-state and returns its own reply. The guard precedes service preparation and
-sampling. The source normal form appends the sampled value and interpolates
-using those two replies; no second round process or evaluator is defined.
-
-`repeat_distribution_of_queryLaw` proves equality of full execution
-distributions for arbitrary counts, starting points, claims and states. Its
-only provider premise is a query law at every state. All continuation
-substitutions use invariant `True`; no reachable-only obligation remains.
-`repeat_uniform_distribution` discharges that local law with the constructor.
-
-`repeat_uniform_publicTable_soundness` and
-`repeat_uniform_residual_soundness` specialize the stop-aware causal bounds to
-this shared process, installing the singleton route internally. They bound
-the decoded public-table observation and the external original-table residual
-observation by `n / |F|`. Callbacks and network actions may stop; the mass is
-unconditional. The residual process has no Boolean terminal checker.
-
-## Actual imported roots
-
-`Examples.CausalSumcheck.SourceVerifier` composes the process theorems with the
-source owner's callback, root-input, count-admission, output and terminal laws.
-Its subjects are `SumcheckSourceViews.imported.program` and
-`SumcheckReduceViews.imported.program`, retaining admission of each complete
-exported snapshot. `source_present` and `reduction_present` are exact process
-equations, including final output conversion and every earlier interaction or
-stop. Their observation equations require no provider premise.
-
-`source_returned_true_bound` bounds the unconditional mass of an actual present
-`true` verifier result by `n / |F|`. It takes the original raw verifier vector,
-its decoding as a table of dimension `n`, a claim different from that vector's
-sum. The bound is nontrivial up to `n ≤ 2`, the exported maximum; for `n > 2`
-the source refuses and contributes zero mass. The checked
-terminal decision includes both
-`point.length = n` and table extension equality. A padded coordinate conversion
-alone is insufficient. Decoding and the admitted count discharge raw-vector
-representability internally; successful iteration supplies the point-length
-fact used by the actual source checker law.
-
-`reduction_residual_bound` bounds the unconditional residual-observation mass
-by `n / |F|` for an external original table of dimension `remaining + n`.
-The bound is nontrivial up to four rounds, the exported maximum; above four
-the root refuses and contributes zero mass. Its initial claim differs from that table's Boolean sum.
-The observer reads the original verifier point/claim outputs. Prover vector and
-dimension inputs remain arbitrary and optional, with no equality to the external
-table. Reduction has no Boolean checker; this event is not acceptance.
-
-Both headline bounds specialize the actual root to the empty parent context,
-verifier role `1`, and peer `0`. The shared-process transport supports arbitrary
-protocol contexts and role mappings. The source owner also provides a contextual
-root equation; this package does not generalize its headline bounds to every
-root context.
-
-Both bounds install the actual qualified child query route internally and
-quantify over arbitrary network behavior, resource/log callbacks and initial
-states. No honesty, local query law, route membership, checker equation,
-whole-run distribution equality or reachable-state premise is exposed. The
-source equations retain missing inputs, malformed checks, count refusal and
-overflow behavior. The headline bounds use present V inputs and internally
-discharge count admission; they do not make excess counts executable.
+The previous generated Sumcheck process transport is retired. The service laws
+above remain available to common construction. Installing them at an actual
+source call requires its checked service identity, arguments, reached state and
+continuation; a distribution name alone does not establish that association.
 
 ## Probability interpretation
 

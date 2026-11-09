@@ -145,7 +145,7 @@ reduction uses the number of **distinct points**, not the number of draws.
 `lift_answers` and `lift_agreement` recover claimed point values and off-set
 agreement, respectively.
 
-The optional `ZkcArkLib.Stark.Quotient` proves exact representation equalities
+The optional `Zkc.Adapters.ArkLib.Stark.Quotient` proves exact representation equalities
 with ArkLib's `vanishingPoly`, `ansPoly` and `polyQuotient`.
 `quotient_distance_gt` applies its proved `Quotienting.quotienting` theorem:
 if every codeword within radius `δ` disagrees with a claimed answer on `S`,

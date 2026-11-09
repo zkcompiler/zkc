@@ -107,7 +107,7 @@ state. Cargo
 regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source. The Lean catalogue's row
 facts are a generated module, `lean/ir/Zkc/IR/Source/Structured/InstalledCatalogue.lean`,
-written by `lean/bridges/common/installed_catalogue.py` and checked fresh by
+written by `lean/support/installed_catalogue.py` and checked fresh by
 `lean/checks/check_installed_catalogue.py`; Lean's admitted identity set stays
 hand-written.
 
@@ -130,6 +130,6 @@ independently of its spelling. Identities are unique across frontend declaration
 and service methods; names are unique within a constructor. Random-service
 consumers select the nominal owner `service.random` before matching a method
 name or capability. The independent Lean Python reader validates these source
-rows separately; this migration preserves its generated module byte for byte.
+rows separately and projects installed data without supplying semantic laws.
 Captured homonyms grant no authority.
 See [frontend associations](../../docs/spec/formats/contract-declarations.md#frontend-declaration-associations).

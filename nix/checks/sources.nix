@@ -19,7 +19,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.compilerTests}/common/tests/fixtures/program/bytes.json
   test -f ${sources.compilerTests}/common/tests/fixtures/entry-json/nodes.json
   test -f ${sources.compilerTests}/compiler/test/CMakeLists.txt
-  test -f ${sources.compilerTests}/lean/bridges/common/fixtures/schnorr-forms.zkc
+  test -f ${sources.compilerTests}/compiler/test/fixtures/structured/schnorr-forms.zkc
   test -f ${sources.compilerTests}/compiler/test/support/source_project.py
   test -f ${sources.compilerTests}/common/tests/support/project.py
   test -f ${sources.compilerTests}/libraries/protocols/polynomial/sumcheck/zkc.toml
@@ -82,7 +82,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test ! -e ${sources.lean-arklib}/lean/adapters/clean
   test -f ${sources.lean-clean}/lean/adapters/clean/lake-manifest.json
   test ! -e ${sources.lean-clean}/lean/applications
-  test -f ${sources.lean-applications}/lean/applications/Zkc/Applications/IR/NativePrograms/CustomProperty.lean
+  test -f ${sources.lean-applications}/lean/applications/Zkc/Applications/Clean/NativeClients.lean
   test -f ${sources.leanChecks}/common/tests/fixtures/clean/air-control.json
   for source in ${sources.lean-verification} ${sources.lean-arklib} ${sources.lean-clean} ${sources.lean-applications}; do
     test -f "$source/lean/checks/check_clients.py"

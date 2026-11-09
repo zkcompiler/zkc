@@ -41,18 +41,6 @@ supportInterpreter = true
 allowNonModules = true
 
 [[lean_exe]]
-name = "command-check-repeat-occurrences"
-root = "Zkc.Tools.IR.Commands.CheckRepeatOccurrences"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-check-source-configuration-selection"
-root = "Zkc.Tools.IR.Commands.CheckSourceConfigurationSelection"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
 name = "command-component-boundaries"
 root = "Zkc.Tools.IR.Commands.ComponentBoundaries"
 supportInterpreter = true
@@ -83,31 +71,7 @@ supportInterpreter = true
 allowNonModules = true
 
 [[lean_exe]]
-name = "command-generate-reusable-aggregate"
-root = "Zkc.Tools.IR.Commands.GenerateReusableAggregate"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-generate-role-views"
-root = "Zkc.Tools.IR.Commands.GenerateRoleViews"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
 name = "command-oracle-source"
 root = "Zkc.Tools.IR.Commands.OracleSource"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-receipt-status"
-root = "Zkc.Tools.IR.Commands.ReceiptStatus"
-supportInterpreter = true
-allowNonModules = true
-
-[[lean_exe]]
-name = "command-test-data-anchors"
-root = "Zkc.Tools.IR.Commands.TestDataAnchors"
 supportInterpreter = true
 allowNonModules = true

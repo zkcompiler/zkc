@@ -18,8 +18,8 @@ declarations. External dependencies may contain unfinished proofs, but reached
 declarations may not depend on them. This audit does not prove kernel correctness
 or statement adequacy.
 
-The maintained source/property certificates and declaration audits reject
-native-evaluation axioms as well as `sorryAx`. Finite native/Lean execution
+The maintained declaration audits reject native-evaluation axioms as well as
+`sorryAx`. Finite native/Lean execution
 comparisons are separate evidence and do not enter those theorem statements.
 Declaration counts do not measure model adequacy or implementation coverage.
 
@@ -37,7 +37,7 @@ Security-changing steps remain checked boundaries. A claim crossing a
 Fiat–Shamir construction or commitment realization requires the applicable Lean
 connection and security obligations; declaring the deterministic translations
 trusted cannot replace those proofs. Unsupported steps and missing required
-links remain open under the existing receipt rules. Each result names its actual
+links remain open; the retired receipt pipeline supplies no compatibility proof. Each result names its actual
 endpoint: an ideal IR interpretation, a realized compiled verifier or interpreted
 executable bytes. It must not silently extend that endpoint to authored source
 or native execution.

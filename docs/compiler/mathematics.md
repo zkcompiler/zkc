@@ -319,7 +319,7 @@ computes, before each action, the needed concrete results of operations that
 precede it in source order and were not computed yet. Formal polynomial
 descriptors are reconstructed beside their consumers; they do not become
 participant ports. The compiler's lowering check expects the selected schedule; the
-[executable lowering rule](../../lean/docs/spec/executable.md#normalization)
+[executable lowering rule](../../lean/docs/spec/components.md)
 accepts both, since their normal forms are the export's.
 
 Entry packages record `finite_bulk`, `fuse_vector_reductions` and

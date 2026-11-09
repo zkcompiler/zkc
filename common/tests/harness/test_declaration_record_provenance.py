@@ -121,7 +121,6 @@ def test_provider_equality_keeps_binder_annotations(capture):
 
 @pytest.mark.parametrize("package,module,namespace,table,endpoints", [
     ("verification", "Zkc.Verification.Claims.Registry", "ZkcSecurity.Registry", "table", "endpoints"),
-    ("applications", "Zkc.Applications.ArkLib.Registry", "ZkcArkLib.Registry", "reportTable", "reportEndpoints"),
 ])
 def test_native_registry_capture_matches_interpreted(package, module, namespace, table, endpoints, tmp_path):
     directory = package_directory(package)
@@ -139,4 +138,5 @@ def test_native_registry_capture_matches_interpreted(package, module, namespace,
         outputs.append(output.read_bytes())
     assert outputs[0] == outputs[1]
     header = json.loads(outputs[0].splitlines()[0])
-    assert header["registry"] and header["endpoints"]
+    assert header["registry"]
+    assert header["endpoints"] == []  # The retired route installs no concrete endpoint.

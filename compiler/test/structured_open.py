@@ -482,7 +482,7 @@ with case('actual-schnorr-library-interactive-retains-formula-and-relation'):
 for form in ['Helpers', 'Reordered', 'EarlyChallenge']:
     with case('retained-source-form-' + form):
         source, symbol, data = frontend('schnorr_forms::' + form, {
-            'schnorr_forms': repository_root / 'lean/bridges/common/fixtures/schnorr-forms.zkc'})
+            'schnorr_forms': repository_root / 'compiler/test/fixtures/structured/schnorr-forms.zkc'})
         defs = definitions(data)
         assert data[5] == []
         assert sum(d[2] == 'math' for d in data[7]) == (2 if form == 'Helpers' else 0)

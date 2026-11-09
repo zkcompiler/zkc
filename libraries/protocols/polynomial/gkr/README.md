@@ -138,13 +138,13 @@ to that circuit remains a separate library law.
 
 ## Lean
 
-The [multi-round security chapter](../../../../lean/docs/spec/fiat-shamir-security.md#the-plain-gkr-verifier)
+The [multi-round security chapter](../../../../lean/docs/spec/fiat-shamir-security.md)
 gives the plain verifier a round-by-round certificate with error
 `max(2, width) / |F|` per challenge and bounds its Fiat–Shamir transform. For
 the retained compiled `example::Proof` Entry of the GKR project, Lean reads the exported
 validator's instructions as that plain verifier on well-formed statements and
 transfers the bound for that exact body
-([compiled Entry](../../../../lean/docs/spec/fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
+([compiled Entry](../../../../lean/docs/spec/fiat-shamir-security.md)).
 
 Source changes require regenerated body bindings and new canonical receipts.
 The retained artifacts do not certify the changed source.

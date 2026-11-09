@@ -246,7 +246,6 @@ def test_registry_module_owners_and_declaration_names_survive_relocation():
 
     for module, owner, namespace in (
         ('Zkc.Verification.Claims.Registry', 'verification', 'ZkcSecurity.Registry'),
-        ('Zkc.Applications.ArkLib.Registry', 'applications', 'ZkcArkLib.Registry'),
     ):
         assert module_owner(module) == owner
         source = module_path(module).read_text()
@@ -259,7 +258,7 @@ def test_registry_module_owners_and_declaration_names_survive_relocation():
 
 @pytest.mark.parametrize('package,registry', [
     ('protocol', None), ('verification', 'ZkcSecurity.Registry.table'),
-    ('arklib', None), ('applications', 'ZkcArkLib.Registry.reportTable'),
+    ('arklib', None), ('applications', None),
 ])
 def test_record_emitter_requests_only_registries_available_in_selected_package(monkeypatch, tmp_path, package, registry):
     from types import SimpleNamespace
@@ -300,7 +299,7 @@ def declaration_shard(path, families, rows):
 
 
 @pytest.mark.parametrize('code', [-15, 1])
-@pytest.mark.parametrize('stage', range(4))
+@pytest.mark.parametrize('stage', range(3))
 def test_record_emitter_propagates_failed_builds_and_captures_without_publishing(monkeypatch, tmp_path, code, stage):
     import subprocess
     from types import SimpleNamespace
@@ -360,3 +359,27 @@ def test_isolated_records_refuse_incomplete_or_inconsistent_shards(tmp_path, def
     second.write_text(json.dumps(header) + '\n' + json.dumps(row) + '\n')
     with pytest.raises(ValueError):
         merge_emissions(parts, tmp_path / 'merged.jsonl')
+
+
+@pytest.mark.parametrize('defect', ['count', 'duplicate-family', 'provenance', 'owner', 'axioms'])
+def test_stored_records_refuse_missing_or_corrupted_evidence(tmp_path, defect):
+    from records.declarations import Records, FORMAT
+    header = dict(format=FORMAT, families=['Owned'], modules=1, declarations=1,
+                  axiom_provenance='resolved-constant-info/0',
+                  reference_provenance='checked-stored-module/0')
+    row = dict(module='Owned', name='Owned.claim', axioms=['propext'])
+    if defect == 'count':
+        header['declarations'] = 0
+    elif defect == 'duplicate-family':
+        header['families'] = ['Owned', 'Owned']
+        header['modules'] = 2
+    elif defect == 'provenance':
+        header.pop('axiom_provenance')
+    elif defect == 'owner':
+        row['module'] = 'Unselected'
+    else:
+        row.pop('axioms')
+    path = tmp_path / 'records.jsonl'
+    path.write_text(json.dumps(header) + '\n' + json.dumps(row) + '\n')
+    with pytest.raises(ValueError):
+        Records.load({'program': path})

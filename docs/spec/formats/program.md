@@ -236,7 +236,7 @@ this same program format with distinct Host responsibilities. The single proof
 policy independently constrains actual messages, loops, keys and transcript
 transitions; the program format alone grants no proof authority.
 The format fixes no formal interpretation. A formal consumer, such as the Lean
-[executable stage](../../../lean/docs/spec/executable.md), supplies its own
+[executable stage](../../../lean/docs/spec/components.md), supplies its own
 interpretation and correspondence evidence.
 
 ## Conditional completion extension

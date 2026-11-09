@@ -21,6 +21,8 @@ PACKAGES = {
                              f"Zkc.Tools.{OWNERS[name]}", f"Zkc.Tests.{OWNERS[name]}"))
     for name, directory in DIRECTORIES.items()
 }
+# Applications currently owns no tool modules. Do not retain an empty target.
+PACKAGES["applications"] = (LEAN / "applications", ("Zkc.Applications", "Zkc.Tests.Applications"))
 NAMES = {name: f"zkc_{name}" for name in PACKAGES}
 DEPENDENCIES = {"program": (), "ir": ("program",), "protocol": ("program",),
                 "verification": ("ir", "protocol"), "arklib": ("protocol",),
@@ -242,3 +244,14 @@ def check_closure(package, directory):
     if not required <= reached:
         raise ValueError(f'{package}: missing required dependencies: {sorted(required - reached)}')
     return reached
+
+
+def source_package(imports, root=LEAN):
+    """Select the smallest maintained closure for imports parsed by Lean's header parser."""
+    owners = {module_owner(module) for module in imports if is_owned_module(module)}
+    if not owners:
+        raise ValueError("source imports no maintained module")
+    for name in PACKAGES:
+        if owners <= set(selected([name])):
+            return package_directory(name, root)
+    raise ValueError("source imports have no common maintained package")

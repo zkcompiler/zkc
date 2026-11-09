@@ -89,39 +89,6 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
     assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")
 
 
-def test_native_lean_checks_subjects_then_source_views_then_records(monkeypatch, tmp_path):
-    developer = load("test_runner", "common/tests/run.py")
-    calls, stores = [], set()
-
-    def run(arguments, **kwargs):
-        calls.append(list(map(str, arguments)))
-        stores.add((kwargs.get("env") or {}).get("ZKC_TOOL_STORE"))
-
-    monkeypatch.setattr(developer, "run", run)
-    monkeypatch.setattr(developer, "ROOT", tmp_path)
-    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
-    monkeypatch.delenv("ZKC_TOOL_STORE", raising=False)
-    monkeypatch.setattr(sys, "argv", ["run.py", "lean-native", "--compiler-build", str(tmp_path / "compiler")])
-    developer.main()
-    # Every child shares one tool store, given to it; the store does not leak into
-    # this process, where later suites would find their tools already retained.
-    store, = stores
-    assert Path(store).is_relative_to(tmp_path / "reports")
-    assert "ZKC_TOOL_STORE" not in os.environ
-    # Subject generation and checked source views precede the records join.
-    subject, checked, records = calls[-3:]
-    assert subject[:4] == [sys.executable, str(tmp_path / "lean/bridges/subject.py"), "--check", "--runtime"]
-    output = Path(subject[subject.index("--output") + 1])
-    assert output.is_dir() and output.is_relative_to(tmp_path / "reports")
-    assert checked == [sys.executable, str(tmp_path / "lean/checks/check_source_views.py")]
-    assert records == [sys.executable, str(tmp_path / "lean/checks/check_records.py"),
-                       "--package", "applications", "--evidence", str(output / "evidence")]
-    assert not any("construction/check.py" in part or "executable/check.py" in part
-                   for call in calls for part in call)
-    services, = [call for call in calls if any(part.endswith("check_local_service_admission.py") for part in call)]
-    assert services == [sys.executable, str(tmp_path / "lean/checks/check_local_service_admission.py"),
-                        "--compiler", str(tmp_path / "compiler/zkc-compile"),
-                        "--output", str(output.parent / "local-services")]
 
 
 @pytest.mark.parametrize("explicit", [False, True])
@@ -244,7 +211,7 @@ def test_install_refuses_existing_prefix_without_running_commands(kind, monkeypa
     assert os.path.lexists(prefix)
 
 
-@pytest.mark.parametrize("scope", ["integration", "harness", "sdk", "style", "lint", "lean-integration"])
+@pytest.mark.parametrize("scope", ["integration", "harness", "sdk", "style", "lint"])
 def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     runner = load("runner", "common/tests/run.py")
     calls = []
@@ -255,8 +222,6 @@ def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     assert len(uv) == 1
     assert uv[0][:5] == ["uv", "run", "--no-sync", "--locked", "ruff" if scope in {"style", "lint"} else "pytest"]
     assert not any("sync" in args or "fetch" in args for args in calls)
-    if scope == "lean-integration":
-        assert "lean/verification/checks/test_receipt_reporting.py" in uv[0]
 
 
 @pytest.mark.parametrize("driver,operation,child", [
@@ -334,17 +299,3 @@ def test_current_lean_checks_do_not_run_snapshot_tools():
     assert not selected.intersection({"build_replay_tools.py", "check_independent.py", "check_migration.py", "source_responsibility.py",
                                       "check_subject_roots.py", "check_local_service_admission.py",
                                       "check_source_construction_cost.py"})
-
-
-def test_generated_view_controls_use_the_prepared_lean_environment(monkeypatch, tmp_path):
-    runner = load("test_view_control_environment", "common/tests/run.py")
-    calls = []
-    monkeypatch.setattr(runner, "run", lambda args, **kwargs: calls.append((list(map(str, args)), kwargs)))
-    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path))
-    runner.execute("lean", SimpleNamespace())
-    for name in ("check_constructed_views", "check_structured_bindings"):
-        (command, options), = [(args, opts) for args, opts in calls
-                              if str(ROOT / f"lean/checks/{name}.py") in args]
-        assert command == ["lake", "env", sys.executable, str(ROOT / f"lean/checks/{name}.py"),
-                           "--records", str(tmp_path / "lean" / name)]
-        assert options["cwd"] == ROOT / "lean/applications"

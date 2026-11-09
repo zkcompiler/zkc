@@ -12,7 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import support.evidence  # noqa: E402
 
 import support.lake
-from bridges.common.lean_render import source_package
+from support.lean_headers import HeaderParser
+from support.packages import source_package
 from support.packages import NAMES, PACKAGES, add_selection, selection  # noqa: E402
 import shutil
 import subprocess
@@ -36,11 +37,13 @@ def check(root, output, packages=None, lake="lake", requested_clients=None):
     unknown = requested - {source.stem for source in sources}
     if unknown:
         raise ValueError(f"unknown standalone clients: {sorted(unknown)}")
+    with HeaderParser(lake=lake) as headers:
+        imports = {source: headers.imports(source.read_text(), source) for source in sources}
     for source in sources:
         if source.stem not in requested:
             continue
         filename = source.name
-        upstream = source_package((root / "clients" / filename).read_text(), root=root)
+        upstream = source_package(imports[source], root=root)
         owner = next(name for name, (directory, _) in PACKAGES.items() if directory.relative_to(HERE) == upstream.relative_to(root))
         if owner in selected_packages:
             clients.append((filename.removesuffix(".lean"), filename, upstream, NAMES[owner]))

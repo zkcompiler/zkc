@@ -36,11 +36,7 @@ cost or rejection:
   propagates assertions for an already chosen interpretation and budget; it is
   not a replacement for that inference algorithm. This small checked-proof
   search remains, with its existing unsupported-component failure controls.
-- Generated endpoints apply shared family contracts in one line. Those
-  contracts now contain the relevant WP proof. Emitting the family's VCs anew
-  for every source instance would duplicate mathematical obligations and
-  increase authored code. Generators emitting cost synthesis retain the
-  inference distinction above.
+
 
 The opaque adaptive prover is not assigned an invented deterministic WP.
 Its probabilistic sampling, query resources, cache extension and observation
@@ -55,7 +51,7 @@ dependent ArkLib message comparison retain their necessary case splits.
 
 Array/Vector operations becoming kernel-reducible does not imply constant-time
 kernel access: Array's logical representation still uses a list. A bounded
-`Availability.inputEnvironment` comparison preserved reverse SSA order and
+`Zkc.Source.Structured.Availability.inputEnvironment` comparison preserved reverse SSA order and
 measured these kernel heartbeat counts:
 
 | Inputs | Existing recursion | `Array.ofFn` |

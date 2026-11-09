@@ -52,7 +52,7 @@ def classify(value, policy=POLICY):
     parts = path.parts
     if parts[:2] == ("docs", "private"):
         return Responsibility(None, (), "sealed evaluation path; excluded from inventory")
-    if parts[:2] in (("lean", "checks"), ("lean", "support"), ("lean", "bridges"), ("lean", "clients")):
+    if parts[:2] in (("lean", "checks"), ("lean", "support"), ("lean", "clients")):
         return Responsibility("support-infrastructure", ("X",), "formal checking, generation or downstream-client tooling")
     module = module_name(path)
     if module is not None:

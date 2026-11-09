@@ -5,13 +5,13 @@ The optional `ZkcArkLib.Sumcheck.Multilinear` package connects the
 actual interactive Sumcheck development. It proves complete soundness,
 honest completeness and partial residual soundness for arbitrary round counts
 without importing `libraries/protocols/polynomial/sumcheck/lib.zkc`;
-[uniform queries](uniform-query-service.md#actual-imported-roots) connect these
+[uniform queries](uniform-query-service.md) connect these
 results to the admitted library roots, and native execution correspondence is a
 separate claim. The imported two-round quadratic examples are separate models.
 
 ## Representations and ordering
 
-`Message.lean` interprets `(a0,a1)` as
+[the message interpretation](../../adapters/arklib/Zkc/Adapters/ArkLib/Sumcheck/Multilinear/Message.lean) interprets `(a0,a1)` as
 `Polynomial.C a0 + Polynomial.C (a1-a0) * Polynomial.X`. The pair contains
 values at zero and one. `messagePolynomial_degree`, `message_evaluate`,
 `message_boundary`, `endpoints_evaluate`, `endpoints_message` and
@@ -41,7 +41,7 @@ encodings nor describe upstream flat storage.
 ## Causal interaction and the original oracle
 
 `Protocol.lean` specializes `Sumcheck.Interaction.Native.Core.protocol` with
-the core endpoint type and interpolation function. `Native.Core` names ArkLib's
+the core endpoint type and interpolation function. `Sumcheck.Interaction.Native.Core` names ArkLib's
 mathematical interaction interface, not zkc native execution. `EndpointProver` is
 ArkLib's ordinary `Prover.Strategy`, with arbitrary ambient computations before
 message selection and in every public response continuation. There is no separate
@@ -127,7 +127,7 @@ truth is proved by upstream completeness, not supplied as an assumption.
 
 ## Partial residual security
 
-The core `Zkc.Polynomial.Multilinear.Marginal` defines
+The core `Zkc.Program.Polynomial.Multilinear.Marginal` defines
 `sumRemaining remaining count table`: retain the first
 `count` Boolean coordinates and sum the other `remaining` coordinates of the
 same fixed table. It uses the same coordinate concatenation.
@@ -204,12 +204,12 @@ with V's table implicitly. `observer_capacity_exclusion` only intersects an
 accepted event with a caller predicate. This differs from an explicit delivery
 stop and never conditions or renormalizes probability.
 
-`endpointGame_execute` proves equality with ArkLib's actual `Native.Core.execute`
+`endpointGame_execute` proves equality with ArkLib's actual `Sumcheck.Interaction.Native.Core.execute`
 observation. Together with the table oracle realization and soundness above,
 `phase_soundness` gives n/card(F). `phase_publicTable_soundness` gives the raw
 public-vector form using `check_eq_true_iff`, `booleanSum_ofList?` and
 `publicTable_observation`. `MSBChronology` identifies chronological challenges
-with `List.ofFn` coordinates; its snoc law preserves order. `residual_phase_soundness`
+with `List.ofFn coordinates`; its snoc law preserves order. `residual_phase_soundness`
 gives k/card(F) for `ResidualClaim` of the original table, through the proved
 marginal view. `residualTerminal remaining count table` takes both dimensions
 explicitly because their sum alone cannot determine the split. All include zero

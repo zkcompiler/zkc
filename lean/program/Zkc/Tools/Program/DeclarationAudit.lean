@@ -475,6 +475,7 @@ private def dependencyPolicyJson : String := r##"{
     [
       "client",
       [
+        "client",
         "program",
         "ir",
         "protocol",
@@ -557,19 +558,6 @@ private def dependencyPolicyJson : String := r##"{
       ]
     },
     {
-      "name": "fixed-knowledge-before-method",
-      "owners": [
-        "Zkc.Verification.Bindings.Extraction",
-        "Zkc.Verification.Claims.Extractor",
-        "Zkc.Verification.Claims.Knowledge",
-        "Zkc.Verification.Claims.Subject"
-      ],
-      "exact": false,
-      "dependencies": [
-        "Zkc.Verification.Claims.Methods"
-      ]
-    },
-    {
       "name": "deterministic-program-probability-boundary",
       "owners": [
         "Zkc.Program",
@@ -613,7 +601,6 @@ private def dependencyPolicyJson : String := r##"{
         "Zkc.Protocol.Claims",
         "Zkc.Protocol.Components",
         "Zkc.Protocol.Construction",
-        "Zkc.Protocol.Execution",
         "Zkc.Protocol.Internal"
       ],
       "exact": false,
@@ -625,7 +612,6 @@ private def dependencyPolicyJson : String := r##"{
       "name": "source-before-compiler",
       "owners": [
         "Zkc.IR.Source",
-        "Zkc.IR.Modules",
         "Zkc.Program.Source"
       ],
       "exact": false,
@@ -636,43 +622,6 @@ private def dependencyPolicyJson : String := r##"{
     {
       "name": "checked-elaborators-before-generators",
       "owners": [
-        "Zkc.Tools.IR.ConstructionBindings.Admission",
-        "Zkc.Tools.IR.ConstructionBindings.Alignment",
-        "Zkc.Tools.IR.ConstructionBindings.ArtifactBindingTactic",
-        "Zkc.Tools.IR.ConstructionBindings.Family",
-        "Zkc.Tools.IR.ConstructionBindings.Inputs",
-        "Zkc.Tools.IR.ConstructionBindings.Interface",
-        "Zkc.Tools.IR.ConstructionBindings.LayoutLookup",
-        "Zkc.Tools.IR.ConstructionBindings.LibraryBuilder",
-        "Zkc.Tools.IR.ConstructionBindings.LibraryPlan",
-        "Zkc.Tools.IR.ConstructionBindings.MathRegion",
-        "Zkc.Tools.IR.ConstructionBindings.Normalization",
-        "Zkc.Tools.IR.ConstructionBindings.ProcessViewTactic",
-        "Zkc.Tools.IR.ConstructionBindings.Readback",
-        "Zkc.Tools.IR.ConstructionBindings.Root",
-        "Zkc.Tools.IR.ConstructionBindings.ScalarConnection",
-        "Zkc.Tools.IR.ConstructionBindings.StructuralFacts",
-        "Zkc.Tools.IR.ConstructionBindings.Syntax",
-        "Zkc.Tools.IR.ConstructionBindings.TargetEquality",
-        "Zkc.Tools.IR.ConstructionBindings.TargetPlacement",
-        "Zkc.Tools.IR.ConstructionBindings.ViewSyntax",
-        "Zkc.Tools.IR.StructuredSource.Association",
-        "Zkc.Tools.IR.StructuredSource.CollectionProofs",
-        "Zkc.Tools.IR.StructuredSource.Composition",
-        "Zkc.Tools.IR.StructuredSource.CountedShape",
-        "Zkc.Tools.IR.StructuredSource.HelperCallbacks",
-        "Zkc.Tools.IR.StructuredSource.HelperPresentation",
-        "Zkc.Tools.IR.StructuredSource.InferReferenceInstallation",
-        "Zkc.Tools.IR.StructuredSource.NamedEquations",
-        "Zkc.Tools.IR.StructuredSource.NamedValues",
-        "Zkc.Tools.IR.StructuredSource.NormalizedRoot",
-        "Zkc.Tools.IR.StructuredSource.Presentation.Syntax",
-        "Zkc.Tools.IR.StructuredSource.ProcessReference",
-        "Zkc.Tools.IR.StructuredSource.PropertyInstallation",
-        "Zkc.Tools.IR.StructuredSource.ReferenceComposition",
-        "Zkc.Tools.IR.StructuredSource.ReferenceInstallation",
-        "Zkc.Tools.IR.StructuredSource.ReferenceLaws",
-        "Zkc.Tools.IR.StructuredSource.SourceCalls",
         "Zkc.Tools.Program.Companions",
         "Zkc.Tools.Program.Companions.Assembly",
         "Zkc.Tools.Program.Companions.Goals",
@@ -709,39 +658,6 @@ private def dependencyPolicyJson : String := r##"{
         "Zkc.Tools.Program.ProofAccount",
         "Zkc.Tools.Verification.StructuredSource",
         "Zkc.Applications"
-      ]
-    },
-    {
-      "name": "ir-clients-before-generators",
-      "owners": [
-        "Zkc.Applications.IR"
-      ],
-      "exact": false,
-      "dependencies": [
-        "Zkc.Tools.IR.ConstructionBindings.Analysis",
-        "Zkc.Tools.IR.ConstructionBindings.Common",
-        "Zkc.Tools.IR.ConstructionBindings.Frames",
-        "Zkc.Tools.IR.ConstructionBindings.Generate",
-        "Zkc.Tools.IR.SourceClaims",
-        "Zkc.Tools.IR.StructuredSource.Bindings",
-        "Zkc.Tools.IR.StructuredSource.Bounds",
-        "Zkc.Tools.IR.StructuredSource.Constructed",
-        "Zkc.Tools.IR.StructuredSource.Discovery",
-        "Zkc.Tools.IR.StructuredSource.Evaluation",
-        "Zkc.Tools.IR.StructuredSource.LibraryAssociation",
-        "Zkc.Tools.IR.StructuredSource.MathematicsAliases",
-        "Zkc.Tools.IR.StructuredSource.NormalForm",
-        "Zkc.Tools.IR.StructuredSource.OpenEvaluation",
-        "Zkc.Tools.IR.StructuredSource.OpenValues",
-        "Zkc.Tools.IR.StructuredSource.OriginalRoot",
-        "Zkc.Tools.IR.StructuredSource.Root",
-        "Zkc.Tools.IR.StructuredSource.TemplateInstallation",
-        "Zkc.Tools.IR.StructuredSource.WireTypes",
-        "Zkc.Tools.Program.DeclarationAudit",
-        "Zkc.Tools.Program.ImportHeaders",
-        "Zkc.Tools.Program.JsonSupport",
-        "Zkc.Tools.Program.ProofAccount",
-        "Zkc.Tools.Verification.StructuredSource"
       ]
     },
     {

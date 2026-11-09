@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-TREES = ("common/tests", "compiler/test", "crates", "lean/checks", "lean/consumers")
+TREES = ("common/tests", "compiler/test", "crates", "lean/checks")
 
 
 def status(node):

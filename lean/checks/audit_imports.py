@@ -7,11 +7,10 @@ import sys
 import tomllib
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from support.packages import (LEAN, PACKAGES, OWNERS, add_selection, selection,
-                              package_directory, package_modules, below, tool_module)
+                              package_directory, package_modules, below, tool_module, selected)
 
 AUDITOR = tool_module('program', 'DeclarationAudit')
-SECURITY_SCOPES = ['Zkc.Applications.Security', 'Zkc.Protocol.Bindings', 'Zkc.Protocol.Library.Families', 'Zkc.Protocol.Library.Mathematics', 'Zkc.Protocol.Library.Security', 'Zkc.Protocol.Library.Transformations', 'Zkc.Protocol.Logic', 'Zkc.Tools.IR.SourceProperties', 'Zkc.Tools.IR.TableCapacity', 'Zkc.Tools.Protocol', 'Zkc.Tools.Verification.Bindings', 'Zkc.Tools.Verification.ClaimConstruction', 'Zkc.Tools.Verification.ComponentAuthoringReport', 'Zkc.Tools.Verification.ComponentBridge', 'Zkc.Tools.Verification.ComponentDerivation', 'Zkc.Tools.Verification.ComponentReadback', 'Zkc.Tools.Verification.ComponentView', 'Zkc.Tools.Verification.Components', 'Zkc.Tools.Verification.Generation', 'Zkc.Tools.Verification.InputLaws', 'Zkc.Tools.Verification.PairConstruction', 'Zkc.Tools.Verification.SigmaReadback', 'Zkc.Tools.Verification.SourceInputClauses', 'Zkc.Tools.Verification.SourceInputReadback', 'Zkc.Tools.Verification.SourceProperties', 'Zkc.Tools.Verification.SubjectABI', 'Zkc.Tools.Verification.Sumcheck', 'Zkc.Tools.Verification.TargetEvaluation', 'Zkc.Verification.Bindings', 'Zkc.Verification.Claims', 'Zkc.Verification.Families', 'Zkc.Verification.Mathematics', 'Zkc.Verification.ProgramLogic', 'Zkc.Verification.Transformations']
-ARKLIB_SCOPES = ['Zkc.Adapters.ArkLib', 'Zkc.Applications.ArkLib']
+SECURITY_SCOPES = ['Zkc.Protocol.Bindings', 'Zkc.Protocol.Library.Families', 'Zkc.Protocol.Library.Mathematics', 'Zkc.Protocol.Library.Security', 'Zkc.Protocol.Library.Transformations', 'Zkc.Protocol.Logic', 'Zkc.Tools.IR.SourceProperties', 'Zkc.Tools.IR.TableCapacity', 'Zkc.Tools.Protocol', 'Zkc.Verification.Bindings', 'Zkc.Verification.Claims', 'Zkc.Verification.Families', 'Zkc.Verification.ProgramLogic']
 
 
 def generated_audit(module):
@@ -51,23 +50,23 @@ def expected(name, root=LEAN):
     banner = '-- Maintained by audit_imports.py; legacy imports load private bodies.\n'
     imports = banner + ''.join(f'import {module}\n' for module in names)
     outputs = {directory.joinpath(*tests.split('.')) / 'LibraryImports.lean': imports}
-    audit = banner + f'import {tests}.LibraryImports\nimport {AUDITOR}\n'
-    if name == 'applications':
-        # Registry schemas include actual subjects. Validate the complete tables
-        # once at their assembly owner; core packages still audit every axiom.
-        for dependency in PACKAGES:
-            if dependency != name:
-                audit += f'import Zkc.Tests.{OWNERS[dependency]}.LibraryImports\n'
+    audit = banner + f'import {tests}.LibraryImports\n'
+    if name == 'verification':
+        # Registry schemas are names, so they need not be semantic imports of
+        # a client. Load every permitted dependency's stored declarations.
+        audit += ''.join(f'import Zkc.Tests.{OWNERS[dependency]}.LibraryImports\n'
+                         for dependency in selected([name]) if dependency != name)
+    audit += f'import {AUDITOR}\n'
     roots = [prefix for prefix in PACKAGES[name][1]
              if any(below(module, prefix) for module in names)]
     audit += '\n' + audit_body(roots, name.upper() + '-AUDIT-PASS')
-    if name == 'applications':
+    if name == 'verification':
+        scopes = [prefix for prefix in SECURITY_SCOPES
+                  if any(below(module, prefix) for package in PACKAGES
+                         for module in package_modules(package, root))]
         audit += ('\nrun_cmd ZkcTools.DeclarationAudit.checkRegistry '
-                  'ZkcSecurity.Registry.audited ' + lean_names(SECURITY_SCOPES) +
+                  'ZkcSecurity.Registry.audited ' + lean_names(scopes) +
                   ' "REGISTRY-AUDIT-PASS"\n')
-        audit += ('run_cmd ZkcTools.DeclarationAudit.checkRegistry '
-                  '(ZkcSecurity.Registry.audited ++ ZkcArkLib.Registry.audited) ' +
-                  lean_names(ARKLIB_SCOPES) + ' "ARKLIB-REGISTRY-AUDIT-PASS"\n')
     outputs[directory.joinpath(*tests.split('.')) / 'Audit.lean'] = audit
     for entry in entries:
         suffix = entry.split('.')[2:]
@@ -82,9 +81,17 @@ def main():
     parser.add_argument('--write', action='store_true')
     add_selection(parser)
     args = parser.parse_args()
-    outputs = {}
+    outputs, existing = {}, set()
     for name in selection(args):
         outputs.update(expected(name))
+        existing.update(path for module, path in package_modules(name).items()
+                        if generated_audit(module))
+    for path in sorted(existing - outputs.keys()):
+        if not args.write:
+            raise SystemExit(f'obsolete generated audit: {path}; run audit_imports.py --write')
+        if not path.read_text().startswith('-- Maintained by audit_imports.py;'):
+            raise SystemExit(f'refusing to remove an unrecognized audit: {path}')
+        path.unlink()
     for path, text in outputs.items():
         if args.write:
             path.parent.mkdir(parents=True, exist_ok=True)
