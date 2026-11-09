@@ -220,7 +220,7 @@ to the same target value cannot be distinguished by a compatible connector
 against the same represented partner. No global injectivity is required.
 
 These laws are implemented in
-[`PIR.Relation.Connected`](../../lean/Zkc/Semantics/RelationComposition.lean).
+[`PIR.Relation.Connected`](../../lean/program/Zkc/Program/Semantics/RelationComposition.lean).
 They concern logical relation composition. Protocol completeness, knowledge,
 zero knowledge and shared-randomness security require their separately selected
 experiments and hypotheses.
@@ -260,7 +260,7 @@ Both premises use the same actual `r` and the same predicate `middle`.
 Equality of type names or identifiers is insufficient. The rule follows by
 applying the second implication and, on its valid-middle branch, the first.
 The exceptional events remain a disjunction; any probability estimate uses
-their [actual joint experiment](../../lean/docs/architecture.md#reuse-and-composition).
+their [actual joint experiment](../../lean/docs/architecture.md#adding-reusable-mathematics-and-actual-clients).
 
 ## Finite obligation derivations
 
@@ -319,7 +319,7 @@ Terminal A = accepted(a : A) | rejected.
 This is distinct from an execution outcome. An execution can return either
 terminal value or stop with a [stop reason](../../lean/docs/spec/semantics.md#effects-and-observations).
 In particular, `returned rejected` and `stopped reject` are different records.
-The [accepted-continuation profile](../../lean/Zkc/Semantics/Continuation.lean)
+The [accepted-continuation profile](../../lean/program/Zkc/Program/Semantics/Continuation.lean)
 specifies the adapter that turns a returned rejection into a stopping combined
 execution.
 

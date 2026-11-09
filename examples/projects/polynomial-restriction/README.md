@@ -6,7 +6,7 @@ and returns the caller's frame unchanged. This is a bounded mathematical helper
 example, with no proof-system or cryptographic claim.
 
 The checked source binding is
-`lean/ZkcExamples/Structured/PolynomialRestrictionBinding.lean`. The security
+`lean/applications/Zkc/Applications/IR/Structured/PolynomialRestrictionBinding.lean`. The security
 library adapter in `ZkcSecurity.Examples.PolynomialRestriction` proves update
 simulation, closure, all-future evaluation and reuse of the existing Sumcheck
 round law. Its negative control distinguishes agreement on Boolean vertices

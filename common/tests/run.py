@@ -83,62 +83,62 @@ def lean_native(args):
     output.mkdir(parents=True, exist_ok=True)
     selection["path"] = str(output / "selection.json")
     with native_stage(selection, "preflight"):
-        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "arklib",
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "applications",
              "--preflight"], env=store)
     if "bridges" in stages:
         with native_stage(selection, "bridges"):
             run([sys.executable, bridge / "check.py", "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source", "--cases", "80",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source", "--cases", "80",
                  "--report", output / "differential.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/check.py",
                  "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/open_protocol.py",
                  "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-open/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/primitives.py",
                  "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-primitives/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/maps.py",
                  "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-maps/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/aggregates.py",
                  "--compiler", compiler / "zkc-compile",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-aggregates/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/scoped.py",
                  "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-scoped/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/tables.py",
                  "--compiler", compiler / "zkc-compile",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-tables/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/applications.py",
                  "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-applications/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/repeats.py",
                  "--compiler", compiler / "zkc-compile",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-repeats/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/inlining.py",
                  "--compiler", compiler / "zkc-compile",
                  "--optimizer", compiler / "zkc-opt",
                  "--reference", compiler / "test/zkc-structured_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+                 "--lean", ROOT / "lean/ir/.lake/build/bin/structured-source",
                  "--report", output / "structured-inlining/report.json"], env=store)
             run([sys.executable, bridge / "verify_tests.py", "--compiler", compiler / "zkc-compile",
                  "--output", output / "requests"], env=store)
@@ -163,7 +163,7 @@ def lean_native(args):
     if "reports" in stages:
         with native_stage(selection, "reports"):
             # The assurance reports join the declaration records with this run's evidence.
-            run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "arklib",
+            run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "applications",
                  "--evidence", evidence,
                  *[arg for name in args.subject for arg in ("--subject", name)]], env=store)
 
@@ -201,50 +201,50 @@ def execute(scope, args):
                 # The generated syntax and its refusal controls import the
                 # prepared package and must see Lake's dependency search path.
                 run(["lake", "env", sys.executable, check,
-                     "--records", reports / "lean" / check.stem], cwd=ROOT / "lean")
+                     "--records", reports / "lean" / check.stem], cwd=ROOT / "lean/applications")
                 continue
-            selection = ["--main-only"] if check.name in {"audit_imports.py", "check_library.py", "check_package_ownership.py"} else []
+            selection = ["--core-only"] if check.name in {"audit_imports.py", "check_library.py", "check_package_ownership.py"} else []
             if check.name == "check_migration_exporter.py":
-                selection = ["--package", ROOT / "lean", "--output", reports / "lean/migration-exporter"]
+                selection = ["--package", ROOT / "lean/program", "--output", reports / "lean/migration-exporter"]
             run([sys.executable, check, *selection])
-    elif scope == "lean-security":
-        run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "security"])
-        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "security"])
-        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--integration", "security"])
-        run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-security",
-             "--output", reports / "lean/clients-security"], cwd=ROOT / "lean")
-        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "security"])
-        run(["lake", "env", sys.executable,
-             ROOT / "lean/security/checks/check_abi_installations.py",
-             reports / "lean/abi-installations"], cwd=ROOT / "lean/security")
-        run(["uv", "run", "--no-sync", "--locked", "pytest",
-             "lean/security/checks/test_receipt_reporting.py",
-             f"--junit-xml={reports / 'lean/receipt-reporting.xml'}"])
+    elif scope == "lean-verification":
+        run([sys.executable, ROOT / "lean/checks/check_library.py", "--package", "verification"])
+        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--package", "verification"])
+        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--package", "verification"])
+        run([sys.executable, ROOT / "lean/checks/check_clients.py", "--package", "verification",
+             "--output", reports / "lean/clients-verification"], cwd=ROOT / "lean")
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "verification"])
     elif scope == "lean-integration":
-        run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "arklib"])
-        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "arklib"])
-        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--integration", "arklib"])
-        run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-arklib",
+        run([sys.executable, ROOT / "lean/checks/check_library.py", "--package", "applications"])
+        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--package", "applications"])
+        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--package", "applications"])
+        run([sys.executable, ROOT / "lean/checks/check_clients.py", "--package", "applications",
              "--output", reports / "lean/clients-arklib"], cwd=ROOT / "lean")
-        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "arklib"])
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "applications"])
+        run(["lake", "env", sys.executable,
+             ROOT / "lean/verification/checks/check_abi_installations.py",
+             reports / "lean/abi-installations"], cwd=ROOT / "lean/applications")
+        run(["uv", "run", "--no-sync", "--locked", "pytest",
+             "lean/verification/checks/test_receipt_reporting.py",
+             f"--junit-xml={reports / 'lean/receipt-reporting.xml'}"])
     elif scope == "lean-clean":
-        run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "clean"])
-        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "clean"])
-        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--integration", "clean"])
-        run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "clean"])
-        directory = ROOT / "lean/integrations/clean"
+        run([sys.executable, ROOT / "lean/checks/check_library.py", "--package", "applications"])
+        run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--package", "applications"])
+        run([sys.executable, ROOT / "lean/checks/audit_imports.py", "--package", "applications"])
+        run([sys.executable, ROOT / "lean/checks/check_records.py", "--package", "applications"])
+        directory = ROOT / "lean/adapters/clean"
         output = reports / "lean/clean-air-control.json"
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("w") as stream:
             run(["lake", "env", "lean", "-DautoImplicit=false", "-DwarningAsError=true",
-                 "--run", "TestsClean/Control.lean"], cwd=directory, stdout=stream)
+                 "--run", "Zkc/Tests/Clean/Control.lean"], cwd=directory, stdout=stream)
         control = ROOT / "common/tests/fixtures/clean/air-control.json"
         if output.read_bytes() != control.read_bytes():
             raise ValueError(f"{control.relative_to(ROOT)} is not the current Clean export; "
                              f"review {output} and replace the fixture with it")
         source = reports / "lean/clean-sources"
         run(["lake", "env", "lean", "-DautoImplicit=false", "-DwarningAsError=true",
-             "--run", "CleanExamples.lean", source], cwd=directory)
+             "--run", "Zkc/Applications/Clean.lean", source], cwd=ROOT / "lean/applications")
         run([sys.executable, ROOT / "compiler/adapters/clean/regenerate.py", "check", source,
              ROOT / "compiler/adapters/clean/fixtures"])
     elif scope == "lean-native":
@@ -277,7 +277,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scopes = parser.add_subparsers(dest="scope", required=True)
     for scope in ["integration", "harness", "sdk", "smoke", "rust", "compiler", "lean",
-                  "lean-security", "lean-integration", "lean-clean", "lean-native", "install", "install-domain", "docs", "style", "lint"]:
+                  "lean-verification", "lean-integration", "lean-clean", "lean-native", "install", "install-domain", "docs", "style", "lint"]:
         command = scopes.add_parser(scope)
         if scope == 'smoke':
             sys.path.insert(0, str(ROOT / 'common/tests/support'))

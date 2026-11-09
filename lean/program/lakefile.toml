@@ -1,12 +1,42 @@
 name = "zkc_program"
 version = "0.0.0"
-defaultTargets = ["ZkcProgram"]
+defaultTargets = ["ZkcProgram", "ZkcProgramTools", "ZkcProgramTests", "import-headers"]
 
 [leanOptions]
 autoImplicit = false
 warningAsError = true
 
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "56a005855ea17e0b0958f73ec801ae140b0a1679"
+
 [[lean_lib]]
 name = "ZkcProgram"
-globs = ["ZkcProgram", "ZkcProgram.+"]
+roots = ["Zkc.Program"]
+globs = ["Zkc.Program", "Zkc.Program.+"]
 requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcProgramTools"
+roots = ["Zkc.Tools.Program"]
+globs = ["Zkc.Tools.Program.+"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "ZkcProgramTests"
+roots = ["Zkc.Tests.Program"]
+globs = ["Zkc.Tests.Program.+"]
+allowNonModules = true
+
+[[lean_exe]]
+name = "import-headers"
+root = "Zkc.Tools.Program.ImportHeaders"
+supportInterpreter = true
+allowNonModules = true
+
+[[lean_exe]]
+name = "command-migration-records"
+root = "Zkc.Tools.Program.Commands.MigrationRecords"
+supportInterpreter = true
+allowNonModules = true

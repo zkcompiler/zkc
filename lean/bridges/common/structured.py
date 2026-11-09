@@ -11,6 +11,8 @@ import sys
 import time
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package  # noqa: E402
 from bridges.structured.snapshot import render
 from bridges.common.schema import interpreted_type
 from request_support import check_lean_resources, require
@@ -59,21 +61,24 @@ def profile(data, field, group=None):
         walk(definition[9])
 
 
-def views(data, directory, prefix, role, executable=None, timeout=30):
+def views(data, directory, prefix, role, *, namespace_prefix, executable=None, timeout=30):
     """Emit data plus Lean-owned phased admission and present-input equations."""
-    executable = executable or ROOT / '.lake/build/bin/structured-source'
+    executable = executable or module_package('Zkc.IR') / '.lake/build/bin/structured-source'
     directory.mkdir(parents=True, exist_ok=True)
     source = directory / (prefix + '.json')
     config = directory / (prefix + '-views.json')
     source.write_text(json.dumps(data) + '\n')
-    config.write_text(json.dumps([prefix + 'Inputs', prefix + 'Data', prefix + 'View', role]))
+    config.write_text(json.dumps([
+        prefix + 'Inputs', namespace_prefix + 'Inputs',
+        prefix + 'Data', namespace_prefix + 'Data.snapshot',
+        prefix + 'View', namespace_prefix + 'View', role]))
     result = subprocess.run([str(executable), 'scalar-views', str(source), str(config)],
                             capture_output=True, text=True, timeout=min(30, timeout))
     (directory / (prefix + '-printer.log')).write_text(result.stdout + result.stderr)
     require(result.returncode == 0, 'structured-admission',
             'Structured admission/view printer refused the source; inspect printer log')
     printed = json.loads(result.stdout)
-    modules = {prefix + 'Data': render(data, prefix + 'Data'),
+    modules = {prefix + 'Data': render(data, namespace_prefix + 'Data'),
                prefix + 'Inputs': printed['inputs'], prefix + 'View': printed['view']}
     for name, source in modules.items():
         path = directory / (name.replace('.', '/') + '.lean')
@@ -90,13 +95,13 @@ def lean_environment(environment, directory, lake='lake'):
     return env
 
 
-def compile_modules(directory, modules, environment=ROOT, lake='lake', timeout=180):
+def compile_modules(directory, modules, environment=None, lake='lake', timeout=180):
     deadline = time.monotonic() + timeout
-    env = lean_environment(environment, directory, lake)
+    env = lean_environment(environment or module_package("Zkc.Applications"), directory, lake)
     logs = []
     for module in modules:
         path = directory / (module.replace('.', '/') + '.lean')
-        result = subprocess.run(['lean', '-j2', '-M16384', '--root=' + str(directory.resolve()),
+        result = subprocess.run([*lean_command(environment or module_package("Zkc.Applications"), lake=lake), '-j2', '-M16384', '--root=' + str(directory.resolve()),
                                  '-o', str(path.with_suffix('.olean')), str(path.resolve())],
                                 cwd=directory, env=env, capture_output=True, text=True, timeout=max(0.001, deadline - time.monotonic()))
         log = directory / (module.replace('.', '_') + '.log')

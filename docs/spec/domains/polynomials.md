@@ -81,7 +81,7 @@ nonzero coefficient index to be at most `d`. An implementation's allocation limi
 does not establish this protocol-specific degree bound. When the permitted
 message domain includes arbitrary univariate polynomials, a sumcheck verifier
 checks its bound before drawing the next challenge. The existing
-[quadratic coefficient type](../../../lean/Zkc/Protocols/Sumcheck/Common.lean)
+[quadratic coefficient type](../../../lean/verification/Zkc/Verification/Installations/Sumcheck/Common.lean)
 is a stronger admitted domain with three coefficients and bound two; it need
 not acquire an unchecked arbitrary-degree message interpretation.
 
@@ -398,7 +398,7 @@ eval tables x ((c,occurrences) :: rest) =
 The empty sum is zero; the empty product is one. Repeated identifiers contribute
 repeated factors, including repeated scales if scales are moved into a term's
 coefficient. All finite occurrence lists have meaning. The
-[two-round quadratic contract](../../../lean/Zkc/Protocols/Sumcheck/Common.lean)
+[two-round quadratic contract](../../../lean/verification/Zkc/Verification/Installations/Sumcheck/Common.lean)
 is a separate selected subset.
 
 For raw table inputs, the adapter resolves every used identifier and preserves

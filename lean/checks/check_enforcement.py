@@ -11,6 +11,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package, module_path  # noqa: E402
 from support import evidence  # noqa: E402
 from support.lean_headers import HeaderParser  # noqa: E402
 from check_library import permitted  # noqa: E402
@@ -42,12 +44,12 @@ def main():
                 raise AssertionError('invalid header was accepted')
         # Parse a real new violating import with Lean's header parser, then run
         # the same graph audit used for maintained source packages.
-        graph = {'Zkc.Source.NewClient': headers.imports(
-            'module\npublic import ZkcSecurity.Mathematics.Probability.UniformTape\n')}
+        graph = {'Zkc.IR.Source.NewClient': headers.imports(
+            'module\npublic import Zkc.Protocol.Library.Mathematics.Probability.UniformTape\n')}
         try:
-            audit_graph(graph, ['Zkc.Source'])
+            audit_graph(graph, ['Zkc.IR.Source'])
         except ValueError as error:
-            if 'forbidden dependency (core-to-probability)' not in str(error):
+            if 'forbidden dependency (deterministic-program-probability-boundary)' not in str(error):
                 raise AssertionError(error)
             rows.append('new-violating-import-refused')
         else:
@@ -58,18 +60,21 @@ def main():
     with tempfile.TemporaryDirectory(prefix='zkc-audit-controls-') as temporary:
         directory = Path(temporary)
         shutil.copy2(ROOT / 'lean-toolchain', directory / 'lean-toolchain')
-        audit = directory / 'ZkcTools/DeclarationAudit.lean'
-        audit.parent.mkdir()
-        shutil.copy2(ROOT / 'ZkcTools/DeclarationAudit.lean', audit)
+        audit = directory / 'Zkc/Tools/Program/DeclarationAudit.lean'
+        audit.parent.mkdir(parents=True)
+        shutil.copy2(module_path('Zkc.Tools.Program.DeclarationAudit'), audit)
         env = dict(os.environ, LEAN_PATH=str(directory))
 
         def compile_module(name):
             path = directory.joinpath(*name.split('.'))
-            return subprocess.run(['lean', '-o', str(path.with_suffix('.olean')),
+            # These controls deliberately compile sorry/unused hypotheses;
+            # the declaration auditor must issue the refusal being tested.
+            return subprocess.run([*lean_command(module_package("Zkc.Program")),
+                '-DwarningAsError=false', '-DautoImplicit=true', '-o', str(path.with_suffix('.olean')),
                 str(path.with_suffix('.lean'))], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=60)
 
-        result = compile_module('ZkcTools.DeclarationAudit')
+        result = compile_module('Zkc.Tools.Program.DeclarationAudit')
         if not (result.returncode == 0):
             raise AssertionError(result.stdout + result.stderr)
         cases = [
@@ -87,7 +92,7 @@ def main():
                 raise AssertionError((name, result.stdout, result.stderr))
             family = 'Missing' if name == 'empty-selection' else 'Control'
             (directory / 'Audit.lean').write_text('import Control.Subject\n'
-                'import ZkcTools.DeclarationAudit\n'
+                'import Zkc.Tools.Program.DeclarationAudit\n'
                 f'run_cmd ZkcTools.DeclarationAudit.check [`{family}]\n')
             result = compile_module('Audit')
             if diagnostic is None:
@@ -112,7 +117,7 @@ def main():
         for name, source, diagnostic in local_cases:
             (directory / 'Local').mkdir(exist_ok=True)
             (directory / 'Local/Subject.lean').write_text(
-                'import ZkcTools.DeclarationAudit\n' + source +
+                'import Zkc.Tools.Program.DeclarationAudit\n' + source +
                 'run_cmd ZkcTools.DeclarationAudit.checkCurrent "CURRENT-MODULE-PASS"\n')
             result = compile_module('Local.Subject')
             if diagnostic is None:
@@ -153,7 +158,7 @@ def main():
             if not (result.returncode == 0):
                 raise AssertionError((name, result.stdout, result.stderr))
             (directory / 'Audit.lean').write_text('import Owner.Subject\n'
-                'import ZkcTools.DeclarationAudit\n'
+                'import Zkc.Tools.Program.DeclarationAudit\n'
                 f'run_cmd ZkcTools.DeclarationAudit.checkBoundary [`Owner] [`Upstream] {named} '
                 '"BOUNDARY-CONTROL-PASS"\n')
             result = compile_module('Audit')
@@ -203,7 +208,7 @@ def main():
         ]
         for name, entries, diagnostic in registry_cases:
             (directory / 'Audit.lean').write_text('import Registry.Subject\n'
-                'import ZkcTools.DeclarationAudit\n'
+                'import Zkc.Tools.Program.DeclarationAudit\n'
                 f'run_cmd ZkcTools.DeclarationAudit.checkRegistry [{entries}] [`Registry] '
                 '"REGISTRY-CONTROL-PASS"\n')
             result = compile_module('Audit')
@@ -222,66 +227,66 @@ def main():
         # Compile actual dependency bodies, then demand rejection by the auditor;
         # also keep the source-import guard in sync with the declaration policy.
         ownership_cases = [
-            ('program-core-body', 'ZkcProgram.GuardFixture',
-             'Zkc.Source.GuardFixture', 'body', False),
-            ('program-proof-type', 'ZkcProgram.GuardFixture',
-             'ProtocolProof.GuardFixture', 'type', False),
-            ('program-mathlib-body', 'ZkcProgram.GuardFixture',
+            ('program-core-body', 'Zkc.Program.GuardFixture',
+             'Zkc.IR.Source.GuardFixture', 'body', False),
+            ('program-proof-type', 'Zkc.Program.GuardFixture',
+             'Zkc.Protocol.Claims.GuardFixture', 'type', False),
+            ('program-mathlib-body', 'Zkc.Program.Execution',
              'Mathlib.GuardFixture', 'body', False),
-            ('core-proof-body', 'Zkc.Source.GuardFixture',
-             'ProtocolProof.GuardFixture', 'body', False),
-            ('proof-core-type', 'ProtocolProof.GuardFixture',
-             'Zkc.Source.GuardFixture', 'type', False),
-            ('proof-subject-body', 'ProtocolProof.GuardFixture',
-             'ZkcSecurityExamples.GuardFixture', 'body', False),
-            ('core-program-allowed', 'Zkc.Source.GuardFixture',
-             'ZkcProgram.GuardFixture', 'body', True),
-            ('proof-program-allowed', 'ProtocolProof.GuardFixture',
-             'ZkcProgram.GuardFixture', 'type', True),
-            ('reusable-tools-example', 'ZkcSecurityTools.GuardFixture',
-             'ZkcSecurityExamples.GuardFixture', 'body', False),
-            ('reusable-binding-example', 'ZkcSecurity.Bindings.GuardFixture',
-             'ZkcSecurityExamples.GuardFixture', 'type', False),
-            ('fixed-knowledge-method', 'ZkcSecurity.Claims.Knowledge',
-             'ZkcSecurity.Claims.Methods.GuardFixture', 'body', False),
-            ('family-binding', 'ZkcSecurity.Families.GuardFixture',
-             'ZkcSecurity.Bindings.GuardFixture', 'body', False),
-            ('security-upstream-arklib', 'ZkcSecurity.GuardFixture',
+            ('core-proof-body', 'Zkc.IR.Source.GuardFixture',
+             'Zkc.Protocol.Claims.GuardFixture', 'body', False),
+            ('proof-core-type', 'Zkc.Protocol.Claims.GuardFixture',
+             'Zkc.IR.Source.GuardFixture', 'type', False),
+            ('proof-subject-body', 'Zkc.Protocol.Claims.GuardFixture',
+             'Zkc.Applications.Security.GuardFixture', 'body', False),
+            ('core-program-allowed', 'Zkc.IR.Source.GuardFixture',
+             'Zkc.Program.GuardFixture', 'body', True),
+            ('proof-program-allowed', 'Zkc.Protocol.Claims.GuardFixture',
+             'Zkc.Program.GuardFixture', 'type', True),
+            ('reusable-tools-example', 'Zkc.Tools.Verification.GuardFixture',
+             'Zkc.Applications.Security.GuardFixture', 'body', False),
+            ('reusable-binding-example', 'Zkc.Verification.Bindings.GuardFixture',
+             'Zkc.Applications.Security.GuardFixture', 'type', False),
+            ('fixed-knowledge-method', 'Zkc.Verification.Claims.Knowledge',
+             'Zkc.Verification.Claims.Methods.GuardFixture', 'body', False),
+            ('family-binding', 'Zkc.Verification.Families.GuardFixture',
+             'Zkc.Verification.Bindings.GuardFixture', 'body', False),
+            ('security-upstream-arklib', 'Zkc.Verification.GuardFixture',
              'ArkLib.GuardFixture', 'body', False),
-            ('security-optional-adapter', 'ZkcSecurity.GuardFixture',
-             'ZkcArkLib.GuardFixture', 'type', False),
-            ('security-vcvio-example-provider', 'ZkcSecurity.Families.GuardFixture',
+            ('security-optional-adapter', 'Zkc.Verification.GuardFixture',
+             'Zkc.Adapters.ArkLib.GuardFixture', 'type', False),
+            ('security-vcvio-example-provider', 'Zkc.Verification.Families.GuardFixture',
              'VCVio.Schemes.Schnorr.SigmaProtocol', 'body', True),
-            ('core-probability-body', 'Zkc.Source.GuardFixture',
-             'ZkcSecurity.Mathematics.Probability.GuardFixture', 'body', False),
-            ('probability-source-type', 'ZkcSecurity.Mathematics.Probability.GuardFixture',
-             'Zkc.Source.GuardFixture', 'type', False),
-            ('security-example-type', 'ZkcSecurity.Transformations.HashChain.GuardFixture',
-             'ZkcSecurityExamples.GuardFixture', 'type', False),
-            ('clean-example-test-body', 'CleanExamples.GuardFixture',
-             'TestsClean.GuardFixture', 'body', False),
-            ('family-probability-rejected', 'Zkc.Protocols.Sumcheck.Verifier',
-             'ZkcSecurity.Mathematics.Probability.UniformTape', 'body', False),
-            ('execution-protocol-body', 'ZkcSecurity.ProgramLogic.Oracle.Execution',
-             'Zkc.Protocols.GuardFixture', 'body', False),
-            ('execution-source-type', 'ZkcSecurity.ProgramLogic.Oracle.Execution',
-             'Zkc.Source.GuardFixture', 'type', False),
-            ('execution-example-body', 'ZkcSecurity.ProgramLogic.Oracle.Execution',
-             'ZkcSecurityExamples.GuardFixture', 'body', False),
-            ('execution-arklib-body', 'ZkcSecurity.ProgramLogic.Oracle.Execution',
-             'ZkcArkLib.GuardFixture', 'body', False),
-            ('execution-upstream-arklib-body', 'ZkcSecurity.ProgramLogic.Oracle.Execution',
+            ('core-probability-body', 'Zkc.IR.Source.GuardFixture',
+             'Zkc.Protocol.Library.Mathematics.Probability.GuardFixture', 'body', False),
+            ('probability-source-type', 'Zkc.Protocol.Library.Mathematics.Probability.GuardFixture',
+             'Zkc.IR.Source.GuardFixture', 'type', False),
+            ('security-example-type', 'Zkc.Verification.Transformations.HashChain.GuardFixture',
+             'Zkc.Applications.Security.GuardFixture', 'type', False),
+            ('clean-example-test-body', 'Zkc.Applications.Clean.GuardFixture',
+             'Zkc.Tests.Applications.Clean.GuardFixture', 'body', False),
+            ('family-probability-rejected', 'Zkc.Protocol.Library.Sumcheck.Verifier',
+             'Zkc.Protocol.Library.Mathematics.Probability.UniformTape', 'body', False),
+            ('execution-protocol-body', 'Zkc.Protocol.Logic.Oracle.Execution',
+             'Zkc.Protocol.Library.GuardFixture', 'body', False),
+            ('execution-source-type', 'Zkc.Protocol.Logic.Oracle.Execution',
+             'Zkc.IR.Source.GuardFixture', 'type', False),
+            ('execution-example-body', 'Zkc.Protocol.Logic.Oracle.Execution',
+             'Zkc.Applications.Security.GuardFixture', 'body', False),
+            ('execution-arklib-body', 'Zkc.Protocol.Logic.Oracle.Execution',
+             'Zkc.Adapters.ArkLib.GuardFixture', 'body', False),
+            ('execution-upstream-arklib-body', 'Zkc.Protocol.Logic.Oracle.Execution',
              'ArkLib.GuardFixture', 'body', False),
-            ('causal-example-body', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Completion',
-             'ZkcSecurityExamples.GuardFixture', 'body', False),
-            ('causal-source-type', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Phase',
-             'Zkc.Source.GuardFixture', 'type', False),
-            ('schnorr-protocol-allowed', 'ZkcSecurity.Families.Sigma.Schnorr',
-             'Zkc.Protocols.Schnorr.Common', 'body', True),
-            ('execution-semantics-allowed', 'ZkcSecurity.ProgramLogic.Oracle.Execution',
-             'Zkc.Semantics.GuardFixture', 'body', True),
-            ('causal-protocol-allowed', 'ZkcArkLib.Sumcheck.Multilinear.Causal.Soundness',
-             'Zkc.Protocols.GuardFixture', 'body', True),
+            ('causal-example-body', 'Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Causal.Completion',
+             'Zkc.Applications.Security.GuardFixture', 'body', False),
+            ('causal-source-type', 'Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Causal.Phase',
+             'Zkc.IR.Source.GuardFixture', 'type', False),
+            ('schnorr-protocol-allowed', 'Zkc.Verification.Families.Sigma.Schnorr',
+             'Zkc.Verification.Installations.Schnorr.Common', 'body', True),
+            ('execution-semantics-allowed', 'Zkc.Protocol.Logic.Oracle.Execution',
+             'Zkc.Program.Semantics.GuardFixture', 'body', True),
+            ('causal-protocol-allowed', 'Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Causal.Soundness',
+             'Zkc.Protocol.Library.GuardFixture', 'body', True),
         ]
         for name, owner, dependency, kind, allowed in ownership_cases:
             if not (permitted(owner, dependency) == allowed):
@@ -302,7 +307,7 @@ def main():
             if not (result.returncode == 0):
                 raise AssertionError((name, result.stdout, result.stderr))
             (directory / 'Audit.lean').write_text(f'import {owner}\n'
-                'import ZkcTools.DeclarationAudit\n'
+                'import Zkc.Tools.Program.DeclarationAudit\n'
                 f'run_cmd ZkcTools.DeclarationAudit.check [`{owner}] "OWNER-GUARD-PASS" true\n')
             result = compile_module('Audit')
             if allowed:
@@ -325,11 +330,11 @@ def main():
         # turn thousands of pairs into one deeply nested elaborated literal.
         literals = json.dumps(pairs)
         (directory / 'Parity.lean').write_text(
-            'import ZkcTools.DeclarationAudit\n'
-            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Source.GuardFixture '
-            '`ZkcSecurity.Mathematics.Probability.GuardFixture = false := by decide +kernel\n'
-            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Protocols.Sumcheck.Verifier '
-            '`ZkcSecurity.Mathematics.Probability.UniformTape = false := by decide +kernel\n'
+            'import Zkc.Tools.Program.DeclarationAudit\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.IR.Source.GuardFixture '
+            '`Zkc.Protocol.Library.Mathematics.Probability.GuardFixture = false := by decide +kernel\n'
+            'example : ZkcTools.DeclarationAudit.permitted `Zkc.Protocol.Library.Sumcheck.Verifier '
+            '`Zkc.Protocol.Library.Mathematics.Probability.UniformTape = false := by decide +kernel\n'
             '#eval do\n'
             f'  let pairs : Array (String × String) ← IO.ofExcept (Lean.Json.parse r##"{literals}"## >>= '
             'Lean.fromJson? (α := Array (String × String)))\n'
@@ -341,7 +346,7 @@ def main():
         if not (json.loads(result.stdout) == [permitted(*pair) for pair in pairs]):
             raise AssertionError('checks/check_enforcement.py:274: json.loads(result.stdout) == [permitted(*pair) for pair in pairs]')
         rows.append(f'shared-policy-interpreter-parity-{len(pairs)}')
-        executable = ROOT / '.lake/build/bin/structured-source'
+        executable = module_package('Zkc.Tools.IR.StructuredSource') / '.lake/build/bin/structured-source'
 
         def invoke(name, arguments, expected):
             result = subprocess.run([str(executable), *map(str, arguments)],

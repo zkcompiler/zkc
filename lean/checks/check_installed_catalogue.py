@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The installed catalogue rows of the Lean readers are generated from the catalog.
 
-`Zkc/Source/Structured/InstalledCatalogue.lean` must equal a fresh rendering of
+`Zkc.IR.Source.Structured.InstalledCatalogue` must equal a fresh rendering of
 `common/catalog/declarations.json` by `bridges/common/installed_catalogue.py`.
 A changed catalog row changes the generated facts, service methods follow the
 sampled field's capabilities, and the generator's check refuses a module it

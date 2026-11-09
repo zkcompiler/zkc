@@ -1,4 +1,4 @@
-import ZkcSecurityTools.Components
+import Zkc.Tools.Verification.Components
 
 /-! A separate consumer checks that the facade exports elaborator code as well
 as theorem declarations through the public module interface. -/

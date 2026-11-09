@@ -1,8 +1,8 @@
 # Adaptive committed-table application security
 
 This independent formal model is owned by
-[`Commitment.Application`](../../security/ZkcSecurity/Transformations/Commitment/Application.lean)
-and [`Commitment.AdaptiveOpening`](../../security/ZkcSecurity/Transformations/Commitment/AdaptiveOpening.lean).
+[`Commitment.Application`](../../verification/Zkc/Verification/Transformations/Commitment/Application.lean)
+and [`Commitment.AdaptiveOpening`](../../verification/Zkc/Verification/Transformations/Commitment/AdaptiveOpening.lean).
 It specializes the existing committed-opening bridge and hashed-leaf Merkle
 extractor. It does not define a second commitment or execution framework.
 
@@ -116,5 +116,5 @@ oracle security, a native provider or encoding correspondence, a compiled
 source connection, FRI, STARK, or extraction of an independently requested
 oracle. Such connections require their owning theorems and any provider loss
 at the joint stage. The implementation is checked by the focused
-[`CommitmentApplication`](../../security/TestsSecurity/CommitmentApplication.lean)
+[`CommitmentApplication`](../../verification/Zkc/Tests/Verification/CommitmentApplication.lean)
 controls; broad package and native validation are separate scopes.

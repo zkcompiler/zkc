@@ -9,11 +9,13 @@ import subprocess
 import tempfile
 
 import snapshot
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from bridges.common import source_format
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "lean/bridges/structured/fixtures"
-DATA = ROOT / "lean/Tests/Generated/GenericOpaqueData.lean"
+DATA = ROOT / "lean/ir/Zkc/Tests/IR/Generated/GenericOpaqueData.lean"
 
 
 def run(command, *, cwd=ROOT):

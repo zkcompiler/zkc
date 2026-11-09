@@ -20,6 +20,8 @@ import subprocess
 import sys
 
 from native_entry import native_subject
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.invocation import command as lean_command  # noqa: E402
 from bridges.common import source_format
 from registry import CONTRACTS
 from request_support import check_lean_resources, Obligation, require
@@ -186,7 +188,8 @@ def audit(namespace, names, marker):
   Lean.logInfo "''' + marker + '"\n')
 
 
-def client_source(request, prefix, namespace, *, positive=True, properties=True):
+def client_source(request, module_prefix, namespace, *, namespace_prefix,
+                  positive=True, properties=True):
     contract = CONTRACTS[request['contract']]
     generic = 'G' if contract.group else 'F'
     parameters = '(F := F)' + (' (G := G)' if contract.group else '')
@@ -200,8 +203,8 @@ def client_source(request, prefix, namespace, *, positive=True, properties=True)
     actual_type = f'PIR.Process (CommonAdapter.commonInterface F {generic}) (Option Bool)'
     cert_args = 'wiring ' + ('publicChecks ' if contract.composed else '') + f'(verifier {parameters})'
     unfolds = ['processView', 'wiring'] + [n if '.' in n else contract.namespace + '.' + n for n in contract.unfold]
-    imports = {contract.module, prefix + 'View', 'Zkc.Source.Structured.CommonAdapter',
-               'ZkcTools.ProcessView', 'Mathlib.Tactic.Ring', 'Mathlib.Tactic.Abel',
+    imports = {contract.module, module_prefix + 'View', 'Zkc.IR.Source.Structured.CommonAdapter',
+               'Zkc.Tools.Program.ProcessView', 'Mathlib.Tactic.Ring', 'Mathlib.Tactic.Abel',
                'Mathlib.Tactic.FailIfNoProgress', 'Lean', 'Aesop'}
     if properties:
         imports.update(contract.properties[prop].module for prop in request['properties'] if contract.properties[prop].module)
@@ -214,8 +217,8 @@ namespace {namespace}
 open Zkc.Source Zkc.Source.Structured
 open {contract.namespace}
 
-abbrev program := {prefix}Inputs.program
-abbrev imported := {prefix}Inputs.imported
+abbrev program := {namespace_prefix}Inputs.program
+abbrev imported := {namespace_prefix}Inputs.imported
 
 def wiring : Wiring := {wiring_term(contract, request['wiring'])}
 variable {{F{(' G' if contract.group else '')} : Type}} [Field F] [DecidableEq F]{context}
@@ -229,15 +232,15 @@ def verifier {contract.binders} : {actual_type} :=
     fun values => PIR.Process.done (values.get .here)).interpret CommonAdapter.project
 
 noncomputable def processView {contract.binders} : {actual_type} :=
-  process_view% (({prefix}View.view {scalar_parameters} {arguments}).bind
+  process_view% (({namespace_prefix}View.view {scalar_parameters} {arguments}).bind
     fun values => PIR.Process.done (values.get .here)).interpret CommonAdapter.project
 
 theorem process_view_eq {contract.binders} :
     verifier {parameters} {contract.arguments} = processView {parameters} {contract.arguments} := by
   unfold verifier
   change ((program.participant F {generic} {request['role']}
-    ({prefix}View.inputs {scalar_parameters} {arguments})).bind _).interpret _ = _
-  rw [{prefix}View.source_equation]
+    ({namespace_prefix}View.inputs {scalar_parameters} {arguments})).bind _).interpret _ = _
+  rw [{namespace_prefix}View.source_equation]
   rfl
 '''
     if positive:
@@ -277,7 +280,8 @@ def render_certificate(data, request, proposal):
             'candidate-shape', 'Expected only a Structured snapshot proposal')
     # No Lean expressions are accepted from a proposal.
     render(proposal['snapshot'], 'CandidateData')
-    result, names = client_source(request, 'Candidate', 'GeneratedCertificate')
+    result, names = client_source(request, 'Candidate', 'GeneratedCertificate',
+                                  namespace_prefix='Candidate')
     return result + audit('GeneratedCertificate', names, 'PROOF-REQUEST-KERNEL-PASS')
 
 
@@ -333,8 +337,10 @@ theorem approvedContract : VerifierContract wiring {('publicChecks ' if contract
 def render_client(data, request, name, *, positive=True):
     """Fixture wrapper around the same request template; no source-name theorem lookup."""
     validate(data, request)
-    prefix = 'ZkcExamples.NativePrograms.Variants.' + name
-    source, _ = client_source(request, prefix, 'ZkcExamples.NativePrograms.' + name,
+    module_prefix = 'Zkc.Applications.IR.NativePrograms.Variants.' + name
+    namespace_prefix = 'ZkcExamples.NativePrograms.Variants.' + name
+    source, _ = client_source(request, module_prefix, 'ZkcExamples.NativePrograms.' + name,
+                             namespace_prefix=namespace_prefix,
                              positive=positive, properties=False)
     source = re.sub(r'^import ', 'public import ', source, flags=re.M)
     end = list(re.finditer(r'^public import [^\n]+\n', source, re.M))[-1].end()
@@ -366,14 +372,16 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
     try:
         proposal = generate(copy.deepcopy(data), copy.deepcopy(request))
         candidate = render_certificate(data, request, proposal) + check_subject(data, request)
-        modules = views(proposal['snapshot'], output, 'Candidate', request['role'], timeout=remaining())
-        modules += views(data, output, 'Expected', request['role'], timeout=remaining())
+        modules = views(proposal['snapshot'], output, 'Candidate', request['role'],
+                        namespace_prefix='Candidate', timeout=remaining())
+        modules += views(data, output, 'Expected', request['role'],
+                         namespace_prefix='Expected', timeout=remaining())
         # Check literal subject identity in its own kernel module before Lean
         # attempts any dependent process transport. A different candidate must
         # fail at this boundary, rather than spend the budget comparing bodies.
         (output / 'SubjectIdentity.lean').write_text('''import CandidateData
 import ExpectedData
-import Zkc.Source.KernelRfl
+import Zkc.Program.Source.KernelRfl
 
 theorem requested_subject : ExpectedData.snapshot = CandidateData.snapshot := by
   kernel_rfl
@@ -384,22 +392,23 @@ theorem requested_subject : ExpectedData.snapshot = CandidateData.snapshot := by
         if relation is not None:
             from intent import relation_candidate, render_relation, relation_subject
             relation_proposal = relation_candidate(copy.deepcopy(relation), copy.deepcopy(request))
-            modules += views(relation_proposal['snapshot'], output, 'RelationCandidate', request['role'], timeout=remaining())[:2]
-            modules += views(relation['snapshot'], output, 'RelationExpected', request['role'], timeout=remaining())[:2]
+            modules += views(relation_proposal['snapshot'], output, 'RelationCandidate', request['role'],
+                             namespace_prefix='RelationCandidate', timeout=remaining())[:2]
+            modules += views(relation['snapshot'], output, 'RelationExpected', request['role'],
+                             namespace_prefix='RelationExpected', timeout=remaining())[:2]
             candidate = 'import RelationCandidateInputs\nimport RelationExpectedInputs\n' + candidate
             candidate += render_relation(relation, request, relation_proposal) + relation_subject(relation, request)
         path = output / 'Certificate.lean'
         path.write_text(candidate)
         receipt['certificate_sha256'] = hashlib.sha256(candidate.encode()).hexdigest()
         contract = CONTRACTS[request['contract']]
-        property_modules = [contract.properties[prop].module or contract.module for prop in request['properties']]
-        environment = (ROOT / 'integrations/arklib' if any(m.startswith('ZkcArkLib.') for m in property_modules)
-                       else ROOT / 'security' if any(m.startswith('ZkcSecurity.') for m in property_modules) else ROOT)
+        from bridges.common.lean_render import source_package
+        environment = source_package(candidate)
         compile_modules(output, modules, environment, lake, remaining())
         receipt['toolchain'] = (environment / 'lean-toolchain').read_text().strip()
         receipt['dependency_manifest_sha256'] = hashlib.sha256(
             (environment / 'lake-manifest.json').read_bytes()).hexdigest()
-        with subprocess.Popen(['lean', '-j2', '-M16384', '--root=' + str(output.resolve()), str(path.resolve())], cwd=output,
+        with subprocess.Popen([*lean_command(environment, lake=lake), '-j2', '-M16384', '--root=' + str(output.resolve()), str(path.resolve())], cwd=output,
                               env=lean_environment(environment, output, lake),
                               text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               start_new_session=True) as child:

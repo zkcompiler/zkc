@@ -200,7 +200,7 @@ def run_cases(suite):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler', type=Path, default=ROOT / 'build/compiler/zkc-compile')
-    parser.add_argument('--lean', type=Path, default=ROOT / 'lean/.lake/build/bin/structured-source')
+    parser.add_argument('--lean', type=Path, default=ROOT / 'lean/ir/.lake/build/bin/structured-source')
     parser.add_argument('--reference', type=Path,
                         default=ROOT / 'build/compiler/test/zkc-structured_reference-test')
     parser.add_argument('--report', type=Path, required=True)

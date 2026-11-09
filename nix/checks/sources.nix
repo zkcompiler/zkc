@@ -69,29 +69,31 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.integration}/compiler/adapters/clean/fixtures/femtocairo/bundle.json
   test -f ${sources.sdk}/common/tests/consumer/test_discovery.py
   test ! -e ${sources.sdk}/compiler/lib
-  test ! -e ${sources.lean}/lean/integrations
-  test -f ${sources.lean}/lean/checks/DeclarationRecords.lean
-  test ! -e ${sources.lean}/lean/checks/check_records.py
-  test -f ${sources.lean}/lean/ZkcTools/StructuredSource.lean
-  test ! -e ${sources.lean}/lean/ZkcTools/CommonSource.lean
-  test -f ${sources.lean}/lean/ZkcExamples/NativePrograms/CustomProperty.lean
+  test -f ${sources.lean-ir}/lean/ir/Zkc/Tools/IR/DeclarationRecords.lean
+  test -f ${sources.lean-ir}/lean/ir/Zkc/Tools/IR/Commands/StructuredSource.lean
+  test ! -e ${sources.lean-ir}/lean/applications
+  test ! -e ${sources.lean-ir}/lean/protocol
+  test -f ${sources.lean-program}/lean/program/lake-manifest.json
+  test -f ${sources.lean-protocol}/lean/protocol/lake-manifest.json
+  test -f ${sources.lean-verification}/lean/verification/lake-manifest.json
+  test ! -e ${sources.lean-verification}/lean/adapters
+  test -f ${sources.lean-arklib}/lean/adapters/arklib/lake-manifest.json
+  test ! -e ${sources.lean-arklib}/lean/applications
+  test ! -e ${sources.lean-arklib}/lean/adapters/clean
+  test -f ${sources.lean-clean}/lean/adapters/clean/lake-manifest.json
+  test ! -e ${sources.lean-clean}/lean/applications
+  test -f ${sources.lean-applications}/lean/applications/Zkc/Applications/IR/NativePrograms/CustomProperty.lean
   test -f ${sources.leanChecks}/common/tests/fixtures/clean/air-control.json
-  test -f ${sources.security}/lean/security/lake-manifest.json
-  test ! -e ${sources.security}/lean/integrations/arklib
-  test ! -e ${sources.arklib}/lean/integrations/clean
-  test -f ${sources.arklib}/lean/checks/check_clients.py
-  test -f ${sources.security}/lean/checks/check_library.py
-  test -f ${sources.security}/lean/checks/check_package_ownership.py
-  test -f ${sources.security}/lean/checks/audit_imports.py
-  test -f ${sources.security}/lean/support/packages.py
-  test -f ${sources.security}/lean/support/dependencies.py
-  test -f ${sources.security}/lean/support/lean_headers.py
-  test -f ${sources.arklib}/lean/checks/check_library.py
-  test -f ${sources.arklib}/lean/checks/check_package_ownership.py
-  test -f ${sources.arklib}/lean/checks/audit_imports.py
-  test -f ${sources.arklib}/lean/support/packages.py
-  test -f ${sources.arklib}/lean/support/dependencies.py
-  test -f ${sources.arklib}/lean/support/lean_headers.py
+  for source in ${sources.lean-verification} ${sources.lean-arklib} ${sources.lean-clean} ${sources.lean-applications}; do
+    test -f "$source/lean/checks/check_clients.py"
+    test -f "$source/lean/checks/check_library.py"
+    test -f "$source/lean/checks/check_package_ownership.py"
+    test -f "$source/lean/checks/audit_imports.py"
+    test -f "$source/lean/support/packages.py"
+    test -f "$source/lean/support/dependencies.py"
+    test -f "$source/lean/support/lean_headers.py"
+    test ! -e "$source/lean/lakefile.toml"
+  done
   test -f ${sources.application}/libraries/core/traversal/finite.zkc
   test -f ${sources.application}/libraries/core/primitives/collections/sequence.zkc
   test -f ${sources.application}/common/tests/support/project.py

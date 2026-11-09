@@ -58,14 +58,14 @@ def check_factor_forms(suite, root, execute):
             raise AssertionError("bridges/common/factor_openings.py:54: interface['original'] == hashlib.sha256(text.encode()).hexdigest()")
         symbol = interface['protocol']
         data = suite.exercise(text, symbol)
-        fixture = root / f'lean/ZkcExamples/NativePrograms/fixtures/factor-{form.lower()}.json'
+        fixture = root / f'lean/applications/Zkc/Applications/IR/NativePrograms/fixtures/factor-{form.lower()}.json'
         if not (data == json.loads(fixture.read_text())):
             raise AssertionError(f'factor/{form}: source drift')
         constructor = fixture.parent.parent / 'Variants' / f'Factor{form}Data.lean'
         if not (render(data, f'ZkcExamples.NativePrograms.Variants.Factor{form}Data') == constructor.read_text()):
             raise AssertionError("bridges/common/factor_openings.py:60: render(data, f'ZkcExamples.NativePrograms.Variants.Factor{form}Data') == constructor.read_text()")
         request = read_json(root / 'lean/bridges/common/requests/factor-openings.json')
-        client = root / f'lean/security/ZkcSecurityExamples/NativePrograms/Factor{form}.lean'
+        client = root / f'lean/applications/Zkc/Applications/Security/NativePrograms/Factor{form}.lean'
         if not (render_client(data, request, f'Factor{form}',
                               positive=form not in ('WrongPoint', 'WrongResidual')) == client.read_text()):
             raise AssertionError("bridges/common/factor_openings.py:63: render_client(data, request, f'Factor{form}') == client.read_text()")

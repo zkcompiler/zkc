@@ -19,18 +19,30 @@ executable = true
 scalar = true
 
 [generated]
-data = "lean/ZkcExamples/Construction/SchnorrProofData.lean"
-bodies = "lean/ZkcExamples/Construction/SchnorrProofBodies.lean"
-participant = "lean/ZkcExamples/Construction/SchnorrProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/SchnorrArtifact.lean"
-program = "lean/ZkcExamples/Executable/SchnorrProofProgramData.lean"
-facts = "lean/ZkcExamples/Executable/SchnorrProofFacts.lean"
-interactive_data = "lean/ZkcExamples/Structured/SchnorrInteractiveData.lean"
+data = "lean/applications/Zkc/Applications/IR/Construction/SchnorrProofData.lean"
+bodies = "lean/applications/Zkc/Applications/IR/Construction/SchnorrProofBodies.lean"
+participant = "lean/applications/Zkc/Applications/IR/Construction/SchnorrProofParticipant.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/SchnorrArtifact.lean"
+program = "lean/applications/Zkc/Applications/IR/Executable/SchnorrProofProgramData.lean"
+facts = "lean/applications/Zkc/Applications/IR/Executable/SchnorrProofFacts.lean"
+interactive_data = "lean/applications/Zkc/Applications/IR/Structured/SchnorrInteractiveData.lean"
 interactive_export = "lean/bridges/structured/fixtures/schnorr-interactive.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-interactive.mlir"
-artifacts = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Artifacts.lean"
-lowering = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Lowering.lean"
-claims = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Claims.lean"
+artifacts = "lean/applications/Zkc/Applications/Security/Subjects/Schnorr/Artifacts.lean"
+lowering = "lean/applications/Zkc/Applications/Security/Subjects/Schnorr/Lowering.lean"
+claims = "lean/applications/Zkc/Applications/Security/Subjects/Schnorr/Claims.lean"
+
+[namespaces]
+data = "ZkcExamples.Construction.SchnorrProofData"
+bodies = "ZkcExamples.Construction.SchnorrProofBodies"
+participant = "ZkcExamples.Construction.SchnorrProofParticipant"
+glue = "ZkcExamples.Construction.SchnorrProof"
+program = "ZkcExamples.Executable.SchnorrProofProgramData"
+facts = "ZkcExamples.Executable.SchnorrProof"
+interactive_data = "ZkcExamples.Structured.SchnorrInteractiveData"
+artifacts = "ZkcSecurity.Examples.Subjects.Schnorr"
+lowering = "ZkcSecurity.Examples.Subjects.Schnorr"
+claims = "ZkcSecurity.Examples.Subjects.Schnorr"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",
@@ -48,16 +60,17 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
          "lowering-function-duplicated"]
 
 [executable]
+module = "Zkc.Applications.IR.Executable.SchnorrProof"
 threshold = "derived"
 namespace = "ZkcExamples.Executable.SchnorrProof"
 
 [construction]
 namespace = "ZkcExamples.Construction.SchnorrProof"
-connection = "ZkcExamples.Construction.SchnorrProof"
+connection = "Zkc.Applications.IR.Construction.SchnorrProof"
 admission = "views"
 inputs = "payloads"
 model = "Zkc.Protocols.Schnorr.Common.experiment wiring"
-model_imports = ["ZkcExamples.Construction.SchnorrProofModel"]
+model_imports = ["Zkc.Applications.IR.Construction.SchnorrProofModel"]
 
 
 [bodies]
@@ -65,7 +78,7 @@ entry = "proof"
 
 [receipt]
 theorem = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness"
-security_module = "ZkcSecurityExamples.ExecutableSchnorrFiatShamir"
+security_module = "Zkc.Applications.Security.ExecutableSchnorrFiatShamir"
 chain = [
   "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness",
   "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.acceptance_le",
@@ -103,7 +116,7 @@ unused = [
 [scalar]
 contract = "schnorr.verifier/0"
 namespace = "Zkc.Protocols.Schnorr.Common"
-module = "Zkc.Protocols.Schnorr.Common"
+module = "Zkc.Verification.Installations.Schnorr.Common"
 binders = "(base key : G) (service : Nat)"
 arguments = "base key service"
 unfold = ["experiment"]
@@ -129,10 +142,10 @@ theorem = "honest_verifier_zero_knowledge"
 experiment = "interactive.honest-verifier-view/0"
 premises = ["public key = secret scalar times base", "uniform prover nonce and simulator response",
             "honest challenge fixed independently of nonce", "public one-session transcript and verifier outcome"]
-module = "ZkcSecurity.Families.Sigma.Schnorr"
+module = "Zkc.Verification.Families.Sigma.Schnorr"
 context = "[SampleableType F] "
 consumer = "ZkcSecurity.VCVio.Schnorr.honest_verifier_zero_knowledge"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Schnorr"
-imports = ["ZkcSecurityExamples.Subjects.Schnorr.Registration"]
+imports = ["Zkc.Applications.Security.Subjects.Schnorr.Registration"]

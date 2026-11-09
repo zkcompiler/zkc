@@ -17,6 +17,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "lean"))
 sys.path.insert(0, str(ROOT / "common/tests/support"))
+from support.packages import is_owned_module, module_path  # noqa: E402
 from bridges.structured.generate_component_roots import Generation, quoted  # noqa: E402
 from project import project_inputs  # noqa: E402
 from checks.check_subject_roots import source_request_module  # noqa: E402
@@ -38,8 +39,9 @@ class ScratchGeneration(Generation):
                 return
             visited.add(name)
             relative = Path(*name.split(".")).with_suffix(".lean")
-            candidates = [self.directory / "source" / relative,
-                          ROOT / "lean/security" / relative, ROOT / "lean" / relative]
+            candidates = [self.directory / "source" / relative]
+            if is_owned_module(name):
+                candidates.append(module_path(name))
             path = path or next((item for item in candidates if item.is_file()), None)
             obj = self.output / relative.with_suffix(".olean")
             for item in [path, obj]:
@@ -95,9 +97,9 @@ def main : IO Unit := do
             self.retain(module, (bindings / (module + ".lean")).read_text())
 
 
-def endpoint_shells(generation, subject, pair):
+def endpoint_shells(generation, subject, pair, pair_namespace):
     """Select existing theorems at the common consumers' fixed propositions."""
-    component = "ZkcSecurityExamples.Generated.Components.FourSums"
+    component = "Zkc.Applications.Verification.Generated.Components.FourSums"
     component_namespace = "ZkcSecurity.Examples.Generated.Components.FourSums"
     subject_namespace = "ZkcSecurity.Examples.Generated.FourSums"
     proof = "TestsSecurity.RootComposition.Four.Endpoints"
@@ -116,14 +118,14 @@ run_cmd do
   let soundness : OriginalEndpoint.Output := {{
     moduleName := {quoted(outputs[2])}, namespaceName := {quoted(component_namespace + "Soundness")},
     subjectModule := {quoted(subject)}, subjectNamespace := {quoted(subject_namespace)},
-    methodModule := "TestsSecurity.RootComposition.FourSoundness",
+    methodModule := "Zkc.Tests.Applications.Verification.RootComposition.FourSoundness",
     sampling := "ZkcSecurity.Domains.PrimeField.rawSampleable blsModulus",
     capabilities := {quoted(proof + '.Soundness.claimCapabilities')},
     schedule := {quoted(proof + '.Soundness.schedule')},
     validatorCost := {quoted(proof + '.Soundness.validatorCost')},
     chargedExport := {quoted(proof + '.Soundness.reductionExport')},
     scalar := some ⟨{quoted(proof + '.Soundness.scalarBound')}, {quoted(proof + '.Soundness.scalar_bound')}⟩ }}
-  let .ok soundnessText := OriginalEndpoint.soundnessSource metadata {pair}.Validator.participant soundness
+  let .ok soundnessText := OriginalEndpoint.soundnessSource metadata {pair_namespace}.Validator.participant soundness
     | Lean.throwError "common original endpoint refused"
   let registration : ZkcTools.StructuredSource.Root.DomainClaimLibraryOutput := {{
     moduleName := {quoted(outputs[3])}, namespaceName := {quoted(subject_namespace + "SoundnessRegistration")}, imports := [{quoted(subject)}, {quoted(outputs[2])}],
@@ -136,7 +138,7 @@ run_cmd do
     theoremNormalization := {quoted([component_namespace + 'Soundness.' + name for name in ['schedule', 'validatorCost', 'scalarBound']] + [proof + '.Soundness.' + name for name in ['schedule', 'price', 'priceBound', 'budget', 'validatorCost', 'scalarBound']] + ['ZkcSecurity.Claims.CompiledSoundness.uniformSchedule'])} }}
   let sources : List (String × String) := [
     ({quoted(outputs[0])}, RootCompleteness.directSource completeness
-      "TestsSecurity.RootComposition.FourEndpoints" {quoted(proof + '.compiled_ideal_complete')}
+      "Zkc.Tests.Applications.Verification.RootComposition.FourEndpoints" {quoted(proof + '.compiled_ideal_complete')}
       "rawSampleable blsModulus" ["ZkcSecurity.Domains.PrimeField"]),
     ({quoted(outputs[1])}, RootCompleteness.claimsSource completeness {{
       capabilities := "ZkcSecurity.Domains.PrimeField.blsCapabilities original (by decide +kernel)" }}),
@@ -144,8 +146,8 @@ run_cmd do
     ({quoted(outputs[3])}, ZkcTools.StructuredSource.Root.domainClaimLibrarySource registration)]
   Lean.Elab.Command.elabCommand (← `(def $(Lean.mkIdent `sources) : List (String × String) := $(Lean.quote sources)))
 '''
-    generation.emit("EndpointShells", ["ZkcSecurityTools.Generation.RootCompleteness",
-                    "ZkcSecurityTools.Generation.OriginalEndpoint", subject, pair],
+    generation.emit("EndpointShells", ["Zkc.Tools.Verification.Generation.RootCompleteness",
+                    "Zkc.Tools.Verification.Generation.OriginalEndpoint", subject, pair],
                     "  for (name, text) in sources do emit name (.ok text)", outputs,
                     "open ZkcSecurity.Generation\n" + declarations)
 
@@ -162,16 +164,21 @@ def check(args):
                 modules={key: str(value) for key, value in modules.items()}, target="totals")
     config = tomllib.loads((Path(__file__).parent / "roots/sampled.toml").read_text())
     name = root["name"]
-    data = f"ZkcExamples.Structured.Generated.Bindings.{name}Data"
-    inputs = f"ZkcExamples.Structured.Generated.Bindings.{name}Inputs"
-    pair = f"ZkcExamples.Construction.Generated.{name}Pair"
-    mathematics = f"ZkcExamples.Structured.Generated.Mathematics.{name}"
-    connection = f"ZkcExamples.Structured.Generated.Connections.{name}"
-    subject = f"ZkcSecurityExamples.Generated.{name}"
+    data = f"Zkc.Applications.IR.Structured.Generated.Bindings.{name}Data"
+    data_namespace = f"ZkcExamples.Structured.Generated.Bindings.{name}Data"
+    inputs = f"Zkc.Applications.IR.Structured.Generated.Bindings.{name}Inputs"
+    inputs_namespace = f"ZkcExamples.Structured.Generated.Bindings.{name}Inputs"
+    pair = f"Zkc.Applications.IR.Construction.Generated.{name}Pair"
+    pair_namespace = f"ZkcExamples.Construction.Generated.{name}Pair"
+    mathematics = f"Zkc.Applications.IR.Structured.Generated.Mathematics.{name}"
+    mathematics_namespace = f"ZkcExamples.Structured.Generated.Mathematics.{name}"
+    connection = f"Zkc.Applications.IR.Structured.Generated.Connections.{name}"
+    connection_namespace = f"ZkcExamples.Structured.Generated.Connections.{name}"
+    subject = f"Zkc.Applications.Verification.Generated.{name}"
     subject_namespace = f"ZkcSecurity.Examples.Generated.{name}"
-    abi = f"ZkcSecurityExamples.Generated.Components.{name}ABI"
+    abi = f"Zkc.Applications.Verification.Generated.Components.{name}ABI"
     abi_namespace = f"ZkcSecurity.Examples.Generated.Components.{name}ABI"
-    source_module = "TestsSecurity.RootComposition.FourSource"
+    source_module = "Zkc.Tests.Applications.Verification.RootComposition.FourSource"
     result_file = generation.directory / "acceptance.json"
     result_file.unlink(missing_ok=True)
     export_inputs = {path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -184,16 +191,17 @@ def check(args):
         generation.export(root)
         # The binding printer needs only the checked snapshot, not a connection.
         path = generation.directory / "Inputs.lean"
-        generation.printer("InputBindings", f'''import ZkcTools.StructuredSource.Bindings.Inputs
+        generation.printer("InputBindings", f'''import Zkc.Tools.IR.StructuredSource.Bindings.Inputs
 import {data}
 open Zkc.Source.Structured ZkcTools.StructuredSource
 def main : IO Unit := do
-  let program := (check {data}.snapshot).toOption.get (by decide +kernel)
-  IO.FS.writeFile {quoted(str(path))} (Bindings.inputsSource program {quoted(inputs)} {quoted(data)})
+  let program := (check {data_namespace}.snapshot).toOption.get (by decide +kernel)
+  IO.FS.writeFile {quoted(str(path))} (Bindings.inputsSource program {quoted(inputs)} {quoted(data)}
+      {quoted(inputs_namespace)} {quoted(data_namespace + ".snapshot")})
 ''')
         generation.retain(inputs, path.read_text())
         export_record.write_text(json.dumps(export_inputs, indent=2) + "\n")
-    source_modules = [source_module, "TestsSecurity.RootComposition.FourRuns"]
+    source_modules = [source_module, "Zkc.Tests.Applications.Verification.RootComposition.FourRuns"]
     source_record = generation.directory / "source-check.json"
     for module in source_modules:
         generation.retain(module, (fixture / (module.split(".")[-1] + ".lean")).read_text())
@@ -209,32 +217,35 @@ def main : IO Unit := do
               "source_requests": {"status": "bound_and_rendered_not_resolved", "path": str(request_path)},
               "remaining": []}
     if args.phase != "source":
-        generation.prepare(["Zkc.Construction.ConnectionCertificateAdmission",
-                            "ZkcTools.ConstructionBindings.Generate"])
-        views = [f"ZkcExamples.Structured.Generated.Constructed.{name}{role}"
+        generation.prepare(["Zkc.IR.Construction.ConnectionCertificateAdmission",
+                            "Zkc.Tools.IR.ConstructionBindings.Generate"])
+        views = [f"Zkc.Applications.IR.Structured.Generated.Constructed.{name}{role}"
                  for role in ("Producer", "Validator")]
-        generation.emit("Connections", ["ZkcTools.ConstructionBindings.Generate", inputs, pair], f'''
+        view_namespaces = [f"ZkcExamples.Structured.Generated.Constructed.{name}{role}"
+                           for role in ("Producer", "Validator")]
+        generation.emit("Connections", ["Zkc.Tools.IR.ConstructionBindings.Generate", inputs, pair], f'''
   let .ok outputs := ZkcTools.ConstructionBindings.Generate.bundle
-    {{ sourceModule := {quoted(inputs)}.toName, program := {quoted(inputs + '.program')}.toName }}
+    {{ sourceModule := {quoted(inputs)}.toName, program := {quoted(inputs_namespace + '.program')}.toName }}
     {quoted(connection)}.toName
     [({{ mode := .producer, artifactModule := {quoted(pair)}.toName,
-         artifact := {quoted(pair + '.Producer.participant')}.toName, viewModule := {quoted(views[0])}.toName }},
-       {pair}.Producer.participant),
+         artifact := {quoted(pair_namespace + '.Producer.participant')}.toName, viewModule := {quoted(views[0])}.toName, viewNamespace := {quoted(view_namespaces[0])}.toName }},
+       {pair_namespace}.Producer.participant),
      ({{ mode := .validator, artifactModule := {quoted(pair)}.toName,
-         artifact := {quoted(pair + '.Validator.participant')}.toName, viewModule := {quoted(views[1])}.toName }},
-       {pair}.Validator.participant)] | throw (IO.userError "connection proposal refused")
+         artifact := {quoted(pair_namespace + '.Validator.participant')}.toName, viewModule := {quoted(views[1])}.toName, viewNamespace := {quoted(view_namespaces[1])}.toName }},
+       {pair_namespace}.Validator.participant)]
+    (namespaceName := {quoted(connection_namespace)}.toName) | throw (IO.userError "connection proposal refused")
   for (moduleName, text) in outputs do emit moduleName.toString (.ok text)''', [*views, connection])
         # Current source-path selection supplies charges, subject and target data.
         identities = json.loads((generation.directory / name / "identities.json").read_text())
         path = generation.directory / "Subject.lean"
-        generation.printer("Subject", f'''import ZkcSecurityExamples.Generation.Roots.Catalogue
+        generation.printer("Subject", f'''import Zkc.Applications.Security.Generation.Roots.Catalogue
 import {inputs}
 import {pair}
 open ZkcSecurity.Generation ZkcTools.StructuredSource.Root
 set_option maxRecDepth 10000
 def selection : Roots.Selection := {{
- name := {quoted(name)}, snapshot := {data}.snapshot, helpers := [],
- artifacts := {pair}.artifacts, target := "totals",
+ name := {quoted(name)}, snapshot := {data_namespace}.snapshot, helpers := [],
+ artifacts := {pair_namespace}.artifacts, target := "totals",
  mathematics := {{
    moduleName := {quoted(config['model_module'])}
    model := {quoted(config['model'])}
@@ -251,12 +262,14 @@ def main : IO Unit := do
    | throw (IO.userError "subject selection refused")
  IO.FS.writeFile {quoted(str(path))} (fixedSubjectSource {{selected with
    sourceModule := {quoted(inputs)}
-   originalExpression := {quoted(data + '.snapshot')}
-   importedExpression := {quoted(inputs + '.imported')}}})
+   connectionModule := {quoted(connection)}
+   connectionNamespace := {quoted(connection_namespace)}
+   originalExpression := {quoted(data_namespace + '.snapshot')}
+   importedExpression := {quoted(inputs_namespace + '.imported')}}})
 ''')
         generation.retain(subject, path.read_text())
         abi_path = generation.directory / "ABI.lean"
-        generation.printer("ABI", f'''import ZkcSecurityTools.Generation.SubjectABI.Command
+        generation.printer("ABI", f'''import Zkc.Tools.Verification.Generation.SubjectABI.Command
 import {subject}
 open ZkcSecurity.Generation.SubjectABI
 set_option maxRecDepth 10000
@@ -264,19 +277,20 @@ derive_subject_abi generated for {subject_namespace}.subject using {{ moduleName
 def main : IO Unit := IO.FS.writeFile {quoted(str(abi_path))} generated
 ''')
         generation.retain(abi, abi_path.read_text())
-        generation.emit("Mathematics", ["ZkcTools.StructuredSource.MathematicsAliases", inputs],
+        generation.emit("Mathematics", ["Zkc.Tools.IR.StructuredSource.MathematicsAliases", inputs],
                         f'  emit {quoted(mathematics)} (MathematicsAliases.source program "totals" '
-                        f'{{moduleName := {quoted(mathematics)}, sourceModule := {quoted(inputs)}}})', [mathematics])
-        generation.retain("TestsSecurity.RootComposition.FourFormula", (fixture / "FourFormula.lean").read_text())
+                        f'{{moduleName := {quoted(mathematics)}, namespaceName := {quoted(mathematics_namespace)}, '
+                        f'sourceModule := {quoted(inputs)}, sourceNamespace := {quoted(inputs_namespace)}}})', [mathematics])
+        generation.retain("Zkc.Tests.Applications.Verification.RootComposition.FourFormula", (fixture / "FourFormula.lean").read_text())
         result["connections"] = "checked producer and validator"
         result["subject_abi_target"] = "checked"
     if args.phase in {"endpoints", "receipts", "all"}:
         for suffix in ["Properties", "Endpoints", "Soundness"]:
-            generation.retain("TestsSecurity.RootComposition.Four" + suffix,
+            generation.retain("Zkc.Tests.Applications.Verification.RootComposition.Four" + suffix,
                               (fixture / ("Four" + suffix + ".lean")).read_text())
-        endpoint_shells(generation, subject, pair)
+        endpoint_shells(generation, subject, pair, pair_namespace)
         generation.retain(request_module, requests)
-        generation.retain("TestsSecurity.RootComposition.FourReceipts",
+        generation.retain("Zkc.Tests.Applications.Verification.RootComposition.FourReceipts",
                           (fixture / "FourReceipts.lean").read_text())
         result["endpoint_status"] = "checked"
         result["receipt_status"] = "proved_three_canonical_receipts"

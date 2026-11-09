@@ -9,9 +9,10 @@ from harness import load
 def case(tmp_path, monkeypatch):
     api = load("normal_form_reporting", "lean/checks/check_records.py").reports
     monkeypatch.setattr(api, "ROOT", tmp_path)
+    from support.packages import module_path
     (tmp_path / "data.lean").write_text("module\n")
     selection = "Gkr"
-    views = ["lean/" + module.replace(".", "/") + ".lean"
+    views = [str(module_path(module, tmp_path / "lean").relative_to(tmp_path))
              for module in api.source_view_modules(selection)]
     for relative in views:
         output = tmp_path / relative

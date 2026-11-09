@@ -13,6 +13,7 @@ import tempfile
 from native_entry import native_subject
 from bridges.common import source_format
 from structured import views
+from support.packages import module_path
 from verify import read_json, render_client
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -67,21 +68,23 @@ def main():
             mlir.write_text(source)
             data = json.loads(execute([compiler, 'protocol-structured', mlir,
                                        '--symbol=' + interface['protocol']]))
-            install(Path('ZkcExamples/NativePrograms/fixtures') / (stem + '.json'),
+            install(Path('applications/Zkc/Applications/IR/NativePrograms/fixtures') / (stem + '.json'),
                     json.dumps(data, indent=2) + '\n')
-            prefix = 'ZkcExamples.NativePrograms.' + name
-            for module in views(data, directory, prefix, 1):
+            prefix = 'Zkc.Applications.IR.NativePrograms.' + name
+            namespace_prefix = 'ZkcExamples.NativePrograms.' + name
+            for module in views(data, directory, prefix, 1, namespace_prefix=namespace_prefix):
                 path = Path(module.replace('.', '/') + '.lean')
-                install(path, (directory / path).read_text())
+                install(module_path(module).relative_to(ROOT / 'lean'),
+                        (directory / path).read_text())
             if name.startswith('Variants.'):
                 client = name.removeprefix('Variants.')
                 family = 'schnorr' if client.startswith('Schnorr') else (
                     'sumcheck' if client.startswith('Sumcheck') else 'factor-openings')
                 request = read_json(ROOT / 'lean/bridges/common/requests' / (family + '.json'))
                 positive = not stem.endswith(('earlychallenge', 'wrongresidual', 'wrongpoint'))
-                relative = Path('ZkcExamples/NativePrograms') / (client + '.lean')
+                relative = Path('applications/Zkc/Applications/IR/NativePrograms') / (client + '.lean')
                 if family == 'factor-openings':
-                    relative = Path('security/ZkcSecurityExamples/NativePrograms') / (client + '.lean')
+                    relative = Path('applications/Zkc/Applications/Security/NativePrograms') / (client + '.lean')
                 install(relative, render_client(data, request, client, positive=positive))
             print(stem, flush=True)
     print(json.dumps({'status': 'pass', 'mode': 'check' if args.check else 'write',

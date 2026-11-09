@@ -1,10 +1,10 @@
 module
-public import TestsSecurity.RootComposition.FourSource
-public import ZkcExamples.Structured.Generated.Connections.FourSums
-public import ZkcSecurity.Bindings.Source.PairRouting
-public import ZkcSecurity.Bindings.Sumcheck.SourceFamilyComposition
-public import ZkcSecurity.Bindings.Sumcheck.SourceFamilyPublic
-public meta import ZkcSecurityTools.SourceProperties.Assembly
+public import Zkc.Tests.Applications.Verification.RootComposition.FourSource
+public import Zkc.Applications.IR.Structured.Generated.Connections.FourSums
+public import Zkc.Verification.Bindings.Source.PairRouting
+public import Zkc.Verification.Bindings.Sumcheck.SourceFamilyComposition
+public import Zkc.Verification.Bindings.Sumcheck.SourceFamilyPublic
+public meta import Zkc.Tools.IR.SourceProperties.Assembly
 @[expose] public section
 set_option autoImplicit false
 set_option maxRecDepth 10000

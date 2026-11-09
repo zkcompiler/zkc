@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 FORMAT = "canonical-git-v0"
@@ -52,9 +53,10 @@ def main():
     args = parser.parse_args()
     root = args.root
     packages = {}
-    for name in ("lean/lake-manifest.json", "lean/security/lake-manifest.json", "lean/integrations/arklib/lake-manifest.json",
-                 "lean/integrations/clean/lake-manifest.json"):
-        for package in json.loads((root / name).read_text())["packages"]:
+    sys.path.insert(0, str(root / "lean"))
+    from support.packages import PACKAGES
+    for directory, _ in PACKAGES.values():
+        for package in json.loads((directory / "lake-manifest.json").read_text())["packages"]:
             if package["type"] == "git":
                 previous = packages.get(package["rev"])
                 if previous and previous["url"] != package["url"]:

@@ -104,7 +104,7 @@ preserved by disabling that cleanup. Git credentials are not persisted.
   builders and substitution disabled. This replaces the former acceptance
   test for GitHub cache restoration into an empty store, because that remote
   cache is no longer used.
-* `fresh` gives the complete `lean` → `security` → `arklib` package chain a
+* `fresh` gives every package in the Applications dependency closure a
   per-attempt derivation input. Each package consumes its newly built parent,
   and source builds retain the no-Lake-cache policy. Only this explicit mode
   changes package identity to prevent output reuse; ordinary jobs retain

@@ -106,7 +106,7 @@ CPU target, the EVM wire generator and the source checker behave as the rows
 state. Cargo
 regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
 changes. None of these outputs is authored source. The Lean catalogue's row
-facts are a generated module, `lean/Zkc/Source/Structured/InstalledCatalogue.lean`,
+facts are a generated module, `lean/ir/Zkc/IR/Source/Structured/InstalledCatalogue.lean`,
 written by `lean/bridges/common/installed_catalogue.py` and checked fresh by
 `lean/checks/check_installed_catalogue.py`; Lean's admitted identity set stays
 hand-written.

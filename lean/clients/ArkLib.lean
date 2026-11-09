@@ -1,5 +1,5 @@
-import ZkcArkLibExamples.Variants
-import ZkcArkLib.Sumcheck.Multilinear
+import Zkc.Applications.ArkLib.Variants
+import Zkc.Adapters.ArkLib.Sumcheck.Multilinear
 
 /-! Independent reuse across imported source forms and external consumers. -/
 noncomputable def importedSumcheckSoundness := @ZkcSecurity.Examples.Variants.sumcheck

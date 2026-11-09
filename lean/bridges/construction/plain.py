@@ -13,6 +13,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "lean"))
 sys.path.insert(0, str(ROOT / "common/tests"))
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package, module_path  # noqa: E402
 from bridges.common import interface as language_interface, source_format  # noqa: E402
 from bridges.common.lean_render import Runner, digest, require  # noqa: E402
 from bridges.pipeline.source_inventory import Inventory, decode  # noqa: E402
@@ -43,15 +45,15 @@ def batch_names(inventory, paired):
     return names
 
 
-def constructed_sources(runner, lake, directory, namespace):
+def constructed_sources(runner, lake, directory, module):
     """Use the common connection generator for the retained aggregate pair."""
-    runner.run([lake, "build", namespace + "Artifacts", "ZkcTools.ConstructionBindings.Generate"],
-               cwd=ROOT / "lean", name="two-batches:build-connection-inputs")
-    runner.run([lake, "env", "lean", "--run", "checks/GenerateReusableAggregate.lean", directory],
-               cwd=ROOT / "lean", name="two-batches:print-connections")
-    return [(ROOT / "lean" / relative, (directory / relative).read_text())
+    runner.run([lake, "build", "+" + module + "Artifacts", "+Zkc.Tools.IR.ConstructionBindings.Generate"],
+               cwd=module_package("Zkc.Applications"), name="two-batches:build-connection-inputs")
+    runner.run([*lean_command(module_package("Zkc.IR"), lake=lake), "--run", str(module_path("Zkc.Tools.IR.Commands.GenerateReusableAggregate")), directory],
+               cwd=module_package("Zkc.Applications"), name="two-batches:print-connections")
+    return [(module_path(module + role), (directory / relative).read_text())
             for role in ("Producer", "Validator", "Connection")
-            for relative in [Path(*(namespace + role).split(".")).with_suffix(".lean")]]
+            for relative in [Path(*(module + role).split(".")).with_suffix(".lean")]]
 
 
 def main():
@@ -151,30 +153,34 @@ def main():
                                             original="sha256:" + digest(original.encode()),
                                             pair="sha256:" + digest(exported.encode()))
             namespace = ("Tests." if name == "two-batches" else "ZkcExamples.Construction.") + stem
-            generated(ROOT / ("lean/" + namespace.replace(".", "/") + "Artifacts.lean"),
+            module = ("Zkc.Tests.Applications.IR." if name == "two-batches"
+                      else "Zkc.Applications.IR.Construction.") + stem
+            generated(module_path(module + "Artifacts"),
                       pair.render(children, namespace + "Artifacts"))
             data_namespace = "ZkcExamples.Structured.TableMembershipData" if name == "table" else namespace + "Data"
-            generated(ROOT / ("lean/" + data_namespace.replace(".", "/") + ".lean"),
+            data_module = "Zkc.Applications.IR.Structured.TableMembershipData" if name == "table" else module + "Data"
+            generated(module_path(data_module),
                       snapshot.render(json.loads(original), data_namespace))
-        for name, namespace in [
-            ("batch", "ZkcExamples.Construction.BatchOpening"),
-            ("two-batches", "Tests.ReusableAggregateTwoBatches"),
+        for name, module, namespace in [
+            ("batch", "Zkc.Applications.IR.Construction.BatchOpening", "ZkcExamples.Construction.BatchOpening"),
+            ("two-batches", "Zkc.Tests.Applications.IR.ReusableAggregateTwoBatches", "Tests.ReusableAggregateTwoBatches"),
         ]:
             if args.subject and name not in args.subject:
                 continue
-            runner.run([args.lake, "build", namespace + "Data"],
-                       cwd=ROOT / "lean", name=name + ":build-data")
-            generated(ROOT / ("lean/" + namespace.replace(".", "/") + "Bodies.lean"),
-                      bodies.generate(namespace + "Data", namespace + "Bodies",
+            runner.run([args.lake, "build", "+" + module + "Data"],
+                       cwd=module_package("Zkc.Applications"), name=name + ":build-data")
+            generated(module_path(module + "Bodies"),
+                      bodies.generate(module + "Data", namespace + "Bodies",
+                                      data_namespace=namespace + "Data",
                                       names=batch_names(inventories[name], name == "two-batches"),
                                       inventory=inventories[name], runner=runner, lake=args.lake,
                                       fresh=args.fresh_bodies))
         if not args.subject or "two-batches" in args.subject:
             for path, value in constructed_sources(runner, args.lake,
-                    args.output / "two-batches" / "views", "Tests.ReusableAggregateTwoBatches"):
+                    args.output / "two-batches" / "views", "Zkc.Tests.Applications.IR.ReusableAggregateTwoBatches"):
                 generated(path, value)
-            runner.run([args.lake, "build", "Tests.ReusableAggregateTwoBatchesConnection"],
-                       cwd=ROOT / "lean", name="two-batches:check-connections")
+            runner.run([args.lake, "build", "+Zkc.Tests.Applications.IR.ReusableAggregateTwoBatchesConnection"],
+                       cwd=module_package("Zkc.Applications"), name="two-batches:check-connections")
         report["status"] = "pass"
     finally:
         if report["status"] == "running":

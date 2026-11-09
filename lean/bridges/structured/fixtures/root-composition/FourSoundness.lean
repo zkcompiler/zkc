@@ -1,10 +1,10 @@
 module
 
-public import TestsSecurity.RootComposition.FourEndpoints
-public import ZkcSecurity.Bindings.Sumcheck.SourcePublicPrimeField
-public import ZkcSecurity.Bindings.Source.RootPublic
-public import ZkcSecurity.Claims.Methods.RootConnectionLossless
-public import ZkcSecurity.Claims.CompiledSoundness
+public import Zkc.Tests.Applications.Verification.RootComposition.FourEndpoints
+public import Zkc.Verification.Bindings.Sumcheck.SourcePublicPrimeField
+public import Zkc.Verification.Bindings.Source.RootPublic
+public import Zkc.Verification.Claims.Methods.RootConnectionLossless
+public import Zkc.Verification.Claims.CompiledSoundness
 
 @[expose] public section
 

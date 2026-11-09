@@ -210,9 +210,15 @@ def check(include_components=False):
     formal_pages = sorted((ROOT / "lean").glob("*.md"))
     formal_reference = sorted((ROOT / "lean" / "docs").rglob("*.md"))
     formal_pages += formal_reference
-    formal_pages += sorted((ROOT / "lean" / "Zkc").rglob("*.md"))
-    formal_pages += sorted((ROOT / "lean" / "ZkcExamples").rglob("*.md"))
-    formal_pages += sorted((ROOT / "lean" / "integrations").glob("*/*.md"))
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lean"))
+    from support.packages import LEAN, PACKAGES
+    for directory, roots in PACKAGES.values():
+        package = ROOT / "lean" / directory.relative_to(LEAN)
+        formal_pages += sorted(package.glob("*.md"))
+        for prefix in roots:
+            formal_pages += sorted(package.joinpath(*prefix.split(".")).rglob("*.md"))
+    formal_pages = sorted(set(formal_pages))
     pages = active + formal_pages + [ROOT / p for p in extra]
     if include_components:
         pages = sorted(set(pages) | set(component_pages()))

@@ -16,6 +16,8 @@ import tempfile
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package, module_path  # noqa: E402
 from bridges.common.request_support import check_lean_resources  # noqa: E402
 
 
@@ -28,29 +30,29 @@ def main() -> None:
     parser.add_argument("--records", type=Path)
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    package = module_package("Zkc.Applications")
     directory = (options.records or Path(tempfile.mkdtemp(prefix="zkc-structured-bindings-"))).resolve()
     directory.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS", "2")}
     if options.overlay:
-        paths = [options.overlay.resolve()]
-        paths.extend((root / ".lake/packages").glob("*/.lake/build/lib/lean"))
-        paths.append(root / ".lake/build/lib/lean")
-        env["LEAN_PATH"] = os.pathsep.join(map(str, paths))
+        search = subprocess.check_output(["lake", "env", "printenv", "LEAN_PATH"],
+                                         cwd=package, text=True).strip()
+        env["LEAN_PATH"] = str(options.overlay.resolve()) + os.pathsep + search
 
     def run(path: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(["lean", *arguments, str(path)], cwd=root, env=env,
+        return subprocess.run([*lean_command(package), *arguments, str(path)], cwd=package, env=env,
                               text=True, capture_output=True, timeout=180)
 
     regenerated = directory / "regenerated"
     result = subprocess.run(
-        ["lean", "--run", "checks/RunGenerators.lean", "bindings", str(regenerated)],
-        cwd=root, env=env, text=True, capture_output=True, timeout=180,
+        [*lean_command(package), "--run", str(module_path("Zkc.Tools.Applications.Commands.GenerateStructuredBindings")), str(regenerated)],
+        cwd=package, env=env, text=True, capture_output=True, timeout=180,
     )
     (directory / "regenerate.log").write_text(result.stdout + result.stderr)
     if result.returncode:
         raise AssertionError(f"generation failed (exit {result.returncode}); see {directory / 'regenerate.log'}")
     generated = []
-    relative = Path("ZkcExamples/Structured/Generated/Bindings")
+    relative = Path("Zkc/Applications/IR/Structured/Generated/Bindings")
     for client in CLIENTS:
         files = [
             (".lean", ".lean"), (".callbacks.lean", "Callbacks.lean"),
@@ -60,10 +62,10 @@ def main() -> None:
             files.append((".inputs.lean", "Inputs.lean"))
         for printed, shipped in files:
             expected = (regenerated / relative / (client + printed)).read_bytes()
-            actual = (root / relative / (client + shipped)).read_bytes()
+            actual = (module_path("Zkc.Applications.IR.Structured.Generated.Bindings." + client + shipped.removesuffix(".lean"))).read_bytes()
             if expected != actual:
                 raise AssertionError(f"stale generated artifact: {client + shipped}")
-            if b"public import ZkcTools" in actual:
+            if b"public import Zkc.Tools." in actual:
                 raise AssertionError(f"proof imports tools: {client + shipped}")
             if b"ZkcTools.StructuredSource.Presentation" in actual:
                 raise AssertionError(f"proof uses tool metadata: {client + shipped}")
@@ -71,10 +73,10 @@ def main() -> None:
                               "sha256": hashlib.sha256(actual).hexdigest()})
         if client == "GkrRounds":
             expected = (regenerated / relative / (client + ".caller.lean")).read_bytes()
-            actual = (root / relative / (client + "Caller.lean")).read_bytes()
+            actual = (module_path("Zkc.Applications.IR.Structured.Generated.Bindings." + client + "Caller")).read_bytes()
             if expected != actual:
                 raise AssertionError("stale generated GKR caller")
-            if b"public import ZkcTools" in actual:
+            if b"public import Zkc.Tools." in actual:
                 raise AssertionError('generated GKR caller imports tooling')
             generated.append({"module": client + "Caller.lean",
                               "sha256": hashlib.sha256(actual).hexdigest()})
@@ -90,21 +92,21 @@ def main() -> None:
             raise AssertionError('unattributed helper obligations must stay open')
     for printed, shipped in [(".lean", ".lean"), (".inputs.lean", "Inputs.lean"),
                              (".callbacks.lean", "Callbacks.lean"), (".present.lean", "Present.lean")]:
-        stem = "Tests/Generated/StructuredBindingsGeneric"
+        stem = "Zkc/Tests/IR/Generated/StructuredBindingsGeneric"
         expected = (regenerated / (stem + printed)).read_bytes()
-        actual = (root / (stem + shipped)).read_bytes()
+        actual = module_path("Zkc.Tests.IR.Generated.StructuredBindingsGeneric" + shipped.removesuffix(".lean")).read_bytes()
         if expected != actual:
             raise AssertionError(f"stale generic callback fixture: {shipped}")
         generated.append({"module": stem + shipped,
                           "sha256": hashlib.sha256(actual).hexdigest()})
     # Production tools must not import mathematical examples, even transitively
     # through the ledger or default callback printer.
-    for source_directory in [root / "ZkcTools/StructuredSource/Bindings",
-                      root / "Zkc/Source/Structured/Bindings"]:
-        if not (all("ZkcExamples" not in path.read_text() for path in source_directory.glob("*.lean"))):
+    for source_directory in [root / "ir/Zkc/Tools/IR/StructuredSource/Bindings",
+                      root / "ir/Zkc/IR/Source/Structured/Bindings"]:
+        if not (all("Zkc.Applications." not in path.read_text() and "ZkcExamples" not in path.read_text() for path in source_directory.glob("*.lean"))):
             raise AssertionError('production binding tools must not import mathematical examples')
 
-    header = """import Tests.StructuredBindingsSources
+    header = """import Zkc.Tests.Applications.IR.StructuredBindingsSources
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
 open ZkcExamples.Structured.Generated.Bindings
 open Tests.StructuredBindingsSources
@@ -163,8 +165,8 @@ example : GkrRoundsGate.gateValueDefinition.body.component
     # the emitter also rejects quadratic catalogue duplication on scaled inputs.
     dispatch = directory / "dispatch"
     result = subprocess.run(
-        ["lean", "--run", "checks/RunGenerators.lean", "dispatch-controls", str(dispatch)],
-        cwd=root, env=env, text=True, capture_output=True, timeout=180,
+        [*lean_command(package), "--run", str(module_path("Zkc.Tools.Applications.Commands.RunStructuralGenerators")), "dispatch-controls", str(dispatch)],
+        cwd=package, env=env, text=True, capture_output=True, timeout=180,
     )
     (directory / "dispatch-generate.log").write_text(result.stdout + result.stderr)
     if result.returncode:

@@ -11,7 +11,7 @@ from bridges.common.replacement import replace_exactly_once
 
 
 DESCRIPTOR = '''schema = "zkc.component-roots/0"
-model_module = "Example.Model"
+model_module = "Zkc.Applications.Model"
 model = "Example.model"
 registry = "Example.registry"
 sampling = "Example.sampling"
@@ -29,7 +29,8 @@ method = "sigma"
 '''
 
 DIRECT_DESCRIPTOR = replace_exactly_once(DESCRIPTOR, 'method = "sigma"', '''method = "direct"
-proof_module = "Example.Proof"
+proof_module = "Zkc.Applications.Proof"
+proof_name = "Example.Proof.compiled_ideal_complete"
 error_bound = "1"
 error_expression = ".natural 1"''')
 
@@ -86,7 +87,7 @@ class ComponentRootDescriptors(unittest.TestCase):
             (replace_exactly_once(DESCRIPTOR, 'name = "Example"', 'name = "bad-name"'), "invalid root name"),
             (replace_exactly_once(DESCRIPTOR, 'method = "sigma"', 'method = "unknown"'), "uninstalled proof method"),
             (replace_exactly_once(DESCRIPTOR, 'method = "sigma"', 'method = "direct"'), "missing keys: .*proof_module"),
-            (DESCRIPTOR + 'proof_module = "Example.Proof"\n', "unknown keys: proof_module"),
+            (DESCRIPTOR + 'proof_module = "Zkc.Applications.Proof"\n', "unknown keys: proof_module"),
             (DESCRIPTOR + 'proof_name = "Example.proof"\n', "unknown keys: proof_name"),
         ]
         for descriptor, diagnostic in cases:
@@ -103,7 +104,7 @@ class ComponentRootDescriptors(unittest.TestCase):
                 self.assert_refused(DESCRIPTOR + suffix, diagnostic)
         self.assert_refused(DIRECT_DESCRIPTOR + 'nonvacuity_law = "Example.nonvacuous"\n',
                             "unknown keys: nonvacuity_law")
-        valid = tomllib.loads(DESCRIPTOR + 'method_imports = ["Example.Laws"]\n'
+        valid = tomllib.loads(DESCRIPTOR + 'method_imports = ["Zkc.Applications.Laws"]\n'
                              'nonvacuity_law = "Example.Laws.nonvacuous"\n')
         driver.validate_config(valid)
 
@@ -126,7 +127,7 @@ class ComponentRootDescriptors(unittest.TestCase):
         driver.validate_config(tomllib.loads(DESCRIPTOR))
         direct = tomllib.loads(DIRECT_DESCRIPTOR)
         driver.validate_config(direct)
-        self.assertNotIn("proof_name", direct["root"][0])
+        self.assertEqual(direct["root"][0]["proof_name"], "Example.Proof.compiled_ideal_complete")
         self.assertEqual(direct["root"][0]["error_expression"], ".natural 1")
         self.assertNotIn("receipt_normalization", direct)
         self.assertNotIn("theorem_normalization", direct)
@@ -154,9 +155,9 @@ class ComponentRootDescriptors(unittest.TestCase):
 
             generation.printer = printer
             generation.prove(root, config)
-            endpoint = "ZkcSecurityExamples.Generated.Components.ExampleCompleteness"
+            endpoint = "Zkc.Applications.Verification.Generated.Components.ExampleCompleteness"
             generation.retain.assert_called_once_with(endpoint, "fresh checked printer output")
-            generation.compile.assert_called_once_with("Example.Proof")
+            generation.compile.assert_called_once_with("Zkc.Applications.Proof")
             generation.receipt(root, config)
             self.assertIn("RootCompleteness.directSource", printers[0])
             self.assertIn("RootCompleteness.claimsSource", printers[1])

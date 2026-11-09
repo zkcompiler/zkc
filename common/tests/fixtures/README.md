@@ -15,9 +15,9 @@ user-facing protocol examples live in `examples/projects/`.
   License 2.0) and derived cases whose outcomes the pinned c-kzg-4844 reference
   computed; see its [reproduction](../reference/c-kzg/README.md).
 - `clean/air-control.json` is the output of the pinned Clean producer in
-  `lean/integrations/clean` (`TestsClean/Control.lean`): exported relations
+  `lean/adapters/clean` (`Zkc/Tests/Clean/Control.lean`): exported relations
   and arenas, rows and Clean's residuals. The C++ and Rust native comparison
-  consumes it; `just test-lean-clean` and `reproduce.py --with-clean` require it
+  consumes it; `just test-lean-clean` and `reproduce.py --package applications` require it
   to be byte-identical to a fresh run. It comes from Lean and Clean, not from the
   native code it checks; replace it only with reviewed producer output.
 

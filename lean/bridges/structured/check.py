@@ -21,6 +21,8 @@ import tomllib
 from uuid import uuid4
 
 import snapshot as constructors
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.packages import module_package  # noqa: E402
 from bridges.common import source_format
 from bridges.common.native_entry import native_subject
 from bridges.common.replacement import replace_exactly_once
@@ -323,7 +325,7 @@ class Suite:
         if not (data == json.loads((fixtures / (stem + ".json")).read_text(encoding="utf-8"))):
             raise AssertionError('bridges/structured/check.py:312: data == json.loads((fixtures / (stem + ".json")).read_text(encoding="utf-8"))')
         generated = constructors.render(data, "ZkcExamples.Structured." + module + "Data")
-        maintained = ROOT / "lean/ZkcExamples/Structured" / (module + "Data.lean")
+        maintained = ROOT / "lean/applications/Zkc/Applications/IR/Structured" / (module + "Data.lean")
         if not (generated == maintained.read_text(encoding="utf-8")):
             raise AssertionError("constructor data differs from actual export")
 
@@ -850,7 +852,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--reference", type=Path, default=ROOT / "build/compiler/test/zkc-structured_reference-test")
-    parser.add_argument("--lean", type=Path, default=ROOT / "lean/.lake/build/bin/structured-source")
+    parser.add_argument("--lean", type=Path, default=module_package("Zkc.IR") / ".lake/build/bin/structured-source")
     parser.add_argument("--runtime", type=Path, help="optional production zkc executable")
     parser.add_argument("--cases", type=int, default=32)
     parser.add_argument("--seed", type=int, default=73191)

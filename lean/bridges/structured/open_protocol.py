@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.packages import module_package  # noqa: E402
 from check import FIELD, MODULUS, ROOT, Suite, definition, fixture, write_json
 from bridges.common import source_format
 from bridges.common.native_entry import native_subject
@@ -80,7 +82,7 @@ class OpenSuite(Suite):
             rendered = subject[1].with_suffix(".lean")
             rendered.write_text(constructors.render(subject[2], f"ZkcExamples.Structured.{module}Data"),
                                 encoding="utf-8")
-            targets.append((rendered, ROOT / f"lean/ZkcExamples/Structured/{module}Data.lean"))
+            targets.append((rendered, ROOT / f"lean/applications/Zkc/Applications/IR/Structured/{module}Data.lean"))
             for generated, maintained in targets:
                 if self.args.write_fixtures:
                     maintained.write_bytes(generated.read_bytes())
@@ -447,7 +449,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--reference", type=Path, default=ROOT / "build/compiler/test/zkc-structured_reference-test")
-    parser.add_argument("--lean", type=Path, default=ROOT / "lean/.lake/build/bin/structured-source")
+    parser.add_argument("--lean", type=Path, default=module_package("Zkc.IR") / ".lake/build/bin/structured-source")
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--write-fixtures", action="store_true")
     args = parser.parse_args()

@@ -33,6 +33,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(ROOT / "lean"))
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package  # noqa: E402
 from bridges.common.lean_render import Refused  # noqa: E402
 from bridges.executable import render  # noqa: E402
 
@@ -66,7 +68,7 @@ CLAIMED = {
                                       "local-control-capture")
 }
 
-PRELUDE = """import Zkc.Executable.ProgramAdmission
+PRELUDE = """import Zkc.IR.Executable.ProgramAdmission
 
 open Zkc.Construction Zkc.Executable
 
@@ -162,7 +164,7 @@ def main():
         f'#eval IO.println (verdict "{name}" (ProgramArtifact.admit {name}))\n' for name, _ in terms)
     lean_input = args.output / "Corpus.lean"
     lean_input.write_text(source)
-    result = subprocess.run([args.lake, "env", "lean", str(lean_input)], cwd=ROOT / "lean", capture_output=True,
+    result = subprocess.run([*lean_command(module_package("Zkc.IR"), lake=args.lake), str(lean_input)], cwd=module_package("Zkc.IR"), capture_output=True,
                             text=True, timeout=3600)
     if result.returncode != 0:
         raise AssertionError(f"Lean failed on {lean_input}:\n{result.stdout[-4000:]}\n{result.stderr[-4000:]}")

@@ -1,6 +1,6 @@
 """A pinned Clean export against native finite-AIR and shared ring evaluation.
 
-The control is the output of the Lean producer in lean/integrations/clean;
+The control is the output of the Lean producer in lean/adapters/clean;
 `just test-lean-clean` requires it to be byte-identical to a fresh run. Its
 export residuals come from Clean's own expressions on each row and its mutant
 residuals from the zkc AIR model. The C++ tool admits and evaluates every
@@ -18,7 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "common/tests/fixtures/clean/air-control.json"
-MANIFEST = ROOT / "lean/integrations/clean/lake-manifest.json"
+MANIFEST = ROOT / "lean/adapters/clean/lake-manifest.json"
 
 # Clean's verdicts, stated independently of the producer: generated rows inside
 # toBits' prover assumption and the kernel control row `six` hold; generated
@@ -28,7 +28,7 @@ FAILING = {
     "is-equal-2": {"flipped-flag", "wrong-inverse"},
 }
 # The row on which each mutant disagrees with Clean is the row of its kernel
-# refutation in lean/integrations/clean/TestsClean/Bits.lean.
+# refutation in lean/adapters/clean/Zkc/Tests/Clean/Bits.lean.
 DETECTED = {"altered-constant": "six", "altered-column": "six", "deleted-assertion": "non-boolean"}
 
 

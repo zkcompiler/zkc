@@ -3,12 +3,12 @@
 This optional adapter turns extracted [Clean](https://github.com/Verified-zkEVM/clean)
 constraints into the ordinary [relation Bundle](../../../docs/spec/domains/relation-bundles.md)
 used by `.zkc` libraries. Clean is pinned in the
-[Lake package](../../../lean/integrations/clean/lakefile.toml). Running the checked-in
+[Lake package](../../../lean/adapters/clean/lakefile.toml). Running the checked-in
 examples requires the native tools; Lean is needed only to regenerate their sources.
 
 ## Boundary
 
-[NativeExport.lean](../../../lean/integrations/clean/ZkcClean/NativeExport.lean)
+[NativeExport.lean](../../../lean/adapters/clean/Zkc/Adapters/Clean/NativeExport.lean)
 extracts expressions, cell assignments, operation scopes and interaction metadata
 from actual Clean definitions. Typed helpers derive lookup/channel names and
 arities from those definitions. `inductiveTable` couples an inductive transition
@@ -126,9 +126,9 @@ That check builds the optional package, extracts the clients and compares every
 committed native fixture with fresh output. To inspect a fresh export directly:
 
 ```sh
-cd lean/integrations/clean
-lake env lean --run CleanExamples.lean /tmp/clean-sources
-cd ../../..
+cd lean/applications
+lake exe command-clean /tmp/clean-sources
+cd ../..
 python3 compiler/adapters/clean/regenerate.py check /tmp/clean-sources compiler/adapters/clean/fixtures
 ```
 
@@ -147,7 +147,7 @@ and end-to-end STARK prove/verify of the example projects. The wider
 [STARK controls](../../../libraries/arguments/stark/README.md#evidence-and-limits) exercise
 malicious prover paths. These are bounded checks, not a proved translation or
 a cryptographic security theorem. The existing
-[Lean correspondence](../../../lean/integrations/clean/README.md) covers a smaller,
+[Lean correspondence](../../../lean/adapters/clean/README.md) covers a smaller,
 channel-free flat fragment and does not cover this native adapter.
 
 Full flat ensembles need shared channel registration and the verifier's single

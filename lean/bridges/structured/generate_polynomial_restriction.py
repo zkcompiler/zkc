@@ -14,9 +14,11 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "lean"))
+from support.packages import module_package, module_path  # noqa: E402
 from bridges.common import source_format  # noqa: E402
 from bridges.structured import bodies, snapshot  # noqa: E402
 
+MODULE = "Zkc.Applications.IR.Structured.PolynomialRestriction"
 NAMESPACE = "ZkcExamples.Structured.PolynomialRestriction"
 
 
@@ -33,7 +35,7 @@ def main():
         return subprocess.check_output([str(argument) for argument in arguments], cwd=cwd, text=True)
 
     def emit(suffix, text):
-        path = ROOT / "lean" / Path(*NAMESPACE.split(".")).with_name("PolynomialRestriction" + suffix + ".lean")
+        path = module_path(MODULE + suffix)
         if args.check:
             if path.read_text() != text:
                 raise RuntimeError(f"generated source differs: {path}")
@@ -51,13 +53,13 @@ def main():
     (output / "snapshot.json").write_text(exported)
     data = json.loads(exported)
     emit("Data", snapshot.render(data, NAMESPACE + "Data"))
-    run(["lake", "build", NAMESPACE + "Data"], ROOT / "lean")
+    run(["lake", "build", "+" + MODULE + "Data"], module_package(MODULE))
     helpers = [item for item in data[7] if item[0] == "function" and item[2] != "protocol"]
     if sorted((len(item[4]), len(item[5]), item[2]) for item in helpers) != [(3, 1, "math"), (5, 2, "math")]:
         raise RuntimeError("unexpected restriction helper signatures")
     names = {item[1]: "restrict" if len(item[4]) == 5 else "evaluate" for item in helpers}
     names[interface["protocol"]] = "caller"
-    emit("Bodies", bodies.generate(NAMESPACE + "Data", NAMESPACE + "Bodies", closed=True,
+    emit("Bodies", bodies.generate(MODULE + "Data", NAMESPACE + "Bodies", data_namespace=NAMESPACE + "Data", closed=True,
                                   names=names, fresh=True))
 
 

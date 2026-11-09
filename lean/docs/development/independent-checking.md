@@ -174,7 +174,7 @@ distinct proof terms, changed statements/dependencies, forbidden axioms, and a
 corrupted proof. They do not build the project:
 
 ```sh
-ZKC_INDEPENDENT_TOOLCHAIN="$(cd lean && lake env lean --print-prefix)" \
+ZKC_INDEPENDENT_TOOLCHAIN="$(cd lean/program && lake env lean --print-prefix)" \
   uv run --no-sync --locked pytest common/tests/harness/test_lean_independent_tools.py
 ```
 

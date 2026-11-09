@@ -17,7 +17,7 @@ from bridges.common.replacement import replace_exactly_once
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
-FIXTURES = ROOT / 'lean/ZkcExamples/NativePrograms/fixtures'
+FIXTURES = ROOT / 'lean/applications/Zkc/Applications/IR/NativePrograms/fixtures'
 
 
 def main():

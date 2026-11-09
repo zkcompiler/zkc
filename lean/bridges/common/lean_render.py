@@ -30,6 +30,24 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[3]
 
+
+def source_package(source, root=None):
+    """Select the smallest maintained package closure containing the imports."""
+    from support.packages import (
+        PACKAGES,
+        is_owned_module,
+        module_owner,
+        selected,
+        package_directory,
+    )  # noqa: E402
+    imports = re.findall(r"(?:^|\n)(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?([A-Za-z][A-Za-z0-9_.]*)", source)
+    owners = {module_owner(module) for module in imports if is_owned_module(module)}
+    require(bool(owners), "scratch Lean source must select a maintained module")
+    for package, (directory, _) in PACKAGES.items():
+        if owners <= set(selected([package])):
+            return directory if root is None else package_directory(package, root)
+    raise Refused("scratch imports have no common maintained package")
+
 # The axioms a kernel-checked bridge theorem may depend on.
 ALLOWED_AXIOMS = frozenset({"propext", "Classical.choice", "Quot.sound"})
 

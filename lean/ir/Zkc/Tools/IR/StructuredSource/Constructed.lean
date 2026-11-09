@@ -1,0 +1,110 @@
+module
+
+public import Zkc.Tools.IR.ConstructionBindings.ViewSyntax
+public import Zkc.Tools.IR.StructuredSource.Presentation
+public import Lean
+
+@[expose] public section
+
+/-! Lean-owned syntax printing for exact constructed Process views.
+
+The printer reads retained artifact constructors, never executes their program,
+and has no protocol or helper-name registry. Its proposed views are accepted
+only by the generated kernel-checked structural correspondence proofs.
+-/
+set_option autoImplicit false
+namespace ZkcTools.StructuredSource.Constructed
+open Zkc.Construction
+
+structure Output where
+  moduleName : String
+  namespaceName : String := moduleName
+  artifactModule : String
+  artifactExpression : String
+
+def binders :=
+  " (model : Structured.DomainModel) (program : Structured.Program) (context : Context)"
+/-- A block is emitted as named actions and bind composition. Nested loops
+remain named, parameterized blocks, never an unrolled trace. -/
+def block (fuel : Nat) (instructions : List Instruction) (name path : String)
+    (inputs : List ValueSort := []) (inputPath : String := "([] : List ValueSort)") :
+    Except String String := do
+  let fuel + 1 := fuel | throw ("constructed-view-depth: path=" ++ path)
+  let mut text := ""
+  let mut names : List String := []
+  let mut sorts := inputs
+  for (instruction, index) in instructions.zipIdx do
+    let stepName := name ++ "Step" ++ toString index
+    let stepPath := "(" ++ path ++ ")[" ++ toString index ++ "]'(by decide +kernel)"
+    let mut bodies := []
+    for (region, arm) in instruction.regions.zipIdx do
+      let suffix := if instruction.operation matches .loop .. then "Body" else "Arm" ++ toString arm
+      let childName := stepName ++ suffix
+      let regionPath := "(" ++ stepPath ++ ").regions[" ++ toString arm ++ "]'(by decide +kernel)"
+      let (childInputs, childInputPath) :=
+        if instruction.operation matches .loop .. then
+          let outerPath := "((" ++ path ++ ").take " ++ toString index ++
+            ").foldl (fun frame instruction => frame ++ instruction.results) (" ++ inputPath ++ ")"
+          (sorts ++ region.inputs, "((" ++ outerPath ++ ") ++ (" ++ regionPath ++ ").inputs)")
+        else (region.inputs, "(" ++ regionPath ++ ").inputs")
+      text := text ++ (← block fuel region.instructions childName
+        ("(" ++ regionPath ++ ").instructions") childInputs childInputPath)
+      bodies := bodies ++ [(app childName arguments, app (childName ++ "_eq") arguments)]
+    let (view, proof) ← (action instruction bodies).mapError
+      (fun error => error ++ "; path=" ++ stepPath)
+    let stepBinders := Presentation.explicitParameters binders arguments ("model " ++ view)
+    text := text ++ "def " ++ stepName ++ stepBinders ++ " : View.Block model.toCarriers :=\n  " ++
+      view ++ "\n\n" ++
+      "theorem " ++ stepName ++ "_eq" ++ binders ++ " :\n" ++
+      "    Correspondence.Step (program := program) (context := context)\n" ++
+      "      (" ++ stepPath ++ ") " ++ app stepName arguments ++ " :=\n  " ++ proof ++ "\n\n"
+    names := names ++ [stepName]
+    sorts := sorts ++ instruction.results
+  let view := names.foldr (fun name rest => app "View.sequence" [app name arguments, rest]) "View.empty"
+  let proof := names.foldr (fun name rest => app "Correspondence.sequence"
+    [app (name ++ "_eq") arguments, rest]) "Correspondence.empty"
+  let results := instructions.map (·.results)
+  let blockBinders := Presentation.explicitParameters binders arguments ("model " ++ view)
+  pure (text ++ "def " ++ name ++ "SlotInputs : List ValueSort := " ++ literal inputs ++
+    "\n\ntheorem " ++ name ++ "SlotInputs_eq : " ++ name ++ "SlotInputs =\n" ++
+    "    (" ++ inputPath ++ ") := by kernel_rfl\n\n" ++
+    "def " ++ name ++ "SlotResults : List (List ValueSort) := " ++ literal results ++
+    "\n\ntheorem " ++ name ++ "SlotResults_eq : " ++ name ++ "SlotResults =\n" ++
+    "    (" ++ path ++ ").map (fun instruction => instruction.results) := by kernel_rfl\n\n" ++
+    "def " ++ name ++ "SlotSorts : List (List ValueSort) :=\n  " ++ name ++
+    "SlotResults.scanl (fun frame results => frame ++ results) " ++ name ++ "SlotInputs" ++
+    "\n\ntheorem " ++ name ++ "SlotSorts_eq : " ++ name ++ "SlotSorts =\n" ++
+    "    (" ++ path ++ ").scanl (fun frame instruction => frame ++ instruction.results)\n" ++
+    "      (" ++ inputPath ++ ") := by\n" ++
+    "  unfold " ++ name ++ "SlotSorts\n" ++
+    "  rw [" ++ name ++ "SlotInputs_eq, " ++ name ++ "SlotResults_eq, List.scanl_map]\n\n" ++
+    "def " ++ name ++ blockBinders ++ " : View.Block model.toCarriers :=\n  " ++ view ++
+    "\n\ntheorem " ++ name ++ "_eq" ++ binders ++ " :\n" ++
+    "    Correspondence.Block (program := program) (context := context)\n" ++
+    "      (" ++ path ++ ") " ++ app name arguments ++ " :=\n  " ++ proof ++ "\n\n")
+termination_by fuel
+
+def source (artifact : Participant) (output : Output) : Except String String := do
+  let body ← block 1024 artifact.instructions "body" "artifact.instructions"
+    artifact.inputs "artifact.inputs"
+  pure ("module\n\npublic import " ++ output.artifactModule ++
+    "\npublic import Zkc.IR.Construction.DomainBinding\n\n@[expose] public section\n\n" ++
+    "/-! Generated by ZkcTools.StructuredSource.Constructed. Kernel-checked whole\n" ++
+    "open Process views of the actual retained artifact, with all runtime checks.\n" ++
+    "No authored mathematical evidence is imported. Regenerate; do not hand edit. -/\n" ++
+    "set_option autoImplicit false\nset_option smartUnfolding false\n" ++
+    "set_option maxRecDepth 10000\nset_option maxHeartbeats 8000000\n" ++
+    "namespace " ++ output.namespaceName ++ "\nopen Zkc.Source Zkc.Construction Zkc.Construction.Domain\n\n" ++
+    "abbrev artifact : Participant := " ++ output.artifactExpression ++ "\n\n" ++
+    "def inputSorts : List ValueSort := " ++ literal artifact.inputs ++ "\n" ++
+    "def outputSorts : List ValueSort := " ++ literal artifact.outputs ++ "\n" ++
+    "def returned : List Nat := " ++ literal artifact.returned ++ "\n\n" ++ body ++
+    "def view" ++ binders ++ " (inputs : Environment model.toCarriers) :\n" ++
+    "    PIR.Process (effects model.toCarriers) (Result model.toCarriers) :=\n" ++
+    "  View.participant inputSorts outputSorts returned " ++ app "body" arguments ++ " inputs\n\n" ++
+    "theorem participant_eq" ++ binders ++ " (inputs : Environment model.toCarriers) :\n" ++
+    "    Domain.participant model program context artifact inputs = view model program context inputs :=\n" ++
+    "  Correspondence.participant artifact (body_eq model program context) inputs\n\n" ++
+    "end " ++ output.namespaceName ++ "\n")
+
+end ZkcTools.StructuredSource.Constructed

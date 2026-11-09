@@ -35,9 +35,9 @@ build-rust:
 build-test-drivers:
     python3 scripts/develop.py test-drivers
 
-# Build the optional independent Lean research package.
-build-lean deps="main":
-    python3 scripts/develop.py lean --deps "$1"
+# Build the selected independent Lean package closure.
+build-lean *selection:
+    python3 scripts/develop.py lean "$@"
 
 # Run compiler, Rust, native integration, installation, documentation and lint checks.
 test: test-harness test-sdk test-compiler test-rust test-integration test-install test-docs lint
@@ -70,27 +70,27 @@ test-rust:
     python3 common/tests/run.py rust
 
 # Run optional formal controls and independent Lean consumers.
-test-lean: (build-lean "main")
+test-lean: (build-lean "--package" "applications")
     python3 common/tests/run.py lean
 
-# Fetch pinned core, security, ArkLib or Clean dependency objects for development.
-fetch-lean deps="main":
-    python3 scripts/develop.py fetch-lean --deps "$1"
+# Fetch the selected package closure (default: all maintained packages).
+fetch-lean *selection:
+    python3 scripts/develop.py fetch-lean "$@"
 
-# Build and check reusable security without ArkLib.
-test-lean-security: (build-lean "security")
-    python3 common/tests/run.py lean-security
+# Build and check reusable Verification without optional adapters.
+test-lean-verification: (build-lean "--package" "verification")
+    python3 common/tests/run.py lean-verification
 
 # Build and check the optional ArkLib integration.
-test-lean-integration: (build-lean "arklib")
+test-lean-integration: (build-lean "--package" "applications")
     python3 common/tests/run.py lean-integration
 
 # Build the optional Clean integration and regenerate its native fixtures.
-test-lean-clean: (build-lean "clean")
+test-lean-clean: (build-lean "--package" "applications")
     python3 common/tests/run.py lean-clean
 
 # Compare native and Lean semantics and check authored security claims and refusals.
-test-lean-native profile="release": (build-compiler profile) build-rust (build-lean "main") (build-lean "arklib")
+test-lean-native profile="release": (build-compiler profile) build-rust (build-lean "--package" "applications")
     python3 common/tests/run.py lean-native --profile "$1"
 
 # Test the optional AIR adapter, including independent native comparisons.

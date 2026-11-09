@@ -16,6 +16,7 @@ import tomllib
 import uuid
 
 from .declarations import ALLOWED_AXIOMS, forbidden_axioms
+from support.packages import PACKAGES, module_owner, module_path, package_directory
 from bridges.structured.source_views import modules as source_view_modules
 
 LEAN = Path(__file__).resolve().parents[2]
@@ -129,7 +130,7 @@ def attached(manifest):
     generated = dict(manifest.get("generated") or {})
     for selection in (manifest.get("source_views") or {}).get("selections", []):
         for module in source_view_modules(selection):
-            generated[f"source-views:{module}"] = "lean/" + module.replace(".", "/") + ".lean"
+            generated[f"source-views:{module}"] = str(module_path(module, ROOT / "lean").relative_to(ROOT))
     for key, value in sorted(generated.items()):
         paths = value if isinstance(value, list) else [value]
         for relative in paths:
@@ -201,20 +202,19 @@ def validation(evidence):
 def checker(records):
     """Toolchain, dependency pins and declared compatibility patches."""
     pins, manifests, patches = {}, {}, []
-    for relative in ("lake-manifest.json", "security/lake-manifest.json", "integrations/arklib/lake-manifest.json",
-                     "integrations/clean/lake-manifest.json"):
-        path = LEAN / relative
+    for directory, _ in PACKAGES.values():
+        path = directory / "lake-manifest.json"
         if path.exists():
-            manifests[f"lean/{relative}"] = sha256(path)
+            manifests[str(path.relative_to(ROOT))] = sha256(path)
             for package in json.loads(path.read_text()).get("packages", []):
                 if package.get("type") == "git":
                     pins[package["name"]] = package["rev"]
-    for relative in ("integrations/arklib/compatibility.json", "integrations/clean/compatibility.json"):
-        path = LEAN / relative
+    for package in ("arklib", "clean"):
+        path = package_directory(package) / "compatibility.json"
         if path.exists():
             declared = json.loads(path.read_text())
             patches.append({"package": declared["package"], "revision": declared["revision"],
-                            "patch_sha256": declared["patch_sha256"], "record": f"lean/{relative}"})
+                            "patch_sha256": declared["patch_sha256"], "record": str(path.relative_to(ROOT))})
     toolchains = sorted({header.get("toolchain") for header in records.headers.values()})
     return {"lean": toolchains, "lake_manifests": manifests, "pins": dict(sorted(pins.items())),
             "compatibility": patches, "packages": sorted(records.packages())}
@@ -284,9 +284,19 @@ def claim_names(manifest):
             "application": f"{namespace}.{short}" if short else None}
 
 
-def module_suffix(namespace, leaf):
-    """The path suffix of a claims namespace's generated module."""
-    return "/".join(namespace.split(".")) + f"/{leaf}.lean"
+def generated_module(manifest, key, root=ROOT):
+    """Resolve an output through source ownership, independently of its namespace."""
+    relative = (manifest.get("generated") or {}).get(key)
+    if not isinstance(relative, str):
+        raise ValueError(f"missing generated.{key} module path")
+    path = (root / relative).resolve()
+    for package in PACKAGES:
+        directory = package_directory(package, root / "lean").resolve()
+        if path.is_relative_to(directory) and path.suffix == ".lean":
+            module = ".".join(path.relative_to(directory).with_suffix("").parts)
+            if module_owner(module) == package:
+                return module
+    raise ValueError(f"generated.{key} has no maintained source owner")
 
 
 def join_reasons(manifest, names, evidence, records):
@@ -305,13 +315,17 @@ def join_reasons(manifest, names, evidence, records):
         derived = names["instance" if field == "instance" else field]
         if value is not None and value != derived:
             reasons.append(f"conflicting override: {table}.{field} names {value}, not the subject's {derived}")
-    generated = manifest.get("generated") or {}
-    for key, leaf in (("artifacts", "Artifacts"), ("claims", "Claims")):
-        path = generated.get(key)
-        if not isinstance(path, str) or not Path(path).as_posix().endswith(module_suffix(namespace, leaf)):
-            reasons.append(f"mismatched artifact: the manifest's generated {key} module is not "
-                           f"{module_suffix(namespace, leaf)} of the claims namespace")
-    claims_module = f"{namespace}.Claims"
+    namespaces = manifest.get("namespaces") or {}
+    modules = {}
+    for key in ("artifacts", "claims"):
+        try:
+            modules[key] = generated_module(manifest, key)
+        except ValueError as error:
+            reasons.append(f"mismatched artifact: {error}")
+        if namespaces.get(key) != namespace:
+            reasons.append(f"mismatched artifact: the manifest's generated {key} module "
+                           f"does not declare the claims namespace {namespace}")
+    claims_module = modules.get("claims")
     for key in ("application", "instance"):
         name = names[key]
         record = records.get(name) if name else None
@@ -320,7 +334,7 @@ def join_reasons(manifest, names, evidence, records):
                            f"subject's generated claims module {claims_module}")
     built = [check for check in ((evidence or {}).get("checks") or [])
              if check.get("name") == "claim-application" and check.get("outcome") == "accepted"]
-    if not any(check.get("module") == claims_module and check.get("application") == names["application"]
+    if claims_module is None or not any(check.get("module") == claims_module and check.get("application") == names["application"]
                for check in built):
         reasons.append(f"the pipeline recorded no accepted claim-application check that built {claims_module} "
                        f"with the application {names['application']}")
@@ -606,7 +620,7 @@ def endpoint_audit_report(manifest_path, records, ledger=None, evidence_director
     checks = validation(evidence)
     reasons = []
     if entries is None:
-        reasons.append("the registry was not emitted: the security package was not selected")
+        reasons.append("the registry was not emitted: the verification/application packages were not selected")
     if reused_records is not None:
         reasons.append(reused_reason(reused_records))
     properties = list((manifest.get("claims") or {}).get("properties", []))
@@ -693,19 +707,15 @@ def claim_details(evidence):
 def owned_module_path(module):
     # Module ownership follows physical providers, independently of declaration
     # namespaces (notably ZkcSecurity declarations in ZkcArkLib modules).
-    from .declarations import PACKAGES
-    candidates = [directory / Path(*module.split(".")).with_suffix(".lean")
-                  for directory, _ in PACKAGES.values()]
-    found = [path for path in candidates if path.is_file()]
-    if len(found) != 1:
-        raise ValueError(f"owned module {module} has {len(found)} source providers")
-    return found[0]
+    path = module_path(module)
+    if not path.is_file():
+        raise ValueError(f"owned module {module} has no source provider")
+    return path
 
 
 def verified_dependencies(packages):
     """Read-only preflight shared with reports; never prepare dependencies."""
     import subprocess
-    from .declarations import PACKAGES
     verified, reasons, seen = [], [], set()
     for package in sorted(packages):
         if package not in PACKAGES:
@@ -833,7 +843,6 @@ class ReceiptTransportError(ValueError):
 
 def _receipt_provider_groups(payload):
     """Keep independent provider environments independent during extraction."""
-    from .declarations import PACKAGES
     operation = payload.get("operation")
     records = payload.get("records") or []
     if operation == "receipt":
@@ -851,17 +860,19 @@ def _receipt_provider_groups(payload):
         module = record.get("module")
         if not isinstance(module, str) or not module:
             raise ReceiptTransportError("receipt root has no provider module")
-        relative = Path(*module.split(".")).with_suffix(".lean")
-        owners = [name for name, (directory, _) in PACKAGES.items() if (directory / relative).is_file()]
-        if len(owners) != 1:
-            raise ReceiptTransportError(f"receipt provider {module} has {len(owners)} source owners")
-        selected.setdefault(owners[0], set()).add(module)
+        try:
+            owner = module_owner(module)
+            owned_module_path(module)
+        except ValueError as error:
+            raise ReceiptTransportError(str(error)) from error
+        selected.setdefault(owner, set()).add(module)
     return selected
 
 
 def _invoke_receipt_classifier(payload, packages):
-    from .declarations import PACKAGES
-    built = subprocess.run(["lake", "build", "declaration-records"], cwd=LEAN,
+    emitter_package = module_owner("Zkc.Tools.IR.DeclarationRecords")
+    emitter_directory = package_directory(emitter_package)
+    built = subprocess.run(["lake", "build", "declaration-records"], cwd=emitter_directory,
                            text=True, capture_output=True)
     if built.returncode:
         raise ReceiptTransportError(built.stdout + built.stderr)
@@ -884,8 +895,8 @@ def _invoke_receipt_classifier(payload, packages):
     payload = {**payload, "providers": providers}
     exchange = {"nonce": uuid.uuid4().hex, "input_digest": data_digest(payload)}
     payload = {**payload, "exchange": exchange}
-    command = ["lake", "env", str(LEAN / ".lake/build/bin/declaration-records"), "--receipt-status"]
-    result = subprocess.run(command, cwd=LEAN, input=json.dumps(payload) + "\n",
+    command = ["lake", "env", str(emitter_directory / ".lake/build/bin/declaration-records"), "--receipt-status"]
+    result = subprocess.run(command, cwd=emitter_directory, input=json.dumps(payload) + "\n",
                             text=True, capture_output=True)
     if result.returncode:
         raise ReceiptTransportError(result.stderr.strip() or "Lean classifier exited without an export")
@@ -952,7 +963,7 @@ def audit_receipt(record, request_record, request, registry, records, generated_
 
 def source_entry(item):
     export = _invoke_receipt_classifier({"format": "zkc.receipt-audit-input/0",
-        "operation": "entry", "item": item}, {"main"})
+        "operation": "entry", "item": item}, {"ir"})
     return export["entry"], export["reasons"]
 
 
@@ -1139,7 +1150,7 @@ def requested_claim(item, mappings, records, registry, modules, evidence, checks
 
 def scope_reasons(source, scope, proof_entry=None):
     export = _invoke_receipt_classifier({"format": "zkc.receipt-audit-input/0",
-        "operation": "scope-reasons", "source": source, "scope": scope, "proof_entry": proof_entry}, {"main"})
+        "operation": "scope-reasons", "source": source, "scope": scope, "proof_entry": proof_entry}, {"ir"})
     return export["reasons"]
 
 

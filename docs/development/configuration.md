@@ -122,3 +122,27 @@ symlink destination, home/ancestor directories, the entire build directory and
 checkout source directories. Generated report locations inside the checkout
 must be below `build/`. Use a dedicated external directory for reports outside
 the checkout.
+
+## Lean package selection
+
+`lean/support/packages.py` owns Python package inventory, full module-prefix
+ownership and dependency closure. `--package NAME` is repeatable; its default
+selects all seven maintained packages. `--core-only` selects Program, IR,
+Protocol and Verification. For example:
+
+```sh
+just build-lean --package verification
+just fetch-lean --package applications
+python3 lean/checks/check_library.py --package ir --package protocol
+python3 lean/checks/check_package_ownership.py --core-only
+python3 lean/checks/audit_imports.py --package applications
+python3 lean/reproduce.py --package applications --output build/reports/lean/fresh
+```
+
+Build commands enter each package directory in dependency order. `lean/` is
+only a documentation/tooling root; it has no Lake targets. The Nix package
+graph and source inputs are derived from the actual package Lake manifests.
+Module paths use `Zkc.Program`, `Zkc.IR`, `Zkc.Protocol`, `Zkc.Verification`,
+`Zkc.Adapters.ArkLib`, `Zkc.Adapters.Clean` and `Zkc.Applications`, with
+owner-specific `Zkc.Tools` and `Zkc.Tests` roots. Declaration namespaces and
+theorem identities are independent of these module names.

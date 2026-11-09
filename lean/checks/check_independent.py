@@ -24,11 +24,9 @@ import time
 
 
 LEAN = Path(__file__).resolve().parents[1]
-# Comparator packages are the owners of protected statements in claims.lock.json,
-# not the complete source-package inventory. Program and proof declarations are
-# audited separately and can occur in these exports' dependency closures.
-PACKAGES = {"main": "", "security": "security", "arklib": "integrations/arklib",
-            "clean": "integrations/clean"}
+sys.path.insert(0, str(LEAN))
+from support.packages import PACKAGES, add_selection, selection, module_owner, package_directory  # noqa: E402
+
 AXIOMS = ["propext", "Classical.choice", "Quot.sound"]
 # Lean 4.35 Lake/CLI/Check.lean: primitiveTargets and builtinTargets.
 # Explicit exports bypass Lake's exporter, so the caller must include these.
@@ -152,19 +150,21 @@ def configuration(root):
     if not isinstance(lock, dict) or set(lock) != {"format", "theorems"} or \
             lock["format"] != "zkc.claims-lock/0" or not isinstance(lock["theorems"], dict) or not lock["theorems"]:
         raise CheckError("invalid claims lock")
-    groups = {package: {"theorems": [], "modules": set()} for package in PACKAGES}
+    groups = {}
     for name, row in lock["theorems"].items():
         names([name], "lock theorem")
         if not isinstance(row, dict) or not isinstance(row.get("package"), str) or row["package"] not in PACKAGES:
             raise CheckError(f"{name}: unknown lock package")
         names([row.get("module")], f"{name} module")
-        group = groups[row["package"]]
+        if module_owner(row["module"]) != row["package"]:
+            raise CheckError(f"{name}: lock module ownership mismatch")
+        group = groups.setdefault(row["package"], {"theorems": [], "modules": set()})
         group["theorems"].append(name)
         group["modules"].add(row["module"])
     fields = {"challenge_module", "solution_module", "theorem_names",
               "definition_names", "permitted_axioms"}
     for package, group in groups.items():
-        path = root / PACKAGES[package] / "comparator.json"
+        path = package_directory(package, root) / "comparator.json"
         config = read_json(path)
         if not isinstance(config, dict) or set(config) != fields:
             raise CheckError(f"{path}: unexpected comparator fields")
@@ -418,7 +418,7 @@ def capture(root, groups, selected, output, lake, runner):
                 "lock_sha256": digest(root / "checks/claims.lock.json"), "packages": {}}
     for package in selected:
         print(f"capture {package}: {len(groups[package]['theorems'])} declarations", flush=True)
-        directory = root / PACKAGES[package]
+        directory = package_directory(package, root)
         group = groups[package]
         search = runner.run([lake, "env", "printenv", "LEAN_PATH"], directory, f"{package}-search-path").strip()
         inputs = {}
@@ -554,7 +554,7 @@ def compare(root, groups, selected, output, lake, runner, base_path, candidate_p
             # Freeze the reviewed policy in the report directory before invoking Lake.
             config = output / f"{package}-comparator.json"
             write_json(config, groups[package]["policy"])
-            directory = root / PACKAGES[package]
+            directory = package_directory(package, root)
             runner.run([str(prefix / "bin/lake"), "comparator", "--config", str(config),
                         "--challenge-from-export", str(challenges[package]),
                         "--solution-from-export", str(solutions[package])], directory, f"{package}-comparator")
@@ -595,7 +595,7 @@ def replay(root, groups, selected, output, lake, runner, candidate_path, toolset
             print(f"replay {package}: {len(groups[package]['theorems'])} declarations", flush=True)
             require_export_roots(solutions[package], groups[package]["theorems"])
             runner.run([str(prefix / "bin/lake"), "check", "--paranoid", "--from-export",
-                        str(solutions[package])], root / PACKAGES[package], f"{package}-paranoid")
+                        str(solutions[package])], package_directory(package, root), f"{package}-paranoid")
             report["packages"][package] = {"status": "passed", "theorems": groups[package]["theorems"]}
         load_artifacts(candidate_path, groups, selected, export_limit)
         if digest(candidate_path) != report["candidate"]["sha256"]:
@@ -622,7 +622,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["capture", "compare", "replay"])
     parser.add_argument("--lean-root", type=Path, default=LEAN)
-    parser.add_argument("--package", choices=list(PACKAGES), action="append", help="repeatable; default: all locked-statement packages")
+    add_selection(parser)
     parser.add_argument("--output", type=Path, required=True, help="new directory, never overwritten")
     parser.add_argument("--base-manifest", type=Path)
     parser.add_argument("--candidate-manifest", type=Path)
@@ -647,7 +647,9 @@ def main(argv=None):
     try:
         root = args.lean_root.resolve()
         groups = configuration(root)
-        selected = list(dict.fromkeys(args.package or PACKAGES))
+        selected = [package for package in selection(args) if package in groups]
+        if not selected:
+            raise CheckError("selected packages contain no locked declarations")
         output.mkdir(parents=True, exist_ok=False)
         created = True
         runner = Runner(output, args.memory_mb, args.log_mb, args.export_mb, args.timeout)

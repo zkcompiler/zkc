@@ -17,6 +17,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package, module_path  # noqa: E402
 from bridges.common.request_support import check_lean_resources  # noqa: E402
 
 
@@ -85,6 +87,7 @@ def main() -> None:
     parser.add_argument("--records", type=Path)
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    package = module_package("Zkc.Applications")
     env = os.environ.copy()
     env["LEAN_NUM_THREADS"] = "2"
     if options.overlay:
@@ -94,8 +97,8 @@ def main() -> None:
     regenerated = directory / "regenerated"
     regenerated.mkdir(exist_ok=True)
     result = subprocess.run(
-        ["lean", "--run", "checks/RunGenerators.lean", "constructed", str(regenerated)],
-        cwd=root, env=env, text=True, capture_output=True, timeout=120,
+        [*lean_command(package), "--run", str(module_path("Zkc.Tools.Applications.Commands.RunStructuralGenerators")), "constructed", str(regenerated)],
+        cwd=package, env=env, text=True, capture_output=True, timeout=120,
     )
     (directory / "regenerate.log").write_text(result.stdout + result.stderr)
     if result.returncode:
@@ -103,25 +106,25 @@ def main() -> None:
     originals: dict[str, str] = {}
     receipts = []
     for role in ROLES:
-        path = root / "ZkcExamples/Structured/Generated/Constructed" / f"{role}.lean"
+        path = root / "applications/Zkc/Applications/IR/Structured/Generated/Constructed" / f"{role}.lean"
         text = path.read_text()
         if text != (regenerated / path.name).read_text():
             raise AssertionError(f"stale generated view: {role}")
         imports = re.findall(r"^public import (.+)$", text, re.MULTILINE)
-        if not (len(imports) == 2 and imports[1] == "Zkc.Construction.DomainBinding"):
+        if not (len(imports) == 2 and imports[1] == "Zkc.IR.Construction.DomainBinding"):
             raise AssertionError('generated view has unexpected imports')
         if imports[0] not in {
-            "ZkcExamples.Construction.Generated.SmallSumcheckPair",
-            "ZkcExamples.Construction.Generated.TwoSumsPair",
-            "ZkcExamples.Construction.Generated.GkrPair",
-            "ZkcExamples.Construction.GkrProofParticipant",
-            "ZkcExamples.Construction.SchnorrProofParticipant",
-            "ZkcExamples.Construction.SchnorrAndProofParticipant",
-            "ZkcExamples.Construction.ChaumPedersenProofParticipant",
-            "ZkcExamples.Construction.OkamotoProofParticipant",
-            "ZkcExamples.Construction.GuessProofParticipant",
-            "ZkcExamples.Construction.BatchOpeningArtifacts",
-            "ZkcExamples.Construction.EmbeddingEqualityParticipant",
+            "Zkc.Applications.IR.Construction.Generated.SmallSumcheckPair",
+            "Zkc.Applications.IR.Construction.Generated.TwoSumsPair",
+            "Zkc.Applications.IR.Construction.Generated.GkrPair",
+            "Zkc.Applications.IR.Construction.GkrProofParticipant",
+            "Zkc.Applications.IR.Construction.SchnorrProofParticipant",
+            "Zkc.Applications.IR.Construction.SchnorrAndProofParticipant",
+            "Zkc.Applications.IR.Construction.ChaumPedersenProofParticipant",
+            "Zkc.Applications.IR.Construction.OkamotoProofParticipant",
+            "Zkc.Applications.IR.Construction.GuessProofParticipant",
+            "Zkc.Applications.IR.Construction.BatchOpeningArtifacts",
+            "Zkc.Applications.IR.Construction.EmbeddingEqualityParticipant",
         }:
             raise AssertionError('generated view imports an unexpected constructed pair')
         if re.search(r"\bDomain\.(?:evaluate|step)\b", text):
@@ -138,15 +141,15 @@ def main() -> None:
     # not require another protocol catalogue in this scheduler.
     connection_output = directory / "connections"
     result = subprocess.run(
-        ["lean", "--run", "checks/RunGenerators.lean", "connections", str(connection_output)],
-        cwd=root, env=env, text=True, capture_output=True, timeout=120,
+        [*lean_command(package), "--run", str(module_path("Zkc.Tools.Applications.Commands.RunStructuralGenerators")), "connections", str(connection_output)],
+        cwd=package, env=env, text=True, capture_output=True, timeout=120,
     )
     (directory / "regenerate-connections.log").write_text(result.stdout + result.stderr)
     if result.returncode:
         raise AssertionError("Lean connection generation failed; see regenerate-connections.log")
-    namespace = Path("ZkcExamples/Structured/Generated/Connections")
+    namespace = Path("Zkc/Applications/IR/Structured/Generated/Connections")
     generated_connections = sorted((connection_output / namespace).glob("*.lean"))
-    maintained_connections = sorted((root / namespace).glob("*.lean"))
+    maintained_connections = sorted((module_package("Zkc.Applications") / namespace).glob("*.lean"))
     if not generated_connections or [p.name for p in generated_connections] != [
         p.name for p in maintained_connections
     ]:
@@ -195,8 +198,8 @@ def main() -> None:
         path = directory / f"{name}.lean"
         path.write_text(mutated)
         result = subprocess.run(
-            ["lean", "-DwarningAsError=true", str(path)],
-            cwd=root, env=env, text=True, capture_output=True, timeout=120,
+            [*lean_command(package), "-DwarningAsError=true", str(path)],
+            cwd=package, env=env, text=True, capture_output=True, timeout=120,
         )
         log = result.stdout + result.stderr
         (directory / f"{name}.log").write_text(log)

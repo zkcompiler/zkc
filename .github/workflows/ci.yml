@@ -156,7 +156,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [lean-checks, lean-toolchain-checks, arklib, llzk, compiler-sanitize]
+        package: [lean-checks, lean-toolchain-checks, applications, llzk, compiler-sanitize]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -199,9 +199,10 @@ jobs:
               project = builtins.getFlake (toString ./.);
               fresh = import ./nix/fresh-formal.nix {
                 packages = project.packages.x86_64-linux;
+                lib = project.inputs.nixpkgs.lib;
                 runId = builtins.getEnv "ZKC_CI_FRESH_RUN";
               };
-            in fresh.arklib
+            in fresh.applications
           ' 2>&1 | tee build/reports/formal-fresh.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

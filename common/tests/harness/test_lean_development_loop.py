@@ -193,7 +193,7 @@ def test_consumer_requirement_cli_refuses_ambiguous_input_before_work(monkeypatc
     output = tmp_path / "output"
     monkeypatch.setattr(sys, "argv", ["check_records.py", "--requirements", str(required),
                                       "--output", str(output), *subjects])
-    monkeypatch.setattr(api, "select_packages", lambda *_: pytest.fail("invalid requirements reached package checks"))
+    monkeypatch.setattr(api, "selection", lambda *_: pytest.fail("invalid requirements reached package checks"))
     with pytest.raises(SystemExit) as failed:
         api.main()
     assert failed.value.code == 2

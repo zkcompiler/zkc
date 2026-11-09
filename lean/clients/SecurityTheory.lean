@@ -1,4 +1,4 @@
-import ZkcSecurity.Families.Sumcheck
+import Zkc.Verification.Families.Sumcheck
 
 /-! A theorem-only external client: no concrete subject or method catalogue. -/
 #check ZkcSecurity.Families.Sumcheck.Contract.soundness

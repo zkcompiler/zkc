@@ -1,0 +1,184 @@
+module
+
+public import Zkc.IR.Source.Structured.MapEvaluation
+public import Zkc.IR.Source.Structured.FiniteDomains
+public import Zkc.IR.Source.Structured.CollectEvaluation
+public import Zkc.Program.Source.Finite
+
+public import Zkc.Program.Polynomial.Multilinear.ListRestriction
+
+@[expose] public section
+
+/-! One arithmetic and control evaluator for explicit scalar/group values and
+an arbitrary effect interface. Nested callbacks use the same closed-value meaning. -/
+
+set_option autoImplicit false
+namespace Zkc.Source.Structured
+
+
+namespace Evaluation
+
+abbrev Meanings (F G : Type) (interface : PIR.Signature) :=
+  HelperTable (assignment F G) interface
+
+/-- The predicate runs before the step, on the item, domain arguments and
+captures. False preserves the entire current state. The step receives the state,
+item, domain arguments and captures, including zero-length state and captures. -/
+def foldTransition {F G : Type} {interface : PIR.Signature}
+    (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
+    (arguments : Values (assignment F G) spec.domain.inputs)
+    (captures : Values (assignment F G) spec.captures)
+    (state : Values (assignment F G) spec.state)
+    (item : Values (assignment F G) spec.domain.items) : PIR.Process interface (Values (assignment F G) spec.state) :=
+  let callbackArguments := item.append (arguments.append captures)
+  let enabled : PIR.Process interface (Values (assignment F G) [.boolean]) :=
+    if spec.predicate.isEmpty then .done (.cons true .nil)
+    else invoke table spec.predicateHelper callbackArguments
+  enabled.bind fun result =>
+    if result.get .here then invoke table spec.stepHelper (state.append callbackArguments)
+    else .done state
+
+def denoteFold {F G : Type} {interface : PIR.Signature}
+    (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
+    (values : Values (assignment F G) spec.arguments) :
+    PIR.Process interface (Values (assignment F G) spec.state) :=
+  let (arguments, rest) := values.split spec.domain.inputs
+  let (initial, captures) := rest.split spec.state
+  Finite.admitThen (spec.domain.admit arguments) fun items =>
+    Finite.fold (foldTransition table spec arguments captures) items initial
+
+/-- Closed callback invocation adapter; the operation observes only returned
+values and stopping, and never inspects callback process constructors. -/
+def invokeCallback {F G : Type} {interface : PIR.Signature} {inputs outputs : List Ty}
+    (callback : RegionFunction (assignment F G) interface (inputs, outputs))
+    (arguments : Values (assignment F G) inputs) :
+    PIR.Process interface (Values (assignment F G) outputs) := callback arguments
+
+def denoteLoop {F G : Type} {interface : PIR.Signature} (state captures : List Ty)
+    (body : RegionFunction (assignment F G) interface
+      (.index :: (state ++ captures), state ++ captures))
+    (lower upper : Nat) (initial : Values (assignment F G) state)
+    (captured : Values (assignment F G) captures) : PIR.Process interface (Values (assignment F G) state) :=
+  Finite.execute (.elements (List.range' lower (upper - lower)))
+    (fun current index =>
+      (invokeCallback body (.cons index (current.append captured))).bind fun results =>
+        .done (results.split state).1) initial
+
+def denoteConditionalLoop {F G : Type} {interface : PIR.Signature} (state captures : List Ty)
+    (body : RegionFunction (assignment F G) interface
+      (.index :: (state ++ captures), .boolean :: (state ++ captures)))
+    (lower upper : Nat) (initial : Values (assignment F G) state)
+    (captured : Values (assignment F G) captures) : PIR.Process interface (Values (assignment F G) state) :=
+  (Finite.execute (.elements (List.range' lower (upper - lower)))
+    (fun (current : Bool × Values (assignment F G) state) index =>
+      if current.1 then
+        (invokeCallback body (.cons index (current.2.append captured))).bind fun results =>
+          match results with
+          | .cons continuing rest => .done (continuing, (rest.split state).1)
+      else .done current) (true, initial)).bind fun result => .done result.2
+
+def operation {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) :
+    (op : Op) → Values (assignment F G) op.arguments →
+    Values (RegionFunction (assignment F G) interface) op.regions →
+    PIR.Process interface (Values (assignment F G) op.results)
+  | .exec primitive, args, .nil => primitiveOutcome (primitive.evaluate args)
+  | .indexConstant value, .nil, .nil => .done (.cons value .nil)
+  | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
+  | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .indexWrappingAdd, .cons a (.cons b .nil), .nil => .done (.cons (wrappingAdd a b) .nil)
+  | .indexWrappingSubtract, .cons a (.cons b .nil), .nil => .done (.cons (wrappingSubtract a b) .nil)
+  | .indexBitAnd, .cons a (.cons b .nil), .nil => .done (.cons (bitAnd a b) .nil)
+  | .indexLogicalShiftRight, .cons a (.cons b .nil), .nil => .done (.cons (logicalShiftRight a b) .nil)
+  | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
+      .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
+  | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
+  | .fieldConstant _ value, .nil, .nil => .done (.cons (value : F) .nil)
+  | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
+  | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
+  | .fieldMultiply _, .cons a (.cons b .nil), .nil => .done (.cons (a * b) .nil)
+  | .fieldEmbed _ _, .cons value .nil, .nil => .done (.cons value .nil)
+  | .fieldEqual _, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .groupIdentity _, .nil, .nil =>
+      .done (.cons 0 .nil)
+  | .groupAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
+  | .groupScale _ _, .cons point (.cons scalar .nil), .nil =>
+      .done (.cons (scalar • point) .nil)
+  | .groupEqual _, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .mark site, .nil, .nil => observations.mark site |>.bind fun _ => .done .nil
+  | .booleanConstant value, .nil, .nil => .done (.cons value .nil)
+  | .booleanAnd, .cons a (.cons b .nil), .nil => .done (.cons (a && b) .nil)
+  | .booleanOr, .cons a (.cons b .nil), .nil => .done (.cons (a || b) .nil)
+  | .booleanXor, .cons a (.cons b .nil), .nil => .done (.cons (xor a b) .nil)
+  | .booleanEqual, .cons a (.cons b .nil), .nil => .done (.cons (a == b) .nil)
+  | .booleanNotEqual, .cons a (.cons b .nil), .nil => .done (.cons (a != b) .nil)
+  | .select _, .cons condition (.cons yes (.cons no .nil)), .nil =>
+      .done (.cons (if condition then yes else no) .nil)
+  | .makeProduct _ _ fields, args, .nil => .done (.cons (fields.pack args) .nil)
+  | .getProduct _ _ fields _ field, .cons value .nil, .nil =>
+      .done (.cons ((fields.unpack value).get field) .nil)
+  | .boundedAt _, .cons container (.cons index .nil), .nil =>
+      match (show List F from container)[index]? with
+      | some value => .done (.cons value .nil)
+      | none => .halt .refused
+  | .invoke helper, args, .nil => invoke table helper args
+  | .fold spec, args, .nil => denoteFold table spec args
+  | .collect spec, args, .nil => denoteCollect table spec args
+  | .map spec, args, .nil => denoteMap table spec args
+  | .branch _ _, .cons condition captures, .cons yes (.cons no .nil) =>
+      invokeCallback (if condition then yes else no) captures
+  | .loop state captures, .cons lower (.cons upper rest), .cons body .nil =>
+      let (initial, captured) := rest.split state
+      denoteLoop state captures body lower upper initial captured
+  | .loopCondition state captures, .cons lower (.cons upper rest), .cons body .nil =>
+      let (initial, captured) := rest.split state
+      denoteConditionalLoop state captures body lower upper initial captured
+  | .guard, .cons condition .nil, .nil => if condition then .done .nil else .halt .reject
+  | .createUnit slot, .nil, .nil =>
+      (observations.createUnit slot).bind fun token => .done (.cons token .nil)
+  | .passUnit slot, .cons token .nil, .nil =>
+      (observations.passUnit slot token).bind fun next => .done (.cons next .nil)
+  | .consumeUnit slot, .cons token .nil, .nil =>
+      (observations.consumeUnit slot token).bind fun _ => .done .nil
+
+-- Generate the dependent equation lemmas in their defining module. Otherwise
+-- separate public clients can export competing lazily generated declarations.
+attribute [local simp] operation
+
+theorem operation_indexLess {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) (a b : Nat) :
+    operation observations table .indexLess (.cons a (.cons b .nil)) .nil =
+      .done (.cons (decide (a < b)) .nil) := rfl
+
+/-- Pure length returns on every list, without a representability premise. -/
+theorem operation_vectorLength {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface)
+    (domain : String) (values : List F) :
+    operation observations table (.vectorLength domain) (.cons values .nil) .nil =
+      .done (.cons values.length .nil) := rfl
+
+/-- The efficient evaluator has the exact unbounded natural meaning. -/
+theorem operation_indexPowerOfTwo {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) (n r : Nat) :
+    operation observations table .indexPowerOfTwo (.cons n (.cons r .nil)) .nil =
+      .done (.cons (decide (n = 2 ^ r)) .nil) := by
+  change (PIR.Process.done (.cons (naturalPowerOfTwo n r) .nil) :
+    PIR.Process interface (Values (assignment F G) [.boolean])) = _
+  rw [naturalPowerOfTwo_eq_decide]
+  rfl
+
+/-- Keep the value assignment visible to dependent clients; operation evaluation
+remains a named definition with its own laws. -/
+abbrev meaning {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) :
+    RegionMeaning dialect interface := ⟨assignment F G, operation observations table⟩
+
+end Evaluation
+
+end Zkc.Source.Structured

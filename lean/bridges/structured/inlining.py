@@ -12,13 +12,15 @@ from pathlib import Path
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, digest, fixture_table, returned, write_json
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from support.packages import module_package  # noqa: E402
 from bridges.common import source_format
 from bridges.common.native_entry import native_subject
 from bridges.common.replacement import replace_exactly_once
 import snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
-EXAMPLES = ROOT / "lean/ZkcExamples/Structured"
+EXAMPLES = ROOT / "lean/applications/Zkc/Applications/IR/Structured"
 # Lake may rebuild imported modules before it checks a proof; allow for that.
 LAKE_TIMEOUT = 1800
 # The retained pairs, from `fixtures.toml`: stem, source module and data name.
@@ -107,9 +109,9 @@ def subject_cases(suite, stem, module, proof):
     # Elan selects the toolchain before Lake processes arguments: --dir alone
     # would select the host default and could overwrite this package's objects.
     suite.command(f"{stem}:build-proof", [suite.args.lake,
-        "build", f"ZkcExamples.Structured.{proof}"], cwd=ROOT / "lean", timeout=LAKE_TIMEOUT)
+        "build", f"+Zkc.Applications.IR.Structured.{proof}"], cwd=module_package("Zkc.Applications"), timeout=LAKE_TIMEOUT)
     suite.command(f"{stem}:kernel-proof", [suite.args.lake,
-        "lean", EXAMPLES / f"{proof}.lean"], cwd=ROOT / "lean", timeout=LAKE_TIMEOUT)
+        "lean", EXAMPLES / f"{proof}.lean"], cwd=module_package("Zkc.Applications"), timeout=LAKE_TIMEOUT)
     suite.sources.append({"proof": str((EXAMPLES / f"{proof}.lean").relative_to(ROOT)),
                           "sha256": digest(EXAMPLES / f"{proof}.lean")})
 
@@ -121,7 +123,7 @@ def run_cases(suite):
         "threads": {key: os.environ.get(key) for key in
                     ("LEAN_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS")},
         "toolchain": suite.command("lean-version", [args.lake, "env", "lean", "--version"],
-                                    cwd=ROOT / "lean").strip(),
+                                    cwd=module_package("Zkc.Applications")).strip(),
     })
     for stem, module, proof in SUBJECTS:
         suite.case(stem, lambda s=stem, m=module, p=proof: subject_cases(suite, s, m, p))
@@ -132,7 +134,7 @@ def main():
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
     parser.add_argument("--optimizer", type=Path, default=ROOT / "build/compiler/zkc-opt")
     parser.add_argument("--reference", type=Path, default=ROOT / "build/compiler/test/zkc-structured_reference-test")
-    parser.add_argument("--lean", type=Path, default=ROOT / "lean/.lake/build/bin/structured-source")
+    parser.add_argument("--lean", type=Path, default=module_package("Zkc.IR") / ".lake/build/bin/structured-source")
     parser.add_argument("--lake", default="lake")
     parser.add_argument("--cases", type=int, default=16)
     parser.add_argument("--seed", type=int, default=91837)

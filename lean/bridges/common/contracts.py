@@ -36,7 +36,7 @@ def check_contract_forms(suite, root, execute, originals):
                 raise AssertionError("bridges/common/contracts.py:31: interface['original'] == hashlib.sha256(text.encode()).hexdigest()")
             symbol = interface['protocol']
             data = suite.exercise(text, symbol)
-            fixture = root / f'lean/ZkcExamples/NativePrograms/fixtures/{family.lower()}-{form.lower()}.json'
+            fixture = root / f'lean/applications/Zkc/Applications/IR/NativePrograms/fixtures/{family.lower()}-{form.lower()}.json'
             if not (data == json.loads(fixture.read_text())):
                 raise AssertionError(f'{family}/{form}: source correspondence drift')
             constructor = fixture.parent.parent / 'Variants' / f'{family}{form}Data.lean'

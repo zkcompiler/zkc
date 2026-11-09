@@ -21,7 +21,8 @@ sys.path.insert(0, str(LEAN))
 from bridges.common import interface as language_interface, policy as native_policy, source_format  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
-from support.packages import module_package  # noqa: E402
+from support.invocation import command as lean_command  # noqa: E402
+from support.packages import module_package, module_owner, is_owned_module  # noqa: E402
 
 
 def quoted(value):
@@ -58,6 +59,7 @@ def validate_config(config):
             raise ValueError(f"{key}: expected a list of strings")
         for value in values:
             string(value, key)
+    module_owner(config["model_module"])
     roots = config["root"]
     if not isinstance(roots, list) or not roots:
         raise ValueError("root: expected a nonempty list of tables")
@@ -72,9 +74,9 @@ def validate_config(config):
         method = root["method"]
         if method not in {"sigma", "direct"}:
             raise ValueError(f"{location}: uninstalled proof method: {method}")
-        required = common | ({"proof_module", "error_bound", "error_expression"}
+        required = common | ({"proof_module", "proof_name", "error_bound", "error_expression"}
                              if method == "direct" else set())
-        optional = {"proof_name"} if method == "direct" else {"method_imports", "nonvacuity_law"}
+        optional = set() if method == "direct" else {"method_imports", "nonvacuity_law"}
         shape(root, required, optional, location)
         for key in (required | optional) - {"modules", "method_imports"}:
             if key in root:
@@ -84,6 +86,8 @@ def validate_config(config):
             raise ValueError(f"{location}.method_imports: expected a list of strings")
         for module in method_imports:
             string(module, f"{location}.method_imports")
+        for module in [*method_imports, *([root["proof_module"]] if method == "direct" else [])]:
+            module_owner(module)
         name = root["name"]
         if not name.isidentifier():
             raise ValueError(f"{location}: invalid root name: {name}")
@@ -104,9 +108,9 @@ def completeness_selection(root):
     error = (".zero" if root["method"] == "sigma" else
              "{ bound := " + quoted(root["error_bound"]) +
              ", expression := " + quoted(root["error_expression"]) + " }")
-    return ("({ moduleName := " + quoted(f"ZkcSecurityExamples.Generated.Components.{name}Completeness") +
+    return ("({ moduleName := " + quoted(f"Zkc.Applications.Verification.Generated.Components.{name}Completeness") +
             ", namespaceName := " + quoted(f"ZkcSecurity.Examples.Generated.Components.{name}Completeness") +
-            ", subjectModule := " + quoted(f"ZkcSecurityExamples.Generated.{name}") +
+            ", subjectModule := " + quoted(f"Zkc.Applications.Verification.Generated.{name}") +
             ", subjectNamespace := " + quoted(f"ZkcSecurity.Examples.Generated.{name}") +
             ", error := " + error + " } : RootCompleteness.Selection)")
 
@@ -118,7 +122,7 @@ class Generation:
         self.directory.mkdir(parents=True, exist_ok=True)
         self.output = self.directory / "lib"
         self.output.mkdir(exist_ok=True)
-        self.package = LEAN / "security"
+        self.package = module_package("Zkc.Applications")
         self.base = subprocess.check_output(["lake", "env", "printenv", "LEAN_PATH"],
                                             cwd=self.package, text=True).strip()
         self.lean = subprocess.check_output(["lake", "env", "which", "lean"],
@@ -141,11 +145,12 @@ class Generation:
     def execute(self, command, cwd=ROOT):
         command = [str(item) for item in command]
         started = time.monotonic()
-        result = subprocess.run(command, cwd=cwd, env=self.environment,
+        invocation = lean_command(cwd, *command[1:]) if command[0] == self.lean else command
+        result = subprocess.run(invocation, cwd=cwd, env=self.environment,
                                 text=True, capture_output=True)
         log = self.directory / f"command-{self.run_id}-{len(self.commands):03}.log"
         log.write_text(result.stdout + result.stderr)
-        self.commands.append({"command": command, "cwd": str(cwd),
+        self.commands.append({"command": command, "invocation": invocation, "cwd": str(cwd),
                               "returncode": result.returncode,
                               "elapsedSeconds": time.monotonic() - started,
                               "log": str(log)})
@@ -208,7 +213,7 @@ class Generation:
         for artifact in target.parent.glob(target.stem + ".*"):
             if artifact.is_symlink():
                 artifact.unlink()
-        package = self.package if source.is_relative_to(self.package) else LEAN
+        package = module_package(module) if is_owned_module(module) else self.package
         flags = ([f"--root={source_root}"] if source_root is not None else
                  [] if source.is_relative_to(package) else [f"--root={source.parent}"])
         command = [self.lean, "-j2", "-M16384", "-DwarningAsError=true", *flags]
@@ -279,9 +284,9 @@ class Generation:
                         "--symbol=" + native_policy.decode(policy).entry)
         (directory / "source.json").write_text(source)
         for module, text in [
-                (f"ZkcExamples.Structured.Generated.Bindings.{name}Data",
+                (f"Zkc.Applications.IR.Structured.Generated.Bindings.{name}Data",
                  snapshot.render(json.loads(source), f"ZkcExamples.Structured.Generated.Bindings.{name}Data")),
-                (f"ZkcExamples.Construction.Generated.{name}Pair",
+                (f"Zkc.Applications.IR.Construction.Generated.{name}Pair",
                  pair.render(children, f"ZkcExamples.Construction.Generated.{name}Pair"))]:
             self.retain(module, text)
         identities = {key: "sha256:" + hashlib.sha256(value.encode()).hexdigest()
@@ -289,58 +294,64 @@ class Generation:
         (directory / "identities.json").write_text(json.dumps(identities, indent=2) + "\n")
 
     def assemble(self, root, config):
-        self.prepare(["ZkcTools.StructuredSource.Root",
-                      "ZkcTools.ConstructionBindings.Generate"])
+        self.prepare(["Zkc.Tools.IR.StructuredSource.Root",
+                      "Zkc.Tools.IR.ConstructionBindings.Generate"])
         name = root["name"]
         directory = self.directory / name
         identities = json.loads((directory / "identities.json").read_text())
-        data = f"ZkcExamples.Structured.Generated.Bindings.{name}Data"
+        data = f"Zkc.Applications.IR.Structured.Generated.Bindings.{name}Data"
+        data_namespace = f"ZkcExamples.Structured.Generated.Bindings.{name}Data"
         inputs = data.removesuffix("Data") + "Inputs"
-        pair_module = f"ZkcExamples.Construction.Generated.{name}Pair"
-        subject = f"ZkcSecurityExamples.Generated.{name}"
+        inputs_namespace = data_namespace.removesuffix("Data") + "Inputs"
+        pair_module = f"Zkc.Applications.IR.Construction.Generated.{name}Pair"
+        pair_namespace = f"ZkcExamples.Construction.Generated.{name}Pair"
+        subject = f"Zkc.Applications.Verification.Generated.{name}"
         subject_namespace = f"ZkcSecurity.Examples.Generated.{name}"
-        producer = f"ZkcExamples.Structured.Generated.Constructed.{name}Producer"
+        producer = f"Zkc.Applications.IR.Structured.Generated.Constructed.{name}Producer"
         validator = producer.removesuffix("Producer") + "Validator"
-        connection = f"ZkcExamples.Structured.Generated.Connections.{name}"
+        producer_namespace = f"ZkcExamples.Structured.Generated.Constructed.{name}Producer"
+        validator_namespace = producer_namespace.removesuffix("Producer") + "Validator"
+        connection = f"Zkc.Applications.IR.Structured.Generated.Connections.{name}"
+        connection_namespace = f"ZkcExamples.Structured.Generated.Connections.{name}"
         # Printers write into scratch. retain() owns comparisons and writes.
         paths = {module: directory.joinpath(*module.split(".")).with_suffix(".lean")
                  for module in (inputs, producer, validator, connection, subject)}
         for path in paths.values():
             path.parent.mkdir(parents=True, exist_ok=True)
-        self.printer("Assemble" + name, f'''import ZkcTools.StructuredSource.Bindings.Inputs
-import ZkcTools.StructuredSource.Constructed
-import ZkcTools.StructuredSource.Root
-import ZkcTools.ConstructionBindings.Generate
+        self.printer("Assemble" + name, f'''import Zkc.Tools.IR.StructuredSource.Bindings.Inputs
+import Zkc.Tools.IR.StructuredSource.Constructed
+import Zkc.Tools.IR.StructuredSource.Root
+import Zkc.Tools.IR.ConstructionBindings.Generate
 import {data}
 import {pair_module}
 open Zkc.Source.Structured ZkcTools.StructuredSource
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
-def program : Program := (check {data}.snapshot).toOption.get (by decide +kernel)
+def program : Program := (check {data_namespace}.snapshot).toOption.get (by decide +kernel)
 def main : IO Unit := do
-  IO.FS.writeFile {quoted(str(paths[inputs]))} (Bindings.inputsSource program {quoted(inputs)} {quoted(data)})
-  for (moduleName, artifactExpression, artifact, path) in [
-    ({quoted(producer)}, {quoted(pair_module+'.Producer.participant')}, {pair_module}.Producer.participant, {quoted(str(paths[producer]))}),
-    ({quoted(validator)}, {quoted(pair_module+'.Validator.participant')}, {pair_module}.Validator.participant, {quoted(str(paths[validator]))})] do
-    match Constructed.source artifact {{moduleName, artifactModule := {quoted(pair_module)}, artifactExpression}} with
+  IO.FS.writeFile {quoted(str(paths[inputs]))} (Bindings.inputsSource program {quoted(inputs)} {quoted(data)} {quoted(inputs_namespace)} {quoted(data_namespace + ".snapshot")})
+  for (moduleName, namespaceName, artifactExpression, artifact, path) in [
+    ({quoted(producer)}, {quoted(producer_namespace)}, {quoted(pair_namespace+'.Producer.participant')}, {pair_namespace}.Producer.participant, {quoted(str(paths[producer]))}),
+    ({quoted(validator)}, {quoted(validator_namespace)}, {quoted(pair_namespace+'.Validator.participant')}, {pair_namespace}.Validator.participant, {quoted(str(paths[validator]))})] do
+    match Constructed.source artifact {{moduleName, namespaceName, artifactModule := {quoted(pair_module)}, artifactExpression}} with
     | .error reason => throw (IO.userError reason)
     | .ok source => IO.FS.writeFile path source
   let .ok connection := ZkcTools.ConstructionBindings.Generate.source
-    {{ sourceModule := {quoted(inputs)}.toName, program := {quoted(inputs + '.program')}.toName }}
-    {{ moduleName := {quoted(connection)}.toName, participants := [
+    {{ sourceModule := {quoted(inputs)}.toName, program := {quoted(inputs_namespace + '.program')}.toName }}
+    {{ moduleName := {quoted(connection)}.toName, namespaceName := {quoted(connection_namespace)}.toName, participants := [
       {{ mode := .producer, artifactModule := {quoted(pair_module)}.toName,
-         artifact := {quoted(pair_module + '.Producer.participant')}.toName,
-         viewModule := {quoted(producer)}.toName }},
+         artifact := {quoted(pair_namespace + '.Producer.participant')}.toName,
+         viewModule := {quoted(producer)}.toName, viewNamespace := {quoted(producer_namespace)}.toName }},
       {{ mode := .validator, artifactModule := {quoted(pair_module)}.toName,
-         artifact := {quoted(pair_module + '.Validator.participant')}.toName,
-         viewModule := {quoted(validator)}.toName }}] }}
+         artifact := {quoted(pair_namespace + '.Validator.participant')}.toName,
+         viewModule := {quoted(validator)}.toName, viewNamespace := {quoted(validator_namespace)}.toName }}] }}
     | throw (IO.userError "connection proposal refused")
   IO.FS.writeFile {quoted(str(paths[connection]))} connection
   IO.FS.writeFile {quoted(str(paths[subject]))} (Root.fixedSubjectSource {{
-    connectionModule := {quoted(connection)},
+    connectionModule := {quoted(connection)}, connectionNamespace := {quoted(connection_namespace)},
     moduleName := {quoted(subject)}, namespaceName := {quoted(subject_namespace)}, sourceModule := {quoted(inputs)},
-    originalExpression := {quoted(data+'.snapshot')}, importedExpression := {quoted(inputs+'.imported')},
-    pairModule := {quoted(pair_module)}, artifactsExpression := {quoted(pair_module+'.artifacts')},
+    originalExpression := {quoted(data_namespace+'.snapshot')}, importedExpression := {quoted(inputs_namespace+'.imported')},
+    pairModule := {quoted(pair_module)}, artifactsExpression := {quoted(pair_namespace+'.artifacts')},
     modelModule := {quoted(config['model_module'])}, modelExpression := {quoted(config['model'])},
     registryExpression := {quoted(config['registry'])},
     targetName := {quoted(root['target'])},
@@ -350,12 +361,12 @@ def main : IO Unit := do
 ''')
         for module in (inputs, producer, validator, connection, subject):
             self.retain(module, paths[module].read_text())
-        self.prepare(["ZkcSecurityTools.Generation.SubjectABI",
-                      "ZkcSecurityTools.Generation.SubjectABI.Command"])
-        abi = f"ZkcSecurityExamples.Generated.Components.{name}ABI"
+        self.prepare(["Zkc.Tools.Verification.Generation.SubjectABI",
+                      "Zkc.Tools.Verification.Generation.SubjectABI.Command"])
+        abi = f"Zkc.Applications.Verification.Generated.Components.{name}ABI"
         abi_namespace = f"ZkcSecurity.Examples.Generated.Components.{name}ABI"
         abi_path = directory / "ABI.lean"
-        self.printer("GenerateABI" + name, f'''import ZkcSecurityTools.Generation.SubjectABI.Command
+        self.printer("GenerateABI" + name, f'''import Zkc.Tools.Verification.Generation.SubjectABI.Command
 import {subject}
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
@@ -368,14 +379,14 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(abi_path))} generated
 
     def prove(self, root, config):
         name = root["name"]
-        self.prepare(["ZkcSecurityTools.Generation.RootCompleteness"])
-        module = f"ZkcSecurityExamples.Generated.Components.{name}Completeness"
+        self.prepare(["Zkc.Tools.Verification.Generation.RootCompleteness"])
+        module = f"Zkc.Applications.Verification.Generated.Components.{name}Completeness"
         namespace = f"ZkcSecurity.Examples.Generated.Components.{name}Completeness"
         output = self.directory / name / "Completeness.lean"
         if root["method"] == "direct":
             self.compile(root["proof_module"])
-            proof = root.get("proof_name", root["proof_module"] + ".compiled_ideal_complete")
-            self.printer("GenerateCompleteness" + name, f'''import ZkcSecurityTools.Generation.RootCompleteness
+            proof = root["proof_name"]
+            self.printer("GenerateCompleteness" + name, f'''import Zkc.Tools.Verification.Generation.RootCompleteness
 open ZkcSecurity.Generation
 def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.directSource
   {completeness_selection(root)} {quoted(root['proof_module'])} {quoted(proof)}
@@ -385,13 +396,13 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.di
             return
         self.prepare(root.get("method_imports", []))
         self.prepare([
-            "ZkcTools.ConstructionBindings.ProcessViewTactic", "ZkcSecurity.Families.Sigma.Algebra",
-            "ZkcSecurity.Bindings.Sigma.Arithmetic", "ZkcSecurityTools.SigmaReadback",
-            "ZkcSecurityTools.Generation.UniformRoot",
-            "ZkcSecurityTools.Generation.SigmaCompleteness", "ZkcSecurityTools.Generation.SigmaCompleteness.Command"])
-        subject = f"ZkcSecurityExamples.Generated.{name}"
+            "Zkc.Tools.IR.ConstructionBindings.ProcessViewTactic", "Zkc.Protocol.Library.Families.Sigma.Algebra",
+            "Zkc.Verification.Bindings.Sigma.Arithmetic", "Zkc.Tools.Verification.SigmaReadback",
+            "Zkc.Tools.Verification.Generation.UniformRoot",
+            "Zkc.Tools.Verification.Generation.SigmaCompleteness", "Zkc.Tools.Verification.Generation.SigmaCompleteness.Command"])
+        subject = f"Zkc.Applications.Verification.Generated.{name}"
         subject_namespace = f"ZkcSecurity.Examples.Generated.{name}"
-        self.printer("GenerateCompleteness" + name, f'''import ZkcSecurityTools.Generation.SigmaCompleteness.Command
+        self.printer("GenerateCompleteness" + name, f'''import Zkc.Tools.Verification.Generation.SigmaCompleteness.Command
 import {subject}
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
@@ -403,9 +414,11 @@ derive_sigma_completeness generated from {{
   output := {{
     moduleName := {quoted(module)}, namespaceName := {quoted(namespace)},
     subjectModule := {quoted(subject)}, subjectNamespace := {quoted(subject_namespace)},
-    producerModule := "ZkcExamples.Structured.Generated.Constructed.{name}Producer",
-    validatorModule := "ZkcExamples.Structured.Generated.Constructed.{name}Validator",
-    abiModule := "ZkcSecurityExamples.Generated.Components.{name}ABI",
+    producerModule := "Zkc.Applications.IR.Structured.Generated.Constructed.{name}Producer",
+    producerNamespace := "ZkcExamples.Structured.Generated.Constructed.{name}Producer",
+    validatorModule := "Zkc.Applications.IR.Structured.Generated.Constructed.{name}Validator",
+    validatorNamespace := "ZkcExamples.Structured.Generated.Constructed.{name}Validator",
+    abiModule := "Zkc.Applications.Verification.Generated.Components.{name}ABI",
     abiNamespace := "ZkcSecurity.Examples.Generated.Components.{name}ABI",
     fieldType := {quoted(config['field_type'])}, groupType := {quoted(config['group_type'])},
     sampling := {quoted(config['sampling'])} }} }}
@@ -414,12 +427,12 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(output))} generated
         self.retain(module, output.read_text())
 
     def receipt(self, root, config):
-        self.prepare(["ZkcSecurityTools.Generation.RootCompleteness"])
+        self.prepare(["Zkc.Tools.Verification.Generation.RootCompleteness"])
         name = root["name"]
-        subject = f"ZkcSecurityExamples.Generated.{name}"
+        subject = f"Zkc.Applications.Verification.Generated.{name}"
         module = subject + "CompletenessClaims"
         output = self.directory / name / "CompletenessClaims.lean"
-        self.printer("GenerateReceipt" + name, f'''import ZkcSecurityTools.Generation.RootCompleteness
+        self.printer("GenerateReceipt" + name, f'''import Zkc.Tools.Verification.Generation.RootCompleteness
 open ZkcSecurity.Generation
 def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.claimsSource
   {completeness_selection(root)} {{

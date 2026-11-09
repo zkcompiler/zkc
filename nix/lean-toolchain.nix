@@ -10,7 +10,7 @@
 }:
 let
   version = lib.removePrefix "leanprover/lean4:v" (
-    lib.trim (builtins.readFile ../lean/lean-toolchain)
+    lib.trim (builtins.readFile ../lean/program/lean-toolchain)
   );
   hashes = {
     "4.35.0" = "sha256:7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d";
@@ -45,7 +45,7 @@ stdenvNoCC.mkDerivation {
     done
   '';
   meta = {
-    description = "Exact upstream Lean/Lake toolchain selected by lean/lean-toolchain";
+    description = "Exact upstream Lean/Lake toolchain selected by lean/program/lean-toolchain";
     license = lib.licenses.asl20;
     platforms = [ "x86_64-linux" ];
     mainProgram = "lean";

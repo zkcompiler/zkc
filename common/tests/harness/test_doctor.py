@@ -114,7 +114,8 @@ def test_doctor_reports_c_and_cxx_and_detects_stale_cache(state, monkeypatch, tm
     (checkout / "lean").mkdir()
     (checkout / "compiler/CMakeLists.txt").write_text('set(ZKC_TESTED_LLVM_VERSION "23.1.2")\n')
     (checkout / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "1.98.0"\n')
-    (checkout / "lean/lean-toolchain").write_text("leanprover/lean4:v4.30.0\n")
+    (checkout / "lean/program").mkdir()
+    (checkout / "lean/program/lean-toolchain").write_text("leanprover/lean4:v4.30.0\n")
     build = tmp_path / "build"
     build.mkdir()
     stale = state != "matching"

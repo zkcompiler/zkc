@@ -1,0 +1,117 @@
+module
+
+public import Zkc.IR.Source.Structured.Operations
+public import Zkc.IR.Source.Structured.ProtocolSignature
+public import Zkc.IR.Source.Structured.OracleOperations
+public import Zkc.IR.Source.Structured.ServiceOperations
+
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
+@[expose] public section
+
+namespace Zkc.Source.Structured
+
+/-- The open calculation boundary excludes Local calls and closed control.
+Exact signatures retain the kind; a hand-built Local reference cannot inhabit
+this view. Admission separately checks the kind of every stored helper body. -/
+def Op.isCalculation : Op → Bool
+  | .makeProduct .. | .getProduct .. => true
+  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
+    .indexWrappingAdd | .indexWrappingSubtract | .indexBitAnd | .indexLogicalShiftRight |
+    .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+    .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. |
+    .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
+    .booleanNotEqual | .select .. | .boundedAt .. => true
+  | .invoke helper => helper.kind == .math
+  | .fold spec => spec.kind == .math
+  | _ => false
+
+theorem Op.calculation_no_regions (op : Op) (allowed : op.isCalculation = true) :
+    op.regions = [] := by
+  cases op <;> simp_all [Op.isCalculation, Op.regions]
+
+/-- The retained callback receives induction, state and immutable captures in
+that order. Roles and scopes use the containing protocol's coordinates. -/
+structure RepeatSpec where
+  state : List Ty
+  captures : List Ty
+  roles : List Nat
+  stateScopes : List (List Nat)
+  maximum : Nat
+  deriving DecidableEq, Repr
+
+/-- Select the already present component for one role. Formation requires
+nonempty distinct role names and availability of each corresponding operand.
+The fallback is absence, never another role's component. -/
+def assembleComponent {V : Ty → Type} {ty : Ty} (selected : Nat → Bool) (absent : V ty) :
+    (roles : List Nat) → Values V (roles.map (fun _ => ty)) → V ty
+  | [], .nil => absent
+  | role :: roles, .cons value values =>
+    if selected role then value else assembleComponent selected absent roles values
+
+/-- Protocol roots have their own operation family, on the same Region carrier.
+Role indices are resolved against the containing root's roster, never global. -/
+inductive ProtocolOp where
+  | oracle (operation : OracleOp) (location : OracleLocation)
+  | calculate (op : Op) (allowed : op.isCalculation = true)
+  | localCall (helper : Helper) (localKind : helper.kind = .local) (owner : Nat) (site : String)
+  | guard (owner : Nat) (site : String)
+  | exchange (type : Ty) (sender receiver : Nat) (site : String)
+  | restrict (type : Ty) (roles : List Nat)
+  | assemble (type : Ty) (roles : List Nat)
+  | query (owner : Nat) (operation : ServiceOp) (site : String)
+  | draw (owner : Nat) (field site : String)
+  | statement (relation : String) (types : List Ty) (selectors : List String) (acceptance : Nat)
+  | mark (site : String)
+  | protocolApply (callee : ProtocolSignature) (roles : List Nat) (site : String)
+  | repeat (spec : RepeatSpec) (site : String)
+
+def ProtocolOp.arguments : ProtocolOp → List Ty
+  | .oracle operation _ => operation.arguments
+  | .calculate op _ => op.arguments
+  | .localCall helper .. => helper.inputs
+  | .protocolApply callee .. => callee.inputs
+  | .repeat spec _ => .index :: (spec.state ++ spec.captures)
+  | .guard .. => [.boolean]
+  | .exchange ty .. | .restrict ty .. => [ty]
+  | .assemble ty roles => roles.map (fun _ => ty)
+  | .query _ operation _ => operation.arguments
+  | .draw _ field _ => [.service ("random." ++ field ++ "/0")]
+  | .statement _ types .. => types
+  | .mark _ => []
+
+def ProtocolOp.results : ProtocolOp → List Ty
+  | .oracle operation _ => operation.results
+  | .calculate op _ => op.results
+  | .localCall helper .. => helper.outputs
+  | .protocolApply callee .. => callee.outputs
+  | .repeat spec _ => spec.state
+  | .guard .. | .statement .. | .mark _ => []
+  | .exchange ty .. | .restrict ty .. | .assemble ty .. => [ty]
+  | .query _ operation _ => [operation.result]
+  | .draw _ field _ => [.field field]
+
+def ProtocolOp.helpers : ProtocolOp → List Helper
+  | .calculate op _ => op.helpers
+  | .localCall helper .. => [helper]
+  | _ => []
+
+def ProtocolOp.protocols : ProtocolOp → List ProtocolSignature
+  | .protocolApply callee .. => [callee]
+  | _ => []
+
+/-- Repeat has one isolated callback on the shared typed carrier. -/
+def ProtocolOp.regions : ProtocolOp → List (List Ty × List Ty)
+  | .repeat spec _ => [(.index :: (spec.state ++ spec.captures), spec.state)]
+  | _ => []
+
+abbrev protocolDialect : Dialect :=
+  ⟨Ty, ProtocolOp, ProtocolOp.arguments, ProtocolOp.results, ProtocolOp.regions⟩
+
+end Zkc.Source.Structured
+
+-- Realize shared equations here so every client imports the same stored proof.
+-- Independent lazy generation can attach different private helpers to one public name.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getUnfoldEqnFor? ``Zkc.Source.Structured.assembleComponent

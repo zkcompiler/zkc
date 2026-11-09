@@ -38,42 +38,48 @@ def test_duplicate_requirement_is_not_silently_selected(tmp_path):
         upgrade.required(path, "mathlib")
 
 
-@pytest.mark.parametrize("defect", [None, "missing", "mathlib", "Arklib", "Clean", "shared", "url", "toolchain"])
-def test_resolution_checks_all_packages_and_shared_dependencies(tmp_path, monkeypatch, defect):
+@pytest.fixture
+def maintained(tmp_path, monkeypatch):
     upgrade = load("lean_upgrade", "scripts/update-lean-pins.py")
-    main, security, arklib, clean = (tmp_path / name for name in ("main", "security", "arklib", "clean"))
-    monkeypatch.setattr(upgrade, "MAIN", main)
-    monkeypatch.setattr(upgrade, "SECURITY", main / "security")
-    monkeypatch.setattr(upgrade, "INTEGRATIONS", {"Arklib": arklib, "Clean": clean})
-    monkeypatch.setattr(upgrade, "SECURITY", security)
-    toolchain = "leanprover/lean4:v4.34.1"
+    packages = {name: (tmp_path / "lean" / directory, ()) for name, directory in {
+        "program": "program", "ir": "ir", "protocol": "protocol", "verification": "verification",
+        "arklib": "adapters/arklib", "clean": "adapters/clean", "applications": "applications"}.items()}
+    for directory, _ in packages.values():
+        directory.mkdir(parents=True)
+    monkeypatch.setattr(upgrade, "ROOT", tmp_path)
+    monkeypatch.setattr(upgrade, "LEAN", tmp_path / "lean")
+    monkeypatch.setattr(upgrade, "PACKAGES", packages)
+    monkeypatch.setattr(upgrade, "select_packages", lambda: list(packages))
+    return upgrade, {name: directory for name, (directory, _) in packages.items()}
+
+
+@pytest.mark.parametrize("defect", [None, "missing", "mathlib", "Arklib", "Clean", "shared", "url", "toolchain"])
+def test_resolution_checks_all_packages_and_shared_dependencies(maintained, defect):
+    upgrade, packages = maintained
+    toolchain = "leanprover/lean4:v4.35.0"
     selected = {"mathlib": OLD, "Arklib": NEW, "Clean": NEW}
-    for directory, name in [(main, "mathlib"), (security, "mathlib"), (arklib, "Arklib"), (clean, "Clean")]:
-        directory.mkdir()
+    for name, directory in packages.items():
         (directory / "lean-toolchain").write_text(toolchain)
-        revisions = {"mathlib": OLD, "batteries": OLD, name: selected[name]}
-        if directory != main:
+        revisions = {"mathlib": OLD, "batteries": OLD}
+        if name in ("protocol", "verification", "arklib", "clean", "applications"):
             revisions["CompPoly"] = OLD
-        if directory == clean:
-            if defect == "missing":
-                revisions.pop("batteries")
-            elif defect in ("mathlib", "Clean"):
+        if name in ("arklib", "applications"):
+            revisions["Arklib"] = NEW
+        if name in ("clean", "applications"):
+            revisions["Clean"] = NEW
+        if name == "applications":
+            if defect == "missing": revisions.pop("batteries")
+            elif defect in ("mathlib", "Arklib", "Clean"):
                 revisions[defect] = NEW if defect == "mathlib" else OLD
-            elif defect == "shared":
-                revisions["CompPoly"] = NEW
-            elif defect == "toolchain":
-                (directory / "lean-toolchain").write_text("different")
-        if directory == arklib and defect == "Arklib":
-            revisions["Arklib"] = OLD
+            elif defect == "shared": revisions["CompPoly"] = NEW
+            elif defect == "toolchain": (directory / "lean-toolchain").write_text("different")
         value = manifest(**revisions)
-        if directory == clean and defect == "url":
+        if name == "applications" and defect == "url":
             value["packages"][0]["url"] = "https://example.invalid/different"
         (directory / "lake-manifest.json").write_text(json.dumps(value))
     if defect:
-        with pytest.raises(ValueError):
-            upgrade.check(toolchain, selected)
-    else:
-        upgrade.check(toolchain, selected)
+        with pytest.raises(ValueError): upgrade.check(toolchain, selected)
+    else: upgrade.check(toolchain, selected)
 
 
 @pytest.mark.parametrize("defect", ["duplicate", "unresolved"])
@@ -88,25 +94,18 @@ def test_manifest_requires_unique_resolved_revisions(defect):
         upgrade.git_revisions(value)
 
 
-def test_upgrade_resolves_manifests_with_the_selected_formal_toolchain(tmp_path, monkeypatch):
+def test_upgrade_resolves_manifests_with_the_selected_formal_toolchain(maintained, monkeypatch):
     import sys
 
-    upgrade = load("lean_upgrade", "scripts/update-lean-pins.py")
-    main = tmp_path / "lean"
-    integrations = {name: main / "integrations" / name.lower() for name in ("Arklib", "Clean")}
-    toolchain = "leanprover/lean4:v4.34.1"
-    packages = {"mathlib": main, "security": main / "security", **integrations}
-    for name, directory in packages.items():
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / "lakefile.toml").write_text(
-            f'[[require]]\nname = "{name}"\ngit = "https://example.invalid/{name}"\nrev = "{OLD}"\n')
-        if name != "mathlib":
-            with (directory / "lakefile.toml").open("a") as file:
-                file.write(f'\n[[require]]\nname = "mathlib"\ngit = "https://example.invalid/mathlib"\nrev = "{OLD}"\n')
-    monkeypatch.setattr(upgrade, "ROOT", tmp_path)
-    monkeypatch.setattr(upgrade, "MAIN", main)
-    monkeypatch.setattr(upgrade, "SECURITY", main / "security")
-    monkeypatch.setattr(upgrade, "INTEGRATIONS", integrations)
+    upgrade, packages = maintained
+    toolchain = "leanprover/lean4:v4.35.0"
+    for package, directory in packages.items():
+        requirements = {"mathlib": OLD} if package in ("program", "protocol", "arklib", "clean") else {}
+        if package in ("arklib", "clean"):
+            requirements["Arklib" if package == "arklib" else "Clean"] = OLD
+        (directory / "lakefile.toml").write_text('name = "fixture"\n' + ''.join(
+            f'[[require]]\nname = "{name}"\ngit = "https://example.invalid/{name}"\nrev = "{rev}"\n'
+            for name, rev in requirements.items()))
     monkeypatch.setattr(upgrade, "upstream_toolchain", lambda *_: toolchain)
     monkeypatch.setattr(upgrade, "lean_archive_hash", lambda _: "selected-hash")
     events = []
@@ -115,25 +114,29 @@ def test_upgrade_resolves_manifests_with_the_selected_formal_toolchain(tmp_path,
     def run(arguments):
         assert arguments[:2] == ["nix", "develop"]
         if arguments[4] == "bash":
-            assert arguments[2] == f"{tmp_path}#lean"
-            assert "--keep-toolchain" in arguments[-1]
-            for name, directory in packages.items():
+            assert arguments[2] == f"{upgrade.ROOT}#lean"
+            positions = []
+            for directory in packages.values():
+                positions.append(arguments[-1].index(str(directory)))
                 assert (directory / "lean-toolchain").read_text().strip() == toolchain
-                revisions = {"mathlib": NEW, name: NEW if name != "Clean" else OLD}
-                (directory / "lake-manifest.json").write_text(json.dumps(manifest(**revisions)))
+                (directory / "lake-manifest.json").write_text(json.dumps(manifest(
+                    mathlib=NEW, Arklib=NEW, Clean=OLD)))
+            assert positions == sorted(positions)
+            assert arguments[-1].count("lake --keep-toolchain update") == len(packages)
             events.append("resolve")
         else:
-            assert arguments[2] == f"{tmp_path}#maintenance"
-            assert arguments[4:6] == ["python3", tmp_path / "scripts/update-nix-sources.py"]
+            assert arguments[2] == f"{upgrade.ROOT}#maintenance"
+            assert arguments[4:6] == ["python3", upgrade.ROOT / "scripts/update-nix-sources.py"]
             events.append("transport")
 
     monkeypatch.setattr(upgrade, "run", run)
     monkeypatch.setattr(sys, "argv", ["update-lean-pins.py", "--mathlib", NEW, "--arklib", NEW])
     upgrade.main()
-    assert events == [("hash", ("4.34.1", "selected-hash")), "resolve", "transport"]
-    assert upgrade.required(main / "lakefile.toml", "mathlib")[1] == NEW
-    assert upgrade.required(integrations["Arklib"] / "lakefile.toml", "Arklib")[1] == NEW
-    assert upgrade.required(integrations["Clean"] / "lakefile.toml", "Clean")[1] == OLD
+    assert events == [("hash", ("4.35.0", "selected-hash")), "resolve", "transport"]
+    for name in ("program", "protocol", "arklib", "clean"):
+        assert upgrade.required(packages[name] / "lakefile.toml", "mathlib")[1] == NEW
+    assert upgrade.required(packages["arklib"] / "lakefile.toml", "Arklib")[1] == NEW
+    assert upgrade.required(packages["clean"] / "lakefile.toml", "Clean")[1] == OLD
 
 
 def test_update_detaches_cache_links_without_modifying_shared_sources(tmp_path, monkeypatch):
@@ -147,8 +150,7 @@ def test_update_detaches_cache_links_without_modifying_shared_sources(tmp_path, 
     (packages / "mathlib").symlink_to(source)
     (packages / "missing").symlink_to(tmp_path / "absent")
     (packages / "owned").mkdir()
-    monkeypatch.setattr(upgrade, "INTEGRATIONS", {"Arklib": integration})
-    monkeypatch.setattr(upgrade, "SECURITY", tmp_path / "security")
+    monkeypatch.setattr(upgrade, "PACKAGES", {"arklib": (integration, ())})
     upgrade.detach_dependency_links()
     assert (source / "source.lean").read_text() == "-- shared source\n"
     assert sorted(path.name for path in packages.iterdir()) == ["owned"]

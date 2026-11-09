@@ -5,21 +5,36 @@ modifiers. The persistent process amortizes loading Lean across the inventory.
 """
 
 import json
+import os
+import re
 from pathlib import Path
 import subprocess
 
-# The formal package, which is this module's parent now that it sits in
-# support/: it runs Lean over ZkcTools/ImportHeaders.lean from there.
-ROOT = Path(__file__).resolve().parents[1]
+from support.packages import module_path, tool_module
+
+# Resolve the explicitly pinned toolchain from the parser's owning package.
+ROOT = Path(__file__).resolve().parents[1] / "program"
+PARSER = module_path(tool_module("program", "ImportHeaders"))
 
 
 class HeaderParser:
     def __init__(self, lean="lean", root=ROOT, lake=None):
+        toolchain = (ROOT / "lean-toolchain").read_text().strip()
+        # Elan honors this selection; native Lean/Lake ignore it. Both use the
+        # ordinary CLI and must report the pinned version before parsing input.
+        environment = dict(os.environ, ELAN_TOOLCHAIN=toolchain)
         command = [lake, "env", "lean"] if lake else [lean]
+        version = subprocess.check_output([*command, "--version"], cwd=ROOT,
+                                          env=environment, text=True).strip()
+        expected = toolchain.split(":v")[-1]
+        found = re.search(r"version (\d+\.\d+\.\d+)", version)
+        if found is None or found[1] != expected:
+            raise ValueError(f"wrong Lean toolchain: {version}; expected {expected}")
         self.process = subprocess.Popen(
-            [*command, "-DautoImplicit=false", "-DwarningAsError=true", "--run", str(ROOT / "ZkcTools/ImportHeaders.lean")],
-            cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            [*command, "-DautoImplicit=false", "-DwarningAsError=true", "--run", str(PARSER)],
+            cwd=ROOT, env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         self.cache = {}
+        self.module_headers = {}
 
     def details(self, source, path="<input>"):
         """Retain visibility and phase from Lean's parsed Import records."""
@@ -33,7 +48,12 @@ class HeaderParser:
             if "error" in result:
                 raise ValueError(f"invalid Lean header: {path}: {result['error']}")
             self.cache[source] = result["import_details"]
+            self.module_headers[source] = result["is_module"]
         return self.cache[source]
+
+    def is_module(self, source, path="<input>"):
+        self.details(source, path)
+        return self.module_headers[source]
 
     def imports(self, source, path="<input>"):
         return [entry["module"] for entry in self.details(source, path)]

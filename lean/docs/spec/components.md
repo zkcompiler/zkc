@@ -146,7 +146,7 @@ to construct its expression language. Python remains responsible for external
 process orchestration, byte capture, report joins and retained older clients.
 
 For the installed table method, `python3
-lean/security/checks/check_derivation_accounts.py` emits a separate discharge
+lean/verification/checks/check_derivation_accounts.py` emits a separate discharge
 account from the actual SmallSumcheck and TwoSums charged receipts.
 `ZkcTools.ProofAccount` inspects applications in checked declaration bodies;
 the method defines its checkpoints once in
@@ -596,8 +596,8 @@ realizations. Another implementation must provide its own checked realization;
 a different representation does not become correct merely by selecting this
 installation.
 
-The maintained table-root producer is `security/checks/RunComponentRoots.lean`:
-from `lean/security`, run `lake env lean --run checks/RunComponentRoots.lean
+The maintained table-root producer is `Zkc.Tools.Applications.Commands.RunComponentRoots`:
+from `lean/applications`, run `lake exe command-run-component-roots
 <output-directory>` after building the two generation configuration modules.
 Freshness checking compares a detached output directory with the checked files;
 running the printer alone does not check the emitted theorems.

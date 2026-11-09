@@ -19,6 +19,12 @@ from reporting import run_report
 run = partial(checked, cwd=ROOT)
 
 
+def lean_inventory():
+    sys.path.insert(0, str(ROOT / "lean"))
+    from support import packages
+    return packages
+
+
 def configure(profile):
     compiler_directory(profile)
     selected = native_configuration()
@@ -32,10 +38,11 @@ def execute(args):
         run(["cargo", "fetch", "--locked"])
     elif args.operation == "fetch-lean":
         run([sys.executable, ROOT / "lean/cache_dependencies.py",
-             *([f"--with-{args.deps}"] if args.deps != "main" else []),
-             "--output", reports_root() / f"lean/cache-{args.deps}.json"], cwd=ROOT / "lean")
+             *[arg for name in lean_inventory().selection(args) for arg in ("--package", name)],
+             "--output", reports_root() / "lean/cache.json"], cwd=ROOT / "lean")
     elif args.operation == "lean-fresh":
-        run([sys.executable, ROOT / "lean/reproduce.py", "--with-arklib", "--with-clean",
+        run([sys.executable, ROOT / "lean/reproduce.py",
+             *[arg for name in lean_inventory().selection(args) for arg in ("--package", name)],
              "--output", reports_root() / "lean/fresh"], cwd=ROOT / "lean")
     elif args.operation == "configure":
         configure(args.profile)
@@ -43,12 +50,13 @@ def execute(args):
         configure(args.profile)
         run(["cmake", "--build", "--preset", args.profile], cwd=ROOT / "compiler")
     elif args.operation == "lean":
-        directory = ROOT / "lean"
-        if args.deps != "main":
-            directory /= "security" if args.deps == "security" else f"integrations/{args.deps}"
+        inventory = lean_inventory()
+        for name in inventory.selection(args):
+            directory = inventory.package_directory(name, ROOT / "lean")
             # Apply a declared dependency patch to its exact pinned source before building.
-            run([sys.executable, ROOT / "lean/support/compatibility.py", directory])
-        run(["lake", "build"], cwd=directory)
+            if (directory / "compatibility.json").is_file():
+                run([sys.executable, ROOT / "lean/support/compatibility.py", directory])
+            run(["lake", "build"], cwd=directory)
     elif args.operation == "rust":
         run(["cargo", "build", "--release", "--locked", "-p", "zkc-cli", "--bin", "zkc"])
     elif args.operation == "test-drivers":
@@ -65,8 +73,8 @@ def main():
         command = operations.add_parser(operation)
         if operation in {"configure", "compiler"}:
             command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
-        if operation in {"fetch-lean", "lean"}:
-            command.add_argument("--deps", choices=["main", "security", "arklib", "clean"], default="main")
+        if operation in {"fetch-lean", "lean", "lean-fresh"} and sys.argv[1:2] == [operation]:
+            lean_inventory().add_selection(command)
     args = parser.parse_args()
     validate_environment()
     if os.environ.get("CARGO_TARGET_DIR"):

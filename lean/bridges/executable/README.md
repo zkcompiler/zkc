@@ -51,7 +51,7 @@ python3 lean/bridges/executable/corpus.py \
 ## Reproduce
 
 From the repository root, with the compiler, the runtime CLI, the main Lean
-package and the [ArkLib integration](../../integrations/arklib/README.md)
+package and the [ArkLib integration](../../adapters/arklib/README.md)
 built:
 
 ```sh

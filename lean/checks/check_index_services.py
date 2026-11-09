@@ -127,9 +127,9 @@ def capture(compiler, output, update_data):
                          "Tests.IndexServices." + name + ".Source")))
         terms.append(lean_render.strip_header(pair.render(data, "Tests.IndexServices." + name)))
 
-    generated = ("module\n\npublic import Zkc.Construction.AuthoredPair\n\n"
+    generated = ("module\n\npublic import Zkc.IR.Construction.AuthoredPair\n\n"
                  "@[expose] public section\n\n" + "\n".join(terms))
-    target = ROOT / "lean/Tests/IndexServicesData.lean"
+    target = ROOT / "lean/ir/Zkc/Tests/IR/IndexServicesData.lean"
     (output / "IndexServicesData.lean").write_text(generated)
     if update_data:
         target.write_text(generated)

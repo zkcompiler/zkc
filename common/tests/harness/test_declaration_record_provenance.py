@@ -7,21 +7,27 @@ import shutil
 import subprocess
 
 import pytest
+from harness import ROOT, lean_imports
 
 
-ROOT = Path(__file__).resolve().parents[3]
+with lean_imports():
+    from support.packages import module_path, tool_module, package_directory, selected
+
 LEAN = ROOT / "lean"
-EMITTER = LEAN / "checks/DeclarationRecords.lean"
+IR = package_directory('ir')
+PROGRAM = package_directory('program')
+EMITTER = module_path(tool_module('ir', 'DeclarationRecords'))
+AUDITOR = Path(*tool_module('program', 'DeclarationAudit').split('.')).with_suffix('.olean')
 
 
 def native_tool(env=None):
     # pytest-xdist workers share the checkout's tool artifacts. Serialize only
     # their builds of this tool, not the read-only captures or other worktrees.
-    with (LEAN / ".lake/declaration-records-build.lock").open("a") as lock:
+    with (IR / ".lake/declaration-records-build.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        subprocess.run(["lake", "build", "declaration-records"], cwd=LEAN, env=env,
+        subprocess.run(["lake", "build", "declaration-records"], cwd=IR, env=env,
                        check=True, capture_output=True, text=True)
-    return str(LEAN / ".lake/build/bin/declaration-records")
+    return str(IR / ".lake/build/bin/declaration-records")
 
 
 @pytest.fixture(params=["interpreted", "native"])
@@ -29,15 +35,15 @@ def capture(tmp_path, request):
     if not shutil.which("lean"):
         pytest.skip("Lean is not installed")
     paths = os.environ.get("LEAN_PATH", "").split(os.pathsep)
-    for package in (LEAN, LEAN / "security", LEAN / "integrations/arklib"):
+    for package in (package_directory(name) for name in selected(['ir'])):
         paths.append(str(package / ".lake/build/lib/lean"))
         dependencies = package / ".lake/packages"
         if dependencies.is_dir():
             paths.extend(str(path / ".lake/build/lib/lean") for path in dependencies.iterdir())
-    if not any((Path(path) / "ZkcTools/DeclarationAudit.olean").is_file() for path in paths if path):
+    if not any((Path(path) / AUDITOR).is_file() for path in paths if path):
         pytest.skip("DeclarationAudit dependencies must already be built")
     env = dict(os.environ, LEAN_PATH=os.pathsep.join([str(tmp_path), *dict.fromkeys(paths)]),
-               ELAN_TOOLCHAIN=(LEAN / "lean-toolchain").read_text().strip(), LEAN_NUM_THREADS="2")
+               ELAN_TOOLCHAIN=(PROGRAM / "lean-toolchain").read_text().strip(), LEAN_NUM_THREADS="2")
     if request.param == "native":
         command = [native_tool(env)]
     else:
@@ -113,11 +119,11 @@ def test_provider_equality_keeps_binder_annotations(capture):
 
 
 @pytest.mark.parametrize("package,module,namespace,table,endpoints", [
-    ("security", "ZkcSecurity.Claims.Registry", "ZkcSecurity.Registry", "table", "endpoints"),
-    ("integrations/arklib", "ZkcArkLib.Registry", "ZkcArkLib.Registry", "reportTable", "reportEndpoints"),
+    ("verification", "Zkc.Verification.Claims.Registry", "ZkcSecurity.Registry", "table", "endpoints"),
+    ("applications", "Zkc.Applications.ArkLib.Registry", "ZkcArkLib.Registry", "reportTable", "reportEndpoints"),
 ])
 def test_native_registry_capture_matches_interpreted(package, module, namespace, table, endpoints, tmp_path):
-    directory = LEAN / package
+    directory = package_directory(package)
     if not shutil.which("lake") or not directory.joinpath(
             ".lake/build/lib/lean", *module.split(".")).with_suffix(".olean").is_file():
         pytest.skip("the selected registry dependencies must already be built")

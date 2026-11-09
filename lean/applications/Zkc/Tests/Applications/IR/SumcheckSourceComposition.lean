@@ -1,0 +1,63 @@
+import Zkc.Applications.IR.Structured.SumcheckSourceVerifier
+import Zkc.Tools.Program.DeclarationAudit
+
+/-! Regression check for the maintained proof chain, rather than another
+substitution wrapper: every source verifier equation must actually depend on
+the normalizer's soundness theorem, whose application case is the generic
+call rule, through the generated root normal form. Inspect stored proof
+bodies, including private helpers; merely importing the theorem cannot satisfy
+this check. -/
+namespace Tests.SumcheckSourceComposition
+open Lean Elab Command
+
+private partial def dependencyPath (env : Lean.Environment) (modules : List Name)
+    (wanted : Name) (pending : List (Name × List Name))
+    (seen : Std.HashSet Name := {}) : Option (List Name) :=
+  match pending with
+  | [] => none
+  | (name, path) :: rest =>
+      if name == wanted then some (path.reverse ++ [name])
+      else if seen.contains name then dependencyPath env modules wanted rest seen
+      else
+        let next := do
+          let owner ← ZkcTools.DeclarationAudit.moduleOf env name
+          if !modules.contains owner then none else do
+            let info ← env.find? name
+            let value ← info.value? true
+            some (value.getUsedConstants.toList.map (fun dependency => (dependency, name :: path)))
+        dependencyPath env modules wanted (next.getD [] ++ rest) (seen.insert name)
+
+/-- Also usable by an optional consumer audit without importing that package
+into the main tests. Only actual proof-body edges count as dependencies. -/
+def checkDependencies (modules roots : List Name) : CommandElabM Unit := do
+  let env ← getEnv
+  let wanted := ``Zkc.Source.Structured.NormalForm.normalize_sound
+  for root in roots do
+    let some path := dependencyPath env modules wanted [(root, [])]
+      | throwError "source verifier proof does not use the normalizer's soundness: {root}"
+    logInfo m!"SOURCE-COMPOSITION-DEPENDENCY {path}"
+
+run_cmd do
+  checkDependencies [`Zkc.Applications.IR.Structured.SumcheckSourceVerifier,
+      `Zkc.Applications.IR.Structured.SumcheckSourceNormalForms, `Zkc.IR.Source.Structured.NormalForm.Presentation,
+      `Zkc.IR.Source.Structured.NormalForm.Soundness]
+    [``ZkcExamples.Structured.SumcheckSourceVerifier.root_context_expansion,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_linked,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_missing,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_excess,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_zero,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_context_optional,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_optional,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_permuted_optional,
+     ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_checked]
+  ZkcTools.DeclarationAudit.check
+    [`Zkc.Applications.IR.Structured.SumcheckSourceVerifier, `Zkc.IR.Source.Structured.ContractComposition]
+    "SUMCHECK-SOURCE-COMPOSITION-AUDIT-PASS" true
+
+/-- error: source verifier proof does not use the normalizer's soundness: ZkcExamples.Structured.SumcheckSourceVerifier.reduce_invoke_plain -/
+#guard_msgs in
+run_cmd do
+  checkDependencies [`Zkc.Applications.IR.Structured.SumcheckSourceVerifier]
+    [``ZkcExamples.Structured.SumcheckSourceVerifier.reduce_invoke_plain]
+
+end Tests.SumcheckSourceComposition

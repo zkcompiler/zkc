@@ -621,7 +621,7 @@ def render(data, namespace):
     invocations(definitions)
     return f'''module
 
-public import Zkc.Source.Structured.Import
+public import Zkc.IR.Source.Structured.Import
 
 @[expose] public section
 

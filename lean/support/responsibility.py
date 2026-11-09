@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import PurePosixPath
 
 from support.dependencies import POLICY, layer
+from support.packages import LEAN, PACKAGES, is_owned_module, module_owner
 
 
 @dataclass(frozen=True)
@@ -37,16 +38,13 @@ def module_name(path):
     """Recognize repository Lean roots, without guessing ownership of integrations."""
     if path.suffix != ".lean":
         return None
-    parts = path.parts
-    if parts[:3] in (("lean", "integrations", "arklib"), ("lean", "integrations", "clean")):
-        parts = parts[3:]
-    elif parts[:2] in (("lean", "program"), ("lean", "proof"), ("lean", "security")):
-        parts = parts[2:]
-    elif parts[:1] == ("lean",) and len(parts) > 1 and parts[1] != "integrations":
-        parts = parts[1:]
-    else:
-        return None
-    return ".".join(PurePosixPath(*parts).with_suffix("").parts)
+    for package, (directory, _) in PACKAGES.items():
+        prefix = PurePosixPath("lean") / directory.relative_to(LEAN).as_posix()
+        if path.is_relative_to(prefix):
+            module = ".".join(path.relative_to(prefix).with_suffix("").parts)
+            if is_owned_module(module) and module_owner(module) == package:
+                return module
+    return None
 
 
 def classify(value, policy=POLICY):
@@ -59,7 +57,15 @@ def classify(value, policy=POLICY):
     module = module_name(path)
     if module is not None:
         owner = layer(module, policy)
+        if module.startswith(("Zkc.Tools.", "Zkc.Tests.")):
+            return Responsibility("support-infrastructure", ("X",),
+                                  "formal tools and controls", module, owner)
         rules = {
+            "ir": ("language-and-compiler", ("X",), "semantic or admission foundation"),
+            "protocol": ("general-methods", ("S",), "shared protocol mathematics and proof contracts"),
+            "verification": (None, ("M", "S"), "concrete verification; declaration review required"),
+            "applications": (None, ("M", "I"), "concrete consumers; declaration review required"),
+            "arklib": (None, ("M", "S"), "ArkLib adapter; declaration review required"),
             "program": ("language-and-compiler", ("X",), "shared deterministic program semantics"),
             "protocol-core": ("general-methods", ("S",), "shared proof semantics and fixed property contracts"),
             "protocol-library": ("family-packages", ("M", "S"), "reusable mathematical proof contracts"),

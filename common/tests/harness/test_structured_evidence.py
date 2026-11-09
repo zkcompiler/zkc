@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 
 import pytest
 
@@ -39,9 +40,9 @@ def bridge(monkeypatch):
 def source_tree(tmp_path):
     root = tmp_path / "source"
     root.mkdir()
-    files = {".gitignore": "ignored/\n", "lean/Proof.lean": "import Dependency\n",
-             "lean/Dependency.lean": "def value := 1\n", "fixture.zkc": "original\n",
-             "lean/lake-manifest.json": '{"packages": []}\n', "removed": "old\n"}
+    files = {".gitignore": "ignored/\n", "lean/ir/Zkc/IR/Proof.lean": "import Zkc.IR.Dependency\n",
+             "lean/ir/Zkc/IR/Dependency.lean": "def value := 1\n", "fixture.zkc": "original\n",
+             "lean/ir/lake-manifest.json": '{"packages": []}\n', "removed": "old\n"}
     for name, text in files.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -51,7 +52,7 @@ def source_tree(tmp_path):
     subprocess.run(["git", "-c", "user.name=Harness", "-c", "user.email=harness@example.invalid",
                     "commit", "-qm", "fixture"], cwd=root, check=True)
     (root / "fixture.zkc").write_bytes(b"modified\r\nexact bytes\x00\n")
-    (root / "lean/Untracked.lean").write_text("import Proof\n-- untracked proof\n")
+    (root / "lean/ir/Zkc/IR/Untracked.lean").write_text("import Zkc.IR.Proof\n-- untracked proof\n")
     (root / "removed").unlink()
     (root / "ignored").mkdir()
     (root / "ignored/cache").write_text("not source")
@@ -78,26 +79,27 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
     """A Git-free package with real driver imports and tiny owned source trees."""
     root = tmp_path / "repeat-source"
     files = {
-        "lean/lakefile.toml": (ROOT / "lean/lakefile.toml").read_text() +
-            '\n[[lean_lib]]\nname = "FutureOwner"\n',
         "lean/lean-toolchain": "leanprover/lean4:test\n",
-        "lean/lake-manifest.json": '{"packages": []}',
-        "lean/Zkc.lean": "import Zkc.Dependency\n",
-        "lean/Zkc/Dependency.lean": "def value := 1\n",
-        "lean/ZkcTools/StructuredSource.lean": "import ZkcTools.StructuredSource.OpenEvaluation\n",
-        "lean/checks/StructuredSource.lean": "import ZkcTools.StructuredSource\n",
-        "lean/ZkcTools/ConstructionBindings.lean": "-- other executable root\n",
-        "lean/ZkcTools/ImportHeaders.lean": "-- import auditing executable\n",
-        "lean/checks/DeclarationRecords.lean": "-- declaration capture executable\n",
-        "lean/ZkcTools/StructuredSource/OpenEvaluation.lean":
-            "import ZkcTools.StructuredSource.Bounds\nimport ZkcTools.JsonSupport\n",
-        "lean/ZkcTools/StructuredSource/Bounds.lean": "def bound := 1\n",
-        "lean/ZkcTools/JsonSupport.lean": "-- observer support\n",
-        "lean/FutureOwner/Dependency.lean": "-- newly declared namespace\n",
-        "lean/Tests/Checks.lean": "-- local test namespace\n",
+        "lean/ir/lakefile.toml": (ROOT / "lean/ir/lakefile.toml").read_text() +
+            '\n[[lean_lib]]\nname = "FutureOwner"\nroots = ["Zkc.IR.FutureOwner"]\nglobs = ["Zkc.IR.FutureOwner.+"]\n',
+        "lean/ir/lean-toolchain": "leanprover/lean4:test\n",
+        "lean/ir/lake-manifest.json": '{"packages": []}',
+        "lean/ir/Zkc/IR.lean": "import Zkc.IR.Dependency\n",
+        "lean/ir/Zkc/IR/Dependency.lean": "def value := 1\n",
+        "lean/ir/Zkc/Tools/IR/StructuredSource.lean": "import Zkc.Tools.IR.StructuredSource.OpenEvaluation\n",
+        "lean/ir/Zkc/Tools/IR/Commands/StructuredSource.lean": "import Zkc.Tools.IR.StructuredSource\n",
+        "lean/ir/Zkc/Tools/IR/ConstructionBindings.lean": "-- other executable root\n",
+        "lean/program/Zkc/Tools/Program/ImportHeaders.lean": "-- import auditing executable\n",
+        "lean/ir/Zkc/Tools/IR/DeclarationRecords.lean": "-- declaration capture executable\n",
+        "lean/ir/Zkc/Tools/IR/StructuredSource/OpenEvaluation.lean":
+            "import Zkc.Tools.IR.StructuredSource.Bounds\nimport Zkc.Tools.Program.JsonSupport\n",
+        "lean/ir/Zkc/Tools/IR/StructuredSource/Bounds.lean": "def bound := 1\n",
+        "lean/program/Zkc/Tools/Program/JsonSupport.lean": "-- observer support\n",
+        "lean/ir/Zkc/IR/FutureOwner/Dependency.lean": "-- newly declared namespace\n",
+        "lean/ir/Zkc/Tests/IR/Checks.lean": "-- local test namespace\n",
         "lean/checks/check_structured_renderer.py": "import support.lake\n",
         "lean/support/lake.py": "# renderer dependency\n",
-        "lean/ZkcExamples/Structured/RepeatData.lean": "-- retained subject\n",
+        "lean/applications/Zkc/Applications/IR/Structured/RepeatData.lean": "-- retained subject\n",
         "lean/bridges/structured/fixtures/repeat.json": "[]\n",
         "lean/bridges/structured/fixtures/repeat.mlir": "// retained source\n",
         "lean/bridges/structured/README.md": "source owners\n",
@@ -120,13 +122,25 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
         "docs/private/secret.md": "private\n",
         "build/experiments/private.py": "private\n",
         "lean/.lake/packages/external/Dependency.lean": "external\n",
-        "lean/Zkc/private/Experiment.lean": "private\n",
+        "lean/ir/Zkc/IR/private/Experiment.lean": "private\n",
         "scripts/__pycache__/ignored.py": "cache\n",
     }
     for name in ("snapshot", "check", "evidence", "open_protocol", "repeats"):
         files[f"lean/bridges/structured/{name}.py"] = (BRIDGE / f"{name}.py").read_text()
     for path in (ROOT / "lean/bridges/common").glob("*.py"):
         files[path.relative_to(ROOT).as_posix()] = path.read_text()
+    for path in (ROOT / "lean/support").glob("*.py"):
+        files[path.relative_to(ROOT).as_posix()] = path.read_text()
+    from support.packages import PACKAGES, package_directory, package_modules
+    for package, (directory, roots) in PACKAGES.items():
+        relative = directory.relative_to(ROOT)
+        for name in ("lakefile.toml", "lean-toolchain", "lake-manifest.json"):
+            files.setdefault(str(relative / name), (directory / name).read_text())
+        for prefix in roots:
+            files.setdefault(str(relative.joinpath(*prefix.split('.')).with_suffix('.lean')), "-- owned source root\n")
+        for executable in tomllib.loads((directory / "lakefile.toml").read_text()).get("lean_exe", []):
+            source = relative.joinpath(*executable["root"].split('.')).with_suffix('.lean')
+            files.setdefault(str(source), "-- declared executable root\n")
     for name in ("scripts/reporting.py", "common/tests/support/project.py", "common/catalog/declarations.json",
                  "common/catalog/installation.json", "lean/bridges/structured/fixtures.toml"):
         files[name] = (ROOT / name).read_text()
@@ -136,6 +150,8 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
         path.write_text(value)
     monkeypatch.setattr(bridge, "ROOT", root)
     monkeypatch.setattr(repeats, "ROOT", root)
+    monkeypatch.setattr(repeats, "package_directory", lambda package: package_directory(package, root / "lean"))
+    monkeypatch.setattr(repeats, "package_modules", lambda package: package_modules(package, root / "lean"))
     monkeypatch.setattr(repeats, "SUBJECTS", [
         ("repeat", "Repeat", "example::Demo", "examples/project/zkc.toml")])
     return root
@@ -152,6 +168,9 @@ def successful_run(bridge, args):
 def test_inlining_selects_toolchain_from_package_directory(bridge, source_tree, tmp_path, monkeypatch):
     monkeypatch.setattr(bridge, "ROOT", source_tree)
     inlining = load("inlining_toolchain_selection", BRIDGE / "inlining.py")
+    from support.packages import module_owner, package_directory
+    monkeypatch.setattr(inlining, "module_package", lambda module: package_directory(module_owner(module), source_tree / "lean"))
+    (source_tree / "lean/applications").mkdir()
     monkeypatch.setattr(inlining, "SUBJECTS", ())
     args = arguments(tmp_path)
     args.optimizer = args.compiler
@@ -161,9 +180,9 @@ def test_inlining_selects_toolchain_from_package_directory(bridge, source_tree, 
     suite = bridge.Suite(args)
     assert suite.run(lambda s: s.case("toolchain", lambda: inlining.run_cases(s))) == 0
     environment = json.loads((suite.directory / "environment.json").read_text())
-    assert environment["toolchain"] == str(source_tree / "lean")
+    assert environment["toolchain"] == str(source_tree / "lean/applications")
     command, = [row for row in suite.commands if row["label"] == "lean-version"]
-    assert command["cwd"] == str(source_tree / "lean")
+    assert command["cwd"] == str(source_tree / "lean/applications")
     assert command["argv"] == [str(args.lake), "env", "lean", "--version"]
 
 
@@ -251,8 +270,8 @@ def test_archive_retains_working_bytes_untracked_proofs_and_local_imports(
         assert manifest["deletedTrackedPaths"] == ["removed"]
         with tarfile.open(archive) as retained:
             assert retained.extractfile("fixture.zkc").read() == expected
-            for name in ("lean/Proof.lean", "lean/Untracked.lean", "lean/Dependency.lean",
-                         "lean/lake-manifest.json"):
+            for name in ("lean/ir/Zkc/IR/Proof.lean", "lean/ir/Zkc/IR/Untracked.lean", "lean/ir/Zkc/IR/Dependency.lean",
+                         "lean/ir/lake-manifest.json"):
                 assert retained.extractfile(name).read() == (source_tree / name).read_bytes()
             assert set(retained.getnames()) == set(manifest["files"])
             assert "ignored/cache" not in retained.getnames()
@@ -306,7 +325,7 @@ def test_actual_repeat_source_failure_is_terminal_and_preserves_prior_run(
     previous = terminal_report(args, "native-only" if native_only else "pass")
     old_directory = Path(previous["directory"])
     retained = {path: path.read_bytes() for path in old_directory.rglob("*") if path.is_file()}
-    name = "lean/ZkcTools/StructuredSource/Bounds.lean"
+    name = "lean/ir/Zkc/Tools/IR/StructuredSource/Bounds.lean"
     source = repeat_tree / name
     before = source.read_bytes()
     read_bytes = Path.read_bytes
@@ -336,7 +355,7 @@ def test_actual_repeat_source_failure_is_terminal_and_preserves_prior_run(
     elif mutation == "changed":
         assert name in stability["changed"]
     else:
-        assert "lean/ZkcTools/StructuredSource/NewDependency.lean" in stability["added"]
+        assert "lean/ir/Zkc/Tools/IR/StructuredSource/NewDependency.lean" in stability["added"]
     with tarfile.open(report["sourceArchives"]["before"]["path"]) as archive:
         assert archive.extractfile(name).read() == before
     assert report["run"] != previous["run"]
@@ -362,7 +381,7 @@ def test_actual_repeat_shared_lifecycle_failures(
     if failure == "missing-source":
         (repeat_tree / "lean/bridges/structured/fixtures/repeat.json").unlink()
     elif failure == "unreadable-source":
-        source = repeat_tree / "lean/ZkcTools/StructuredSource/Bounds.lean"
+        source = repeat_tree / "lean/ir/Zkc/Tools/IR/StructuredSource/Bounds.lean"
         original = Path.read_bytes
         def unreadable(path):
             return denied() if path == source else original(path)
@@ -434,10 +453,10 @@ def test_repeat_inventory_captures_owners_and_runs_from_git_free_archive(
     assert "Git-free" in record["scope"]
     assert manifest["deletedTrackedPaths"] == []
     assert {
-        "lean/checks/StructuredSource.lean",
-        "lean/ZkcTools/StructuredSource.lean", "lean/ZkcTools/StructuredSource/OpenEvaluation.lean",
-        "lean/ZkcTools/StructuredSource/Bounds.lean", "lean/ZkcTools/JsonSupport.lean",
-        "lean/FutureOwner/Dependency.lean", "scripts/reporting.py", "common/tests/support/project.py",
+        "lean/ir/Zkc/Tools/IR/Commands/StructuredSource.lean",
+        "lean/ir/Zkc/Tools/IR/StructuredSource.lean", "lean/ir/Zkc/Tools/IR/StructuredSource/OpenEvaluation.lean",
+        "lean/ir/Zkc/Tools/IR/StructuredSource/Bounds.lean", "lean/program/Zkc/Tools/Program/JsonSupport.lean",
+        "lean/ir/Zkc/IR/FutureOwner/Dependency.lean", "scripts/reporting.py", "common/tests/support/project.py",
         "lean/support/lake.py", "libraries/lib/lib.zkc", "libraries/lib/zkc.toml",
         "lean/bridges/common/lean_render.py", "lean/bridges/common/native_entry.py",
         "lean/bridges/common/schema.py", "common/catalog/declarations.json",
@@ -485,12 +504,17 @@ def test_live_repeat_inventory_covers_main_lean_imports_and_python_owners(repeat
             continue
         for module in re.findall(r"^\s*(?:public\s+)?import\s+(?:all\s+)?([\w.]+)",
                                  path.read_text(), flags=re.MULTILINE):
-            dependency = ROOT / "lean" / (module.replace(".", "/") + ".lean")
+            from support.packages import is_owned_module, module_path
+            if is_owned_module(module):
+                dependency = module_path(module)
+                assert dependency.exists()
+            else:
+                continue
             if dependency.exists():
                 assert dependency in inventory, (path, dependency)
     for tree in ("scripts", "common/tests/support", "lean/bridges/structured", "lean/bridges/common"):
         assert set((ROOT / tree).glob("*.py")) <= inventory
-    assert ROOT / "lean/ZkcTools/StructuredSource/Bounds.lean" in inventory
+    assert ROOT / "lean/ir/Zkc/Tools/IR/StructuredSource/Bounds.lean" in inventory
     assert set((ROOT / "common/unicode").rglob("*.txt")) <= inventory
     assert ROOT / "common/catalog/declarations.json" in inventory
     assert ROOT / "common/catalog/installation.json" in inventory
@@ -543,15 +567,15 @@ def test_tools_are_retained_once_per_digest_and_damaged_entries_are_replaced(bri
 def test_repeat_inventory_refusals_are_terminal(
         repeats, repeat_tree, tmp_path, monkeypatch, failure):
     args = arguments(tmp_path)
-    owner = repeat_tree / "lean/ZkcTools/StructuredSource"
+    owner = repeat_tree / "lean/ir/Zkc/Tools/IR/StructuredSource"
     if failure == "namespace":
-        shutil.rmtree(repeat_tree / "lean/FutureOwner")
+        shutil.rmtree(repeat_tree / "lean/ir/Zkc/IR/FutureOwner")
     elif failure == "executable":
-        (repeat_tree / "lean/checks/StructuredSource.lean").unlink()
+        (repeat_tree / "lean/ir/Zkc/Tools/IR/Commands/StructuredSource.lean").unlink()
     elif failure == "directory-link":
         (owner / "External").symlink_to(tmp_path, target_is_directory=True)
     elif failure == "file-link":
-        (owner / "External.lean").symlink_to(repeat_tree / "lean/Zkc.lean")
+        (owner / "External.lean").symlink_to(repeat_tree / "lean/ir/Zkc/IR.lean")
     else:
         import os
         scandir = os.scandir

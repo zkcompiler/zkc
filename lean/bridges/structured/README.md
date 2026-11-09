@@ -295,13 +295,13 @@ and [`unit-state.mlir`](../../../compiler/test/fixtures/finite/unit-state.mlir)
 are the canonical subjects. Their retained JSON is `protocol-structured` output.
 The bridge compares the source-byte digest, the entire exported snapshot and regenerated
 transparent constructor data used by
-[`TotalState`](../../ZkcExamples/Structured/TotalState.lean) and
-[`UnitState`](../../ZkcExamples/Structured/UnitState.lean).
+[`TotalState`](../../applications/Zkc/Applications/IR/Structured/TotalState.lean) and
+[`UnitState`](../../applications/Zkc/Applications/IR/Structured/UnitState.lean).
 
 ```sh
 python3 lean/bridges/structured/snapshot.py \
   lean/bridges/structured/fixtures/total-state.json \
-  lean/ZkcExamples/Structured/TotalStateData.lean \
+  lean/applications/Zkc/Applications/IR/Structured/TotalStateData.lean \
   --namespace ZkcExamples.Structured.TotalStateData
 ```
 
@@ -419,9 +419,9 @@ Lean set up ([development guide](../../../docs/development/README.md)):
    `[source_views] selections`; the driver regenerates and checks every output.
 5. State the protocol's mathematics over the generated declarations and connect
    it to a library, as
-   [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)
+   [`ChaumPedersenBinding`](../../applications/Zkc/Applications/IR/Structured/ChaumPedersenBinding.lean)
    (extraction from two accepting transcripts) and
-   [`ChaumPedersenSigma`](../../security/ZkcSecurityExamples/ChaumPedersenSigma.lean)
+   [`ChaumPedersenSigma`](../../applications/Zkc/Applications/Security/ChaumPedersenSigma.lean)
    (VCVio's Schnorr Σ-protocol at the base pair) do. The package treats warnings
    as errors: a lemma that does not use every section instance needs
    `omit [...] in`, written before its docstring.
@@ -614,8 +614,8 @@ literal is admitted by kernel reduction. Both computations are scalar
 ingredients of protocols, without group operations or interactive security
 claims.
 
-[`SchnorrResponse`](../../ZkcExamples/Structured/SchnorrResponse.lean) and
-[`SumcheckClaim`](../../ZkcExamples/Structured/SumcheckClaim.lean) are the proof
+[`SchnorrResponse`](../../applications/Zkc/Applications/IR/Structured/SchnorrResponse.lean) and
+[`SumcheckClaim`](../../applications/Zkc/Applications/IR/Structured/SumcheckClaim.lean) are the proof
 clients for these pairs. The retained mutation changes only the prepared
 response entry's addition to subtraction. It passes native formation and Lean
 admission. [Formal support](../../docs/support.md#helper-inlining-pairs) states

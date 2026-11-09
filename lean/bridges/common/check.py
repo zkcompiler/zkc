@@ -418,7 +418,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler',type=Path,default=ROOT/'build/compiler/zkc-compile')
     parser.add_argument('--reference',type=Path,default=ROOT/'build/compiler/test/zkc-structured_reference-test')
-    parser.add_argument('--lean',type=Path,default=ROOT/'lean/.lake/build/bin/structured-source')
+    parser.add_argument('--lean',type=Path,default=ROOT/'lean/ir/.lake/build/bin/structured-source')
     parser.add_argument('--seed',type=int,default=20261012)
     parser.add_argument('--cases',type=int,default=40)
     parser.add_argument('--report',type=Path,required=True)
@@ -443,7 +443,7 @@ def main():
             raise AssertionError("bridges/common/check.py:336: interface['original']==hashlib.sha256(text.encode()).hexdigest()")
         symbol=interface['protocol']
         data=suite.exercise(text,symbol)
-        fixture=ROOT/'lean/ZkcExamples/NativePrograms/fixtures/schnorr.json'
+        fixture=ROOT/'lean/applications/Zkc/Applications/IR/NativePrograms/fixtures/schnorr.json'
         if not (data==json.loads(fixture.read_text())):
             raise AssertionError('Schnorr source drift: review correspondence before refreshing')
         expected=render(data,'ZkcExamples.NativePrograms.SchnorrData')

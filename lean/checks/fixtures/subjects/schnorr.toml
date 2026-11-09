@@ -22,8 +22,8 @@ executable = true
 scalar = false
 
 [generated]
-data = "lean/ZkcExamples/Construction/SchnorrProofData.lean"
-glue = "lean/ZkcExamples/Construction/SchnorrProof.lean"
+data = "lean/applications/Zkc/Applications/IR/Construction/SchnorrProofData.lean"
+glue = "lean/applications/Zkc/Applications/IR/Construction/SchnorrProof.lean"
 
 [family]
 module = "ZkcSecurity.Bindings.Sigma.Schnorr"

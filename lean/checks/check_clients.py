@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import support.evidence  # noqa: E402
 
 import support.lake
+from bridges.common.lean_render import source_package
+from support.packages import NAMES, PACKAGES, add_selection, selection  # noqa: E402
 import shutil
 import subprocess
 
@@ -19,7 +21,7 @@ import subprocess
 HERE = Path(__file__).resolve().parents[1]
 
 
-def check(root, output, with_arklib=False, lake="lake", with_security=False):
+def check(root, output, packages=None, lake="lake", requested_clients=None):
     lake = support.lake.resolve(lake)
     lake = str(Path(lake).absolute())
     output.mkdir(parents=True, exist_ok=False)
@@ -27,29 +29,33 @@ def check(root, output, with_arklib=False, lake="lake", with_security=False):
     for key in ('LEAN_PATH', 'LEAN_SRC_PATH', 'LEAN_SYSROOT', 'LAKE_HOME'):
         environment.pop(key, None)
     results = {}
-    clients = [('main', 'Main.lean', root, 'zkc')]
-    if with_security or with_arklib:
-        clients.extend([
-            ('security', 'Security.lean', root / 'security', 'zkc_security'),
-            ('security-theory', 'SecurityTheory.lean', root / 'security', 'zkc_security'),
-            ('security-tools', 'SecurityTools.lean', root / 'security', 'zkc_security'),
-        ])
-    if with_arklib:
-        integration = root / 'integrations/arklib'
-        clients.extend([
-            ('arklib', 'ArkLib.lean', integration, 'zkc_arklib'),
-            ('uniform', 'UniformComposition.lean', integration, 'zkc_arklib'),
-        ])
+    selected_packages = set(PACKAGES if packages is None else packages)
+    clients = []
+    sources = sorted((root / "clients").glob("*.lean"))
+    requested = set(requested_clients or (source.stem for source in sources))
+    unknown = requested - {source.stem for source in sources}
+    if unknown:
+        raise ValueError(f"unknown standalone clients: {sorted(unknown)}")
+    for source in sources:
+        if source.stem not in requested:
+            continue
+        filename = source.name
+        upstream = source_package((root / "clients" / filename).read_text(), root=root)
+        owner = next(name for name, (directory, _) in PACKAGES.items() if directory.relative_to(HERE) == upstream.relative_to(root))
+        if owner in selected_packages:
+            clients.append((filename.removesuffix(".lean"), filename, upstream, NAMES[owner]))
+    if not clients:
+        raise ValueError("selected packages have no maintained standalone clients")
     for kind, filename, upstream, dependency in clients:
         client = output / kind
         client.mkdir()
-        shutil.copy2(root / 'lean-toolchain', client / 'lean-toolchain')
+        shutil.copy2(upstream / 'lean-toolchain', client / 'lean-toolchain')
         source = root / 'clients' / filename
         source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
         compiled_source = client / 'Client.lean'
         shutil.copy2(source, compiled_source)
         (client / 'Audit.lean').write_text(
-            'import Client\nimport ZkcTools.DeclarationAudit\n\n'
+            'import Client\nimport Zkc.Tools.Program.DeclarationAudit\n\n'
             'run_cmd ZkcTools.DeclarationAudit.check [`Client]\n')
         (client / 'lakefile.toml').write_text(
             'name = "zkc_client"\ndefaultTargets = ["Client"]\n\n'
@@ -103,10 +109,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path,
                         default=support.evidence.records("clients", ""))
-    parser.add_argument('--with-arklib', action='store_true')
-    parser.add_argument('--with-security', action='store_true')
+    add_selection(parser)
     parser.add_argument('--lake', default='lake')
+    parser.add_argument('--client', action='append', help='check only named clients; repeat (default: all)')
     args = parser.parse_args()
-    record = check(HERE, args.output.resolve(), args.with_arklib, args.lake, args.with_security)
+    record = check(HERE, args.output.resolve(), selection(args), args.lake, args.client)
     print(json.dumps(record, indent=2))
     raise SystemExit(0 if record['status'] == 'pass' else 1)

@@ -12,6 +12,6 @@ zkc check
 ```
 
 The corresponding formal construction and negative controls are in
-`lean/ZkcExamples/Structured/Generated/Bindings/SampledAbortData.lean` and
-`lean/security/TestsSecurity/SampledRootClaims.lean`. Source admission alone does
+`lean/applications/Zkc/Applications/IR/Structured/Generated/Bindings/SampledAbortData.lean` and
+`lean/applications/Zkc/Tests/Applications/Verification/SampledRootClaims.lean`. Source admission alone does
 not discharge their security obligations.

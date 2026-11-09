@@ -379,7 +379,7 @@ def render(deployment, namespace):
     binding_text = ",\n    ".join(rendered_bindings)
     return f'''module
 
-public import Zkc.Executable.Program
+public import Zkc.IR.Executable.Program
 
 @[expose] public section
 

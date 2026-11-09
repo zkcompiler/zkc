@@ -15,4 +15,4 @@ and degree laws concern this mathematical model.
 `Zkc.Relation.AIR.RingExpression` connects admitted AIR expressions to that ring
 language. `ZkcClean` exports a lookup-free and channel-free flat Clean component,
 proves constraint interpretation and source-specification preservation, and
-emits the maintained finite native fixture. See the [adapter guide](../../integrations/clean/README.md).
+emits the maintained finite native fixture. See the [adapter guide](../../adapters/clean/README.md).

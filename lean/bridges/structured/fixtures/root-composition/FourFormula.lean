@@ -1,11 +1,11 @@
 module
 
-public import ZkcExamples.Structured.Generated.Mathematics.FourSums
-public import ZkcSecurityExamples.Generated.FourSums
-public import ZkcSecurityExamples.Generated.Components.FourSumsABI
-public import ZkcSecurity.Bindings.Sumcheck.Table.TableComponentFold
-public import ZkcSecurity.Claims.Completeness
-public meta import ZkcSecurityTools.TargetEvaluation
+public import Zkc.Applications.IR.Structured.Generated.Mathematics.FourSums
+public import Zkc.Applications.Verification.Generated.FourSums
+public import Zkc.Applications.Verification.Generated.Components.FourSumsABI
+public import Zkc.Verification.Bindings.Sumcheck.Table.TableComponentFold
+public import Zkc.Verification.Claims.Completeness
+public meta import Zkc.Tools.Verification.TargetEvaluation
 
 @[expose] public section
 noncomputable section

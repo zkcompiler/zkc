@@ -19,6 +19,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 LEAN = ROOT / "lean"
 sys.path.insert(0, str(LEAN))
+from support.packages import module_package  # noqa: E402
 from bridges.common import lean_render, source_format  # noqa: E402
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
@@ -234,16 +235,16 @@ example : (SourceOccurrences.check Repeated.Source.snapshot Repeated.context
 #print axioms Zkc.Construction.AuthoredPair.admitted_servicePorts
 '''
     path = output / "LocalServices.lean"
-    path.write_text("module\n\npublic import Zkc.Construction.AuthoredPair\npublic import Zkc.Construction.CatalogueAdmission\n\n"
+    path.write_text("module\n\npublic import Zkc.IR.Construction.AuthoredPair\npublic import Zkc.IR.Construction.CatalogueAdmission\n\n"
                     "@[expose] public section\n\n"
                     "set_option maxRecDepth 10000\nset_option maxHeartbeats 8000000\n\n"
                     + "\n".join(definitions) + controls)
     if not args.native_only:
         command = ["lake", "env"]
         if args.lean_path:
-            base = run(["lake", "env", "printenv", "LEAN_PATH"], cwd=LEAN).strip()
+            base = run(["lake", "env", "printenv", "LEAN_PATH"], cwd=module_package("Zkc.IR")).strip()
             command += ["env", "LEAN_PATH=" + str(args.lean_path.resolve()) + ":" + base]
-        log = run([*command, "lean", path], cwd=LEAN)
+        log = run([*command, "lean", path], cwd=module_package("Zkc.IR"))
         (output / "lean.log").write_text(log)
     result = {"status": "pass", "compiled_pairs": list(data_by_name),
               "strict_reader_refusals": refusal_count, "lean_checked": not args.native_only}

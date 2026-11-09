@@ -17,7 +17,7 @@
    complete runs. `--subject` reports retain every live receipt check but omit
    this global regression suite; the result records that partial test coverage.
 
-Without `--integration`, the program and main packages are emitted; a ledger row whose
+The default selection emits every maintained package; a ledger row whose
 theorem lives in an unselected package is skipped and counted. `--write`
 rewrites the lock and the generated regions instead of failing on them.
 """
@@ -34,7 +34,7 @@ import support.evidence  # noqa: E402
 import support.lake  # noqa: E402
 from records import controls, ledger, reports  # noqa: E402
 from records.declarations import Records, emit, forbidden_axioms  # noqa: E402
-from support.packages import OPTIONAL, selected as select_packages  # noqa: E402
+from support.packages import add_selection, selection  # noqa: E402
 
 LEAN = HERE.parent
 ROOT = LEAN.parent
@@ -75,7 +75,7 @@ def compare(document, region, rendered, write, failures, notes, subjects=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--integration", action="append", choices=OPTIONAL, default=[])
+    add_selection(parser)
     parser.add_argument("--records", type=Path, help="reuse emitted records from this directory")
     parser.add_argument("--output", type=Path, default=support.evidence.records("records", ""))
     parser.add_argument("--manifests", type=Path, help="subject manifests (default: lean/subjects)")
@@ -102,12 +102,12 @@ def main():
             parser.error(str(error))
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    packages = select_packages(list(dict.fromkeys(args.integration)))
+    packages = selection(args)
     # Catch an unprepared or changed dependency before generating subjects or
     # traversing declarations. The report still verifies it at the final join.
     dependencies = []
     if args.preflight or not args.records:
-        from support.packages import PACKAGES, check_closure
+        from support.packages import PACKAGES, check_closure  # noqa: E402
         for package in packages:
             directory = PACKAGES[package][0]
             check_closure(package, directory)
@@ -127,7 +127,7 @@ def main():
             parser.error(f"unknown subjects: {', '.join(sorted(missing))}")
         subject_manifests = [path for path in subject_manifests if reports.load_manifest(path)["name"] in wanted]
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
-    details = [*controls.EMITTED_APPLICATIONS, *controls.EMITTED_HYPOTHESES] if "arklib" in packages else []
+    details = [*controls.EMITTED_APPLICATIONS, *controls.EMITTED_HYPOTHESES] if "applications" in packages else []
     for path in subject_manifests + samples:
         manifest = reports.load_manifest(path)
         evidence = reports.load_evidence(args.evidence, manifest["name"])
@@ -142,7 +142,7 @@ def main():
         lake = str(Path(support.lake.resolve(args.lake)).absolute())
         for package in packages:
             target = output / "declarations" / f"{package}.jsonl"
-            selected = details if package in {"security", "arklib"} else []
+            selected = details if package in {"verification", "arklib", "applications"} else []
             with (output / f"emit-{package}.log").open("w") as log:
                 result = emit(package, target, lake=lake, details=selected, log=log)
             # A signal death is a failure too, so success is the only accepted status.
@@ -192,12 +192,12 @@ def main():
             failures.append(f"{report['subject']}: consumer requirements remain unresolved")
     rows = reports.render_subjects(built)
     (output / "support-subjects.md").write_text(rows)
-    if subject_manifests and "arklib" in packages and args.evidence is not None:
+    if subject_manifests and "applications" in packages and args.evidence is not None:
         compare(SUPPORT, "subject-rows", rows, args.write, failures, notes,
                 subjects=set(args.subject) if args.subject else None)
         if args.subject:
             notes.append(f"subject table checked for: {', '.join(sorted(set(args.subject)))}")
-    elif subject_manifests and "arklib" in packages:
+    elif subject_manifests and "applications" in packages:
         # A report is established only with the pipeline's evidence, so the rows a
         # run without it renders are not the subjects' outcomes; only a run with
         # evidence is compared.
@@ -205,7 +205,7 @@ def main():
     elif subject_manifests:
         # Without the security package the registry and endpoints are absent, so the
         # rows are incomplete; only a run that emits them is compared.
-        notes.append(f"{SUPPORT.relative_to(ROOT)}#subject-rows: not compared without --integration arklib")
+        notes.append(f"{SUPPORT.relative_to(ROOT)}#subject-rows: not compared without --package applications")
     if samples:
         notes.append(f"no subject manifests under {SUBJECTS.relative_to(ROOT)}; "
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")
@@ -218,7 +218,7 @@ def main():
         receipt_rows, receipt_failures = controls.run_emitted_receipts(records)
         control_rows += receipt_rows
         failures += receipt_failures
-        if "arklib" in packages:
+        if "applications" in packages:
             emitted_rows, emitted_failures = controls.run_emitted(records)
             control_rows += emitted_rows
             failures += emitted_failures

@@ -3,7 +3,7 @@
 
 `common/catalog/declarations.json` owns the installed domain rows and random
 services. This generator projects every one of them into
-`Zkc/Source/Structured/InstalledCatalogue.lean`, in the encoding the native
+`Zkc.IR.Source.Structured.InstalledCatalogue`, in the encoding the native
 exporter gives exported rows: identity, sort, associated members and
 capability facts in declaration order and, for a field, its characteristic as
 the modulus; a service's methods are `draw` and each method whose capability
@@ -23,9 +23,10 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import lean_render, schema  # noqa: E402
 from bridges.common.lean_render import Refused, require  # noqa: E402
+from support.packages import module_path  # noqa: E402
 
 LEAN = Path(__file__).resolve().parents[2]
-MODULE = LEAN / "Zkc/Source/Structured/InstalledCatalogue.lean"
+MODULE = module_path("Zkc.IR.Source.Structured.InstalledCatalogue")
 SORTS = {"Field": ".field", "Group": ".group", "Commitment": ".commitment", "Transcript": ".transcript"}
 # A catalog identity: a letter or underscore, then letters, digits and `_ . - /`.
 # It names its Lean definition between guillemets.
@@ -247,7 +248,7 @@ def render(declarations):
     offered = ",\n    ".join(f"Services.«{contract}»" for contract in contracts)
     return f'''module
 
-public import Zkc.Source.Structured.Catalogue
+public import Zkc.IR.Source.Structured.Catalogue
 
 @[expose] public section
 

@@ -130,33 +130,40 @@ def test_patch_refuses_unexpected_added_file(addition):
 
 def test_fresh_reproduction_records_arklib_patch():
     root = Path(__file__).resolve().parents[3]
-    integration = root / 'lean/integrations/arklib'
+    integration = root / 'lean/adapters/arklib'
     result = subprocess.run(['python3', '-c',
-        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, with_arklib=True)))'],
+        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, packages=["arklib"])))'],
         cwd=root / 'lean', capture_output=True, text=True, check=True)
     inputs = json.loads(result.stdout)
     for name in ['compatibility.json', 'compatibility.patch']:
         path = integration / name
         if path.is_file():
-            assert inputs['integrations/arklib/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
+            assert inputs['adapters/arklib/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
         else:
-            assert 'integrations/arklib/' + name not in inputs
+            assert 'adapters/arklib/' + name not in inputs
 
 
 def test_fresh_reproduction_records_clean_wrapper_and_patch():
     root = Path(__file__).resolve().parents[3]
     result = subprocess.run(['python3', '-c',
-        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, with_clean=True)))'],
+        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, packages=["applications"])))'],
         cwd=root / 'lean', capture_output=True, text=True, check=True)
     inputs = json.loads(result.stdout)
-    for name in ['CleanExamples.lean', 'compatibility.json', 'compatibility.patch',
-                 'CleanExamples/NativeClients.lean', 'ZkcClean/NativeExport.lean']:
-        path = root / 'lean/integrations/clean' / name
-        assert inputs['integrations/clean/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
+    for name in ['applications/Zkc/Applications/Clean.lean',
+                 'applications/Zkc/Applications/Clean/NativeClients.lean',
+                 'adapters/clean/Zkc/Adapters/Clean/NativeExport.lean',
+                 'adapters/clean/compatibility.json', 'adapters/clean/compatibility.patch']:
+        path = root / 'lean' / name
+        assert inputs[name] == hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_clean_control_runs_with_package_options_before_its_filename(tmp_path, monkeypatch):
     reproduce = load('lean_reproduce', 'lean/reproduce.py')
+    directory = tmp_path / 'lean/adapters/clean'
+    directory.mkdir(parents=True)
+    control = directory / 'Zkc/Tests/Clean/Control.lean'
+    control.parent.mkdir(parents=True)
+    control.write_text('def main : IO Unit := pure ()\n')
     expected = tmp_path / 'expected.mlir'
     expected.write_bytes(b'control\n')
     commands = []
@@ -167,7 +174,7 @@ def test_clean_control_runs_with_package_options_before_its_filename(tmp_path, m
         return SimpleNamespace(returncode=0, stdout=expected.read_bytes())
 
     monkeypatch.setattr(reproduce.subprocess, 'run', run)
-    result = reproduce.clean_control('lake', tmp_path, expected, tmp_path / 'control.log', {})
+    result = reproduce.clean_control('lake', directory, expected, tmp_path / 'control.log', {})
     assert result['status'] == 'pass'
     assert commands == [['lake', 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true',
-                         '--run', 'TestsClean/Control.lean']]
+                         '--run', str(control)]]
