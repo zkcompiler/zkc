@@ -3,7 +3,10 @@
 The framework fixes the claim before accepting a proof. An `Experiment E O` supplies a
 normalized probability law for every environment. An `Observation O V` is a measurable map
 of the entire outcome. `Experiment.observe` pushes forward all probability mass, including
-explicit rejection and abort outcomes; it never conditions on success.
+explicit rejection and abort outcomes; it never conditions on success. For Process clients,
+`System.experiment` produces canonical `PIR.Execution State Event Result` from `ZkcProgram`,
+with outcome, reached state and ordered events. An observation selects what is visible without
+silently replacing that underlying execution meaning.
 
 The environment fixes the public input, setup and admitted adversary or honest strategy.
 It is semantic context, not automatically an argument available to an adversary. A mathematical
@@ -33,14 +36,19 @@ This avoids forcing proximity soundness to mean the negation of exact membership
 
 ## Extraction: algorithm, access and threshold
 
-The execution interface is shared by extraction and simulation:
+Extraction and simulation share
+`AccessExecution Public Environment Interface State Event Result`. Its fields are, with
+parameters and measurable instances understood:
 
 ```lean
-structure AccessExecution ... where
-  system : System Environment Interface State
-  publicInput : Environment → Public
-  algorithm : Public → FreeM Interface Result
+system : System Environment Interface State Event
+publicInput : Environment → Public
+algorithm : Public → Process Interface Result
 ```
+
+Its experiment returns `Execution State Event Result`. Operation replies must be countable
+with measurable singletons for this kernel interpretation; state, event and result spaces
+carry their stated measurable structures. Requests retain measurable success/event premises.
 
 The algorithm gets the selected public input and typed operation answers. The request also
 fixes the handler and initial state law. Private state is threaded by `System`; it is not
@@ -49,19 +57,34 @@ must occur in the selected interface/handler if allowed. Naming an algorithm an 
 does not grant those capabilities.
 
 The implemented extraction profile uses a statement fixed by the public input. Acceptance and
-extraction are indexed by the same environment. Success means that the actual selected program
-returns `some w` satisfying the request's witness relation for that statement. `none` and invalid
-witnesses retain their mass as failure. `successRequest environment` exposes this as a regular
-lower-bound proof goal, and `establish` conjoins its proof with the selected resource bound.
+extraction are indexed by the same environment. Success means that the selected program returns
+a record with `out.outcome = .returned (some w)` and `w` satisfies the request's witness relation
+for that statement. Returned `none`, invalid witnesses and every stopped reason retain their
+mass as failure. `successRequest environment` exposes this as a regular lower-bound proof goal,
+and `establish` conjoins its proof with the selected resource bound.
 
 `ExtractionGuarantee` fixes a monotone success function, its probability range, and positivity
 above an explicit threshold. `direct` is the concrete profile `lower p = p`, with threshold zero.
 Other extraction methods may supply another proved profile; evidence for an existing request
 cannot select an easier one. `Informative` asks whether its threshold is below one.
 
-Resource accounting directly reuses pinned PolyFun `OpSpec.charge` and `FreeM.wpFold`. A call
-costs its fixed nonnegative weight plus the supremum over answer-dependent continuation costs.
-This preserves adaptive call choices. `OperationCost.calls` gives each abstract call weight one.
+`OperationCost.bound` is a structural fold over the well-founded Process tree:
+
+```text
+bound (.done value) = 0
+bound (.halt reason) = 0
+bound (.call operation next) = weight operation + ⨆ reply, bound (next reply)
+```
+
+It preserves adaptive call choices and charges no continuation after an explicit stop, including
+`halt.bind`. The call itself is charged; a handler stop prevents further execution under the
+fixed System semantics, while this uniform structural bound may overestimate that path.
+`OperationCost.calls` gives each abstract call weight one. Every Process path is finite, but
+unbounded reply branching can still give an infinite supremum; a finite budget is a separate
+obligation. This fold computes a resource bound, not another probability evaluator.
+`Internal.bound_eq_charge` connects it to PolyFun's charge fold on the stop-aware encoding;
+authors still supply a Process and its selected call budget.
+
 These are worst-case weighted **abstract calls**. Pure computation is uncharged; operations can
 represent substantial work. The claim is therefore named bounded extraction, not general
 efficient proof of knowledge. An efficient knowledge definition needs a justified computational
@@ -69,19 +92,21 @@ and adversary-resource profile as well as the cryptographic extraction theorem.
 
 ## Simulation: uniformity and observations
 
-`SimulationProfile` fixes `real : Experiment (Context × Witness) View`, one simulator over
+`SimulationProfile` fixes `real : Experiment (Context × Witness) (Outcome View)`, one simulator over
 `Context`, and the valid context/witness relation. The simulator can depend on public input and
 the context-selected verifier through allowed services. It does not receive the witness as an
 argument. Its handler is indexed by context, not by the subsequently quantified witness.
 
-The returned `View` is the request's complete claimed observation. Secret state is not secretly
-added to it. Conversely, omitting a transcript or leakage field from the requested view is a
-change of security claim; the framework cannot infer the author's intended view.
+The simulated law observes the complete Execution through `Observation.outcome`, giving
+`Outcome View`. Every stopped reason remains visible; it is neither discarded nor replaced by
+a successful view. The returned `View` must contain the claimed transcript/leakage fields.
+Private state and event logs are not automatically added to that view. Omitting a field changes
+the security claim; the framework cannot infer the author's intended observation.
 
 Statistical simulation quantifies over every measurable event. Zero error plus exact view-law
 equality is the supported perfect-simulation case. Selected-observer simulation instead fixes
-normalized test kernels and their admitted class. This distinction is intentional. A restricted
-test family is not automatically a polynomial-time class, and either profile must state the
+normalized test kernels on `Outcome View` and their admitted class. A restricted test family
+is not automatically a polynomial-time class, and either profile must state the
 actual verifier/context capabilities before being interpreted as a particular ZK definition.
 
 ## Receipts, premises and diagnostics
@@ -107,15 +132,17 @@ These assessments supplement proof validity, independently of the proof route.
 They are typed interfaces for later reporting, not a new report generator. In particular, an
 informative error assessment alone can be vacuous if admission is empty: both axes matter.
 
-## Checked boundary examples
+## Model boundary examples
 
-The old adaptive/nested and shared-state clients still close through `UpperEvidence` and
-`LowerEvidence`, with ordinary truth embedded by `PromiseProblem.ofPredicate`. The new examples
-exercise the semantic layer independently:
+The Process migrations of the adaptive/nested and shared-state clients use `UpperEvidence`
+and `LowerEvidence`, with ordinary truth embedded by `PromiseProblem.ofPredicate`. The property
+models exercise the following boundaries; their current integrated validation belongs to the
+parent's final gate, separately from the historical records:
 
 - `PropertyProfiles`: one persistent-state service, fixed extraction and simulation algorithms,
   wrong extractor, wrong public statement, insufficient budget, adaptive call accounting, leaked
-  witness, and closed receipts for extraction and both simulation meanings.
+  witness, and closed receipts for extraction and both simulation meanings. Stop controls cover
+  retained state/events, refused stopped extraction and distinguishable terminal reasons.
 - `ClaimBoundaries`: accepted promise gap versus accepted negative/adaptive statement, honest
   half-abort behavior, measurable observation retaining rejection mass, closed soundness,
   completeness and recovery receipts, conditional closure, custom classification and emptiness.

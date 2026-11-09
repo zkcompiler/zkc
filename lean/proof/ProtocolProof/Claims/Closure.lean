@@ -1,120 +1,136 @@
 module
 
-public import ProtocolProof.Semantics.System
-public import ProtocolProof.Claims.Request
 public import ProtocolProof.Components.Contract
 public import ProtocolProof.Components.Installation
+public import ProtocolProof.Internal.Closure
 
 /-!
-# Top-level closure from local facts
+# Process-facing root closure
 
-The fixed request is the index, not a field chosen by evidence. The common connection contains
-only operation-level installations and initial-state coverage. The mathematical part contains
-compositional contracts and a bound on their initial potential. Neither record contains the
-requested whole-experiment conclusion.
-
-`subject` binds the request to this standalone execution. It is reflexivity for requests built
-from `System.experiment`. A later compiler adapter must prove this binding for its fixed subject;
-that adapter is deliberately outside this package.
+Evidence is indexed by the request and the fixed Process client. Complete local operation
+installation, whole initial-law coverage, mathematical contracts and property-directed
+terminal comparison are assembled by the existing checked backend root theorem.
 -/
 
 public section
-
-open MeasureTheory PFunctor
-open scoped ENNReal
-
-universe uE uA uB uS uT uX
+open PIR MeasureTheory PFunctor
 
 namespace ProtocolProof
+variable {E : Type} {I : Signature} {S T L M A : Type}
+  [∀ op, MeasurableSpace (I.Reply op)]
+  [∀ op, Countable (I.Reply op)] [∀ op, MeasurableSingletonClass (I.Reply op)]
+  [MeasurableSpace S] [MeasurableSpace T] [MeasurableSpace L] [MeasurableSpace M]
+  [MeasurableSpace A]
 
-variable {E : Type uE} {P : PFunctor.{uA, uB}} {S : Type uS} {T : Type uT}
-  [∀ a, MeasurableSpace (P.B a)] [MeasurableSpace S] [MeasurableSpace T]
-
-/-- One set of local laws, reusable for every client of this component interface. -/
-structure Connection (actual : System E P S) (model : System E P T)
-    (admissible : E → Prop) (related : E → S → T → Prop) where
-  operations : ∀ environment, admissible environment →
-    KernelHandler.CouplingContract (actual.operations environment) (model.operations environment)
-      (related environment)
-  initial : ∀ environment, admissible environment →
-    ExpectationWP.CouplingPost (actual.initial environment) (model.initial environment)
-      (related environment)
-
-variable [∀ a, Countable (P.B a)] [∀ a, MeasurableSingletonClass (P.B a)]
-  {X : Type uX} [MeasurableSpace X]
-
-/-- Local installation, mathematical contracts and event transport for a fixed upper request. -/
-structure UpperEvidence (request : UpperRequest E (X × S))
-    (actual : System E P S) (model : System E P T) (client : E → FreeM P X)
-    (related : E → S → T → Prop) where
+/-- Substantive local and mathematical obligations for the request's fixed upper event. -/
+structure UpperEvidence (request : UpperRequest E (Execution S L A))
+    (actual : System E I S L) (model : System E I T M) (client : E → Process I A)
+    (related : E → (S × List L) → (T × List M) → Prop) where
   subject : request.experiment = actual.experiment client
-  connection : Connection actual model request.admissible related
-  spec : E → OpSpec P (T → ENNReal)
+  installation : Installation actual model request.admissible related
+  spec : E → OperationSpec I T M
   local_bound : ∀ e, request.admissible e → ∀ operation continuation,
-    opExpectation (model.operations e) operation continuation ≤ spec e operation continuation
-  model_event : E → Set (X × T)
+    opExpectation (model.accumulatedOperations e) operation continuation ≤
+      spec e operation continuation
+  model_event : E → Set (Execution T M A)
   measurable_event : ∀ e, MeasurableSet (model_event e)
-  terminal : ∀ e, request.admissible e → ∀ value actualState modelState,
+  terminal : ∀ e, request.admissible e → ∀ outcome actualState modelState,
     related e actualState modelState →
-    (value, actualState) ∈ request.event → (value, modelState) ∈ model_event e
-  potential : E → T → ENNReal
+    (⟨outcome, actualState.1, actualState.2⟩ : Execution S L A) ∈ request.event →
+      (⟨outcome, modelState.1, modelState.2⟩ : Execution T M A) ∈ model_event e
+  potential : E → (T × List M) → ENNReal
   mathematics : ∀ e, request.admissible e →
     UpperBound (spec e) (client e)
-      (fun value state ↦ (model_event e).indicator 1 (value, state)) (potential e)
+      (fun outcome state ↦ (model_event e).indicator 1 ⟨outcome, state.1, state.2⟩) (potential e)
   budget : ∀ e, request.admissible e →
-    (∫⁻ state, potential e state ∂model.initial e) ≤ request.bound e
+    (∫⁻ state, potential e state ∂model.initialWithEvents e) ≤ request.bound e
 
-/-- Completeness reverses both quantitative and observation directions, retaining full mass. -/
-structure LowerEvidence (request : LowerRequest E (X × S))
-    (actual : System E P S) (model : System E P T) (client : E → FreeM P X)
-    (related : E → S → T → Prop) where
+/-- Completeness reverses both contract and event implications, retaining every stopped path. -/
+structure LowerEvidence (request : LowerRequest E (Execution S L A))
+    (actual : System E I S L) (model : System E I T M) (client : E → Process I A)
+    (related : E → (S × List L) → (T × List M) → Prop) where
   subject : request.experiment = actual.experiment client
-  connection : Connection actual model request.admissible related
-  spec : E → OpSpec P (T → ENNReal)
+  installation : Installation actual model request.admissible related
+  spec : E → OperationSpec I T M
   local_bound : ∀ e, request.admissible e → ∀ operation continuation,
-    spec e operation continuation ≤ opExpectation (model.operations e) operation continuation
-  model_event : E → Set (X × T)
+    spec e operation continuation ≤ opExpectation (model.accumulatedOperations e)
+      operation continuation
+  model_event : E → Set (Execution T M A)
   measurable_event : ∀ e, MeasurableSet (model_event e)
-  terminal : ∀ e, request.admissible e → ∀ value actualState modelState,
+  terminal : ∀ e, request.admissible e → ∀ outcome actualState modelState,
     related e actualState modelState →
-    (value, modelState) ∈ model_event e → (value, actualState) ∈ request.event
-  potential : E → T → ENNReal
+    (⟨outcome, modelState.1, modelState.2⟩ : Execution T M A) ∈ model_event e →
+      (⟨outcome, actualState.1, actualState.2⟩ : Execution S L A) ∈ request.event
+  potential : E → (T × List M) → ENNReal
   mathematics : ∀ e, request.admissible e →
     LowerBound (spec e) (client e)
-      (fun value state ↦ (model_event e).indicator 1 (value, state)) (potential e)
+      (fun outcome state ↦ (model_event e).indicator 1 ⟨outcome, state.1, state.2⟩) (potential e)
   budget : ∀ e, request.admissible e →
-    request.bound e ≤ ∫⁻ state, potential e state ∂model.initial e
+    request.bound e ≤ ∫⁻ state, potential e state ∂model.initialWithEvents e
 
-/-- Close an upper request using the common structural theorem and the composed mathematics. -/
-theorem UpperEvidence.establish {request : UpperRequest E (X × S)}
-    {actual : System E P S} {model : System E P T} {client : E → FreeM P X}
-    {related : E → S → T → Prop}
+/-- Assemble public local obligations using the existing upper root, with no claim substitution. -/
+theorem UpperEvidence.establish {request : UpperRequest E (Execution S L A)}
+    {actual : System E I S L} {model : System E I T M} {client : E → Process I A}
+    {related : E → (S × List L) → (T × List M) → Prop}
     (evidence : UpperEvidence request actual model client related) : request.Holds := by
-  intro environment hadmitted
+  let backendRequest : UpperRequest E (Outcome A × (S × List L)) := {
+    experiment := (Internal.backendSystem actual).experiment (fun e ↦ Internal.encode (client e))
+    admissible := request.admissible
+    event := Execution.measurableEquiv.symm ⁻¹' request.event
+    measurable_event := request.measurable_event.preimage
+      Execution.measurableEquiv.symm.measurable
+    bound := request.bound }
+  have backendEvidence : Internal.UpperEvidence backendRequest (Internal.backendSystem actual) (Internal.backendSystem model)
+      (fun e ↦ Internal.encode (client e)) related := {
+    subject := rfl
+    connection := ⟨evidence.installation.operations, evidence.installation.initial⟩
+    spec := evidence.spec
+    local_bound := evidence.local_bound
+    model_event := fun e ↦ Execution.measurableEquiv.symm ⁻¹' evidence.model_event e
+    measurable_event := fun e ↦ (evidence.measurable_event e).preimage
+      Execution.measurableEquiv.symm.measurable
+    terminal := evidence.terminal
+    potential := evidence.potential
+    mathematics := evidence.mathematics
+    budget := evidence.budget }
+  intro e he
   rw [evidence.subject]
-  exact (Installation.event_le (evidence.connection.operations environment hadmitted)
-    (evidence.connection.initial environment hadmitted) (client environment)
-    request.event (evidence.model_event environment) request.measurable_event
-    (evidence.measurable_event environment) (evidence.terminal environment hadmitted)).trans
-      (UpperBound.closed_event_le (model.operations environment)
-        (evidence.local_bound environment hadmitted) (evidence.model_event environment)
-        (evidence.measurable_event environment) (evidence.mathematics environment hadmitted)
-        (model.initial environment) (evidence.budget environment hadmitted))
+  change ((((Internal.backendSystem actual).experiment (fun e ↦ Internal.encode (client e))).run e).map
+    Execution.measurableEquiv.symm) request.event ≤ request.bound e
+  rw [Measure.map_apply Execution.measurableEquiv.symm.measurable request.measurable_event]
+  exact backendEvidence.establish e he
 
-/-- The same installation supports a lower request, with the property's correct direction. -/
-theorem LowerEvidence.establish {request : LowerRequest E (X × S)}
-    {actual : System E P S} {model : System E P T} {client : E → FreeM P X}
-    {related : E → S → T → Prop}
+/-- Reuse the lower root with the opposite, property-correct terminal implication. -/
+theorem LowerEvidence.establish {request : LowerRequest E (Execution S L A)}
+    {actual : System E I S L} {model : System E I T M} {client : E → Process I A}
+    {related : E → (S × List L) → (T × List M) → Prop}
     (evidence : LowerEvidence request actual model client related) : request.Holds := by
-  intro environment hadmitted
+  let backendRequest : LowerRequest E (Outcome A × (S × List L)) := {
+    experiment := (Internal.backendSystem actual).experiment (fun e ↦ Internal.encode (client e))
+    admissible := request.admissible
+    event := Execution.measurableEquiv.symm ⁻¹' request.event
+    measurable_event := request.measurable_event.preimage
+      Execution.measurableEquiv.symm.measurable
+    bound := request.bound }
+  have backendEvidence : Internal.LowerEvidence backendRequest (Internal.backendSystem actual) (Internal.backendSystem model)
+      (fun e ↦ Internal.encode (client e)) related := {
+    subject := rfl
+    connection := ⟨evidence.installation.operations, evidence.installation.initial⟩
+    spec := evidence.spec
+    local_bound := evidence.local_bound
+    model_event := fun e ↦ Execution.measurableEquiv.symm ⁻¹' evidence.model_event e
+    measurable_event := fun e ↦ (evidence.measurable_event e).preimage
+      Execution.measurableEquiv.symm.measurable
+    terminal := evidence.terminal
+    potential := evidence.potential
+    mathematics := evidence.mathematics
+    budget := evidence.budget }
+  intro e he
   rw [evidence.subject]
-  exact (LowerBound.le_closed_event (model.operations environment)
-    (evidence.local_bound environment hadmitted) (evidence.model_event environment)
-    (evidence.measurable_event environment) (evidence.mathematics environment hadmitted)
-    (model.initial environment) (evidence.budget environment hadmitted)).trans
-      (Installation.event_ge (evidence.connection.operations environment hadmitted)
-        (evidence.connection.initial environment hadmitted) (client environment)
-        request.event (evidence.model_event environment) request.measurable_event
-        (evidence.measurable_event environment) (evidence.terminal environment hadmitted))
+  change request.bound e ≤
+    ((((Internal.backendSystem actual).experiment (fun e ↦ Internal.encode (client e))).run e).map
+      Execution.measurableEquiv.symm) request.event
+  rw [Measure.map_apply Execution.measurableEquiv.symm.measurable request.measurable_event]
+  exact backendEvidence.establish e he
 
 end ProtocolProof

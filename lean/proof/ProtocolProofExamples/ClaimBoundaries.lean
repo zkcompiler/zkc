@@ -12,12 +12,10 @@ and keep conditional and custom claims separate from established canonical meani
 
 public section
 
-open ProtocolProof PFunctor MeasureTheory
+open ProtocolProof PIR MeasureTheory
 open scoped ENNReal
 
 namespace ProtocolProofExamples.ClaimBoundaries
-
-local instance : MeasurableSpace (Option Bool) := ⊤
 
 @[expose] def promise : PromiseProblem Nat where
   yes n := n = 0
@@ -60,19 +58,20 @@ theorem adaptive_negative_refused : ¬ adaptiveStatements.Holds := by
   have bad := h 2 trivial
   simp [SoundnessRequest.toUpper, adaptiveStatements, promise] at bad
 
-@[expose] noncomputable def honestWithAbort : Experiment Unit (Option Bool) where
-  run _ := (2 : ℝ≥0∞)⁻¹ • Measure.dirac (some true) + (2 : ℝ≥0∞)⁻¹ • Measure.dirac none
+@[expose] noncomputable def honestWithAbort : Experiment Unit (Outcome Bool) where
+  run _ := (2 : ℝ≥0∞)⁻¹ • Measure.dirac (.returned true) +
+    (2 : ℝ≥0∞)⁻¹ • Measure.dirac (.stopped .abort)
   normalized _ := ⟨by simp [ENNReal.inv_two_add_inv_two]⟩
 
 @[expose] noncomputable def completeness (error : ℝ≥0∞) :
-    CompletenessRequest Unit (Option Bool) where
+    CompletenessRequest Unit (Outcome Bool) where
   experiment := honestWithAbort
   admissible _ := True
-  accepts := {some true}
+  accepts := {.returned true}
   measurable_accepts := MeasurableSet.of_discrete
   error _ := error
 
-theorem honest_abort_mass : honestWithAbort.run () {none} = (2 : ℝ≥0∞)⁻¹ := by
+theorem honest_abort_mass : honestWithAbort.run () {.stopped .abort} = (2 : ℝ≥0∞)⁻¹ := by
   simp [honestWithAbort]
 
 theorem honest_half_completeness : (completeness (2 : ℝ≥0∞)⁻¹).Holds := by
@@ -85,8 +84,8 @@ theorem honest_perfect_completeness_refused : ¬ (completeness 0).Holds := by
   norm_num [completeness, CompletenessRequest.toLower, honestWithAbort] at bad
 
 /-- A requested Boolean observation retains the abort as a rejection, with its probability. -/
-@[expose] def acceptedObservation : Observation (Option Bool) Bool where
-  observe value := value = some true
+@[expose] def acceptedObservation : Observation (Outcome Bool) Bool where
+  observe value := value = .returned true
   measurable := measurable_of_countable _
 
 theorem observed_abort_preserved :

@@ -1,4 +1,73 @@
-# Current property-interface validation
+# Process-facing proof-core validation
+
+Date: 9 November 2026. Scope: `lean/proof`, consuming the shared `ZkcProgram`
+foundation at `../program`. This validates the proof-owned Process migration;
+cross-package wiring, Package 2 and actual protocol integration remain separate.
+
+## Final package gate
+
+From `lean/proof`:
+
+```sh
+lake +leanprover/lean4:v4.35.0 build
+```
+
+Passed with `autoImplicit = false` and `warningAsError = true`, including the public
+library, all seven example/control modules and `ProtocolProofChecks`. The transitive
+all-declaration audit checked **1,542 package declarations**, including generated and
+private declarations, allowing only `propext`, `Classical.choice` and `Quot.sound`.
+All **43 local Lean modules** are reachable from the three package roots. No Lean
+source changed after this gate. The incremental command took 30.02 seconds and Lake
+reported 2,808 jobs, including cached dependencies; this is not a build benchmark.
+
+The local build log is `.lake/process-proof-final-build.log`; the exact Lean source
+fingerprints are in `.lake/process-proof-final-sources.json`. Focused module checks
+preceded the final gate. The package build itself ran the standard-axiom audit, so
+no second audit command or broader production suite is implied.
+
+## Checked semantic boundaries
+
+| Boundary | Evidence |
+| --- | --- |
+| Full shared semantics | `Internal.complete_execution` covers every lawful monadic handler, full outcome, reached state and ordered events, including an existing prefix. `Internal.encode_bind` preserves failure-aware bind. |
+| One probability interpretation | `System.runFrom`, `run`, and `experiment` use the same upstream kernel interpretation. `runFrom_done`, `runFrom_halt`, `runFrom_call`, and `runFrom_bind` expose its complete equations. |
+| Normalization and deterministic agreement | `runFrom_mass_one`, `run_mass_one`, Markov instances, `runFrom_eq_dirac`, `run_eq_dirac`, and `experiment_eq_dirac`; no stopped path loses mass. |
+| Measurable quantitative semantics | `wpFold_eq_lintegral_runFrom` and whole-initial-law expectation/indicator equations; arbitrary measurable states, events and final results. Countable replies and measurable rewards remain explicit premises. |
+| Checked contracts and root reuse | Process upper/lower rules and adequacy reuse `Internal.Contract`; both public roots reuse `Internal.Closure`. `Installation` transports exact complete outcomes and whole initial measures. |
+| Resources | `Internal.bound_eq_charge` equates the structural Process bound with upstream `OpSpec.charge` on the stop-aware encoding. This counts abstract calls, not runtime. |
+| Complete models | `AdaptiveChecks` retains adaptive strategies, arbitrary nested rounds, exact bounds and honest completeness. `SharedState` retains persistent challenge/counters, audit erasure, adaptive replies, whole initial coverage and Process inlining. |
+| Property meanings | Existing extraction, simulation, promise-gap, half-abort, receipt, admission and resource controls pass. No existing model/profile declaration was dropped; the old connection is named installation. |
+| Stop controls | `ExecutionControls` checks all five reasons, failed-call state and log preservation, skipped continuations, ordinary-bind failure, and mixed returned/stopped initial laws. `ContractControls` closes complete stopped events through both roots and adequacy directions and refutes omission of either stopped-bind obligation. |
+
+A source/import audit found strict module headers throughout, no concrete IR imports,
+no public FreeM algorithm carrier, no compatibility aliases, and no `sorry`, new axiom,
+`native_decide`, blanket exposure section or warning suppression. Tracked changes are
+confined to `lean/proof`; tracked `lean/program` sources are unchanged. The proof manifest
+records the relative shared-package dependency already required by its Lake file.
+
+## Dependency and validation scope
+
+| Dependency | Verified revision |
+| --- | --- |
+| Lean | `v4.35.0` |
+| VCVio | `96754a37e739270ac5bb8fe7deaeafef6964b688` |
+| PolyFun | `a5edfe2dd24d9d76f9a13cc1f131b220617ad534` |
+| Mathlib | `56a005855ea17e0b0958f73ec801ae140b0a1679` |
+
+The three upstream worktrees were verified clean. Individual dependency symlinks reuse
+existing caches; the proof and shared-program build directories are local directories,
+not links to a shared writable build directory. No upstream source or revision changed.
+
+The shared-state inlining theorem is for arbitrary Process clients under its deterministic
+component implementation. It does not supply the generic differing-interface probability
+composition API planned for Package 2. No native/compiler tests, concrete-subject build,
+security-package integration, construction engine, external protocol adoption, PPT/runtime
+adequacy or independent review of this migration is claimed. Historical review and build
+records below apply to their named earlier checkpoints.
+
+---
+
+# Historical property-interface validation
 
 Date: 9 November 2026. Scope: the independent `lean/framework` package. This is not a
 production migration, source/IR correspondence result, or complete cryptographic client.

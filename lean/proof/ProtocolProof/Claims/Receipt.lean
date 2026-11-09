@@ -14,7 +14,7 @@ choose the meaning of a built-in claim. A receipt permits any proof of that fixe
 
 public section
 
-open PFunctor
+open PIR
 
 namespace ProtocolProof
 
@@ -36,19 +36,21 @@ inductive Claim : Type (u + 1) where
   | soundness {E O X : Type u} [MeasurableSpace O] (request : SoundnessRequest E O X)
   | completeness {E O : Type u} [MeasurableSpace O] (request : CompletenessRequest E O)
   | recovery {E O W : Type u} [MeasurableSpace O] (request : RecoveryRequest E O W)
-  | extraction {P E S W X : Type u} {I : PFunctor.{u, u}}
-      [∀ op, MeasurableSpace (I.B op)] [∀ op, Countable (I.B op)]
-      [∀ op, MeasurableSingletonClass (I.B op)]
-      [MeasurableSpace S] [MeasurableSpace (Option W)]
-      (request : ExtractionRequest P E I S W X)
-  | statisticalSimulation {P C W V S : Type u} {I : PFunctor.{u, u}}
-      [∀ op, MeasurableSpace (I.B op)] [∀ op, Countable (I.B op)]
-      [∀ op, MeasurableSingletonClass (I.B op)] [MeasurableSpace S] [MeasurableSpace V]
-      (request : StatisticalSimulationRequest P C W V I S)
-  | distinguisherSimulation {P C W V S D : Type u} {I : PFunctor.{u, u}}
-      [∀ op, MeasurableSpace (I.B op)] [∀ op, Countable (I.B op)]
-      [∀ op, MeasurableSingletonClass (I.B op)] [MeasurableSpace S] [MeasurableSpace V]
-      (request : DistinguisherSimulationRequest P C W V I S D)
+  | extraction {P E S L W X : Type} {I : Signature}
+      [∀ op, MeasurableSpace (I.Reply op)] [∀ op, Countable (I.Reply op)]
+      [∀ op, MeasurableSingletonClass (I.Reply op)]
+      [MeasurableSpace S] [MeasurableSpace L] [MeasurableSpace (Option W)]
+      (request : ExtractionRequest P E I S L W X)
+  | statisticalSimulation {P C W V S L : Type} {I : Signature}
+      [∀ op, MeasurableSpace (I.Reply op)] [∀ op, Countable (I.Reply op)]
+      [∀ op, MeasurableSingletonClass (I.Reply op)]
+      [MeasurableSpace S] [MeasurableSpace L] [MeasurableSpace V]
+      (request : StatisticalSimulationRequest P C W V I S L)
+  | distinguisherSimulation {P C W V S L D : Type} {I : Signature}
+      [∀ op, MeasurableSpace (I.Reply op)] [∀ op, Countable (I.Reply op)]
+      [∀ op, MeasurableSingletonClass (I.Reply op)]
+      [MeasurableSpace S] [MeasurableSpace L] [MeasurableSpace V]
+      (request : DistinguisherSimulationRequest P C W V I S L D)
   | custom (statement : Prop)
 
 namespace Claim
@@ -57,9 +59,9 @@ namespace Claim
   | @Claim.soundness _ _ _ _ _ => .promiseSoundness
   | @Claim.completeness _ _ _ _ => .honestCompleteness
   | @Claim.recovery _ _ _ _ _ => .fixedRecovery
-  | @Claim.extraction _ _ _ _ _ _ _ _ _ _ _ _ => .boundedExtraction
-  | @Claim.statisticalSimulation _ _ _ _ _ _ _ _ _ _ _ _ => .statisticalSimulation
-  | @Claim.distinguisherSimulation _ _ _ _ _ _ _ _ _ _ _ _ _ => .distinguisherSimulation
+  | @Claim.extraction _ _ _ _ _ _ _ _ _ _ _ _ _ _ => .boundedExtraction
+  | @Claim.statisticalSimulation _ _ _ _ _ _ _ _ _ _ _ _ _ _ => .statisticalSimulation
+  | @Claim.distinguisherSimulation _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ => .distinguisherSimulation
   | .custom _ => .custom
 
 /-- The schema determines the proposition. Evidence cannot replace it. -/
@@ -67,9 +69,9 @@ namespace Claim
   | @Claim.soundness _ _ _ _ request => request.Holds
   | @Claim.completeness _ _ _ request => request.Holds
   | @Claim.recovery _ _ _ _ request => request.Holds
-  | @Claim.extraction _ _ _ _ _ _ _ _ _ _ _ request => request.Holds
-  | @Claim.statisticalSimulation _ _ _ _ _ _ _ _ _ _ _ request => request.Holds
-  | @Claim.distinguisherSimulation _ _ _ _ _ _ _ _ _ _ _ _ request => request.Holds
+  | @Claim.extraction _ _ _ _ _ _ _ _ _ _ _ _ _ request => request.Holds
+  | @Claim.statisticalSimulation _ _ _ _ _ _ _ _ _ _ _ _ _ request => request.Holds
+  | @Claim.distinguisherSimulation _ _ _ _ _ _ _ _ _ _ _ _ _ _ request => request.Holds
   | .custom statement => statement
 
 /-- Canonical means a framework-defined schema, not approval of its application or parameters. -/

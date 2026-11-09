@@ -15,7 +15,7 @@ knowledge. In particular, pure computation has no runtime interpretation in this
 
 public section
 
-open MeasureTheory PFunctor
+open MeasureTheory PIR
 open scoped ENNReal
 
 namespace ProtocolProof
@@ -40,41 +40,39 @@ structure ExtractionGuarantee where
 @[expose] def ExtractionGuarantee.Informative (guarantee : ExtractionGuarantee) : Prop :=
   guarantee.threshold < 1
 
-universe uP uE uA uB uS uW uX
-
-variable (Public : Type uP) (Environment : Type uE) (Interface : PFunctor.{uA, uB})
-  (State : Type uS) (Witness : Type uW) (Statement : Type uX)
-  [∀ op, MeasurableSpace (Interface.B op)] [∀ op, Countable (Interface.B op)]
-  [∀ op, MeasurableSingletonClass (Interface.B op)]
-  [MeasurableSpace State] [MeasurableSpace (Option Witness)]
+variable (Public Environment : Type) (Interface : Signature) (State Event Witness Statement : Type)
+  [∀ op, MeasurableSpace (Interface.Reply op)] [∀ op, Countable (Interface.Reply op)]
+  [∀ op, MeasurableSingletonClass (Interface.Reply op)]
+  [MeasurableSpace State] [MeasurableSpace Event] [MeasurableSpace (Option Witness)]
 
 /-- A request-fixed extraction experiment and its mathematical success criterion. -/
 structure ExtractionRequest where
   acceptance : Experiment Environment Bool
   admissible : Environment → Prop
-  execution : AccessExecution Public Environment Interface State (Option Witness)
+  execution : AccessExecution Public Environment Interface State Event (Option Witness)
   statement : Public → Statement
   problem : PromiseProblem Statement
   witnesses : WitnessRelation problem Witness
   measurable_success : ∀ environment, MeasurableSet
-    {out : Option Witness × State | ∃ witness, out.1 = some witness ∧
-      witnesses.relates (statement (execution.publicInput environment)) witness}
+    {out : Execution State Event (Option Witness) |
+      ∃ witness, out.outcome = .returned (some witness) ∧
+        witnesses.relates (statement (execution.publicInput environment)) witness}
   guarantee : Public → ExtractionGuarantee
   cost : OperationCost Interface
   budget : Public → ℝ≥0∞
 
-variable {Public Environment Interface State Witness Statement}
+variable {Public Environment Interface State Event Witness Statement}
 
 namespace ExtractionRequest
 
-variable (request : ExtractionRequest Public Environment Interface State Witness Statement)
+variable (request : ExtractionRequest Public Environment Interface State Event Witness Statement)
 
 /-- A per-environment lower-bound goal uses the actual extractor's complete execution law. -/
 @[expose] noncomputable def successRequest (environment : Environment) :
-    LowerRequest Unit (Option Witness × State) where
+    LowerRequest Unit (Execution State Event (Option Witness)) where
   experiment := request.execution.experiment.reindex (fun _ ↦ environment)
   admissible _ := True
-  event := {out | ∃ witness, out.1 = some witness ∧
+  event := {out | ∃ witness, out.outcome = .returned (some witness) ∧
     request.witnesses.relates
       (request.statement (request.execution.publicInput environment)) witness}
   measurable_event := request.measurable_success environment

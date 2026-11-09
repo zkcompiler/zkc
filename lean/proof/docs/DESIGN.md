@@ -1,8 +1,10 @@
-# A standalone protocol-proof framework
+# A Process-facing protocol-proof framework
 
-This package implements a top-level proof framework before connecting it to zkc's compiler or
-existing execution model. Its acceptance object is a proved claim about a complete model game,
-assembled from local facts. It does not certify an existing `.zkc` artifact.
+This package owns the top-level proof framework over the shared `ZkcProgram` foundation.
+Its acceptance object is a proved claim about a complete model game, assembled from local
+facts. Package 1 migrates that framework to canonical Process without importing concrete IR,
+source readers or production protocol clients. It does not certify an existing `.zkc` artifact.
+The selected architecture and current ownership limits are in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## The proof structure
 
@@ -10,7 +12,7 @@ assembled from local facts. It does not certify an existing `.zkc` artifact.
 Fixed request about a complete experiment
 └─ UpperEvidence.establish / LowerEvidence.establish
    ├─ Subject binding: the request denotes this fixed system and client
-   ├─ Connection: local operation couplings + initial-state coverage
+   ├─ Installation: complete local operation couplings + whole initial-law coverage
    │  └─ VCVio's universal adaptive-client substitution theorem
    ├─ Mathematics: composed upper/lower contract + initial budget
    │  ├─ operation specifications and their local validity
@@ -24,38 +26,54 @@ Optional security transformation
 ```
 
 This is a dependency graph, not four sequential compiler phases. A component theorem can be
-used many times; the same exact connection supports completeness and soundness. A mathematical
+used many times; the same exact installation supports completeness and soundness. A mathematical
 model may be proposed by automation, imported from another library, or written in a companion.
 Its origin does not change any proof obligation.
 
 ## One execution and several judgments
 
-The execution carrier is upstream `PFunctor.FreeM`. Its typed operation interface specifies
-which operations exist and each operation's answer type. Arguments are part of the operation.
-Ordinary Lean continuations express adaptive control and branches; finite iteration is ordinary
-monadic iteration. We introduce no new protocol AST and no second interpreter.
+The public execution carrier is canonical `PIR.Process I A`, with typed `PIR.Signature`
+operations, adaptive continuations and explicit `.halt` stops. `PIR.Outcome` distinguishes
+returned values from stopped reasons; `PIR.Execution` retains outcome, reached state and
+ordered events. These definitions come from `ZkcProgram`, alongside the generic
+`Zkc.Source.Region`. Region preserves typed structure and nested bodies; `Region.denote`
+produces Process. Concrete dialect meanings remain with the concrete IR owner.
 
-The probability meaning is VCVio's `PFunctor.FreeM.runKernel`. An operation maps private state
-to a *joint* law of answer and successor state. All calls share the threaded state. Sampling an
-answer and sampling a state independently is a different kernel. Different service names do
-not imply independence. The privileged semantic state is not automatically visible to an
-adversary: a client/system instantiation supplies an adversary only the interface it is allowed
-to observe. In the adaptive test the strategy sees only earlier challenge answers.
+The single probability interpretation uses `Internal.effects I` and `Internal.encode` to feed
+VCVio's `PFunctor.FreeM.runKernel`. The internal reply type is `Outcome (I.Reply op)` and the
+threaded state is `S × List L`. Encoding short-circuits stopped replies; ordinary FreeM bind
+on an outcome value would incorrectly continue. Authors do not translate clients into FreeM.
 
-`System` adds normalized operation kernels and a normalized initial law. Its `experiment`
-constructor proves that every complete client has mass one. Explicit rejection and abort are
-ordinary observable terminal values. The lower-level contract theorems also apply to
-subprobability kernels, but the request-facing complete experiments cannot silently lose mass.
+`System E I S L` supplies normalized operation kernels returning full Execution and a normalized
+initial law. `accumulatedOperations` appends events even for a stopped call;
+`initialWithEvents` maps the whole initial law to an empty event prefix. `runFrom`, `run` and
+`experiment` use this one interpretation, with complete records recovered by a measurable
+bijection. Reject, abort, exhausted, incomplete and refused stops retain their mass and reached
+records. The Process equations and Dirac agreement relate this meaning to canonical deterministic
+execution; they do not define a second probability evaluator.
 
-There are three different judgments:
+An operation samples outcome, successor state and events jointly. All calls share the threaded
+state. Sampling answers and states independently is a different kernel; service names do not
+imply independence. Privileged semantic state is not automatically visible to an adversary:
+the selected client and interface determine access. The adaptive model's strategy sees only
+prior challenge answers. Lower-level backend contracts can handle subprobability kernels,
+but request-facing System experiments cannot silently lose mass.
 
-- **Installation:** exact joint-law coupling, with a relation on hidden state and common
-  interface answers. It accounts for all outputs and has no security error budget.
-- **Mathematical contract:** an upper or lower expected terminal potential. It can describe a
-  bad event, residual obligation, iteration invariant, or a successful outcome. It is not
-  restricted to equality tests or a protocol-family tag.
-- **Game transfer:** a proved change of the security experiment/admissible environment with an
-  explicit loss. It is not an extra instruction in the execution interpreter.
+Keep these proof boundaries distinct:
+
+- **Installation:** exact joint-law coupling for the same client and typed interface, with a
+  relation on accumulated state/log pairs and equal complete outcomes. It covers the whole
+  initial law and has no security error budget.
+- **Representation:** differing interfaces, programs or result encodings need a separate full
+  meaning theorem, including malformed answers and stops. Same-interface state maps are a
+  supported special case, not a general decoder theorem.
+- **Security transformation:** a change of game or adversary access carries explicit environment
+  translation, assumptions, loss and resource obligations. It is not exact installation.
+
+A mathematical upper/lower contract is a reasoning method across these boundaries. Its terminal
+potential can describe a bad event, residual obligation or successful outcome; it is not a
+protocol-family tag. Broader representation and security-transformation APIs remain parent-owned
+Package 2 work.
 
 Upper and lower contracts are separate because the implication directions differ. Canonical
 property meanings are separately typed: promise soundness, honest completeness, fixed recovery,
@@ -63,38 +81,52 @@ bounded extraction, statistical simulation, and selected-observer simulation. Th
 quantifiers and resource boundaries are in [CLAIMS.md](CLAIMS.md). They share execution and
 mathematical proof infrastructure without pretending to be the same property.
 
-## The common construction path
+## Contracts and exact installation
 
-`opExpectation` interprets one operation as a transformer of continuation potentials.
-PolyFun's existing `wpFold` extends it over the existing client. The new theorem
-`wpFold_eq_runExpectation_of_measurable` proves that this fold equals the expectation of
-VCVio's kernel execution. It supports measurable state and outputs; the convenient unrestricted
-assertion specialization uses countable state/output spaces.
+`OperationSpec I S L` transforms continuation rewards on complete outcomes and accumulated state.
+`opExpectation` supplies exact local expectations. Public `wpFold` uses PolyFun's fold on the
+stop-aware encoding; `UpperBound` and `LowerBound` reuse the existing backend contracts.
+The backend theorem `Internal.wpFold_eq_runExpectation_of_measurable` identifies that fold with
+kernel expectation. It accepts arbitrary measurable state/result spaces and a measurable
+reward, with countable operation replies and measurable singletons. Only its unrestricted-reward
+specialization additionally requires countable state/result spaces with measurable singletons.
+Measurable events and relations remain explicit premises of transport.
 
-`UpperBound` and `LowerBound` are propositions over that fold. Their bind rules pass the
-*reached* answer and state to the continuation. Their finite-iteration rules accept one
-iteration-, accumulator-, and state-indexed invariant and one body theorem. Nested iteration
-is a body instance of the same rule. Proofs use ordinary Lean theorem applications, not an
-unverified collection of selected paths. The local-to-global adequacy theorems prove the
-probability bounds from individual operation specifications.
+The public `System.wpFold_eq_lintegral_runFrom` expresses exact expectation over full Execution
+records; `System.lintegral_wpFold_eq_experiment` integrates over the whole initial law with
+events. `System.runFrom_bind` retains stopped records and requires a countable intermediate
+return type with measurable singletons. `System.experiment_eq_dirac` requires Dirac primitive
+and initial laws. These laws reuse the same backend interpretation.
 
-For exact connections, VCVio already provides `KernelHandler.CouplingContract` and
-`bind_state_laws`. The latter constructs a whole-client coupling from local joint kernels and
-an initial coupling, for every adaptive client. We reuse it and prove event/expectation
-transport corollaries. `freeHandler` installs an entire proved implementation as a component at
-the next interface. Thus a component may consist of many calls or loops; protocol names never
-occur in the common engine.
+The Process bind rules pass the returned value and reached state/log to the continuation and
+require a separate inequality for every stopped terminal reward. Finite-iteration rules use
+one round-, outcome- and accumulated-state-indexed invariant, a body theorem and a stopped-branch
+obligation. Nested iteration reuses that rule. A model that gives stops zero acceptance reward
+must say so in its postcondition; it cannot remove their probability mass.
 
-`Representation.contractOfMap` proves the coupling obligations for a total state map from one
-local commutation law per operation. The map need not be injective. `Connection.ofMap` also
-proves root coverage from the pushforward of the entire actual initial law.
-`Connection.reflexive` handles an unchanged representation without an authored connection.
+VCVio's `KernelHandler.CouplingContract` and `bind_state_laws` provide local-to-contextual coupling
+for adaptive clients. The Process-facing `Installation` supplies those contracts over the
+outcome-valued accumulated handlers and couples the whole initial distributions. Public
+`UpperEvidence.establish` and `LowerEvidence.establish` reuse the existing internal roots through
+`Execution.measurableEquiv`; the mathematical and terminal fields remain substantive obligations.
+The additional public probability and contextual-transport laws are tracked in
+[IMPLEMENTATION.md](IMPLEMENTATION.md), separately from final integration validation.
 
-The common-answer interface is a substantive boundary: a runtime parser, polynomial encoding,
-or answer decoder must first prove its full answer-and-state meaning, including failure. We
-have not claimed that deleting an output field or matching a function name supplies this law.
-A state map may erase a log only when the local operation laws and the requested observation
-both permit it. A later call that reads an erased log invalidates the local law.
+`Representation.contractOfMap` constructs a local coupling from a total measurable map on
+accumulated state. The map need not be injective. `Installation.ofMap` additionally requires the
+pushforward of the entire actual `initialWithEvents` law; `Installation.reflexive` handles an
+unchanged representation. `Installation` replaces the old public `Connection` without an alias.
+
+`PIR.OperationInterpretation` and `Process.interpret` substitute Process implementations for
+operations. The shared-state model relates its deterministic multi-call implementations to
+`System.run` by `run_eq_dirac`, and proves `component_inlining` using `Process.run_interpret`.
+This retains shared state across calls; it does not establish arbitrary differing-interface
+representation or the parent-owned service-wiring package.
+
+A runtime parser, polynomial encoding or answer decoder must prove its full answer/state/event
+meaning, including failure. Deleting an output field or matching a function name supplies no
+such law. A representation may erase an audit field only when later calls and the requested
+observation cannot distinguish it. Resetting an observable counter invalidates the local law.
 
 ## Requests and assumptions
 
@@ -132,11 +164,11 @@ mathematical proof is not an executable recovery algorithm.
 | Polynomial root bound, proximity lemma, special soundness, residual algebra | Mathematical library or companion | Mathematical component/family |
 | Loop invariant and meaningful state relation | Companion, often parameterized | Reusable mathematical pattern |
 | Instance parameters and theorem selection | Author/tooling | Instance |
-| Actual compiler subject binding | Future compiler adapter | Shared construction path, not ordinary companion plumbing |
+| Actual compiler subject binding | Integration owner | Binding of the fixed concrete subject to shared execution |
 
-No model companion traverses `FreeM` to re-prove the universal installation theorem. Some model
-proofs induct on a *mathematical round count* or prove a state invariant; that is a mathematical
-argument. Automatic structural application does not discover arbitrary invariants, representation
+No model companion needs to traverse Process or its internal encoding to re-prove universal
+installation. Some model proofs induct on a *mathematical round count* or prove a state invariant;
+that is a mathematical argument. Automatic structural application does not discover arbitrary invariants, representation
 relations, or new cryptographic theorems. An automation engine can propose those and apply these
 same checked rules later, without defining another security meaning.
 
@@ -157,13 +189,14 @@ concrete Lean instance of this separation, with request-facing claim closure add
 The selected [VCVio kernel contracts](https://github.com/Verified-zkEVM/VCVio/blob/96754a37e739270ac5bb8fe7deaeafef6964b688/VCVio/ProgramLogic/Relational/KernelHandler.lean)
 and [PolyFun specification fold](https://github.com/Verified-zkEVM/PolyFun/blob/a5edfe2dd24d9d76f9a13cc1f131b220617ad534/PolyFun/PFunctor/Free/WP.lean)
 are reused as code, rather than credited only as inspiration. Their pinned sources and the new
-proofs are checked by the same Lean package. No new theorem is claimed merely because an
+proofs belong to the same Lean package's build scope. No new theorem is claimed merely because an
 existing library already has the appropriate interface.
 
-A separate typed proof AST was considered and rejected for this package. Lean theorem terms
-already share checked lemmas. A certificate format should be added only for a concrete tooling
-need; it should index the existing client and fixed request, never supply another evaluator.
-A new PMF-only interpreter was also rejected in favor of the existing kernel semantics.
+The earlier standalone checkpoint used ordinary Lean theorem applications without a proof
+constructor. The selected architecture adds a shared checked derivation over typed Region and
+its proposer in a later package. It will reference these semantic contracts and reusable lemmas;
+it is not implemented by the present Process migration. A separate PMF-only probability
+interpreter remains unnecessary: the upstream kernel interpretation supplies the fixed meaning.
 
 ## Protocol stress matrix
 
@@ -177,7 +210,7 @@ A new PMF-only interpreter was also rejected in favor of the existing kernel sem
 | Stateful lookup / random oracle client | coupled initial laws, repeat calls, exact map-based installation | cache invariant and admitted adversary access |
 | Zero knowledge | exact structural transport reused on each game/view | simulator construction, hiding theorem, correct observation; not one unary soundness contract |
 
-These rows are design tests, not newly verified production protocols. The implemented complete
-model clients and their exact proved claims are listed in the validation record. Before actual
-integration, review this core and require the source adapter to bind the *fixed actual subject*
-to this common path. Do not declare production success from a model-only theorem.
+These rows are design tests, not newly verified production protocols. The validation record
+separates the current Process proof-package gate from earlier complete-model evidence.
+Actual integration must bind the *fixed actual subject* to this common path. A model-only
+theorem does not establish production success.

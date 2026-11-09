@@ -1,4 +1,38 @@
-# Property-interface review and disposition
+# Process migration review scope
+
+The implementation was checked against the selected shared-program/proof architecture
+and its Process migration gates. Private-source workers implemented disjoint portions;
+that implementation work is not represented as independent review of the final package.
+
+The final source review checked the following boundaries:
+
+- The public carrier is canonical Process, including extractor and simulator algorithms.
+  The normalized backend helper is `Internal.backendSystem`; public `System.backend`
+  and the former public FreeM contract/connection surface are retired without aliases.
+- The encoding short-circuits stopped replies and preserves the stopping operation's
+  reached state and events. The general lawful-monad correspondence and the sole kernel
+  interpretation retain complete records. Negative controls distinguish ordinary bind,
+  changed stop reasons, rollback, log loss, later calls and successful conditioning.
+- Public contracts, contextual installation and roots reuse the checked internal backend.
+  Upper/lower stopped-branch obligations, terminal directions, measurable rewards and
+  whole initial measures remain explicit. Both root and adequacy directions are exercised
+  on complete stopped events.
+- Existing adaptive/nested and shared-state claims and profile/refusal controls remain.
+  Shared-state component meaning reuses canonical `PIR.run_related`; arbitrary Process
+  inlining reuses `Process.run_interpret` and Dirac agreement. This is not the pending
+  generic differing-interface probabilistic composition theorem.
+- The Process resource bound is proved equal to upstream charge semantics. Property
+  distinctions, fixed request meanings, admission and conditional premises remain intact.
+- All 43 local modules are in the final audit cone. The affected package build and
+  1,542-declaration standard-axiom audit passed; see [VALIDATION.md](VALIDATION.md).
+
+Cross-package extraction/wiring and final integration are outside this proof-only unit.
+No independent external review or actual compiled protocol security result is claimed.
+The reviews below are historical evidence for earlier surfaces.
+
+---
+
+# Historical property-interface review and disposition
 
 The property-interface unit received a central semantic, architecture and code review against
 the accepted framework-completion plan. No external reviewer/delegation tool was exposed in

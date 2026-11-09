@@ -3,3 +3,6 @@ module
 public import ProtocolProofExamples.AdaptiveChecks
 public import ProtocolProofExamples.SharedState
 public import ProtocolProofExamples.ClaimBoundaries
+
+public import ProtocolProofExamples.ExecutionControls
+public import ProtocolProofExamples.ContractControls

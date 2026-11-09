@@ -13,33 +13,33 @@ Weighted abstract calls do not certify host runtime or a polynomial-time disting
 
 public section
 
-open MeasureTheory ProbabilityTheory PFunctor
+open MeasureTheory ProbabilityTheory PIR
 open scoped ENNReal
 
 namespace ProtocolProof
 
-universe uP uC uW uV uA uB uS uD
+universe uC uV uD
 
-variable (Public : Type uP) (Context : Type uC) (Witness : Type uW) (View : Type uV)
-  (Interface : PFunctor.{uA, uB}) (State : Type uS)
-  [∀ op, MeasurableSpace (Interface.B op)] [MeasurableSpace State] [MeasurableSpace View]
+variable (Public Context Witness View : Type) (Interface : Signature) (State Event : Type)
+  [∀ op, MeasurableSpace (Interface.Reply op)]
+  [MeasurableSpace State] [MeasurableSpace Event] [MeasurableSpace View]
 
 /-- One simulator works for all valid witnesses of each context. The context can fix a verifier. -/
 structure SimulationProfile where
-  real : Experiment (Context × Witness) View
-  simulation : AccessExecution Public Context Interface State View
+  real : Experiment (Context × Witness) (Outcome View)
+  simulation : AccessExecution Public Context Interface State Event View
   valid : Context → Witness → Prop
 
-variable {Public Context Witness View Interface State}
-  [∀ op, Countable (Interface.B op)] [∀ op, MeasurableSingletonClass (Interface.B op)]
+variable {Public Context Witness View Interface State Event}
+  [∀ op, Countable (Interface.Reply op)] [∀ op, MeasurableSingletonClass (Interface.Reply op)]
 
 namespace SimulationProfile
 
-variable (profile : SimulationProfile Public Context Witness View Interface State)
+variable (profile : SimulationProfile Public Context Witness View Interface State Event)
 
-/-- Only the specified returned view is observed; private handler state is not silently exposed. -/
-@[expose] noncomputable def simulated : Experiment Context View :=
-  profile.simulation.experiment.observe Observation.result
+/-- The view includes every stop; the real experiment must likewise return `Outcome View`. -/
+@[expose] noncomputable def simulated : Experiment Context (Outcome View) :=
+  profile.simulation.experiment.observe Observation.outcome
 
 /-- The selected simulator's resource statement retains the same valid-context quantification. -/
 @[expose] def CallsBounded (cost : OperationCost Interface) (budget : Context → ℝ≥0∞) : Prop :=
@@ -50,19 +50,20 @@ variable (profile : SimulationProfile Public Context Witness View Interface Stat
 end SimulationProfile
 
 /-- Statistical simulation of the fixed view, together with a weighted-call bound. -/
-structure StatisticalSimulationRequest (Public : Type uP) (Context : Type uC)
-    (Witness : Type uW) (View : Type uV) (Interface : PFunctor.{uA, uB}) (State : Type uS)
-    [∀ op, MeasurableSpace (Interface.B op)] [MeasurableSpace State] [MeasurableSpace View] where
-  profile : SimulationProfile Public Context Witness View Interface State
+structure StatisticalSimulationRequest (Public Context Witness View : Type)
+    (Interface : Signature) (State Event : Type)
+    [∀ op, MeasurableSpace (Interface.Reply op)]
+    [MeasurableSpace State] [MeasurableSpace Event] [MeasurableSpace View] where
+  profile : SimulationProfile Public Context Witness View Interface State Event
   error : Context → ℝ≥0∞
   cost : OperationCost Interface
   budget : Context → ℝ≥0∞
 
 namespace StatisticalSimulationRequest
 
-variable (request : StatisticalSimulationRequest Public Context Witness View Interface State)
+variable (request : StatisticalSimulationRequest Public Context Witness View Interface State Event)
 
-@[expose] noncomputable def comparison : ViewComparison Context Witness View where
+@[expose] noncomputable def comparison : ViewComparison Context Witness (Outcome View) where
   real := request.profile.real
   simulated := request.profile.simulated
   valid := request.profile.valid
@@ -88,20 +89,20 @@ structure ObserverFamily (Context : Type uC) (View : Type uV) (Test : Type uD)
   normalized : ∀ context test view, kernel context test view Set.univ = 1
 
 /-- Distinguishing against the selected observer family, rather than all measurable events. -/
-structure DistinguisherSimulationRequest (Public : Type uP) (Context : Type uC)
-    (Witness : Type uW) (View : Type uV) (Interface : PFunctor.{uA, uB}) (State : Type uS)
-    (Test : Type uD) [∀ op, MeasurableSpace (Interface.B op)]
-    [MeasurableSpace State] [MeasurableSpace View] where
-  profile : SimulationProfile Public Context Witness View Interface State
-  observers : ObserverFamily Context View Test
+structure DistinguisherSimulationRequest (Public Context Witness View : Type)
+    (Interface : Signature) (State Event : Type)
+    (Test : Type) [∀ op, MeasurableSpace (Interface.Reply op)]
+      [MeasurableSpace State] [MeasurableSpace Event] [MeasurableSpace View] where
+  profile : SimulationProfile Public Context Witness View Interface State Event
+  observers : ObserverFamily Context (Outcome View) Test
   error : Context → ℝ≥0∞
   cost : OperationCost Interface
   budget : Context → ℝ≥0∞
 
 namespace DistinguisherSimulationRequest
 
-variable {Test : Type uD}
-  (request : DistinguisherSimulationRequest Public Context Witness View Interface State Test)
+variable {Test : Type}
+  (request : DistinguisherSimulationRequest Public Context Witness View Interface State Event Test)
 
 @[expose] def ViewsIndistinguishable : Prop := ∀ context witness,
   request.profile.valid context witness → ∀ test, request.observers.admitted context test →

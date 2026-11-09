@@ -1,43 +1,109 @@
-# Accepted standalone implementation interfaces
+# Process-facing implementation interfaces
 
-The sole execution carrier is upstream `PFunctor.FreeM`; its sole probability reading is VCVio `PFunctor.FreeM.runKernel` over `PFunctor.KernelHandler`. There is no new protocol syntax or evaluator. Private state and answers are sampled jointly. Exact installation reuses `KernelHandler.CouplingContract`.
+Namespace: `ProtocolProof`. The package depends on `ZkcProgram` at `../program` and pinned
+VCVio, PolyFun and Mathlib. `PIR.Signature`, `PIR.Process`, `PIR.Outcome`, `PIR.Execution` and
+`PIR.Stop` are canonical declarations from `ZkcProgram`, not aliases. The generic
+`Zkc.Source.Region` also belongs to that shared package; its namespace does not imply a
+concrete IR dependency. The Process-facing carrier parameters use `Type`.
 
-Namespace: `ProtocolProof`. Package imports pinned VCVio, PolyFun and Mathlib, never existing zkc modules.
+## Execution and quantitative contracts
 
-## Core module assignments
+- `Semantics/Execution.lean` supplies measurable structures and
+  `PIR.Execution.measurableEquiv : Execution S L A ≃ᵐ Outcome A × (S × List L)`.
+  `Semantics/EventLog.lean` supplies measurable list operations for ordered event accumulation.
+- `System E I S L` fixes `operations : E → (op : I.Op) → Kernel S (Execution S L (I.Reply op))`
+  and `initial : E → Measure S`, with fields `operation_mass` and `initial_probability`.
+  `System.run` takes an environment and a `Process I A` and returns a kernel from `S` to
+  `Execution S L A`. `System.runFrom` additionally accepts an existing event prefix as part
+  of `S × List L`. `System.experiment` takes `E → Process I A` and returns the complete
+  `Experiment E (Execution S L A)`.
+- `System.accumulatedOperations` preserves the joint outcome/state law and appends newly
+  emitted events to the prefix, including on a stopped reply. `System.initialWithEvents`
+  maps the whole initial law by `fun state => (state, [])`.
+- `Internal.effects I` gives operations outcome-valued replies. `Internal.encode` translates
+  Process once, stopping after a failed reply. `System.runFrom` uses upstream `FreeM.runKernel`
+  on this encoding; `System.experiment` uses the same backend and the measurable record
+  equivalence. These are not independent probability evaluators or alternative authoring APIs.
+- `OperationSpec I S L` consumes a continuation of type
+  `Outcome (I.Reply op) → (S × List L) → ENNReal`. `OperationSpec.Monotone` is pointwise
+  monotonicity. `opExpectation (system.accumulatedOperations environment)` is the exact spec.
+  `wpFold spec program post` applies the upstream specification fold to the encoding, with
+  `post : Outcome A → (S × List L) → ENNReal`.
+- `UpperBound spec program post potential` and `LowerBound ...` are Process-indexed contracts,
+  with `potential : (S × List L) → ENNReal`. Their `pure`, `halt`, `operation`, `bind`,
+  `consequence`, `ite`, `dite` and `iterate` rules retain stop rewards. The public single-call
+  expression is `PIR.Process.call operation .done`. Bind and iteration require an explicit
+  stopped-branch inequality, in opposite directions for upper and lower bounds.
+- `Semantics/Probability.lean` supplies `System.runFrom_bind`,
+  `System.wpFold_eq_lintegral_runFrom`, `System.lintegral_wpFold_eq_experiment`, the event
+  indicator specializations and `System.experiment_eq_dirac`. These relate the same
+  interpretation to full-record expectations and deterministic experiments. Dirac experiment
+  agreement requires both the primitive Dirac laws and a Dirac initial law.
+- `Components/Adequacy.lean` exposes `UpperBound.adequate`, `closed_expectation_le` and
+  `closed_event_le`, plus `LowerBound.adequate`, `le_closed_expectation` and `le_closed_event`.
+  These reuse internal adequacy for `System.runFrom` and whole experiments. Local spec
+  comparisons, measurable rewards/events and whole-initial-law budgets remain explicit.
 
-- `Semantics/Quantitative.lean`: `opExpectation handler : OpSpec P (S → ENNReal)` and `runExpectation handler program post state`; proved equality `wpFold_eq_runExpectation`. The main measurable-postcondition bridge supports arbitrary measurable state and final-result spaces; operation answers are countable with measurable singletons. Only the unrestricted-postcondition specialization additionally requires countable state and final-result spaces with measurable singletons. The root closure uses the measurable bridge and retains its generality.
-- `Components/Contract.lean`: upper and lower contract rules over existing `wpFold`; bind, branch, arbitrary finite iteration and concrete local-to-global semantic bounds. No new execution AST.
-- `Components/Installation.lean`: whole adaptive-client event/expectation transport from upstream local coupling contracts; free-handler installation and explicit initial-state coverage. Interface/state relations are explicit. Use existing coupling results, not a new coupling implementation.
-- `Semantics/System.lean`: normalized operation handlers and initial laws, with a generic mass-one experiment constructor.
-- `Components/Representation.lean`: total, possibly non-injective state maps installed from full local joint-law commutation and initial pushforward.
-- `Semantics/Experiment.lean`: complete normalized laws, fixed measurable observations, and environment reindexing.
-- `Semantics/Access.lean`: public-input/typed-service algorithm execution; weighted-call bounds reuse PolyFun's `OpSpec.charge` and `wpFold`.
-- `Claims/Problem.lean`: promise regions, optional witness relations and explicit population predicates.
-- `Claims/Quantitative.lean`: reusable upper/lower event requests.
-- `Claims/Soundness.lean`, `Completeness.lean`, `Recovery.lean`: separate fixed property meanings over those event requests.
-- `Claims/View.lean`: mathematical statistical view comparison and exact-law closure.
-- `Claims/Request.lean`: import surface for the preceding unary/view definitions, not another implementation.
-- `Claims/Extraction.lean`: request-fixed acceptance-to-extraction guarantee, access execution and weighted-call bound.
-- `Claims/Simulation.lean`: request-fixed simulator, statistical or selected-observer comparison, and weighted-call bound.
-- `Claims/Receipt.lean`: built-in versus custom claim constructors, exact meanings, closed and conditional evidence.
-- `Claims/Diagnostics.lean`: inhabited/empty/unchecked admission error and finite/infinite resource-budget assessments.
-- `Claims/Closure.lean`: top-level closure assembling local installation, initial correspondence, mathematical bound and fixed observation transfer.
+Kernel execution and root closure require measurable state, event and result spaces, and
+countable operation replies with measurable singletons. The backend measurable-reward bridge
+`Internal.wpFold_eq_runExpectation_of_measurable` requires a measurable terminal reward, not
+countable state or result spaces. Its unrestricted-reward specialization additionally requires
+countable state/result spaces with measurable singletons. Event transports require measurable
+events; expectation transports require measurable rewards. `System.runFrom_bind` additionally
+requires a countable intermediate return type with measurable singletons. The exact measurable
+reward and whole-initial-law expectation theorems do not add that return-type restriction.
 
-- `Claims/Assembly.lean`: identity and map-based connection constructors.
-- `Claims/Transfer.lean`: statistical upper game transfer with explicit environment translation, losses and composition.
+## Installation and root closure
 
-All public statements must expose countability, measurability, normalization and premises actually needed. No `sorry`, custom axioms, unchecked equality tests or whole-request theorem stored as local evidence.
+`Installation actual model admissible related` is exact same-interface installation. Both
+systems use the same `Signature`; their states and event types may differ. The relation has
+type `E → (S × List L) → (T × List M) → Prop`. Its `operations` field is VCVio's
+`KernelHandler.CouplingContract` for the two accumulated handlers, including complete equal
+outcomes and related accumulated states. Its `initial` field couples the entire
+`initialWithEvents` laws. There is no public `Connection` compatibility alias.
 
-## Module and reduction conventions
+`Installation.mass_eq`, `lintegral_le`/`lintegral_ge` and `event_le`/`event_ge` transport the
+same Process client at an admitted environment. Their terminal premise compares complete
+outcomes and related state/log pairs. `upper_bound`/`lower_bound` and
+`event_upper_bound`/`event_lower_bound` compose these transports with a model bound.
 
-Definitions used as the public meaning of a request, a fixed experiment, or a structural
-resource fold are exposed with Lean 4.35's `@[expose]`. This permits downstream unfolding and
-kernel conversion without duplicating a second model. Mathematical proof bodies need no such
-policy. Proposition names (`Holds`, `Meaning`, `CallsBounded`, `IsCanonical`) are capitalized;
-computations and constructors use lower camel case. No compatibility aliases remain.
+`Representation.contractOfMap` constructs the local coupling from a measurable, possibly
+non-injective map on accumulated state and a full local commutation equation.
+`Installation.ofMap` also requires the whole initial-law pushforward;
+`Installation.reflexive` handles identity. These constructors require the stated measurable
+equality structure on the target accumulated state. They do not decode differing interfaces.
 
-The full request, not a property-name string, indexes `Receipt`. `ConditionalReceipt claim P`
-contains `P → claim.Meaning`; only `close` supplied with a proof of `P` produces a closed receipt.
-No route attribution participates in this typing decision. These are logical interfaces, not
-a completed report generator or proof-search engine.
+`UpperEvidence request actual model client related` and `LowerEvidence ...` fix a request over
+`Execution S L A` and a client `E → Process I A`. Their fields are `subject`, `installation`,
+`spec`, `local_bound`, `model_event`, `measurable_event`, `terminal`, `potential`, `mathematics`
+and `budget`. The terminal implication compares full outcomes and related state/log pairs.
+The budget integrates over the whole model `initialWithEvents` law. `.establish` reuses
+`Internal.UpperEvidence.establish` or `Internal.LowerEvidence.establish` through the measurable
+record equivalence; no field is the requested whole-game conclusion.
+
+## Property modules
+
+- `Semantics/Experiment`: normalized laws, measurable observations and environment reindexing.
+- `Semantics/Access`: `AccessExecution Public Environment Interface State Event Result`, with
+  `algorithm : Public → Process Interface Result`; its experiment returns full Execution.
+  `OperationCost.bound` is a structural Process call bound, not a probability interpretation.
+  `Internal.bound_eq_charge` relates it to the upstream charge fold of the stop-aware encoding.
+- `Claims/Problem`, `Quantitative`, `Soundness`, `Completeness`, `Recovery` and `View`: distinct
+  fixed meanings and reusable event/view bounds. `Claims/Request` is their import surface.
+- `Claims/Extraction`: explicit Event parameter, fixed access and success guarantee; success
+  requires `out.outcome = .returned (some witness)` and the witness relation.
+- `Claims/Simulation`: explicit Event parameter; real and simulated experiments observe
+  `Outcome View`. Selected observer kernels also take `Outcome View`, retaining every stop.
+- `Claims/Receipt`, `Diagnostics`: built-in/custom and closed/conditional evidence, with
+  admission, error and resource assessments. `Claims/Transfer` supplies statistical upper game
+  transport with explicit environment translation and losses.
+
+The complete request indexes `Receipt`; `ConditionalReceipt claim P` closes only with a proof
+of `P`. Computations and constructors use descriptive lower camel case names; propositions
+such as `Holds`, `Meaning` and `CallsBounded` are capitalized. Public meaning definitions use
+selective `@[expose]` for downstream unfolding; mathematical proof bodies need no such policy.
+Package numbers describe the architecture plan, not shipped API names.
+
+See [IMPLEMENTATION.md](IMPLEMENTATION.md) for Package 1 proof ownership and the parent-owned
+P2/integration boundary and [VALIDATION.md](VALIDATION.md) for the final package build and
+standard-axiom audit. The construction engine remains a later unit.
