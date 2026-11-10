@@ -50,6 +50,10 @@ def build_inputs(root, packages=None):
         files.update(package / filename for filename in
                      ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
         files.update(package_modules(name, root).values())
+        # Test modules read their package's data fixtures while they elaborate.
+        fixtures = package / 'fixtures'
+        if fixtures.is_dir():
+            files.update(path for path in fixtures.rglob('*') if path.is_file())
         declaration = package / 'compatibility.json'
         if declaration.is_file():
             config = json.loads(declaration.read_text())
