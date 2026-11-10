@@ -1241,3 +1241,17 @@ coverage of every linear port, consistently across each closed source type.
 `EntryContractBinding` separately requires the actual selected root, its unique
 named target statement and the target's exact acceptance output. Component
 association does not supply that binding or prove its relation.
+
+
+### Selected protocol regions
+
+Boolean `protocol_branch` retains exactly the ordered `then` and `else` arms.
+Both isolated arms receive the same explicitly typed captures and return the
+declared output tuple. Admission checks every arm, even an arm that a particular
+execution does not select. Active roles and each output placement are explicit;
+lexical service captures preserve their source authority. An active participant
+with no selector stops as incomplete. It executes only the selected arm and
+preserves that arm's effects and stops before applying the output mask. An
+inactive participant executes neither arm and returns absent components.
+Presence does not establish selector agreement between participants. Ordinary
+multi-alternative variants remain outside this formal profile.

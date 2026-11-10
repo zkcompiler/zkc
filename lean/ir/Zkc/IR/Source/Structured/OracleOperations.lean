@@ -42,7 +42,7 @@ inductive OracleOp where
   | sequenceLength (kind : OracleKind) (maximum : Nat)
   deriving DecidableEq, Repr
 
-def OracleOp.arguments : OracleOp → List Ty
+abbrev OracleOp.arguments : OracleOp → List Ty
   | .input sort .. => [sort.dataType, sort.type]
   | .send kind .. => kind.data :: kind.shape.map (fun _ ↦ Ty.index)
   | .query kind _ => [.oracle kind, kind.query]
@@ -55,7 +55,7 @@ def OracleOp.arguments : OracleOp → List Ty
   | .sequenceAt kind maximum _ => [.oracleSequence kind maximum, .index]
   | .sequenceLength kind maximum => [.oracleSequence kind maximum]
 
-def OracleOp.results : OracleOp → List Ty
+abbrev OracleOp.results : OracleOp → List Ty
   | .input sort .. => [sort.type]
   | .send kind .. | .sequenceAt kind .. => [.oracle kind]
   | .query kind _ => [kind.answer]

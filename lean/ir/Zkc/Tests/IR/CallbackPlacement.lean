@@ -6,7 +6,6 @@ and stops; transport must preserve them before projecting the loop state. -/
 set_option autoImplicit false
 namespace Tests.CallbackPlacement
 open Zkc.Source Zkc.Source.Structured
-attribute [local implicit_reducible] Op.arguments Op.results Op.regions
 
 private def guardedBody :
     Region dialect [.index, .resourceUnit "slot", .boolean] [.resourceUnit "slot", .boolean] :=
@@ -41,7 +40,7 @@ theorem guarded_equation (model : DomainModel) {I : PIR.Signature}
         cases arguments
         cases enabled <;> simp only [source, placed, guardedBody, Region.denote, Regions.denote,
           Evaluation.meaningOn, Evaluation.operationOn,
-          Operands.eval, Values.get, Environment.prepend, Environment.push,
+          Operands.eval, Values.get, Environment.prepend,
           PIR.Process.bind_assoc, PIR.Process.bind, Bool.false_eq_true, ite_false, ite_true]
 
 /-- Exact callback transport retains arbitrary effects, including custody, at

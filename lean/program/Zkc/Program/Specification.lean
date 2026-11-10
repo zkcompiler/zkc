@@ -18,6 +18,14 @@ structure Imported {Raw Program Error : Type}
   program : Program
   admitted : decode raw = .ok program
 
+/-- Turn a checked success bit into exact admission without adding a proof axiom.
+A failed decoder cannot produce a subject through this constructor. -/
+def Imported.ofIsOk {Raw Program Error : Type} (decode : Raw → Except Error Program)
+    (raw : Raw) (accepted : (decode raw).isOk = true) : Imported decode raw :=
+  match result : decode raw with
+  | .ok program => ⟨program, result⟩
+  | .error error => False.elim (by simp [result, Except.isOk, Except.toBool] at accepted)
+
 /-- Successful deterministic admission has only one program subject. -/
 theorem Imported.unique {Raw Program Error : Type}
     {decode : Raw → Except Error Program} {raw : Raw}

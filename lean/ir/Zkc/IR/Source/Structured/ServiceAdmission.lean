@@ -1,6 +1,6 @@
 module
 
-public import Zkc.IR.Source.Structured.RepeatAdmission
+public import Zkc.IR.Source.Structured.ProtocolRegionAdmission
 
 @[expose] public section
 
@@ -41,8 +41,18 @@ def checkServiceInstructions : ServiceConstants → List Instruction → Except 
       let nested := none :: (List.replicate carried none ++ captures)
       if nested.length != inputs.length then throw "structured-protocol-signature"
       checkServiceBlock nested body
+    | .protocolBranch .., arms =>
+      let captures := (operands.drop 1).map fun reference ↦ (constants[reference]?).getD none
+      checkServiceBranches captures arms
     | _, _ => pure ()
     checkServiceInstructions (serviceConstants descriptor types ++ constants) rest
+
+def checkServiceBranches (captures : ServiceConstants) : List WireRegion → Except String Unit
+  | [] => pure ()
+  | .region inputs _ body :: rest => do
+    if inputs.length != captures.length then throw "structured-protocol-signature"
+    checkServiceBlock captures body
+    checkServiceBranches captures rest
 end
 
 /-- A successful checked prefix cannot create a successful continuation. -/

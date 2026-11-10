@@ -42,9 +42,15 @@ def main():
                                  text=True, timeout=180)
         (output / f"{label}.stdout").write_text(process.stdout)
         (output / f"{label}.stderr").write_text(process.stderr)
-        valid_exit = process.returncode > 0 if refused else process.returncode == 0
+        valid_exit = process.returncode == 1 if refused else process.returncode == 0
         if not valid_exit:
             raise ValueError(f"{label}: unexpected exit {process.returncode}; see {output}")
+        if refused:
+            diagnostic = json.loads(process.stdout)
+            if (diagnostic.get("status") != "refused" or
+                    not isinstance(diagnostic.get("code"), str) or
+                    diagnostic["code"].endswith("-io")):
+                raise ValueError(f"{label}: not a semantic admission refusal")
         return process.stdout
 
     def write(name, value):
@@ -62,6 +68,15 @@ def main():
         rows.append({"name": name + "-admission", "status": "pass",
                      "source_sha256": hashlib.sha256(text.encode()).hexdigest()})
         return snapshot, snapshot_path
+
+    def check_quoted(entry, data):
+        quoted = ROOT / "lean/verification/Zkc/Tests/Verification/Construction" / f"{entry}Source.lean"
+        literals = [line.removeprefix("import_source actual from ")
+                    for line in quoted.read_text().splitlines()
+                    if line.startswith("import_source actual from ")]
+        if len(literals) != 1 or json.loads(json.loads(literals[0])) != data:
+            raise ValueError(f"{entry}: maintained Lean source differs from actual frontend export")
+        rows.append({"name": entry + "-proof-source", "status": "pass"})
 
     def compare(name, source, symbol, snapshot, role, inputs, replies=()):
         request = write(name + "-request.json", ["zkc.structured-open-request/0", role, inputs, list(replies), 1000000])
@@ -96,6 +111,8 @@ def main():
             if not isinstance(symbol, str) or not symbol:
                 raise ValueError(f"{entry}: subject interface has no protocol identity")
             data, snapshot = prepare(entry, path, symbol)
+            if entry == "Replace":
+                check_quoted(entry, data)
             definition = next(row for row in data[7] if row[0] == "function" and row[1] == symbol)
             role = definition[6][1][0]
             for index, values in enumerate(inputs):
@@ -106,6 +123,66 @@ def main():
             run([executable, "check", write(entry + "-bad-entry.json", changed)],
                 label=entry + "-bad-entry", refused=True)
             rows.append({"name": entry + "-bad-entry", "status": "pass", "outcome": "refused"})
+        # Current frontend source: repeated calls and actual effectful selected regions.
+        source = fixtures / "actual-calls.zkc"
+        actual_cases = {
+            "Twice": [["7", "11"]],
+            "DrawPair": [[False, "17", "17"], [True, "17", "17"]],
+            "Nested": [[True, True, "7", "11"], [True, False, "7", "11"],
+                       [False, True, "7", "11"], [None, True, "7", "11"]],
+            "Select": [[True, "7", "17"], [False, "7", "17"]],
+        }
+        for entry, inputs in actual_cases.items():
+            flags = ["--source-format=zkc", f"--subject=actual_calls::{entry}",
+                     f"--module=actual_calls={source}"]
+            original = run([args.compiler, "language-emit", *flags], label=entry + "-lower")
+            interface = json.loads(run([args.compiler, "language-interface", *flags],
+                                       label=entry + "-interface"))
+            path = output / f"{entry}.mlir"
+            path.write_text(original)
+            symbol = interface["protocol"]
+            data, snapshot = prepare(entry, path, symbol)
+            definition = next(row for row in data[7] if row[0] == "function" and row[1] == symbol)
+            role = definition[6][1][0]
+            if entry in {"Twice", "DrawPair"}:
+                check_quoted(entry, data)
+            for index, values in enumerate(inputs):
+                compare(f"{entry}-{index}", path, symbol, snapshot, role, values)
+            if entry == "DrawPair":
+                first = definition[9][1][0][3][0][2][1][0]
+                second = definition[9][1][1]
+                for right in ["17", "23"]:
+                    scripts = [["reply", ["draw", instruction[4], role,
+                        "random.bls12-381.fr/0", handle, "bls12-381.fr"], ["value", value]]
+                        for instruction, handle, value in [(first, "17", "3"), (second, right, "8")]]
+                    compare(f"draw-pair-{right}", path, symbol, snapshot, role,
+                            [True, "17", right], scripts)
+                    compare(f"draw-pair-wrong-order-{right}", path, symbol, snapshot, role,
+                            [True, "17", right], list(reversed(scripts)))
+            if entry == "Select":
+                selected = definition[9][1][0]
+                draw = selected[3][0][2][1][0]
+                request = ["draw", draw[4], role, "random.bls12-381.fr/0", "17", "bls12-381.fr"]
+                for answer in [["value", "13"], ["stop", "reject"], ["stop", "exhausted"]]:
+                    compare(f"selected-service-{answer[1]}", path, symbol, snapshot, role,
+                            [True, "7", "17"], [["reply", request, answer]])
+                receiver = definition[6][1][1]
+                compare("selected-receiver", path, symbol, snapshot, receiver, [True, None, None])
+                # Both arms are checked, including one that a concrete input would not select.
+                mutations = {
+                    "missing-arm": lambda branch: branch[3].pop(),
+                    "reordered-labels": lambda branch: branch[0].__setitem__(2, ["else", "then"]),
+                    "wrong-selector": lambda branch: branch[1].__setitem__(0, 1),
+                    "unknown-output-role": lambda branch: branch[0].__setitem__(3, [["unknown"]]),
+                    "bad-unselected-capture": lambda branch: branch[3][1][2].__setitem__(2, ["yield", [99]]),
+                    "bad-service-capture": lambda branch: branch[3][0][2][1][0][1].__setitem__(0, 0),
+                }
+                for name, mutate in mutations.items():
+                    changed = deepcopy(data)
+                    owner = next(row for row in changed[7] if row[0] == "function" and row[1] == symbol)
+                    mutate(owner[9][1][0])
+                    run([executable, "check", write(name + ".json", changed)], label=name, refused=True)
+                    rows.append({"name": name, "status": "pass", "outcome": "refused"})
         # Ordered requests, aliasing, pending answers and reached service stops.
         source = fixtures / "open-services.mlir"
         _, snapshot = prepare("services", source, "main")

@@ -171,7 +171,7 @@ attribute [local instance] lowerLogic
   construct_region with_invariants [fun remaining acc =>
     potential (factor e.residual ^ remaining * value) acc]
   all_goals try simp only [pow_zero, one_mul, pow_succ', mul_assoc]
-  all_goals first | exact honest ‹_› _ | exact le_rfl
+  all_goals exact le_rfl
 
 @[spec high] theorem batches_lower (count width : Nat) (e : Environment)
     (env : Zkc.Source.Environment (meaning e).Value [.accumulator]) (value : ENNReal)
@@ -183,7 +183,7 @@ attribute [local instance] lowerLogic
   construct_region with_invariants [fun remaining acc =>
     potential ((factor e.residual ^ width) ^ remaining * value) acc]
   all_goals try simp only [pow_zero, one_mul, pow_succ', mul_assoc]
-  all_goals first | exact honest ‹_› _ | exact le_rfl
+  all_goals exact le_rfl
 
 @[spec high] theorem source_lower (count width : Nat) (e : Environment)
     (env : Zkc.Source.Environment (meaning e).Value [.accumulator]) (value : Bool → ENNReal)
@@ -193,7 +193,6 @@ attribute [local instance] lowerLogic
     ⦃fun out => fun _ => reward (out.get .here).2 (value (out.get .here).1); fun _ _ => 0⦄ := by
   unfold source
   construct_region
-  all_goals exact honest ‹_› _
 
 end Lower
 
@@ -220,7 +219,6 @@ attribute [local instance] lowerLogic
     ⦃fun out => fun _ => reward out.2 (value out.1); fun _ _ => 0⦄ := by
   unfold game
   construct_region
-  all_goals exact honest ‹_› _
 end LowerGame
 
 /-- The event and error are fixed independently of constructor success. -/

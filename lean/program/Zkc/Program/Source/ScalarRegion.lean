@@ -156,7 +156,7 @@ theorem Program.denote_toRegion (meaning : Interpretation language interface) {Î
       rw [bodySame, PIR.Process.bind_assoc, PIR.Process.bind_assoc]
       congr 1
       funext value
-      exact nextIH _
+      simpa only [PIR.Process.bind, Environment.prepend_singleton] using nextIH (env.push value)
 
 /-- Effect translation of a lowered reference term uses the canonical law. -/
 theorem Program.translate_toRegion (meaning : Interpretation language interface)

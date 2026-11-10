@@ -2,6 +2,7 @@ module
 
 public import Zkc.Protocol.Construction.Region
 public import Zkc.Program.Source.ScalarRegion
+public import Zkc.Program.Source.Finite
 
 /-! Callback and finite-control rules for the existing scalar reference profile.
 
@@ -36,6 +37,27 @@ variable {I : Signature} {Pred EPred : Type}
       (Triple.bind (m := Process I) (body initial) (repeatN count body) (inv count)
         (step count (Nat.lt_succ_self count) initial)
         (fun value => ih value (fun remaining h => step remaining (Nat.lt_succ_of_lt h))))
+
+/-- Mathematical state assertions indexed by the remaining ordered input suffix. -/
+@[spec_invariant_type]
+abbrev SequenceInvariant (Item State Pred : Type) := List Item → State → Pred
+
+/-- The same structural fold rule covers runtime bounds and admitted finite domains.
+A step law is required only for actual suffixes; no independent-state assumption is made. -/
+@[spec] theorem finiteFold {Item State : Type} (step : State → Item → Process I State)
+    (items : List Item) (initial : State) (inv : SequenceInvariant Item State Pred)
+    (post : State → Pred) (stopped : EPred)
+    (each : ∀ before item rest, items = before ++ item :: rest → ∀ state,
+      ⦃inv (item :: rest) state⦄ step state item ⦃inv rest; stopped⦄)
+    (terminal : ∀ state, Lean.Order.PartialOrder.rel (inv [] state) (post state)) :
+    ⦃inv items initial⦄ Finite.fold step items initial ⦃post; stopped⦄ := by
+  induction items generalizing initial with
+  | nil => exact ⟨(processDone initial post stopped).entails_wp_of_pre (terminal initial)⟩
+  | cons item rest ih =>
+    exact Triple.bind (m := Process I) (step initial item) (Finite.fold step rest) (inv rest)
+      (each [] item rest rfl initial)
+      (fun state => ih state (fun before next suffix split =>
+        each (item :: before) next suffix (by simp only [List.cons_append, split])))
 
 variable {language : Language} (meaning : Interpretation language I)
 

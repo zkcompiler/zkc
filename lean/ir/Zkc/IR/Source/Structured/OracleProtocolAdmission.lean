@@ -12,7 +12,7 @@ set_option autoImplicit false
 namespace Zkc.Source.Structured
 
 def Descriptor.protocolLogicalTransport : Descriptor → Bool
-  | .oracle _ | .protocolApply .. | .protocolRepeat .. => true
+  | .oracle _ | .protocolApply .. | .protocolRepeat .. | .protocolBranch .. => true
   | _ => false
 
 /-- Stored instruction coordinates, including callback positions. Fuel is the independently

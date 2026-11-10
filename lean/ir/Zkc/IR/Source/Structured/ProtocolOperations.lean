@@ -41,6 +41,15 @@ structure RepeatSpec where
   maximum : Nat
   deriving DecidableEq, Repr
 
+/-- Selected control retains two isolated callbacks with one capture ABI and
+explicit output placement. Both arms are admitted; only one executes. -/
+structure BranchSpec where
+  captures : List Ty
+  outputs : List Ty
+  roles : List Nat
+  outputScopes : List (List Nat)
+  deriving DecidableEq, Repr
+
 /-- Select the already present component for one role. Formation requires
 nonempty distinct role names and availability of each corresponding operand.
 The fallback is absence, never another role's component. -/
@@ -65,13 +74,15 @@ inductive ProtocolOp where
   | statement (relation : String) (types : List Ty) (selectors : List String) (acceptance : Nat)
   | mark (site : String)
   | protocolApply (callee : ProtocolSignature) (roles : List Nat) (site : String)
+  | branch (spec : BranchSpec) (site : String)
   | repeat (spec : RepeatSpec) (site : String)
 
-def ProtocolOp.arguments : ProtocolOp → List Ty
+abbrev ProtocolOp.arguments : ProtocolOp → List Ty
   | .oracle operation _ => operation.arguments
   | .calculate op _ => op.arguments
   | .localCall helper .. => helper.inputs
   | .protocolApply callee .. => callee.inputs
+  | .branch spec _ => .boolean :: spec.captures
   | .repeat spec _ => .index :: (spec.state ++ spec.captures)
   | .guard .. => [.boolean]
   | .exchange ty .. | .restrict ty .. => [ty]
@@ -81,11 +92,12 @@ def ProtocolOp.arguments : ProtocolOp → List Ty
   | .statement _ types .. => types
   | .mark _ => []
 
-def ProtocolOp.results : ProtocolOp → List Ty
+abbrev ProtocolOp.results : ProtocolOp → List Ty
   | .oracle operation _ => operation.results
   | .calculate op _ => op.results
   | .localCall helper .. => helper.outputs
   | .protocolApply callee .. => callee.outputs
+  | .branch spec _ => spec.outputs
   | .repeat spec _ => spec.state
   | .guard .. | .statement .. | .mark _ => []
   | .exchange ty .. | .restrict ty .. | .assemble ty .. => [ty]
@@ -101,8 +113,9 @@ def ProtocolOp.protocols : ProtocolOp → List ProtocolSignature
   | .protocolApply callee .. => [callee]
   | _ => []
 
-/-- Repeat has one isolated callback on the shared typed carrier. -/
-def ProtocolOp.regions : ProtocolOp → List (List Ty × List Ty)
+/-- Selected control and repeat have isolated callbacks on the shared typed carrier. -/
+abbrev ProtocolOp.regions : ProtocolOp → List (List Ty × List Ty)
+  | .branch spec _ => [(spec.captures, spec.outputs), (spec.captures, spec.outputs)]
   | .repeat spec _ => [(.index :: (spec.state ++ spec.captures), spec.state)]
   | _ => []
 

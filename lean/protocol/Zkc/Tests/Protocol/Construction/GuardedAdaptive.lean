@@ -37,8 +37,6 @@ theorem game_upper (allowed : Bool) (count width : Nat) (e : AdaptiveChecks.Envi
       OrderDual.toDual (fun _ _ => 0)⦄ := by
   unfold game source
   construct_region
-  all_goals simp_all
-  all_goals exact le_rfl
 
 section Lower
 attribute [local instance] lowerLogic
@@ -51,9 +49,6 @@ theorem game_lower (allowed : Bool) (count width : Nat) (e : AdaptiveChecks.Envi
     ⦃fun out => fun _ => reward out.2 (value out.1); fun _ _ => 0⦄ := by
   unfold game source
   construct_region
-  all_goals try exact honest ‹_› _
-  all_goals simp_all
-  all_goals exact le_rfl
 
 end Lower
 

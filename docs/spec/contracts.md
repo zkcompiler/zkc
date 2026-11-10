@@ -251,9 +251,10 @@ The independent structured-source reader remains supported for its explicit
 interpretation profile. The previous constructed-participant and executable-byte
 formal readers, scalar views and generated endpoint installations are retired.
 Native publication, native admission and execution contracts remain unchanged.
-There is no current formal connection for those compiled artifacts; complete
-actual-source installation and generated-controller correspondence are subsequent
-work. [Formal support](../../lean/docs/support.md) is the authority for claimed
+There is no current formal connection for those compiled artifacts. Actual-source
+installation now uses checked declaration membership and the complete dependency
+table, with common proof construction for the admitted Boolean-control profile.
+Generated-controller correspondence remains subsequent work. [Formal support](../../lean/docs/support.md) is the authority for claimed
 formal coverage. A native catalog row does not install a formal interpretation.
 
 ### Foundation interfaces

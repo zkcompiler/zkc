@@ -74,11 +74,19 @@ theorem Block.denote_project (meaning : Meaning language)
   induction block with
   | ret value => rfl
   | letOp op args next ih =>
+      change (next.project role).denote (meaning.projected condition)
+        (env.prepend (Values.singleton
+          ((RoleFamily.sequence (Operands.eval env args)).map (meaning.operation op)))) = _
+      erw [Environment.prepend_singleton]
       exact ih _
   | restrict scope value next ih =>
+      change (next.project role).denote (meaning.projected condition)
+        (env.prepend (Values.singleton (if scope role then env value else none))) = _
+      erw [Environment.prepend_singleton]
       exact ih _
   | bind body next bodyIH nextIH =>
       simp only [project, Region.denote, bodyIH, PIR.Process.bind, evalAt]
+      erw [Environment.prepend_singleton]
       exact nextIH _
 
 /-- Complete deterministic execution preserves state and emits no events. -/

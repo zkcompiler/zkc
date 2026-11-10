@@ -1,6 +1,24 @@
 {
   "format": "zkc.claims-lock/0",
   "theorems": {
+    "ActualSourceConstruction.DrawPair.participant_law": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Construction.SharedServices",
+      "structural": "902e3af85c937357",
+      "explicit": "dfda61bd75d7cda8"
+    },
+    "ActualSourceConstruction.Replace.participant_law": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Construction.FiniteLoop",
+      "structural": "b8bdf04520b8cfd1",
+      "explicit": "a6078f0ed89b75dc"
+    },
+    "ActualSourceConstruction.Twice.participant_law": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Construction.ActualCalls",
+      "structural": "52e4ca82bb592709",
+      "explicit": "dd330dcf24e1fd8c"
+    },
     "ProtocolProof.Construction.finiteRepeat": {
       "package": "protocol",
       "module": "Zkc.Protocol.Construction.Control",
@@ -72,6 +90,24 @@
       "module": "Zkc.IR.Source.Structured.Import",
       "structural": "f0429d280e132dd2",
       "explicit": "c0d2089731e865c6"
+    },
+    "Zkc.Verification.Construction.component": {
+      "package": "verification",
+      "module": "Zkc.Verification.Construction.Source",
+      "structural": "22cd7eed62b704e7",
+      "explicit": "5593b3308e43cb43"
+    },
+    "Zkc.Verification.Construction.helper": {
+      "package": "verification",
+      "module": "Zkc.Verification.Construction.Source",
+      "structural": "37d06135c524a0aa",
+      "explicit": "043e5c55af1e4dd5"
+    },
+    "Zkc.Verification.Construction.protocol": {
+      "package": "verification",
+      "module": "Zkc.Verification.Construction.Source",
+      "structural": "64570a552a8b0fb5",
+      "explicit": "56a0ef98acbb6cf0"
     },
     "ZkcArkLib.Kzg.averageSuccess_eq_bindingExperiment": {
       "package": "arklib",

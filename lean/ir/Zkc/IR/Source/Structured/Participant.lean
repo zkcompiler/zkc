@@ -3,6 +3,7 @@ module
 public import Zkc.IR.Source.Structured.Interpretation
 public import Zkc.Program.Source.Participant
 public import Zkc.IR.Source.Structured.ProtocolTable
+public import Zkc.IR.Source.Structured.Selection
 public import Zkc.IR.Source.Structured.Repeat
 
 public import Zkc.IR.Source.Structured.ServiceExecution
@@ -98,6 +99,9 @@ def protocolOperationWith {I : PIR.Signature} (observations : SiteObservations I
     PIR.Process I (Values (Component (assignment F G)) op.results) :=
   match op, args with
   | .oracle .., _ => .halt .refused
+  | .branch spec _, .cons selector captures =>
+    denoteBranch some spec context self selector captures
+      (callbacks.get .here) (callbacks.get (.there .here))
   | .repeat spec _, .cons count values =>
     let parts := Values.split spec.state values
     denoteRepeat spec context self count parts.1 parts.2 (callbacks.get .here)
@@ -177,6 +181,12 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
     PIR.Process.interpret_interchange leftActions operations rightActions actions process
   cases op with
   | oracle => rfl
+  | branch spec site =>
+    cases args with | cons selector captures =>
+      cases callbacks with | cons yes rest =>
+        cases rest with | cons no tail =>
+          cases tail
+          exact denoteBranch_interpret operations some spec context self selector captures yes no
   | «repeat» spec site =>
     cases args with
     | cons count values =>
@@ -441,7 +451,6 @@ theorem apply_inside {I : PIR.Signature} (observations : SiteObservations I)
     protocolOperationWith observations actions helpers self (.protocolApply signature roles site)
       args .nil protocols context = invokeProtocol protocols signature (context.enter site roles) self args := by
   simp [protocolOperationWith, inside]
-  rfl
 
 /-- An immediately returned tuple, including an empty tuple, reaches the caller continuation. -/
 theorem apply_returns {I : PIR.Signature} {A : Type}

@@ -170,7 +170,6 @@ theorem operation_indexPowerOfTwo {F G : Type} {interface : PIR.Signature}
   change (PIR.Process.done (.cons (naturalPowerOfTwo n r) .nil) :
     PIR.Process interface (Values (assignment F G) [.boolean])) = _
   rw [naturalPowerOfTwo_eq_decide]
-  rfl
 
 /-- Keep the value assignment visible to dependent clients; operation evaluation
 remains a named definition with its own laws. -/

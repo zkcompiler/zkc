@@ -119,6 +119,7 @@ theorem protocol_region_protocols_congrOn
   | guard | exchange | restrict =>
     cases args with | cons value rest => cases rest; rfl
   | mark => cases args; rfl
+  | branch spec site => cases args; rfl
   | «repeat» spec site =>
     cases args with | cons count values => rfl
 

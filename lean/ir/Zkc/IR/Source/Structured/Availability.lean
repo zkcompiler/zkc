@@ -1,6 +1,6 @@
 module
 
-public import Zkc.IR.Source.Structured.RepeatAdmission
+public import Zkc.IR.Source.Structured.ProtocolRegionAdmission
 
 @[expose] public section
 
@@ -365,6 +365,27 @@ def repeatInputs (roles : Nat) (spec : RepeatSpec) (arguments : List Footprint) 
   chargeReplay (1 + spec.state.length + captures.length)
   return spec.roles :: (spec.stateScopes ++ captures)
 
+/-- A Boolean selector is available to every active role; captures retain only
+availability they already had within that roster. Output placement is checked
+against both arms by the region traversal. -/
+def branchInputs (roles : Nat) (spec : BranchSpec) (arguments : List Footprint) :
+    Analysis (List Footprint) := do
+  validScope roles spec.roles
+  if arguments.length != 1 + spec.captures.length ||
+      spec.outputScopes.length != spec.outputs.length then
+    throw "structured-availability-port-scopes"
+  protocolTransport spec.outputs
+  let selector :: captures := arguments | throw "structured-availability-operand"
+  if !(← subset spec.roles selector) then throw "structured-branch-selector-scope"
+  for scope in spec.outputScopes do
+    validScope roles scope
+    if !(← subset scope spec.roles) then throw "structured-branch-output-scope"
+  captures.mapM fun supplied ↦ do
+    chargeReplay (1 + supplied.length * (spec.roles.length + 1))
+    let scope := supplied.filter spec.roles.contains
+    if scope.isEmpty then throw "structured-branch-capture-scope"
+    return scope
+
 /-- Availability of the resolved logical action. These rules do not grant a Math/message
 codec to a handle. Coordinate agreement and holder-origin obligations are separate from
 availability. Canonical Oracle subject selection separately requires the source-bound
@@ -429,7 +450,7 @@ def operation (summaries : List DependencySummary) (roster : List String)
   match op with
   | .calculate op _ => availableCalculation summaries roles op arguments active
   | .oracle op _ => oracleOperation roles op arguments active
-  | .repeat .. =>
+  | .repeat .. | .branch .. =>
     -- The region traversal must inspect the callback before exporting scopes.
     throw "structured-protocol-region"
   | .protocolApply signature indices _ =>
@@ -499,6 +520,18 @@ def protocolRegionWith (summaries : List DependencySummary) (roster : List Strin
     chargeOperations 1
     operands environment values
   | .stop _, _ => throw "structured-availability-protocol-stop"
+  | .letOp (.branch spec _) arguments (.cons yes (.cons no .nil)) next, environment => do
+    chargeOperations 1
+    checkActiveRoles active spec.roles
+    let inputs ← branchInputs roster.length spec (← operands environment arguments)
+    let yesResults ← protocolRegionWith summaries roster spec.roles yes (extendEnvironment #[] inputs)
+    let noResults ← protocolRegionWith summaries roster spec.roles no (extendEnvironment #[] inputs)
+    for yielded in [yesResults, noResults] do
+      if yielded.length != spec.outputScopes.length then throw "structured-availability-port-scopes"
+      for (requested, supplied) in spec.outputScopes.zip yielded do
+        if !(← subset requested supplied) then throw "structured-branch-yield-scope"
+    chargeReplay spec.outputScopes.length
+    protocolRegionWith summaries roster active next (extendEnvironment environment spec.outputScopes)
   | .letOp (.repeat spec _) arguments (.cons body .nil) next, environment => do
     chargeOperations 1
     checkActiveRoles active spec.roles

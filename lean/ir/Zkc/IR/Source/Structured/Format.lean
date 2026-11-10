@@ -303,6 +303,10 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "call", name] => return .call (← string name)
   | [.str "apply", name] => return .apply (← string name)
   | [.str "protocol_apply", name, roles] => return .protocolApply (← string name) (← strings roles Limits.protocolRoles)
+  | [.str "protocol_branch", roles, alternatives, outputScopes] =>
+      if (← strings alternatives) != ["then", "else"] then
+        throw "structured-protocol-branch-alternatives"
+      return .protocolBranch (← strings roles Limits.protocolRoles) (← scopes outputScopes)
   | [.str "protocol_repeat", carried, maximum, roles, stateScopes] =>
       return .protocolRepeat (← natural carried 512) (← natural maximum 1048576)
         (← strings roles Limits.protocolRoles) (← scopes stateScopes)

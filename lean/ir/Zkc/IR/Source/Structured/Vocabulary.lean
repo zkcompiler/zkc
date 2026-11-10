@@ -189,6 +189,7 @@ inductive Descriptor where
   | call (name : String)
   | apply (name : String)
   | protocolApply (name : String) (roles : List String)
+  | protocolBranch (roles : List String) (outputScopes : List (List String))
   | protocolRepeat (carried maximum : Nat) (roles : List String)
       (scopes : List (List String))
   | localCall (name owner : String)

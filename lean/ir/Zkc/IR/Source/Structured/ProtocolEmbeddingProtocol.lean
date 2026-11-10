@@ -22,7 +22,7 @@ def eraseInternal (carriers : Carriers) :
   | .ordinary action => .call (.ordinary action) .done
   | .oracle request => .call (.oracle request) .done
   | .demand request => .call (.demand request) .done
-  | .application .. | .iteration .. | .leave | .mark .. => .done ()
+  | .application .. | .iteration .. | .selection .. | .leave | .mark .. => .done ()
 
 @[simp] theorem erase_actions (model : DomainModel)
     (action : (participantInterfaceOn model.toCarriers).Op) :
@@ -40,6 +40,13 @@ theorem erase_enter_application (model : DomainModel) {A : Type}
 theorem erase_enter_iteration (model : DomainModel) {A : Type} (site : String) (index : Nat)
     (process : PIR.Process (OracleProtocol.Interface model) A) :
     (OracleProtocol.enter model (.iteration site index) process).interpret
+      (eraseInternal model.toCarriers) = process.interpret (eraseInternal model.toCarriers) := by
+  simp only [OracleProtocol.enter, PIR.Process.interpret_bind, PIR.Process.interpret,
+    eraseInternal, PIR.Process.bind, PIR.Process.bind_done]
+
+theorem erase_enter_selection (model : DomainModel) {A : Type} (site : String) (selected : Bool)
+    (process : PIR.Process (OracleProtocol.Interface model) A) :
+    (OracleProtocol.enter model (.selection site selected) process).interpret
       (eraseInternal model.toCarriers) = process.interpret (eraseInternal model.toCarriers) := by
   simp only [OracleProtocol.enter, PIR.Process.interpret_bind, PIR.Process.interpret,
     eraseInternal, PIR.Process.bind, PIR.Process.bind_done]
@@ -229,6 +236,41 @@ theorem operation_embed (model : DomainModel) (self : Nat)
           (fun result ↦ .done (ProtocolValue.embedComponents result)) := by
   cases op with
   | oracle => cases allowed
+  | branch spec site =>
+    dsimp only [ProtocolOp.arguments, ProtocolOp.results, ProtocolOp.regions]
+      at args left right callbacks ⊢
+    cases args with | cons selector captures =>
+      cases left with | cons yes tail =>
+        cases tail with | cons no tail =>
+          cases tail
+          cases right with | cons lazyYes tail =>
+            cases tail with | cons lazyNo tail =>
+              cases tail
+              have yesEq := callbacks .here captures
+              have noEq := callbacks (.there .here) captures
+              simp only [map_components, Values.get] at yesEq noEq
+              change (denoteBranch ProtocolValue.toConcrete spec context self
+                (component .boolean selector) (ProtocolValue.embedComponents captures)
+                (fun values ↦ OracleProtocol.enter model (.selection site true) (lazyYes values))
+                (fun values ↦ OracleProtocol.enter model (.selection site false) (lazyNo values))).interpret
+                  (eraseInternal model.toCarriers) =
+                    (denoteBranch some spec context self selector captures yes no).bind
+                      (fun result ↦ .done (ProtocolValue.embedComponents result))
+              unfold denoteBranch
+              split
+              · cases selector with
+                | none => rfl
+                | some selected =>
+                  cases selected <;>
+                    simp only [component, ProtocolValue.toConcrete_ofConcrete,
+                      Option.map_some, Option.bind_some, Bool.false_eq_true, ↓reduceIte,
+                      PIR.Process.interpret_bind, erase_enter_selection,
+                      PIR.Process.interpret, yesEq, noEq, PIR.Process.bind_assoc]
+                  all_goals
+                    apply congrArg _
+                    funext values
+                    simp only [mask_embed, PIR.Process.bind]
+              · simp only [PIR.Process.interpret, PIR.Process.bind, embed_absent]
   | «repeat» spec site =>
     dsimp only [ProtocolOp.arguments, ProtocolOp.results,
       ProtocolOp.regions] at args left right callbacks ⊢

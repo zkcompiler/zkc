@@ -853,6 +853,26 @@ partial def protocolOperation (definitions : Helpers) (protocols : ProtocolBound
       let child := context.enter site roles
       if !child.contains signature self then return some (signature.outputs.map fun _ => .absent)
       invokeProtocolBound protocols signature child self received args
+  | .branch spec _, selector :: captures,
+      .cons yesInputs yesOutputs yes (.cons noInputs noOutputs no .nil) =>
+      tick (spec.captures.length + spec.outputs.length + spec.roles.length)
+      if yesInputs != spec.captures || noInputs != spec.captures ||
+          yesOutputs != spec.outputs || noOutputs != spec.outputs then throw .unknown
+      if !spec.roles.any (fun role ↦ context.roles role == self) then
+        return some (spec.outputs.map fun _ ↦ .absent)
+      if selector.present == .absent then return none
+      let .boolean selected := selector.present | throw .unknown
+      let result ← match selected with
+        | some selected =>
+          region (protocolOperation definitions protocols context self received)
+            (if selected then yes else no) captures
+        | none =>
+          let left ← region (protocolOperation definitions protocols context self received) yes captures
+          let right ← region (protocolOperation definitions protocols context self received) no captures
+          joinResult left right
+      match result with
+      | none => return none
+      | some values => return some (← maskProtocolValues context self spec.outputScopes values)
   | .repeat spec _, count :: rest, .cons inputs outputs body .nil =>
       tick (inputs.foldl (fun cost type => cost + typeWork type) 0 +
         outputs.foldl (fun cost type => cost + typeWork type) 0 + spec.roles.length)

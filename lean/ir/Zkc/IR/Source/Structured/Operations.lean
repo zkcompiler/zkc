@@ -181,7 +181,7 @@ inductive Op where
   /-- Internal observation only; erased by the ordinary closed interpretation. -/
   | mark (site : String)
 
-def Op.arguments : Op → List Ty
+abbrev Op.arguments : Op → List Ty
   | .exec primitive => primitive.arguments
   | .indexConstant _ => []
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.index, .index]
@@ -208,7 +208,7 @@ def Op.arguments : Op → List Ty
   | .createUnit _ => []
   | .passUnit slot | .consumeUnit slot => [.resourceUnit slot]
 
-def Op.results : Op → List Ty
+abbrev Op.results : Op → List Ty
   | .exec primitive => primitive.results
   | .indexConstant _ => [.index]
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.boolean]
@@ -232,7 +232,7 @@ def Op.results : Op → List Ty
   | .createUnit slot | .passUnit slot => [.resourceUnit slot]
   | .guard | .mark _ | .consumeUnit _ => []
 
-def Op.regions : Op → List (List Ty × List Ty)
+abbrev Op.regions : Op → List (List Ty × List Ty)
   | .branch captures outputs => [(captures, outputs), (captures, outputs)]
   | .loop state captures => [(.index :: (state ++ captures), state ++ captures)]
   | .loopCondition state captures =>

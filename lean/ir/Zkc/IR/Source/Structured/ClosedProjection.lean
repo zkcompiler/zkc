@@ -132,7 +132,7 @@ theorem ClosedProjection.exists_of_exact {inputs outputs}
       | ok tail =>
         obtain ⟨target, relation⟩ := nextIH tail step
         exact ⟨_, .mark site args relation⟩
-    | «repeat» spec site =>
+    | branch spec site | «repeat» spec site =>
       cases bodies with
       | cons body rest =>
         simp [Region.erase, Regions.erase, closedRootTree] at projected
@@ -247,7 +247,6 @@ theorem ClosedProjection.protocols_empty {inputs outputs}
   induction projection <;>
     simp_all [Region.erase, Regions.erase, RawRegion.operations, RawRegions.operations,
       ProtocolOp.protocols, List.flatMap_append]
-  all_goals assumption
 
 /-- Dormant declarations may contain applies; only this projected tree is independent. -/
 theorem ClosedProjection.protocol_table_independent {inputs outputs}

@@ -233,7 +233,6 @@ theorem operationOn_indexPowerOfTwo (model : DomainModel) {interface : PIR.Signa
   change (PIR.Process.done (.cons (naturalPowerOfTwo n r) .nil) :
     PIR.Process interface (Values model.Value [.boolean])) = _
   rw [naturalPowerOfTwo_eq_decide]
-  rfl
 
 /-- Keep the values visible to dependent clients; operation evaluation remains a
 named definition with its own laws. -/
