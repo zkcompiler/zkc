@@ -37,12 +37,14 @@ parameter. The compiler records the parameters it chose in the
 
 | Pattern | Template |
 |---|---|
-| `oracle_read(o, site)` on a handle whose origin is `computed(d, …)` | for each position in order: `o` evaluates `d`'s extent test on the captures and stops `refused` if it fails; evaluates `d`'s position function; reads the parents at those positions; evaluates `d`'s answer function on the captures and the answers |
+| `oracle_read(o, site)` on a handle whose origin is `computed(d, …)` | `o` evaluates `d`'s extent test on the captures and each position and stops `refused` at the first failure; evaluates `d`'s position function; reads the parents at those positions in one read; evaluates `d`'s answer function on the captures and the answers |
 | `oracle_compute(o, d)` | the handle becomes the tuple of its parents and captures, in order |
 
-No state, no parameters. The ideal meaning of every side is unchanged, including
-which execution stops, where and why. After the stage every handle is `sent`.
-Functions of a computed oracle stay shared definitions; a read calls them.
+No state, no parameters. The [meaning](meaning.md#reads) of a read of a computed
+handle is already its expansion on the parents, so the stage leaves the process of
+every side unchanged: the same effects in the same order, the same stops for the
+same reasons, the same results. After the stage every handle is `sent`. Functions
+of a computed oracle stay shared definitions; a read calls them.
 
 ## Commit oracles
 
@@ -63,10 +65,13 @@ with shared parts sent once. A read is one operation whose positions do not depe
 on its answers, so every layout stays inside that operation and moves nothing
 across a guard, a draw or a later read. A layout is admissible when it covers
 every position of the read once and lets the reader restore the rows in their
-order; the stage checks this. Layouts differ in their messages. For every
-admissible layout the reader obtains the same rows, stops at the same point for
-the same reason, and is charged for the same accesses; the stage's theorem is
-stated for all of them.
+order; the stage checks this. Layouts differ in their messages, so they are
+related through decoding: every admissible layout has a function from its message
+to the per-position openings, and the reader's run on a message is its run on the
+decoded openings, with the same rows and the same stop. A charge is per requested
+position, repeated positions included, whatever the layout shares physically.
+Proof bytes and hash work are separate measures that do depend on the layout. The
+stage's theorem is stated for every admissible layout.
 
 ## Fiat–Shamir
 
@@ -86,8 +91,8 @@ this stage.
 ### Transcript discipline
 
 - The suite's domain separator is absorbed first and names the proof: it includes
-  the package's identity. Two proofs that share an oracle have different
-  separators.
+  the [proof identity](package.md#identities), which is fixed before this stage
+  runs. Two proofs that share an oracle have different separators.
 - The statement is absorbed next, by an operation of the constructed program.
 - A label is the site: the definition and its local site number. The path of
   applications and the iteration number are not absorbed. Two executions of one

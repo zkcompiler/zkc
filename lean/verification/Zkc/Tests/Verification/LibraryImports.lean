@@ -19,6 +19,11 @@ import Zkc.Tests.Verification.Construction.SemanticControls
 import Zkc.Tests.Verification.Construction.SharedServices
 import Zkc.Tests.Verification.Construction.SharingAudit
 import Zkc.Tests.Verification.Construction.TwiceSource
+import Zkc.Tests.Verification.Core.Controls
+import Zkc.Tests.Verification.Core.Opening
+import Zkc.Tests.Verification.Core.Regions
+import Zkc.Tests.Verification.Core.Schnorr
+import Zkc.Tests.Verification.Core.Sumcheck
 import Zkc.Tests.Verification.Counterexamples.Couplings
 import Zkc.Tests.Verification.Counterexamples.Gates
 import Zkc.Tests.Verification.Counterexamples.Imports
@@ -71,6 +76,7 @@ import Zkc.Tests.Verification.SumcheckConsumers
 import Zkc.Tests.Verification.SumcheckHonestReferences
 import Zkc.Tests.Verification.SumcheckReference
 import Zkc.Tests.Verification.WeakestPrecondition
+import Zkc.Tools.Verification.CoreConstruction
 import Zkc.Tools.Verification.SourceConstruction
 import Zkc.Verification.Bindings.Gkr.Encoding
 import Zkc.Verification.Bindings.Gkr.Relations
@@ -93,6 +99,8 @@ import Zkc.Verification.Claims.CanonicalAuthorityKeys
 import Zkc.Verification.Claims.FiniteRecovery
 import Zkc.Verification.Claims.Registry
 import Zkc.Verification.Construction.Source
+import Zkc.Verification.Core.Steps
+import Zkc.Verification.Core.Transcript
 import Zkc.Verification.Families.Sumcheck
 import Zkc.Verification.Families.Sumcheck.Composition
 import Zkc.Verification.Families.Sumcheck.Contract

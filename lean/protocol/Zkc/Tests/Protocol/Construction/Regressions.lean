@@ -12,6 +12,12 @@ public import Zkc.Tools.Protocol.Readings
   and takes that branch as written, so a named program in it keeps its law.
 * A structural equation whose instantiation needs non-reducible unfolding of a value type is
   registered as a `@[spec]` equation; as a `construction_simp` lemma it does not fire.
+* Laws of one operation that differ in a premise that evaluation decides select one another; a
+  premise that evaluation does not decide remains an obligation.
+* A definition registered for evaluation is evaluated when its match is decided and stays as
+  written otherwise.
+* An instance parameter of a law that the program does not determine is found by instance
+  synthesis.
 -/
 
 @[expose] public section
@@ -170,10 +176,119 @@ theorem present_call (found : Nat) :
 
 end SpecForm
 
+/-! ### Premises decided by evaluation -/
+
+/-- The numbers of a literal set. -/
+def odd : Nat → Bool := fun index => index.testBit 0
+
+/-- A receive for a member of a set, a constant for another number. -/
+def gated (allowed : Nat → Bool) (index : Nat) : Process VSig Nat :=
+  if allowed index then .call VOp.recv .done else .done 0
+
+@[spec] theorem gated_member (allowed : Nat → Bool) (index : Nat) (member : allowed index = true) :
+    gated allowed index = .call VOp.recv .done := by
+  simp only [gated, member, ite_true]
+
+@[spec] theorem gated_outside (allowed : Nat → Bool) (index : Nat)
+    (outside : allowed index = false) : gated allowed index = .done 0 := by
+  simp only [gated, outside, Bool.false_eq_true, ite_false]
+
+/-- The membership of `2` is decided: the law for a member is refuted and the law for another
+number applies. No premise remains. -/
+theorem gated_closed :
+    ⦃fun _ => ⟨True⟩⦄ gated odd 2 ⦃fun out _ => ⟨out = 0⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  construct_region
+
+/-- The membership of `3` is decided the other way: the receive remains, and no premise. -/
+theorem gated_open :
+    ⦃fun history => ⟨history = []⟩⦄ gated odd 3
+    ⦃fun out history => ⟨history = [out]⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  construct_region
+  rintro rfl message value recovered
+  obtain rfl : message = value := Option.some.inj recovered
+  rfl
+
+/-- A flag that returns when set. -/
+def flagged (flag : Bool) : Process VSig Nat := if flag then .done 1 else .halt .reject
+
+@[spec] theorem flagged_set (flag : Bool) (set : flag = true) : flagged flag = .done 1 := by
+  simp only [flagged, set, ite_true]
+
+/-- A symbolic flag is not decided: the premise of the law remains an obligation, which the
+hypothesis closes. -/
+theorem flagged_symbolic (flag : Bool) (set : flag = true) :
+    ⦃fun _ => ⟨True⟩⦄ flagged flag ⦃fun out _ => ⟨out = 1⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  construct_region
+
+/-! ### Definitions evaluated when their match is decided -/
+
+/-- A transport along a flag: the value, or the unit value. -/
+def keep : (present : Bool) → Nat → Carrier present
+  | true, value => value
+  | false, _ => ()
+
+/-- Return a number held for a literal index. -/
+def stored (index : Nat) : Process VSig (Carrier (odd index)) := .done (keep (odd index) 7)
+
+/-- Without the registration the transport remains in the obligation: reflexivity closes it
+only by unfolding the transport and the set. -/
+example : ⦃fun _ => ⟨True⟩⦄ stored 3
+    ⦃fun out _ => ⟨out = (7 : Nat)⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  unfold stored
+  construct_region
+  fail_if_success with_reducible rfl
+  rfl
+
+section Evaluated
+attribute [local construction_eval] keep
+
+/-- With the registration the transport is evaluated: the obligation is an equation between
+numerals. -/
+theorem stored_value : ⦃fun _ => ⟨True⟩⦄ stored 3
+    ⦃fun out _ => ⟨out = (7 : Nat)⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  unfold stored
+  construct_region
+  with_reducible rfl
+
+/-- Return a number held for a symbolic flag. -/
+def storedFor (present : Bool) : Process VSig (Carrier present) := .done (keep present 7)
+
+/-- A symbolic flag is not decided: the transport stays as written. -/
+theorem stored_symbolic (present : Bool) : ⦃fun _ => ⟨True⟩⦄ storedFor present
+    ⦃fun out _ => ⟨out = keep present 7⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  unfold storedFor
+  construct_region
+
+end Evaluated
+
+/-! ### Instance parameters of a law -/
+
+/-- A class that no program mentions. -/
+class Budget where
+  limit : Nat
+
+/-- A named program whose law holds under an instance that the program does not determine. -/
+def budgeted : Process VSig Nat := unknown >>= fun value => .done value
+
+@[spec] theorem budgeted_law [Budget] :
+    ⦃fun _ => ⟨True⟩⦄ budgeted ⦃fun _ _ => ⟨True⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ :=
+  holds_trivially budgeted
+
+/-- The instance of the law is the one in scope. -/
+theorem budgeted_call [Budget] :
+    ⦃fun _ => ⟨True⟩⦄ (Process.call VOp.recv .done >>= fun _ => budgeted)
+    ⦃fun _ _ => ⟨True⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  construct_region
+
 #print axioms nested_returns_zero
 #print axioms equal_call
 #print axioms decided_branch
 #print axioms decided_named_branch
 #print axioms present_call
+#print axioms gated_closed
+#print axioms gated_open
+#print axioms flagged_symbolic
+#print axioms stored_value
+#print axioms budgeted_call
 
 end ProtocolProofExamples.ConstructorRegressions

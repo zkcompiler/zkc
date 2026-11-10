@@ -8,8 +8,25 @@ package needs no name lookup, no string comparison and no search.
 ## Canonical bytes
 
 The canonical encoding is UTF-8 JSON with no insignificant whitespace, integers in
-decimal without leading zeros, and strings escaped minimally. A package's identity
-is the SHA-256 of its canonical bytes. A reader accepts any JSON whitespace.
+decimal without leading zeros, and strings escaped minimally. A reader accepts any
+JSON whitespace.
+
+## Identities
+
+A package has two identities, for two purposes.
+
+- The **artifact identity** is the SHA-256 of the canonical bytes of the whole
+  package. It names the file. Names, added stages and regenerated parameters
+  change it.
+- The **proof identity** is the SHA-256 of the canonical encoding of
+  `["zkc.core.proof/0", original, proof, parameters]`: the `original` program, the
+  proof declaration, and the stage parameters (the commitment scheme of each oracle
+  row, the layouts, the suite). All of these are fixed before the Fiat–Shamir stage
+  runs; none is a later program, and `names` is not among them. The Fiat–Shamir
+  stage puts the proof identity into the constructed program as a constant.
+
+A definition number and a site are positions in one package. The proof identity
+is what separates the proofs of two packages.
 
 ## Envelope
 
@@ -42,7 +59,8 @@ Catalogue identities (`constructor`, operation names, domain names) are the only
 strings with meaning. They occur once, in these tables. A consumer binds each row
 to its own interpretation when it loads the table and thereafter refers to the row
 by number. A catalogue name consists of letters, digits, `.`, `_`, `-` and `/`. A
-`type` static of a type row names only earlier type rows.
+`type` static of a type row names only earlier type rows. A `variant` lists at least
+one alternative.
 
 ## Operations
 

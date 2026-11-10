@@ -58,6 +58,11 @@ import_core batched from r#"["zkc.core/0", [["batched", [], [], [], []]], [], []
 expect_core_refusal "unknown format" in
 import_core format from r#"["zkc.core/1", [["original", [], [], [], []]], [], [], [], []]"#
 
+expect_core_refusal "a variant type has no alternative" in
+import_core emptyVariant from r#"["zkc.core/0", [["original", [], [],
+  [],
+  [["function", 0, [["variant", []]], [], [[], []]]]]], [], [], [], []]"#
+
 expect_core_refusal "oracle rows are not supported" in
 import_core oracles from
   r#"["zkc.core/0", [["original", [], [["index", "index", ["sent"]]], [], []]],

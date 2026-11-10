@@ -114,8 +114,10 @@ partial def readType (nominals : Nat) : Json → Read Ty
   | .arr #[.str "array", element] => return .array (← readType nominals element)
   | .arr #[.str "tuple", .arr components] =>
       return .tuple (← components.toList.mapM (readType nominals))
-  | .arr #[.str "variant", .arr alternatives] =>
-      return .variant (← alternatives.toList.mapM (readType nominals))
+  | .arr #[.str "variant", .arr alternatives] => do
+      match ← alternatives.toList.mapM (readType nominals) with
+      | first :: rest => pure (.variant first rest)
+      | [] => throw "a variant type has no alternative"
   | .arr #[.str "oracle", _] => throw "oracle handle types are not supported by this importer"
   | other => throw s!"malformed type {other.compress}"
 
@@ -126,7 +128,7 @@ partial def renderTy : Ty → String
   | .nominal row => s!"nominal({row})"
   | .array element => s!"array({renderTy element})"
   | .tuple components => "tuple(" ++ ", ".intercalate (components.map renderTy) ++ ")"
-  | .variant alternatives => "variant(" ++ ", ".intercalate (alternatives.map renderTy) ++ ")"
+  | .variant first rest => "variant(" ++ ", ".intercalate ((first :: rest).map renderTy) ++ ")"
 
 /-! ## Decoded package -/
 
@@ -158,8 +160,8 @@ partial def renderIdentityType (nominal : Array String) : Ty → String
   | .array element => s!"array[{renderIdentityType nominal element}]"
   | .tuple components =>
       "tuple[" ++ ", ".intercalate (components.map (renderIdentityType nominal)) ++ "]"
-  | .variant alternatives =>
-      "variant[" ++ ", ".intercalate (alternatives.map (renderIdentityType nominal)) ++ "]"
+  | .variant first rest =>
+      "variant[" ++ ", ".intercalate ((first :: rest).map (renderIdentityType nominal)) ++ "]"
 
 def renderStatics (nominal : Array String) (statics : List Static) : String :=
   ", ".intercalate <| statics.map fun
@@ -470,8 +472,9 @@ partial def tyTermRaw : Ty → Build Expr
   | .array element => return mkApp (mkConst ``Zkc.Core.Ty.array) (← tyTerm element)
   | .tuple components =>
       return mkApp (mkConst ``Zkc.Core.Ty.tuple) (listOf tyType (← components.mapM tyTerm))
-  | .variant alternatives =>
-      return mkApp (mkConst ``Zkc.Core.Ty.variant) (listOf tyType (← alternatives.mapM tyTerm))
+  | .variant first rest =>
+      return mkApp2 (mkConst ``Zkc.Core.Ty.variant) (← tyTerm first)
+        (listOf tyType (← rest.mapM tyTerm))
 where
   tyTerm (type : Ty) : Build Expr := do
     let key := tyKey type

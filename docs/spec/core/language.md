@@ -12,11 +12,14 @@ A type is built from the package's nominal types and a small structural grammar.
 | `nominal(n)` | row `n` of the package's type table: a catalogue type constructor applied to static arguments, such as a field, a group, a polynomial over a field, bytes, a commitment or a transcript state |
 | `array(T)` | finite sequences of `T` |
 | `tuple(T₁, …, Tₖ)` | records, by position |
-| `variant(T₁, …, Tₖ)` | one alternative, tagged by position |
+| `variant(T₁, …, Tₖ)`, `k ≥ 1` | one alternative, tagged by position |
 | `oracle(n)` | a handle of row `n` of the package's oracle table |
 
 A nominal type has no structure in the core. Its algebra is fixed by the catalogue
 operations over it and, in the formal library, by the laws a model satisfies.
+
+A variant has at least one alternative. Every type therefore has a value when every
+nominal type has one, and an operation row of any signature has a meaning.
 
 An oracle row records the row type, the position type and the origin of the
 handle: `sent`, or `computed(d, n₁, …, nₖ)` by definition `d` from parent handles of

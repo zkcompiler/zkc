@@ -23,8 +23,10 @@ namespace Zkc.Core
 
 open Zkc.Source
 
-/-- Core types: a structural grammar over the package's nominal types. Oracle handle
-types are part of the specified grammar and are not represented here yet. -/
+/-- Core types: a structural grammar over the package's nominal types. A variant has
+at least one alternative, so every type has a value when every nominal carrier has
+one. Oracle handle types are part of the specified grammar and are not represented
+here yet. -/
 inductive Ty where
   | unit
   | bool
@@ -32,7 +34,7 @@ inductive Ty where
   | nominal (row : Nat)
   | array (element : Ty)
   | tuple (components : List Ty)
-  | variant (alternatives : List Ty)
+  | variant (first : Ty) (rest : List Ty)
   deriving Repr, Inhabited, BEq
 
 mutual
@@ -44,14 +46,14 @@ mutual
     | .nominal row => Carrier row
     | .array element => List (Ty.Value Carrier element)
     | .tuple components => Ty.Tuple Carrier components
-    | .variant alternatives => Ty.Variant Carrier alternatives
+    | .variant first rest => Ty.Value Carrier first ⊕ Ty.Variant Carrier rest
 
   /-- Records by position. -/
   @[reducible] def Ty.Tuple (Carrier : Nat → Type) : List Ty → Type
     | [] => PUnit
     | component :: rest => Ty.Value Carrier component × Ty.Tuple Carrier rest
 
-  /-- One alternative, tagged by position. -/
+  /-- One of the later alternatives of a variant, tagged by position. -/
   @[reducible] def Ty.Variant (Carrier : Nat → Type) : List Ty → Type
     | [] => PEmpty
     | alternative :: rest => Ty.Value Carrier alternative ⊕ Ty.Variant Carrier rest
@@ -260,6 +262,47 @@ structure Model where
 
 abbrev Model.Value (model : Model) : Ty → Type := Ty.Value model.Carrier
 
+mutual
+  /-- A value of a type, from a value of every nominal carrier. -/
+  def Ty.inhabitant {Carrier : Nat → Type} (carrier : (row : Nat) → Carrier row) :
+      (type : Ty) → Ty.Value Carrier type
+    | .unit => PUnit.unit
+    | .bool => false
+    | .index => (0 : Nat)
+    | .nominal row => carrier row
+    | .array _ => ([] : List _)
+    | .tuple components => Ty.tupleInhabitant carrier components
+    | .variant first _ => .inl (Ty.inhabitant carrier first)
+
+  /-- A record of a value of every component. -/
+  def Ty.tupleInhabitant {Carrier : Nat → Type} (carrier : (row : Nat) → Carrier row) :
+      (components : List Ty) → Ty.Tuple Carrier components
+    | [] => PUnit.unit
+    | component :: rest => (Ty.inhabitant carrier component, Ty.tupleInhabitant carrier rest)
+end
+
+/-- A value of every type of a list. -/
+def Ty.inhabitants {Carrier : Nat → Type} (carrier : (row : Nat) → Carrier row) :
+    (types : List Ty) → Values (Ty.Value Carrier) types
+  | [] => .nil
+  | type :: rest => .cons (Ty.inhabitant carrier type) (Ty.inhabitants carrier rest)
+
+/-- A model exists: one-point carriers, every pure row returning the value of each of
+its output types, every partial row stopping. A statement quantified over models is
+therefore not vacuous. A model interprets every row, so each of its carriers has a
+value. -/
+def Model.unit : Model where
+  Carrier _ := PUnit
+  pure row _ := Ty.inhabitants (fun _ => PUnit.unit) row.outputs
+  «partial» _ _ := .error .abort
+
+instance : Inhabited Model := ⟨Model.unit⟩
+
+/-- Every nominal carrier of a model has a value: the result of a row without inputs
+that returns it. -/
+def Model.inhabitant (model : Model) (row : Nat) : model.Carrier row :=
+  (model.pure ⟨0, [], [.nominal row]⟩ .nil).get .here
+
 /-- A static argument of a catalogue row. A `type` argument names nominal types by
 their rows in the same package. -/
 inductive Static where
@@ -371,3 +414,6 @@ run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Core.authoredStop
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Core.occursIn
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Core.SideValue
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Core.Ty.inhabitant
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Core.Ty.tupleInhabitant
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Core.Ty.inhabitants

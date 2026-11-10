@@ -88,6 +88,70 @@ default transparency, does not fire as a structural simp lemma. Register such an
 a `@[spec]` equation instead: the constructor applies specification equations at the program
 root with full unification. `Regressions.lean` shows both forms on the same program.
 
+## Core definitions
+
+Import `Zkc.Tools.Verification.CoreConstruction` to construct a reading of an imported
+[core definition](../spec/core-language.md#readings-of-a-side). The program is the meaning of
+the definition for a literal side, `package.definition.meaning model side inputs`, or the meaning
+of a function.
+
+```lean
+register_core_entries sumcheck
+
+noncomputable abbrev logic :
+    WPMonad (Process (Effects M)) (Assert (Event M.Value)) (StopAssert (Event M.Value)) :=
+  chargedMonad (interface .refused) (boundedEscape charge) (boundedEscape_antitone charge)
+attribute [local instance] logic
+
+@[spec] theorem round_wrong … :
+    ⦃Wrong values arity rounds (remaining + 1) claim point⦄
+      sumcheck.round.meaning M (Side.preimage [0, 1] verifier) (.cons () (.cons claim (.cons point .nil)))
+    ⦃fun out => Wrong values arity rounds remaining (out.get (.there .here)) (out.get (.there (.there .here)));
+      estack⟨fun _ _ => ⟨True⟩⟩⦄ := by
+  open_core_definition
+  construct_region
+  …
+```
+
+The author writes:
+
+- the reading: a local instance over `Zkc.Core.Transcript.interface secrets`, with a `Sampling`
+  instance for the model when a probability is bounded. `interface .refused` serves a side
+  that samples no secret, under both endpoints; a side that samples is read with `.fresh` under
+  the exact reading. The model documentation states what each endpoint concludes.
+- `open_core_definition` and `construct_region` for the definition being proved. A callee is
+  never opened: the author states a law about its meaning, at the side the caller applies it
+  at (`Side.preimage roleMap side`), registers it with `@[spec]`, and the constructor applies
+  it at every `call` and `apply`. `register_core_entries package` makes the callee's meaning
+  visible there.
+- the laws of the model as hypotheses on named rows, the bound of each challenge site, and an
+  invariant for each `repeat` and `loop` through `with_invariants`. The carried values of a
+  `repeat` are one tuple; the invariant names them by position, `state.get (.there .here)`.
+- the residual obligations. They name the received values, the replies and the model's rows
+  applied to them. A model operation defined on a row, such as
+  `add M a b := (M.pure (.of row) (.cons a (.cons b .nil))).get .here`, is definitionally the
+  term in the obligation; `show` restates the obligation with the named operations.
+
+The author writes no equation about the structure of a body. A law that a loop reuses states
+the step of the loop's invariant: its ghost parameters, such as the rounds to go, are found by
+unifying its postcondition with the invariant, so the postcondition must be the invariant's
+shape. A fact about the state before a call that the postcondition needs must be part of that
+shape; a law stated as a plain consequence leaves the two obligations of the rule of
+consequence, which share no hypothesis.
+
+| Client | Author input | Steps, build |
+| --- | --- | --- |
+| `Core.Schnorr` | none beyond the statement | 37 steps, 4.5 s |
+| `Core.Sumcheck` | field laws and restricted multilinearity of the model, one root-counting lemma, the law of the final check, the doomed invariant and the budget | 6 + 41 + 38 + 41 + 36 steps, 21 s |
+| `Core.Opening` | none beyond the statement | 78 steps, 12 s |
+| `Core.Controls` | none beyond the statements | 57, 30 and 7 steps, 8 s |
+| `Core.Regions` | two invariants on the length of the history | 6 s |
+
+The previous import path took 424 steps and 29 s, with a raised heartbeat limit, for the
+verifier of the Schnorr example. The steps here are one rule application for a pure row, for a
+role outside the side and for an internal exchange, and a step followed by the primitive call
+for an effect. The times are fresh elaboration of the test module with built dependencies.
+
 ## Complete clients and reusable inputs
 
 All examples below are under `Zkc.Tests.Protocol.Construction`.
@@ -111,7 +175,8 @@ The proposition-valued clients are under `Zkc.Tests.Protocol.Construction.Readin
 | `Controls` | Counterexamples and one total interface | Refuted acceptance, required stop, the refuted obligation of a forgetful invariant and unpaid query; refusal and failed decoding accepted as stops; every run returns over a total interface |
 
 `Regressions` checks the nested-condition split, the equation-candidate filter, decided
-conditions and the two registrations of a structural equation.
+conditions, the two registrations of a structural equation, premises decided by evaluation,
+definitions registered for evaluation and instance parameters of a law.
 
 `SharedChallengeSource` was held out until the constructor and rules were frozen. The first
 reply recovers the shared private bit; the second query then accepts with probability one.
@@ -192,10 +257,14 @@ over a different proof architecture. Proof sharing never discounts executed serv
 
 ## Scope and next boundary
 
-The path covers quantitative and proposition-valued construction over model Regions and the
-admitted Boolean-control original-source profile. The proposition-valued readings are
-exercised on model verifiers; their primitive rules cover any transcript interface, but no
-imported participant is connected to an endpoint here. The setup-shaped client is the ideal
+The path covers quantitative and proposition-valued construction over model Regions, the
+admitted Boolean-control original-source profile and imported core definitions at literal
+sides. The proposition-valued readings are exercised on model verifiers and on the sides of
+three imported core packages, of which the Sumcheck verifier reaches both endpoints. A core
+side at a symbolic side, a partial row whose law is a hypothesis on the model, and `match` are
+not covered. The laws of the Sumcheck client are hypotheses on the model; the model that
+restricts a table by folding satisfies them, and at that model the bound has no hypothesis. The
+opening client characterizes runs and states no binding property. The setup-shaped client is the ideal
 algebraic interpretation: the group, the pairing, the algebraic adversary and the reduction
 from the group game are not modelled.
 

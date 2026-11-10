@@ -503,3 +503,18 @@ end Zkc.Tests.Core.Controls
 
 /-- info: 'Zkc.Tests.Core.Controls.decrement_never_incomplete' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Zkc.Tests.Core.Controls.decrement_never_incomplete
+
+/-! ## Models exist
+
+A model interprets every row, so a statement quantified over models is not vacuous only when a
+model exists. The one-point model is one, and every carrier of a model has a value. -/
+
+namespace Zkc.Tests.Core.Models
+
+open Zkc.Core
+
+example : Nonempty Model := ⟨Model.unit⟩
+
+example (model : Model) (row : Nat) : Nonempty (model.Carrier row) := ⟨model.inhabitant row⟩
+
+end Zkc.Tests.Core.Models

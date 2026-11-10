@@ -995,7 +995,7 @@ inputs. Math retains per-result optional behavior; an owned Local call still
 requires all inputs, including unused ones. Missing Local inputs stop at the
 qualified caller mark, while a reached helper's own stop retains its raw mark.
 A zero-result child may perform actions or stop; output arity never erases work.
-`ProtocolOp.regions` supplies typed optional callback meanings to the one
+`Zkc.Source.Structured.ProtocolOp.regions` supplies typed optional callback meanings to the one
 operation interpreter. Repeat contributes one such callback; applications use
 the captured protocol table.
 
@@ -1043,7 +1043,7 @@ inside the body requires a separate explicit capture. No outer SSA reference
 is implicitly available in the isolated callback.
 
 `RepeatSpec` retains state and capture types, the resolved ordered roster,
-ordered state scopes and maximum. `ProtocolOp.repeat` stores this specification
+ordered state scopes and maximum. `Zkc.Source.Structured.ProtocolOp.repeat` stores this specification
 and its header site. The callback is an ordinary typed `Region`, interpreted
 through the same optional region meaning, root participant coordinate and
 captured helper/protocol tables. There is no expanded repeat source or second
@@ -1144,7 +1144,7 @@ Local closure and preserves stopping even for zero results. Missing owned inputs
 stop `incomplete`. Nonowners skip the call. Optional Local helper closures are
 not used for protocol dispatch.
 
-`Op.mark` and `ProtocolOp.mark` retain internal site observations before protocol/Local
+`Op.mark` and `Zkc.Source.Structured.ProtocolOp.mark` retain internal site observations before protocol/Local
 instructions and explicit Local stops. Math bodies do not insert marks; their
 source operations have no nonempty stop sites in the admitted profile. `Zkc.Source.Structured.Program.observed` exposes these to the
 scripted observer. `forgetSites` erases only those observations to obtain the

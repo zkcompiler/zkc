@@ -56,8 +56,8 @@ environment holds the values of its roles and nothing for the others.
 | `branch(P)` | if no role of `P` is in `H`, nothing. If the conditions held by the roles of `P ∩ H` differ, stops `incomplete`. Otherwise the selected region |
 | `apply(d, ρ, site)` | the meaning of `d` for the side `{ j : ρ(j) ∈ H }` |
 | `oracle_send(s, R, site)` | as an exchange of the table from `s` to each role of `R` |
-| `oracle_compute(o, d)` | if `o ∈ H`, the table that `d` defines from the parents' tables and the captured values |
-| `oracle_read(o, site)` | if `o ∈ H`: stops `refused` if a position is outside its handle's extent; otherwise `read`, and the results are the handles' tables at the positions |
+| `oracle_compute(o, d)` | if `o ∈ H`, the handle that records the parents and the captured values |
+| `oracle_read(o, site)` | if `o ∈ H`: as described under [reads](#reads) |
 
 "Nothing" means the operation performs no effect and its results, which no role of
 `H` holds, do not exist for `H`.
@@ -104,13 +104,33 @@ The meaning for a single role is the participant the compiler projects.
 
 ## Ideal and deployed interpretations
 
-A handle of oracle type denotes, for a side that holds it, the table: an extent,
-which is a decidable set of positions, and a row for each position in it. A
-`sent` handle received from outside the side is a logical message: the reply to
+A handle of a `sent` oracle denotes, for a side that holds it, the table: an
+extent, which is a decidable set of positions, and a row for each position in it.
+A `sent` handle received from outside the side is a logical message: the reply to
 its `receive` is the whole table. The side never computes with the whole table; it
-performs `read`s, whose results the table determines. A computed handle denotes
-the table whose extent, parent reads and rows its definition gives for the
-captured values. This is the ideal interpretation.
+performs `read`s, whose results the table determines. A computed handle denotes its
+parents and captured values; its table is the one its definition gives for them,
+and a read of it is carried out on the parents. This is the ideal interpretation.
+
+### Reads
+
+A `read` effect names a `sent` handle and one position. Only reads of `sent`
+tables are effects: they are what an adversary observes and what a budget counts.
+
+A read operation proceeds in three steps.
+
+1. Every requested position is tested against the extent of its handle, in the
+   order of the operation's handles and of each handle's positions. The first
+   failure stops the side with `refused`, before any effect of the operation.
+2. For a `sent` handle, one `read` effect per requested position, in order,
+   repeated positions included.
+3. For a computed handle, the definition's position function gives, for each
+   requested position, the positions to read in each parent; the parents are read
+   by this same procedure; the definition's answer function gives the row.
+
+The result of a read of a computed handle equals its table at the position. That
+is a property of the definition, used by relations over the table; the process is
+the one above.
 
 A [stage](stages.md) replaces operations on an ideal type by operations on
 deployed data: a table by a commitment and openings, a challenge by a hash of the

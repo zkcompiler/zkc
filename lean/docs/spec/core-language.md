@@ -15,13 +15,18 @@ model, stated on rows that are named by their catalogue identity.
 | `Zkc.IR.Core.Laws` | equations of the meaning, one operation at a time |
 | `Zkc.Tools.IR.Core.Import` | the `import_core` command |
 | `Zkc.Tests.IR.Core.*` | the Schnorr, Sumcheck and opening packages, semantic controls, refusals |
+| `Zkc.Verification.Core.Transcript` | the transcript interface of a side |
+| `Zkc.Verification.Core.Steps` | the steps of core regions for the source proof constructor |
+| `Zkc.Tools.Verification.CoreConstruction` | registrations, `open_core_definition`, `register_core_entries` |
+| `Zkc.Tests.Verification.Core.*` | readings of the Schnorr, Sumcheck and opening packages, controls |
 
 ## Types, holders and sides
 
-`Ty` is `unit | bool | index | nominal n | array T | tuple Ts | variant Ts`. Its
+`Ty` is `unit | bool | index | nominal n | array T | tuple Ts | variant T Ts`. Its
 values are `Ty.Value Carrier`, where a model supplies `Carrier n` for nominal row
-`n`. A located type `⟨T, r⟩ : Located` has one holder. There are no multi-role and
-no optional values.
+`n`. A variant has at least one alternative, so every type has a value when every
+carrier has one (`Ty.inhabitant`). A located type `⟨T, r⟩ : Located` has one holder.
+There are no multi-role and no optional values.
 
 A side is a membership function `Side := Nat → Bool`. `Side.ofMask m` is the side of
 the set bits of `m`, so a literal side applied to a literal role reduces to `true`
@@ -38,7 +43,7 @@ def SideValue (model : Model) (side : Side) : Located → Type
 
 For a literal side, `SideValue` reduces to the value type or to `PUnit`; no cast,
 optional value or run-time presence test appears in a side's process. The
-transports between held and plain values (`Held.of`, `Held.value`, `Held.absent`,
+transports between held and plain values (`Zkc.Core.Held.of`, `Zkc.Core.Held.value`, `Zkc.Core.Held.absent`,
 `presentValues`, `holdValues`) match on the membership first, so they reduce away
 at a literal side whatever the form of the value.
 
@@ -56,6 +61,11 @@ structure Model where
   «partial» : (row : OperationRow) → Values (Ty.Value Carrier) row.inputs →
     Except Reason (Values (Ty.Value Carrier) row.outputs)
 ```
+
+A model interprets every row, of every number and signature, so each of its
+carriers has a value (`Model.inhabitant`). A model exists: `Model.unit` has
+one-point carriers. A statement quantified over models is therefore not vacuous. A
+model of a package gives its rows their meaning and any value to the other rows.
 
 `Reason` is the type of the authored reasons; `Reason.stop` maps it into the shared
 `PIR.Stop`, whose fifth reason is `incomplete`. A partial row and a `guard` stop
@@ -186,8 +196,8 @@ them once for every definition it accepts.
 | the copies of an agreement have different holders | `Violation.agreementHolders` |
 | the agreements of a signature name each port at most once | `Violation.agreementPorts` |
 
-`ProtocolOp.roles` lists every role an operation names, and
-`ProtocolOp.violation` evaluates the condition lists of one operation
+`Zkc.Core.ProtocolOp.roles` lists every role an operation names, and
+`Zkc.Core.ProtocolOp.violation` evaluates the condition lists of one operation
 (`actingRoles`, `exchangeConditions`, `drawConditions`, `participantConditions`,
 `roleMapConditions`); `portConditions` and `agreementConditions` cover the
 signature. One pass over the body, `protocolRegionSites`, checks every operation
@@ -217,7 +227,7 @@ Points that the model settles:
 ## Meaning
 
 `Definition.meaning model table` interprets a definition given the meanings of the
-earlier ones; `Program.table` and `Program.meaning` build the table and the meaning
+earlier ones; `Zkc.Core.Program.table` and `Zkc.Core.Program.meaning` build the table and the meaning
 of the last definition. A function denotes
 `Values model.Value inputs → PIR.Process (Effects model) (Values model.Value outputs)`
 and performs no effect. A protocol denotes
@@ -308,7 +318,7 @@ completeness statement `Schnorr.honest_accepts` assumes it.
 
 `Zkc.IR.Core.Laws` gives what a proof needs to walk a body one operation at a time.
 
-- **Root equations.** `Program.protocol_meaning` and `Program.function_meaning`
+- **Root equations.** `Zkc.Core.Program.protocol_meaning` and `Zkc.Core.Program.function_meaning`
   open a program at its last definition: the meaning is the body's denotation over
   the table of the earlier definitions. `sideMeaning_step` turns an equation for
   the first operation of a region into one for the region: the operation's process
@@ -377,6 +387,131 @@ comparison that costs the kernel minutes on a protocol of a dozen instructions.
 For a symbolic side the transports stay in the equations. The statements that the
 tests derive are at literal sides and at preimages of literal sides; a callee's
 side meaning is stated for the preimage side at which the caller applies it.
+
+## Readings of a side
+
+A side's process is read by the weakest-precondition interpretations of
+[the protocol package](weakest-preconditions.md) once its effects are classified by
+a transcript interface. `Zkc.Verification.Core.Transcript` gives one for every model.
+
+```lean
+inductive Event (Value : Ty → Type) where
+  | sent (site : Site) (type : Ty) (value : Value type)
+  | received (site : Site) (type : Ty) (value : Value type)
+  | drawn (site : Site) (law : SamplingRow) (inputs : Values Value law.inputs)
+  | sampled (site : Site) (law : SamplingRow) (inputs : Values Value law.inputs)
+  | read (site : Site) (type : Ty) (position : Value type)
+
+class Sampling (model : Model) where
+  Raw : (law : SamplingRow) → Values model.Value law.inputs → Type
+  decode : (law : SamplingRow) → (inputs : Values model.Value law.inputs) → Raw law inputs →
+    Option (model.Value law.output)
+
+inductive Secrets where
+  | fresh
+  | refused
+
+noncomputable def interface [Sampling model] (secrets : Secrets) :
+    Interface (Effects model) (Event model.Value) (Message model) (Answer model)
+```
+
+| Effect | Absorption | Event |
+|---|---|---|
+| `send site T v` | an absorbed send | `sent site T v` |
+| `receive site T` | the next proof message, a typed value `⟨T', v⟩ : Message model`; refused unless `T' = T` | `received site T v` |
+| `draw site law inputs` | a query; the reply is the law's reading of a raw sample | `drawn site law inputs` |
+| `sample site law inputs` | by the policy: a query under `fresh`, refused under `refused` | `sampled site law inputs` |
+| `read site T p` | an absorbed send | `read site T p` |
+
+An event of a `draw` or a `sample` records the occurrence and not the reply. The raw
+answer of an occurrence is `Answer model event`: a sample of the law for `drawn` and
+`sampled`, and the unit type for every other event.
+
+**Sample spaces.** A model gives no meaning to a sampling row, and the experiments
+sample a raw answer uniformly. `Sampling model` gives every law a sample space and
+its reading of a sample; a law that is uniform over its output has the output as
+its sample space and reads every sample as itself. A bounded judgment and the
+experiments need a uniform sampler for every sample space. A reading that never
+bounds a probability, the exact one, holds for every `Sampling`.
+
+**Secrets.** A `sample` is a secret, and the two experiments treat a query
+differently.
+
+| | `Secrets.fresh` | `Secrets.refused` |
+|---|---|---|
+| exact reading | characterizes every run, for every value of the secret | accepts the refusal: a triple says nothing after the first `sample` |
+| charged and cost readings | the secret is a query site, charged like a challenge | the same refusal |
+| interactive experiment | the secret is a fresh uniform sample, and the strategy sees its raw answer: a bound holds against a prover that knows the secret | the run stops `refused` at the first `sample` |
+| Fiat–Shamir transform | the secret would be the transcript oracle's answer at the public history, a value every party can compute: the theorem is about a protocol whose secret is public | the transform stops `refused` at the first `sample`; a side that samples has no transform |
+
+A side that never samples reads the same under both policies. The Sumcheck verifier
+is one: one charged triple and one cost triple over `interface .refused` give the
+interactive bound and the Fiat–Shamir bound. A side that samples is read with
+`fresh` under the exact reading. No reading states that a secret is hidden from the
+other roles: the strategies of the interactive experiment see every raw answer.
+
+**Refusals.** A `receive` refuses a message of another type. The interface does not
+admit every operation, so `ZkcSecurity.Interactive.returns_of_exact` does not apply
+to it: an exact triple with a false stop assertion shows that the side's own
+operations never stop, not that every run of the interactive experiment returns.
+
+### Stepping a side
+
+`Zkc.Verification.Core.Steps` states one equation per operation and membership case
+for the [source proof constructor](source-construction.md): the root step of
+`Zkc.IR.Core.Laws` applied to the operation's equation, with the rest of the region
+symbolic.
+
+| Operation | Step | Rule applications |
+|---|---|---|
+| pure row of a role in the side | `pure_row` | one: the rest of the region on the model's results |
+| operation of a role outside the side | `outside` | one |
+| exchange inside or outside the side | `exchange_internal`, `exchange_outside` | one |
+| exchange across the side | `exchange_send`, `exchange_receive` | the step, then the primitive call |
+| draw, sample | `draw_owner`, `draw_outside`, `sample_owner`, `sample_outside` | the step, then the primitive call; one for an owner outside |
+| guard | `guard` | the step, then a split on the condition |
+| partial row | `partial_row` | the step, then the model's result |
+| `call`, `apply` | `function_call`, `apply` | the step, then the law of the callee |
+| `repeat`, `loop` | `repeat`, `loop` | the step, then the rule for `PIR.repeatN` with an invariant |
+| `branch`, `if` | `branch`, `conditional` | the step, then a split on the agreed condition |
+
+Local regions have the same steps (`local_pure_row`, `local_partial_row`,
+`local_function_call`, `local_guard`, `local_conditional`, `local_loop`).
+
+The premises of a step are the memberships of the roles the operation names. The
+constructor decides them by evaluation at a literal side, and at the preimage of one
+under a literal role map, and the steps of one operation select one another by
+them. The transports and the control definitions of the meaning are evaluated at a
+literal side: a held value becomes the value or the unit value, an agreement the
+agreed count or condition, and `repeatProcess` the bounded iteration `PIR.repeatN`
+under its guard. Results are read by position (`Step.collect`), so the results of a
+callee are named `values.get position` whatever their form.
+
+`open_core_definition` opens the definition whose meaning the goal names. A callee
+is not opened: after the step of a `call` or an `apply`, the entry equation of the
+importer names the callee's own meaning (`register_core_entries package`), and a
+registered law about that meaning is applied. The law of a callee is stated for the
+side at which it is applied: `Side.preimage roleMap side`.
+
+### Clients
+
+`Zkc.Tests.Verification.Core` derives, for every model:
+
+| Client | Statement |
+|---|---|
+| `Schnorr.verifier_decides` | exact: the history gains the received commitment, the challenge occurrence and the received response, and the decision is the model's check on them |
+| `Sumcheck.round_wrong`, `round_cost` | the contract of a round at the preimage side: a wrong claim stays wrong except with probability `1 / \|F\|`; one challenge is paid |
+| `Sumcheck.verifier_rejects`, `verifier_cost` | the whole protocol by a loop invariant that applies the round's contract through `apply` |
+| `Sumcheck.interactive_soundness`, `fiat_shamir_soundness` | a false claim is accepted with probability at most `rounds / \|F\|`, and `(queries + rounds) / \|F\|` after the transform |
+| `Sumcheck.fold_laws`, `table_soundness` | the model that restricts a table of `2 ^ arity` scalars by folding satisfies the laws; at that model a claim that is not the sum of the table is accepted with probability at most `arity / \|F\|`, with no hypothesis left |
+| `Opening.setup_verifier_decides` | exact, two roles, `fresh`: the six events and the pairing check against the key of the same secret; no `incomplete` |
+| `Controls.prover_transcript`, `honest_decision`, `prover_refused` | a side that samples and sends; both roles; the refusal of a secret |
+| `Regions.verifier_counts`, `accumulate_silent` | a `branch`, a `repeat` whose body draws, with the stop `refused` above its maximum; a function with a `loop` |
+
+The Sumcheck laws are hypotheses on the model: the scalar carrier is a finite
+field, the model's field operations are the field's, and the reference of the table
+is multilinear in the next variable at every point with fewer coordinates than the
+table has variables. The theorems ask that the round count is at most that number.
 
 ## Importer
 
@@ -500,6 +635,11 @@ positional representation of variables and named header lists would remove the
 quadratic terms; neither is implemented.
 
 ## Not implemented
+
+A reading of a side at a symbolic side, a law of a partial row stated as a
+hypothesis on the model, and a statement that a secret is hidden from the roles
+outside a side are not provided. The readings of the opening package characterize
+its runs; evaluation binding is not stated.
 
 Oracle types, rows and operations, `match` and the injections into variants,
 computed oracle and relation definitions, contracts and claims, the stage tables and

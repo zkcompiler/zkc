@@ -80,7 +80,7 @@ baseline correspondence nor source freshness and must be reported separately.
 Lean 4.35's replay implementations also have a string-literal dependency
 limitation. The full main export contains `Char.ofNat` and `String.ofList`, yet
 Lean default/paranoid replay rejects `SumcheckVerifierBodies.roundBody` with
-unknown `String.ofList`, and lean4lean rejects `ProtocolOp.arguments` with
+unknown `String.ofList`, and lean4lean rejects `Zkc.Source.Structured.ProtocolOp.arguments` with
 unknown `Char.ofNat`. Replay walks explicit constant references; string literals
 can require primitives that this walk has not installed yet. A small two-string
 definition control reproduces lean4lean's ordering failure. Three other bundled
