@@ -50,6 +50,60 @@ can register proved specifications. Missing rules are reported as infrastructure
 constructor does not export residual `Region.denote`, `wpFold` or `WP` structure as mathematics.
 This profile does not assert admission of every native operation.
 
+## Proposition-valued readings
+
+The constructor is generic in the `WPMonad` of `Process`. Besides the quantitative
+potentials above, it constructs the proposition-valued readings of
+[weakest-precondition interfaces](weakest-preconditions.md): the charged reading at an
+escape judgment (the exact judgment, which excludes no reply, or a bounded judgment, which
+charges each query site) and the pathwise cost reading. Their assertions are
+`ProtocolProof.Truth`, a structure around `Prop` ordered by implication. The constructor
+composes un-applied entailments and derives intermediate bounds as lattice elements;
+upstream VC generation introduces the state of an assertion that is syntactically
+`σ → Prop`, so the carrier is a structure that keeps the entailment shape.
+
+One path leads from a typed `Region` to an endpoint:
+
+1. `construct_region` derives a charged triple and a cost triple of the actual process,
+   using one `@[spec]` call rule and one stop rule per reading. The remaining goals are the
+   mathematical obligations of the nodes: for each query site, a probability bound on the
+   replies whose continuation fails (bounded judgment) or the continuation for every reply
+   (exact judgment); for each loop, the initialization, preservation and terminal
+   conditions of the supplied invariant.
+2. `charged_of_triple` and `costBound_of_triple` turn the triples into
+   `Interface.Charged` and `ZkcSecurity.FiatShamir.Typed.ChargedCostBound`.
+3. The retained Fiat–Shamir theorem `ZkcSecurity.FiatShamir.Typed.soundness_charged` or the interactive theorem
+   `ZkcSecurity.Interactive.soundness_accepted` bounds acceptance by the prover's and the
+   verifier's charges.
+
+`Zkc.Tools.Protocol.Readings` registers the node equations with the structural
+normalization and the residual equations with `construction_residual`. The residual set reads
+entailments between explicit propositions as implications over the quantified histories,
+messages and replies. Its registration is global wherever `Zkc.Tools.Protocol.Readings` is
+imported, but the constructor applies it only to the goals that remain after every rule has been
+applied and whose statement mentions `ProtocolProof.Truth`, its constructor or its projection;
+a goal of any other reading is never rewritten by it. On each such goal it is applied twice,
+immediately before and after the structural simplification of that goal. Stepping never uses
+it, so it cannot remove the entailment shape while rules are being applied; when no lemma is
+registered it is skipped. A request may be stated through a reducible triple abbreviation such
+as `ChargedTriple`; the constructor exposes the triple.
+
+## Selected and decided conditions
+
+A conditional program splits on its condition. When the bound before the conditional is
+derived, the constructor builds it as a dependent conditional on the same condition and
+splits on that condition, so a condition that itself contains a conditional is not split
+inside. A condition whose `Decidable` instance reduces to a fixed answer selects its branch as
+written: the branch is not reduced, so a named program in it keeps its law, and the other branch
+is not visited. `Decidable` is a structure, so a decided instance reduces to
+`Decidable.intro b proof` with a Boolean literal `b`.
+
+An operation meaning by cases may register its equations as `@[spec]` equations. A
+candidate equation whose left side differs from the actual program in a constructor-headed
+argument is rejected before unification: after unfolding the operation, full unification
+could otherwise accept the equation of another case and leave its unused parameters
+unassigned.
+
 ## Actual source association
 
 `import_source` quotes one literal `zkc.structured-source/0` checkpoint into the existing
@@ -144,6 +198,28 @@ requires no new constructor or semantic rule. Stored-proof audits check both que
 applications, repeated/nested calls and count-independent finite-loop theorem references.
 See the [authoring and measurement guide](../development/source-construction.md) for the
 complete scope, author inputs and reproduction commands.
+
+Proposition-valued model clients include:
+
+- A multilinear Sumcheck verifier written as a typed Region: its charged triple from a false
+  claim, its cost triple, `(queries + count) / |F|` at the Fiat–Shamir endpoint and
+  `count / |F|` at the interactive endpoint, from one per-site root-counting lemma and one
+  loop invariant.
+- The same verifier receiving a table handle first: soundness for a statement the prover
+  chooses and sends in the clear. An accepted run returns a handle whose table sums to the
+  claim, at the same Fiat–Shamir endpoint. The postcondition has the shape of an extraction
+  statement whose extractor is the identity on the received handle; no commitment is opened.
+- A three-move verifier under the exact reading: every returning run appends the commitment, an
+  occurrence of the challenge site and the response to the history, and returns them with the
+  challenge and the check's decision.
+- A setup-shaped opening verifier in its ideal algebraic game: the prover's representations are
+  fixed before the secret is drawn and no reference string is published. One setup site is
+  charged `(n + 1) / |F|`, at the interactive endpoint; this is a root-counting bound, not
+  evaluation binding of a commitment scheme with a published setup.
+- Controls refuting an accepting request under a failing check, a returning run required to
+  stop, the obligation a forgetful loop invariant leaves, and an unpaid query. Refusal and failed decoding satisfy
+  every rejection-oriented triple while their runs stop; over a total interface an exact
+  triple with false stop assertions shows that every interactive run returns.
 
 These are independent model clients, not completed native Sumcheck/FRI connections. Generated-controller correspondence and concrete protocol security endpoints
 remain separate obligations. Actual-source construction tests establish their stated source laws,

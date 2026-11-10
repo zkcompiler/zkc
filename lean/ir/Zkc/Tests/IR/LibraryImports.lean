@@ -60,6 +60,7 @@ import Zkc.IR.Source.Structured.CustodySoundness
 import Zkc.IR.Source.Structured.DerivationRules
 import Zkc.IR.Source.Structured.DeterministicFold
 import Zkc.IR.Source.Structured.DomainComponent
+import Zkc.IR.Source.Structured.DomainComponentLinking
 import Zkc.IR.Source.Structured.DomainContract
 import Zkc.IR.Source.Structured.DomainEvaluation
 import Zkc.IR.Source.Structured.DomainFrame
@@ -160,6 +161,7 @@ import Zkc.IR.Source.Structured.ProtocolEmbeddingSource
 import Zkc.IR.Source.Structured.ProtocolLinking
 import Zkc.IR.Source.Structured.ProtocolLoopPresentation
 import Zkc.IR.Source.Structured.ProtocolOperations
+import Zkc.IR.Source.Structured.ProtocolRegionAdmission
 import Zkc.IR.Source.Structured.ProtocolScopes
 import Zkc.IR.Source.Structured.ProtocolSignature
 import Zkc.IR.Source.Structured.ProtocolTable
@@ -170,9 +172,9 @@ import Zkc.IR.Source.Structured.ReferenceLibrary
 import Zkc.IR.Source.Structured.RelationChecking
 import Zkc.IR.Source.Structured.RelationMeaning
 import Zkc.IR.Source.Structured.Repeat
-import Zkc.IR.Source.Structured.ProtocolRegionAdmission
 import Zkc.IR.Source.Structured.RepeatLaws
 import Zkc.IR.Source.Structured.ReplyScript
+import Zkc.IR.Source.Structured.Selection
 import Zkc.IR.Source.Structured.ServiceAdmission
 import Zkc.IR.Source.Structured.ServiceExecution
 import Zkc.IR.Source.Structured.ServiceOperations
@@ -290,9 +292,11 @@ import Zkc.Tests.IR.TransportReduction
 import Zkc.Tools.IR.SourceClaims.Components
 import Zkc.Tools.IR.SourceProperties.Assembly
 import Zkc.Tools.IR.StructuredSource
+import Zkc.Tools.IR.StructuredSource.Bindings
 import Zkc.Tools.IR.StructuredSource.Bounds
 import Zkc.Tools.IR.StructuredSource.Evaluation
 import Zkc.Tools.IR.StructuredSource.OpenEvaluation
 import Zkc.Tools.IR.StructuredSource.OpenValues
+import Zkc.Tools.IR.StructuredSource.Quotation
 import Zkc.Tools.IR.StructuredSource.WireTypes
 import Zkc.Tools.IR.TableCapacity

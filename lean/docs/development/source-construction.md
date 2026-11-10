@@ -43,6 +43,51 @@ The current root evidence records are still explicit: the author states the inte
 local operation law, provider installation, initial budget and terminal observation. Source
 construction fills the structural bound, not the independent mathematical/security meaning.
 
+## Proposition-valued readings
+
+Import `Zkc.Tools.Protocol.Readings` to construct the charged, exact and cost readings of
+the [weakest-precondition interfaces](../spec/weakest-preconditions.md). Select the reading
+as a local instance and register the concrete transcript interface with the structural
+normalization, so that each primitive call exposes its absorption:
+
+```lean
+noncomputable abbrev logic := chargedMonad absorb (boundedEscape charge) (boundedEscape_antitone charge)
+attribute [local instance] logic
+attribute [local construction_simp] absorb
+```
+
+The exact reading is `chargedMonad absorb exactEscape exactEscape_antitone`; the cost reading
+is `costMonad absorb charge`. Assertions are written `⟨P⟩`, for example
+`⦃fun _ => ⟨True⟩⦄ game ⦃fun out _ => ⟨out = false⟩; estack⟨fun _ _ => ⟨True⟩⟩⦄`. No rule
+is registered per interface or per judgment.
+
+The author supplies:
+
+- one bound per query site. Under a bounded judgment the remaining obligation is
+  `Pr[∃ reply decoded from the raw answer whose continuation fails] ≤ charge`; it is usually
+  a root-counting or binding lemma about the actual check. Under the exact judgment it is the
+  continuation for every reply.
+- the continuation obligations of receives: every recovered message, with the actual
+  recovery equation as a hypothesis.
+- a loop invariant through `construct_region with_invariants`, with its preservation and
+  terminal conditions. A cost invariant is a budget on the remaining iterations.
+- the endpoint assembly: `charged_of_triple` and `costBound_of_triple`, then
+  `ZkcSecurity.FiatShamir.Typed.soundness_charged` with `certificate` and `certificate_doomed`, or
+  `ZkcSecurity.Interactive.soundness_accepted`.
+
+The remaining goals read as plain propositions over the quantified histories, messages and
+replies; name them with `intro`. The constructor never supplies a probability bound or an
+invariant.
+
+### Structural equations and value types
+
+Structural normalization (`construction_simp`) matches up to reducible unfolding. An
+equation about the program whose left side spells a value type differently from the actual
+program, for example `Nat` against a carrier `Carrier true` that unfolds to `Nat` only at
+default transparency, does not fire as a structural simp lemma. Register such an equation as
+a `@[spec]` equation instead: the constructor applies specification equations at the program
+root with full unification. `Regressions.lean` shows both forms on the same program.
+
 ## Complete clients and reusable inputs
 
 All examples below are under `Zkc.Tests.Protocol.Construction`.
@@ -54,6 +99,19 @@ All examples below are under `Zkc.Tests.Protocol.Construction`.
 | `StatefulOracle` | Word representation, checked decoder, acceptance formula and proximity premise | Two publications, sample, reply-dependent second position, actual read/decode calls and stop preservation |
 | `OracleInstallation` | Audit-state projection and whole-outcome map law | Existing installation and upper/lower root assembly with the same source mathematics |
 | `SharedChallengeSource` | Boolean recovery law, counter meaning and intended observation | Multi-result routing and two different query arguments using one named theorem |
+
+The proposition-valued clients are under `Zkc.Tests.Protocol.Construction.Readings`:
+
+| Client | Author/library mathematics | Endpoint |
+| --- | --- | --- |
+| `Sumcheck` | Multilinearity of the reference, one root-counting lemma per round, wrong-claim invariant and per-round budget | Fiat–Shamir `(queries + count) / \|F\|`; interactive `count / \|F\|` |
+| `Extraction` | The same lemma; invariant "agreement implies the statement of the received handle" | Fiat–Shamir, at "accepted and the returned handle's statement fails": soundness for a prover-chosen statement sent in the clear (identity extractor), not extraction from a commitment |
+| `ExactThreeMove` | None beyond the reached history and returned value | Exact characterization of every returning run; bounded evidence for every charge |
+| `SetupOpening` | Root counting for the exponent equation at the setup secret | Interactive `(n + 1) / \|F\|` in the ideal algebraic game (representations fixed before the secret, no published reference string), randomized and fixed-message forms |
+| `Controls` | Counterexamples and one total interface | Refuted acceptance, required stop, the refuted obligation of a forgetful invariant and unpaid query; refusal and failed decoding accepted as stops; every run returns over a total interface |
+
+`Regressions` checks the nested-condition split, the equation-candidate filter, decided
+conditions and the two registrations of a structural equation.
 
 `SharedChallengeSource` was held out until the constructor and rules were frozen. The first
 reply recovers the shared private bit; the second query then accepts with probability one.
@@ -134,8 +192,20 @@ over a different proof architecture. Proof sharing never discounts executed serv
 
 ## Scope and next boundary
 
-The path covers quantitative construction over model Regions and the admitted Boolean-control
-original-source profile. Existing exact derivations remain appropriate for exact correspondence;
+The path covers quantitative and proposition-valued construction over model Regions and the
+admitted Boolean-control original-source profile. The proposition-valued readings are
+exercised on model verifiers; their primitive rules cover any transcript interface, but no
+imported participant is connected to an endpoint here. The setup-shaped client is the ideal
+algebraic interpretation: the group, the pairing, the algebraic adversary and the reduction
+from the group game are not modelled.
+
+The readings bound acceptance and do not show that an execution returns: refusal and failed
+decoding are accepted stops (`Controls` exhibits both). Completeness over an interface that
+admits every operation follows from an exact triple with false stop assertions
+(`ZkcSecurity.Interactive.returns_of_exact`); an outcome-aware adequacy theorem for other
+interfaces is not provided. The interactive endpoint's strategies see every earlier raw draw; a
+secret setup value is a property of the strategy a statement instantiates, not of the
+endpoint. Existing exact derivations remain appropriate for exact correspondence;
 installed extraction and simulation laws retain their meanings. Multi-alternative protocol
 variants are still explicitly refused by this formal profile.
 

@@ -337,6 +337,9 @@ def entries : List Entry := [
   ⟨"event.batch-opening-collision", .event,
     some `ZkcSecurity.Commitment.BatchOpening.Collision,
     "Two distinct complete hash queries in the recorded execution have the same answer."⟩,
+  ⟨"wellformed.total-transcript-interface", .wellFormedness, some `ZkcSecurity.Interactive.Total,
+    "The transcript interface refuses no operation, every received message recovers a reply and \
+    every raw answer of a query decodes."⟩,
   ⟨"wellformed.hash-chain-agrees", .wellFormedness, some `ZkcSecurity.HashChain.Agrees,
     "Trace and tables are consistent, and unrouted cache entries are the auxiliary cell."⟩,
   ⟨"wellformed.hash-chain-consistent", .wellFormedness, some `ZkcSecurity.HashChain.Consistent,

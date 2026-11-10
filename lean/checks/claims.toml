@@ -80,3 +80,21 @@ theorems = [
   "ActualSourceConstruction.DrawPair.participant_law",
   "ActualSourceConstruction.Replace.participant_law",
 ]
+
+[[proved]]
+subject = "Proposition-valued readings"
+result = "Charged, exact and cost readings of the actual typed Region/Process meaning, constructed by the common constructor with one rule per primitive node and connected by adequacy to the retained Fiat–Shamir endpoint and an interactive endpoint; model clients: Sumcheck soundness, soundness for a prover-chosen statement sent in the clear (identity extractor, not extraction from a commitment), an exact three-move characterization, and the opening check in an ideal algebraic game (representations fixed before the secret, no published reference string; not KZG evaluation binding). No imported participant or compiled protocol is connected"
+owners = [["Weakest preconditions", "docs/spec/weakest-preconditions.md"], ["Construction", "docs/spec/source-construction.md"], ["Authoring", "docs/development/source-construction.md"]]
+theorems = [
+  "ZkcSecurity.Obligations.WeakestPrecondition.call_spec",
+  "ZkcSecurity.Obligations.WeakestPrecondition.call_cost",
+  "ZkcSecurity.Obligations.WeakestPrecondition.charged_of_triple",
+  "ZkcSecurity.Obligations.WeakestPrecondition.costBound_of_triple",
+  "ZkcSecurity.Obligations.WeakestPrecondition.bounded_of_exact",
+  "ZkcSecurity.Interactive.soundness",
+  "ProtocolProofExamples.ChargedSumcheck.fiat_shamir_soundness",
+  "ProtocolProofExamples.ChargedSumcheck.interactive_soundness",
+  "ProtocolProofExamples.ExtractionSumcheck.extraction_soundness",
+  "ProtocolProofExamples.ExactThreeMove.transcript_decides",
+  "ProtocolProofExamples.SetupOpening.setup_soundness",
+]

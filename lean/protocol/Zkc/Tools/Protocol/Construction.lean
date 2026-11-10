@@ -28,6 +28,50 @@ initialize registerTraceClass `Zkc.construction
 initialize constructionSimp : SimpExtension ←
   registerSimpAttr `construction_simp "structural normalization for source proof construction"
 
+/-- Normalization of the obligations of proposition-valued readings that remain after
+construction. The registration is global wherever its module is imported, but `construct`
+applies the set only to the remaining goals whose statement mentions the carrier
+`ProtocolProof.Truth`, its constructor or its projection (`mentionsTruth`) when the final
+normalization starts; other goals are never rewritten by it. On each such goal it is applied
+twice: before and after the structural `simp_all`. Stepping never uses these lemmas, so they
+cannot remove the shape `pre ⊑ wp …` while rules are still being applied. -/
+initialize constructionResidual : SimpExtension ←
+  registerSimpAttr `construction_residual
+    "normalization of residual obligations stated over `ProtocolProof.Truth`"
+
+/-- Whether a statement mentions the assertion carrier of proposition-valued readings: the type
+`ProtocolProof.Truth`, its constructor or its projection. Named without an import, since this
+module does not depend on the carrier's module. -/
+def mentionsTruth (statement : Expr) : Bool :=
+  (statement.find? fun part => match part with
+    | .const name _ =>
+        name == `ProtocolProof.Truth || name == `ProtocolProof.Truth.mk ||
+          name == `ProtocolProof.Truth.holds
+    | .proj typeName _ _ => typeName == `ProtocolProof.Truth
+    | _ => false).isSome
+
+/-- The final structural normalization of the remaining goals, in order. Every goal receives the
+structural `simp_all`; a goal that mentions the carrier also receives the residual normalization
+immediately before and after it, so the second application also reaches what the structural
+simplification exposes in that goal. -/
+def normalizeRemaining : TacticM Unit := do
+  let residual := !(← constructionResidual.getTheorems).lemmaNames.isEmpty
+  let mut result := []
+  for goal in ← getGoals do
+    if ← goal.isAssigned then continue
+    let statement ← goal.withContext <| instantiateMVars (← goal.getType)
+    let reading := residual && mentionsTruth statement
+    setGoals [goal]
+    if reading then
+      evalTactic (← `(tactic| simp (config := { failIfUnchanged := false }) only
+        [construction_residual]))
+    evalTactic (← `(tactic| all_goals try simp_all only [construction_simp]))
+    if reading then
+      evalTactic (← `(tactic| all_goals simp (config := { failIfUnchanged := false }) only
+        [construction_residual]))
+    result := result ++ (← getGoals)
+  setGoals result
+
 /-- Filter only impossible body heads before dependent unification. Structural constructor
 rules inspect the actual constructor; a different named law cannot replace its source. -/
 def compatibleRegionRule (pattern actual : Expr) : MetaM Bool := do
@@ -46,6 +90,28 @@ def compatibleRegionRule (pattern actual : Expr) : MetaM Bool := do
       | .error error => throwError "body reduction failed: {error.toMessageData (← getOptions)}"
     return !head.isConst || !constructor head.constName! || supplied == head
   return !body.getAppFn.isConst || supplied == body.getAppFn
+
+/-- An equation for one constructor of an operation cannot describe a call of another. Full
+unification may still accept it after unfolding both sides, leaving the parameters of the unused
+case unassigned, so a candidate whose left side differs from the actual program in a
+constructor-headed argument is rejected before unification, as region bodies are. Proof
+arguments are not compared: proofs of the same proposition unify whatever their constructors. -/
+def compatibleEquation (pattern actual : Expr) : MetaM Bool := do
+  let some name := pattern.getAppFn.constName? | return true
+  unless actual.getAppFn.constName? == some name &&
+      pattern.getAppNumArgs == actual.getAppNumArgs do return true
+  let environment ← getEnv
+  let constructor (value : Expr) : Option Name := do
+    let head ← value.getAppFn.constName?
+    match environment.find? head with
+    | some (.ctorInfo _) => some head
+    | _ => none
+  for (supplied, argument) in pattern.getAppArgs.zip actual.getAppArgs do
+    let some expected := constructor supplied | continue
+    if ← (try isProof argument catch _ => pure false) then continue
+    if let some found := constructor (← withDefault (whnf argument)) then
+      if found != expected then return false
+  return true
 
 /-- Prefer a law for this named body over a rule that unfolds its constructor.
 Priority still orders laws within each group; every candidate is checked on application. -/
@@ -185,6 +251,28 @@ partial def assignDerived (value result : Expr) : MetaM Unit := do
       throwError "cyclic structural continuation bound"
     marker.assign assigned
 
+/-- The answer of a `Decidable` instance that reduces to a fixed Boolean. `Decidable` is a
+structure; `Decidable.isTrue` and `Decidable.isFalse` abbreviate its constructor, so the weak
+head normal form of a decided instance is `Decidable.intro b proof` with `b` a Boolean literal. -/
+def decidedAnswer? (decision : Expr) : MetaM (Option Bool) := do
+  unless decision.isAppOfArity ``Decidable.intro 3 do return none
+  let answer ← withDefault (whnf decision.getAppArgs[1]!)
+  if answer.isConstOf ``Bool.true then return some true
+  if answer.isConstOf ``Bool.false then return some false
+  return none
+
+/-- The branch that a decided `ite` or `dite` selects, exactly as written. The branch is not
+reduced: a named program in it stays named, so its law still applies. -/
+def selectedBranch (selected : Expr) (answer : Bool) : MetaM Expr := do
+  let arguments := selected.getAppArgs
+  let branch := if answer then arguments[3]! else arguments[4]!
+  let extra := arguments.extract 5 arguments.size
+  if selected.isAppOf ``ite then return mkAppN branch extra
+  let decided ← mkEqRefl (toExpr answer)
+  let proof ← mkAppOptM (if answer then ``of_decide_eq_true else ``of_decide_eq_false)
+    #[some arguments[1]!, some arguments[2]!, some decided]
+  return (mkAppN (branch.app proof) extra).headBeta
+
 def prepareConditional (goal : MVarId) (derived : Array MVarId) :
     MetaM (Option (List MVarId × Array MVarId)) := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
@@ -192,11 +280,11 @@ def prepareConditional (goal : MVarId) (derived : Array MVarId) :
   let selected := match isWPApp? right with | some info => info.prog | none => right
   unless selected.isAppOf ``ite || selected.isAppOf ``dite do return none
   let decision ← withDefault (whnf selected.getAppArgs[2]!)
-  if decision.isAppOf ``Decidable.isTrue || decision.isAppOf ``Decidable.isFalse then
-    let reduced ← withDefault (whnf selected)
+  if let some answer ← decidedAnswer? decision then
+    let branch ← selectedBranch selected answer
     let target := match isWPApp? right with
-      | some info => mkAppN info.head ((info.args.set! 7 reduced) ++ info.excessArgs)
-      | none => reduced
+      | some info => mkAppN info.head ((info.args.set! 7 branch) ++ info.excessArgs)
+      | none => branch
     let next ← goal.change (← mkAppM ``Lean.Order.PartialOrder.rel #[left, target])
     return some ([next], #[])
   let mut added := #[]
@@ -209,6 +297,12 @@ def prepareConditional (goal : MVarId) (derived : Array MVarId) :
       #[some predicate, some condition, some selected.getAppArgs[2]!, some yes, some no]
     assignDerived left selectedBound
     added := #[yes.mvarId!, no.mvarId!]
+    -- Split on the condition the bound is built for: `SplitIf.splitIfAt?` would select an `if`
+    -- nested inside that condition and leave the derived branches unassigned.
+    let (yes, no) ← goal.byCasesDec condition selected.getAppArgs[2]!
+      (← mkFreshBinderNameForTactic `h)
+    return some ([← simpIfTarget yes.mvarId (useNewSemantics := true),
+      ← simpIfTarget no.mvarId (useNewSemantics := true)], added)
   if let some (yes, no) ← SplitIf.splitIfAt? goal selected none then
     return some ([← simpIfTarget yes.mvarId (useNewSemantics := true),
       ← simpIfTarget no.mvarId (useNewSemantics := true)], added)
@@ -269,6 +363,8 @@ def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) (equationsOn
       | .triple => continue
       | .simp _ => pure ()
     unless ← compatibleRegionRule candidate.pattern.pattern info.prog do continue
+    if candidate.kind matches .simp _ then
+      unless ← compatibleEquation candidate.pattern.pattern info.prog do continue
     trace[Zkc.construction] "candidate {candidate.proof} for {info.prog.getAppFn}"
     let saved ← saveState
     try
@@ -335,10 +431,18 @@ def reduceEnvironment (goal : MVarId) : MetaM MVarId := goal.withContext do
 
 def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
   let roots ← getGoals
+  let mut requests := []
   for goal in ← getGoals do
     let fixed ← goal.withContext <| instantiateMVars (← goal.getType)
     if fixed.hasMVar then
       throwError "source construction requires a fixed request before rule or choice selection"
+    -- A request may name its reading through a reducible triple abbreviation.
+    let exposed ← goal.withContext <| whnfR fixed
+    if !fixed.isAppOf ``Std.WP.Triple && exposed.isAppOf ``Std.WP.Triple then
+      requests := requests ++ [← goal.change exposed]
+    else
+      requests := requests ++ [goal]
+  setGoals requests
   let mut derived : Array MVarId := #[]
   let mut choiceIndex := 0
   let mut pending ← getGoals
@@ -477,7 +581,7 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
     Zkc.Source.Environment.push]))
   evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
 
-  evalTactic (← `(tactic| all_goals try simp_all only [construction_simp]))
+  normalizeRemaining
   evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
   evalTactic (← `(tactic| all_goals try solve | apply le_rfl))
   evalTactic (← `(tactic| all_goals try contradiction))

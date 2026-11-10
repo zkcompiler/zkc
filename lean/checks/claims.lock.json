@@ -55,6 +55,36 @@
       "structural": "48f78df2f8e1cb82",
       "explicit": "81e07fe99a27f0d2"
     },
+    "ProtocolProofExamples.ChargedSumcheck.fiat_shamir_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.Sumcheck",
+      "structural": "55062db97c4e780f",
+      "explicit": "b2e0e45502a54d8e"
+    },
+    "ProtocolProofExamples.ChargedSumcheck.interactive_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.Sumcheck",
+      "structural": "4cf296b340d21c43",
+      "explicit": "58c10842a3631392"
+    },
+    "ProtocolProofExamples.ExactThreeMove.transcript_decides": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.ExactThreeMove",
+      "structural": "c0fbb5aedae90856",
+      "explicit": "4c881ca39c4c029e"
+    },
+    "ProtocolProofExamples.ExtractionSumcheck.extraction_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.Extraction",
+      "structural": "2d793671d5033977",
+      "explicit": "f31183cae9debd34"
+    },
+    "ProtocolProofExamples.SetupOpening.setup_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.SetupOpening",
+      "structural": "a34f8a054164a786",
+      "explicit": "285a98437c8d1998"
+    },
     "ProtocolProofExamples.StatefulOracle.honest_completeness": {
       "package": "protocol",
       "module": "Zkc.Tests.Protocol.Construction.StatefulOracle",
@@ -150,6 +180,42 @@
       "module": "Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Residual",
       "structural": "e7051ec100b08bec",
       "explicit": "c20073950024470c"
+    },
+    "ZkcSecurity.Interactive.soundness": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.Transcript.Interactive",
+      "structural": "9fe617ba14036c00",
+      "explicit": "b5957c13435c6c11"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.bounded_of_exact": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "385f58aaa6d17ce3",
+      "explicit": "1105b92a66f9c869"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.call_cost": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "73f7facf3d1f4cdd",
+      "explicit": "a1d712bced777adb"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.call_spec": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "355ffb1b8c423f20",
+      "explicit": "7311129c2b0a20d5"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.charged_of_triple": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "cdbaa162e9d82493",
+      "explicit": "2ca28cb13391c440"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.costBound_of_triple": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "68653080339c5901",
+      "explicit": "83b56cecb0b16ef8"
     }
   }
 }
