@@ -639,7 +639,6 @@ private theorem math_region_embed (model : DomainModel)
           (Op.branch ts us) args (.cons yes (.cons no .nil))).bind _
       rw [selected_missing model args onYes onNo sequenced]
       simp only [strictComponent, sequenced, PIR.Process.bind, embed_absent]
-      rfl
     | some values =>
       have present := sequence_some args values sequenced
       subst args

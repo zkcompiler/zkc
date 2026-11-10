@@ -312,7 +312,6 @@ theorem protocolApply_outside (payload : UnitPayload)
     (.protocolApply signature roles site) (operands.eval environment) .nil
     (payload.protocolTable F G) context).bind _ = _
   simp only [protocolOperationWith, outside, Bool.false_eq_true, ↓reduceIte, PIR.Process.bind]
-  rfl
 
 end UnitPayload
 

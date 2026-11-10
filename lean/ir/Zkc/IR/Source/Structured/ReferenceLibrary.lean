@@ -12,8 +12,6 @@ set_option autoImplicit false
 namespace Zkc.Source.Structured.ReferenceLibrary
 open Zkc.Source
 
-attribute [local implicit_reducible] Op.arguments Op.results Op.regions
-
 variable (model : DomainModel) (domain site : String)
 
 def emptyVector : ReferenceLaw model [] [.vector domain] where

@@ -101,6 +101,7 @@ theorem protocolOperation_table_congr {I : PIR.Signature}
     cases args with
     | cons value rest => cases rest; rfl
   | mark => cases args; rfl
+  | branch spec site => cases args; rfl
   | «repeat» spec site =>
     cases args with
     | cons count values =>

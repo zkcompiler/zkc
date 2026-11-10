@@ -430,7 +430,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind == .math || kind == .protocol
   | .makeProduct .. | .getProduct .. => kind == .math || kind == .protocol
   | .boundedAt .. | .mathBranch => kind == .math
-  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .sampleIndex .. | .sampleIndices .. | .statement .. =>
+  | .protocolApply .. | .protocolRepeat .. | .protocolBranch .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .sampleIndex .. | .sampleIndices .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
@@ -596,7 +596,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     | _ => throw "structured-bounded-at-arguments"
   | .call name => resolveCall name .math .call
   | .apply name => resolveCall name .local .apply
-  | .protocolApply .. | .protocolRepeat .. | .localCall .. => throw "structured-open-operation"
+  | .protocolApply .. | .protocolRepeat .. | .protocolBranch .. | .localCall .. => throw "structured-open-operation"
   | .fold domain step predicate =>
     let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
     return .fold spec

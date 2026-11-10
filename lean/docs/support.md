@@ -27,11 +27,17 @@ and library theorem reuse. State, ordered history, return rows and stop reasons
 remain in the judgments. See the [construction specification](spec/source-construction.md)
 and [authoring guide](development/source-construction.md).
 
-Those model clients are not proofs about a native compiler export. Actual-source
-association, the complete generated query controller and complete protocol
-applications remain subsequent work. A companion may supply mathematics and
-meaningful representation/admissibility premises; structural slot, frame, cursor
-and continuation reconstruction belongs in common infrastructure.
+The Verification package also installs laws on actual admitted native exports. Its
+arithmetic client reuses one named theorem at two calls; its shared-service client
+retains ordered handles, state and reached stops; its finite-loop client supplies
+one invariant for arbitrary runtime counts. Checked association rejects stale bodies,
+and semantic controls refute swapped arguments/handles and ignored stops. These
+are source-execution results, not compiled cryptographic security endpoints.
+
+The complete generated query controller and complete protocol applications remain
+subsequent work. A companion supplies mathematics and meaningful representation
+or admissibility premises; structural slots, frames, cursors and continuations
+belong in common infrastructure.
 
 ## Independent mathematics
 

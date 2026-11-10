@@ -198,7 +198,6 @@ theorem boundedAt_exact [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq 
     | some result => (PIR.Process.done (Values.cons result Values.nil) : PIR.Process interface (Values (assignment F G) [.field domain]))
     | none => PIR.Process.halt .refused) = _
   rw [read]
-  rfl
 
 theorem boundedAt_refuses [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] (table : HelperTable (assignment F G) interface)
     (domain : String) (container : List F) (index : Nat)
@@ -209,7 +208,6 @@ theorem boundedAt_refuses [CommRing F] [AddCommGroup G] [Module F G] [DecidableE
     | some result => (PIR.Process.done (Values.cons result Values.nil) : PIR.Process interface (Values (assignment F G) [.field domain]))
     | none => PIR.Process.halt .refused) = _
   rw [read]
-  rfl
 
 theorem enumerated_index_bound (container : List F) (index : Nat)
     (member : index ∈ List.range container.length) : index < container.length :=

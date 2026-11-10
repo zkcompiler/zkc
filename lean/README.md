@@ -12,7 +12,7 @@ formats remain supported by the compiler and runtime; no replacement formal
 connection is implied. The current package does not claim compiled Schnorr,
 Sumcheck, GKR, FRI or STARK security. See [support](docs/support.md) for the exact
 boundary, and [source construction](docs/spec/source-construction.md) for the
-shared framework implemented before native association.
+shared framework and actual-source law installation.
 
 ## What is proved
 

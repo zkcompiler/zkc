@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Protocol.Construction.Control
+public import Zkc.Protocol.Construction.Component
 public import Std.Tactic.Do
 public meta import Lean.Elab.Tactic.VCGen.RuleConstruction
 public meta import Lean.Elab.Tactic.VCGen.SpecDB
@@ -23,23 +24,80 @@ namespace ProtocolProof.Tools.Construction
 
 initialize registerTraceClass `Zkc.construction
 
+/-- Extensible structural normalization; semantic rules still use the upstream spec database. -/
+initialize constructionSimp : SimpExtension ←
+  registerSimpAttr `construction_simp "structural normalization for source proof construction"
+
+/-- Filter only impossible body heads before dependent unification. Structural constructor
+rules inspect the actual constructor; a different named law cannot replace its source. -/
+def compatibleRegionRule (pattern actual : Expr) : MetaM Bool := do
+  let region (value : Expr) := value.isAppOf ``Zkc.Source.Region.denote ||
+    value.isAppOf ``Zkc.Source.Region.component
+  unless region pattern && region actual do return true
+  let supplied := pattern.getAppArgs[pattern.getAppNumArgs - 2]!.getAppFn
+  let body := actual.getAppArgs[actual.getAppNumArgs - 2]!
+  unless supplied.isConst do return true
+  let environment ← getEnv
+  let constructor (name : Name) := (environment.find? name).any
+    (fun info => match info with | .ctorInfo _ => true | _ => false)
+  if constructor supplied.constName! then
+    let head ← match Kernel.whnf environment (← getLCtx) body with
+      | .ok value => pure value.getAppFn
+      | .error error => throwError "body reduction failed: {error.toMessageData (← getOptions)}"
+    return !head.isConst || !constructor head.constName! || supplied == head
+  return !body.getAppFn.isConst || supplied == body.getAppFn
+
+/-- Prefer a law for this named body over a rule that unfolds its constructor.
+Priority still orders laws within each group; every candidate is checked on application. -/
+def namesActualRegion (pattern actual : Expr) : MetaM Bool := do
+  unless (actual.isAppOf ``Zkc.Source.Region.denote ||
+      actual.isAppOf ``Zkc.Source.Region.component) &&
+      pattern.getAppFn == actual.getAppFn do return false
+  let body := actual.getAppArgs[actual.getAppNumArgs - 2]!.getAppFn
+  unless body.isConst && pattern.getAppArgs[pattern.getAppNumArgs - 2]!.getAppFn == body do
+    return false
+  return match (← getEnv).find? body.constName! with
+    | some (.ctorInfo _) => false
+    | _ => true
+
 /-- Reuse a named law with the actual postcondition before general consequence rules.
 This preserves inferable mathematical parameters instead of turning them into choice holes. -/
 def applyExactPostSpec (goal : MVarId) (candidate : SpecAttr.SpecTheorem)
     (info : WPApp) : MetaM (Option (List MVarId)) := do
   let (parameters, _, proof, type) ← candidate.instantiate
+  if type.isAppOfArity ``Eq 3 then
+    let lhs := type.getAppArgs[1]!
+    let rhs := type.getAppArgs[2]!
+    -- Instantiate a dependent equation against the concrete operation before abstracting
+    -- it into a backward rule. This avoids splitting unrelated operation constructors.
+    unless ← isDefEq lhs info.prog do return none
+    let mut premises := []
+    for parameter in parameters do
+      let parameter ← instantiateMVars parameter
+      if parameter.isMVar then
+        let type ← instantiateMVars (← inferType parameter)
+        if type.hasMVar || !(← isProp type) then return none
+        premises := premises ++ [parameter.mvarId!]
+    let target ← instantiateMVars (← goal.getType)
+    let_expr Lean.Order.PartialOrder.rel _ _ expected _ := target | return none
+    let context ← withLocalDeclD `program info.Prog fun program => do
+      let next := mkAppN info.head ((info.args.set! 7 program) ++ info.excessArgs)
+      mkLambdaFVars #[program] (← mkAppM ``Lean.Order.PartialOrder.rel #[expected, next])
+    let equality ← mkAppM ``congrArg #[context, (← instantiateMVars proof)]
+    let child ← goal.replaceTargetEq ((context.app (← instantiateMVars rhs)).headBeta) equality
+    return some (child :: premises)
   let_expr Lean.Order.PartialOrder.rel _ _ pre rhs := type | return none
   let some supplied := isWPApp? rhs | return none
-  -- A named Region law only targets that body; do not unfold an unrelated callee
-  -- while checking whether it can prove a structural return or a different call.
-  if supplied.prog.isAppOf ``Zkc.Source.Region.denote &&
-      info.prog.isAppOf ``Zkc.Source.Region.denote then
-    let expectedBody := info.prog.getAppArgs[info.prog.getAppNumArgs - 2]!
-    let suppliedBody := supplied.prog.getAppArgs[supplied.prog.getAppNumArgs - 2]!
-    if suppliedBody.getAppFn.isConst && expectedBody.getAppFn.isConst &&
-        suppliedBody.getAppFn != expectedBody.getAppFn then return none
-  -- Bind the actual meaning before matching its projected value type and WP instance.
-  -- An unknown RegionMeaning cannot be recovered by inverting its Value projection.
+  unless ← compatibleRegionRule supplied.prog info.prog do return none
+  -- Fix the dialect, interpretation and typed contexts before matching a dependent body.
+  -- Otherwise unification can try to recover the meaning by inverting Value projections.
+  if supplied.prog.getAppFn == info.prog.getAppFn &&
+      (info.prog.isAppOf ``Zkc.Source.Region.denote ||
+        info.prog.isAppOf ``Zkc.Source.Region.component) then
+    let provided := supplied.prog.getAppArgs
+    let actual := info.prog.getAppArgs
+    for index in [:actual.size - 2] do
+      unless ← isDefEq provided[index]! actual[index]! do return none
   unless ← isDefEq supplied.prog info.prog do return none
   unless ← isDefEq supplied.instWP info.instWP do return none
   unless ← isDefEq supplied.post info.post do
@@ -117,12 +175,15 @@ partial def assignDerived (value result : Expr) : MetaM Unit := do
     unless arguments.size ≥ delayed.fvars.size do
       throwError "incomplete application of a derived continuation bound"
     let actual := arguments.extract 0 delayed.fvars.size
-    let result := result.replaceFVars actual delayed.fvars
-    let remaining := (arguments.extract delayed.fvars.size arguments.size).map
-      (·.replaceFVars actual delayed.fvars)
+    let result ← result.replaceFVarsM actual delayed.fvars
+    let remaining ← (arguments.extract delayed.fvars.size arguments.size).mapM
+      (·.replaceFVarsM actual delayed.fvars)
     assignDerived (mkAppN (mkMVar delayed.mvarIdPending) remaining) result
   else
-    marker.assign (← mkLambdaFVars value.getAppArgs result)
+    let assigned ← mkLambdaFVars value.getAppArgs result
+    unless ← occursCheck marker assigned do
+      throwError "cyclic structural continuation bound"
+    marker.assign assigned
 
 def prepareConditional (goal : MVarId) (derived : Array MVarId) :
     MetaM (Option (List MVarId × Array MVarId)) := goal.withContext do
@@ -130,6 +191,14 @@ def prepareConditional (goal : MVarId) (derived : Array MVarId) :
   let_expr Lean.Order.PartialOrder.rel _ _ left right := target | return none
   let selected := match isWPApp? right with | some info => info.prog | none => right
   unless selected.isAppOf ``ite || selected.isAppOf ``dite do return none
+  let decision ← withDefault (whnf selected.getAppArgs[2]!)
+  if decision.isAppOf ``Decidable.isTrue || decision.isAppOf ``Decidable.isFalse then
+    let reduced ← withDefault (whnf selected)
+    let target := match isWPApp? right with
+      | some info => mkAppN info.head ((info.args.set! 7 reduced) ++ info.excessArgs)
+      | none => reduced
+    let next ← goal.change (← mkAppM ``Lean.Order.PartialOrder.rel #[left, target])
+    return some ([next], #[])
   let mut added := #[]
   if ← isDerived left derived then
     let condition := selected.getAppArgs[1]!
@@ -150,24 +219,33 @@ is not silently accepted as a mathematical premise or exported to a protocol aut
 def finishDerived (goal : MVarId) (derived : Array MVarId) : MetaM Bool := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let_expr Lean.Order.PartialOrder.rel _ _ left right := target | return false
-  unless ← isDerived left derived do return false
-  if right.hasMVar || (right.find? fun expression => (isWPApp? expression).isSome).isSome then
+  unless ← isDerived left derived do
     return false
+  if (right.find? fun expression => (isWPApp? expression).isSome).isSome then return false
+  -- A structural bound may depend on another owned continuation bound. Keep that
+  -- dependency without solving mathematical choices or leaving a cyclic assignment.
+  for dependency in ← getMVars right do
+    unless derived.contains (← getDelayedMVarRoot dependency) do
+      return false
+  unless ← occursCheck left.getAppFn.mvarId! right do return false
+  trace[Zkc.construction] "derive {left} := {right}"
   assignDerived left right
   goal.assign (← mkAppOptM ``Lean.Order.PartialOrder.rel_refl #[none, none, some right])
   return true
 
-def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) :
+def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) (equationsOnly : Bool := false) :
     TacticM (Option (List MVarId)) := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let .app _ rhs := target | return none
   let some info := isWPApp? rhs | return none
-  if regionOnly && !info.prog.isAppOf ``Zkc.Source.Region.denote then return none
+  if regionOnly && !(info.prog.isAppOf ``Zkc.Source.Region.denote ||
+        info.prog.isAppOf ``Zkc.Source.Region.component) then return none
   if info.prog.isAppOf ``ite || info.prog.isAppOf ``dite then
     if let some (yes, no) ← SplitIf.splitIfAt? goal info.prog none then
       return some [← simpIfTarget yes.mvarId (useNewSemantics := true),
         ← simpIfTarget no.mvarId (useNewSemantics := true)]
-  if info.prog.isAppOf ``Zkc.Source.Region.denote then
+  if (info.prog.isAppOf ``Zkc.Source.Region.denote ||
+        info.prog.isAppOf ``Zkc.Source.Region.component) then
     trace[Zkc.construction]
       "region body head {info.prog.getAppArgs[info.prog.getAppNumArgs - 2]!.getAppFn}"
   let database ← SpecAttr.getSpecTheorems
@@ -178,19 +256,25 @@ def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) :
     candidate.pattern.pattern.getAppFn == info.prog.getAppFn &&
       !database.erased.contains candidate.proof && !indexed.contains candidate
   let candidates := (indexed ++ contextual).insertionSort (·.priority > ·.priority)
+  let mut named := #[]
+  let mut structural := #[]
   for candidate in candidates do
+    if ← namesActualRegion candidate.pattern.pattern info.prog then
+      named := named.push candidate
+    else
+      structural := structural.push candidate
+  for candidate in named ++ structural do
+    if equationsOnly then
+      match candidate.kind with
+      | .triple => continue
+      | .simp _ => pure ()
+    unless ← compatibleRegionRule candidate.pattern.pattern info.prog do continue
     trace[Zkc.construction] "candidate {candidate.proof} for {info.prog.getAppFn}"
     let saved ← saveState
     try
       if let some goals ← applyExactPostSpec goal candidate info then
         return some goals
       saved.restore
-      let pattern := candidate.pattern.pattern
-      if pattern.isAppOf ``Zkc.Source.Region.denote &&
-          info.prog.isAppOf ``Zkc.Source.Region.denote then
-        let given := pattern.getAppArgs[pattern.getAppNumArgs - 2]!.getAppFn
-        let wanted := info.prog.getAppArgs[info.prog.getAppNumArgs - 2]!.getAppFn
-        if given.isConst && wanted.isConst && given != wanted then continue
       let some rule ← (tryMkBackwardRuleFromSpec candidate info).run |
         saved.restore
         continue
@@ -204,6 +288,18 @@ def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) :
         if message == (← (failure.toMessageData (← getOptions)).toString) then throw error
       saved.restore
   return none
+
+/-- Reduce an already selected dependent equation using its actual discriminants. The
+standard restricted-transparency matcher may otherwise try to split an operation which is
+already fixed by the source. This does not unfold named calls or choose a different rule. -/
+def reduceSelectedMatcher (goal : MVarId) : MetaM (Option MVarId) := goal.withContext do
+  let target ← instantiateMVars (← goal.getType)
+  let_expr Lean.Order.PartialOrder.rel _ _ expected rhs := target | return none
+  let some info := isWPApp? rhs | return none
+  let some program ← withDefault (reduceRecMatcher? info.prog) | return none
+  if program == info.prog then return none
+  let next := mkAppN info.head ((info.args.set! 7 program) ++ info.excessArgs)
+  return some (← goal.change (← mkAppM ``Lean.Order.PartialOrder.rel #[expected, next]))
 
 /-- Give reply-dependent primitive continuations to the same monadic construction path.
 The atomic call rule leaves no residual execution fold for an author to assemble. -/
@@ -221,7 +317,24 @@ def prepareCall (goal : MVarId) : MetaM (Option (List MVarId)) := goal.withConte
   let child ← goal.replaceTargetEq rewritten.eNew rewritten.eqProof
   return some (child :: rewritten.mvarIds)
 
+/-- Normalize typed slot access with the actual context, even when its type list is a
+named dialect signature. Only environment projections are reduced; named bodies and calls
+remain visible to the specification database. -/
+def reduceEnvironment (goal : MVarId) : MetaM MVarId := goal.withContext do
+  let target ← instantiateMVars (← goal.getType)
+  let reduced ← Meta.transform target (post := fun term => do
+    if term.isAppOfArity ``Zkc.Source.Environment.prepend 8 ||
+        term.isAppOfArity ``Zkc.Source.Environment.push 8 ||
+        term.isAppOfArity ``Zkc.Source.Values.get 6 then
+      if let some unfolded ← unfoldDefinition? term (ignoreTransparency := true) then
+        return .visit (← whnfR unfolded)
+      return .done term
+    return .done term)
+  if reduced == target then return goal
+  goal.change reduced
+
 def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
+  let roots ← getGoals
   for goal in ← getGoals do
     let fixed ← goal.withContext <| instantiateMVars (← goal.getType)
     if fixed.hasMVar then
@@ -237,19 +350,20 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
     if steps > 4096 then throwError "source construction exceeded its step limit"
     let goal := pending.head!
     pending := pending.tail!
-    setGoals [goal]
+    setGoals [← reduceEnvironment goal]
     evalTactic (← `(tactic| all_goals simp (config := { failIfUnchanged := false }) only
-      [binderNameHint, Zkc.Source.Regions.denote, Zkc.Source.Operands.eval,
+      [construction_simp, ite_true, ite_false, dite_true, dite_false, id_eq, eq_self, binderNameHint, Zkc.Source.Regions.denote, Zkc.Source.Operands.eval,
        Zkc.Source.Values.get_here, Zkc.Source.Values.get_there,
        Zkc.Source.Values.get, Zkc.Source.Values.singleton,
        Zkc.Source.Environment.push_here, Zkc.Source.Environment.push_there,
        Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here,
        Zkc.Source.Environment.prepend_weakenSuffix,
+       Zkc.Source.Environment.prepend_empty, Zkc.Source.Environment.prepend_there, Zkc.Source.Values.tail,
        Zkc.Source.Environment.prepend, Zkc.Source.Environment.push]))
     if (← getGoals).isEmpty then continue
     let goal ← getMainGoal
     let target ← instantiateMVars (← goal.getType)
-    trace[Zkc.construction] "step {steps}: {target.getAppFn}"
+    trace[Zkc.construction] "step {steps}: {target}"
     let structural ← goal.withContext <| forallTelescope target fun _ body => do
       if body.isAppOf ``Std.WP.Triple then return true
       let_expr Lean.Order.PartialOrder.rel _ _ _ rhs := body | return false
@@ -265,6 +379,9 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
       setGoals [child]
       pending := (← getGoals) ++ pending
       continue
+    if let some child ← reduceSelectedMatcher goal then
+      pending := child :: pending
+      continue
     if let some children ← prepareCall goal then
       pending := children ++ pending
       continue
@@ -272,12 +389,17 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
       derived := derived.push middle
       pending := children ++ pending
       continue
+    -- An already derived mathematical expression is one bound, including its
+    -- conditionals. Only split an execution that still needs structural rules.
+    if ← finishDerived goal derived then continue
     if let some (children, added) ← prepareConditional goal derived then
       derived := derived ++ added
       pending := children ++ pending
       continue
-    if ← finishDerived goal derived then continue
     if let some children ← applyDependentSpec goal true then
+      pending := children ++ pending
+      continue
+    if let some children ← applyDependentSpec goal (equationsOnly := true) then
       pending := children ++ pending
       continue
     if structural then
@@ -297,6 +419,7 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
       Zkc.Source.Environment.push_here, Zkc.Source.Environment.push_there,
        Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here,
        Zkc.Source.Environment.prepend_weakenSuffix,
+       Zkc.Source.Environment.prepend_empty, Zkc.Source.Environment.prepend_there, Zkc.Source.Values.tail,
       Zkc.Source.Environment.prepend, Zkc.Source.Environment.push]))
     evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
     for current in ← getGoals do
@@ -319,9 +442,27 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
         remaining := remaining ++ [current]
   if choiceIndex < choices.size then throwError "unused mathematical choice"
 
-  setGoals remaining
+  -- A false branch has no executions, but its inferred predicate is still a term.
+  -- Give such owned holes their canonical empty elimination rather than leaving an
+  -- unresolved data metavariable behind a discharged implication.
+  for bound in derived do
+    unless ← bound.isAssigned do
+      let saved ← saveState
+      try
+        setGoals [bound]
+        evalTactic (← `(tactic| solve | intros; apply False.elim; simp_all))
+      catch error =>
+        if error.isInterrupt || error.isRuntime then throw error
+        saved.restore
+  -- Choice premises are processed in source order. Revisit earlier consequence goals
+  -- once those choices and the continuation predicates are known.
+  let mut unresolved := []
+  for goal in remaining do
+    unless ← goal.isAssigned do
+      unless ← finishDerived goal derived do unresolved := unresolved ++ [goal]
+  setGoals unresolved
   evalTactic (← `(tactic| all_goals simp (config := { failIfUnchanged := false }) only [
-    ProtocolProof.OperationSpec.wp_upper, ProtocolProof.OperationSpec.wp_lower,
+    construction_simp, ProtocolProof.OperationSpec.wp_upper, ProtocolProof.OperationSpec.wp_lower,
     ProtocolProof.wpFold_done, ProtocolProof.wpFold_halt, ProtocolProof.wpFold_bind,
     ProtocolProof.wpFold_call, ProtocolProof.wpFold_ite,
     ProtocolProof.OperationSpec.outcomePost, ProtocolProof.upper_entailment,
@@ -331,9 +472,15 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
        Zkc.Source.Values.get, Zkc.Source.Values.singleton,
     Zkc.Source.Operands.eval, Zkc.Source.Environment.push_here, Zkc.Source.Environment.push_there,
        Zkc.Source.Environment.prepend_weakenPrefix, Zkc.Source.Environment.prepend_here,
-    Zkc.Source.Environment.prepend_weakenSuffix, Zkc.Source.Environment.prepend,
+    Zkc.Source.Environment.prepend_weakenSuffix,
+       Zkc.Source.Environment.prepend_empty, Zkc.Source.Environment.prepend_there, Zkc.Source.Values.tail, Zkc.Source.Environment.prepend,
     Zkc.Source.Environment.push]))
   evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
+
+  evalTactic (← `(tactic| all_goals try simp_all only [construction_simp]))
+  evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
+  evalTactic (← `(tactic| all_goals try solve | apply le_rfl))
+  evalTactic (← `(tactic| all_goals try contradiction))
 
   for goal in ← getGoals do
     let type ← goal.withContext <| instantiateMVars (← goal.getType)
@@ -345,8 +492,34 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
     if (type.find? fun expression =>
         (isWPApp? expression).isSome || expression.isAppOf ``Std.WP.Triple ||
         expression.isAppOf ``ProtocolProof.wpFold ||
-        expression.isAppOf ``Zkc.Source.Region.denote).isSome then
+        expression.isAppOf ``Zkc.Source.Region.denote ||
+        expression.isAppOf ``Zkc.Source.Region.component).isSome then
       throwError "missing common construction rule; execution structure is not a mathematical obligation:\n{type}"
+
+  -- A derived predicate may be assigned after its enclosing lambda was abstracted.
+  -- Finalize those delayed wrappers from their already fixed bodies. This supplies no
+  -- mathematical value: each abstraction keeps its recorded binders and checked type.
+  for root in roots do
+    while true do
+      checkSystem "finalizing source proof abstractions"
+      let proof ← instantiateMVars (mkMVar root)
+      let mut progress := false
+      for missing in ← getMVars proof do
+        if let some delayed ← getDelayedMVarAssignment? missing then
+          let value ← instantiateMVars (mkMVar delayed.mvarIdPending)
+          unless value.hasMVar do
+            let closed ← delayed.mvarIdPending.withContext <| mkLambdaFVars delayed.fvars value
+            missing.withContext do
+              unless ← isDefEq (← inferType closed) (← missing.getType) do
+                throwError "derived continuation abstraction changed its type"
+              missing.assign closed
+            progress := true
+      unless progress do break
+    if (← getGoals).isEmpty then
+      let proof ← instantiateMVars (mkMVar root)
+      for missing in ← getMVars proof do
+        missing.withContext do
+          throwError "construction left an unresolved proof argument:\n{← missing.getType}"
 
 /-- Reuse the existing obligation record with the actual local context on demand.
 An open authoring goal is not evidence that a request or security endpoint holds. -/

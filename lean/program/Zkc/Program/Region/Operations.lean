@@ -15,6 +15,17 @@ def Values.append {Value : Ty → Type} {Γ Δ : List Ty} :
   | .nil, right => right
   | .cons value rest, right => .cons value (rest.append right)
 
+/-- Tuple concatenation uses the same typed slot lookup as environment extension. -/
+@[simp] theorem Values.get_append {Value : Ty → Type} {Γ Δ : List Ty} {ty : Ty}
+    (first : Values Value Γ) (rest : Values Value Δ) (reference : Var (Γ ++ Δ) ty) :
+    (first.append rest).get reference = Environment.prepend rest.get first reference := by
+  induction first with
+  | nil => rfl
+  | cons value tail ih =>
+    cases reference with
+    | here => rfl
+    | there reference => exact ih reference
+
 /-- Separate an explicitly typed result prefix from the retained suffix. -/
 def Values.split {Value : Ty → Type} (added : List Ty) {Γ : List Ty}
     (values : Values Value (added ++ Γ)) : Values Value added × Values Value Γ :=
@@ -123,7 +134,9 @@ def Values.singleton {ty : Ty} (value : Value ty) : Values Value [ty] :=
 theorem Environment.prepend_singleton {Γ : List Ty} {ty : Ty}
     (env : Environment Value Γ) (value : Value ty) :
     @Eq (Environment Value (ty :: Γ))
-      (env.prepend (Values.singleton value)) (env.push value) := rfl
+      (env.prepend (Values.singleton value)) (env.push value) := by
+  funext sort reference
+  cases reference <;> rfl
 
 theorem Values.get_cons {Γ : List Ty} {ty : Ty}
     (value : Value ty) (values : Values Value Γ) :
@@ -168,5 +181,18 @@ theorem Renaming.liftPrefix_comp {Γ Δ Ξ : List Ty} (added : List Ty)
     cases reference with
     | here => rfl
     | there reference => exact congrArg Var.there (congrFun (congrFun ih _) reference)
+
+@[simp] theorem Environment.prepend_empty {Value : Ty → Type} {Γ : List Ty}
+    (env : Environment Value Γ) (values : Values Value []) :
+    @Eq (Environment Value Γ) (env.prepend values) env := by
+  cases values
+  rfl
+
+@[simp] theorem Environment.prepend_there {Value : Ty → Type} {Γ Δ : List Ty}
+    {ty result : Ty} (env : Environment Value Γ) (values : Values Value (ty :: Δ))
+    (reference : Var (Δ ++ Γ) result) :
+    env.prepend values (.there reference) = env.prepend values.tail reference := by
+  cases values
+  rfl
 
 end Zkc.Source

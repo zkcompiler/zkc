@@ -161,6 +161,7 @@ enum class Kind {
   Call,
   ProtocolApply,
   ProtocolRepeat,
+  ProtocolBranch,
   LocalCall,
   Fold,
   Guard,
@@ -308,6 +309,7 @@ Kind kind(Operation &op) {
       .Case("func.call", Kind::Call)
       .Case("protocol.apply", Kind::ProtocolApply)
       .Case("protocol.repeat", Kind::ProtocolRepeat)
+      .Case("protocol.branch", Kind::ProtocolBranch)
       .Case("protocol.local_call", Kind::LocalCall)
       .Case("data.finite_fold", Kind::Fold)
       .Case("protocol.guard", Kind::Guard)
@@ -570,12 +572,15 @@ class Admission {
       return error("structured-reference-unsupported",
                    op.getName().getStringRef());
     if (code != Kind::MathematicalBranch &&
-        op.getNumRegions() != (code == Kind::ProtocolRepeat ? 1u : 0u))
+        op.getNumRegions() != (code == Kind::ProtocolRepeat   ? 1u
+                               : code == Kind::ProtocolBranch ? 2u
+                                                              : 0u))
       return error("structured-reference-unsupported", "region count");
     for (Type type : op.getOperandTypes())
       if (!referenceType(type, isScoped(owner)) ||
           (isa<protocol_ir::ServiceReferenceType>(type) && code != Kind::Draw &&
-           code != Kind::ProtocolApply && code != Kind::ProtocolRepeat))
+           code != Kind::ProtocolApply && code != Kind::ProtocolRepeat &&
+           code != Kind::ProtocolBranch))
         return error("structured-reference-unsupported", "operand type");
     for (Type type : op.getResultTypes())
       if (!referenceType(type, isScoped(owner)) ||
@@ -622,6 +627,28 @@ class Admission {
       return attributes(op, {"alternative"});
     case Kind::Get:
       return attributes(op, {"index"});
+    case Kind::ProtocolBranch: {
+      if (auto failure =
+              attributes(op, {"site", "roles", "output_roles", "alternatives"}))
+        return failure;
+      auto branch = cast<protocol_ir::BranchOp>(op);
+      auto alternatives = branch.getAlternatives();
+      if (!isa<protocol_ir::MathematicalOp>(owner) || !op.getNumOperands() ||
+          !op.getOperand(0).getType().isSignlessInteger(1) ||
+          alternatives.size() != 2 ||
+          cast<StringAttr>(alternatives[0]).getValue() != "then" ||
+          cast<StringAttr>(alternatives[1]).getValue() != "else" ||
+          branch.getOutputRoles().size() != op.getNumResults())
+        return error("structured-reference-signature", "protocol branch");
+      for (Region &arm : branch.getArms())
+        if (!llvm::hasSingleElement(arm) || arm.front().empty() ||
+            arm.front().getArgumentTypes() !=
+                op.getOperands().drop_front().getTypes() ||
+            !isa<protocol_ir::ProtocolYieldOp>(arm.front().back()) ||
+            arm.front().back().getOperandTypes() != op.getResultTypes())
+          return error("structured-reference-signature", "protocol branch arm");
+      break;
+    }
     case Kind::ProtocolRepeat: {
       if (auto failure = attributes(
               op, {"site", "carried", "maximum", "roles", "carried_roles"}))
@@ -808,16 +835,26 @@ class Admission {
     // Only immutable service captures carry lexical entry-port identity.
     // Index and state arguments never acquire the origin of their initials.
     unsigned depth = 0;
-    while (argument &&
-           isa<protocol_ir::RepeatOp>(argument.getOwner()->getParentOp())) {
-      auto repeat =
-          cast<protocol_ir::RepeatOp>(argument.getOwner()->getParentOp());
+    while (argument) {
+      Operation *parent = argument.getOwner()->getParentOp();
+      auto repeat = dyn_cast<protocol_ir::RepeatOp>(parent);
+      auto branch = dyn_cast<protocol_ir::BranchOp>(parent);
+      if (!repeat && !branch)
+        break;
       unsigned position = argument.getArgNumber();
-      if (++depth > maxDepth || position <= repeat.getNumResults() ||
-          position >= repeat.getNumOperands() ||
+      if (++depth > maxDepth ||
           !isa<protocol_ir::ServiceReferenceType>(argument.getType()))
         return error("structured-reference-application", "service capture");
-      argument = dyn_cast<BlockArgument>(repeat.getInputs()[position]);
+      if (repeat) {
+        if (position <= repeat.getNumResults() ||
+            position >= repeat.getNumOperands())
+          return error("structured-reference-application", "service capture");
+        argument = dyn_cast<BlockArgument>(repeat.getInputs()[position]);
+      } else {
+        if (position + 1 >= branch.getNumOperands())
+          return error("structured-reference-application", "service capture");
+        argument = dyn_cast<BlockArgument>(branch.getInputs()[position + 1]);
+      }
     }
     if (!protocol || !argument ||
         argument.getOwner() != &protocol.getBody().front())
@@ -2206,6 +2243,26 @@ class Reference {
             cast<StringAttr>(source).getValue(),
             context->role(cast<StringAttr>(replacement).getValue()));
       return invokeProtocol(callee, args, child, depth + 1);
+    }
+    case Kind::ProtocolBranch: {
+      auto branch = cast<protocol_ir::BranchOp>(op);
+      if (!inScope(branch.getRoles(), context))
+        return absent(op);
+      if (!present(args[0]))
+        return stopped(op, "incomplete", context);
+      unsigned selected = std::get<bool>(args[0]) ? 0 : 1;
+      auto result = block(branch.getArms()[selected].front(), args.drop_front(),
+                          depth + 1, context);
+      if (!result || result->stopped())
+        return result;
+      if (result->terminator != Kind::Yield ||
+          result->values.size() != op.getNumResults())
+        return error("structured-reference-signature", "protocol branch yield");
+      for (auto [i, scope] : llvm::enumerate(branch.getOutputRoles()))
+        if (!inScope(cast<ArrayAttr>(scope), context))
+          result->values[i] = std::monostate{};
+      result->terminator = Kind::Return;
+      return result;
     }
     case Kind::ProtocolRepeat: {
       auto repeat = cast<protocol_ir::RepeatOp>(op);

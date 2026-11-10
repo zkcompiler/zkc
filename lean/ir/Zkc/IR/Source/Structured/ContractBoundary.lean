@@ -130,6 +130,13 @@ inductive ApplicationOccurrence (signature : ProtocolSignature) (roles : List Na
       ApplicationOccurrence signature roles site operands body →
       ApplicationOccurrence signature roles site operands
         (.letOp (.repeat spec repeatSite) args (.cons body .nil) next)
+  | branchBody {Δ out} (spec : BranchSpec) (branchSite : String)
+      (args : Operands Δ (.boolean :: spec.captures))
+      (yes no : Region protocolDialect spec.captures spec.outputs)
+      (next : Region protocolDialect (spec.outputs ++ Δ) out) (selected : Bool) :
+      ApplicationOccurrence signature roles site operands (if selected then yes else no) →
+      ApplicationOccurrence signature roles site operands
+        (.letOp (.branch spec branchSite) args (.cons yes (.cons no .nil)) next)
 
 structure CheckedApplication {snapshot : Snapshot} {imported : Imported snapshot}
     (callee : ContractBinding imported) (Γ : List Ty) where

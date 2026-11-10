@@ -19,6 +19,7 @@ inductive OracleProtocolAction (carriers : Carriers) where
   | oracle (request : OracleRequest carriers)
   | demand (request : OracleDataDemand)
   | application (signature : ProtocolSignature) (site : String)
+  | selection (site : String) (selected : Bool)
   | iteration (site : String) (index : Nat)
   | leave
   | mark (sourceSite observedSite : String)
@@ -29,7 +30,7 @@ abbrev oracleProtocolInterface (carriers : Carriers) : PIR.Signature where
     | .ordinary action => (participantInterfaceOn carriers).Reply action
     | .oracle request => (oracleInterface carriers).Reply request
     | .demand request => (oracleDataDemandInterface carriers).Reply request
-    | .application .. | .iteration .. | .leave | .mark .. => Unit
+    | .application .. | .iteration .. | .selection .. | .leave | .mark .. => Unit
 
 namespace OracleProtocol
 variable (model : DomainModel)
@@ -84,7 +85,9 @@ def algebra (self : Nat)
     ProtocolAlgebra (ProtocolValue model.toCarriers) (Interface model) where
   index := ProtocolValue.ofConcrete .index
   count := ProtocolValue.toConcrete
+  condition := ProtocolValue.toConcrete
   application := fun _ signature site process ↦ enter model (.application signature site) process
+  selection := fun _ site selected process ↦ enter model (.selection site selected) process
   iteration := fun _ site index process ↦ enter model (.iteration site index) process
   action context _ op args := match op, args with
     | .oracle operation location, args =>
@@ -143,7 +146,7 @@ def sourceSite (snapshot : Snapshot) (frame : Frame) (site : String) : Except St
 
 /-- Canonical lowering retains one mark for every stored instruction, including unnamed
 calculations. The checked row advances in the current lexical block only. Entering a
-repeat callback selects its actual child block; successful exit restores the caller cursor.
+selected or repeated callback selects its actual child block; successful exit restores the caller cursor.
 Rendered names and dynamic allocation counts never determine an Oracle anchor. -/
 def sourceStep (snapshot : Snapshot) (frame : Frame) (site : String) : Except String Frame := do
   let row := frame.block ++ [1, frame.next]
@@ -225,6 +228,15 @@ def handler {snapshot : Snapshot} {domains : List DomainSpec} {math : OracleMath
               definition := index }
             ⟨.returned (), {state with frame := frame, parents := state.frame :: state.parents}, []⟩
         | _ => stop
+    | .selection site selected =>
+      match sourceSite snapshot state.frame site with
+      | .error _ => stop
+      | .ok row =>
+        let frame : Frame := {state.frame with
+          block := row ++ [4, if selected then 0 else 1, 3]
+          next := 0
+          row := []}
+        ⟨.returned (), {state with frame := frame, parents := state.frame :: state.parents}, []⟩
     | .iteration site index =>
       match sourceSite snapshot state.frame site with
       | .error _ => stop

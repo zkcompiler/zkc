@@ -129,38 +129,41 @@ def protocolOperationWithOn {I : PIR.Signature} (observations : SiteObservations
     (context : ProtocolContext := {})
     (iterations : IterationObservations I := .silent) :
     PIR.Process I (Values (Component model.Value) op.results) :=
-  match op, args with
-  | .oracle .., _ => .halt .refused
-  | .repeat spec site, .cons count values =>
-    let parts := Values.split spec.state values
-    denoteRepeatOn spec context self count parts.1 parts.2 (callbacks.get .here) iterations site
-  | .calculate op allowed, args =>
+  match op with
+  | .oracle .. => .halt .refused
+  | .branch spec _ =>
+    denoteBranch some spec context self (args.get .here) args.tail
+      (callbacks.get .here) (callbacks.get (.there .here))
+  | .repeat spec site =>
+    let parts := Values.split spec.state args.tail
+    denoteRepeatOn spec context self (args.get .here) parts.1 parts.2 (callbacks.get .here) iterations site
+  | .calculate op allowed =>
     Evaluation.componentOperationOn model observations tables op args (op.calculationRegions allowed)
-  | .localCall helper _ owner _, args =>
+  | .localCall helper _ owner _ =>
     Participant.owned self (context.roles owner) (invoke tables.closed helper) args
-  | .guard owner _, .cons condition .nil =>
+  | .guard owner _ =>
     ((Participant.guard (services := services) (Value := model.Value) self (context.roles owner)
-      condition).interpret actions).bind fun _ => .done .nil
-  | .exchange _ sender receiver site, .cons value .nil =>
+      (args.get .here)).interpret actions).bind fun _ => .done .nil
+  | .exchange _ sender receiver site =>
     ((Participant.exchange (services := services) self (context.roles sender) (context.roles receiver)
-      (qualifyProtocolSite context.applicationPrefix site) value).interpret
+      (qualifyProtocolSite context.applicationPrefix site) (args.get .here)).interpret
       actions).bind fun result => .done (.cons result .nil)
-  | .restrict _ roles, .cons value .nil =>
-    .done (.cons (Participant.restrict ((roles.map context.roles).contains self) value) .nil)
-  | .assemble _ roles, values =>
-    .done (.cons (assembleComponent (fun role => context.roles role == self) none roles values) .nil)
-  | .query owner operation site, args =>
+  | .restrict _ roles =>
+    .done (.cons (Participant.restrict ((roles.map context.roles).contains self) (args.get .here)) .nil)
+  | .assemble _ roles =>
+    .done (.cons (assembleComponent (fun role => context.roles role == self) none roles args) .nil)
+  | .query owner operation site =>
     ((Participant.query (services := services) self (context.roles owner)
       (qualifyProtocolSite context.applicationPrefix site) operation args).interpret serviceAction |>.interpret
       actions).bind fun result => .done (.cons result .nil)
-  | .draw owner field site, args =>
+  | .draw owner field site =>
     ((Participant.query (services := services) self (context.roles owner)
       (qualifyProtocolSite context.applicationPrefix site) (.draw field) args).interpret
       actions).bind fun result => .done (.cons result .nil)
-  | .statement .., _ => .done .nil
-  | .mark site, .nil =>
+  | .statement .. => .done .nil
+  | .mark site =>
     (observations.mark (qualifyProtocolSite context.applicationPrefix site)).bind fun _ => .done .nil
-  | .protocolApply signature roles site, args =>
+  | .protocolApply signature roles site =>
     let child := context.enter site roles
     if child.contains signature self then invokeProtocol protocols signature child self args
     else .done (Values.absent model.Value signature.outputs)
@@ -290,6 +293,7 @@ theorem protocolOperationWith_eq_protocolOperationWithOn {I : PIR.Signature}
       protocolOperationWithOn (ringModel F G) observations actions tables.toOn self op args callbacks
         protocols context := by
   cases op with
+  | branch spec site => cases args; rfl
   | «repeat» spec site =>
     rcases args with _ | ⟨count, values⟩
     exact denoteRepeat_eq_denoteRepeatOn spec context self count _ _ _

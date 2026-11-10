@@ -170,7 +170,7 @@ import Zkc.IR.Source.Structured.ReferenceLibrary
 import Zkc.IR.Source.Structured.RelationChecking
 import Zkc.IR.Source.Structured.RelationMeaning
 import Zkc.IR.Source.Structured.Repeat
-import Zkc.IR.Source.Structured.RepeatAdmission
+import Zkc.IR.Source.Structured.ProtocolRegionAdmission
 import Zkc.IR.Source.Structured.RepeatLaws
 import Zkc.IR.Source.Structured.ReplyScript
 import Zkc.IR.Source.Structured.ServiceAdmission

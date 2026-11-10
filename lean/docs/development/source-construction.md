@@ -30,10 +30,14 @@ cursor. A well-typed zero invariant cannot prove a nonzero requested bound. Miss
 rules are reported separately from mathematics; the constructor does not give an unresolved
 execution fold to the companion.
 
-The models explicitly author source fixtures using typed coordinates because no native parser
-is involved. Those source definitions are counted as fixtures. Their proofs do not traverse
-source syntax or manually route result slots, frames, execution marks or cursors. Removing
-such native-source work for real authors requires the separate actual-source integration.
+The model examples author typed source fixtures explicitly. Actual-source clients instead
+import `Zkc.Tools.Verification.SourceConstruction`, use `import_source` on the native structured
+export, and bind definitions with `bind_source_helper` or `bind_source_protocol`. The quotation
+retains the exported source; ordinary kernel-checked admission produces the typed Region.
+Bindings derive the actual body, signature and closure membership. Named installation rules
+supply dependency framing, role substitution and input/output placement. Authors select the
+intended definition and state its mathematical contract; they do not write a replacement body,
+slot layout, source visitor or frame proof. Rendering remains a named trust boundary.
 
 The current root evidence records are still explicit: the author states the intended request,
 local operation law, provider installation, initial budget and terminal observation. Source
@@ -62,6 +66,27 @@ helper needs no new mathematical theorem. A new component author still supplies 
 mathematics, representation/admissibility premises and operation meaning; the shared constructor
 handles supported structural composition. An entirely new operation constructor needs a common
 proved specification before this authoring guarantee applies.
+
+## Actual-source clients
+
+`Zkc.Tests.Verification.Construction` exercises the native
+`compiler/test/fixtures/structured-source/actual-calls.zkc` and `scoped-control.zkc` exports.
+The source-admission check regenerates and compares their literal quotations with the current
+compiler output; checking an unrelated hand-authored Region cannot satisfy that gate.
+
+| Client | Author input | Constructed connection |
+| --- | --- | --- |
+| `ActualCalls` | Difference formula over the selected field interpretation | The same named law at two actual calls with opposite operand order |
+| `SharedServices` | Counter provider, shared state and history observation | Selected execution, two aliased or distinct handles, reached stop and ordered effects |
+| `FiniteLoop` | Remaining-sequence invariant and replacement formula | Actual finite loop, captured replacement, arbitrary runtime count including zero |
+| `AssociationControls` | Addition law for the changed dependency | Correct rebinding under unchanged lookup metadata and caller body |
+| `SemanticControls` | Counterexamples to incorrect result/history requests | Kernel-checked rejection of stale dependencies, operand/handle swaps and ignored stops |
+| `LawRequests` | Fixed actual-body proposition and a proved library law | Typed selection, direct proof, explicit wrong-law refusal and open required coverage |
+
+The shared-state example uses integer carriers to isolate service behavior. It does not establish
+a production field instance or protocol security. The generic arithmetic example quantifies over
+the admitted domain model. Public source law/ghost syntax is not required for these Lean library
+laws; its frontend formation and coverage remain a separate language task.
 
 ## Choices and module ordering
 
@@ -109,14 +134,12 @@ over a different proof architecture. Proof sharing never discounts executed serv
 
 ## Scope and next boundary
 
-The new path covers quantitative construction over admitted typed model Regions. Existing
-exact derivations remain appropriate for exact correspondence, and installed extraction and
-simulation laws retain their meanings. No legacy native source route is removed before its
-actual replacement is proved.
+The path covers quantitative construction over model Regions and the admitted Boolean-control
+original-source profile. Existing exact derivations remain appropriate for exact correspondence;
+installed extraction and simulation laws retain their meanings. Multi-alternative protocol
+variants are still explicitly refused by this formal profile.
 
-Native integration must next select one original-source profile, associate laws with the
-actual admitted definitions and their semantic dependencies, and reuse this path on two
-actual source calls plus a new complete source component. Generated controllers then need
-one whole execution theorem covering phases, saved continuations, captures, ordered answers,
-completion and capacity. The original Sumcheck/FRI endpoints remain open until those edges and
-their mathematical reductions are closed.
+Generated controllers next need one whole execution theorem covering phases, saved continuations,
+captures, ordered answers, completion and capacity. Complete protocol applications then instantiate
+that theorem and supply their mathematical reductions. These are separate acceptance boundaries;
+actual-source installation alone does not establish a compiled Sumcheck or FRI security endpoint.

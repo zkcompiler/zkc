@@ -14,9 +14,12 @@ namespace Zkc.Source.Structured
 structure ProtocolAlgebra (V : Ty → Type) (I : PIR.Signature) where
   index : Nat → V .index
   count : V .index → Option Nat
+  condition : V .boolean → Option Bool
   action : (context : ProtocolContext) → (self : Nat) → (op : ProtocolOp) →
     Values (Component V) op.arguments → PIR.Process I (Values (Component V) op.results)
   application : {A : Type} → ProtocolContext → ProtocolSignature → String →
+    PIR.Process I A → PIR.Process I A := fun _ _ _ p ↦ p
+  selection : {A : Type} → ProtocolContext → String → Bool →
     PIR.Process I A → PIR.Process I A := fun _ _ _ p ↦ p
   iteration : {A : Type} → ProtocolContext → String → Nat →
     PIR.Process I A → PIR.Process I A := fun _ _ _ p ↦ p
@@ -48,21 +51,33 @@ def operation (algebra : ProtocolAlgebra V I)
     (op : ProtocolOp) (args : Values (Component V) op.arguments)
     (callbacks : Values (RegionFunction (Component V) I) op.regions) :
     PIR.Process I (Values (Component V) op.results) :=
-  match op, args with
-  | .repeat spec site, .cons count values =>
-    let parts := Values.split spec.state values
-    algebra.repeatProcess spec context self site count parts.1 parts.2 (callbacks.get .here)
-  | .protocolApply signature roles site, args =>
+  match op with
+  | .branch spec site =>
+    match args with
+    | .cons selector captures =>
+      denoteBranch algebra.condition spec context self selector captures
+        (fun values ↦ algebra.selection context site true (callbacks.get .here values))
+        (fun values ↦ algebra.selection context site false (callbacks.get (.there .here) values))
+  | .repeat spec site =>
+    match args with
+    | .cons count values =>
+      let parts := Values.split spec.state values
+      algebra.repeatProcess spec context self site count parts.1 parts.2 (callbacks.get .here)
+  | .protocolApply signature roles site =>
     let child := context.enter site roles
     if child.contains signature self then
       algebra.application context signature site
         (invokeProtocol protocols signature child self args)
     else .done (Values.absent V signature.outputs)
-  | .restrict _ roles, .cons value .nil =>
-    .done (.cons (Participant.restrict ((roles.map context.roles).contains self) value) .nil)
-  | .assemble _ roles, values =>
-    .done (.cons (assembleComponent (fun role ↦ context.roles role == self) none roles values) .nil)
-  | op, args => algebra.action context self op args
+  | .restrict _ roles =>
+    match args with
+    | .cons value tail =>
+      match tail with
+      | .nil =>
+        .done (.cons (Participant.restrict ((roles.map context.roles).contains self) value) .nil)
+  | .assemble _ roles =>
+    .done (.cons (assembleComponent (fun role ↦ context.roles role == self) none roles args) .nil)
+  | op => algebra.action context self op args
 
 abbrev meaning (algebra : ProtocolAlgebra V I) (protocols : ProtocolTable V I)
     (context : ProtocolContext) (self : Nat) : RegionMeaning protocolDialect I where
@@ -91,6 +106,7 @@ def ordinaryProtocolAlgebra (model : DomainModel) {I : PIR.Signature}
     (iterations : IterationObservations I := .silent) : ProtocolAlgebra model.Value I where
   index := id
   count := some
+  condition := some
   iteration := fun context site index p ↦
     iterations.within (qualifyProtocolSite context.applicationPrefix site) index p
   action context self op args :=
@@ -132,6 +148,7 @@ theorem ordinaryProtocolAlgebra_operation (model : DomainModel) {I : PIR.Signatu
         protocolOperationWithOn model observations actions tables self op args callbacks
           protocols context iterations := by
   cases op with
+  | branch spec site => cases args; rfl
   | «repeat» spec site =>
     cases args with | cons count rest =>
       cases callbacks with | cons body tail =>
@@ -140,7 +157,10 @@ theorem ordinaryProtocolAlgebra_operation (model : DomainModel) {I : PIR.Signatu
           spec context self site count (rest.split spec.state).1 (rest.split spec.state).2 body
   | _ =>
     cases callbacks
-    first | rfl | (cases args; rfl) | (cases args; rename_i head tail; cases tail; rfl)
+    first
+    | rfl
+    | solve | cases args
+    | cases args; rename_i head tail; cases tail; rfl
 
 theorem ordinaryProtocolAlgebra_meaning (model : DomainModel) {I : PIR.Signature}
     (observations : SiteObservations I)

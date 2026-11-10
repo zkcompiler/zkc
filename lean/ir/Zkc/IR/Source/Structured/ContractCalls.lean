@@ -45,6 +45,7 @@ def ApplicationOccurrence.continuation {signature : ProtocolSignature} {roles : 
   | _, _, _, .bindBody _ _ occurrence => occurrence.continuation
   | _, _, _, .bindNext _ _ occurrence => occurrence.continuation
   | _, _, _, .repeatBody _ _ _ _ _ occurrence => occurrence.continuation
+  | _, _, _, .branchBody _ _ _ _ _ _ _ occurrence => occurrence.continuation
 
 namespace CallOccurrence
 
@@ -95,6 +96,14 @@ def repeatBody {Γ out} (spec : RepeatSpec) (site : String)
     CallOccurrence (.letOp (.repeat spec site) args (.cons body .nil) next) :=
   ⟨call.callSite, .repeatBody spec site args body next call.occurrence⟩
 
+def branchBody {Γ out} (spec : BranchSpec) (site : String)
+    (args : Operands Γ (.boolean :: spec.captures))
+    (yes no : Region protocolDialect spec.captures spec.outputs)
+    (next : Region protocolDialect (spec.outputs ++ Γ) out) (selected : Bool)
+    (call : CallOccurrence (if selected then yes else no)) :
+    CallOccurrence (.letOp (.branch spec site) args (.cons yes (.cons no .nil)) next) :=
+  ⟨call.callSite, .branchBody spec site args yes no next selected call.occurrence⟩
+
 end CallOccurrence
 
 /-- Only an actual application constructor contributes a call at this node. -/
@@ -107,7 +116,7 @@ def headCallInventory {Γ out} (op : ProtocolOp) (args : Operands Γ op.argument
       [CallOccurrence.here signature roles site args next]
   | _, _, _, _ => []
 
-/-- Repeat is the only protocol operation with a callback. Both bind children
+/-- Every admitted callback is traversed. Both bind children
 and every continuation are traversed, independently of execution reachability. -/
 def callInventory {Γ out} (body : Region protocolDialect Γ out) : List (CallOccurrence body) :=
   match body with
@@ -119,6 +128,13 @@ def callInventory {Γ out} (body : Region protocolDialect Γ out) : List (CallOc
        | .repeat spec site, args, .cons body tail, next =>
            match tail with
            | .nil => (callInventory body).map (CallOccurrence.repeatBody spec site args body next)
+       | .branch spec site, args, .cons yes tail, next =>
+           match tail with
+           | .cons no tail =>
+             match tail with
+             | .nil =>
+               (callInventory yes).map (CallOccurrence.branchBody spec site args yes no next true) ++
+               (callInventory no).map (CallOccurrence.branchBody spec site args yes no next false)
        | _, _, _, _ => [])
   | .bind body next => (callInventory body).map (CallOccurrence.bindBody body next) ++
       (callInventory next).map (CallOccurrence.bindNext body next)
@@ -152,6 +168,12 @@ theorem callInventory_complete {Γ out} {body : Region protocolDialect Γ out}
     exact List.mem_append_right _ (List.mem_map.mpr ⟨CallOccurrence.mk _ occurrence, ih, rfl⟩)
   | repeatBody spec site args body next occurrence ih =>
     exact List.mem_append_right _ (List.mem_map.mpr ⟨CallOccurrence.mk _ occurrence, ih, rfl⟩)
+  | branchBody spec site args yes no next selected occurrence ih =>
+    cases selected
+    · exact List.mem_append_right _ (List.mem_append_right _
+        (List.mem_map.mpr ⟨CallOccurrence.mk _ occurrence, ih, rfl⟩))
+    · exact List.mem_append_right _ (List.mem_append_left _
+        (List.mem_map.mpr ⟨CallOccurrence.mk _ occurrence, ih, rfl⟩))
 
 theorem CheckedApplication.toCallOccurrence_mem {snapshot : Snapshot}
     {imported : Imported snapshot} {callee : ContractBinding imported} {Γ : List Ty}

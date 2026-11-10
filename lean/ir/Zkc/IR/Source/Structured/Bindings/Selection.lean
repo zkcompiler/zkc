@@ -47,6 +47,12 @@ inductive RepeatAt (selected : RepeatSite) :
       (next : Region protocolDialect (spec.state ++ inputs) outputs) :
       RepeatAt selected body →
       RepeatAt selected (.letOp (.repeat spec site) args (.cons body .nil) next)
+  | branchBody {inputs outputs} (spec : BranchSpec) (site : String)
+      (args : Operands inputs (.boolean :: spec.captures))
+      (yes no : Region protocolDialect spec.captures spec.outputs)
+      (next : Region protocolDialect (spec.outputs ++ inputs) outputs) (selectedArm : Bool) :
+      RepeatAt selected (if selectedArm then yes else no) →
+      RepeatAt selected (.letOp (.branch spec site) args (.cons yes (.cons no .nil)) next)
 
 namespace RepeatAt
 variable {selected : RepeatSite}
@@ -59,6 +65,8 @@ def position : {inputs outputs : List Ty} → {body : Region protocolDialect inp
   | _, _, _, .bindBody _ _ occurrence => 0 :: occurrence.position
   | _, _, _, .bindNext _ _ occurrence => 1 :: occurrence.position
   | _, _, _, .repeatBody _ _ _ _ _ occurrence => 0 :: occurrence.position
+  | _, _, _, .branchBody _ _ _ _ _ _ selected occurrence =>
+    0 :: (if selected then 0 else 1) :: occurrence.position
 
 /-- Exact enclosing repeat nodes, outermost first, with root-relative paths.
 Their lexical presence does not assert a reached runtime iteration. -/
@@ -71,6 +79,8 @@ def enclosing : {inputs outputs : List Ty} → {body : Region protocolDialect in
   | _, _, _, .repeatBody spec site args body suffix occurrence =>
       ([], ⟨_, _, spec, site, args, body, suffix⟩) ::
         occurrence.enclosing.map (fun (path, site) => (0 :: path, site))
+  | _, _, _, .branchBody _ _ _ _ _ _ selected occurrence =>
+    occurrence.enclosing.map fun (path, site) ↦ (0 :: (if selected then 0 else 1) :: path, site)
 
 end RepeatAt
 
@@ -113,6 +123,14 @@ def repeatBody {inputs outputs} (spec : RepeatSpec) (site : String)
     RepeatOccurrence (.letOp (.repeat spec site) args (.cons body .nil) next) :=
   ⟨selected.repeatSite, .repeatBody spec site args body next selected.occurrence⟩
 
+def branchBody {inputs outputs} (spec : BranchSpec) (site : String)
+    (args : Operands inputs (.boolean :: spec.captures))
+    (yes no : Region protocolDialect spec.captures spec.outputs)
+    (next : Region protocolDialect (spec.outputs ++ inputs) outputs) (selected : Bool)
+    (occurrence : RepeatOccurrence (if selected then yes else no)) :
+    RepeatOccurrence (.letOp (.branch spec site) args (.cons yes (.cons no .nil)) next) :=
+  ⟨occurrence.repeatSite, .branchBody spec site args yes no next selected occurrence.occurrence⟩
+
 end RepeatOccurrence
 
 /-- One preorder traversal: a repeat, its nested callbacks, then its suffix.
@@ -130,6 +148,13 @@ def repeatInventory {inputs outputs} (body : Region protocolDialect inputs outpu
            match tail with
            | .nil => RepeatOccurrence.here spec site args body next ::
                (repeatInventory body).map (RepeatOccurrence.repeatBody spec site args body next)
+       | .branch spec site, args, .cons yes tail, next =>
+           match tail with
+           | .cons no tail =>
+             match tail with
+             | .nil =>
+               (repeatInventory yes).map (RepeatOccurrence.branchBody spec site args yes no next true) ++
+               (repeatInventory no).map (RepeatOccurrence.branchBody spec site args yes no next false)
        | _, _, _, _ => []) ++
       (repeatInventory next).map (RepeatOccurrence.next op args bodies next)
 
@@ -152,6 +177,13 @@ theorem repeatInventory_complete {inputs outputs} {body : Region protocolDialect
   | repeatBody spec label args body next occurrence ih =>
     exact List.mem_append_left _ (List.mem_cons_of_mem _
       (List.mem_map.mpr ⟨⟨site, occurrence⟩, ih, rfl⟩))
+
+  | branchBody spec label args yes no next selected occurrence ih =>
+    cases selected
+    · exact List.mem_append_left _ (List.mem_append_right _
+        (List.mem_map.mpr ⟨⟨site, occurrence⟩, ih, rfl⟩))
+    · exact List.mem_append_left _ (List.mem_append_left _
+        (List.mem_map.mpr ⟨⟨site, occurrence⟩, ih, rfl⟩))
 
 /-- Ordinals locate candidates; full typed equality establishes association. -/
 def selectRepeat {inputs outputs} (ordinal : Nat) (body : Region protocolDialect inputs outputs) :

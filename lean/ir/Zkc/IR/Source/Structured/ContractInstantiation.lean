@@ -20,6 +20,8 @@ def position : {Δ out : List Ty} → {body : Region protocolDialect Δ out} →
   | _, _, _, .bindBody _ _ occurrence => 0 :: occurrence.position
   | _, _, _, .bindNext _ _ occurrence => 1 :: occurrence.position
   | _, _, _, .repeatBody _ _ _ _ _ occurrence => 0 :: occurrence.position
+  | _, _, _, .branchBody _ _ _ _ _ _ selected occurrence =>
+    0 :: (if selected then 0 else 1) :: occurrence.position
 
 /-- Enclosing repeat positions and their admitted maxima, outermost first. -/
 def repeats : {Δ out : List Ty} → {body : Region protocolDialect Δ out} →
@@ -30,6 +32,9 @@ def repeats : {Δ out : List Ty} → {body : Region protocolDialect Δ out} →
   | _, _, _, .bindNext _ _ occurrence => occurrence.repeats.map fun (path, bound) => (1 :: path, bound)
   | _, _, _, .repeatBody spec _ _ _ _ occurrence =>
     ([], spec.maximum) :: occurrence.repeats.map (fun (path, bound) => (0 :: path, bound))
+
+  | _, _, _, .branchBody _ _ _ _ _ _ selected occurrence =>
+    occurrence.repeats.map fun (path, bound) ↦ (0 :: (if selected then 0 else 1) :: path, bound)
 
 end ApplicationOccurrence
 

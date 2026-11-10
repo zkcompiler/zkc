@@ -37,11 +37,12 @@ cover this boundary and capacity exhaustion.
 Selected polynomial observations retain their existing admission restriction.
 Checked source-selected Math emission, actual native comparison and CPU
 execution are covered by the [selected source tests](../common/tests/protocol/test_selected_source.py).
-The independent structured-source reader retains Boolean Math selection.
+The independent structured-source reader admits Boolean Math and protocol selection.
 The previous generated Schnorr, Chaum–Pedersen, Sumcheck and FRI connection
 route has been retired. Native admission and execution remain supported;
-complete actual-source installation on the shared Region/Process framework
-remains open. [Formal support](../lean/docs/support.md) records that boundary.
+actual-source installation now connects arithmetic, shared-service and finite-loop
+clients through the common Region/Process constructor. Complete generated-controller
+and cryptographic endpoint correspondence remain open. [Formal support](../lean/docs/support.md) records that boundary.
 
 Oracle capacity, observation and storage inventories retain alternative arm
 coordinates. Native Oracle realization materializes selected common bodies and
@@ -1039,8 +1040,8 @@ answer-independent position maps, closed total helpers, actual polynomial bounds
 explicit admissibility references and fresh occurrence anchors. Their generated
 condition templates and ordered query footprints have native export/check
 commands. The retained logical Lean wire reader and oracle meanings do not
-establish correspondence for these generated controllers. Complete actual-source
-installation and controller correspondence remain open.
+establish correspondence for these generated controllers. Actual-source law installation is supported for the admitted Boolean-control profile;
+generated-controller correspondence remains open.
 These proposals retain exact occurrences and actual operands; they do
 not discharge their predicates. A conservative scheduling analysis reads actual
 prepared bodies and role substitution, separates participant-local stops, and

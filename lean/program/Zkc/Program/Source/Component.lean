@@ -41,6 +41,21 @@ def Values.absent (Value : Ty → Type) : (types : List Ty) → Values (Componen
   | nil => rfl
   | cons value rest ih => simp [Values.present, RoleFamily.sequence, ih]
 
+/-- Successful sequencing identifies the entire ordered optional tuple. -/
+theorem RoleFamily.sequence_eq_some {types : List Ty}
+    (arguments : Values (Component Value) types) (values : Values Value types) :
+    RoleFamily.sequence arguments = some values ↔ arguments = values.present := by
+  induction values with
+  | nil => cases arguments; simp [RoleFamily.sequence, Values.present]
+  | cons value rest ih =>
+    cases arguments with
+    | cons head tail =>
+      cases head with
+      | none => simp [RoleFamily.sequence, Values.present]
+      | some head =>
+        simp [RoleFamily.sequence, Values.present, Option.bind_eq_some_iff, ih]
+        exact and_comm
+
 theorem Operands.eval_present {types args : List Ty}
     (env : Environment Value types) (operands : Operands types args) :
     operands.eval (fun ref => some (env ref)) = (operands.eval env).present := by

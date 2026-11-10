@@ -59,6 +59,11 @@ def Values.get {Value : Ty → Type} {Γ : List Ty} {ty : Ty}
     (value : Value ty) (tail : Values Value Γ) (reference : Var Γ result) :
     (Values.cons value tail).get (.there reference) = tail.get reference := rfl
 
+/-- Ordered tail of an abstract nonempty typed tuple. -/
+def Values.tail {Value : Ty → Type} {Γ : List Ty} {ty : Ty}
+    (values : Values Value (ty :: Γ)) : Values Value Γ :=
+  match values with | .cons _ rest => rest
+
 abbrev Environment (Value : Ty → Type) (Γ : List Ty) :=
   {ty : Ty} → Var Γ ty → Value ty
 
@@ -77,9 +82,11 @@ def Environment.push {Value : Ty → Type} {Γ : List Ty} {ty : Ty}
 /-- Bind ordered results in front of the retained caller context. -/
 def Environment.prepend {Value : Ty → Type} {Γ Δ : List Ty}
     (env : Environment Value Γ) (values : Values Value Δ) : Environment Value (Δ ++ Γ) :=
-  match values with
-  | .nil => env
-  | .cons value rest => Environment.push (Environment.prepend env rest) value
+  match Δ with
+  | [] => env
+  | _ :: _ => fun reference => match reference with
+    | .here => values.get .here
+    | .there tail => Environment.prepend env values.tail tail
 
 /-- Preserve a variable while adding a prefix to its context. -/
 def Var.weakenPrefix {Γ : List Ty} {ty : Ty} (extra : List Ty)

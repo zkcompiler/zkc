@@ -97,7 +97,7 @@ theorem Var.prefixCases {Γ : List Ty} : {Δ : List Ty} → {ty : Ty} → (posit
     · refine .inl ⟨.there inner, by simp [Var.index, index], fun Value env values => ?_⟩
       cases values with
       | cons head rest =>
-        simp only [Environment.prepend, Environment.push, Values.get]
+        simp only [Environment.prepend, Values.get]
         exact value Value env rest
     · exact .inr ⟨outer, rfl⟩
 
@@ -636,6 +636,9 @@ theorem _root_.Zkc.Source.Region.custodySound {holder : String} {custodyFree : S
           cases bodies
           simp only [Operands.eval, Regions.denote]
           rw [create_run]
+          simp only [PIR.Execution.follow, Evaluation.operation, SiteObservations.closed, SiteObservations.silent,
+            PIR.Process.bind]
+          erw [Environment.prepend_singleton, Environment.prepend_singleton]
           refine Agrees.step rfl rfl (Nat.le_succ _) ?_ ?_
             (nextIH _ nextAdmitted _ _ _ (DataAgree.push_custody agree _ 0) ?_)
           · intro entry member outside
@@ -676,6 +679,9 @@ theorem _root_.Zkc.Source.Region.custodySound {holder : String} {custodyFree : S
             rw [value] at checked
             have passed := Ledger.pass_of_check checked
             rw [pass_run holder slot tL passed]
+            simp only [PIR.Execution.follow, Evaluation.operation, SiteObservations.closed, SiteObservations.silent,
+              PIR.Process.bind]
+            erw [Environment.prepend_singleton, Environment.prepend_singleton]
             have available : Available spent envL (envL token) := ⟨slot, token, notSpent .here, rfl⟩
             refine Agrees.step rfl rfl (Nat.le_succ _) ?_ ?_
               (nextIH _ nextAdmitted _ _ _ (DataAgree.push_custody agree _ 0) ?_)

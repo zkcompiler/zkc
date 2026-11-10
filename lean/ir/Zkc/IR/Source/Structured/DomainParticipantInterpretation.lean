@@ -63,6 +63,12 @@ theorem protocolOperationWithOn_interpret {I J : PIR.Signature}
     PIR.Process.interpret_interchange leftActions operations rightActions actions process
   cases op with
   | oracle => rfl
+  | branch spec site =>
+    cases args with | cons selector captures =>
+      cases callbacks with | cons yes rest =>
+        cases rest with | cons no tail =>
+          cases tail
+          exact denoteBranch_interpret operations some spec context self selector captures yes no
   | «repeat» spec site =>
     cases args with
     | cons count values =>

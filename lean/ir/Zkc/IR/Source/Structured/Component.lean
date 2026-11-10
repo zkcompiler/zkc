@@ -66,7 +66,6 @@ theorem componentOperation_map_present (observations : SiteObservations interfac
     componentOperation observations tables (.map spec) args.present .nil =
       (denoteMap tables.closed spec args).bind (fun result => .done result.present) := by
   simp only [componentOperation, RoleFamily.sequence_present]
-  rfl
 
 /-- Direct optional maps require every operand, including unused broadcasts. -/
 theorem componentOperation_map_absent (observations : SiteObservations interface)
@@ -82,7 +81,6 @@ theorem componentOperation_math (observations : SiteObservations interface)
     componentOperation observations tables (.invoke helper) args .nil =
       invoke tables.components helper args := by
   simp only [componentOperation, kind, ↓reduceIte]
-  rfl
 
 theorem componentOperation_local (observations : SiteObservations interface)
     (tables : ComponentTables F G interface) (helper : Helper) (kind : helper.kind = .local)

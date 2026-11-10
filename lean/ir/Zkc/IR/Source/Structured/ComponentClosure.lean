@@ -32,6 +32,5 @@ theorem component_invoke_closed (definitions : List CheckedDefinition) (helper :
     (.invoke helper) arguments .nil).trans ?_
   change (invoke _ helper arguments).bind _ = _
   rw [closed_invoke_componentTablesOn]
-  rfl
 
 end Zkc.Source.Structured.Evaluation

@@ -12,7 +12,7 @@ schema = "zkc.claims/0"
 [[proved]]
 subject = "Structured import"
 result = '''
-Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications and repeats'''
+Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications, Boolean selection and repeats'''
 owners = [["Structured source", "docs/spec/structured-source.md"], ["support", "docs/support.md"]]
 theorems = [
   "Zkc.Source.Structured.Imported.exactSubject",
@@ -55,7 +55,7 @@ theorems = [
 
 [[proved]]
 subject = "Shared quantitative source construction"
-result = "Upper and lower bounds over the actual typed Region/Process meaning, reusable structural operation/callback rules and complete adaptive/stateful model clients; no native-source or generated-controller correspondence is claimed"
+result = "Upper and lower bounds over the actual typed Region/Process meaning, reusable structural operation/callback rules and complete adaptive/stateful model clients; generated-controller correspondence is separate"
 owners = [["Construction", "docs/spec/source-construction.md"], ["Authoring", "docs/development/source-construction.md"]]
 theorems = [
   "ProtocolProof.OperationSpec.lowerBound_iff_triple",
@@ -66,4 +66,17 @@ theorems = [
   "ProtocolProofExamples.AdaptiveSource.honest_completeness",
   "ProtocolProofExamples.StatefulOracle.proximity",
   "ProtocolProofExamples.StatefulOracle.honest_completeness",
+]
+
+[[proved]]
+subject = "Actual-source law installation"
+result = "Exact helper dependency framing and participant installation on admitted native exports; repeated-call reuse, shared service state and finite-loop clients. No generated-controller or compiled cryptographic security endpoint is claimed"
+owners = [["Construction", "docs/spec/source-construction.md"], ["Authoring", "docs/development/source-construction.md"]]
+theorems = [
+  "Zkc.Verification.Construction.helper",
+  "Zkc.Verification.Construction.component",
+  "Zkc.Verification.Construction.protocol",
+  "ActualSourceConstruction.Twice.participant_law",
+  "ActualSourceConstruction.DrawPair.participant_law",
+  "ActualSourceConstruction.Replace.participant_law",
 ]

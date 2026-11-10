@@ -2,7 +2,8 @@
 
 This interface constructs proofs about the existing `Zkc.Source.Region` and its actual
 `RegionMeaning`. It introduces no second source language or execution semantics. Native
-source admission and generated-controller correspondence remain separate connection boundaries.
+source admission supplies the actual typed Region. Generated-controller correspondence remains a
+separate connection boundary.
 
 ## Fixed meaning and request
 
@@ -49,6 +50,44 @@ can register proved specifications. Missing rules are reported as infrastructure
 constructor does not export residual `Region.denote`, `wpFold` or `WP` structure as mathematics.
 This profile does not assert admission of every native operation.
 
+## Actual source association
+
+`import_source` quotes one literal `zkc.structured-source/0` checkpoint into the existing
+`Snapshot` vocabulary. Rendering source bytes into Lean data remains a named trust boundary.
+The ordinary admission checker must return a program; its success and the materialized program's
+exact equality are kernel checked. The literal participates in the module's dependency graph.
+Materialization does not replace admission or introduce a second semantic tree.
+
+`source_helper` and `source_protocol` select declarations from that admitted program. The
+signature, entire body, output layout and membership equation are derived from the selected
+member. A spelling or digest only locates a candidate. Equal keys do not make different bodies
+interchangeable. The helper association contains the full signature and erased body tree.
+
+`bind_source_helper` and `bind_source_protocol` install common rules against the actual linked
+unit. They retain its semantic dependency closure, ordered actual arguments, role substitutions,
+service handles, callback captures and stopping outcomes. Present optional operands can reuse
+the same closed helper law. Optional Math calls retain dependency-precise behavior; absence is
+not replaced by a blanket strictness assumption.
+
+The caller supplies a named mathematical law for the selected body and interpretation. The same
+checked law is instantiated at each actual call. A changed dependency requires a law valid under
+the new table or an independently proved transport; body membership alone establishes neither.
+The public participant rule retains the selected role and both input and output placement.
+Boolean protocol branches check both arms and execute only the selected arm. Missing active
+selectors stop as incomplete; inactive participants execute neither arm.
+
+Typed environments resolve a lookup from the ordered type context and variable position, even
+when an operation's result tuple is abstract. This is structural infrastructure. Companions do
+not reconstruct lexical slots, empty mark results or enclosing frames.
+
+The installation path uses ordinary named theorems and the existing specification database.
+Operation libraries may register their operational equations; these equations expose the same
+interpreter rather than copying its traversal into a protocol companion. Pure equations require
+proof of the corresponding total computation on their stated domain. Stateful, failing and
+probabilistic contracts retain the full outcome-aware meaning. Law coverage, interface
+conformance and a proof of a fixed claim remain distinct judgments. A direct checked proof does
+not require law registration, and it does not discharge an unrelated public coverage promise.
+
 ## Choices, templates and companions
 
 `construct_region with_invariants [term, ...]` elaborates each mathematical value against the
@@ -75,6 +114,8 @@ The default constructor uses upstream one-step VC generation and its specificati
 with checked dependent application where projected Region value types require ordinary
 elaborator unification. Continuations are exposed before applying a preceding call's law.
 Otherwise an opaque operation expectation can hide later reusable calls inside a semantic fold.
+Named laws for the actual body are tried before generic constructor unfolding;
+priority orders candidates within each group, and application checks their complete types.
 Only privately introduced intermediate potentials are synthesized. Generalization follows
 Lean's delayed-assignment abstraction map, preserving state and branch-hypothesis dependencies.
 
@@ -104,7 +145,7 @@ applications, repeated/nested calls and count-independent finite-loop theorem re
 See the [authoring and measurement guide](../development/source-construction.md) for the
 complete scope, author inputs and reproduction commands.
 
-These are independent model clients, not completed native Sumcheck/FRI connections. Actual
-source association, generated-controller correspondence and the original security endpoints
-remain separate obligations. The constructor does not certify an arbitrary native operation
+These are independent model clients, not completed native Sumcheck/FRI connections. Generated-controller correspondence and concrete protocol security endpoints
+remain separate obligations. Actual-source construction tests establish their stated source laws,
+not full native protocol security. The constructor does not certify an arbitrary native operation
 or infer the intended security property from executable code.
