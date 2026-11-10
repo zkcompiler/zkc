@@ -1,0 +1,18 @@
+{
+  "challenge_module": "LockedStatements",
+  "solution_module": "LockedStatements",
+  "theorem_names": [
+    "ActualSourceConstruction.DrawPair.participant_law",
+    "ActualSourceConstruction.Replace.participant_law",
+    "ActualSourceConstruction.Twice.participant_law",
+    "Zkc.Verification.Construction.component",
+    "Zkc.Verification.Construction.helper",
+    "Zkc.Verification.Construction.protocol"
+  ],
+  "definition_names": [],
+  "permitted_axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ]
+}
