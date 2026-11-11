@@ -80,3 +80,48 @@ theorems = [
   "ActualSourceConstruction.DrawPair.participant_law",
   "ActualSourceConstruction.Replace.participant_law",
 ]
+
+[[proved]]
+subject = "Proposition-valued readings"
+result = "Charged, exact and cost readings of the actual typed Region/Process meaning, constructed by the common constructor with one rule per primitive node and connected by adequacy to the retained Fiat–Shamir endpoint and an interactive endpoint; model clients: Sumcheck soundness, soundness for a prover-chosen statement sent in the clear (identity extractor, not extraction from a commitment), an exact three-move characterization, and the opening check in an ideal algebraic game (representations fixed before the secret, no published reference string; not KZG evaluation binding). These clients are model verifiers; imported core sides are in the row of the core language. No compiled protocol is connected"
+owners = [["Weakest preconditions", "docs/spec/weakest-preconditions.md"], ["Construction", "docs/spec/source-construction.md"], ["Authoring", "docs/development/source-construction.md"]]
+theorems = [
+  "ZkcSecurity.Obligations.WeakestPrecondition.call_spec",
+  "ZkcSecurity.Obligations.WeakestPrecondition.call_cost",
+  "ZkcSecurity.Obligations.WeakestPrecondition.charged_of_triple",
+  "ZkcSecurity.Obligations.WeakestPrecondition.costBound_of_triple",
+  "ZkcSecurity.Obligations.WeakestPrecondition.bounded_of_exact",
+  "ZkcSecurity.Interactive.soundness",
+  "ProtocolProofExamples.ChargedSumcheck.fiat_shamir_soundness",
+  "ProtocolProofExamples.ChargedSumcheck.interactive_soundness",
+  "ProtocolProofExamples.ExtractionSumcheck.extraction_soundness",
+  "ProtocolProofExamples.ExactThreeMove.transcript_decides",
+  "ProtocolProofExamples.SetupOpening.setup_soundness",
+]
+
+[[proved]]
+subject = "Core language"
+result = "A kernel-checked model of `zkc.core/0` packages: typed definitions, residual well-formedness and, for every side, a process over one effect signature, with equations for one operation at a time and generated table and entry equations. The common constructor walks a side at a literal side with one step per operation, reuses a law of a callee through `apply`, and reads the side by a transcript interface with an explicit policy for secrets. Clients, for every model: the exact reading of the Schnorr verifier and of the setup and verifier of an opening protocol (a characterization of runs, not binding), and the Sumcheck verifier's interactive `rounds / \\|F\\|` and Fiat–Shamir `(queries + rounds) / \\|F\\|` bounds under field and restricted multilinearity laws of the model, which the model that restricts a table by folding satisfies: at that model a claim that is not the sum of a table of `2^n` scalars is accepted with probability at most `n / \\|F\\|`. Oracle operations, `match`, contracts, stages other than the original and the package bytes are outside"
+owners = [["Core language model", "docs/spec/core-language.md"], ["Construction", "docs/spec/source-construction.md"], ["Authoring", "docs/development/source-construction.md"]]
+theorems = [
+  "Zkc.Core.Reason.stop_ne_incomplete",
+  "Zkc.Core.sideMeaning_step",
+  "Zkc.Core.repeat_meaning",
+  "Zkc.Core.apply_meaning",
+  "Zkc.Core.agreed_single",
+  "Zkc.Core.Program.table_unfold",
+  "Zkc.Core.Program.entry_there",
+  "Zkc.Tests.Core.Schnorr.honest_accepts",
+  "Zkc.Tests.Core.Sumcheck.sumcheck_verifier",
+  "Zkc.Core.Step.pure_row",
+  "Zkc.Core.Step.apply",
+  "Zkc.Core.Step.repeat",
+  "Zkc.Core.Transcript.forall_recovered",
+  "Zkc.Tests.Verification.Core.Schnorr.verifier_decides",
+  "Zkc.Tests.Verification.Core.Sumcheck.round_wrong",
+  "Zkc.Tests.Verification.Core.Sumcheck.interactive_soundness",
+  "Zkc.Tests.Verification.Core.Sumcheck.fiat_shamir_soundness",
+  "Zkc.Tests.Verification.Core.Sumcheck.fold_laws",
+  "Zkc.Tests.Verification.Core.Sumcheck.table_soundness",
+  "Zkc.Tests.Verification.Core.Opening.setup_verifier_decides",
+]

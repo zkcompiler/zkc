@@ -8,6 +8,7 @@ do not expand implemented support.
 ## Meaning and construction
 
 - [Shared semantics](spec/semantics.md), [weakest preconditions](spec/weakest-preconditions.md)
+- [Core language](spec/core-language.md): types, sides, dialects, side meaning and the `zkc.core/0` importer
 - [Source construction](spec/source-construction.md) and [authoring](development/source-construction.md)
 - [Structured source](spec/structured-source.md), [logical decoding](spec/structured-source-foundation.md)
 - [Nominal data](spec/nominal-data.md), [numerical source](spec/numerical-source.md)

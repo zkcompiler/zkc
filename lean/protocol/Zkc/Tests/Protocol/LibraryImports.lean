@@ -27,9 +27,11 @@ import Zkc.Protocol.Components.Installation
 import Zkc.Protocol.Components.Interpretation
 import Zkc.Protocol.Components.Representation
 import Zkc.Protocol.Components.ServiceInstallation
+import Zkc.Protocol.Construction.Component
 import Zkc.Protocol.Construction.Control
 import Zkc.Protocol.Construction.Process
 import Zkc.Protocol.Construction.Region
+import Zkc.Protocol.Construction.Truth
 import Zkc.Protocol.Construction.WP
 import Zkc.Protocol.Internal.Closure
 import Zkc.Protocol.Internal.Contract
@@ -160,6 +162,7 @@ import Zkc.Protocol.Logic.Oracle.PermutationExposure.Sampling
 import Zkc.Protocol.Logic.Oracle.PermutationExposure.State
 import Zkc.Protocol.Logic.Transcript.Budget
 import Zkc.Protocol.Logic.Transcript.CostComposition
+import Zkc.Protocol.Logic.Transcript.Interactive
 import Zkc.Protocol.Logic.Transcript.Interface
 import Zkc.Protocol.Logic.Transcript.Keyed
 import Zkc.Protocol.Logic.Transcript.Lifting
@@ -167,6 +170,7 @@ import Zkc.Protocol.Logic.Transcript.Reduction
 import Zkc.Protocol.Logic.Transcript.Typed
 import Zkc.Protocol.Logic.WeakestPrecondition
 import Zkc.Protocol.Obligations.Assembly
+import Zkc.Protocol.Obligations.Bounded
 import Zkc.Protocol.Obligations.Charged
 import Zkc.Protocol.Obligations.Component
 import Zkc.Protocol.Obligations.Derivation
@@ -187,6 +191,12 @@ import Zkc.Tests.Protocol.Construction.GuardedAdaptive
 import Zkc.Tests.Protocol.Construction.OracleInstallation
 import Zkc.Tests.Protocol.Construction.Pilot
 import Zkc.Tests.Protocol.Construction.ProcessContinuations
+import Zkc.Tests.Protocol.Construction.Readings.Controls
+import Zkc.Tests.Protocol.Construction.Readings.ExactThreeMove
+import Zkc.Tests.Protocol.Construction.Readings.Extraction
+import Zkc.Tests.Protocol.Construction.Readings.SetupOpening
+import Zkc.Tests.Protocol.Construction.Readings.Sumcheck
+import Zkc.Tests.Protocol.Construction.Regressions
 import Zkc.Tests.Protocol.Construction.SharedChallengeSource
 import Zkc.Tests.Protocol.Construction.Sharing
 import Zkc.Tests.Protocol.Construction.SharingAudit
@@ -205,3 +215,5 @@ import Zkc.Tests.Protocol.Models.SharedState
 import Zkc.Tests.Protocol.Models.TransferControls
 import Zkc.Tools.Protocol.ComponentCost
 import Zkc.Tools.Protocol.Construction
+import Zkc.Tools.Protocol.ConstructionAudit
+import Zkc.Tools.Protocol.Readings

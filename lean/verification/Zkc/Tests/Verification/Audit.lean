@@ -7,7 +7,7 @@ import Zkc.Tools.Program.DeclarationAudit
 
 run_cmd do
   let env ← Lean.getEnv
-  let families : List Lean.Name := [`Zkc.Verification, `Zkc.Tests.Verification]
+  let families : List Lean.Name := [`Zkc.Verification, `Zkc.Tools.Verification, `Zkc.Tests.Verification]
   for imported in env.header.modules do
     if families.any (·.isPrefixOf imported.module) && !imported.importAll then
       throwError "audit requires private module data: {imported.module}"

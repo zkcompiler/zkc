@@ -28,6 +28,67 @@ initialize registerTraceClass `Zkc.construction
 initialize constructionSimp : SimpExtension ←
   registerSimpAttr `construction_simp "structural normalization for source proof construction"
 
+/-- Normalization of the obligations of proposition-valued readings that remain after
+construction. The registration is global wherever its module is imported, but `construct`
+applies the set only to the remaining goals whose statement mentions the carrier
+`ProtocolProof.Truth`, its constructor or its projection (`mentionsTruth`) when the final
+normalization starts; other goals are never rewritten by it. On each such goal it is applied
+twice: before and after the structural `simp_all`. Stepping never uses these lemmas, so they
+cannot remove the shape `pre ⊑ wp …` while rules are still being applied. -/
+initialize constructionResidual : SimpExtension ←
+  registerSimpAttr `construction_residual
+    "normalization of residual obligations stated over `ProtocolProof.Truth`"
+
+/-- Definitions that structural normalization evaluates. An application of a registered
+definition is replaced by the result of unfolding it and reducing the matches of its body, whose
+scrutinees are decided by evaluation. An application whose match is not decided stays as written,
+so a symbolic argument never exposes a match. This serves definitions indexed by a decided value,
+such as a transport along the membership of a literal set: no equation can rewrite them, because
+the two sides of such an equation have types that agree only after evaluation. -/
+initialize constructionEvaluated : SimpleScopedEnvExtension Name NameSet ←
+  registerSimpleScopedEnvExtension {
+    addEntry := fun names name => names.insert name
+    initial := {} }
+
+initialize registerBuiltinAttribute {
+  name := `construction_eval
+  descr := "a definition that source proof construction evaluates when its matches are decided"
+  applicationTime := .afterTypeChecking
+  add := fun declaration _ kind => constructionEvaluated.add declaration kind }
+
+/-- Whether a statement mentions the assertion carrier of proposition-valued readings: the type
+`ProtocolProof.Truth`, its constructor or its projection. Named without an import, since this
+module does not depend on the carrier's module. -/
+def mentionsTruth (statement : Expr) : Bool :=
+  (statement.find? fun part => match part with
+    | .const name _ =>
+        name == `ProtocolProof.Truth || name == `ProtocolProof.Truth.mk ||
+          name == `ProtocolProof.Truth.holds
+    | .proj typeName _ _ => typeName == `ProtocolProof.Truth
+    | _ => false).isSome
+
+/-- The final structural normalization of the remaining goals, in order. Every goal receives the
+structural `simp_all`; a goal that mentions the carrier also receives the residual normalization
+immediately before and after it, so the second application also reaches what the structural
+simplification exposes in that goal. -/
+def normalizeRemaining : TacticM Unit := do
+  let residual := !(← constructionResidual.getTheorems).lemmaNames.isEmpty
+  let mut result := []
+  for goal in ← getGoals do
+    if ← goal.isAssigned then continue
+    let statement ← goal.withContext <| instantiateMVars (← goal.getType)
+    let reading := residual && mentionsTruth statement
+    setGoals [goal]
+    if reading then
+      evalTactic (← `(tactic| simp (config := { failIfUnchanged := false }) only
+        [construction_residual]))
+    evalTactic (← `(tactic| all_goals try simp_all only [construction_simp]))
+    if reading then
+      evalTactic (← `(tactic| all_goals simp (config := { failIfUnchanged := false }) only
+        [construction_residual]))
+    result := result ++ (← getGoals)
+  setGoals result
+
 /-- Filter only impossible body heads before dependent unification. Structural constructor
 rules inspect the actual constructor; a different named law cannot replace its source. -/
 def compatibleRegionRule (pattern actual : Expr) : MetaM Bool := do
@@ -47,6 +108,28 @@ def compatibleRegionRule (pattern actual : Expr) : MetaM Bool := do
     return !head.isConst || !constructor head.constName! || supplied == head
   return !body.getAppFn.isConst || supplied == body.getAppFn
 
+/-- An equation for one constructor of an operation cannot describe a call of another. Full
+unification may still accept it after unfolding both sides, leaving the parameters of the unused
+case unassigned, so a candidate whose left side differs from the actual program in a
+constructor-headed argument is rejected before unification, as region bodies are. Proof
+arguments are not compared: proofs of the same proposition unify whatever their constructors. -/
+def compatibleEquation (pattern actual : Expr) : MetaM Bool := do
+  let some name := pattern.getAppFn.constName? | return true
+  unless actual.getAppFn.constName? == some name &&
+      pattern.getAppNumArgs == actual.getAppNumArgs do return true
+  let environment ← getEnv
+  let constructor (value : Expr) : Option Name := do
+    let head ← value.getAppFn.constName?
+    match environment.find? head with
+    | some (.ctorInfo _) => some head
+    | _ => none
+  for (supplied, argument) in pattern.getAppArgs.zip actual.getAppArgs do
+    let some expected := constructor supplied | continue
+    if ← (try isProof argument catch _ => pure false) then continue
+    if let some found := constructor (← withDefault (whnf argument)) then
+      if found != expected then return false
+  return true
+
 /-- Prefer a law for this named body over a rule that unfolds its constructor.
 Priority still orders laws within each group; every candidate is checked on application. -/
 def namesActualRegion (pattern actual : Expr) : MetaM Bool := do
@@ -59,6 +142,48 @@ def namesActualRegion (pattern actual : Expr) : MetaM Bool := do
   return match (← getEnv).find? body.constName! with
     | some (.ctorInfo _) => false
     | _ => true
+
+/-- The answer of a premise that evaluation decides: an equation between Boolean terms that both
+reduce to literals. Such a premise states a decided fact about the actual program, such as the
+membership of a literal role in a literal set. A premise of another form, or one that mentions a
+value evaluation cannot decide, has no answer and remains an obligation. -/
+def decidedPremise? (premise : Expr) : MetaM (Option Bool) := do
+  let_expr Eq sort left right := premise | return none
+  unless sort.isConstOf ``Bool do return none
+  let literal (value : Expr) : MetaM (Option Bool) := do
+    let value ← withDefault (whnf value)
+    if value.isConstOf ``Bool.true then return some true
+    if value.isConstOf ``Bool.false then return some false
+    return none
+  let some left ← literal left | return none
+  let some right ← literal right | return none
+  return some (left == right)
+
+/-- Settle the obligations of an applied law that evaluation decides. One that holds is closed
+by reflexivity. When one fails, the law does not describe the actual program: the result is `none`
+and the caller tries the next candidate, so laws for one operation that differ in a decided premise
+select one another. Every other obligation is returned unchanged. -/
+def settleDecided (goals : List MVarId) : MetaM (Option (List MVarId)) := do
+  let mut remaining := []
+  for goal in goals do
+    if ← goal.isAssigned then continue
+    let statement ← instantiateMVars (← goal.getType)
+    match ← goal.withContext (decidedPremise? statement) with
+    | some true =>
+      let_expr Eq _ left _ := statement | return none
+      goal.assign (← goal.withContext (mkExpectedTypeHint (← mkEqRefl left) statement))
+    | some false =>
+      trace[Zkc.construction] "refuted premise {statement}"
+      return none
+    | none => remaining := remaining ++ [goal]
+  return some remaining
+
+/-- Assign a parameter of a law that the program, its interpretation and its postconditions do
+not determine: an instance of a class is found by instance synthesis. No other value is chosen. -/
+def synthesizeParameter (parameter type : Expr) : MetaM Bool := do
+  unless (← isClass? type).isSome do return false
+  let some found ← synthInstance? type | return false
+  isDefEq parameter found
 
 /-- Reuse a named law with the actual postcondition before general consequence rules.
 This preserves inferable mathematical parameters instead of turning them into choice holes. -/
@@ -76,8 +201,9 @@ def applyExactPostSpec (goal : MVarId) (candidate : SpecAttr.SpecTheorem)
       let parameter ← instantiateMVars parameter
       if parameter.isMVar then
         let type ← instantiateMVars (← inferType parameter)
-        if type.hasMVar || !(← isProp type) then return none
-        premises := premises ++ [parameter.mvarId!]
+        if type.hasMVar then return none
+        if ← isProp type then premises := premises ++ [parameter.mvarId!]
+        else unless ← synthesizeParameter parameter type do return none
     let target ← instantiateMVars (← goal.getType)
     let_expr Lean.Order.PartialOrder.rel _ _ expected _ := target | return none
     let context ← withLocalDeclD `program info.Prog fun program => do
@@ -111,10 +237,13 @@ def applyExactPostSpec (goal : MVarId) (candidate : SpecAttr.SpecTheorem)
     let parameter ← instantiateMVars parameter
     if parameter.isMVar then
       let type ← instantiateMVars (← inferType parameter)
-      if type.hasMVar || !(← isProp type) then
+      if type.hasMVar then
         trace[Zkc.construction] "unfixed parameter {parameter}: {type}"
         return none
-      obligations := obligations ++ [parameter.mvarId!]
+      if ← isProp type then obligations := obligations ++ [parameter.mvarId!]
+      else unless ← synthesizeParameter parameter type do
+        trace[Zkc.construction] "unfixed parameter {parameter}: {type}"
+        return none
   let target ← instantiateMVars (← goal.getType)
   let_expr Lean.Order.PartialOrder.rel _ _ expected _ := target | return none
   let premise ← mkFreshExprSyntheticOpaqueMVar
@@ -185,6 +314,28 @@ partial def assignDerived (value result : Expr) : MetaM Unit := do
       throwError "cyclic structural continuation bound"
     marker.assign assigned
 
+/-- The answer of a `Decidable` instance that reduces to a fixed Boolean. `Decidable` is a
+structure; `Decidable.isTrue` and `Decidable.isFalse` abbreviate its constructor, so the weak
+head normal form of a decided instance is `Decidable.intro b proof` with `b` a Boolean literal. -/
+def decidedAnswer? (decision : Expr) : MetaM (Option Bool) := do
+  unless decision.isAppOfArity ``Decidable.intro 3 do return none
+  let answer ← withDefault (whnf decision.getAppArgs[1]!)
+  if answer.isConstOf ``Bool.true then return some true
+  if answer.isConstOf ``Bool.false then return some false
+  return none
+
+/-- The branch that a decided `ite` or `dite` selects, exactly as written. The branch is not
+reduced: a named program in it stays named, so its law still applies. -/
+def selectedBranch (selected : Expr) (answer : Bool) : MetaM Expr := do
+  let arguments := selected.getAppArgs
+  let branch := if answer then arguments[3]! else arguments[4]!
+  let extra := arguments.extract 5 arguments.size
+  if selected.isAppOf ``ite then return mkAppN branch extra
+  let decided ← mkEqRefl (toExpr answer)
+  let proof ← mkAppOptM (if answer then ``of_decide_eq_true else ``of_decide_eq_false)
+    #[some arguments[1]!, some arguments[2]!, some decided]
+  return (mkAppN (branch.app proof) extra).headBeta
+
 def prepareConditional (goal : MVarId) (derived : Array MVarId) :
     MetaM (Option (List MVarId × Array MVarId)) := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
@@ -192,11 +343,11 @@ def prepareConditional (goal : MVarId) (derived : Array MVarId) :
   let selected := match isWPApp? right with | some info => info.prog | none => right
   unless selected.isAppOf ``ite || selected.isAppOf ``dite do return none
   let decision ← withDefault (whnf selected.getAppArgs[2]!)
-  if decision.isAppOf ``Decidable.isTrue || decision.isAppOf ``Decidable.isFalse then
-    let reduced ← withDefault (whnf selected)
+  if let some answer ← decidedAnswer? decision then
+    let branch ← selectedBranch selected answer
     let target := match isWPApp? right with
-      | some info => mkAppN info.head ((info.args.set! 7 reduced) ++ info.excessArgs)
-      | none => reduced
+      | some info => mkAppN info.head ((info.args.set! 7 branch) ++ info.excessArgs)
+      | none => branch
     let next ← goal.change (← mkAppM ``Lean.Order.PartialOrder.rel #[left, target])
     return some ([next], #[])
   let mut added := #[]
@@ -209,6 +360,12 @@ def prepareConditional (goal : MVarId) (derived : Array MVarId) :
       #[some predicate, some condition, some selected.getAppArgs[2]!, some yes, some no]
     assignDerived left selectedBound
     added := #[yes.mvarId!, no.mvarId!]
+    -- Split on the condition the bound is built for: `SplitIf.splitIfAt?` would select an `if`
+    -- nested inside that condition and leave the derived branches unassigned.
+    let (yes, no) ← goal.byCasesDec condition selected.getAppArgs[2]!
+      (← mkFreshBinderNameForTactic `h)
+    return some ([← simpIfTarget yes.mvarId (useNewSemantics := true),
+      ← simpIfTarget no.mvarId (useNewSemantics := true)], added)
   if let some (yes, no) ← SplitIf.splitIfAt? goal selected none then
     return some ([← simpIfTarget yes.mvarId (useNewSemantics := true),
       ← simpIfTarget no.mvarId (useNewSemantics := true)], added)
@@ -269,17 +426,21 @@ def applyDependentSpec (goal : MVarId) (regionOnly : Bool := false) (equationsOn
       | .triple => continue
       | .simp _ => pure ()
     unless ← compatibleRegionRule candidate.pattern.pattern info.prog do continue
+    if candidate.kind matches .simp _ then
+      unless ← compatibleEquation candidate.pattern.pattern info.prog do continue
     trace[Zkc.construction] "candidate {candidate.proof} for {info.prog.getAppFn}"
     let saved ← saveState
     try
       if let some goals ← applyExactPostSpec goal candidate info then
-        return some goals
+        if let some goals ← settleDecided goals then return some goals
+        saved.restore
+        continue
       saved.restore
       let some rule ← (tryMkBackwardRuleFromSpec candidate info).run |
         saved.restore
         continue
-      let goals ← goal.apply rule.expr
-      return some goals
+      if let some goals ← settleDecided (← goal.apply rule.expr) then return some goals
+      saved.restore
     catch error =>
       if error.isInterrupt || error.isRuntime then throw error
       let message ← error.toMessageData.toString
@@ -317,28 +478,80 @@ def prepareCall (goal : MVarId) : MetaM (Option (List MVarId)) := goal.withConte
   let child ← goal.replaceTargetEq rewritten.eNew rewritten.eqProof
   return some (child :: rewritten.mvarIds)
 
+/-- Whether a reduction stopped at a match or a recursor whose scrutinee is not decided, or at
+a function that still awaits arguments. -/
+def undecided (result : Expr) : MetaM Bool := do
+  let environment ← getEnv
+  return match result.getAppFn with
+    | .const name _ => isMatcherCore environment name || isAuxRecursor environment name ||
+        isRecCore environment name
+    | .proj .. | .lam .. => true
+    | _ => false
+
+/-- One application of a definition, or of a match of its body, evaluated: the definition is
+unfolded and the matches are reduced, their scrutinees decided by evaluation. A number that
+evaluation decides becomes its numeral. No result is returned when a match is not decided, or
+when the definition is applied to fewer arguments than its body binds. -/
+def evaluateDecided (term : Expr) : MetaM (Option Expr) := withDefault do
+  let some name := term.getAppFn.constName? | return none
+  unless term.isApp do return none
+  if (← whnfR (← inferType term)).isConstOf ``Nat then
+    if let some number := (← whnf term).rawNatLit? then return some (mkNatLit number)
+  let unfolded ← if isMatcherCore (← getEnv) name then pure term else
+    match ← unfoldDefinition? term (ignoreTransparency := true) with
+    | some unfolded => pure unfolded
+    | none => return none
+  let result ← whnfCore unfolded
+  if ← undecided result then return none
+  return some result
+
+/-- The definitions of typed slot access. -/
+def slotAccess : List Name :=
+  [``Zkc.Source.Environment.prepend, ``Zkc.Source.Environment.push, ``Zkc.Source.Values.get]
+
 /-- Normalize typed slot access with the actual context, even when its type list is a
-named dialect signature. Only environment projections are reduced; named bodies and calls
-remain visible to the specification database. -/
+named dialect signature. Environment projections are reduced, and applications of the
+definitions registered for evaluation whose matches are decided; named bodies and calls
+remain visible to the specification database. Slot access is reduced with reducible unfolding,
+which suffices for a context written as a list; when that stops at a match, because the context
+is a list only after evaluation, the access is evaluated instead. A match that an earlier
+reduction left from the body of one of these definitions is evaluated in the same way. -/
 def reduceEnvironment (goal : MVarId) : MetaM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
+  let evaluated := constructionEvaluated.getState (← getEnv)
+  let environment ← getEnv
   let reduced ← Meta.transform target (post := fun term => do
     if term.isAppOfArity ``Zkc.Source.Environment.prepend 8 ||
         term.isAppOfArity ``Zkc.Source.Environment.push 8 ||
         term.isAppOfArity ``Zkc.Source.Values.get 6 then
       if let some unfolded ← unfoldDefinition? term (ignoreTransparency := true) then
-        return .visit (← whnfR unfolded)
+        let reduced ← whnfR unfolded
+        if ← undecided reduced then
+          if let some result ← evaluateDecided term then return .visit result
+        return .visit reduced
       return .done term
+    if let some name := term.getAppFn.constName? then
+      let owner := if isMatcherCore environment name then name.getPrefix else name
+      if evaluated.contains owner || (owner != name && slotAccess.contains owner) then
+        if let some result ← evaluateDecided term then return .visit result
     return .done term)
   if reduced == target then return goal
   goal.change reduced
 
 def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
   let roots ← getGoals
+  let mut requests := []
   for goal in ← getGoals do
     let fixed ← goal.withContext <| instantiateMVars (← goal.getType)
     if fixed.hasMVar then
       throwError "source construction requires a fixed request before rule or choice selection"
+    -- A request may name its reading through a reducible triple abbreviation.
+    let exposed ← goal.withContext <| whnfR fixed
+    if !fixed.isAppOf ``Std.WP.Triple && exposed.isAppOf ``Std.WP.Triple then
+      requests := requests ++ [← goal.change exposed]
+    else
+      requests := requests ++ [goal]
+  setGoals requests
   let mut derived : Array MVarId := #[]
   let mut choiceIndex := 0
   let mut pending ← getGoals
@@ -459,7 +672,9 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
   let mut unresolved := []
   for goal in remaining do
     unless ← goal.isAssigned do
-      unless ← finishDerived goal derived do unresolved := unresolved ++ [goal]
+      unless ← finishDerived goal derived do
+        -- A choice assigned after a goal was set aside may have exposed slot access in it.
+        unresolved := unresolved ++ [← reduceEnvironment goal]
   setGoals unresolved
   evalTactic (← `(tactic| all_goals simp (config := { failIfUnchanged := false }) only [
     construction_simp, ProtocolProof.OperationSpec.wp_upper, ProtocolProof.OperationSpec.wp_lower,
@@ -477,7 +692,7 @@ def construct (choices : Array (TSyntax `term)) : TacticM Unit := do
     Zkc.Source.Environment.push]))
   evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
 
-  evalTactic (← `(tactic| all_goals try simp_all only [construction_simp]))
+  normalizeRemaining
   evalTactic (← `(tactic| all_goals try exact Lean.Order.PartialOrder.rel_refl))
   evalTactic (← `(tactic| all_goals try solve | apply le_rfl))
   evalTactic (← `(tactic| all_goals try contradiction))

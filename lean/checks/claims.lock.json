@@ -55,6 +55,36 @@
       "structural": "48f78df2f8e1cb82",
       "explicit": "81e07fe99a27f0d2"
     },
+    "ProtocolProofExamples.ChargedSumcheck.fiat_shamir_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.Sumcheck",
+      "structural": "55062db97c4e780f",
+      "explicit": "b2e0e45502a54d8e"
+    },
+    "ProtocolProofExamples.ChargedSumcheck.interactive_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.Sumcheck",
+      "structural": "4cf296b340d21c43",
+      "explicit": "58c10842a3631392"
+    },
+    "ProtocolProofExamples.ExactThreeMove.transcript_decides": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.ExactThreeMove",
+      "structural": "c0fbb5aedae90856",
+      "explicit": "4c881ca39c4c029e"
+    },
+    "ProtocolProofExamples.ExtractionSumcheck.extraction_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.Extraction",
+      "structural": "2d793671d5033977",
+      "explicit": "f31183cae9debd34"
+    },
+    "ProtocolProofExamples.SetupOpening.setup_soundness": {
+      "package": "protocol",
+      "module": "Zkc.Tests.Protocol.Construction.Readings.SetupOpening",
+      "structural": "a34f8a054164a786",
+      "explicit": "285a98437c8d1998"
+    },
     "ProtocolProofExamples.StatefulOracle.honest_completeness": {
       "package": "protocol",
       "module": "Zkc.Tests.Protocol.Construction.StatefulOracle",
@@ -66,6 +96,72 @@
       "module": "Zkc.Tests.Protocol.Construction.StatefulOracle",
       "structural": "00cfad007a306873",
       "explicit": "c76bb41dad538a53"
+    },
+    "Zkc.Core.Program.entry_there": {
+      "package": "ir",
+      "module": "Zkc.IR.Core.Meaning",
+      "structural": "04e505e3d28e00cc",
+      "explicit": "0c16443d94ef03dc"
+    },
+    "Zkc.Core.Program.table_unfold": {
+      "package": "ir",
+      "module": "Zkc.IR.Core.Meaning",
+      "structural": "44dc010744f47cad",
+      "explicit": "ed1f5aa3a3cbc19d"
+    },
+    "Zkc.Core.Reason.stop_ne_incomplete": {
+      "package": "ir",
+      "module": "Zkc.IR.Core.Types",
+      "structural": "edd83d2868e7dfda",
+      "explicit": "9861b7f176ec3546"
+    },
+    "Zkc.Core.Step.apply": {
+      "package": "verification",
+      "module": "Zkc.Verification.Core.Steps",
+      "structural": "ce644d6c9cc00b1f",
+      "explicit": "bdaf1b747c135a44"
+    },
+    "Zkc.Core.Step.pure_row": {
+      "package": "verification",
+      "module": "Zkc.Verification.Core.Steps",
+      "structural": "59b1f80f3f868e85",
+      "explicit": "2116a230996afa30"
+    },
+    "Zkc.Core.Step.repeat": {
+      "package": "verification",
+      "module": "Zkc.Verification.Core.Steps",
+      "structural": "f357201710a0da20",
+      "explicit": "ee97eab2d611d7f7"
+    },
+    "Zkc.Core.Transcript.forall_recovered": {
+      "package": "verification",
+      "module": "Zkc.Verification.Core.Transcript",
+      "structural": "e22af75cc3985e0e",
+      "explicit": "c877fcc77c0dc381"
+    },
+    "Zkc.Core.agreed_single": {
+      "package": "ir",
+      "module": "Zkc.IR.Core.Laws",
+      "structural": "a751f9eda1a77c22",
+      "explicit": "0d7341ecf0d694b2"
+    },
+    "Zkc.Core.apply_meaning": {
+      "package": "ir",
+      "module": "Zkc.IR.Core.Laws",
+      "structural": "10667d07a1e19de1",
+      "explicit": "979fe0b888aedccf"
+    },
+    "Zkc.Core.repeat_meaning": {
+      "package": "ir",
+      "module": "Zkc.IR.Core.Laws",
+      "structural": "254c69cbe3052517",
+      "explicit": "55790a6eb7d3f780"
+    },
+    "Zkc.Core.sideMeaning_step": {
+      "package": "ir",
+      "module": "Zkc.IR.Core.Laws",
+      "structural": "b23f62d4d27ac3e2",
+      "explicit": "ec1c2e1b5648e2ee"
     },
     "Zkc.Protocols.Sumcheck.Multilinear.check_of_residual": {
       "package": "protocol",
@@ -90,6 +186,60 @@
       "module": "Zkc.IR.Source.Structured.Import",
       "structural": "f0429d280e132dd2",
       "explicit": "c0d2089731e865c6"
+    },
+    "Zkc.Tests.Core.Schnorr.honest_accepts": {
+      "package": "ir",
+      "module": "Zkc.Tests.IR.Core.Schnorr",
+      "structural": "a0add32bed9b5336",
+      "explicit": "e9a50a481238fb5d"
+    },
+    "Zkc.Tests.Core.Sumcheck.sumcheck_verifier": {
+      "package": "ir",
+      "module": "Zkc.Tests.IR.Core.Sumcheck",
+      "structural": "bc8cbd26237b37af",
+      "explicit": "66d20de30ae4ab2e"
+    },
+    "Zkc.Tests.Verification.Core.Opening.setup_verifier_decides": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Core.Opening",
+      "structural": "2e434cd68d8d4acf",
+      "explicit": "f0b53286a1828451"
+    },
+    "Zkc.Tests.Verification.Core.Schnorr.verifier_decides": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Core.Schnorr",
+      "structural": "cde13929f6a60acb",
+      "explicit": "afbfddfa8f46e433"
+    },
+    "Zkc.Tests.Verification.Core.Sumcheck.fiat_shamir_soundness": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Core.Sumcheck",
+      "structural": "477a9ba5871ffd57",
+      "explicit": "cb370b97474e6fc0"
+    },
+    "Zkc.Tests.Verification.Core.Sumcheck.fold_laws": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Core.Sumcheck",
+      "structural": "fe6cacf50768e3dd",
+      "explicit": "1dde1a81c964b207"
+    },
+    "Zkc.Tests.Verification.Core.Sumcheck.interactive_soundness": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Core.Sumcheck",
+      "structural": "17550b28b67b7dba",
+      "explicit": "d9f2ce6436fb47ff"
+    },
+    "Zkc.Tests.Verification.Core.Sumcheck.round_wrong": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Core.Sumcheck",
+      "structural": "4da5c901218e4b6d",
+      "explicit": "919968563e030980"
+    },
+    "Zkc.Tests.Verification.Core.Sumcheck.table_soundness": {
+      "package": "verification",
+      "module": "Zkc.Tests.Verification.Core.Sumcheck",
+      "structural": "941d6e7d7b350855",
+      "explicit": "ef6372d914e7dc85"
     },
     "Zkc.Verification.Construction.component": {
       "package": "verification",
@@ -150,6 +300,42 @@
       "module": "Zkc.Adapters.ArkLib.Sumcheck.Multilinear.Residual",
       "structural": "e7051ec100b08bec",
       "explicit": "c20073950024470c"
+    },
+    "ZkcSecurity.Interactive.soundness": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.Transcript.Interactive",
+      "structural": "9fe617ba14036c00",
+      "explicit": "b5957c13435c6c11"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.bounded_of_exact": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "385f58aaa6d17ce3",
+      "explicit": "1105b92a66f9c869"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.call_cost": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "73f7facf3d1f4cdd",
+      "explicit": "a1d712bced777adb"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.call_spec": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "355ffb1b8c423f20",
+      "explicit": "7311129c2b0a20d5"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.charged_of_triple": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "cdbaa162e9d82493",
+      "explicit": "2ca28cb13391c440"
+    },
+    "ZkcSecurity.Obligations.WeakestPrecondition.costBound_of_triple": {
+      "package": "protocol",
+      "module": "Zkc.Protocol.Logic.WeakestPrecondition",
+      "structural": "68653080339c5901",
+      "explicit": "83b56cecb0b16ef8"
     }
   }
 }
