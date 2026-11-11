@@ -8,9 +8,20 @@
     "ProtocolProof.OperationSpec.upperBound_iff_triple",
     "ProtocolProofExamples.AdaptiveSource.adaptive_soundness",
     "ProtocolProofExamples.AdaptiveSource.honest_completeness",
+    "ProtocolProofExamples.ChargedSumcheck.fiat_shamir_soundness",
+    "ProtocolProofExamples.ChargedSumcheck.interactive_soundness",
+    "ProtocolProofExamples.ExactThreeMove.transcript_decides",
+    "ProtocolProofExamples.ExtractionSumcheck.extraction_soundness",
+    "ProtocolProofExamples.SetupOpening.setup_soundness",
     "ProtocolProofExamples.StatefulOracle.honest_completeness",
     "ProtocolProofExamples.StatefulOracle.proximity",
-    "Zkc.Protocols.Sumcheck.Multilinear.check_of_residual"
+    "Zkc.Protocols.Sumcheck.Multilinear.check_of_residual",
+    "ZkcSecurity.Interactive.soundness",
+    "ZkcSecurity.Obligations.WeakestPrecondition.bounded_of_exact",
+    "ZkcSecurity.Obligations.WeakestPrecondition.call_cost",
+    "ZkcSecurity.Obligations.WeakestPrecondition.call_spec",
+    "ZkcSecurity.Obligations.WeakestPrecondition.charged_of_triple",
+    "ZkcSecurity.Obligations.WeakestPrecondition.costBound_of_triple"
   ],
   "definition_names": [],
   "permitted_axioms": [

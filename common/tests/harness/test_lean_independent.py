@@ -61,7 +61,7 @@ def artifacts(audit, root, directory, legacy=False):
 
 def test_repository_covers_all_locked_declarations():
     groups = checker().configuration(ROOT / 'lean')
-    assert sum(len(g['theorems']) for g in groups.values()) == 25
+    assert sum(len(g['theorems']) for g in groups.values()) == 56
     assert not {'main', 'proof', 'security'} & groups.keys()
     locked = checker().read_json(ROOT / 'lean/checks/claims.lock.json')['theorems']
     assert {name for group in groups.values() for name in group['theorems']} == set(locked)
