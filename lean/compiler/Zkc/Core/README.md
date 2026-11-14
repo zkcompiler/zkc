@@ -251,7 +251,7 @@ vocabulary, and the formal package (`lean/formal`) states and proves properties 
 meaning. A module of the core imports only modules of the core and of Lean's prelude and
 standard library (`Init`, `Std`); `lake exe zkc-audit` checks this, the axioms, `@[extern]` and
 `@[implemented_by]` of its declarations, and that the kernel accepts them when they are
-replayed.
+replayed on an environment that takes only Lean's libraries as built.
 
 Run `lake build` from `lean/compiler`. It builds the library, the tool and the checks;
 the kernel comparisons, the printed links and their statements are checked by the

@@ -47,15 +47,17 @@ Schnorr proof is replayed by `scripts/replay_derived_schnorr.py`, so the tests n
 `zkc-audit` imports the core, the frontend and the tests of the core from their built files
 and checks, for every declaration, that its axioms are among `propext`, `Classical.choice` and
 `Quot.sound` and that it carries no `@[extern]` or `@[implemented_by]`. It replays the
-declarations of the core and of its tests through the kernel, so that a declaration stored
-without the kernel's check is refused; the frontend is not replayed, since it is the unproved part
-of the compiler and no theorem of the project rests on it. It checks that a module of the core
-imports only the core, `Init` and `Std`, that no module of the core or of the frontend imports a
-module of the tests or of the tools, that every file of the two is imported by its root module
-(`Zkc/Core.lean`, `Zkc/Frontend.lean`), and that every file of the tests is built and audited. It
-prints the number of `partial` definitions of each library, what it replayed and what it took as
-built, and exits with 0 only when the libraries pass and it refuses each of its controls
-(`Zkc/Tools/Audit/Controls/`) by the rule that the control is for.
+declarations of the core and of its tests through the kernel, together with every module that
+they import outside Lean's libraries (the tool that the tests import), on an environment that
+takes only Lean's libraries as built, so that a declaration stored without the kernel's check is
+refused; the frontend is not replayed, since it is the unproved part of the compiler and no
+theorem of the project rests on it, and a replayed module that imports it is a finding. It
+checks that a module of the core imports only the core, `Init` and `Std`, that no module of the
+core or of the frontend imports a module of the tests or of the tools, that every file of the two
+is imported by its root module (`Zkc/Core.lean`, `Zkc/Frontend.lean`), and that every file of the
+tests is built and audited. It prints the number of `partial` definitions of each library, what
+it replayed and what it took as built, and exits with 0 only when the libraries pass and it
+refuses each of its controls (`Zkc/Tools/Audit/Controls/`) by the rule that the control is for.
 
 ## Files
 

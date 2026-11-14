@@ -70,4 +70,6 @@ Run `lake build`, `lake test` and `lake exe zkc-formal-audit` from this director
 (`Zkc.Tools.Audit` of the compiler's package) checks that a module of `Zkc.Formal` imports only
 modules of the core and of the formal library, besides Lean's prelude; and, for every declaration
 of `Zkc.Formal` and of its tests `Zkc.Tests.Formal`, its axioms, `@[extern]` and
-`@[implemented_by]`, and that the kernel accepts it when it is replayed from the built files.
+`@[implemented_by]`, and that the kernel accepts it when it is replayed from the built files,
+together with every module that it imports outside Lean's libraries (of the core, of the tests of
+the core and of the tools), on an environment that takes only Lean's libraries as built.

@@ -61,7 +61,8 @@ each part of the tests checks, and what the second reading does not compare.
 its tests in `lean/compiler`, the formal library (`Zkc.Formal`) and its tests in `lean/formal`.
 
 - Every declaration is replayed through Lean's kernel, so a declaration that was compiled
-  without the kernel's check is refused.
+  without the kernel's check is refused. What these libraries import from the project is
+  replayed with them; only Lean's own libraries are taken as built.
 - No declaration uses `sorry` or an axiom beyond Lean's three (`propext`, `Classical.choice`
   and `Quot.sound`), and none has `@[extern]` or `@[implemented_by]`.
 - The core imports only the core, `Init` and `Std`; the formal library only the core and
@@ -70,8 +71,8 @@ its tests in `lean/compiler`, the formal library (`Zkc.Formal`) and its tests in
 
 The frontend (`Zkc.Frontend`) is checked for the same axioms, attributes and imports but is not
 replayed: no theorem rests on it, and admission checks what it emits. The audit runs on
-controls that break each rule and passes only when it refuses all of them. It takes about two
-minutes.
+controls that break each rule and passes only when it refuses all of them. It takes about
+three minutes.
 
 ### The documents
 
