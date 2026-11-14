@@ -190,8 +190,10 @@ of that control runs in `just test-integration` without Lean.
 project/dependency objects. A dependency-free package is built and its test driver run
 without Program; Program's sources and dependencies are prepared, not built, only for
 its consumer-workspace audit. These can be expensive. `just test-lean` also builds the
-Core and Formal packages, which are outside Program's closure, runs their kernel checks
-and Formal's test driver, and checks their sources.
+Core, Frontend and Formal packages, which are outside Program's closure, runs their kernel
+checks and the test drivers of Frontend and Formal, and checks their sources. The
+Frontend's driver checks the language reference of the repository (`language/`), or the
+one that `ZKC_LANGUAGE_REFERENCE` names.
 
 The core lane checks maintained source ownership, declaration/axiom records and
 external consumers. The optional integration lane includes the retained ArkLib and

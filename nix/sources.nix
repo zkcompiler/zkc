@@ -155,6 +155,8 @@ let
     };
     leanChecks.paths = [
       "lean"
+      "common/unicode"
+      "language"
     ]
     ++ runner
     ++ [

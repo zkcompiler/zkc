@@ -63,6 +63,11 @@ are completeness of one derived Schnorr scheme under those hypotheses and an inv
 ten rounds of one Sumcheck package; neither is a soundness result. Its theorems are not in
 the ledger. The [package guide](../formal/README.md) states the scope.
 
+## Frontend package
+
+The Frontend package is the compiler of the source language. It has no theorem: what it
+emits is admitted by Core at every compilation, and its behaviour is tested.
+
 ## Independent mathematics
 
 Retained libraries include algebraic rounds, multilinear table laws, commitment

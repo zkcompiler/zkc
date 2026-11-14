@@ -5,6 +5,7 @@ The shared lean directory is a harness, never a Lake package.
 """
 from pathlib import Path
 import json
+import os
 import re
 import tomllib
 
@@ -12,10 +13,11 @@ LEAN = Path(__file__).resolve().parents[1]
 DIRECTORIES = {"program": "program", "ir": "ir", "protocol": "protocol",
                "verification": "verification", "arklib": "adapters/arklib",
                "clean": "adapters/clean", "applications": "applications", "core": "core",
-               "formal": "formal"}
+               "frontend": "frontend", "formal": "formal"}
 OWNERS = {"program": "Program", "ir": "IR", "protocol": "Protocol",
           "verification": "Verification", "arklib": "ArkLib", "clean": "Clean",
-          "applications": "Applications", "core": "Core", "formal": "Formal"}
+          "applications": "Applications", "core": "Core", "frontend": "Frontend",
+          "formal": "Formal"}
 PACKAGES = {
     name: (LEAN / directory, (f"Zkc.Adapters.{OWNERS[name]}" if name in ("arklib", "clean")
                              else f"Zkc.{OWNERS[name]}",
@@ -28,17 +30,18 @@ NAMES = {name: f"zkc_{name}" for name in PACKAGES}
 # Core has no Lake dependency. Its library declares names that the core model in IR
 # also declares (`Zkc.Core.*`, `Zkc.Source.Var`, `PIR.Process`), so the two import
 # closures stay disjoint, and core is not part of the core-only selection, whose
-# declaration records are matched to the theorem ledger by name. Formal states and
-# proves properties over the core's meaning and so requires core; nothing imports it,
-# and its closure stays outside Program's as core's does.
+# declaration records are matched to the theorem ledger by name. Frontend, the
+# compiler of the source language, emits the core's packages and so requires core;
+# no proof imports it, and its closure stays outside Program's as core's does. Formal
+# states and proves properties over the core's meaning and so requires core.
 DEPENDENCIES = {"program": (), "ir": ("program",), "protocol": ("program",),
                 "verification": ("ir", "protocol"), "arklib": ("protocol",),
                 "clean": ("ir",), "applications": ("verification", "arklib", "clean"),
-                "core": (), "formal": ("core",)}
+                "core": (), "frontend": ("core",), "formal": ("core",)}
 UPSTREAM = {"program": {"mathlib"}, "ir": set(),
             "protocol": {"VCVio", "PolyFun", "CompPoly"}, "verification": set(),
             "arklib": {"Arklib"}, "clean": {"Clean", "CompPoly"}, "applications": set(),
-            "core": set(), "formal": set()}
+            "core": set(), "frontend": set(), "formal": set()}
 CORE = ("program", "ir", "protocol", "verification")
 # The declaration audit is a Program tool. A package whose closure does not reach
 # Program cannot import it through Lake; its audit runs in a consumer workspace
@@ -99,10 +102,19 @@ def audited(name):
 
 
 def test_arguments(name, root=LEAN, environment=None):
-    """The arguments of `lake test` for a package with a test driver; None without one."""
+    """The arguments of `lake test` for a package with a test driver; None without one.
+
+    The frontend's driver reads the language reference of the repository, beside `root`, or
+    the one that ZKC_LANGUAGE_REFERENCE names; in a tree that has neither, such as a copy of
+    the packages alone, it runs only the tests that need none.
+    """
     config = tomllib.loads((package_directory(name, root) / 'lakefile.toml').read_text())
     if 'testDriver' not in config:
         return None
+    environment = os.environ if environment is None else environment
+    reference = environment.get('ZKC_LANGUAGE_REFERENCE') or (root.parent / 'language/conformance').is_dir()
+    if name == 'frontend' and not reference:
+        return ['--', '--without-reference']
     return []
 
 

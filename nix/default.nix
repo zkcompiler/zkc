@@ -207,6 +207,7 @@ in
       clean
       applications
       core
+      frontend
       formal
       ;
     lake-sources = lakeSources;
@@ -226,6 +227,7 @@ in
       inherit leanToolchain environment;
       lean = formal.applications;
       core = formal.core;
+      frontend = formal.frontend;
       formal = formal.formal;
       source = sources.leanChecks;
       python3 = python;

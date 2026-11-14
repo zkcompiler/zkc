@@ -110,11 +110,12 @@ class LeanArchitecture(unittest.TestCase):
         self.assertEqual(p.selected(['clean']), ['program', 'ir', 'clean'])
         self.assertEqual(p.selected(['verification']), ['program', 'ir', 'protocol', 'verification'])
         self.assertEqual(p.selected(['applications', 'clean', 'applications']),
-                         [name for name in p.PACKAGES if name not in ('core', 'formal')])
-        # Core has no maintained dependency; Formal requires it alone.
+                         [name for name in p.PACKAGES if name not in ('core', 'frontend', 'formal')])
+        # Core has no maintained dependency; Frontend and Formal require it alone.
         self.assertEqual(p.selected(['core']), ['core'])
+        self.assertEqual(p.selected(['frontend']), ['core', 'frontend'])
         self.assertEqual(p.selected(['formal']), ['core', 'formal'])
-        self.assertEqual(p.selected(['applications', 'formal']), list(p.PACKAGES))
+        self.assertEqual(p.selected(['applications', 'frontend', 'formal']), list(p.PACKAGES))
         self.assertEqual(p.selected([]), [])
         for name in ('main', 'proof', 'security', 'unknown'):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'unknown Lean packages'):
@@ -483,7 +484,7 @@ class LeanArchitecture(unittest.TestCase):
             (targets / package['name']).mkdir()
 
         with patch.object(reproduce, 'materialize', side_effect=materialize), patch.object(reproduce, 'prepare', side_effect=prepared.append):
-            pins = reproduce.prepare_dependencies(self.root, [], ['applications', 'core', 'formal'])
+            pins = reproduce.prepare_dependencies(self.root, [], ['applications', 'core', 'frontend', 'formal'])
         self.assertEqual(len(materialized), len(set(materialized)))
         self.assertEqual(set(pins), set().union(*self.packages.UPSTREAM.values()))
         self.assertEqual(prepared, [directory for directory, _ in self.packages.PACKAGES.values()])
@@ -567,7 +568,7 @@ class LeanArchitecture(unittest.TestCase):
 
         # Accept keyword arguments without invoking Lean.
         with patch.object(checker, 'HeaderParser', side_effect=lambda **_: Headers()):
-            result = checker.check(['applications', 'core', 'formal'], 'unused-lake')
+            result = checker.check(['applications', 'core', 'frontend', 'formal'], 'unused-lake')
             self.assertEqual(result['packages'], list(self.packages.PACKAGES))
             self.assertEqual(result['modules'], sum(len(self.packages.package_modules(name)) for name in self.packages.PACKAGES))
             source_path = self.packages.module_path('Zkc.Program.Example')
@@ -588,7 +589,7 @@ class LeanArchitecture(unittest.TestCase):
                 checker.check(['ir'], 'unused-lake')
     def test_reproduction_runs_every_selected_build_in_order_and_records_scopes(self):
         reproduce = importlib.import_module('reproduce')
-        args = SimpleNamespace(package=['applications', 'core', 'formal'], core_only=False,
+        args = SimpleNamespace(package=['applications', 'core', 'frontend', 'formal'], core_only=False,
                                output=Path(self.temporary.name) / 'reproduction',
                                dependency_cache=None, integration_dependency_cache=[], lake='lake')
         built = []
@@ -596,7 +597,7 @@ class LeanArchitecture(unittest.TestCase):
         def build(lake, directory, log, env, markers):
             built.append(directory)
             # A package outside Program's closure has no in-package audit markers.
-            self.assertEqual('DEPENDENCY-AUDIT-PASS' in markers, directory.name not in ('core', 'formal'))
+            self.assertEqual('DEPENDENCY-AUDIT-PASS' in markers, directory.name not in ('core', 'frontend', 'formal'))
             self.assertNotIn('LEAN_PATH', env)
             self.assertEqual(env['ELAN_TOOLCHAIN'], 'leanprover/lean4:v4.35.0')
             return {'status': 'pass'}
@@ -609,8 +610,8 @@ class LeanArchitecture(unittest.TestCase):
                 patch.object(reproduce, 'prepare_dependencies', return_value={}), patch.object(reproduce.support.lake, 'resolve', return_value='/tools/lake'), patch.object(reproduce.subprocess, 'check_output', return_value='Lean (version 4.35.0)'), patch.object(reproduce.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), patch.object(reproduce, 'checked_build', side_effect=build), patch.object(reproduce, 'clean_control', return_value={'status': 'pass'}) as control, patch.object(reproduce, 'run_clients', return_value={'status': 'pass'}) as clients, patch('builtins.print'):
             reproduce.run(args)
         self.assertEqual(built, [self.packages.package_directory(name, args.output / 'lean') for name in self.packages.PACKAGES])
-        self.assertEqual(audited_by_consumer, ['core', 'formal'])
-        self.assertEqual(tested, ['core', 'formal'])
+        self.assertEqual(audited_by_consumer, ['core', 'frontend', 'formal'])
+        self.assertEqual(tested, ['core', 'frontend', 'formal'])
         self.assertEqual(control.call_count, 1)
         self.assertEqual(clients.call_count, 1)
         record = json.loads((args.output / 'result.json').read_text())

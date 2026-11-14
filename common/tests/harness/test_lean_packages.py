@@ -31,12 +31,12 @@ def test_core_package_is_dependency_free_and_disjoint_from_the_ir_core_model():
     from support.packages import DEPENDENCIES, PACKAGES, audited, check_closure, selected
     assert DEPENDENCIES['core'] == () and selected(['core']) == ['core']
     assert check_closure('core', PACKAGES['core'][0]) == set()
-    # Formal requires the core alone, and nothing requires it.
-    for name in ('formal',):
+    # The frontend and formal require the core alone, and nothing requires them.
+    for name in ('frontend', 'formal'):
         assert DEPENDENCIES[name] == ('core',) and selected([name]) == ['core', name]
         assert not any(name in DEPENDENCIES[other] for other in PACKAGES)
         assert check_closure(name, PACKAGES[name][0]) == {'zkc_core'}
-    for name in ('core', 'formal'):
+    for name in ('core', 'frontend', 'formal'):
         assert not audited(name)
     assert audited('program')
     # Both declare names such as Zkc.Source.Var: neither closure may reach the other.
@@ -44,10 +44,17 @@ def test_core_package_is_dependency_free_and_disjoint_from_the_ir_core_model():
     assert not permitted('Zkc.IR.Core.Laws', 'Zkc.Core.Laws')
     assert not permitted('Zkc.Tools.Core.Main', 'Zkc.IR.Core.Meaning')
     assert permitted('Zkc.Tests.Core.Check', 'Zkc.Tools.Core.PrintLinked')
-    # Formal may import core; nothing imports formal, and it does not reach Program.
+    # The frontend may import core; nothing imports the frontend.
+    assert permitted('Zkc.Frontend.Syntax.Lexer', 'Zkc.Core.Laws')
+    assert not permitted('Zkc.Core.Laws', 'Zkc.Frontend.Syntax.Lexer')
+    assert not permitted('Zkc.Program.Execution', 'Zkc.Frontend.Syntax.Lexer')
+    assert not permitted('Zkc.Frontend.Syntax.Lexer', 'Zkc.Program.Execution')
+    # Formal may import core; nothing imports formal, and it reaches neither Program nor
+    # the frontend.
     assert permitted('Zkc.Formal.Relation.Values', 'Zkc.Core.Meaning')
     assert not permitted('Zkc.Core.Laws', 'Zkc.Formal.Relation.Values')
     assert not permitted('Zkc.Formal.Relation.Values', 'Zkc.Program.Execution')
+    assert not permitted('Zkc.Formal.Relation.Values', 'Zkc.Frontend.Syntax.Lexer')
 
 
 def test_companion_modules_are_declaration_record_inputs():
@@ -200,8 +207,8 @@ def test_partial_or_retired_module_prefix_is_unowned(module):
 def test_selection_retires_old_keys_and_resolves_diamond_once():
     from support.packages import selected
     assert selected(['verification']) == ['program', 'ir', 'protocol', 'verification']
-    assert selected(['applications', 'core', 'formal']) == selected()
-    assert not {'core', 'formal'} & set(selected(['applications']))
+    assert selected(['applications', 'core', 'frontend', 'formal']) == selected()
+    assert not {'core', 'frontend', 'formal'} & set(selected(['applications']))
     for old in ('main', 'proof', 'security'):
         with pytest.raises(ValueError, match='unknown Lean packages'): selected([old])
 

@@ -77,6 +77,9 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.lean-core}/lean/core/lake-manifest.json
   test ! -e ${sources.lean-core}/lean/program
   test ! -e ${sources.lean-core}/lean/ir
+  test -f ${sources.lean-frontend}/lean/frontend/lake-manifest.json
+  test ! -e ${sources.lean-frontend}/lean/core
+  test ! -e ${sources.lean-frontend}/lean/program
   test -f ${sources.lean-formal}/lean/formal/lake-manifest.json
   test ! -e ${sources.lean-formal}/lean/core
   test ! -e ${sources.lean-formal}/lean/program

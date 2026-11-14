@@ -44,7 +44,8 @@ declarations. An empty native endpoint registry confers no native guarantee.
 | [Verification](verification/README.md) | Mathematical laws instantiated against concrete IR meanings |
 | [ArkLib](adapters/arklib/README.md), [Clean](adapters/clean/README.md) | Explicitly scoped external mathematical adapters |
 | [Applications](applications/README.md) | Surviving concrete downstream consumers |
-| [Core](core/README.md) | The re-founded core language and its tool: elaboration, steps, links, executor and structural theorems. No Lake dependency; its dependent is Formal, and its import closure is disjoint from those of the other packages |
+| [Core](core/README.md) | The re-founded core language and its tool: elaboration, steps, links, executor and structural theorems. No Lake dependency; its dependents are Frontend and Formal, and its import closure is disjoint from those of the other packages |
+| [Frontend](frontend/README.md) | The lexer, parser and canonical printer of the source language, and its checker, which types bodies and emits packages of Core. Requires Core; no dependent |
 | [Formal](formal/README.md) | Statements about admitted programs over Core's meaning, and their proofs: the relation of two models of a program, the model of a package's rows in an arithmetic, and the arithmetic of BLS12-381 related to the model that runs. Requires Core; no dependent |
 
 Source meaning, mathematical assumptions, source association and a security claim
