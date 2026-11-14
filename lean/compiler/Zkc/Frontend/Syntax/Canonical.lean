@@ -16,10 +16,13 @@ text alone:
   the order of the roster of the enclosing protocol; a role that is not in the roster keeps its
   place after those that are. Outside a protocol the order is kept.
 - FM1: a body that is one expression is printed as an expression body: a `def` body of only
-  `return e` becomes the suite form with the expression alone.
+  `return e` becomes the suite form with the expression alone, except `return ()`, since a line
+  `()` is the empty statement (GR1).
 - FM2: `else reject` on a guard is removed; `-> ()` on a `def` and on a function member of an
-  interface is removed; `#[site(x)]` on an event whose binder is the single name `x` is removed;
-  a role-map entry `O = O` is removed, and the map with it when it is left empty.
+  interface is removed, except on a `def` without parameters in the suite of a module, which
+  without it is a member definition (GR4); `#[site(x)]` on an event whose binder is the single
+  name `x` is removed; a role-map entry `O = O` is removed, and the map with it when it is left
+  empty.
 
 The other rows of FM2 (`@S` on a binder, `from p` on a send or a query, `@R` on `reduces` and
 `proves`, `_ <-` on an application) compare an annotation with what the checker computes, and
@@ -100,8 +103,11 @@ mutual
     | .«case» span pattern body => .«case» span pattern (body.map (stmt roster))
 end
 
+/-- A body of only `return e` becomes an expression body (FM1), except `return ()`: a line `()`
+of a suite is the empty statement (GR1), so that body keeps its `return`. -/
 def body : Body → Body
-  | .statements span #[] result => .suiteExpression span result
+  | .statements span #[] result =>
+    if result matches .unit _ then .statements span #[] result else .suiteExpression span result
   | .statements span statements result => .statements span (statements.map (stmt none)) result
   | other => other
 
@@ -109,9 +115,12 @@ def defBinding : DefBinding → DefBinding
   | .body value => .body (body value)
   | other => other
 
-def defNode (value : Def) : Def :=
+/-- A `def`, with `inModule` when it stands in the suite of a module. There `def Name():` and
+`def Name() =` are member definitions (GR4), so a `def` without parameters keeps `-> ()` (FM2). -/
+def defNode (inModule : Bool) (value : Def) : Def :=
+  let keepsUnit := inModule && value.params.isEmpty
   { value with
-    result := if value.result.any isUnitType then none else value.result
+    result := if value.result.any isUnitType && !keepsUnit then none else value.result
     binding := defBinding value.binding }
 
 def protocolHead (value : ProtocolHead) : ProtocolHead :=
@@ -148,7 +157,7 @@ mutual
         | other => other
       .«module» (.«module» span pub name sp b w moduleBody)
     | .interface value => .interface { value with members := value.members.map (·.map member) }
-    | .«def» value => .«def» (defNode value)
+    | .«def» value => .«def» (defNode false value)
     | .protocol value => .protocol (protocol value)
     | .relation value =>
       .relation { value with
@@ -159,6 +168,7 @@ mutual
     | other => other
 
   partial def moduleItem : ModuleItem → ModuleItem
+    | .item (.«def» value) => .item (.«def» (defNode true value))
     | .item value => .item (item value)
     | .memberDef value => .memberDef { value with binding := defBinding value.binding }
     | other => other

@@ -1,7 +1,7 @@
 # Conformance tests
 
-These are the tests that an implementation of `../LANGUAGE.md` must pass: 502 programs, each
-with the outcome that the rules require. The 322 tests of layer A are frozen with that layer.
+These are the tests that an implementation of `../LANGUAGE.md` must pass: 504 programs, each
+with the outcome that the rules require. The 324 tests of layer A are frozen with that layer.
 The tests of the later layers (77 for layer B, 62 for C, 35 for D, 6 for E) are not frozen:
 their layers are carried, and an outcome that rests on a pending change says so in its note.
 
@@ -82,14 +82,14 @@ By file:
 |---|---|---|---|---|
 | `layer-a-functions-specification.txt` | 15 | 3 | 12 | 0 |
 | `layer-a-interaction.txt` | 46 | 15 | 31 | 0 |
-| `layer-a-lexical-grammar.txt` | 24 | 10 | 14 | 0 |
+| `layer-a-lexical-grammar.txt` | 26 | 12 | 14 | 0 |
 | `layer-a-names-static.txt` | 88 | 30 | 58 | 0 |
 | `layer-a-types-facts.txt` | 149 | 62 | 87 | 0 |
 | `layer-b.txt` | 77 | 12 | 65 | 0 |
 | `layer-c.txt` | 62 | 17 | 45 | 0 |
 | `layer-d.txt` | 35 | 11 | 23 | 1 |
 | `layer-e.txt` | 6 | 2 | 4 | 0 |
-| total | 502 | 162 | 339 | 1 |
+| total | 504 | 164 | 339 | 1 |
 
 By prefix and layer:
 
@@ -97,7 +97,7 @@ By prefix and layer:
 |---|---|---|---|---|---|---|
 | `T-` | 67 | 3 | 10 | 9 | 0 | 89 |
 | `S-`, `I-` | 27 | 3 | 9 | 7 | 0 | 46 |
-| `R-` | 37 | 15 | 17 | 12 | 0 | 81 |
+| `R-` | 39 | 15 | 17 | 12 | 0 | 83 |
 | `V-` | 31 | 5 | 12 | 5 | 0 | 53 |
 | `M-` | 48 | 32 | 13 | 0 | 0 | 93 |
 | `L-` | 18 | 0 | 0 | 0 | 0 | 18 |
@@ -110,6 +110,7 @@ for an acceptance, the rule that its note names):
 |---|---|
 | LX | 11 |
 | GR | 13 |
+| FM | 2 |
 | NL | 28 |
 | SP | 60 |
 | TY | 149 |

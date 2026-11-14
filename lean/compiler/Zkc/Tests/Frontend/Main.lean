@@ -66,6 +66,9 @@ def main (args : List String) : IO UInt32 := do
   tallies := tallies.push (← runSuite "schemes" schemeSuite)
   tallies := tallies.push (← runSuite "session" sessionSuite)
   tallies := tallies.push (← runSuite "libraries/ and examples/" (corpusSuite repository))
+  tallies := tallies.push (← runSuite "formatting keeps a program" (formatCaseSuite repository))
+  tallies := tallies.push (← runSuite "formatting keeps a program: libraries/ and examples/"
+    (corpusFormattingSuite repository))
   tallies := tallies.push (← runSuite "conformance" (conformanceSuite repository))
   tallies := tallies.push (← runSuite "names: conformance of layer A" (conformanceNamesSuite repository))
   tallies := tallies.push (← runSuite "names: libraries/" (libraryNamesSuite repository))

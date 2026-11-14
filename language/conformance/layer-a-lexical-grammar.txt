@@ -1,4 +1,4 @@
-Conformance tests of layer A (frozen): lexical structure and grammar (LX, GR).
+Conformance tests of layer A (frozen): lexical structure, grammar and canonical text (LX, GR, FM).
 One block per test: `=== ID | expect | note`, then the program. See README.md.
 
 === T-L1 | accept | `//` inside a string is text (LX7)
@@ -77,6 +77,23 @@ interface I:
 module M: I:
     def zero(): 0
     def helper() -> nat: 0
+=== R-FM1a | accept, fmt | `return ()` alone keeps its `return`, since a line `()` is the empty statement (FM1, GR1); `-> ()` is removed
+module t
+def f() -> ():
+    return ()
+=== R-FM2a | accept, fmt | in the suite of a module `-> ()` stays on a `def` without parameters, which without it is a member definition (FM2, GR4), and is removed from one with parameters
+module t
+interface I:
+    def zero() -> nat
+module M: I:
+    def zero(): 0
+    def helper() -> ():
+        if true then () else ()
+module N:
+    def helper() -> ():
+        if true then () else ()
+    def scaled(x: nat) -> ():
+        if true then () else ()
 === T-Z10b | refuse GR | a loop whose `where` states the type of its state is not in the grammar
 module t
 type F = primitive("bls12-381.fr")

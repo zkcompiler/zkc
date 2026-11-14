@@ -22,3 +22,5 @@ import Zkc.Tests.Frontend.Schemes
 import Zkc.Tests.Frontend.Session
 import Zkc.Tests.Frontend.Trees
 import Zkc.Tests.Frontend.Keys
+import Zkc.Tests.Frontend.FormatCases
+import Zkc.Tests.Frontend.Formatting

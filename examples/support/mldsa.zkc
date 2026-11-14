@@ -10,7 +10,11 @@ pub interface Parameters where (beta <= gamma1, 1 <= attempts):
     nat gamma1
     nat beta
     nat attempts
+    // The bytes of the challenge seed: λ/4 of FIPS 204, so 32, 48 and 64 for ML-DSA-44, ML-DSA-65
+    // and ML-DSA-87.
+    nat challenge_seed_bytes
 
+// The members of ML-DSA-65 are those of the asset `mldsa65`; its `challenge_seed_bytes` is 48.
 pub module Parameters65: Parameters = asset(mldsa65)
 
 pub type PublicKey<K: Parameters> = primitive("ml-dsa.public_key", K)
@@ -22,8 +26,8 @@ pub type Hint<K: Parameters> = primitive("ml-dsa.hint", K)
 
 // The mask of 64 uniform bytes: the prover samples the bytes and applies the function.
 pub def expand<K: Parameters>(bytes: [byte; 64]) -> Vector<K> = primitive("ml-dsa.expand_mask")
-// The challenge of a 32-byte seed (SampleInBall); the seed is what the verifier draws.
-pub def ball<K: Parameters>(seed: [byte; 32]) -> Challenge<K> = primitive("ml-dsa.sample_in_ball")
+// The challenge of its seed (SampleInBall); the seed is what the verifier draws.
+pub def ball<K: Parameters>(seed: [byte; K::challenge_seed_bytes]) -> Challenge<K> = primitive("ml-dsa.sample_in_ball")
 
 pub def high_bits<K: Parameters>(key: PublicKey<K>, y: Vector<K>) -> HighBits<K> = primitive("ml-dsa.high_bits_of")
 pub def respond<K: Parameters>(y: Vector<K>, c: Challenge<K>, secret: SecretKey<K>) -> Vector<K> = primitive("ml-dsa.respond")
@@ -41,5 +45,5 @@ pub spec def abort_bound<K: Parameters>() -> rational = external("Zkc.MlDsa.abor
 
 pub module Suite: construction::Suite = primitive("suite.ml-dsa")
 pub def expand_mask<K: Parameters>(secret: SecretKey<K>, statement: [byte], site: nat, tries: nat) -> [byte; 64] = primitive("ml-dsa.derive_mask")
-pub def recover_commitment<K: Parameters>(key: PublicKey<K>, seed: [byte; 32], response: (Vector<K>, Hint<K>)) -> HighBits<K> = primitive("ml-dsa.recover_commitment")
+pub def recover_commitment<K: Parameters>(key: PublicKey<K>, seed: [byte; K::challenge_seed_bytes], response: (Vector<K>, Hint<K>)) -> HighBits<K> = primitive("ml-dsa.recover_commitment")
 pub def keygen<K: Parameters>(seed: [byte; 32]) -> (SecretKey<K>, PublicKey<K>) = primitive("ml-dsa.keygen")

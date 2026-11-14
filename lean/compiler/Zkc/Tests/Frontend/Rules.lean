@@ -196,6 +196,14 @@ def printerSuite : TestM Unit := do
   -- FM1: a body of `return e` alone is an expression body
   checkFormat "expression body" "module t\ndef f() -> nat:\n    return 1\n"
     "module t\n\ndef f() -> nat:\n    1\n"
+  -- FM1: `return ()` alone keeps its `return`: a line `()` is the empty statement (GR1)
+  checkFormat "unit body" "module t\ndef f() -> ():\n    return ()\n"
+    "module t\n\ndef f():\n    return ()\n"
+  -- FM2: in the suite of a module, `-> ()` stays on a `def` without parameters, which without it
+  -- is a member definition (GR4), and goes from one with parameters
+  checkFormat "unit result in a module"
+    "module t\nmodule M:\n    def f() -> (): if true then () else ()\n    def g(x: nat) -> (): ()\n    def h() -> () = primitive(\"t.h\")\n"
+    "module t\n\nmodule M:\n    def f() -> (): if true then () else ()\n    def g(x: nat): ()\n    def h() -> () = primitive(\"t.h\")\n"
   -- FM1: one blank line between top-level items, consecutive `use` items as in the source
   checkFormat "blank lines"
     "module t\nuse a::b\nuse a::c\n\n\nuse a::d\ndef f() -> nat: 1\n// about g\n\ndef g() -> nat:\n    x = 1\n\n\n    return x\n"
