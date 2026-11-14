@@ -70,7 +70,7 @@ test-rust:
     python3 common/tests/run.py rust
 
 # Run optional formal controls and independent Lean consumers.
-test-lean: (build-lean "--package" "applications" "--package" "core")
+test-lean: (build-lean "--package" "applications" "--package" "core" "--package" "formal")
     python3 common/tests/run.py lean
 
 # Fetch the selected package closure (default: all maintained packages).

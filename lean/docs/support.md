@@ -53,6 +53,16 @@ are not in the ledger; its declarations are audited in a workspace that also req
 Program. It is independent of the core model in IR. The [package guide](../core/README.md)
 lists the theorems.
 
+## Formal package
+
+The Formal package states properties of admitted programs over Core's meaning. It relates
+the model of a package's rows in an arithmetic to the model that runs, for the operations
+that pass its test, with the laws of the BLS12-381 curve as named hypotheses, and gives
+rules for proving that every run returns an accepted value along a region. Its two clients
+are completeness of one derived Schnorr scheme under those hypotheses and an invariant of
+ten rounds of one Sumcheck package; neither is a soundness result. Its theorems are not in
+the ledger. The [package guide](../formal/README.md) states the scope.
+
 ## Independent mathematics
 
 Retained libraries include algebraic rounds, multilinear table laws, commitment

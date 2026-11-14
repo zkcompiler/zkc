@@ -1,0 +1,36 @@
+name = "zkc_formal"
+version = "0.0.0"
+defaultTargets = ["ZkcFormal", "ZkcFormalTools", "ZkcFormalTests", "zkc-formal-receipts"]
+# a hyphenated name is written in guillemets for Lake to resolve it
+testDriver = "«zkc-formal-receipts»"
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[require]]
+name = "zkc_core"
+path = "../core"
+
+[[lean_lib]]
+name = "ZkcFormal"
+roots = ["Zkc.Formal"]
+globs = ["Zkc.Formal", "Zkc.Formal.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcFormalTools"
+roots = ["Zkc.Tools.Formal"]
+globs = ["Zkc.Tools.Formal", "Zkc.Tools.Formal.+"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "ZkcFormalTests"
+roots = ["Zkc.Tests.Formal"]
+globs = ["Zkc.Tests.Formal", "Zkc.Tests.Formal.+"]
+allowNonModules = true
+
+[[lean_exe]]
+name = "zkc-formal-receipts"
+root = "Zkc.Tests.Formal.Main"
+allowNonModules = true

@@ -11,10 +11,11 @@ import tomllib
 LEAN = Path(__file__).resolve().parents[1]
 DIRECTORIES = {"program": "program", "ir": "ir", "protocol": "protocol",
                "verification": "verification", "arklib": "adapters/arklib",
-               "clean": "adapters/clean", "applications": "applications", "core": "core"}
+               "clean": "adapters/clean", "applications": "applications", "core": "core",
+               "formal": "formal"}
 OWNERS = {"program": "Program", "ir": "IR", "protocol": "Protocol",
           "verification": "Verification", "arklib": "ArkLib", "clean": "Clean",
-          "applications": "Applications", "core": "Core"}
+          "applications": "Applications", "core": "Core", "formal": "Formal"}
 PACKAGES = {
     name: (LEAN / directory, (f"Zkc.Adapters.{OWNERS[name]}" if name in ("arklib", "clean")
                              else f"Zkc.{OWNERS[name]}",
@@ -27,15 +28,17 @@ NAMES = {name: f"zkc_{name}" for name in PACKAGES}
 # Core has no Lake dependency. Its library declares names that the core model in IR
 # also declares (`Zkc.Core.*`, `Zkc.Source.Var`, `PIR.Process`), so the two import
 # closures stay disjoint, and core is not part of the core-only selection, whose
-# declaration records are matched to the theorem ledger by name.
+# declaration records are matched to the theorem ledger by name. Formal states and
+# proves properties over the core's meaning and so requires core; nothing imports it,
+# and its closure stays outside Program's as core's does.
 DEPENDENCIES = {"program": (), "ir": ("program",), "protocol": ("program",),
                 "verification": ("ir", "protocol"), "arklib": ("protocol",),
                 "clean": ("ir",), "applications": ("verification", "arklib", "clean"),
-                "core": ()}
+                "core": (), "formal": ("core",)}
 UPSTREAM = {"program": {"mathlib"}, "ir": set(),
             "protocol": {"VCVio", "PolyFun", "CompPoly"}, "verification": set(),
             "arklib": {"Arklib"}, "clean": {"Clean", "CompPoly"}, "applications": set(),
-            "core": set()}
+            "core": set(), "formal": set()}
 CORE = ("program", "ir", "protocol", "verification")
 # The declaration audit is a Program tool. A package whose closure does not reach
 # Program cannot import it through Lake; its audit runs in a consumer workspace

@@ -31,13 +31,23 @@ def test_core_package_is_dependency_free_and_disjoint_from_the_ir_core_model():
     from support.packages import DEPENDENCIES, PACKAGES, audited, check_closure, selected
     assert DEPENDENCIES['core'] == () and selected(['core']) == ['core']
     assert check_closure('core', PACKAGES['core'][0]) == set()
-    assert not audited('core')
+    # Formal requires the core alone, and nothing requires it.
+    for name in ('formal',):
+        assert DEPENDENCIES[name] == ('core',) and selected([name]) == ['core', name]
+        assert not any(name in DEPENDENCIES[other] for other in PACKAGES)
+        assert check_closure(name, PACKAGES[name][0]) == {'zkc_core'}
+    for name in ('core', 'formal'):
+        assert not audited(name)
     assert audited('program')
     # Both declare names such as Zkc.Source.Var: neither closure may reach the other.
     assert not permitted('Zkc.Core.Laws', 'Zkc.Program.Region.Basic')
     assert not permitted('Zkc.IR.Core.Laws', 'Zkc.Core.Laws')
     assert not permitted('Zkc.Tools.Core.Main', 'Zkc.IR.Core.Meaning')
     assert permitted('Zkc.Tests.Core.Check', 'Zkc.Tools.Core.PrintLinked')
+    # Formal may import core; nothing imports formal, and it does not reach Program.
+    assert permitted('Zkc.Formal.Relation.Values', 'Zkc.Core.Meaning')
+    assert not permitted('Zkc.Core.Laws', 'Zkc.Formal.Relation.Values')
+    assert not permitted('Zkc.Formal.Relation.Values', 'Zkc.Program.Execution')
 
 
 def test_companion_modules_are_declaration_record_inputs():
@@ -190,8 +200,8 @@ def test_partial_or_retired_module_prefix_is_unowned(module):
 def test_selection_retires_old_keys_and_resolves_diamond_once():
     from support.packages import selected
     assert selected(['verification']) == ['program', 'ir', 'protocol', 'verification']
-    assert selected(['applications', 'core']) == selected()
-    assert 'core' not in selected(['applications'])
+    assert selected(['applications', 'core', 'formal']) == selected()
+    assert not {'core', 'formal'} & set(selected(['applications']))
     for old in ('main', 'proof', 'security'):
         with pytest.raises(ValueError, match='unknown Lean packages'): selected([old])
 

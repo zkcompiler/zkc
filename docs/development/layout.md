@@ -12,6 +12,7 @@
 | `lean/adapters/arklib/`, `lean/adapters/clean/` | Pure upstream adapters |
 | `lean/applications/` | Concrete clients downstream of Verification and the adapters |
 | `lean/core/` | The re-founded core language and its tool; no Lake dependency |
+| `lean/formal/` | Statements about admitted programs over the core's meaning, and their proofs; requires the core |
 | [`common/`](../../common/README.md) | Shared build inputs and project-level validation |
 | `common/unicode/` | Pinned source-name data and generation shared by C++ and Rust |
 | `common/tests/` | Native execution integration, installed consumers and documentation/build checks |
