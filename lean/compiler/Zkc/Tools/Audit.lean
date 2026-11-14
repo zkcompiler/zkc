@@ -18,18 +18,19 @@ module of a library:
   library (the recursive ones, a `where` helper of one included: Lean compiles a `partial`
   definition that does not recur as an ordinary one) is reported, so that a new one is a
   visible difference;
-- the kernel accepts it (`replayLibrary`). Reading a constant from a built file says nothing of
+- the kernel accepts it (`replay`). Reading a constant from a built file says nothing of
   whether the kernel checked it: a theorem elaborated under `set_option debug.skipKernelTC` is
-  stored with whatever proof the elaborator built. So the declarations of a library are replayed
-  through the kernel (`Lean.Kernel.Environment.replay`), module after module, on an environment
-  that imports only the modules outside the library that the library imports. The kernel does
+  stored with whatever proof the elaborator built. So the declarations of the libraries are
+  replayed through the kernel (`Lean.Kernel.Environment.replay`), module after module in the
+  order of their imports, together with every module that they import, directly or not, that is
+  not of Lean's libraries (`leanLibraries`): the replay starts from an environment that imports
+  only modules of Lean's libraries, so that a library is checked relative to Lean's libraries
+  alone, and a tool that a library of tests imports is replayed with it. The kernel does
   not check unsafe declarations, and the replay skips them and the code of `partial`
-  definitions, as Lean's own replay does. The modules outside the library are taken as built,
-  and the audit prints which they are: Lean's libraries, modules of the libraries that the
-  audits replay, and modules that no audit replays (the tools that a library of tests imports
-  are such). A library can be left out of the replay, with the
+  definitions, as Lean's own replay does. A library can be left out of the replay, with the
   reason (`Library.withoutReplay`): the frontend is, since it is the unproved part of the
-  compiler and no theorem of the project rests on it.
+  compiler and no theorem of the project rests on it; a replayed module that imports a module
+  of a library left out is a finding.
 
 The rules on imports hold for a library proper and are read from the headers of the modules: a
 module of the library imports only modules of the library itself and of the prefixes that the
@@ -40,9 +41,9 @@ a library of tests is a module of the environment that the audit loads, so that 
 tests is left unbuilt and unaudited.
 
 `run` audits the libraries, then the controls (`controls`): modules under
-`Zkc.Tools.Audit.Controls` that the audit must refuse, each by one rule. The exit code is 0 only
-when the libraries pass and every control is refused by its rule; every finding is one line that
-names the constant or the module and the rule.
+`Zkc.Tools.Audit.Controls` that the audit must refuse, each audited alone and by one rule. The
+exit code is 0 only when the libraries pass and every control is refused by its rule; every
+finding is one line that names the constant or the module and the rule.
 -/
 
 set_option autoImplicit false
@@ -73,7 +74,7 @@ structure Library where
   are checked against the modules that the audit reads. -/
   directory : Option System.FilePath := none
   /-- Why the declarations of the library are not replayed through the kernel, when they are
-  not. -/
+  not. A replayed module that imports a module of the library is then a finding. -/
   withoutReplay : Option String := none
 
 /-- Whether a module is of a library. -/
@@ -87,8 +88,13 @@ def testsAndTools : Array Name := #[`Zkc.Tests, `Zkc.Tools]
 standard library. -/
 def coreImports : Array Name := #[`Init, `Std]
 
-/-- The modules that no audit replays through the kernel: the frontend and the tools. -/
-def neverReplayed : Array Name := #[`Zkc.Frontend, `Zkc.Tools]
+/-- The first components of the modules of Lean's own libraries: the only modules that the replay
+through the kernel takes as built. -/
+def leanLibraries : Array Name := #[`Init, `Std, `Lean, `Lake]
+
+/-- Whether a module is of Lean's own libraries. -/
+def isOfLean (module : Name) : Bool :=
+  leanLibraries.contains module.getRoot
 
 /-- The axioms that a constant of a library may depend on. -/
 def allowedAxioms : Array Name := #[``propext, ``Classical.choice, ``Quot.sound]
@@ -155,12 +161,12 @@ def modulesOf (env : Environment) (library : Library) : Array (Nat × Name) :=
   (env.header.moduleNames.zipIdx.filter fun (module, _) => library.contains module).map
     fun (module, index) => (index, module)
 
-/-- The modules that a module imports, directly or not, and the module itself. -/
-def importClosure (env : Environment) (root : Name) : NameSet := Id.run do
+/-- The modules that some modules import, directly or not, and the modules themselves. -/
+def importClosure (env : Environment) (roots : Array Name) : NameSet := Id.run do
   let indices : Std.HashMap Name Nat := env.header.moduleNames.zipIdx.foldl
     (fun indices (module, index) => indices.insert module index) {}
-  let mut found : NameSet := ({} : NameSet).insert root
-  let mut stack := #[root]
+  let mut found : NameSet := roots.foldl (·.insert ·) {}
+  let mut stack := roots
   while true do
     let some module := stack.back? | break
     stack := stack.pop
@@ -244,62 +250,73 @@ def libraryFiles (directory : System.FilePath) (root : Name) : IO (Array Name) :
 def seconds (milliseconds : Nat) : String :=
   s!"{milliseconds / 1000}.{(milliseconds % 1000) / 100} s"
 
-/-- The replay of the declarations of a library through the kernel, module after module, on an
-environment that imports only the modules outside the library that the library imports: the
-finding of the first module whose declarations the kernel refuses, after which the replay of the
-library stops, and what was replayed and what was taken as built, as lines. -/
-def replayLibrary (env : Environment) (library : Library) (arts : NameMap ImportArtifacts) :
+/-- The replay through the kernel of the declarations of the libraries that are not left out of
+it, together with every module that they import, directly or not, that is not of Lean's
+libraries: module after module, in the order of the environment, on an environment that imports
+only the modules of Lean's libraries that the replayed modules import. A module of a library left
+out of the replay is not replayed, and a replayed module that imports one is a finding, after
+which nothing is replayed: the environment of the replay would hold what that module imports.
+Returns the finding of the first module whose declarations the kernel refuses, after which the
+replay stops, and what was replayed and what was taken as built, as lines. -/
+def replay (env : Environment) (libraries : Array Library) (arts : NameMap ImportArtifacts) :
     IO (Option Finding × Array String) := do
-  let modules := modulesOf env library
-  let mut outside : Array Name := #[]
-  let mut seen : NameSet := {}
-  for (index, _) in modules do
+  let replayed := libraries.filter (·.withoutReplay.isNone)
+  if replayed.isEmpty then return (none, #[])
+  let leftOut (module : Name) : Option Library :=
+    libraries.find? fun library => library.withoutReplay.isSome && library.contains module
+  let moduleNames := env.header.moduleNames
+  let closure := importClosure env
+    (moduleNames.filter fun module => replayed.any (·.contains module))
+  let modules := (moduleNames.zipIdx.filter fun (module, _) =>
+      closure.contains module && !isOfLean module && (leftOut module).isNone).map
+    fun (module, index) => (index, module)
+  let mut base : Array Name := #[]
+  for (index, module) in modules do
     for imported in env.header.moduleData[index]!.imports do
-      unless library.contains imported.module || seen.contains imported.module do
-        seen := seen.insert imported.module
-        outside := outside.push imported.module
+      let target := imported.module
+      if let some library := leftOut target then
+        return (some { subject := module, rule := .kernel
+                       line := s!"{module}: imports {target}, of {library.root}, which is not replayed through the kernel, so no declaration is replayed" },
+          #["the replay through the kernel did not start"])
+      if isOfLean target && !base.contains target then base := base.push target
   let start ← IO.monoMsNow
-  let base ← importModules (outside.map fun module => { module }) {} (loadExts := false)
+  let environment ← importModules (base.map fun module => { module }) {} (loadExts := false)
     (level := .private) (arts := arts)
-  -- a declaration that is already in the environment of the replay would not be checked again
-  if let some module := base.header.moduleNames.find? library.contains then
-    return (some { subject := module, rule := .kernel
-                   line := s!"{module}: the modules outside {library.root} that the library imports import it, so the declarations of {library.root} are not replayed" },
-      #[s!"{library.name}: not replayed through the kernel"])
-  let mut kernel := base.toKernelEnv
-  let mut replayed := 0
+  let mut kernel := environment.toKernelEnv
+  -- the declarations and the modules replayed: of each library, and of each prefix of the modules
+  -- that the libraries import
+  let mut groups : Array (String × Nat × Nat) := replayed.map (·.name, 0, 0)
   let mut skipped := 0
   for (index, module) in modules do
     let data := env.header.moduleData[index]!
     let mut constants : Std.HashMap Name ConstantInfo := {}
+    let mut checked := 0
     for name in data.constNames, info in data.constants do
       constants := constants.insert name info
-      if info.isUnsafe || info.isPartial then skipped := skipped + 1 else replayed := replayed + 1
+      if info.isUnsafe || info.isPartial then skipped := skipped + 1 else checked := checked + 1
     try
       kernel ← kernel.replay constants
     catch error =>
       let message := (toString error).replace "\n" " "
       return (some { subject := module, rule := .kernel
-                     line := s!"{module}: the kernel refuses a declaration when it is replayed: {message}; the modules of {library.root} after it are not replayed" },
-        #[s!"{library.name}: the replay through the kernel stopped at {module}"])
-  -- what the replay took as built: Lean's libraries, the modules of the libraries that an audit
-  -- replays, and the modules that no audit replays
-  let isNeverReplayed (module : Name) := neverReplayed.any (·.isPrefixOf module)
-  let mut fromLean : Array Name := #[]
-  for module in base.header.moduleNames do
-    unless (`Zkc).isPrefixOf module || fromLean.contains module.getRoot do
-      fromLean := fromLean.push module.getRoot
-  let replayedElsewhere := (base.header.moduleNames.filter fun module =>
-    (`Zkc).isPrefixOf module && !isNeverReplayed module).size
-  let notReplayed := base.header.moduleNames.filter isNeverReplayed
-  let mut built := [s!"Lean's libraries {", ".intercalate (fromLean.toList.map toString)}"]
-  if replayedElsewhere > 0 then
-    built := built ++ [s!"{replayedElsewhere} modules of the libraries that the audits replay"]
-  unless notReplayed.isEmpty do
-    built := built ++ [s!"{", ".intercalate (notReplayed.toList.map toString)}, which no audit replays"]
-  return (none, #[
-    s!"{library.name}: replayed through the kernel: {replayed} declarations of {modules.size} modules, in {seconds ((← IO.monoMsNow) - start)}; not replayed: {skipped} unsafe declarations and code of `partial` definitions, which the kernel does not check",
-    s!"  taken as built: {"; ".intercalate built}"])
+                     line := s!"{module}: the kernel refuses a declaration when it is replayed: {message}; the modules after it are not replayed" },
+        #[s!"the replay through the kernel stopped at {module}"])
+    let group := match replayed.find? (·.contains module) with
+      | some library => library.name
+      | none => s!"the modules under {module.getPrefix} that they import"
+    groups := match groups.findIdx? (·.1 == group) with
+      | some position => groups.modify position fun (label, declarations, count) =>
+        (label, declarations + checked, count + 1)
+      | none => groups.push (group, checked, 1)
+  let fromLean := environment.header.moduleNames.foldl (init := #[]) fun roots module =>
+    if roots.contains module.getRoot then roots else roots.push module.getRoot
+  let counts := groups.map fun (label, declarations, count) =>
+    s!"  {label}: {declarations} declarations of {count} module{if count == 1 then "" else "s"}"
+  return (none,
+    #[s!"replayed through the kernel, module after module in the order of their imports, in {seconds ((← IO.monoMsNow) - start)}:"] ++
+    counts ++
+    #[s!"  not replayed: {skipped} unsafe declarations and code of `partial` definitions, which the kernel does not check",
+      s!"  taken as built: Lean's libraries {", ".intercalate (fromLean.toList.map toString)}"])
 
 /-- The audit of libraries in an environment that imports them. `arts` are the built files of
 the modules, for the environments of the replay. -/
@@ -327,14 +344,12 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
             report := report.add name .implementedBy
               s!"{name}: carries `@[implemented_by {implementation}]`"
     report := { report with lines := report.lines.push s!"{library.name}: {partials} partial definitions" }
-    -- the kernel
-    match library.withoutReplay with
-    | some reason =>
+    if let some reason := library.withoutReplay then
       report := { report with lines := report.lines.push s!"{library.name}: not replayed through the kernel: {reason}" }
-    | none =>
-      let (finding, lines) ← replayLibrary env library arts
-      if let some finding := finding then report := { report with findings := report.findings.push finding }
-      report := { report with lines := report.lines ++ lines }
+  -- the kernel
+  let (finding, lines) ← replay env libraries arts
+  if let some finding := finding then report := { report with findings := report.findings.push finding }
+  report := { report with lines := report.lines ++ lines }
   -- the axioms
   let (axioms, users, reached) := dependencies env constants
   report := { report with declarations := constants.size, reached, axioms }
@@ -370,7 +385,7 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
         s!"{library.root}: no file of the library is under {directory}"
     match library.kind with
     | .library =>
-      let imported := importClosure env library.root
+      let imported := importClosure env #[library.root]
       for module in files do
         unless imported.contains module do
           report := report.add module .fileNotImported
@@ -400,6 +415,12 @@ def Control.refusedIn (control : Control) (report : Report) : Bool :=
 /-- Why a control is not replayed: it is a control of another rule. -/
 def anotherRule : Option String := some "a control of another rule"
 
+/-- Whether a finding is the kernel's refusal of the theorem of `False` that it never checked
+(`Controls/Unchecked.lean`). -/
+def refusesUnchecked (finding : Finding) : Bool :=
+  finding.subject == `Zkc.Tools.Audit.Controls.Unchecked &&
+    (finding.line.splitOn "'Zkc.Tools.Audit.Controls.unchecked'").length > 1
+
 /-- The controls, whose files are in the directory of the compiler's package. A control that is
 refused by its rule may be refused by others as well. -/
 def controls (directory : System.FilePath) : Array Control := #[
@@ -422,9 +443,14 @@ def controls (directory : System.FilePath) : Array Control := #[
   { description := "a theorem of `False` that the kernel never checked"
     library := { name := "unchecked", root := `Zkc.Tools.Audit.Controls.Unchecked }
     rule := .kernel
-    isRefusal := fun finding =>
-      finding.subject == `Zkc.Tools.Audit.Controls.Unchecked &&
-        (finding.line.splitOn "'Zkc.Tools.Audit.Controls.unchecked'").length > 1 },
+    isRefusal := refusesUnchecked },
+  { description := "a theorem that uses a theorem of another module that the kernel never checked"
+    -- a library of tests, whose imports are not ruled: it imports the control above
+    library := { name := "uses unchecked", root := `Zkc.Tools.Audit.Controls.UsesUnchecked
+                 kind := .tests }
+    rule := .kernel
+    -- its replay goes through the module that it imports
+    isRefusal := refusesUnchecked },
   { description := "an import of a module of the tests"
     library := { name := "import of the tests", root := `Zkc.Tools.Audit.Controls.Import
                  imports := some coreImports, withoutReplay := anotherRule }
@@ -521,10 +547,10 @@ def run (libraries : System.FilePath → Array Library)
     if arts.contains module && !controlModules.any (·.module == module) then
       controlModules := controlModules.push { module }
   let controlEnv ← importModules controlModules {} (loadExts := false) (level := .private) (arts := arts)
-  let controlReport ← audit controlEnv (controls.map (·.library)) arts
   let mut refused := 0
   for control in controls do
-    let found := control.refusedIn controlReport
+    -- each control is audited alone, so that only its own findings refuse it
+    let found := control.refusedIn (← audit controlEnv #[control.library] arts)
     if found then refused := refused + 1
     IO.println s!"control, {control.description}: {if found then "refused" else "NOT refused"} by the rule: {control.rule.describe}"
   IO.println s!"audit: {report.findings.size} findings in {libraries.size} libraries; {refused} of the {controls.size} controls are refused"

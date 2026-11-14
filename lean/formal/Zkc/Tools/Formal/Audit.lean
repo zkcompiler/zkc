@@ -4,6 +4,7 @@ import Zkc.Tools.Audit.Controls.Axiom
 import Zkc.Tools.Audit.Controls.Extern
 import Zkc.Tools.Audit.Controls.ImplementedBy
 import Zkc.Tools.Audit.Controls.Unchecked
+import Zkc.Tools.Audit.Controls.UsesUnchecked
 import Zkc.Tools.Audit.Controls.Import
 import Zkc.Tools.Audit.Controls.ImportOutside
 import Zkc.Tools.Audit.Controls.Unreached

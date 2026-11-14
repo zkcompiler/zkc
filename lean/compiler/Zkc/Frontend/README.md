@@ -9,7 +9,8 @@ whose `elaborate` and check of facts admit them; no library requires the fronten
 builds it and runs its test driver against the reference, the library in source and the worked
 programs of the repository, and `just audit` audits its declarations and its imports
 (`lake exe zkc-audit`) but does not replay them through the kernel: the frontend is the unproved
-part of the compiler, and no theorem of the project rests on it.
+part of the compiler, and no theorem of the project rests on it, which the audit checks: it
+refuses a module that it replays and that imports the frontend.
 
 | Module | Holds |
 |---|---|
