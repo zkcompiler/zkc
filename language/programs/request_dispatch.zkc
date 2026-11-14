@@ -1,0 +1,22 @@
+// Layer D, carried and not frozen: a shared `match` whose arms query an
+// oracle.
+module request_dispatch
+
+use zkc::oracle::{table}
+
+pub enum Request<M: nat, Q: nat>:
+    Single(index<M>)
+    Batch([index<M>; Q])
+
+// A shared variant: both roles hold the request, and each arm asks the oracle differently.
+pub protocol Dispatch<F: Field, M: nat, Q: nat> roles(P, V)(
+    word: Oracle<table<F, M>> @P -> V,
+    request: Request<M, Q> @(P, V)
+):
+    match request:
+        case Request::Single(i):
+            row <- query word at i
+            guard @V row == 0
+        case Request::Batch(positions):
+            rows <- query word at positions
+            guard @V sum(rows) == 0

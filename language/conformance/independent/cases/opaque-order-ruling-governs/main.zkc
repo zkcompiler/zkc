@@ -1,0 +1,8 @@
+module conformance::opaque_order_ruling_governs
+
+interface I:
+    type T
+module M:I:
+    type T = bool
+def f<X:I>(x:X::T) -> X::T: x + x
+def main(x:bool) -> bool: f<M>(x)

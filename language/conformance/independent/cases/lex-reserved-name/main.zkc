@@ -1,0 +1,5 @@
+module conformance::lex_reserved_name
+
+def f() -> nat:
+    roles = 7
+    return roles

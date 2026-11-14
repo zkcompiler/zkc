@@ -1,0 +1,124 @@
+Conformance tests of layer E (constraint systems). NOT FROZEN: the layer is carried,
+and its rules can still change; an outcome that rests on a pending change says so in its note.
+One block per test: `=== ID | expect | note`, then the program. See README.md.
+
+=== N-E1 | accept | a constraint system as one function over an algebra; the stated degree is a closed law, decided true by evaluation at the degree interpretation
+module t
+type F = primitive("koala-bear")
+struct Bound:
+    pub degree: nat
+interface Algebra:
+    type T
+    def constant(c: F) -> T
+    def add(a: T, b: T) -> T
+    def sub(a: T, b: T) -> T
+    def mul(a: T, b: T) -> T
+module Over: Algebra:
+    type T = F
+    def constant(c): c
+    def add(a, b): a + b
+    def sub(a, b): a - b
+    def mul(a, b): a * b
+def larger(a: nat, b: nat) -> nat: if a < b then b else a
+module Degrees: Algebra:
+    type T = Bound
+    def constant(c): Bound{degree = 0}
+    def add(a, b): Bound{degree = larger(a.degree, b.degree)}
+    def sub(a, b): Bound{degree = larger(a.degree, b.degree)}
+    def mul(a, b): Bound{degree = a.degree + b.degree}
+interface System:
+    nat Width
+    nat Degree
+    def constraint<X: Algebra>(row: [X::T; Width]) -> X::T
+    law degree(): constraint<Degrees>([Bound{degree = 1}; Width]).degree <= Degree
+module Square: System:
+    nat Width = 2
+    nat Degree = 2
+    def constraint(row): row[0] * row[0] - row[1]
+=== N-E2 | accept, law false | a stated degree that is too small: the closed law is found false, an error of the build by policy
+module t
+type F = primitive("koala-bear")
+struct Bound:
+    pub degree: nat
+interface Algebra:
+    type T
+    def constant(c: F) -> T
+    def add(a: T, b: T) -> T
+    def sub(a: T, b: T) -> T
+    def mul(a: T, b: T) -> T
+module Over: Algebra:
+    type T = F
+    def constant(c): c
+    def add(a, b): a + b
+    def sub(a, b): a - b
+    def mul(a, b): a * b
+def larger(a: nat, b: nat) -> nat: if a < b then b else a
+module Degrees: Algebra:
+    type T = Bound
+    def constant(c): Bound{degree = 0}
+    def add(a, b): Bound{degree = larger(a.degree, b.degree)}
+    def sub(a, b): Bound{degree = larger(a.degree, b.degree)}
+    def mul(a, b): Bound{degree = a.degree + b.degree}
+interface System:
+    nat Width
+    nat Degree
+    def constraint<X: Algebra>(row: [X::T; Width]) -> X::T
+    law degree(): constraint<Degrees>([Bound{degree = 1}; Width]).degree <= Degree
+module Square: System:
+    nat Width = 2
+    nat Degree = 1
+    def constraint(row): row[0] * row[0] - row[1]
+=== N-E3 | refuse SP12 | a constraint that branches on a value: the type member is opaque, and `Algebra` declares no `equal`
+module t
+type F = primitive("koala-bear")
+interface Algebra:
+    type T
+    def constant(c: F) -> T
+    def add(a: T, b: T) -> T
+    def sub(a: T, b: T) -> T
+    def mul(a: T, b: T) -> T
+module Over: Algebra:
+    type T = F
+    def constant(c): c
+    def add(a, b): a + b
+    def sub(a, b): a - b
+    def mul(a, b): a * b
+interface System:
+    nat Width
+    def constraint<X: Algebra>(row: [X::T; Width]) -> X::T
+module Branching: System:
+    nat Width = 2
+    def constraint(row): if row[0] == row[1] then row[0] else row[1]
+=== N-E4 | refuse TY6 | a number in a constraint does not check against the type member; the interface has `constant`
+module t
+type F = primitive("koala-bear")
+interface Algebra:
+    type T
+    def constant(c: F) -> T
+    def add(a: T, b: T) -> T
+    def sub(a: T, b: T) -> T
+    def mul(a: T, b: T) -> T
+module Over: Algebra:
+    type T = F
+    def constant(c): c
+    def add(a, b): a + b
+    def sub(a, b): a - b
+    def mul(a, b): a * b
+interface System:
+    nat Width
+    def constraint<X: Algebra>(row: [X::T; Width]) -> X::T
+module Shifted: System:
+    nat Width = 2
+    def constraint(row): row[0] - row[1] - 1
+=== N-E5 | refuse NL9 | the relation of a constraint system is not bound to an asset
+module t
+type F = primitive("koala-bear")
+relation Satisfied(public: [F; 3]; trace: [[F; 2]; 8]) = asset(fibonacci)
+=== N-E6 | refuse NL9 | an asset module has no function that takes arguments
+module t
+type F = primitive("koala-bear")
+interface Air:
+    nat Width
+    nat Degree
+    def constraints(local: [F; Width], next: [F; Width]) -> [F; 3]
+module Fibonacci: Air = asset(fibonacci)

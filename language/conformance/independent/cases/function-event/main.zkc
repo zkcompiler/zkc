@@ -1,0 +1,5 @@
+module conformance::function_event
+
+def f() -> bool:
+    x <- sample bool
+    return x

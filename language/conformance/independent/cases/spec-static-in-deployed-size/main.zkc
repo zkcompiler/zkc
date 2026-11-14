@@ -1,0 +1,4 @@
+module conformance::spec_static_in_deployed_size
+
+pub protocol P<spec n:nat> roles(A)(xs:[nat;n] @A):
+    guard @A true

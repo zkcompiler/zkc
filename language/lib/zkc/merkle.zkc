@@ -1,0 +1,58 @@
+// Layer D, carried and not frozen. To change: `Tree` takes its layout as a static argument;
+// what it relies on in `Commitment`.
+module zkc::merkle
+
+// Standard library, layer 4. A Merkle tree over a byte hash, as a commitment scheme for a table.
+
+use zkc::commitment::{Commitment}
+use zkc::hash::{Hash}
+use zkc::layout::{canonical}
+use zkc::oracle::{table}
+
+// A binary tree over the 2^k rows of a table. A row is hashed in the canonical layout. The
+// scheme has no key and does not hide. `commit table<_, _> with Tree<Keccak256>` leaves `T`
+// and `k` to be found from the kind.
+pub module Tree<H: Hash, T, k: nat>: Commitment<table<T, 2^k>>:
+    type ProverKey = ()
+    type VerifierKey = ()
+    type Blinding = ()
+    type Digest = [byte; H::Size]
+    // Every level, the leaves first; the root is the last node.
+    type State = [[byte; H::Size]; 2^(k + 1) - 1]
+    // One path per position: the sibling at each level, from the leaves up.
+    type Proof<n: nat> = [[[byte; H::Size]; k]; n]
+
+    spec def paired(prover_key, verifier_key): true
+
+    #[kernel("merkle.commit")]
+    def commit(key, data, blinding):
+        mut level = [H::hash(canonical::write<T>(row)) for row in data]
+        mut nodes = level
+        for j in 0..k:
+            level := [H::hash(level[2 * i] ++ level[2 * i + 1]) for i in 0..2^(k - j - 1)]
+            nodes := nodes ++ level
+        return (level[0], nodes)
+
+    // The sibling, at level j, of the node above a position: level j starts at
+    // 2^(k + 1) - 2^(k - j + 1) and has 2^(k - j) nodes.
+    def sibling<j: nat>(state: State, position: index<2^k>) -> Digest where (j + 1 <= k):
+        state[
+            2^(k + 1) - 2^(k - j + 1) + 2 * (position / 2^(j + 1)) + (1 - (position / 2^j) % 2)
+        ]
+
+    def opening(key, state, positions):
+        [[sibling<j>(state, positions[q]) for j in 0..k] for q in 0..n]
+
+    // The root that a row, its position and a path give.
+    def root_of(row: T, position: index<2^k>, path: [Digest; k]) -> Digest:
+        mut node = H::hash(canonical::write<T>(row))
+        for j in 0..k:
+            node := (
+                if (position / 2^j) % 2 == 0 then H::hash(node ++ path[j])
+                else H::hash(path[j] ++ node)
+            )
+        return node
+
+    #[kernel("merkle.check")]
+    def check(key, digest, positions, rows, proof):
+        ∀ q ∈ 0..n, root_of(rows[q], positions[q], proof[q]) == digest

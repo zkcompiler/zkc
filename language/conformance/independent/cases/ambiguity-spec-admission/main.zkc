@@ -1,0 +1,4 @@
+module conformance::ambiguity_spec_admission
+
+def f(x:nat) -> nat: x
+law broken(): missing

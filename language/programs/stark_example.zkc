@@ -1,0 +1,21 @@
+// Layers C to E, carried and not frozen. Its module `fibonacci` has the withdrawn forms of an
+// asset module with abstract types and of `relation … = asset`.
+module stark_example
+
+use stark::{TableArgument}
+use fibonacci::{Fibonacci}
+use zkc::fields::{KoalaBear4}
+use zkc::hash::{Keccak256}
+use zkc::merkle::{Tree}
+use zkc::oracle::{table}
+use zkc::suites::{Poseidon2KoalaBear}
+use zkc::security::{soundness, random_oracle, johnson}
+
+scheme TableProof = TableArgument<
+    KoalaBear4, Fibonacci, LogHeight = 10, LogBlowup = 2, FinalLog = 0, Layers = 10, Queries = 40
+>:
+    construction derived(Poseidon2KoalaBear)
+    commit table<_, _> with Tree<Keccak256>
+    grind 16 bits at sites.low_degree.spots
+
+goal sound = soundness(TableProof, model = (random_oracle(queries = 2^80), johnson)) <= 2^-100

@@ -1,0 +1,395 @@
+Conformance tests of layer D (oracles, commitments, derived kinds). NOT FROZEN: the layer is carried,
+and its rules can still change; an outcome that rests on a pending change says so in its note.
+One block per test: `=== ID | expect | note`, then the program. See README.md.
+
+=== T-O1 | refuse OR8 | handles of different degrees are of different kinds and do not combine (OR8)
+module t
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(g: [F; 9] @P, h: [F; 17] @P):
+    gh <- send g to V as oracle<poly<F, 8>>
+    hh <- send h to V as oracle<poly<F, 16>>
+    z <- draw F from V to P
+    open (hh - gh * z) at z == 0
+=== T-O1b | accept | handles of one kind combine (OR8)
+module t
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(g: [F; 9] @P, h: [F; 9] @P):
+    gh <- send g to V as oracle<poly<F, 8>>
+    hh <- send h to V as oracle<poly<F, 8>>
+    z <- draw F from V to P
+    open (hh - gh * z) at z == 0
+=== T-O2 | refuse LN2 | a claim that is never opened
+module t
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(f: Oracle<poly<F, 8>> @P -> V):
+    z <- draw F from V to P
+    (a, owed) <- query f at z deferred
+=== T-O3 | refuse LN2 | a claim opened twice
+module t
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(f: Oracle<poly<F, 8>> @P -> V):
+    z <- draw F from V to P
+    (a, owed) <- query f at z deferred
+    open owed
+    open owed
+=== T-O4 | refuse OR2 | `data` at the reader
+module t
+use zkc::oracle::{Oracle, table, data}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(f: Oracle<table<F, 8>> @P -> V):
+    xs @V = data(f)
+=== T-O5 | refuse OR9 | a row that reads a parent at a position computed from a row
+module t
+use zkc::oracle::{Rows, table}
+oracle def Bad<T: Rows<index<8>, 8>>(p: Oracle<T>): Rows<index<8>, 8>:
+    at i: p[p[i]]
+protocol X roles(P, V)(h: Oracle<table<index<8>, 8>> @P -> V):
+    w = Bad(h)
+    x <- query w at 0
+=== T-O6 | accept | a claim passed to a port of an application (OR7)
+module t
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol Settle roles(P, V)(owed: Pending<poly<F, 8>> @(P, V)):
+    open owed
+protocol X roles(P, V)(f: Oracle<poly<F, 8>> @P -> V):
+    z <- draw F from V to P
+    (a, owed) <- query f at z deferred
+    done <- Settle(owed)
+=== T-O7 | accept | one `open` over claims of two kinds is one opening (OR6)
+module t
+use zkc::oracle::{table}
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(f: Oracle<poly<F, 8>> @P -> V, t: Oracle<table<F, 8>> @P -> V):
+    z <- draw F from V to P
+    (a, c1) <- query f at z deferred
+    (b, c2) <- query t at 3 deferred
+    open c1, c2
+=== T-F6 | skip | NOT RUN: a derived kind whose `Open` queries its own kind (NL1 on instances); pending the redesign of derived kinds
+module t
+=== S-O2 | refuse OR4 | a handle with two holders; the query names its opener
+module t
+use zkc::oracle::{Oracle, table}
+type F = primitive("bls12-381.fr")
+protocol Fixed roles(S, P, V)(values: [F; 8] @(S, P)):
+    h <- send values from S to V as oracle<table<F, 8>>
+    z <- draw index<8> from V to P
+    row <- query h at z
+=== S-O2b | accept | the opener written
+module t
+use zkc::oracle::{Oracle, table}
+type F = primitive("bls12-381.fr")
+protocol Fixed roles(S, P, V)(values: [F; 8] @(S, P)):
+    h <- send values from S to V as oracle<table<F, 8>>
+    z <- draw index<8> from V to P
+    row <- query h from P at z
+=== S-O2c | refuse OR3 | an oracle is sent to one reader
+module t
+use zkc::oracle::{Oracle, table}
+type F = primitive("bls12-381.fr")
+protocol Two roles(P, V, W)(values: [F; 8] @P):
+    h <- send values to V, W as oracle<table<F, 8>>
+=== S-O4a | refuse LN3 | `_` on a claim
+module t
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(f: Oracle<poly<F, 8>> @P -> V):
+    z <- draw F from V to P
+    (a, _) <- query f at z deferred
+=== S-O4b | refuse LN2 | a specification argument does not use a claim
+module t
+use zkc::polynomial::{poly}
+type F = primitive("bls12-381.fr")
+protocol Sink roles(P, V)(spec c: Pending<poly<F, 8>>, x: F @P):
+    y <- send x to V
+protocol X roles(P, V)(f: Oracle<poly<F, 8>> @P -> V):
+    z <- draw F from V to P
+    (a, owed) <- query f at z deferred
+    done <- Sink(a, spec c = owed)
+=== I-8b | refuse TY5 | the payload of an arm has the type of its alternative
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+enum Request:
+    Single(index<8>)
+    Batch([index<8>; 4])
+protocol Dispatch roles(P, V)(word: Oracle<table<F, 8>> @P -> V, request: Request @(P, V)):
+    match request:
+        case Request::Single(i):
+            one <- query word at i
+            guard @V one == [0, 0, 0, 0]
+        case Request::Batch(positions):
+            rows <- query word at positions
+=== I-6 | refuse GL3 | a goal on a scheme whose protocol returns a claim says how it is settled
+module t
+use zkc::polynomial::{poly}
+use zkc::security::{completeness}
+type F = primitive("bls12-381.fr")
+protocol Ask roles(P, V)(f: Oracle<poly<F, 8>> @P -> V) -> (row: F @(P, V), owed: Pending<poly<F, 8>> @(P, V)):
+    z <- draw F from V to P
+    (a, c) <- query f at z deferred
+    return (a, c)
+scheme S = Ask:
+    construction interactive
+    prover P
+goal g = completeness(S)
+=== R-OR1a | accept | the data of a handle is sized: a relation reads its rows by position (OR1, OR2)
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+relation Zeros(; rows: [F; 8]): (∑ i ∈ 0..8, if rows[i] == 0 then 0 else 1) <= 2
+protocol X roles(P, V)(word: Oracle<table<F, 8>> @P -> V):
+    z <- draw index<8> from V to P
+    row <- query word at z
+    guard @V row == 0
+spec for X:
+    requires Zeros(; data(word))
+=== R-OR3a | refuse OR3 | a send writes no shape: the shape is in the kind
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(values: [F; 8] @P):
+    h <- send values to V as oracle<table<F, 8>>(rows = 8)
+=== R-OR3b | refuse OR3 | the data has the size of the kind
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(values: [F; 4] @P):
+    h <- send values to V as oracle<table<F, 8>>
+=== R-OR4a | refuse OR4 | a position is an index of the kind: nothing is tested at run time
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(word: Oracle<table<F, 8>> @P -> V):
+    z <- draw index<9> from V to P
+    row <- query word at z
+    guard @V row == 0
+=== R-OR8a | refuse OR8 | a table is not a linear kind
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(a: Oracle<table<F, 8>> @P -> V, b: Oracle<table<F, 8>> @P -> V):
+    open (a + b) at 0 == 0
+=== R-SX9a | accept | `Run` has a field for an oracle send: the committed data (SX9). The clause reads one run: its statement is the obligation bounded by the charges, not a deterministic one; the function after `by` is a `def`
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+relation AllZero(; rows: [F; 8]): ∀ i ∈ 0..8, rows[i] == 0
+protocol X roles(P, V)(values: [F; 8] @P):
+    committed <- send values to V as oracle<table<F, 8>>
+    z <- draw index<8> from V to P
+    row <- query committed at z
+    guard @V row == 0
+def extract(runs: X::Runs<1>) -> [F; 8]: runs[0].committed
+spec def rows_of(runs: X::Runs<1>) -> F: runs[0].row
+spec for X:
+    knowledge AllZero() by extract
+=== R-SX9g | refuse SX9 | a handle is not written
+module t
+use zkc::layout::{canonical}
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(h: Oracle<table<F, 8>> @P -> V):
+    bytes @P = canonical::write(h)
+=== R-TY16a | accept | collected values without a common type are a tuple, indexed by a static natural
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(xs: [F; 8] @P):
+    mut current = xs
+    for i in 0..3 collect (layers = layer):
+        current := current[0..2^(2 - i)] + current[2^(2 - i)..2^(3 - i)]
+        layer <- send current to V as oracle<table<F, 2^(2 - i)>>
+    for j in 0..3 collect (rows = row):
+        row <- query layers[j] at 0
+    guard @V rows[0] == rows[1]
+=== R-SC5e | refuse SC5 | a commitment scheme realizes the kind of its line
+module t
+use zkc::curves::bls12_381::{Bls12381, Fr}
+use zkc::kzg::{Kzg}
+use zkc::oracle::{table}
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(P, V)(xs: [Fr; 8] @P):
+    h <- send xs to V as oracle<table<Fr, 8>>
+    z <- draw index<8> from V to P
+    row <- query h at z
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+    commit table<_, _> with Kzg<Bls12381>
+=== R-SC5f | refuse SC5 | a Merkle tree needs a number of rows that is a power of two
+module t
+use zkc::curves::bls12_381::{Fr}
+use zkc::hash::{Keccak256}
+use zkc::merkle::{Tree}
+use zkc::oracle::{table}
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(P, V)(xs: [Fr; 6] @P):
+    h <- send xs to V as oracle<table<Fr, 6>>
+    z <- draw index<6> from V to P
+    row <- query h at z
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+    commit table<_, _> with Tree<Keccak256>
+=== R-SC5g | refuse SC5 | a scheme with a key names the pinned site that holds it
+module t
+use zkc::curves::bls12_381::{Bls12381, Fr}
+use zkc::kzg::{Kzg}
+use zkc::polynomial::{poly}
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(P, V)(f: Oracle<poly<Fr, 8>> @P -> V):
+    z <- draw Fr from V to P
+    y <- query f at z
+    guard @V y == 0
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+    commit poly<_, _> with Kzg<Bls12381>
+=== R-SC5h | refuse SC5 | a scheme without a key takes none
+module t
+use zkc::curves::bls12_381::{Fr}
+use zkc::hash::{Keccak256}
+use zkc::merkle::{Tree}
+use zkc::oracle::{table}
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(S, P, V)(xs: [Fr; 8] @P):
+    key @S <- sample Fr
+    k <- send key to P, V
+    h <- send xs to V as oracle<table<Fr, 8>>
+    z <- draw index<8> from V to P
+    row <- query h at z
+scheme Sch = X:
+    offline S
+    construction derived(Merlin3Bls12381)
+    commit table<_, _> with Tree<Keccak256>(prover_key = sites.k)
+=== V-S9 | accept | one-run extraction is admitted: its statement is the obligation "the deciding role returns and the output is no witness with probability at most the charges"; no charge is written here, so a goal on it stays open; the function after `by` is a `def`
+module t
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+relation AllZero(; rows: [F; 8]): ∀ i ∈ 0..8, rows[i] == 0
+protocol X roles(P, V)(values: [F; 8] @P):
+    committed <- send values to V as oracle<table<F, 8>>
+    z <- draw index<8> from V to P
+    row <- query committed at z
+    guard @V row == 0
+def extract(runs: X::Runs<1>) -> [F; 8]: runs[0].committed
+spec for X:
+    knowledge AllZero() by extract
+=== V-S10 | accept | admitted as an obligation; pending: at `committed` the goal will rest on the extractability of the commitment scheme; the function after `by` is a `def`
+module t
+use zkc::oracle::{table}
+use zkc::merkle::{Tree}
+use zkc::hash::{Keccak256}
+use zkc::security::{knowledge_soundness}
+type F = primitive("bls12-381.fr")
+relation AllZero(; rows: [F; 8]): ∀ i ∈ 0..8, rows[i] == 0
+protocol X roles(P, V)(values: [F; 8] @P):
+    committed <- send values to V as oracle<table<F, 8>>
+    z <- draw index<8> from V to P
+    row <- query committed at z
+    guard @V row == 0
+def extract(runs: X::Runs<1>) -> [F; 8]: runs[0].committed
+spec for X:
+    knowledge AllZero() by extract
+    charge sites.z <= 7 / 8
+scheme S = X:
+    prover P
+    construction interactive
+    commit table<_, _> with Tree<Keccak256>
+goal g = knowledge_soundness(S, stage = committed)
+=== V-C1 | refuse GL4 | a ceiling at `committed` needs the budget of the model of the commitment scheme; the function after `by` is a `def`
+module t
+use zkc::oracle::{table}
+use zkc::merkle::{Tree}
+use zkc::hash::{Keccak256}
+use zkc::security::{knowledge_soundness}
+type F = primitive("bls12-381.fr")
+relation AllZero(; rows: [F; 8]): ∀ i ∈ 0..8, rows[i] == 0
+protocol X roles(P, V)(values: [F; 8] @P):
+    committed <- send values to V as oracle<table<F, 8>>
+    z <- draw index<8> from V to P
+    row <- query committed at z
+    guard @V row == 0
+def extract(runs: X::Runs<1>) -> [F; 8]: runs[0].committed
+spec for X:
+    knowledge AllZero() by extract
+    charge sites.z <= 7 / 8
+scheme S = X:
+    prover P
+    construction interactive
+    commit table<_, _> with Tree<Keccak256>
+goal g = knowledge_soundness(S, stage = committed) <= 7 / 8
+=== V-C2 | refuse GL4 | the same with KZG; the function after `by` is a `def`
+module t
+use zkc::polynomial::{poly}
+use zkc::kzg::{Kzg, powers, verifier_key}
+use zkc::curves::bls12_381::{Fr, Bls12381}
+use zkc::security::{knowledge_soundness}
+relation Zero(; c: [Fr; 4]): c[0] == 0
+protocol X roles(S, P, V)(coefficients: [Fr; 4] @P):
+    tau @S <- sample nonzero<Fr>
+    pk <- send powers<Bls12381, 4>(tau) to P
+    vk <- send verifier_key<Bls12381>(tau) to V
+    h <- send coefficients to V as oracle<poly<Fr, 3>>
+    z <- draw Fr from V to P
+    v <- query h at z
+    guard @V v == 0
+def extract(runs: X::Runs<1>) -> [Fr; 4]: runs[0].h
+spec for X:
+    knowledge Zero() by extract
+    charge sites.z <= 3 / Fr::Order
+scheme T = X:
+    prover P
+    offline S
+    construction interactive
+    commit poly<_, _> with Kzg<Bls12381>(prover_key = sites.pk, verifier_key = sites.vk)
+goal g = knowledge_soundness(T, stage = committed) <= 2^-200
+=== V-P1 | accept | accepted as the rules stand; pending: `paired` of the pinned keys becomes a hypothesis that receipts list
+module t
+use zkc::commitment::{Commitment}
+use zkc::oracle::{table}
+type F = primitive("bls12-381.fr")
+pub module Never: Commitment<table<F, 8>>:
+    type ProverKey = ()
+    type VerifierKey = ()
+    type Blinding = ()
+    type Digest = F
+    type State = ()
+    type Proof<n: nat> = ()
+    spec def paired(prover_key, verifier_key): false
+    def commit(key, data, blinding): (0, ())
+    def opening(key, state, positions): ()
+    def check(key, digest, positions, rows, proof): true
+=== N-SX9a | accept | the field of `Run` for a site in a stepped loop has the type of its `collect`, a tuple (§8)
+module t
+use zkc::oracle::{table}
+type F = primitive("koala-bear")
+protocol Layers roles(P, V)(xs: [F; 8] @P):
+    mut current = xs
+    for i in 0..3 collect (layers = layer):
+        current := current[0..2^(2 - i)] + current[2^(2 - i)..2^(3 - i)]
+        layer <- send current to V as oracle<table<F, 2^(2 - i)>>
+    for j in 0..3 collect (rows = row):
+        row <- query layers[j] at 0
+    guard @V rows[0] == rows[1]
+spec def layer0(run: Layers::Run) -> [F; 4]: run.layer.0
+=== N-SP8c | refuse SP8 LN2 | a protocol member of an implementing module is typed, and its head equals the member's
+module t
+use zkc::oracle::{Kind, Derived, table}
+pub module probe<F: Field, size: nat>: Kind + Derived:
+    type Data = [F; size]
+    type Position = index<size>
+    type Row = F
+    def answer(data, position): data[position]
+    type Lower = Oracle<table<F, size>>
+    type Residual = ()
+    spec def settled(residual): true
+    protocol Send roles(A, B)(stuff: bool @B):
+        x <- send true + 1 to A
+    protocol Open<n: nat> roles(H, R)(
+        claims: [Pending<Self>; n] @(H, R)
+    ) -> residual: Residual @(H, R):
+        return ()

@@ -1,0 +1,9 @@
+module conformance::alias_record_construction
+
+struct R:
+    pub value:nat
+type Alias = R
+def f(x:nat) -> nat:
+    r = Alias{value=x}
+    Alias{value=y} = r
+    return y

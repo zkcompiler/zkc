@@ -1,0 +1,3 @@
+module conformance::lex_touching_comparison
+
+def f(a: nat, b: nat) -> bool: a<b

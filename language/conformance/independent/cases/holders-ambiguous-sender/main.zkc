@@ -1,0 +1,4 @@
+module conformance::holders_ambiguous_sender
+
+protocol P roles(A,B,C)(x:nat @(A,B)):
+    y <- send x to C

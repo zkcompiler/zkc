@@ -1,0 +1,19 @@
+module zkc::prelude
+
+// Core library. In scope in every module without `use`: these names, and the functions `sum`,
+// `product`, `all`, `any` and `inner` of the fixed table, which have no declaration. The prelude
+// holds the names that the syntax and the fixed tables of the language produce or require.
+
+// [table] The sorts: a closed set, declared in `zkc::algebra` so that their members can be read.
+pub use zkc::algebra::{
+    Group, Ring, PrimeOrderGroup, Field, PrimeField, ExtensionField, TwoAdicField
+}
+
+// [item] What `send … as oracle`, `query … deferred` and `data(h)` produce and read.
+pub use zkc::oracle::{Oracle, Pending, data}
+
+// [source] A byte. `b"…"` and `hex"…"` are `[byte; k]`.
+pub type byte = index<256>
+
+// [item] [row seq.length] The number of elements of a collection; a term of the fact calculus.
+pub def length<T: linear>(values: [T]) -> nat = primitive("seq.length")

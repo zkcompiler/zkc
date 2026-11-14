@@ -1,0 +1,17 @@
+// Layers C and D, carried and not frozen.
+module variants_example
+
+use sigma_or::{Or}
+use request_dispatch::{Dispatch}
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::hash::{Keccak256}
+use zkc::merkle::{Tree}
+use zkc::oracle::{table}
+use zkc::suites::{Merlin3Bls12381}
+
+scheme OrProof = Or<G1>:
+    construction derived(Merlin3Bls12381)
+
+scheme Lookup = Dispatch<Fr, M = 1024, Q = 8>:
+    construction derived(Merlin3Bls12381)
+    commit table<_, _> with Tree<Keccak256>

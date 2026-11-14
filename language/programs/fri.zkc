@@ -1,0 +1,86 @@
+// Layer D, carried and not frozen. To change: `LowDegree` states `1 <= Layers`; a claim is one
+// handle, one position and one row; the protocol is generic over the field of its domain.
+module fri
+
+use zkc::oracle::{Rows, table}
+use zkc::coset::{Coset, square, coefficients}
+use zkc::polynomial
+use zkc::proximity
+
+section <
+    F: TwoAdicField, W: Rows<F, 2^LogSize>,
+    LogSize: nat, FinalLog: nat, Layers: nat, Queries: nat
+> where (FinalLog + Layers + 2 <= LogSize, LogSize <= F::TwoAdicity, 1 <= Queries):
+
+    // A position of the layer of 2^(k + 1) rows.
+    type Spot<k: nat> = index<2^(k + 1)>
+
+    // The fold of the two values of one fibre at the point x of the larger domain.
+    pub def fold_pair(low: F, high: F, beta: F, x: nonzero<F>) -> F:
+        (low + high) / 2 + beta * (low - high) / (2 * x)
+
+    def fold<k: nat>(source: [F; 2^(k + 1)], domain: Coset<F, k + 1>, beta: F) -> [F; 2^k]:
+        [fold_pair(source[j], source[j + 2^k], beta, domain[j]) for j in 0..2^k]
+
+    // The positions read at a layer of 2^(k + 1) rows: the low member of each query's fibre,
+    // then the high one.
+    def fibres<k: nat>(spots: [Spot<LogSize - 2>; Queries]) -> [Spot<k>; 2 * Queries]:
+        [s % 2^k for s in spots] ++ [s % 2^k + 2^k for s in spots]
+
+    def consistent(
+        word_rows: [F; 2 * Queries],
+        layer_rows: [[F; 2 * Queries]; Layers],
+        betas: [F; Layers + 1],
+        final: [F; 2^FinalLog],
+        spots: [Spot<LogSize - 2>; Queries],
+        domain: Coset<F, LogSize>
+    ) -> bool:
+        mut ok = true
+        for q in 0..Queries:
+            mut pair = (word_rows[q], word_rows[q + Queries])
+            mut coset = domain
+            for i in 0..Layers:
+                j = spots[q] % 2^(LogSize - 1 - i)
+                folded = fold_pair(pair.0, pair.1, betas[i], coset[j])
+                next = (layer_rows[i][q], layer_rows[i][q + Queries])
+                ok := ok and folded == (if j < 2^(LogSize - 2 - i) then next.0 else next.1)
+                pair := next
+                coset := square(coset)
+            last = spots[q] % 2^(LogSize - 1 - Layers)
+            tail = fold_pair(pair.0, pair.1, betas[Layers], coset[last])
+            ok := ok and tail == polynomial::evaluate(final, square(coset)[last])
+        return ok
+
+    // Tests that `word` is close to a polynomial of degree below 2^(FinalLog + Layers + 1).
+    // `word` is any oracle of 2^LogSize rows in F: a table that was sent, or a virtual one.
+    pub protocol LowDegree roles(P, V)(
+        word: Oracle<W> @P -> V,
+        domain: Coset<F, LogSize> @(P, V)
+    ):
+        mut current = data(word)
+        mut coset = domain
+        for i in 0..Layers collect (betas = beta, layers = layer):
+            beta <- draw F from V to P
+            current := fold(current, coset, beta)
+            coset := square(coset)
+            layer <- send current to V as oracle<table<F, 2^(LogSize - 1 - i)>>
+        last <- draw F from V to P
+        final <- send coefficients<t = FinalLog>(fold(current, coset, last), square(coset)) to V
+        spots <- draw [Spot<LogSize - 2>; Queries] from V to P
+        (word_rows, word_owed) <- query word at fibres<LogSize - 1>(spots) deferred
+        for j in 0..Layers collect (layer_rows = rows, owed = claim):
+            (rows, claim) <- query layers[j] at fibres<LogSize - 2 - j>(spots) deferred
+        open word_owed, owed
+        guard @V consistent(word_rows, layer_rows, betas ++ [last], final, spots, domain)
+
+    // Yes: `word` is the encoding of a polynomial of degree below 2^(FinalLog + Layers + 1).
+    // No: `word` is farther than the regime's radius from every such encoding.
+    pub relation Close(
+        word: [F; 2^LogSize], domain: Coset<F, LogSize>
+    ) = external("Zkc.Fri.close")
+
+    spec for LowDegree:
+        proves Close(data(word), domain)
+        charge sites.beta <= proximity::fold_error<F>(LogSize, FinalLog + Layers + 1)
+        charge sites.last <= proximity::fold_error<F>(LogSize, FinalLog + Layers + 1)
+        charge sites.spots <= proximity::query_error<F>(LogSize, FinalLog + Layers + 1, Queries)

@@ -1,0 +1,5 @@
+module conformance::event_function_binding
+
+def f() -> nat: 1
+protocol P roles(A)():
+    x <- f()

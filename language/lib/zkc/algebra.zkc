@@ -1,0 +1,88 @@
+module zkc::algebra
+
+// Core library. A sort is an interface that only the vocabulary implements: `T: S` holds when
+// the vocabulary gives the type `T` the sort `S`. In a sort, `Self` is `T`, and a member is
+// reached as `T::m`. The operators of a sort are those of the fixed table; their rows have no
+// declaration. The sorts form one hierarchy: a `Group` has a `Scalar` that is a `Ring`; a
+// `Ring` is a `Group` that is its own `Scalar`; a `Field` is a `Ring` with division. The laws
+// of a sort are stated in the comment of its interface and in `LANGUAGE.md` SP3; they are not
+// `law` members, because the vocabulary gives each type a model that satisfies them.
+
+// [item] An abelian group written additively, with a right action of its `Scalar`, a ring:
+// `x * 1 == x`, `x * (a * b) == (x * a) * b`, `(x + y) * a == x * a + y * a`,
+// `x * (a + b) == x * a + x * b`. It has `+`, `-`, prefix `-`, `==`, the literal `0`, `x * a`
+// with `a: Scalar`, `∑`, `⟪xs, as⟫`. A type of the sort is finite and is a law. A sized
+// collection of elements of a `Group` is a `Group` with the same `Scalar`.
+pub interface Group:
+    type Scalar: Ring
+    // The number of elements.
+    nat Order
+
+// [item] A ring: a `Group` that is its own `Scalar`, with a commutative multiplication that has the
+// unit `1`. What is a ring's is here: `*`, `^` by a natural, `∏`, the literal `1` and number
+// literals, `Characteristic` and `from_nat`. An interpretation of a signature that does not
+// satisfy these laws, such as a degree, is not a `Ring`.
+pub interface Ring where (Self: Group, Self::Scalar == Self):
+    nat Characteristic
+    // [row field.from_nat] The image of a natural; total. A number literal below the
+    // characteristic is this image.
+    def from_nat(n: nat) -> Self
+
+// [item] A group of prime order with a generator.
+pub interface PrimeOrderGroup where (
+    Self: Group, Self::Scalar: PrimeField, Self::Order == Self::Scalar::Characteristic
+):
+    // [row group.generator]
+    def generator() -> Self
+
+// [item] A field: a `Ring` in which every `nonzero` has an inverse. It adds `/` by a
+// `nonzero<Self>`, and `nonzero<Self>` is a type. A field states its view over its prime field:
+// an element is `Dimension` components in `Prime`.
+pub interface Field where (Self: Ring):
+    // The prime field, and the dimension over it.
+    type Prime: PrimeField
+    nat Dimension
+    // [rows field.components, field.from_components] Total, and inverse to each other.
+    def components(x: Self) -> [Prime; Dimension]
+    def from_components(c: [Prime; Dimension]) -> Self
+
+// [item] A field of prime order: its elements are the naturals below `Order`. It is its own `Prime`,
+// with dimension 1.
+pub interface PrimeField where (
+    Self: Field, Self::Order == Self::Characteristic, Self::Prime == Self, Self::Dimension == 1
+):
+    // The length of the canonical byte encoding.
+    nat Bytes
+    // [row field.to_nat] The representative below the order.
+    def to_nat(x: Self) -> index<Self::Order>
+
+// [item] A finite extension, one step of a tower: an element is `Degree` coefficients over `Base`.
+pub interface ExtensionField where (Self: Field, Base::Characteristic == Self::Characteristic):
+    type Base: Field
+    nat Degree
+    // [row field.embed] Applied to a `nonzero<Base>` it gives a `nonzero<Self>`: a result range
+    // of the row, which a signature in source does not write.
+    def embed(x: Base) -> Self
+    // [rows field.coefficients, field.from_coefficients]
+    def coefficients(x: Self) -> [Base; Degree]
+    def from_coefficients(c: [Base; Degree]) -> Self
+
+// [item] A field with a subgroup of order 2^TwoAdicity.
+pub interface TwoAdicField where (Self: Field, 1 <= TwoAdicity):
+    nat TwoAdicity
+    // [row field.root] A generator of the subgroup of order 2^k.
+    def root(k: index<TwoAdicity + 1>) -> nonzero<Self>
+
+// An ordinary interface: a pairing of the vocabulary is a module, bound in `zkc::curves`.
+pub interface Pairing where (
+    G1::Scalar == Scalar, G2::Scalar == Scalar, Target::Scalar == Scalar
+):
+    type Scalar: PrimeField
+    type G1: PrimeOrderGroup
+    type G2: PrimeOrderGroup
+    type Target: Group
+    // [row pairing.pair]
+    def pair(a: G1, b: G2) -> Target
+    law left(a: G1, b: G2, s: Scalar): pair(a * s, b) == pair(a, b) * s
+    law right(a: G1, b: G2, s: Scalar): pair(a, b * s) == pair(a, b) * s
+    law nondegenerate(): pair(G1::generator(), G2::generator()) != 0

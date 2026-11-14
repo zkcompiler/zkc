@@ -1,0 +1,7 @@
+module conformance::events_static_dead_sites
+
+protocol P roles(A,B)():
+    if 0 == 1:
+        dead <- send 9 from A to B
+    live <- draw bool from B to A
+    k @A <- attempt

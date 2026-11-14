@@ -1,0 +1,90 @@
+// Layer A, with a contract of layer B. Under TY10 the loop of
+// `Reduce` is stepped: its index is not static in the body, and the state `s` changes type in
+// every iteration. Under SP12 `R::State` and `R::Message` are opaque in `Reduce`, which uses
+// them only through the members of `Round`.
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)

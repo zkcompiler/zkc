@@ -1,0 +1,3 @@
+module conformance::lex_byte_string
+
+def f() -> [byte; 2]: hex"00fF"

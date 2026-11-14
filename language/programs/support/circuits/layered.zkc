@@ -1,0 +1,43 @@
+// Carried: rows of a project and functions of the formal library. A circuit as data in source
+// is to replace it.
+module circuits::layered<F: Field>
+
+// Project library of the GKR example: layered circuits, bound to rows of the project.
+
+use sumcheck<F>::{Round}
+use zkc::polynomial::{MvPoly, Poly}
+
+// A circuit of d layers of 2^w gates; layer 0 is the outputs and layer d the inputs.
+pub type Circuit<d: nat, w: nat> = primitive("circuit.layered", F, d, w)
+
+pub def values<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d + 1>
+) -> [F; 2^w] = primitive("circuit.values")
+
+// Rounds over the gate polynomial of one layer: degree 2 in each of 2 * w variables.
+pub module Gate: Round:
+    nat Degree = 2
+    type State<v: nat> = primitive("circuit.gate_state", F, v)
+    type Message = (F, F, F)
+    def message(state) = primitive("circuit.gate_message")
+    def bind(state, r) = primitive("circuit.gate_bind")
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r) = primitive("circuit.gate_evaluate")
+    spec def table(state) = external("Zkc.Circuit.gateTable")
+    spec def polynomial(m) = external("Zkc.Circuit.gatePolynomial")
+
+pub def gate_state<d: nat, w: nat>(
+    c: Circuit<d, w>, layer: index<d>, z: [F; w], below: [F; 2^w]
+) -> Gate::State<2 * w> = primitive("circuit.gate_state_of")
+pub spec def summand<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d>, z: [F; w]
+) -> MvPoly<F, 2 * w, 2> = external("Zkc.Circuit.summand")
+// The coefficients of the restriction of the layer below to the line through the two points.
+pub def restriction<w: nat>(
+    below: [F; 2^w], pair: [F; 2 * w]
+) -> [F; w + 1] = primitive("circuit.restriction")
+pub def on_line<w: nat>(pair: [F; 2 * w], t: F) -> [F; w] = primitive("circuit.on_line")
+pub def wiring<d: nat, w: nat>(
+    c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
+) -> (F, F) = primitive("circuit.wiring")
+pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")

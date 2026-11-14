@@ -1,0 +1,47 @@
+// Layer D, carried and not frozen. To change: one key serves several shapes
+// (`Kzg<E, MaxDegree>`); `Commitment` gets a combination for the linear kind `poly`, and
+// `paired` becomes a hypothesis.
+module zkc::kzg
+
+// Standard library, layer 4. The KZG commitment scheme for a polynomial, over a pairing.
+
+use zkc::algebra::{Pairing}
+use zkc::commitment::{Commitment}
+use zkc::polynomial::{poly, divide_linear}
+
+// The keys of a setup with the secret `tau`: its powers in the first group, `tau` in the second.
+pub def powers<E: Pairing, n: nat>(tau: nonzero<E::Scalar>) -> [E::G1; n]:
+    [E::G1::generator() * tau ^ i for i in 0..n]
+
+pub def verifier_key<E: Pairing>(tau: nonzero<E::Scalar>) -> E::G2: E::G2::generator() * tau
+
+// `commit poly<_, _> with Kzg<E>(prover_key = sites.x, verifier_key = sites.y)` leaves `degree`
+// to be found from the kind.
+pub module Kzg<E: Pairing, degree: nat>: Commitment<poly<E::Scalar, degree>>:
+    type ProverKey = [E::G1; degree + 1]
+    type VerifierKey = E::G2
+    type Blinding = ()
+    type Digest = E::G1
+    type State = [E::Scalar; degree + 1]
+    // One quotient commitment per position.
+    type Proof<n: nat> = [E::G1; n]
+
+    // The prover's key is the powers of the secret that the verifier's key holds.
+    spec def paired(prover_key, verifier_key):
+        prover_key[0] == E::G1::generator() and ∀ i ∈ 0..degree, (
+            E::pair(prover_key[i + 1], E::G2::generator()) == E::pair(prover_key[i], verifier_key)
+        )
+
+    #[kernel("kzg.commit")]
+    def commit(key, data, blinding): (⟪key, data⟫, data)
+
+    #[kernel("kzg.open")]
+    def opening(key, state, positions):
+        [⟪key[0..degree], divide_linear(state, z).0⟫ for z in positions]
+
+    #[kernel("kzg.check")]
+    def check(key, digest, positions, rows, proof):
+        ∀ q ∈ 0..n, (
+            E::pair(digest - E::G1::generator() * rows[q], E::G2::generator())
+                == E::pair(proof[q], key - E::G2::generator() * positions[q])
+        )

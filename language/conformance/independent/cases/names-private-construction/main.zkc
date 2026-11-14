@@ -1,0 +1,4 @@
+module conformance::client
+
+use conformance::hidden::R
+def f() -> R: R{value=1}

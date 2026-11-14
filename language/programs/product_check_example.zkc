@@ -1,0 +1,21 @@
+// Layers C and D, carried and not frozen. To change: the key of `Kzg`, and `Commitment`.
+module product_check_example
+
+use product_check::{ProductCheckKzg}
+use zkc::curves::bls12_381::{Bls12381, Fr}
+use zkc::hash::{Keccak256, Sha256}
+use zkc::kzg::{Kzg}
+use zkc::polynomial::{poly}
+use zkc::suites::{HashChain}
+use zkc::security::{soundness, random_oracle, algebraic_group}
+
+scheme Opening = ProductCheckKzg<Bls12381, 4096>:
+    offline S
+    construction derived(HashChain<Keccak256, Fr>)
+    commit poly<_, _> with Kzg<Bls12381>(
+        prover_key = sites.prover_key, verifier_key = sites.verifier_key
+    )
+    pin sites.prover_key = Sha256:hex"5f0c2a9b7e41d3866a1f0e9d4c3b2a1908f7e6d5c4b3a29180706f5e4d3c2b1a"
+    pin sites.verifier_key = Sha256:hex"0a1b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f708"
+
+goal sound = soundness(Opening, model = (algebraic_group, random_oracle(queries = 2^80))) <= 2^-100

@@ -1,0 +1,61 @@
+// Layers D and E, carried and not frozen. It is written over `zkc::constraint`; its oracles
+// change with the redesign of derived kinds and of `Commitment`.
+module stark
+
+use zkc::oracle::{Rows, table}
+use zkc::coset::{Coset, coset}
+use air::{Air}
+use fri
+
+section <
+    F: TwoAdicField, A: Air<F>,
+    LogHeight: nat, LogBlowup: nat, FinalLog: nat, Layers: nat, Queries: nat
+> where (
+    1 <= LogBlowup, FinalLog + Layers + 2 <= LogHeight + LogBlowup,
+    LogHeight + LogBlowup <= F::TwoAdicity, 1 <= Queries
+):
+
+    use air::deep<F, A>::{Opened, opened, deep_row, Satisfied}
+
+    // The DEEP word is never sent: a row of it is computed from one row of each table.
+    pub oracle def Deep<
+        T: Rows<[F; A::Width], 2^(LogHeight + LogBlowup)>,
+        Q: Rows<[F; A::Chunks], 2^(LogHeight + LogBlowup)>
+    >(
+        trace: Oracle<T>,
+        quotient: Oracle<Q>,
+        claimed: Opened<LogHeight + LogBlowup>
+    ): Rows<F, 2^(LogHeight + LogBlowup)>:
+        at i: deep_row(trace[i], quotient[i], claimed, i)
+
+    pub protocol TableArgument roles(P, V)(
+        trace: [[F; A::Width]; 2^LogHeight] @P,
+        public: A::Public @(P, V),
+        shift: nonzero<F> @(P, V)
+    ):
+        domain = coset<F, LogHeight + LogBlowup>(shift)
+        extended = A::extend(trace, domain)
+        trace_rows <- send extended to V as oracle<
+            table<[F; A::Width], 2^(LogHeight + LogBlowup)>
+        >
+        alpha <- draw F from V to P
+        chunks = A::quotient<h = LogHeight>(extended, public, domain, alpha)
+        quotient_rows <- send chunks to V as oracle<
+            table<[F; A::Chunks], 2^(LogHeight + LogBlowup)>
+        >
+        zeta <- draw F from V to P
+        trace_at_zeta <- send A::trace_values(trace, zeta) to V
+        chunks_at_zeta <- send A::chunk_values(chunks, domain, zeta) to V
+        guard @V A::identity<LogHeight>(public, trace_at_zeta, chunks_at_zeta, zeta, alpha)
+        gamma <- draw F from V to P
+        claimed = opened(domain, zeta, trace_at_zeta, chunks_at_zeta, gamma)
+        word = Deep(trace_rows, quotient_rows, claimed)
+        low_degree <- fri::LowDegree<
+            FinalLog = FinalLog, Layers = Layers, Queries = Queries
+        >(word, domain)
+
+    spec for TableArgument:
+        proves Satisfied(public; trace)
+        charge sites.alpha <= A::Constraints / F::Order
+        charge sites.zeta <= A::Degree * 2^LogHeight / F::Order
+        charge sites.gamma <= (A::Openings + A::Chunks) / F::Order

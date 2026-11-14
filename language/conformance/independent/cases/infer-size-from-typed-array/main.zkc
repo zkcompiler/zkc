@@ -1,0 +1,4 @@
+module conformance::infer_size_from_typed_array
+
+def copy<T,n: nat>(xs: [T;n]) -> [T;n]: xs
+def main(xs: [bool;3]) -> [bool;3]: copy(xs)

@@ -1,0 +1,6 @@
+module conformance::wire_fact_missing_receiver_guard
+
+protocol P roles(A,B)(xs:[nat] @A):
+    guard @A length(xs) == 2 else refused
+    m <- send xs to B
+    y @B = m[1]

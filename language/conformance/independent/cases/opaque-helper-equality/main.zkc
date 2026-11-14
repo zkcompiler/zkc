@@ -1,0 +1,10 @@
+module conformance::opaque_helper_equality
+
+interface Carrier:
+    type T
+module N: Carrier:
+    type T = nat
+
+def same<T>(a:T,b:T) -> bool: a == b
+def hidden<X:Carrier>(a:X::T,b:X::T) -> bool: same(a,b)
+def main(a:nat,b:nat) -> bool: hidden<N>(a,b)

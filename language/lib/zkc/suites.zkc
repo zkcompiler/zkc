@@ -1,0 +1,44 @@
+// Layer C, carried and not frozen. To change: what `Suite` states and what the Fiat-Shamir
+// step absorbs.
+module zkc::suites
+
+// Standard library, layer 3. Transcript suites: the catalogue suites, bound once, and one
+// suite in source.
+
+use zkc::construction::{Suite}
+use zkc::hash::{Hash}
+use zkc::layout::{canonical}
+use zkc::option::{Option}
+
+// [rows] Suites of the catalogue; legacy until they are written in source.
+pub module Merlin3Bls12381: Suite = primitive("suite.merlin3.bls12-381.fr64be/0")
+pub module Poseidon2KoalaBear: Suite = primitive("suite.poseidon2-duplex.koala-bear/0")
+
+// [source] A hash chain over a byte hash, with challenges in a prime field. The state is one
+// digest. A challenge is `F::Bytes + 16` squeezed bytes reduced modulo the order; a position
+// is 16 bytes reduced modulo the bound. Not validated against a deployed transcript.
+pub module HashChain<H: Hash, F: PrimeField>: Suite where (1 <= H::Size):
+    module Units = canonical
+    type State = [byte; H::Size]
+    type Challenge = F
+    nat ChallengeUnits = F::Bytes + 16
+    nat PositionUnits = 16
+
+    def start(identity): H::hash(identity)
+
+    def absorb(state, units): H::hash(state ++ [0] ++ units)
+
+    // The block of squeezed bytes with a counter.
+    def block(state: State, counter: index<2^64>) -> State:
+        H::hash(state ++ [1] ++ canonical::write_natural(counter))
+
+    def squeeze(state):
+        (H::hash(state ++ [2]), [block(state, i / H::Size)[i % H::Size] for i in 0..n])
+
+    def challenge(units): Some(F::from_nat(∑ i ∈ 0..F::Bytes + 16, units[i] * 256^i))
+
+    def position(units): Some((∑ i ∈ 0..16, units[i] * 256^i) % n)
+
+    spec def challenge_distance(): F::Order / 2^(8 * (F::Bytes + 16))
+
+    spec def position_distance(): n / 2^128

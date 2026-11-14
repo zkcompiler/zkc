@@ -1,0 +1,9 @@
+module conformance::opaque_literal
+
+interface Carrier:
+    type T
+module N: Carrier:
+    type T = nat
+
+def zero<X:Carrier>() -> X::T: 0
+def main() -> nat: zero<N>()

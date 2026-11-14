@@ -1,0 +1,3 @@
+module conformance::empty_value
+
+def f() -> [index<0>;0]: []

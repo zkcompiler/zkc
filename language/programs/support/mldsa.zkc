@@ -1,0 +1,45 @@
+// Layer F, carried and not frozen. To change: a ring sort and the SHAKE rows of `zkc::hash`;
+// the sampling loops.
+module mldsa
+
+// Project library of the ML-DSA example: the lattice operations are rows of the project.
+
+use zkc::construction
+
+pub interface Parameters where (beta <= gamma1, 1 <= attempts):
+    nat gamma1
+    nat beta
+    nat attempts
+
+pub module Parameters65: Parameters = asset(mldsa65)
+
+pub type PublicKey<K: Parameters> = primitive("ml-dsa.public_key", K)
+pub type SecretKey<K: Parameters> = primitive("ml-dsa.secret_key", K)
+pub type Vector<K: Parameters> = primitive("ml-dsa.vector", K)
+pub type HighBits<K: Parameters> = primitive("ml-dsa.high_bits", K)
+pub type Challenge<K: Parameters> = primitive("ml-dsa.challenge", K)
+pub type Hint<K: Parameters> = primitive("ml-dsa.hint", K)
+
+// The mask of 64 uniform bytes: the prover samples the bytes and applies the function.
+pub def expand<K: Parameters>(bytes: [byte; 64]) -> Vector<K> = primitive("ml-dsa.expand_mask")
+// The challenge of a 32-byte seed (SampleInBall); the seed is what the verifier draws.
+pub def ball<K: Parameters>(seed: [byte; 32]) -> Challenge<K> = primitive("ml-dsa.sample_in_ball")
+
+pub def high_bits<K: Parameters>(key: PublicKey<K>, y: Vector<K>) -> HighBits<K> = primitive("ml-dsa.high_bits_of")
+pub def respond<K: Parameters>(y: Vector<K>, c: Challenge<K>, secret: SecretKey<K>) -> Vector<K> = primitive("ml-dsa.respond")
+pub def within<K: Parameters>(z: Vector<K>, bound: nat) -> bool = primitive("ml-dsa.within")
+pub def low_bits_ok<K: Parameters>(key: PublicKey<K>, secret: SecretKey<K>, y: Vector<K>, c: Challenge<K>) -> bool = primitive("ml-dsa.low_bits_ok")
+pub def make_hint<K: Parameters>(key: PublicKey<K>, secret: SecretKey<K>, y: Vector<K>, c: Challenge<K>) -> Hint<K> = primitive("ml-dsa.make_hint")
+pub def hint_ok<K: Parameters>(hint: Hint<K>) -> bool = primitive("ml-dsa.hint_ok")
+pub def use_hint<K: Parameters>(hint: Hint<K>, w: HighBits<K>) -> HighBits<K> = primitive("ml-dsa.use_hint")
+pub def approximate<K: Parameters>(key: PublicKey<K>, z: Vector<K>, c: Challenge<K>) -> HighBits<K> = primitive("ml-dsa.approximate")
+
+pub relation ShortSecret<K: Parameters>(key: PublicKey<K>; secret: SecretKey<K>) = external("Zkc.MlDsa.short_secret")
+pub relation RelaxedSecret<K: Parameters>(key: PublicKey<K>; secret: SecretKey<K>) = external("Zkc.MlDsa.relaxed_secret")
+pub relation SelfTargetMsis<K: Parameters>(key: PublicKey<K>) = external("Zkc.MlDsa.self_target_msis")
+pub spec def abort_bound<K: Parameters>() -> rational = external("Zkc.MlDsa.abortBound")
+
+pub module Suite: construction::Suite = primitive("suite.ml-dsa")
+pub def expand_mask<K: Parameters>(secret: SecretKey<K>, statement: [byte], site: nat, tries: nat) -> [byte; 64] = primitive("ml-dsa.derive_mask")
+pub def recover_commitment<K: Parameters>(key: PublicKey<K>, seed: [byte; 32], response: (Vector<K>, Hint<K>)) -> HighBits<K> = primitive("ml-dsa.recover_commitment")
+pub def keygen<K: Parameters>(seed: [byte; 32]) -> (SecretKey<K>, PublicKey<K>) = primitive("ml-dsa.keygen")

@@ -1,0 +1,4 @@
+module conformance::literal_sibling_field
+
+type F = primitive("koala-bear")
+def f(x:F) -> F: (2^3) + x

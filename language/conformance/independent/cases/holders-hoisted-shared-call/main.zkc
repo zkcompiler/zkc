@@ -1,0 +1,8 @@
+module conformance::holders_hoisted_shared_call
+
+def positive(x:nat) -> nat:
+    guard 0 < x else abort
+    return x
+protocol P roles(A,B)(x:nat @(A,B)):
+    t = positive(x)
+    m <- send t from A to B

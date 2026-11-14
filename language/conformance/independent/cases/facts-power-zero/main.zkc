@@ -1,0 +1,3 @@
+module conformance::facts_power_zero
+
+def f() -> index<2>: 0^0

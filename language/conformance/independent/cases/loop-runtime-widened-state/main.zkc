@@ -1,0 +1,7 @@
+module conformance::loop_runtime_widened_state
+
+def f(n:nat) -> [nat]:
+    mut xs: [nat] = []
+    for i in 0..n:
+        xs := xs ++ [i]
+    return xs

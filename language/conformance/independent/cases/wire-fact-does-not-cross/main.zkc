@@ -1,0 +1,7 @@
+module conformance::wire_fact_does_not_cross
+
+protocol P roles(A,B)(xs:[nat] @A):
+    guard @A length(xs) == 2 else refused
+    m <- send xs to B
+    guard @B length(m) == 2
+    y @B = m[1]

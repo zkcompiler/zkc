@@ -1,0 +1,4 @@
+module conformance::events_multireceiver_parts
+
+protocol P roles(A,B,C)(x:nat @A):
+    m <- send x to C,B

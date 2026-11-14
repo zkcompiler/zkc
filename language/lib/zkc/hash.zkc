@@ -1,0 +1,21 @@
+module zkc::hash
+
+// Core library.
+
+// [item] A function from bytes to a digest; the hash of a `pin`.
+pub interface Hash:
+    nat Size
+    def hash(input: [byte]) -> [byte; Size]
+
+// [rows hash.sha256, hash.keccak256]
+pub module Sha256: Hash = primitive("hash.sha256")
+pub module Keccak256: Hash = primitive("hash.keccak256")
+
+// An extendable-output function: from bytes to as many bytes as are asked for. It is no `Hash`,
+// whose `Size` is fixed.
+pub interface ExtendableOutput:
+    def output<count: nat>(input: [byte]) -> [byte; count]
+
+// [rows hash.shake128, hash.shake256]
+pub module Shake128: ExtendableOutput = primitive("hash.shake128")
+pub module Shake256: ExtendableOutput = primitive("hash.shake256")

@@ -1,0 +1,29 @@
+// Layer E, carried; superseded by `zkc::constraint::air::deep`.
+module air::deep<F: TwoAdicField, A: Air<F>>
+
+// Project library of the STARK example: the out-of-domain values of a table argument.
+
+use air::{Air}
+use zkc::coset::{Coset, contains}
+
+// What both roles know once the out-of-domain values are sent; sealed.
+pub type Opened<n: nat> = primitive("air.deep.opened", F, n)
+
+def combine<n: nat>(
+    domain: Coset<F, n>, zeta: F, trace: [F; A::Openings], chunks: [F; A::Chunks], gamma: F
+) -> Opened<n> = primitive("air.deep.open_values")
+
+// A guard, then a total row: stops with `refused` when zeta lies in the domain.
+pub def opened<n: nat>(
+    domain: Coset<F, n>, zeta: F, trace: [F; A::Openings], chunks: [F; A::Chunks], gamma: F
+) -> Opened<n> where (n <= F::TwoAdicity):
+    guard not contains(domain, zeta) else refused
+    return combine(domain, zeta, trace, chunks, gamma)
+
+pub def deep_row<n: nat>(
+    trace: [F; A::Width], chunks: [F; A::Chunks], claimed: Opened<n>, i: index<2^n>
+) -> F = primitive("air.deep.row")
+
+pub relation Satisfied<h: nat>(
+    public: A::Public; trace: [[F; A::Width]; 2^h]
+) = external("Zkc.Air.satisfied")

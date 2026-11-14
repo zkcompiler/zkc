@@ -1,0 +1,61 @@
+// Layer A, carried. Pending: the lift of a coset to an extension, for additions that mix a
+// field and its extension.
+module zkc::coset
+
+// Standard library, layer 2. Cosets of the two-adic subgroups of a field.
+
+use zkc::polynomial::{evaluate}
+
+// The coset `shift * H`, with `H` the subgroup of order 2^k; point i is `shift * w^i` for the
+// generator `w = F::root(k)`. A record with a field that is not `pub`: built by `coset` only.
+pub struct Coset<F: TwoAdicField, k: nat>:
+    shift: nonzero<F>
+
+pub def coset<F: TwoAdicField, k: nat>(shift: nonzero<F>) -> Coset<F, k> where (
+    k <= F::TwoAdicity
+):
+    Coset{shift}
+
+// `domain[i]` is this function: the point i.
+pub def at<F: TwoAdicField, k: nat>(domain: Coset<F, k>, i: index<2^k>) -> nonzero<F> where (
+    k <= F::TwoAdicity
+):
+    domain.shift * F::root(k) ^ i
+
+// The coset of the squares: point i of `domain` and point i + 2^k both map to its point i.
+pub def square<F: TwoAdicField, k: nat>(domain: Coset<F, k + 1>) -> Coset<F, k>:
+    Coset{shift = domain.shift * domain.shift}
+
+pub def points<F: TwoAdicField, k: nat>(domain: Coset<F, k>) -> [nonzero<F>; 2^k] where (
+    k <= F::TwoAdicity
+):
+    [domain[i] for i in 0..2^k]
+
+// Whether a value is a point of the coset.
+#[kernel("coset.contains")]
+pub def contains<F: TwoAdicField, k: nat>(domain: Coset<F, k>, x: F) -> bool where (
+    k <= F::TwoAdicity
+):
+    ∃ i ∈ 0..2^k, domain[i] == x
+
+// The coefficients of the polynomial of degree below 2^k with these values on the domain.
+#[kernel("coset.interpolate")]
+pub def interpolate<F: TwoAdicField, k: nat>(
+    values: [F; 2^k], domain: Coset<F, k>
+) -> [F; 2^k] where (k <= F::TwoAdicity):
+    [(∑ i ∈ 0..2^k, values[i] / domain[i] ^ j) / 2^k for j in 0..2^k]
+
+// The same, for a polynomial of degree below 2^t; stops with `refused` when the degree is larger.
+pub def coefficients<F: TwoAdicField, t: nat, k: nat>(
+    values: [F; 2^k], domain: Coset<F, k>
+) -> [F; 2^t] where (t <= k, k <= F::TwoAdicity):
+    all_coefficients = interpolate(values, domain)
+    guard ∀ j ∈ 2^t..2^k, all_coefficients[j] == 0 else refused
+    return all_coefficients[0..2^t]
+
+// The values on `target` of the polynomial of degree below 2^k with these values on `domain`.
+#[kernel("coset.extend")]
+pub def extend<F: TwoAdicField, k: nat, n: nat>(
+    values: [F; 2^k], domain: Coset<F, k>, target: Coset<F, n>
+) -> [F; 2^n] where (k <= n, n <= F::TwoAdicity):
+    [evaluate(interpolate(values, domain), target[i]) for i in 0..2^n]

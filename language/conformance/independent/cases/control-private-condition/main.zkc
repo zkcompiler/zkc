@@ -1,0 +1,5 @@
+module conformance::control_private_condition
+
+protocol P roles(A,B)(c:bool @A,x:nat @A):
+    if c:
+        m <- send x to B

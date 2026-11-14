@@ -1,0 +1,6 @@
+module conformance::grammar_element_update
+
+def f() -> [nat; 2]:
+    mut xs = [1,2]
+    xs[0] := 3
+    return xs

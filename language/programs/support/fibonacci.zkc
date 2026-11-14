@@ -1,0 +1,9 @@
+// Layer E, carried and withdrawn: the language has no `module … = asset` with abstract types
+// and no `relation … = asset`.
+module fibonacci
+
+use air::{Air}
+use zkc::fields::{KoalaBear4}
+
+// A module backed by a constraint asset; its naturals are read from the asset.
+pub module Fibonacci: Air<KoalaBear4> = asset(fibonacci)

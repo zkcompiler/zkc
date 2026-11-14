@@ -26,6 +26,12 @@ the [walkthrough](getting-started.md) compiles and runs a complete example.
 implementation requires an explicit correspondence. A specification, compiler
 check, test and security proof establish different claims.
 
+[`language/`](../language/README.md) owns the source language of the compiler
+route in Lean: its reference, its library and worked programs in source, and its
+conformance tests. It is not the language that [`docs/language/`](language/README.md)
+describes and the C++ compiler reads. The two have the same file extension and
+are not interchangeable; native execution is of the latter only.
+
 The [contract register](spec/contracts.md) records cross-component owners,
 consumers and interface vocabularies.
 

@@ -1,0 +1,7 @@
+module conformance::facts_direct_order
+
+def f(a:nat,b:nat,c:nat) -> nat:
+    guard a <= b
+    guard b <= c
+    guard a <= c
+    return c - a

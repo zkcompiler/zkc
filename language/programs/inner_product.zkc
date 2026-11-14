@@ -1,0 +1,121 @@
+// Layer A, with a contract of layer B. Both loops are stepped
+// (TY10); the collected names of `InnerProductOnce` are collections, because every iteration
+// gives them one type (TY16). The `knowledge` clause is `by external`: a draw is in a loop.
+module inner_product
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::hash::{Keccak256}
+use zkc::sequence::{low, high, fold}
+use zkc::suites::{HashChain}
+use zkc::security::{completeness, knowledge_soundness, random_oracle}
+
+section <G: PrimeOrderGroup>:
+    // P = g^a h^b u^<a, b>, written additively.
+    def commitment<m: nat>(
+        g: [G; 2^m],
+        h: [G; 2^m],
+        u: G,
+        a: [G::Scalar; 2^m],
+        b: [G::Scalar; 2^m]
+    ) -> G:
+        ⟪g, a⟫ + ⟪h, b⟫ + u * ⟪a, b⟫
+
+    relation InnerProductRelation<n: nat>(
+        g: [G; 2^n], h: [G; 2^n], u: G, target: G; a: [G::Scalar; 2^n], b: [G::Scalar; 2^n]
+    ):
+        target == commitment(g, h, u, a, b)
+
+    // A non-trivial discrete-logarithm relation among the generators.
+    relation DiscreteLogRelation<n: nat>(
+        g: [G; 2^n], h: [G; 2^n], u: G; r: [G::Scalar; 2^n], s: [G::Scalar; 2^n], t: G::Scalar
+    ):
+        ⟪g, r⟫ + ⟪h, s⟫ + u * t == 0 and (∃ c ∈ r ++ s ++ [t], c != 0)
+
+    protocol InnerProduct<n: nat> roles(P, V)(
+        g: [G; 2^n] @(P, V),
+        h: [G; 2^n] @(P, V),
+        u: G @(P, V),
+        target: G @(P, V),
+        a: [G::Scalar; 2^n] @P,
+        b: [G::Scalar; 2^n] @P
+    ):
+        mut gk = g
+        mut hk = h
+        mut pk = target
+        mut ak = a
+        mut bk = b
+        for k in 0..n:
+            left <- send commitment(high(gk), low(hk), u, low(ak), high(bk)) to V
+            right <- send commitment(low(gk), high(hk), u, high(ak), low(bk)) to V
+            x <- draw nonzero<G::Scalar> from V to P
+            y = 1 / x
+            gk := fold(gk, y, x)
+            hk := fold(hk, x, y)
+            pk := left * x^2 + pk + right * y^2
+            ak := fold(ak, x, y)
+            bk := fold(bk, y, x)
+        a_last <- send ak[0] to V
+        b_last <- send bk[0] to V
+        guard @V pk == gk[0] * a_last + hk[0] * b_last + u * (a_last * b_last)
+
+    // The extractor of Bulletproofs, Theorem 1, rewinds every round four times: a tree of 4^n
+    // runs. The tree of runs over a loop of challenges has no type yet, so the statement is the
+    // formal library's, and a goal that uses this clause is reported as resting on it.
+    spec for InnerProduct:
+        proves InnerProductRelation(g, h, u, target; a, b)
+        through InnerProductRelation(gk, hk, u, pk; ak, bk) at k
+        knowledge InnerProductRelation(g, h, u, target) by external(
+            "Bulletproofs.InnerProduct.extract"
+        ) or DiscreteLogRelation(g, h, u)
+
+    // The scalars of the folded generators: s[i] is the product over the rounds j of x[j] when
+    // bit j of i is set (the most significant bit is round 0) and of y[j] otherwise.
+    def scalars<n: nat>(x: [G::Scalar; n], y: [G::Scalar; n]) -> [G::Scalar; 2^n]:
+        [(∏ j ∈ 0..n, if (i / 2^(n - j - 1)) % 2 == 1 then x[j] else y[j]) for i in 0..2^n]
+
+    // The same argument with the verifier of section 3.1 of the paper: it keeps the messages
+    // and the challenges and computes the folded generators once, at the end.
+    protocol InnerProductOnce<n: nat> roles(P, V)(
+        g: [G; 2^n] @(P, V),
+        h: [G; 2^n] @(P, V),
+        u: G @(P, V),
+        target: G @(P, V),
+        a: [G::Scalar; 2^n] @P,
+        b: [G::Scalar; 2^n] @P
+    ):
+        mut gk @P = g
+        mut hk @P = h
+        mut ak = a
+        mut bk = b
+        for k in 0..n collect (lefts = left, rights = right, xs = x, ys = y):
+            left <- send commitment(high(gk), low(hk), u, low(ak), high(bk)) to V
+            right <- send commitment(low(gk), high(hk), u, high(ak), low(bk)) to V
+            x <- draw nonzero<G::Scalar> from V to P
+            y = 1 / x
+            gk := fold(gk, y, x)
+            hk := fold(hk, x, y)
+            ak := fold(ak, x, y)
+            bk := fold(bk, y, x)
+        a_last <- send ak[0] to V
+        b_last <- send bk[0] to V
+        folded @V = target + ⟪lefts, [c^2 for c in xs]⟫ + ⟪rights, [c^2 for c in ys]⟫
+        g_last @V = ⟪g, scalars(xs, ys)⟫
+        h_last @V = ⟪h, scalars(ys, xs)⟫
+        guard @V folded == g_last * a_last + h_last * b_last + u * (a_last * b_last)
+
+    spec for InnerProductOnce:
+        proves InnerProductRelation(g, h, u, target; a, b)
+        through InnerProductRelation(
+            gk, hk, u, target + ⟪lefts, [c^2 for c in xs]⟫ + ⟪rights, [c^2 for c in ys]⟫; ak, bk
+        ) at k
+
+scheme InnerProduct8 = InnerProduct<G1, n = 3>:
+    construction derived(HashChain<Keccak256, Fr>)
+
+goal complete = completeness(InnerProduct8)
+goal extractable = knowledge_soundness(InnerProduct8, model = random_oracle(queries = 2^64))
+
+scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
+    construction derived(HashChain<Keccak256, Fr>)
+
+goal complete_once = completeness(InnerProductOnce8)

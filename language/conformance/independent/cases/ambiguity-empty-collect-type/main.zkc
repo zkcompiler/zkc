@@ -1,0 +1,6 @@
+module conformance::ambiguity_empty_collect_type
+
+def f():
+    for i in 0..0 collect (xs = i):
+        ()
+    return ()

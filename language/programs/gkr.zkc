@@ -1,0 +1,46 @@
+// Layer A, with a contract of layer B. Its circuit library, `support/circuits/layered.zkc`,
+// is carried; a circuit as data in source is to replace it.
+module gkr<F: Field>
+
+use sumcheck<F>::{Reduce}
+use zkc::multilinear
+use zkc::polynomial::{evaluate}
+use circuits::layered<F>::{
+    Circuit, Gate, values, gate_state, summand, restriction, on_line, wiring, combine
+}
+
+pub relation Outputs<d: nat, w: nat>(c: Circuit<d, w>, inputs: [F; 2^w], outputs: [F; 2^w]):
+    outputs == values(c, inputs, 0)
+
+pub relation LayerValue<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d + 1>, point: [F; w], value: F
+):
+    value == multilinear::evaluate(values(c, inputs, layer), point)
+
+pub protocol Gkr<d: nat, w: nat> roles(P, V)(
+    c: Circuit<d, w> @(P, V),
+    inputs: [F; 2^w] @(P, V),
+    outputs: [F; 2^w] @(P, V)
+):
+    z0 <- draw [F; w] from V to P
+    mut z = z0
+    mut v = multilinear::evaluate(outputs, z0)
+    for i in 0..d:
+        below @P = values(c, inputs, i + 1)
+        reduced <- Reduce<Gate, rounds = 2 * w>(
+            gate_state(c, i, z, below), [], v, spec p = summand(c, inputs, i, z)
+        )
+        q <- send restriction(below, reduced.point) to V
+        guard @V reduced.value == combine(
+            wiring(c, i, z, reduced.point), evaluate(q, 0), evaluate(q, 1)
+        )
+        t <- draw F from V to P
+        z := on_line<w>(reduced.point, t)
+        v := evaluate(q, t)
+    guard @V v == multilinear::evaluate(inputs, z)
+
+spec for Gkr:
+    proves @V Outputs(c, inputs, outputs)
+    through LayerValue(c, inputs, i, z, v) at i
+    charge sites.z0 <= w / F::Order
+    charge sites.t <= w / F::Order

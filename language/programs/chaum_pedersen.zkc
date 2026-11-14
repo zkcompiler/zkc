@@ -1,0 +1,61 @@
+// Layer A: the protocol. Its contract is layer B: the tree function and the simulator are
+// `def`s with a closed cost, and the goals ask for completeness, knowledge soundness and
+// honest-verifier zero knowledge of the derived scheme.
+module chaum_pedersen
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::hash::{Keccak256}
+use zkc::suites::{HashChain}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, random_oracle
+}
+
+section <G: PrimeOrderGroup>:
+    // u and v have the same discrete logarithm x with respect to the bases g and h.
+    relation SameLog(g: G, h: G, u: G, v: G; x: G::Scalar):
+        u == g * x and v == h * x
+
+    protocol ChaumPedersen roles(P, V)(
+        g: G @(P, V),
+        h: G @(P, V),
+        u: G @(P, V),
+        v: G @(P, V),
+        x: G::Scalar @P
+    ):
+        r @P <- sample G::Scalar
+        #[site(commitment)]
+        (a, b) <- send (g * r, h * r) to V
+        c <- draw G::Scalar from V to P
+        z <- send r + c * x to V
+        guard @V g * z == a + u * c
+        guard @V h * z == b + v * c
+
+    // Special soundness: two accepting runs with one commitment and two challenges.
+    def extract(g: G, h: G, u: G, v: G, runs: ChaumPedersen::Runs<2>) -> G::Scalar:
+        difference = runs[0].c - runs[1].c
+        guard difference != 0
+        return (runs[0].z - runs[1].z) / difference
+
+    // The honest verifier's view from its inputs, its challenge and a uniform response.
+    def simulate(
+        inputs: ChaumPedersen::Inputs<V>,
+        coins: ChaumPedersen::Coins<V>,
+        z: G::Scalar
+    ) -> ChaumPedersen::Received<V>:
+        ChaumPedersen::Received<V>{
+            commitment = (inputs.g * z - inputs.u * coins.c, inputs.h * z - inputs.v * coins.c),
+            z
+        }
+
+    spec for ChaumPedersen:
+        proves SameLog(g, h, u, v; x)
+        knowledge SameLog(g, h, u, v) by extract
+        zero_knowledge by simulate using coins
+        charge sites.c <= 1 / G::Scalar::Order
+
+scheme SameLogProof = ChaumPedersen<G1>:
+    construction derived(HashChain<Keccak256, Fr>)
+
+goal complete = completeness(SameLogProof)
+goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
+goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)

@@ -1,0 +1,4 @@
+module conformance::infer_additive_size
+
+def shorten<T,n: nat>(xs: [T;n+1]) -> [T;n]: xs[0..n]
+def main(xs: [bool;3]) -> [bool;2]: shorten(xs)

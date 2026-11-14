@@ -1,0 +1,4 @@
+module conformance::names_unreached_unbound
+
+def latent<n: nat>(x: nat) -> nat: missing(x)
+def main() -> nat: 1

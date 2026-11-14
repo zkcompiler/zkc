@@ -1,0 +1,4 @@
+module conformance::names_unused_private_instance
+
+def latent<n: nat>(xs: [nat; n]) -> nat: xs[0]
+def main() -> nat: 1

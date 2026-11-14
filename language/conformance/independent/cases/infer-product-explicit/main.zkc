@@ -1,0 +1,4 @@
+module conformance::infer_product_explicit
+
+def same<n: nat>(xs: [bool;2*n]) -> [bool;2*n]: xs
+def main(xs: [bool;6]) -> [bool;6]: same<n=3>(xs)

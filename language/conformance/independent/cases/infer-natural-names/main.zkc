@@ -1,0 +1,4 @@
+module conformance::infer_natural_names
+
+def count<n: nat,m: nat>() -> nat: n + m
+def main() -> nat: count<n=2,m=3>()

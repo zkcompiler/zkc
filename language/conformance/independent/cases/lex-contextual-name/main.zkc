@@ -1,0 +1,5 @@
+module conformance::lex_contextual_name
+
+def f() -> nat:
+    from = 7
+    return from

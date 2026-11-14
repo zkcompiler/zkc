@@ -1,0 +1,53 @@
+// Layer A protocol under schemes of layer C and goals of layer B. Each zero-knowledge goal
+// names its clause; `derived_view`, zero knowledge at `constructed`, reads the simulator that
+// programs the oracle. The functions that the lines of `Signature` name are deployed: they are
+// bound to rows of the project. Not settled, with the schedule of the Fiat-Shamir step: what
+// the suite of `Signature` absorbs.
+module schnorr_example
+
+use schnorr::{Schnorr}
+use signature
+use zkc::curves::bls12_381::{G1}
+use zkc::layout::{canonical}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, zero_knowledge,
+    unforgeability, random_oracle
+}
+
+scheme Proof = Schnorr<G1>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof, stage = written) <= 0
+goal special = knowledge_soundness(Proof, stage = written)
+goal view = honest_verifier_zero_knowledge(Proof, stage = written, clause = honest) <= 0
+goal knowledge = knowledge_soundness(Proof, model = random_oracle, statement = fixed)
+goal derived_view = zero_knowledge(
+    Proof, model = random_oracle, stage = constructed, clause = programmed
+)
+
+// The same protocol as a signature: a message and a context in the statement, a derived nonce,
+// and a proof that carries the challenge and omits the commitment.
+scheme Signature = Schnorr<G1>:
+    context message: [byte]
+    context domain: [byte]
+    construction derived(signature::Suite)
+    samples derived by signature::nonce
+    layout canonical:
+        carry sites.challenge
+        recover sites.commitment by signature::commitment
+
+goal forged = unforgeability(Signature, keys = signature::keygen, model = random_oracle)
+
+pub entry def sign(secret: G1::Scalar, message: [byte], domain: [byte]) -> Signature::Proof:
+    statement = Signature::Statement{
+        base = G1::generator(), point = G1::generator() * secret, message, domain
+    }
+    return Signature::prove(statement, Signature::Witness{scalar = secret})
+
+pub entry def check(point: G1, message: [byte], domain: [byte], proof: Signature::Proof):
+    Signature::verify(
+        Signature::Keys{},
+        Signature::Statement{base = G1::generator(), point, message, domain},
+        proof
+    )

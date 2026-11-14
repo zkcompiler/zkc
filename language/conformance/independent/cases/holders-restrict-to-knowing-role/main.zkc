@@ -1,0 +1,5 @@
+module conformance::holders_restrict_to_knowing_role
+
+protocol P roles(A,B)(xs:[nat;8] @(A,B),i:nat @(A,B)):
+    guard @B i < 8
+    y @B = xs[i]

@@ -1,0 +1,4 @@
+module conformance::where_function_call
+
+def bound() -> nat: 3
+def f<n: nat>() -> nat where (n <= bound()): n

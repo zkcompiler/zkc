@@ -1,0 +1,10 @@
+module conformance::linear_generic_bound
+
+linear struct Ticket:
+    pub value: nat
+def consume(t:Ticket) -> nat:
+    Ticket{value=v} = t
+    return v
+
+def identity<T:linear>(x:T) -> T: x
+def f(t:Ticket) -> Ticket: identity(t)

@@ -1,0 +1,6 @@
+module conformance::infer_fact_explicit_bound
+
+def bound<n: nat>(x: index<n>) -> nat: x
+def main(x: nat) -> nat:
+    guard x < 8
+    return bound<n=8>(x)

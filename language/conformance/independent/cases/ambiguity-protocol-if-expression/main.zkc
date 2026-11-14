@@ -1,0 +1,4 @@
+module conformance::ambiguity_protocol_if_expression
+
+protocol P roles(A)(c:bool @A):
+    x = if c then 1 else 2

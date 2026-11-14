@@ -1,0 +1,3 @@
+module conformance::facts_power_zero_too_narrow
+
+def f() -> index<1>: 0^0
