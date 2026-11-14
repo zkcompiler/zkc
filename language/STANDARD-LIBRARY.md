@@ -3,16 +3,15 @@
 The standard library is everything above the core library that is not a protocol. A module of
 it holds no language item: it can be replaced by another module with the same signatures and no
 rule of the reference notices. This document gives its layers, its naming rules, what a protocol
-author imports, the ten modules that were written in source for the worked programs, and what
-happens to the 33 packages and the 249 operations that exist today. It is one of a set:
-`LANGUAGE.md`, the reference of the language; `CORE-LIBRARY.md`, the core library; this
-document; `lib/zkc/`, the library in source; `programs/`, the worked programs; and
-`conformance/`, the tests.
+author imports, and the ten modules that were written in source for the worked programs. It is
+one of a set: `LANGUAGE.md`, the reference of the language; `CORE-LIBRARY.md`, the core library;
+this document; `conformance/`, the tests; and, at the root of the repository, `libraries/zkc/`,
+the library in source, and `examples/`, the worked programs.
 
 *State.* This document follows `LANGUAGE.md`. `zkc::sequence` is layer A, which is frozen;
 `zkc::fields` and `zkc::curves` are layer A and carried. The other modules are carried, and the
 comment at the head of each source says what will change in it. A library of constraint systems,
-`zkc::constraint`, is designed and not written here (`LANGUAGE.md` §E). §6 is carried.
+`zkc::constraint`, is designed and not written here (`LANGUAGE.md` §E).
 
 ---
 
@@ -29,7 +28,7 @@ beyond the rows and the operations that the frontend applies without a declarati
 | 2 mathematics | `sequence`, `polynomial`, `multilinear`, `coset`, `fields`, `curves`; to come: `bits`, `matrix`, `pairing` | one row per field, group and pairing of the vocabulary | optional on every function | `sequence`, `polynomial`, `multilinear`, `coset`, `fields`, `curves::bls12_381` |
 | 3 encoding and hashing | `suites`; to come: `encoding`, `sponge`, `hash::poseidon2` | one permutation per hash; the suites of the catalogue until they are written in source | optional | `suites`, with one suite in source |
 | 4 commitments | `merkle`, `kzg`, `proximity` | none | optional | all three |
-| 5 protocol libraries | `sigma`, `sumcheck`, `gkr`, `fri`, `air`, `stark`, `inner_product` | none | — | as worked programs (`programs/`) |
+| 5 protocol libraries | `sigma`, `sumcheck`, `gkr`, `fri`, `air`, `stark`, `inner_product` | none | — | as worked programs (`examples/`) |
 | 6 deployments | `ethereum::eip4844`, `monero::bulletproofs_plus`, `spongefish` | none | — | — |
 
 Rule: every function of layers 2 to 4 that has a kernel has a body. A target without the kernel
@@ -93,7 +92,7 @@ A program does not bind a type of the vocabulary (`type Fr = primitive("…")`):
 
 ## 5. The modules written in source
 
-Each is a file of `lib/zkc/`, which the test suite of the frontend checks (`LANGUAGE.md` §11).
+Each is a file of `libraries/zkc/`, which the test suite of the frontend checks (`LANGUAGE.md` §11).
 They are standard library, not core. Marks as in `CORE-LIBRARY.md`.
 
 ### 5.1 `zkc::sequence` (layer 2)
@@ -115,7 +114,7 @@ They are standard library, not core. Marks as in `CORE-LIBRARY.md`.
 | `batch_inverse<F, n>` | function | source, kernel `sequence.batch_inverse` |  |
 | `bit_reverse<T, k>` | function | source, kernel `sequence.bit_reverse` |  |
 
-`lib/zkc/sequence.zkc`
+`libraries/zkc/sequence.zkc`
 
 ```zkc
 module zkc::sequence
@@ -192,7 +191,7 @@ pub def bit_reverse<T, k: nat>(values: [T; 2^k]) -> [T; 2^k]:
 | `of_coefficients<F, D>` | spec function | formal: `Zkc.Polynomial.ofCoefficients` |  |
 | `cube<F, n>` | spec function | formal: `Zkc.Polynomial.cube` |  |
 
-`lib/zkc/polynomial.zkc`
+`libraries/zkc/polynomial.zkc`
 
 ```zkc
 // Carried. Its functions are layer A; the kind `poly` is layer D. Pending: evaluation and
@@ -267,7 +266,7 @@ pub spec def cube<F: Field, n: nat>() -> [[F; n]; 2^n] = external("Zkc.Polynomia
 | `Multilinear<F, variables>` | interface | source | — |
 | `multilinear<F, variables>` | module | source | `Data`, `Position`, `Row`, `answer` |
 
-`lib/zkc/multilinear.zkc`
+`libraries/zkc/multilinear.zkc`
 
 ```zkc
 // Carried. Its functions are layer A; the kind `multilinear` is layer D, which is not
@@ -318,7 +317,7 @@ pub module multilinear<F: Field, variables: nat>: Kind + Multilinear<F, variable
 | `coefficients<F, t, k>` | function | source |  |
 | `extend<F, k, n>` | function | source, kernel `coset.extend` |  |
 
-`lib/zkc/coset.zkc`
+`libraries/zkc/coset.zkc`
 
 ```zkc
 // Layer A, carried. Pending: the lift of a coset to an extension, for additions that mix a
@@ -391,7 +390,7 @@ pub def extend<F: TwoAdicField, k: nat, n: nat>(
 | `KoalaBear` | type | row `koala-bear` |  |
 | `KoalaBear4` | type | row `koala-bear.ext4` |  |
 
-`lib/zkc/fields.zkc`
+`libraries/zkc/fields.zkc`
 
 ```zkc
 // Layer A, carried. The vocabulary gives each field the members `Prime`, `Dimension`,
@@ -418,7 +417,7 @@ pub type KoalaBear4 = primitive("koala-bear.ext4")
 | `Gt` | type | row `bls12-381.gt` |  |
 | `Bls12381` | module | row `bls12-381` |  |
 
-`lib/zkc/curves/bls12_381.zkc`
+`libraries/zkc/curves/bls12_381.zkc`
 
 ```zkc
 // Layer A, carried. The vocabulary gives `Fr` the members of a field over its prime field and
@@ -447,7 +446,7 @@ pub module Bls12381: Pairing = primitive("bls12-381")
 | `Poseidon2KoalaBear` | module | row `suite.poseidon2-duplex.koala-bear/0` |  |
 | `HashChain<H, F>` | module | source | `State`, `Challenge`, `block`, `Units`, `ChallengeUnits`, `PositionUnits`, `start`, `absorb`, `squeeze`, `challenge`, `position`, `challenge_distance`, `position_distance` |
 
-`lib/zkc/suites.zkc`
+`libraries/zkc/suites.zkc`
 
 ```zkc
 // Layer C, carried and not frozen. To change: what `Suite` states and what the Fiat-Shamir
@@ -502,7 +501,7 @@ pub module HashChain<H: Hash, F: PrimeField>: Suite where (1 <= H::Size):
 |---|---|---|---|
 | `Tree<H, T, k>` | module | source | `ProverKey`, `VerifierKey`, `Blinding`, `Digest`, `State`, `Proof`, `sibling`, `root_of`, `paired`, `commit` (kernel `merkle.commit`), `opening`, `check` (kernel `merkle.check`) |
 
-`lib/zkc/merkle.zkc`
+`libraries/zkc/merkle.zkc`
 
 ```zkc
 // Layer D, carried and not frozen. To change: `Tree` takes its layout as a static argument;
@@ -573,7 +572,7 @@ pub module Tree<H: Hash, T, k: nat>: Commitment<table<T, 2^k>>:
 | `verifier_key<E>` | function | source |  |
 | `Kzg<E, degree>` | module | source | `ProverKey`, `VerifierKey`, `Blinding`, `Digest`, `State`, `Proof`, `paired`, `commit` (kernel `kzg.commit`), `opening` (kernel `kzg.open`), `check` (kernel `kzg.check`) |
 
-`lib/zkc/kzg.zkc`
+`libraries/zkc/kzg.zkc`
 
 ```zkc
 // Layer D, carried and not frozen. To change: one key serves several shapes
@@ -632,7 +631,7 @@ pub module Kzg<E: Pairing, degree: nat>: Commitment<poly<E::Scalar, degree>>:
 | `fold_error<F>` | spec function | formal: `Zkc.Proximity.foldError` |  |
 | `query_error<F>` | spec function | formal: `Zkc.Proximity.queryError` |  |
 
-`lib/zkc/proximity.zkc`
+`libraries/zkc/proximity.zkc`
 
 ```zkc
 // Layer B, carried: bounds of the formal library.
@@ -659,109 +658,3 @@ layer 3, which are not written. `zkc::kzg::Kzg` states `paired` with pairings an
 as types. `zkc::suites::HashChain` is one suite in source; it was not compared with a deployed
 transcript. The suites of the catalogue are modules bound once to a row, until they are written
 in source.
-
----
-
-## 6. What happens to what exists today
-
-The tables below classify the 249 operations of the catalogue and the 636 public declarations
-of the 33 packages by their fate.
-
-### 6.1 The 249 operations
-
-| Fate | Count |
-|---|---|
-| a form of the language (`form`) | 78 |
-| source with a kernel (`source+kernel`) | 37 |
-| a row of the table (`row-table`) | 34 |
-| source (`source`) | 22 |
-| legacy: suites and constructions (`legacy-suite`) | 21 |
-| legacy: asset rows (`legacy-asset`) | 15 |
-| legacy: the lattice ring (`legacy-lattice`) | 10 |
-| deleted (`delete`) | 8 |
-| legacy: commitment helpers (`legacy-commitment`) | 8 |
-| a row bound in the standard library (`row-std`) | 7 |
-| a member of a sort (`row-sort`) | 5 |
-| unexamined (`unexamined`) | 4 |
-
-249 operations. Of them 46 stay rows (34 applied by the table, 5 members of sorts, 7 bound in the standard library),
-59 become source definitions (37 with a kernel), 78 are replaced by a form of the language and deleted,
-and 54 are legacy until their libraries move. The Merkle and KZG commitment helpers
-(`legacy-commitment`) and the hash-chain suite have a successor in source (`zkc::merkle`, `zkc::kzg`,
-`zkc::suites::HashChain`); the other suites, the asset rows and the lattice ring do not yet.
-
-### 6.2 The 636 declarations of the 33 packages
-
-| Fate | Count |
-|---|---|
-| a form of the language (`form`) | 177 |
-| ported with its library (`port`) | 168 |
-| source with a kernel (`source+kernel`) | 58 |
-| legacy: suites and constructions (`legacy-suite`) | 54 |
-| a sized type (`sized`) | 39 |
-| source (`source`) | 25 |
-| legacy: the lattice ring (`legacy-lattice`) | 24 |
-| deleted (`delete`) | 20 |
-| a type bound once in `zkc::fields`, `zkc::curves` (`std-binding`) | 16 |
-| a row of the table (`row-table`) | 16 |
-| a line of a scheme (`scheme-line`) | 10 |
-| a name of the formal library (`formal`) | 9 |
-| legacy: commitment helpers (`legacy-commitment`) | 8 |
-| a row bound in the standard library (`row-std`) | 7 |
-| a member of a sort (`row-sort`) | 4 |
-| a language item (`item`) | 1 |
-
-| Package | Declarations | Fate, by count |
-|---|---|---|
-| `arguments/bulletproofs/weighted_inner_product` | 13 | 13 port |
-| `arguments/stark/configurations/baby_bear_quartic` | 5 | 2 std-binding, 2 scheme-line, 1 port |
-| `arguments/stark/configurations/contract` | 4 | 3 source+kernel, 1 port |
-| `arguments/stark/configurations/goldilocks_quadratic` | 5 | 2 std-binding, 2 scheme-line, 1 port |
-| `arguments/stark/configurations/koala_bear_octic` | 7 | 2 std-binding, 2 scheme-line, 2 form, 1 port |
-| `arguments/stark/configurations/koala_bear_quartic` | 9 | 4 scheme-line, 3 std-binding, 2 port |
-| `arguments/stark/sampling` | 3 | 3 port |
-| `arguments/stark/single_table` | 5 | 4 port, 1 delete |
-| `arguments/stark/single_table/koala_bear_octic` | 2 | 2 port |
-| `arguments/stark/whole_bundle` | 6 | 6 port |
-| `commitments/kzg` | 5 | 5 port |
-| `constructions/ethereum/eip4844` | 36 | 18 legacy-suite, 14 port, 3 std-binding, 1 delete |
-| `constructions/monero/bulletproofs_plus` | 19 | 13 legacy-suite, 2 delete, 2 std-binding, 2 port |
-| `constructions/spongefish` | 18 | 13 legacy-suite, 2 delete, 2 std-binding, 1 port |
-| `core/algebra` | 23 | 21 form, 2 delete |
-| `core/collections` | 29 | 23 form, 3 delete, 2 source, 1 source+kernel |
-| `core/encoding` | 4 | 2 delete, 2 legacy-suite |
-| `core/polynomial` | 83 | 39 sized, 22 source+kernel, 8 source, 7 legacy-lattice, 6 port, 1 delete |
-| `core/primitives/algebra` | 22 | 13 form, 4 row-table, 3 row-sort, 2 source+kernel |
-| `core/primitives/collections` | 81 | 54 form, 12 row-table, 9 source, 6 source+kernel |
-| `core/primitives/cryptography` | 47 | 14 source+kernel, 8 legacy-commitment, 8 form, 8 legacy-suite, 7 row-std, 2 source |
-| `core/primitives/polynomial` | 52 | 17 legacy-lattice, 12 form, 10 source+kernel, 9 formal, 3 source, 1 row-sort |
-| `core/services` | 3 | 3 form |
-| `core/transport` | 3 | 3 port |
-| `core/traversal` | 41 | 41 form |
-| `protocols/polynomial/fri` | 18 | 15 port, 1 source, 1 item, 1 delete |
-| `protocols/polynomial/gkr` | 17 | 17 port |
-| `protocols/polynomial/sumcheck` | 15 | 13 port, 2 delete |
-| `protocols/sigma/compositions` | 4 | 4 port |
-| `protocols/sigma/schnorr` | 2 | 2 port |
-| `relations/air` | 43 | 40 port, 3 delete |
-| `relations/lattice` | 1 | 1 port |
-| `relations/table` | 11 | 11 port |
-
-33 packages, 636 declarations. Twelve modules go whole (`zkc::boolean`, `zkc::scalar`,
-`zkc::linear`, `zkc::field_array`, `zkc::accumulation`, `zkc::finite`, `zkc::finite_math`,
-`zkc::finite_domain`, `zkc::sampling::fields`, `zkc::sampling::words`, and the facades `zkc::curve`
-and `zkc::bytes`): what they held is a form of the language, a sized type or a draw of a law.
-
-### 6.3 Where a package goes
-
-| Today | Becomes |
-|---|---|
-| `core/primitives/algebra`, `core/algebra` | the sorts of `zkc::algebra`, the operators, `zkc::fields`, `zkc::curves` |
-| `core/primitives/collections`, `core/collections`, `core/traversal` | the collection type and its operators; comprehensions, `∑ ∏ ∀ ∃`, loops; `zkc::sequence` |
-| `core/primitives/polynomial`, `core/polynomial` | `zkc::polynomial`, `zkc::multilinear`, `zkc::coset`, with kernels |
-| `core/primitives/cryptography` | `zkc::hash` and the modes of layer 3; `zkc::merkle`; the pairing rows of `zkc::curves` |
-| `core/encoding`, `core/services`, `core/transport` | `zkc::layout`, the generated writers and readers, `zkc::suites` |
-| `commitments/kzg` | `zkc::kzg` |
-| `protocols/*`, `relations/*`, `arguments/*` | protocol libraries, ported with the forms of the reference; their field bindings and `commit` choices become imports and scheme lines |
-| `constructions/*` | suites and layouts in source, and deployments; legacy until then |
-| `relations/lattice` and the lattice ring | unexamined |

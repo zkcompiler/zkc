@@ -18,7 +18,6 @@ import Zkc.Tests.Frontend.Protocols
 import Zkc.Tests.Frontend.ProtocolRuns
 import Zkc.Tests.Frontend.Independent
 import Zkc.Tests.Frontend.Generators
-import Zkc.Tests.Frontend.DifferentialRuns
 import Zkc.Tests.Frontend.Schemes
 import Zkc.Tests.Frontend.Session
 import Zkc.Tests.Frontend.Trees

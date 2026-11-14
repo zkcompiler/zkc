@@ -1,13 +1,11 @@
 import Zkc.Tests.Frontend.NamesReference
-import Zkc.Tools.Frontend.Differential
+import Zkc.Tools.Frontend.PackageRuns
 
 /-!
 # Generators of true statements
 
 A protocol run on inputs drawn by type is mostly run on a false statement: an honest verifier
-stops at its first check, and what comes after it is not run. So a change after the first
-check is not seen: the fold of Sumcheck with its two halves exchanged agrees with the right
-one under every seed on drawn inputs.
+stops at its first check, and what comes after it is not run.
 
 A **generator** is a function of the language in a test module beside its protocol: from
 freely drawn values to a statement and its witness, in the order of the protocol's inputs. The
@@ -15,23 +13,20 @@ table `generators` names, for each protocol root, its generator and a second fun
 statement is false in one component. The free values have types that exclude a degenerate
 statement where the type can: the logarithm of a base is a unit.
 
-The suite runs each protocol, with the worked programs of the reference:
+The suite emits each test module with the worked programs of the repository, runs the generator
+by the core's executor on values drawn by type (`PackageRuns.inputs`), and runs every role of
+the protocol together on what it returns, with the coins of a seed:
 
-- on the statements of its generator, where every role returns and the package is observed to
-  agree with itself;
-- on the false statements, where the verifier stops: the check that a verifier is not
-  satisfied by everything.
-
-The runs are under draws taken from the stream first (`statementSeeds`): under a boundary draw
-every coin of a run is one boundary value, and with a challenge of zero the verifier of
-Schnorr's protocol accepts every response.
+- on the statement of its generator, every role returns;
+- on the false statement, a role stops `reject`: the check that a verifier is not satisfied by
+  everything.
 -/
 
 namespace Zkc.Tests.Frontend
 
 open Zkc.Frontend
 open Zkc.Frontend.Syntax
-open Zkc.Tools.Frontend.Differential
+open Zkc.Core.Concrete (Datum)
 
 /-- The test modules of the generators, each with its protocol: the worked program's, named by
 `use`, or its text where the worked program does not make it public. -/
@@ -184,43 +179,99 @@ def generators : Array (String × String × String × String) := #[
   ("sumcheck_statements", "Sumcheck<Fr, 10>", "statement", "false_statement")
 ]
 
-/-- The generators of a test module, for the settings of a comparison. -/
-def generatorsOf (program : String) : Array (String × String) :=
-  generators.filterMap fun (name, root, generator, _) =>
-    if name == program then some (root, generator) else none
+/-- The seed of the free values and of the coins of the runs. -/
+def generatorSeed : Nat := 14
 
-/-- Each protocol on the statements of its generator and on the false statements, under the
-first seeds of `statementSeeds`. -/
-def generatorSuite (reference : System.FilePath) : TestM Unit := do
-  let programs := reference / "programs"
-  let load ← cachedLoader #[reference / "lib", programs, programs / "support"]
-  let defaults : Settings := {}
-  let seeds := (statementSeeds defaults.seeds).take 1
+/-- The packages of the complete roots of a test module, by their descriptions. -/
+def emittedRoots (name text : String) (load : Array String → IO (Option SourceInput)) :
+    IO (Except String (Array (String × Zkc.Core.Raw.Package))) := do
+  let check ← checkNames #[{ name, parsed := parseString name text }] load
+  if let some first := check.refusals[0]? then
+    return .error s!"the names are refused: {first.render}"
+  let schemes := checkSchemes (checkTyping (checkInstances check #[name]) #[name])
+  return match (schemes.session.admitRoots none).completeRoots with
+    | .ok (roots, _) => .ok (roots.held.map fun (description, held) => (description, held.package))
+    | .error reported => .error s!"nothing is emitted: {"; ".intercalate reported.toList}"
+
+/-- The inputs of the newest protocol of a package as the source has them: the ports that an
+agreement over the inputs names are one input held by several roles, and every other port is
+an input of its own; in the order of their first ports. -/
+def sourceInputs (package : Zkc.Core.Raw.Package) : List (List Nat) :=
+  match package.protocols.getLast? with
+  | none => []
+  | some protocol =>
+    let agreed := (protocol.agreements.filter (!·.overOutputs)).map (·.ports)
+    let alone := (List.range protocol.inputs.length).filter fun port => !agreed.any (·.contains port)
+    (agreed ++ alone.map ([·])).mergeSort fun first second => first.headD 0 ≤ second.headD 0
+
+/-- The statement and the witness that a generator gives for a protocol: the last function of
+the generator's package run on values drawn for its inputs, its outputs in the order of the
+protocol's inputs in the source; one datum per input port of the protocol. A generator that
+returns one tuple gives its components. -/
+def statementOf (generator protocol : Zkc.Core.Raw.Package) : Except String (List Datum) := do
+  let typed ← match Zkc.Core.elaborate generator with
+    | .ok typed => pure typed
+    | .error refusal => throw s!"the core refuses the generator: {reprStr refusal}"
+  let some header := typed.functions.head? | throw "the generator has no function"
+  let free ← Zkc.Tools.Frontend.PackageRuns.inputs generator.types.toArray generatorSeed header.inputs
+  let inputs := sourceInputs protocol
+  let ports := (protocol.protocols.getLast?.map (·.inputs.length)).getD 0
+  match Zkc.Core.Vocabulary.runData Zkc.Core.Vocabulary.table generator
+      (typed.functions.length - 1) free with
+  | .returned outputs =>
+    let given := match outputs with
+      | [.sequence items] => if inputs.length == 1 then outputs else items
+      | other => other
+    if given.length != inputs.length then
+      throw s!"the generator gives {given.length} values, and the protocol has {inputs.length} inputs"
+    return (inputs.zip given).foldl (init := List.replicate ports (default : Datum))
+      fun data (held, datum) => held.foldl (fun data port => data.set port datum) data
+  | .stopped reason => throw s!"the generator stops {Zkc.Tools.Frontend.PackageRuns.stopText reason}"
+  | .limit elements => throw s!"the generator reaches the limit of {elements} elements"
+  | .failed message => throw s!"the generator fails: {message}"
+
+/-- Every role of the newest protocol of a package run together on a statement and a witness,
+with the coins of the seed: how each ended. -/
+def runOnStatement (package : Zkc.Core.Raw.Package) (data : List Datum) :
+    Except String (List (Zkc.Core.Execute.Outcome (List Datum))) := do
+  let roles := (package.protocols.getLast?.map (·.roles)).getD 0
+  let run ← Zkc.Core.Vocabulary.runEntry Zkc.Core.Vocabulary.table package (List.range roles) data
+    [generatorSeed]
+  return run.outcomes
+
+/-- The ends of the roles, as a line. -/
+def describeEnds (ends : List (Zkc.Core.Execute.Outcome (List Datum))) : String :=
+  "; ".intercalate (ends.map Zkc.Tools.Frontend.PackageRuns.describe)
+
+/-- Each protocol on the statement of its generator, where every role returns, and on the false
+statement, where a role stops `reject`. -/
+def generatorSuite (repository : Repository) : TestM Unit := do
+  let programs := repository.examples
+  let load ← cachedLoader #[repository.libraries, programs, programs / "support"]
   for (name, root, generator, falseGenerator) in generators do
     let some (_, text) := generatorPrograms.find? (·.1 == name)
       | failure s!"{name}: no such test module"
-    let emission ← match ← emit #[{ name, parsed := parseString name text }] load with
-      | .ok emission => pure emission
+    let roots ← match ← emittedRoots name text load with
+      | .ok roots => pure roots
       | .error message => do failure s!"{name}: {message}"; continue
     let rootOf (description : String) : Option Zkc.Core.Raw.Package :=
-      (emission.roots.find? (·.1 == description)).map (·.2)
+      (roots.find? (·.1 == description)).map (·.2)
     let some package := rootOf root | do failure s!"{name}: no root {root}"; continue
     let some trueStatements := rootOf generator
       | do failure s!"{name}: no generator {generator}"; continue
     let some falseStatements := rootOf falseGenerator
       | do failure s!"{name}: no generator {falseGenerator}"; continue
-    let settings : Settings := { seeds }
-    -- a true statement: every role returns, and the package agrees with itself
-    let onTrue := compareRoot settings package package emission.sites emission.sites
-      (some trueStatements)
-    expectTrue (onTrue matches .agree _)
-      s!"{name}: {root} on the statements of its generator: {onTrue.describe}"
-    -- a false statement: the verifier stops
-    let onFalse := compareRoot settings package package emission.sites emission.sites
-      (some falseStatements)
-    let stops := match onFalse with
-      | .incomplete (.cannotRun reason) => (reason.splitOn "stopped reject").length > 1
-      | _ => false
-    expectTrue stops s!"{name}: {root} on a false statement: {onFalse.describe}"
+    -- a true statement: every role returns
+    match statementOf trueStatements package >>= runOnStatement package with
+    | .ok ends =>
+      expectTrue (!ends.isEmpty && ends.all (· matches .returned _))
+        s!"{name}: {root} on the statement of its generator: {describeEnds ends}"
+    | .error message => failure s!"{name}: {root} on the statement of its generator: {message}"
+    -- a false statement: a role stops `reject`
+    match statementOf falseStatements package >>= runOnStatement package with
+    | .ok ends =>
+      expectTrue (ends.any (· matches .stopped .reject))
+        s!"{name}: {root} on a false statement: {describeEnds ends}"
+    | .error message => failure s!"{name}: {root} on a false statement: {message}"
 
 end Zkc.Tests.Frontend

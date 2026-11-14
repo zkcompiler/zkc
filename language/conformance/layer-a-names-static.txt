@@ -417,7 +417,7 @@ pub protocol X<spec d: nat> roles(P, V)(x: nat @P):
 module t
 pub def lift<G: Group>(n: nat, a: G::Scalar) -> G::Scalar:
     G::Scalar::from_nat(n) ^ 3 + a * G::Scalar::from_nat(G::Scalar::Characteristic - 1)
-=== M-SUM4 | refuse SP6 | `programs/sumcheck.zkc` with one change: `v + rounds` has two unknowns
+=== M-SUM4 | refuse SP6 | `examples/sumcheck.zkc` with one change: `v + rounds` has two unknowns
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -504,7 +504,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUM8 | refuse SP9 | `programs/sumcheck.zkc` with one change: a member that can stop
+=== M-SUM8 | refuse SP9 | `examples/sumcheck.zkc` with one change: a member that can stop
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -593,7 +593,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUM12 | refuse NL6 | `programs/sumcheck.zkc` with one change: a law is typed at the implementing module
+=== M-SUM12 | refuse NL6 | `examples/sumcheck.zkc` with one change: a law is typed at the implementing module
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -680,7 +680,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUM13 | refuse SP12 GU2 | `programs/sumcheck.zkc` with one change: `==` on the opaque type member `R::Message`, which `Round` gives no `equal`; and V does not hold `s`
+=== M-SUM13 | refuse SP12 GU2 | `examples/sumcheck.zkc` with one change: `==` on the opaque type member `R::Message`, which `Round` gives no `equal`; and V does not hold `s`
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -767,7 +767,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUM14 | refuse SP8 | `programs/sumcheck.zkc` with one change: a member that the interface declares `spec def` is written `spec def`
+=== M-SUM14 | refuse SP8 | `examples/sumcheck.zkc` with one change: a member that the interface declares `spec def` is written `spec def`
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -854,7 +854,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SCH6 | refuse NL6 | `programs/schnorr.zkc` with one change: `scalar * point`
+=== M-SCH6 | refuse NL6 | `examples/schnorr.zkc` with one change: `scalar * point`
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -913,7 +913,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-GKR1 | refuse SP6 | `programs/gkr.zkc` with one change: a product is not solved
+=== M-GKR1 | refuse SP6 | `examples/gkr.zkc` with one change: a product is not solved
 module gkr<F: Field>
 
 use sumcheck<F>::{Reduce}
@@ -1087,7 +1087,7 @@ pub def wiring<d: nat, w: nat>(
     c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
 ) -> (F, F) = primitive("circuit.wiring")
 pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")
-=== M-FRA2 | refuse NL6 | `programs/fragments.zkc` with one change: an operator without its function in the home module
+=== M-FRA2 | refuse NL6 | `examples/fragments.zkc` with one change: an operator without its function in the home module
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1280,7 +1280,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA21 | refuse SP12 | `programs/fragments.zkc` with one change: `==` on an opaque type member
+=== M-FRA21 | refuse SP12 | `examples/fragments.zkc` with one change: `==` on an opaque type member
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1473,7 +1473,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA22 | refuse NL6 | `programs/fragments.zkc` with one change: `Carrier` declares no `mul`
+=== M-FRA22 | refuse NL6 | `examples/fragments.zkc` with one change: `Carrier` declares no `mul`
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1666,7 +1666,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA25 | refuse SP11 | `programs/fragments.zkc` with one change: a specification-only static parameter in a deployed type
+=== M-FRA25 | refuse SP11 | `examples/fragments.zkc` with one change: a specification-only static parameter in a deployed type
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1860,7 +1860,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-IPA6 | refuse NL6 | `programs/inner_product.zkc` with one change: points first
+=== M-IPA6 | refuse NL6 | `examples/inner_product.zkc` with one change: points first
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1979,7 +1979,7 @@ scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete_once = completeness(InnerProductOnce8)
-=== M-IPA7 | refuse NL6 | `programs/inner_product.zkc` with one change: the scalar on the left
+=== M-IPA7 | refuse NL6 | `examples/inner_product.zkc` with one change: the scalar on the left
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2098,7 +2098,7 @@ scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete_once = completeness(InnerProductOnce8)
-=== L-ALG1 | refuse SP4 | `lib/zkc/algebra.zkc` with one change, in place of the library module: the vocabulary is checked against the conditions of a sort
+=== L-ALG1 | refuse SP4 | `libraries/zkc/algebra.zkc` with one change, in place of the library module: the vocabulary is checked against the conditions of a sort
 module zkc::algebra
 
 // Core library. A sort is an interface that only the vocabulary implements: `T: S` holds when
@@ -2187,7 +2187,7 @@ pub interface Pairing where (
     law left(a: G1, b: G2, s: Scalar): pair(a * s, b) == pair(a, b) * s
     law right(a: G1, b: G2, s: Scalar): pair(a, b * s) == pair(a, b) * s
     law nondegenerate(): pair(G1::generator(), G2::generator()) != 0
-=== L-ALG2 | refuse SP3 | `lib/zkc/algebra.zkc` with one change, in place of the library module: a member that the vocabulary does not give
+=== L-ALG2 | refuse SP3 | `libraries/zkc/algebra.zkc` with one change, in place of the library module: a member that the vocabulary does not give
 module zkc::algebra
 
 // Core library. A sort is an interface that only the vocabulary implements: `T: S` holds when
@@ -2277,7 +2277,7 @@ pub interface Pairing where (
     law left(a: G1, b: G2, s: Scalar): pair(a * s, b) == pair(a, b) * s
     law right(a: G1, b: G2, s: Scalar): pair(a, b * s) == pair(a, b) * s
     law nondegenerate(): pair(G1::generator(), G2::generator()) != 0
-=== L-ALG3 | refuse SP3 | `lib/zkc/algebra.zkc` with one change, in place of the library module: a member that a sort does not have
+=== L-ALG3 | refuse SP3 | `libraries/zkc/algebra.zkc` with one change, in place of the library module: a member that a sort does not have
 module zkc::algebra
 
 // Core library. A sort is an interface that only the vocabulary implements: `T: S` holds when
@@ -2366,7 +2366,7 @@ pub interface Pairing where (
     law left(a: G1, b: G2, s: Scalar): pair(a * s, b) == pair(a, b) * s
     law right(a: G1, b: G2, s: Scalar): pair(a, b * s) == pair(a, b) * s
     law nondegenerate(): pair(G1::generator(), G2::generator()) != 0
-=== L-ALG4 | refuse SP4 | `lib/zkc/algebra.zkc` with one change, in place of the library module: a prime field is its own prime field, with dimension 1
+=== L-ALG4 | refuse SP4 | `libraries/zkc/algebra.zkc` with one change, in place of the library module: a prime field is its own prime field, with dimension 1
 module zkc::algebra
 
 // Core library. A sort is an interface that only the vocabulary implements: `T: S` holds when
@@ -2455,7 +2455,7 @@ pub interface Pairing where (
     law left(a: G1, b: G2, s: Scalar): pair(a * s, b) == pair(a, b) * s
     law right(a: G1, b: G2, s: Scalar): pair(a, b * s) == pair(a, b) * s
     law nondegenerate(): pair(G1::generator(), G2::generator()) != 0
-=== L-ALG5 | accept | `lib/zkc/algebra.zkc` with one change, in place of the library module: every scalar of the vocabulary is a field, so the stronger bound is not seen: the known lateness of typing on instances
+=== L-ALG5 | accept | `libraries/zkc/algebra.zkc` with one change, in place of the library module: every scalar of the vocabulary is a field, so the stronger bound is not seen: the known lateness of typing on instances
 module zkc::algebra
 
 // Core library. A sort is an interface that only the vocabulary implements: `T: S` holds when
@@ -2544,7 +2544,7 @@ pub interface Pairing where (
     law left(a: G1, b: G2, s: Scalar): pair(a * s, b) == pair(a, b) * s
     law right(a: G1, b: G2, s: Scalar): pair(a, b * s) == pair(a, b) * s
     law nondegenerate(): pair(G1::generator(), G2::generator()) != 0
-=== L-HASH1 | refuse NL3 | `lib/zkc/hash.zkc` with one change, in place of the library module: names are resolved in an interface that nothing reaches
+=== L-HASH1 | refuse NL3 | `libraries/zkc/hash.zkc` with one change, in place of the library module: names are resolved in an interface that nothing reaches
 module zkc::hash
 
 // Core library.
@@ -2566,7 +2566,7 @@ pub interface ExtendableOutput:
 // [rows hash.shake128, hash.shake256]
 pub module Shake128: ExtendableOutput = primitive("hash.shake128")
 pub module Shake256: ExtendableOutput = primitive("hash.shake256")
-=== L-HASH2 | refuse SP4 SP8 | `lib/zkc/hash.zkc` with one change, in place of the library module: an extendable-output function has no `Size`: it is no `Hash`
+=== L-HASH2 | refuse SP4 SP8 | `libraries/zkc/hash.zkc` with one change, in place of the library module: an extendable-output function has no `Size`: it is no `Hash`
 module zkc::hash
 
 // Core library.
@@ -2588,7 +2588,7 @@ pub interface ExtendableOutput:
 // [rows hash.shake128, hash.shake256]
 pub module Shake128: Hash = primitive("hash.shake128")
 pub module Shake256: ExtendableOutput = primitive("hash.shake256")
-=== L-SEQ4 | refuse NL6 | `lib/zkc/sequence.zkc` with one change, in place of the library module: one spelling: the scalar on the right
+=== L-SEQ4 | refuse NL6 | `libraries/zkc/sequence.zkc` with one change, in place of the library module: one spelling: the scalar on the right
 module zkc::sequence
 
 // Standard library, layer 2. Collections. Every declaration is source; a kernel is marked.
@@ -2641,7 +2641,7 @@ pub def batch_inverse<F: Field, n: nat>(values: [nonzero<F>; n]) -> [nonzero<F>;
 #[kernel("sequence.bit_reverse")]
 pub def bit_reverse<T, k: nat>(values: [T; 2^k]) -> [T; 2^k]:
     [values[(∑ j ∈ 0..k, ((i / 2^j) % 2) * 2^(k - (j + 1))) % 2^k] for i in 0..2^k]
-=== L-BLS1 | refuse SP4 SP8 | `lib/zkc/curves/bls12_381.zkc` with one change, in place of the library module: a module of the vocabulary is checked against the conditions of its interface
+=== L-BLS1 | refuse SP4 SP8 | `libraries/zkc/curves/bls12_381.zkc` with one change, in place of the library module: a module of the vocabulary is checked against the conditions of its interface
 module zkc::curves::bls12_381
 
 // Standard library, layer 2. The groups and the pairing of BLS12-381, bound once.

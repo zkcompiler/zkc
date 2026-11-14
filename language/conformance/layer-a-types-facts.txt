@@ -705,7 +705,7 @@ def value(units: [byte; 8]) -> index<2^64>:
 module t
 def value(units: [byte; 9]) -> index<2^64>:
     ∑ i ∈ 0..9, units[i] * 256^i
-=== M-SUM1 | refuse TY7 | `programs/sumcheck.zkc` with one change: a slice beyond the size
+=== M-SUM1 | refuse TY7 | `examples/sumcheck.zkc` with one change: a slice beyond the size
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -792,7 +792,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUM6 | refuse TY5 | `programs/sumcheck.zkc` with one change: the result has another size
+=== M-SUM6 | refuse TY5 | `examples/sumcheck.zkc` with one change: the result has another size
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -879,7 +879,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUM11 | refuse TY5 | `programs/sumcheck.zkc` with one change: the collected values have another type
+=== M-SUM11 | refuse TY5 | `examples/sumcheck.zkc` with one change: the collected values have another type
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -966,7 +966,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SCH2 | refuse TY8 TY5 | `programs/schnorr.zkc` with one change: division by a value that is not `nonzero`
+=== M-SCH2 | refuse TY8 TY5 | `examples/schnorr.zkc` with one change: division by a value that is not `nonzero`
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1024,7 +1024,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-GKR3 | refuse TY8 TY5 | `programs/gkr.zkc` with one change: a layer beyond the last
+=== M-GKR3 | refuse TY8 TY5 | `examples/gkr.zkc` with one change: a layer beyond the last
 module gkr<F: Field>
 
 use sumcheck<F>::{Reduce}
@@ -1198,7 +1198,7 @@ pub def wiring<d: nat, w: nat>(
     c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
 ) -> (F, F) = primitive("circuit.wiring")
 pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")
-=== M-FRA1 | refuse TY13 | `programs/fragments.zkc` with one change: a `match` that does not cover an alternative
+=== M-FRA1 | refuse TY13 | `examples/fragments.zkc` with one change: a `match` that does not cover an alternative
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1389,7 +1389,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA3 | accept | `programs/fragments.zkc` with one change: both fields bound
+=== M-FRA3 | accept | `examples/fragments.zkc` with one change: both fields bound
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1582,7 +1582,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA4 | refuse TY7 | `programs/fragments.zkc` with one change: a read of `[T]` without its fact
+=== M-FRA4 | refuse TY7 | `examples/fragments.zkc` with one change: a read of `[T]` without its fact
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1774,7 +1774,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA5 | refuse TY7 | `programs/fragments.zkc` with one change: the fact of an `if` holds in its first arm
+=== M-FRA5 | refuse TY7 | `examples/fragments.zkc` with one change: the fact of an `if` holds in its first arm
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1967,7 +1967,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA6 | refuse TY2 TY5 | `programs/fragments.zkc` with one change: a `mut` name is not a static name, so the slices are unsized and are not accepted at a sized type
+=== M-FRA6 | refuse TY2 TY5 | `examples/fragments.zkc` with one change: a `mut` name is not a static name, so the slices are unsized and are not accepted at a sized type
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2160,7 +2160,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA7 | refuse TY6 | `programs/fragments.zkc` with one change: the only literal of a group is `0`
+=== M-FRA7 | refuse TY6 | `examples/fragments.zkc` with one change: the only literal of a group is `0`
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2353,7 +2353,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA8 | refuse TY8 | `programs/fragments.zkc` with one change: `%` in a `rational`
+=== M-FRA8 | refuse TY8 | `examples/fragments.zkc` with one change: `%` in a `rational`
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2546,7 +2546,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA14 | accept, law false | `programs/fragments.zkc` with one change: the closed law `limbs_cover` is found false: admitted, and an error of the build by policy
+=== M-FRA14 | accept, law false | `examples/fragments.zkc` with one change: the closed law `limbs_cover` is found false: admitted, and an error of the build by policy
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2739,7 +2739,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA15 | refuse TY7 | `programs/fragments.zkc` with one change: the facts of `and` go from left to right
+=== M-FRA15 | refuse TY7 | `examples/fragments.zkc` with one change: the facts of `and` go from left to right
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2932,7 +2932,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA16 | refuse TY5 | `programs/fragments.zkc` with one change: the literal takes the element type of the other operand
+=== M-FRA16 | refuse TY5 | `examples/fragments.zkc` with one change: the literal takes the element type of the other operand
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3125,7 +3125,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA17 | refuse TY7 | `programs/fragments.zkc` with one change: the arm that the static condition takes is typed, at the default instance `n = 0`
+=== M-FRA17 | refuse TY7 | `examples/fragments.zkc` with one change: the arm that the static condition takes is typed, at the default instance `n = 0`
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3318,7 +3318,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA18 | refuse TY8 | `programs/fragments.zkc` with one change: without the range fact on `x - y` the divisor can be 0
+=== M-FRA18 | refuse TY8 | `examples/fragments.zkc` with one change: without the range fact on `x - y` the divisor can be 0
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3510,7 +3510,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA19 | refuse TY7 | `programs/fragments.zkc` with one change: a tuple is indexed by a static natural
+=== M-FRA19 | refuse TY7 | `examples/fragments.zkc` with one change: a tuple is indexed by a static natural
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3703,7 +3703,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA23 | refuse TY7 | `programs/fragments.zkc` with one change: V has a `[F]` and no fact of its own
+=== M-FRA23 | refuse TY7 | `examples/fragments.zkc` with one change: V has a `[F]` and no fact of its own
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3895,7 +3895,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA24 | refuse TY7 | `programs/fragments.zkc` with one change: a binder without a written type has the type without facts
+=== M-FRA24 | refuse TY7 | `examples/fragments.zkc` with one change: a binder without a written type has the type without facts
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -4088,7 +4088,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-OR2 | refuse TY13 | `programs/sigma_or.zkc` with one change: a second case of one alternative is refused
+=== M-OR2 | refuse TY13 | `examples/sigma_or.zkc` with one change: a second case of one alternative is refused
 module sigma_or
 
 pub enum Witness<G: PrimeOrderGroup>:
@@ -4131,7 +4131,7 @@ pub protocol Or<G: PrimeOrderGroup> roles(P, V)(
     guard @V reply.0 + reply.1 == challenge
     guard @V base * reply.2 == commitments.0 + x0 * reply.0
     guard @V base * reply.3 == commitments.1 + x1 * reply.1
-=== M-IPA1 | refuse TY8 TY5 | `programs/inner_product.zkc` with one change: division by a challenge that is not `nonzero`
+=== M-IPA1 | refuse TY8 TY5 | `examples/inner_product.zkc` with one change: division by a challenge that is not `nonzero`
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -4250,7 +4250,7 @@ scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete_once = completeness(InnerProductOnce8)
-=== M-IPA2 | refuse TY7 | `programs/inner_product.zkc` with one change: one generator is left after n rounds
+=== M-IPA2 | refuse TY7 | `examples/inner_product.zkc` with one change: one generator is left after n rounds
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -4369,7 +4369,7 @@ scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete_once = completeness(InnerProductOnce8)
-=== M-IPA9 | refuse TY5 | `programs/inner_product.zkc` with one change: folding the vector that was already folded: the sizes of an iteration
+=== M-IPA9 | refuse TY5 | `examples/inner_product.zkc` with one change: folding the vector that was already folded: the sizes of an iteration
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -4488,7 +4488,7 @@ scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete_once = completeness(InnerProductOnce8)
-=== L-SEQ1 | accept | `lib/zkc/sequence.zkc` with one change, in place of the library module: at the default instance n = 0 the body of the comprehension does not run, and is asked no fact (TY4)
+=== L-SEQ1 | accept | `libraries/zkc/sequence.zkc` with one change, in place of the library module: at the default instance n = 0 the body of the comprehension does not run, and is asked no fact (TY4)
 module zkc::sequence
 
 // Standard library, layer 2. Collections. Every declaration is source; a kernel is marked.
@@ -4541,7 +4541,7 @@ pub def batch_inverse<F: Field, n: nat>(values: [nonzero<F>; n]) -> [nonzero<F>;
 #[kernel("sequence.bit_reverse")]
 pub def bit_reverse<T, k: nat>(values: [T; 2^k]) -> [T; 2^k]:
     [values[(∑ j ∈ 0..k, ((i / 2^j) % 2) * 2^(k - (j + 1))) % 2^k] for i in 0..2^k]
-=== L-SEQ2 | accept | `lib/zkc/sequence.zkc` with one change, in place of the library module: at the default instance m = 0 the body of the comprehension does not run, and is asked no fact (TY4)
+=== L-SEQ2 | accept | `libraries/zkc/sequence.zkc` with one change, in place of the library module: at the default instance m = 0 the body of the comprehension does not run, and is asked no fact (TY4)
 module zkc::sequence
 
 // Standard library, layer 2. Collections. Every declaration is source; a kernel is marked.
@@ -4594,7 +4594,7 @@ pub def batch_inverse<F: Field, n: nat>(values: [nonzero<F>; n]) -> [nonzero<F>;
 #[kernel("sequence.bit_reverse")]
 pub def bit_reverse<T, k: nat>(values: [T; 2^k]) -> [T; 2^k]:
     [values[(∑ j ∈ 0..k, ((i / 2^j) % 2) * 2^(k - (j + 1))) % 2^k] for i in 0..2^k]
-=== L-SEQ3 | refuse TY7 | `lib/zkc/sequence.zkc` with one change, in place of the library module: a slice of `[T]` without its fact
+=== L-SEQ3 | refuse TY7 | `libraries/zkc/sequence.zkc` with one change, in place of the library module: a slice of `[T]` without its fact
 module zkc::sequence
 
 // Standard library, layer 2. Collections. Every declaration is source; a kernel is marked.
@@ -4646,7 +4646,7 @@ pub def batch_inverse<F: Field, n: nat>(values: [nonzero<F>; n]) -> [nonzero<F>;
 #[kernel("sequence.bit_reverse")]
 pub def bit_reverse<T, k: nat>(values: [T; 2^k]) -> [T; 2^k]:
     [values[(∑ j ∈ 0..k, ((i / 2^j) % 2) * 2^(k - (j + 1))) % 2^k] for i in 0..2^k]
-=== L-SEQ5 | refuse TY5 | `lib/zkc/sequence.zkc` with one change, in place of the library module: `nonzero` is closed under `/`, not under `-`
+=== L-SEQ5 | refuse TY5 | `libraries/zkc/sequence.zkc` with one change, in place of the library module: `nonzero` is closed under `/`, not under `-`
 module zkc::sequence
 
 // Standard library, layer 2. Collections. Every declaration is source; a kernel is marked.
@@ -4699,7 +4699,7 @@ pub def batch_inverse<F: Field, n: nat>(values: [nonzero<F>; n]) -> [nonzero<F>;
 #[kernel("sequence.bit_reverse")]
 pub def bit_reverse<T, k: nat>(values: [T; 2^k]) -> [T; 2^k]:
     [values[(∑ j ∈ 0..k, ((i / 2^j) % 2) * 2^(k - (j + 1))) % 2^k] for i in 0..2^k]
-=== L-POLY1 | refuse TY7 | `lib/zkc/polynomial.zkc` with one change, in place of the library module: the first iteration reads beyond the coefficients
+=== L-POLY1 | refuse TY7 | `libraries/zkc/polynomial.zkc` with one change, in place of the library module: the first iteration reads beyond the coefficients
 module zkc::polynomial
 
 // Standard library, layer 2. Polynomials in one variable by their coefficients, lowest first;
@@ -4759,7 +4759,7 @@ pub spec def of_coefficients<F: Field, D: nat>(
 ) -> Poly<F, D> = external("Zkc.Polynomial.ofCoefficients")
 // The points of the Boolean cube in n variables.
 pub spec def cube<F: Field, n: nat>() -> [[F; n]; 2^n] = external("Zkc.Polynomial.cube")
-=== L-MLE1 | refuse TY5 | `lib/zkc/multilinear.zkc` with one change, in place of the library module: element-wise operators need equal sizes
+=== L-MLE1 | refuse TY5 | `libraries/zkc/multilinear.zkc` with one change, in place of the library module: element-wise operators need equal sizes
 module zkc::multilinear
 
 // Standard library, layer 2. A multilinear polynomial in v variables by its values on the
@@ -4790,7 +4790,7 @@ pub module multilinear<F: Field, variables: nat>: Kind + Multilinear<F, variable
     type Position = [F; variables]
     type Row = F
     def answer(data, position): evaluate(data, position)
-=== L-COS1 | refuse TY8 TY5 | `lib/zkc/coset.zkc` with one change, in place of the library module: the default instances include the bound `k = F::TwoAdicity` of the `where`, where `root(k + 1)` does not exist
+=== L-COS1 | refuse TY8 TY5 | `libraries/zkc/coset.zkc` with one change, in place of the library module: the default instances include the bound `k = F::TwoAdicity` of the `where`, where `root(k + 1)` does not exist
 module zkc::coset
 
 // Standard library, layer 2. Cosets of the two-adic subgroups of a field.
@@ -4850,7 +4850,7 @@ pub def extend<F: TwoAdicField, k: nat, n: nat>(
     values: [F; 2^k], domain: Coset<F, k>, target: Coset<F, n>
 ) -> [F; 2^n] where (k <= n, n <= F::TwoAdicity):
     [evaluate(interpolate(values, domain), target[i]) for i in 0..2^n]
-=== L-COS2 | refuse TY8 TY5 | `lib/zkc/coset.zkc` with one change, in place of the library module: division by a value that is not `nonzero`
+=== L-COS2 | refuse TY8 TY5 | `libraries/zkc/coset.zkc` with one change, in place of the library module: division by a value that is not `nonzero`
 module zkc::coset
 
 // Standard library, layer 2. Cosets of the two-adic subgroups of a field.
@@ -4910,7 +4910,7 @@ pub def extend<F: TwoAdicField, k: nat, n: nat>(
     values: [F; 2^k], domain: Coset<F, k>, target: Coset<F, n>
 ) -> [F; 2^n] where (k <= n, n <= F::TwoAdicity):
     [evaluate(interpolate(values, domain), target[i]) for i in 0..2^n]
-=== L-COS3 | refuse TY5 TY7 | `lib/zkc/coset.zkc` with one change, in place of the library module: the result has 2^t coefficients
+=== L-COS3 | refuse TY5 TY7 | `libraries/zkc/coset.zkc` with one change, in place of the library module: the result has 2^t coefficients
 module zkc::coset
 
 // Standard library, layer 2. Cosets of the two-adic subgroups of a field.

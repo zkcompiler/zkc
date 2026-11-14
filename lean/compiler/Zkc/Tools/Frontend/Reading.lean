@@ -1,4 +1,4 @@
-import Zkc.Tools.Frontend.Differential
+import Zkc.Tools.Frontend.PackageRuns
 import Zkc.Tools.Frontend.Trees
 
 /-!
@@ -6,9 +6,9 @@ import Zkc.Tools.Frontend.Trees
 
 An evaluation of the typed tree of a protocol instance that returns what each role shows: what
 it sent, received, heard, drew and sampled, each under the key of the event in the source, and
-how it ended. It is in the form that the comparison of runs compares
-(`Zkc.Core.RunComparison.Shown`), so that a tree is compared with the run of a package emitted
-for the same instance, under the same provider, seed and inputs.
+how it ended. It is in the form in which the run of a package shows what each role did
+(`Zkc.Tools.Frontend.PackageRuns.Shown`), so that a tree is compared with the run of the package
+emitted for the same instance, under the same seed, inputs and coins.
 
 The reading follows the tree and its tables and nothing else of the frontend:
 
@@ -21,10 +21,11 @@ The reading follows the tree and its tables and nothing else of the frontend:
   applications through which its definition was reached;
 - a choice and a loop are followed by each participant on its own copy of what decides it.
 
-The operations of the core are computed here, on data. The rows of the vocabulary, the literals
-of its types, and the coins are the provider's, asked through the tables of the package that
-the reading is compared with: a row and a type of the tree are found in the package's catalogue
-by their names and static arguments.
+The operations of the core are computed here, on data. The rows of the vocabulary and the
+literals of its types are those of the model of the vocabulary's rows, and the coins are those
+of the run (`PackageRuns.coin`), asked through the tables of the package that the reading is
+compared with: a row and a type of the tree are found in the package's catalogue by their names
+and static arguments.
 -/
 
 set_option autoImplicit false
@@ -36,7 +37,7 @@ open Zkc.Core (Ty Static CatalogueRow Operation)
 open Zkc.Core.Concrete (Datum)
 open Zkc.Core.Execute (Outcome)
 
-/-- What the provider answers, on data. -/
+/-- What the model of the vocabulary's rows answers, on data, and the coins. -/
 structure World where
   /-- A row of the package, by its number: its outputs, or none where it has no value. -/
   apply : Nat → List Datum → Option (List Datum)
@@ -383,7 +384,7 @@ def record (role : Nat) (kind : Zkc.Core.Execute.Event.Kind) (key : List Nat) (v
 
 /-- A role that waits for a message that no role sends. -/
 def starve (role : Nat) : JointM Unit := do
-  if ← running role then endRole role (.failed Zkc.Core.RunComparison.waitingMessage)
+  if ← running role then endRole role (.failed PackageRuns.waitingMessage)
 
 /-- An evaluation by one role of a body, on its values: its result, or none when the role is
 not running or stops here. -/
@@ -409,7 +410,7 @@ def bindAt (role : Nat) (binder : Option Typed.Binder) (value : Datum) : FrameM 
 /-- The key of a part of an event of a body, composed along the applications that reached the
 body. -/
 def keyOf (frame : Frame) (event : Nat) (part : String) (iteration : Array Nat) : List Nat × List Nat :=
-  let own := [event, Differential.partNumber part, iteration.size] ++ iteration.toList
+  let own := [event, PackageRuns.partNumber part, iteration.size] ++ iteration.toList
   ((frame.depth + 1) :: (frame.reached ++ own), own)
 
 /-- The next coin of a key at a type. -/
@@ -420,7 +421,7 @@ def nextCoin (key : List Nat) (type : ClosedType) : JointM Datum := do
   modify fun state => { state with asked := state.asked.insert key (count + 1) }
   match context.world.coin key count core with
   | some value => return value
-  | none => throw "the provider has no coin at a law's type"
+  | none => throw "the run has no coin at a law's type"
 
 def rolesOf (roles : Typed.Roles) (node : Typed.NodeId) : Array Nat :=
   ((roles.computing[node]?).getD .empty).toArray
@@ -624,7 +625,7 @@ end
 /-- What each role of a protocol instance shows on inputs, one datum per port and holder in the
 order of the ports: the reading of its tree. -/
 def read (context : Context) (root : InstanceId) (data : List Datum) (fuel : Nat) :
-    Except String (List Zkc.Core.RunComparison.Shown) := do
+    Except String (List PackageRuns.Shown) := do
   let some definition := context.results.trees.result? root | throw "the root has no tree"
   let some checked := context.results.checked? root | throw "the passes did not read the root"
   let .protocol body := definition.body | throw "the root is no protocol"
@@ -661,8 +662,8 @@ def read (context : Context) (root : InstanceId) (data : List Datum) (fuel : Nat
 /-! ## The reading against the run of the package -/
 
 open Zkc.Core in
-/-- The model of the vocabulary's rows, on data: what the provider `RunComparison.arithmetic`
-answers for a package under a seed. -/
+/-- The model of the vocabulary's rows, on data, and the coins of the run of a package under a
+seed (`PackageRuns.coin`). -/
 def arithmeticWorld (package : Raw.Package) (seed : Nat) : World :=
   let types := package.types.toArray
   { apply := fun row data =>
@@ -674,37 +675,20 @@ def arithmeticWorld (package : Raw.Package) (seed : Nat) : World :=
       | none => none
     literal := Vocabulary.literalDatum Vocabulary.table types
     coin := fun key count type =>
-      match ValidData.coin Vocabulary.table types seed key count type with
-      | .ok value => some value
-      | .error _ => none }
-
-open Zkc.Core in
-/-- Uninterpreted rows, on data: what the provider of `Zkc.Core.UninterpretedRows` answers
-for a package under a seed. -/
-def uninterpretedWorld (package : Raw.Package) (seed : Nat)
-    (settings : UninterpretedRows.Settings := {}) : World :=
-  let types := package.types.toArray
-  let rows := UninterpretedRows.rowsOf package
-  { apply := fun row data =>
-      (package.operations[row]?).map fun operation =>
-        UninterpretedRows.answer rows seed settings.trueSeeds
-          { row, inputs := operation.signature.inputs, outputs := operation.signature.outputs } data
-    literal := UninterpretedRows.literalTerm types
-    coin := fun key count type =>
-      match UninterpretedRows.coin seed key count type with
+      match PackageRuns.coin types seed key count type with
       | .ok value => some value
       | .error _ => none }
 
 /-- The work that one reading may do. -/
 def workLimit : Nat := 4000000
 
-open Zkc.Core.RunComparison in
-/-- The reading of the tree of a protocol root against the run of its package, over seeds,
-under a provider: the package's run on the left, the reading on the right. -/
-def compareRoot (results : ResultStore) (root : InstanceId) (side : Side) (uninterpreted : Bool)
-    (seeds : List Nat) : Verdict :=
-  let provider := if uninterpreted then Zkc.Core.UninterpretedRows.provider else arithmetic
-  match side.typed.protocols.head?, tooLarge? side.package, provider.refuses side.package with
+open PackageRuns in
+/-- The reading of the tree of a protocol root against the run of its package, over seeds: the
+package's run on the left, the reading on the right. -/
+def compareRoot (results : ResultStore) (root : InstanceId) (side : Side) (seeds : List Nat) :
+    Verdict :=
+  match side.typed.protocols.head?, tooLarge? side.package,
+      (Zkc.Core.Vocabulary.missing Zkc.Core.Vocabulary.table side.package).head? with
   | _, some reason, _ | _, _, some reason => .incomplete (.cannotRun reason)
   | none, none, none => .incomplete (.cannotRun "the package has no protocol")
   | some header, none, none =>
@@ -712,12 +696,11 @@ def compareRoot (results : ResultStore) (root : InstanceId) (side : Side) (unint
       { types := side.package.types.toArray, operations := side.package.operations.toArray }
     overSeeds seeds fun seed => do
       let inputs := agreed (agreementsOf side.package)
-        (← provider.inputs side.package seed (header.inputs.map (·.type)))
-      let first ← provider.protocol side seed inputs Zkc.Core.defaultLimit
-      let world := if uninterpreted then uninterpretedWorld side.package seed
-        else arithmeticWorld side.package seed
+        (← PackageRuns.inputs side.package.types.toArray seed (header.inputs.map (·.type)))
+      let first ← runProtocol side seed inputs
+      let world := arithmeticWorld side.package seed
       -- a reading that breaks off is a fault of the tree, of its tables or of the reading: it is
-      -- named so that it is not counted with what the provider cannot run
+      -- named so that it is not counted with what the run cannot do
       let second ← match read { world, dictionary, results } root inputs workLimit with
         | .ok shown => pure shown
         | .error message => throw s!"the reading breaks off: {message}"
@@ -726,12 +709,12 @@ def compareRoot (results : ResultStore) (root : InstanceId) (side : Side) (unint
 /-- The readings of the trees of a program's protocol roots against the runs of their
 packages: per root, its description and the verdict. A root whose tree has a refusal, or whose
 package is not complete, is not compared. -/
-def compareProgram (program : Trees.ProgramTrees) (uninterpreted : Bool) (seeds : List Nat) :
-    Array (String × Zkc.Core.RunComparison.Verdict) := Id.run do
+def compareProgram (program : Trees.ProgramTrees) (seeds : List Nat) :
+    Array (String × PackageRuns.Verdict) := Id.run do
   let state := program.session.state
   let results := state.results
   -- the tables of sites of the protocols, by name
-  let mut sites : Array (String × Array Differential.SiteRow) := #[]
+  let mut sites : Array (String × Array PackageRuns.SiteRow) := #[]
   for entry in results.bodies.entries do
     let .done (.protocol code) := entry.state | continue
     sites := sites.push (code.name, code.sites.map fun site =>
@@ -743,16 +726,16 @@ def compareProgram (program : Trees.ProgramTrees) (uninterpreted : Bool) (seeds 
   for (description, held) in held do
     unless held.protocol.isSome do continue
     -- a root that is held was elaborated and checked without a refusal
-    let verdict : Zkc.Core.RunComparison.Verdict :=
-      match Differential.duplicateKey? held.package sites, Differential.side held.package sites with
+    let verdict : PackageRuns.Verdict :=
+      match PackageRuns.duplicateKey? held.package sites, PackageRuns.side held.package sites with
       | some reason, _ => .incomplete (.cannotRun reason)
       | none, .error reason => .incomplete (.cannotRun reason)
-      | none, .ok side => compareRoot results held.root side uninterpreted seeds
+      | none, .ok side => compareRoot results held.root side seeds
     verdicts := verdicts.push (description, verdict)
   return verdicts
 
 /-- A verdict as a line. -/
-def describeVerdict : Zkc.Core.RunComparison.Verdict → String
+def describeVerdict : PackageRuns.Verdict → String
   | .agree seeds => s!"observed to agree under {seeds} seeds"
   | .differ seed _ role left right =>
     let who := match role with
@@ -771,7 +754,7 @@ def trees (options : Names.Options) : IO UInt32 := do
   match ← Trees.treesOf inputs (Names.libraryLoader options.libraries) with
   | .error _ => return code
   | .ok program =>
-    for (description, verdict) in compareProgram program options.uninterpreted (List.range options.seeds) do
+    for (description, verdict) in compareProgram program (List.range options.seeds) do
       IO.println s!"reading {description}: {describeVerdict verdict}"
     return code
 

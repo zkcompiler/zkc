@@ -180,36 +180,6 @@ exactly when it moves (`event?_isSome`), and a run to its end with its events en
 executor's run does (`finishObserved_fst`, `observeAlone_fst`); no definition of the executor
 changes.
 
-Two packages of one program are compared by what they do (`Zkc.Core.RunComparison`), for a
-frontend whose emission changes: for the same inputs and the same coins under several seeds,
-the last functions of the two, every role of their newest protocols, or the prover and the
-verifier of their constructed schemes with the proofs, must show the same: each role the same
-things done in the same order (kind, key of the site, value) and the same end. The verdict is
-one of three: observed to agree, observed to differ (the seed, the inputs, the role, the first
-place), or incomplete (a run reached the limit, no seed was run, the root cannot be run); two
-runs that both reach the limit are incomplete. The comparison is one function over a provider
-of runs: the model of the vocabulary's rows, or uninterpreted rows
-(`Zkc.Core.UninterpretedRows`), under which a row applied to terms is a term and every row
-runs. A protocol can be run on true statements, the outputs of a generator function
-(`statementsOf`), on which every role of the first package must return. The inputs
-are valid data drawn by type (`Zkc.Core.ValidData`): values that `validInput` accepts, the
-boundary values first (zero, one, the largest; the empty collection, one and two elements;
-the point at infinity, the generator and its negation), then draws in which each leaf takes one
-of its boundary values chosen from the seed (eleven of them), then values drawn from the seed,
-each leaf that has a law by `Vocabulary.Law`, with a small bound on the scalar of a point. A
-coin is a value of its law drawn from the seed and a key of its site that the caller gives,
-so two packages that number their sites differently get the same coin for the same event of
-the source. A root whose runs would be too long, a type with no value to draw, or a run that
-fails otherwise is reported as one that cannot be run, with why. `Zkc.Core.Mutation` makes
-the mutants of a package that measure how much the runs tell apart: two operands of one
-operation exchanged (not at a commutative one), a literal changed by one, a row replaced by
-another of its signature (also an `add`, `sub` or `mul` of the vocabulary that the package does
-not have, added to its table) or an operation of the core by another of its group, and an
-operand replaced by another value of its type that the same role holds, each kept only when the
-core admits it. A probe of an instruction is the package with a stop just before it, which
-tells whether a seed reaches the instruction.
-None of this is a proof: equal runs under the seeds tried are not equal meanings.
-
 The threading steps (Fiat–Shamir, serialize) have a theorem over whole programs, for a
 side that holds exactly one of the two transcript roles (the prover and the verifier as
 separate sides; `OneTranscriptRole`). From `stepProtocols … = .ok …`: the image of the
@@ -273,19 +243,15 @@ vocabulary's rows (`Admitted.rows_matched`).
 and of a sized collection of elements, the value that the model of a package gives at typed
 values, as the operation of the element type on their data, at any package whose row has the
 name and the static arguments of the vocabulary's row. A statement about a model of the
-mathematics is related to the model that runs through these (`../formal`).
+mathematics is related to the model that runs through these (`lean/formal`).
 
-The package has no Lake dependency; its dependents are Frontend (`../frontend`), which
-emits its packages and reads its vocabulary, and Formal (`../formal`), which states and
-proves properties over its meaning. It declares names that the core
-model in IR also declares (`Zkc.Core.*`, `Zkc.Source.Var`, `PIR.Process`) with other
-definitions, so the two import closures are disjoint and the dependency policy refuses
-an import in either direction. Its theorems are not in the theorem ledger. The
-declaration auditor is a Program tool, which a package without a Lake dependency cannot
-import, so the package keeps only its inventory of modules, and
-`lean/checks/check_consumer_audit.py` runs its declaration and command audits in a
-workspace that requires Program and Core.
+The core is a library of the package `zkc_compiler` (`lean/compiler`), which has no Lake
+dependency; the frontend (`Zkc.Frontend`, in the same package) emits its packages and reads its
+vocabulary, and the formal package (`lean/formal`) states and proves properties over its
+meaning. A module of the core imports only modules of the core and of Lean (`Init`, `Std`,
+`Lean`); `lake exe zkc-audit` checks this, and the axioms, `@[extern]` and `@[implemented_by]`
+of its declarations.
 
-Run `lake build` from this directory. It builds the library, the tool and the checks;
+Run `lake build` from `lean/compiler`. It builds the library, the tool and the checks;
 the kernel comparisons, the printed links and their statements are checked by the
 build.

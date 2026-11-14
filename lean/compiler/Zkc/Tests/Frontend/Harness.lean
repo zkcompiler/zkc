@@ -27,6 +27,23 @@ def failure (message : String) : TestM Unit :=
 
 def note (message : String) : TestM Unit := modify fun t => { t with notes := t.notes.push message }
 
+/-- The directories of the repository that the tests read: the reference of the language
+(`language/`, which holds `LANGUAGE.md` and `conformance/`), the library in source
+(`libraries/`, a module `zkc::a::b` at `zkc/a/b.zkc`) and the worked programs (`examples/`, with
+the modules they share in `examples/support/`). -/
+structure Repository where
+  language : System.FilePath
+  libraries : System.FilePath
+  examples : System.FilePath
+
+/-- The conformance tests of the reference. -/
+def Repository.conformance (repository : Repository) : System.FilePath :=
+  repository.language / "conformance"
+
+/-- The independent conformance suite. -/
+def Repository.independent (repository : Repository) : System.FilePath :=
+  repository.conformance / "independent"
+
 /-- The cases of the independent suite that the reference accepts since a fact is about a
 value and not about a name. The suite was written from the reference before that amendment,
 and its files are not changed: each of these expects a refusal of a rule of facts about a

@@ -5,7 +5,7 @@ import Zkc.Tests.Frontend.Typing
 # The typing of bodies over the reference
 
 The tests of layer A whose names resolve and whose instances form, typed and elaborated to the
-core; every module of `lib/` as a root at its default instances; the worked programs with their
+core; every module of `libraries/` as a root at its default instances; the worked programs with their
 example files; the generated program of the measurements. Every package emitted is elaborated by
 the core, and every function of it passes the core's check of facts.
 
@@ -76,8 +76,8 @@ def notElaborated : Array String := #[
   "a row at a module argument"]
 
 /-- The tests of layer A, from their instances to the core. -/
-def conformanceTypingSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def conformanceTypingSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let mut total := 0
   let mut beforeThis := 0
   let mut refusedHere : Array String := #[]
@@ -92,7 +92,7 @@ def conformanceTypingSuite (reference : System.FilePath) : TestM Unit := do
   let mut protocolRootsTotal := 0
   let mut protocolsTotal := 0
   let mut left : Array String := #[]
-  for path in ← sortedFiles (reference / "conformance") "txt" do
+  for path in ← sortedFiles (repository.conformance) "txt" do
     unless (path.fileName.getD "").startsWith "layer-a-" do continue
     for block in readBlocks (← IO.FS.readFile path) do
       total := total + 1
@@ -179,7 +179,7 @@ def conformanceTypingSuite (reference : System.FilePath) : TestM Unit := do
   for entry in refusedHere do note s!"refused: {entry}"
   for entry in waiting do note s!"waiting: {entry}"
 
-/-- The refusals of modules of `lib/` that the reference names as its own: the root's file stem,
+/-- The refusals of modules of `libraries/` that the reference names as its own: the root's file stem,
 the file refused, the rule and the line. `canonical::read_natural` of `zkc::layout` forms its
 value in a `mut` accumulator, a `nat` about which no fact is made; the module's own note says
 it is to change (layer C, not frozen). The law `natural` of `Layout`, typed at `canonical`,
@@ -187,14 +187,14 @@ reaches it. -/
 def expectedLibraryRefusals : Array (String × String × String × Nat) := #[
   ("layout", "layout.zkc", "TY8", 46), ("suites", "layout.zkc", "TY8", 46)]
 
-/-- The modules of `lib/` whose every function must be admitted at its default instances. -/
+/-- The modules of `libraries/` whose every function must be admitted at its default instances. -/
 def admittedModules : Array String := #["prelude", "option", "algebra", "sequence"]
 
-/-- Every module of `lib/` as a root: its bodies type, and the packages of its default instances
+/-- Every module of `libraries/` as a root: its bodies type, and the packages of its default instances
 are admitted or wait; those of `prelude`, `option`, `algebra` and `sequence` are all admitted. -/
-def libraryTypingSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
-  for path in ← sortedFiles (reference / "lib") "zkc" do
+def libraryTypingSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
+  for path in ← sortedFiles (repository.libraries) "zkc" do
     let stem := path.fileStem.getD ""
     let source ← IO.FS.readBinFile path
     let input : SourceInput := { name := path.toString, parsed := parse path.toString source }
@@ -244,9 +244,9 @@ def libraryTypingSuite (reference : System.FilePath) : TestM Unit := do
 
 /-- Every worked program with its example file: its bodies type, except where the check of
 instances refuses it, and its packages are admitted or wait. -/
-def programTypingSuite (reference : System.FilePath) : TestM Unit := do
-  let programs := reference / "programs"
-  let load ← cachedLoader #[reference / "lib", programs, programs / "support"]
+def programTypingSuite (repository : Repository) : TestM Unit := do
+  let programs := repository.examples
+  let load ← cachedLoader #[repository.libraries, programs, programs / "support"]
   for path in ← sortedFiles programs "zkc" do
     let stem := path.fileStem.getD ""
     if stem.endsWith "_example" || path.parent != some programs then continue
@@ -275,8 +275,8 @@ def programTypingSuite (reference : System.FilePath) : TestM Unit := do
     note s!"{stem}: {check.state.results.finished.size} function instances typed, {check.packages.size} packages, {admitted} admitted, {typedOnly} typed only{if waits.isEmpty then "" else s!", waiting for {", ".intercalate waits.toList}"}; {checked} functions elaborated, {checked - failing} pass the check of facts; {protocolRoots} protocol roots admitted with {protocols} protocols checked; {check.state.results.obligations.size} obligations of laws"
 
 /-- The generated program of the measurements: its bodies type. -/
-def generatedTypingSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def generatedTypingSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let text := Zkc.Tools.Frontend.Generate.program 50000
   let input : SourceInput := { name := "generated", parsed := parseString "generated" text }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)
@@ -292,8 +292,8 @@ def generatedTypingSuite (reference : System.FilePath) : TestM Unit := do
 /-- A body over a type of the vocabulary at a module argument is checked for its facts like any
 other: the type has no form in a package yet, and the check of a definition does not wait for
 it. -/
-def moduleArgumentSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def moduleArgumentSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let text := "module held\nuse zkc::oracle::{table}\ndef with_oracle(xs: [nat], i: nat, h: Oracle<table<nat, 4>>) -> nat:\n    v = xs[i]\n    return v\n"
   let input : SourceInput := { name := "held", parsed := parseString "held" text }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)

@@ -8,8 +8,8 @@ import Zkc.Tools.Formal.Evaluate
 
 The subject is the package that the frontend emits for `Sumcheck<Fr, 10>` of the worked
 program `sumcheck_example`: `fixtures/sumcheck-ten-rounds.json` is the package of the root
-`Sumcheck<Fr, 10>` that the frontend's tool writes for `programs/sumcheck_example.zkc` of the
-language reference (`zkc-check types … --packages <directory>`), byte for byte. The loop of `Reduce` is
+`Sumcheck<Fr, 10>` that the frontend's tool writes for `examples/sumcheck_example.zkc` of the
+repository (`zkc-check types … --packages <directory>`), byte for byte. The loop of `Reduce` is
 written out: its body is the ten rounds one after another, each of nine operations, and the
 library functions `sums`, `low`, `high` and `fix_first` are in it once per size of the table.
 The package is linked here with its body in pieces of nine operations, so that a piece is a

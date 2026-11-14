@@ -2,7 +2,7 @@
 
 The core language is the typed representation of a protocol between the source
 language and the programs that its roles run. A producer writes a program of it as
-a package; the Core package (`lean/core`) admits the package, applies the stages
+a package; the Core package (`lean/compiler/Zkc/Core`) admits the package, applies the stages
 of a scheme and projects the result to one program per role. Every statement about
 a protocol is a statement about the meaning of a core program.
 
@@ -68,9 +68,7 @@ version of these chapters described are not part of it.
   [stages](stages.md) chapters; no statement of soundness, knowledge or zero
   knowledge is part of this specification.
 - **Native execution.** Role programs are run by the executor of the Core package.
-  Their lowering to native code, and the runtime contracts of the existing
-  compiler, are specified by the other chapters of `docs/spec/` and do not read
-  this format.
+  Their lowering to native code is not specified here.
 
 ## Consumers
 
@@ -92,10 +90,4 @@ The Core package implements every chapter: the reader and printer of the format,
 elaboration, admission, the meaning, projection, the two stages, the canonical
 layout and the executor. `core-tool admit` and `core-tool compile` are its
 admission and its compilation on a package read from a file
-([package guide](../../../lean/core/README.md)).
-
-The IR package holds a separate model of an earlier form of this language
-(`Zkc.IR.Core`, described in the
-[formal reference](../../../lean/docs/spec/core-language.md)). It reads the
-original program of three hand-written packages and is not a consumer of the
-packages that this specification describes.
+([package guide](../../../lean/compiler/Zkc/Core/README.md)).

@@ -2,8 +2,9 @@
 
 This document is the reference of the source language of zkc. It is one of a set:
 `CORE-LIBRARY.md` gives the nine modules that the rules of this reference name,
-`STANDARD-LIBRARY.md` the libraries above them, `lib/zkc/` the library in source, `programs/`
-the worked programs in source, and `conformance/` the tests that an implementation must pass.
+`STANDARD-LIBRARY.md` the libraries above them, and `conformance/` the tests that an
+implementation must pass; the library in source is `libraries/zkc/` and the worked programs in
+source are `examples/`, both at the root of the repository.
 The language is designed in layers (§0.1). The inner layer, layer A, is frozen as the baseline
 of the implementation: an implementation starts from it. The later layers are carried, and each
 of their sections opens with a note that gives its state. A parser works from §3 and §5, a
@@ -3347,7 +3348,7 @@ literal, so it is closed code with literal sizes, and the core needs no operatio
 collected name is a `local.make` of the per-iteration values at each holder: a `seq<U, n>` when
 they have one type, the tuple otherwise (TY16). A stepped `for` of a function is the same in
 its region. The emitted code is linear in the count. Measured on `Sumcheck<n>` of
-`programs/sumcheck.zkc` for `n` from 0 to 20: about 50 operations and 2.8 KB of package per
+`examples/sumcheck.zkc` for `n` from 0 to 20: about 50 operations and 2.8 KB of package per
 round, and typing, emission, admission and projection together under 13 ms at `n = 20`. One
 repetition over an unsized carrier, with the length at each boundary as a fact indexed by the
 iteration, would make the code independent of the count and would add to the core a fact about
@@ -3502,7 +3503,7 @@ record of an application, and the witness the blinding of each input handle.*
 So a `knowledge` clause can name what was committed inside a run: for
 `codeword <- send values to V as oracle<table<F, 2^k>>`, the field `runs[0].codeword` is the
 table, a `[F; 2^k]`, and the soundness of "commit, then check" is stated on the protocol that does
-both (`programs/spot_check.zkc`). Such a clause reads one run, and the bound it claims is the sum of the
+both (`examples/spot_check.zkc`). Such a clause reads one run, and the bound it claims is the sum of the
 charges of the contract (SX6). **Messages:** "`<X>::Runs` is not defined: the draw `<c>` (line <n>) is
 inside a loop; the tree of runs of an extractor over a loop of challenges is not expressible yet:
 state the clause as `knowledge R(a…) by external("name")`"; "`<X>::Runs` is not defined: the draw
@@ -3665,7 +3666,7 @@ smallest choice that keeps the document set consistent.
 | # | Point | What would settle it |
 |---|---|---|
 | 1 | **How a stepped loop is represented below the surface**: (A) the iterations in sequence, or (B) one repetition over an unsized carrier with a length invariant | closed: the iterations in sequence, each occurrence of a site a site of its own (§7.5). Measured on `Sumcheck<n>` for `n` up to 20: about 50 operations and 2.8 KB of package per round, and typing, emission, admission and projection under 13 ms at `n = 20`. Form (B) is not part of the core; the size and the checking time of proof terms over a stepped loop are not measured |
-| 2 | **Variants and shared `match`** are in the language and not validated | the programs `programs/sigma_or.zkc`, `programs/request_dispatch.zkc` and `programs/variants_example.zkc` elaborated and their endpoint meaning checked; a variant with a claim as payload |
+| 2 | **Variants and shared `match`** are in the language and not validated | the programs `examples/sigma_or.zkc`, `examples/request_dispatch.zkc` and `examples/variants_example.zkc` elaborated and their endpoint meaning checked; a variant with a claim as payload |
 | 3 | **The tree of runs of an extractor over a loop of challenges.** `P::Runs` is not defined for a draw in a loop, there is no recursion, and the clause takes an external statement | a type for a tree whose depth is the count of a loop, and a way to write the extractor over it |
 | 4 | **Oracles whose shape is a run-time value**, and sizes over run-time naturals | a library that needs them; they can be added without invalidating programs written under static shapes |
 | 5 | **Handles of one family and different shapes**: polynomials of different degrees do not combine; the collected handles of a folding loop are a tuple | no widening (OR8); a named conversion of a library, examined with the commitment schemes that must realize it |
@@ -3694,7 +3695,7 @@ smallest choice that keeps the document set consistent.
 | 28 | **The length of a slice as a fact** (TY7). The length of a slice of an unsized collection, of a concatenation and of a filled collection is not made a fact about the name that the value is bound to, because the check of facts of the core has no rule that gives it from the parts: `t = a[0..length(a) - 1]` followed by a slice of `t` is refused by TY8. No program and no test of this reference needs it | a rule of the check of facts for the length of a slice, of a concatenation and of a filled sequence, and with it the fact in TY4, which gives a bound name the other facts of its right side |
 | 29 | The readers of `zkc::layout::canonical` form their value in a `mut` accumulator: `read_natural` is refused by TY8 once the law of `Layout` is typed at `canonical` | the readers written with `∑`, with layer C |
 | 30 | `CORE-LIBRARY.md` §1.2 gives each suite of the catalogue three members, and `Suite` declares more | the rows of the catalogue suites, with layer C |
-| 31 | `programs/support/fibonacci.zkc` is the withdrawn form of a module bound to an asset, and `programs/stark_example.zkc` depends on it | the programs of layer E, rewritten with their layer |
+| 31 | `examples/support/fibonacci.zkc` is the withdrawn form of a module bound to an asset, and `examples/stark_example.zkc` depends on it | the programs of layer E, rewritten with their layer |
 | 32 | The test `M-SUMX3` of layer C names a module by its full path without a `use`, which NL3 does not admit | the test, corrected with layer C |
 | 33 | The frozen test `T-P6` cites SX3 for a `;` in the arguments of a call of a function, and FN6 states that refusal | the test accepts both rules: `refuse FN6 SX3` |
 | 34 | **A profile of layer A.** The whole-program tests of layer A (`M-SUM…`, `M-GKR…`, `M-FRA…`, `M-IPA…`, `M-SCH…`) carry declarations of later layers and generated members, and no rule says what an implementation of layer A does with them. Until one does, an implementation of layer A *types* the declarations of layer A (types, records, variants, functions, interfaces and implementing modules, laws, `spec def`s and the formulas of relations, protocols with their events of layer A and the `spec` arguments of their applications), from the roots of SP7 and, in a test, from the instances that a line `// instantiate:` names; it *parses and resolves the names of* the items of later layers and types nothing in them (`spec for` and its clauses, the lines of a `scheme` other than the protocol instance it names, `goal`, `entry def`, `oracle def`); and it *leaves* a root that reaches a form it does not elaborate, and says which: an oracle event or a handle placement (layer D), a generated member of §8 (layers B and C), and `attempt` (EV7), which is of layer A and is not elaborated yet | a rule beside the table of §0.1: which declarations are typed, which later items are parsed and resolved only, which generated signatures a test may assume, and how roots are given |
@@ -3730,9 +3731,10 @@ smallest choice that keeps the document set consistent.
 
 ## 11. Checks run on this document
 
-The library of `lib/`, the worked programs of `programs/` and the tests of `conformance/` are
-checked by the test suite of the frontend (`lean/frontend`), which reports for each test whether
-its outcome is the expected one, and for each worked program how far it is compiled.
+The library of `libraries/`, the worked programs of `examples/` and the tests of `conformance/`
+are checked by the test suite of the frontend (`Zkc.Frontend` in `lean/compiler`), which reports
+for each test whether its outcome is the expected one, and for each worked program how far it is
+compiled.
 
 ---
 

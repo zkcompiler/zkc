@@ -58,19 +58,10 @@ structure Options where
   statement : Option String := none
   witness : Option String := none
   proof : Option String := none
-  /-- `compare`: the baseline directory, whether to write it, the number of seeds, the time in
-  milliseconds within which the seeds of a root are run, whether to run packages whose text is
-  identical, and the changes of each root for its mutants. -/
-  baseline : Option System.FilePath := none
-  write : Bool := false
-  seeds : Nat := 16
-  budget : Option Nat := none
+  /-- `trees`: the reading of each protocol root against the run of its package, under this
+  many seeds. -/
   runs : Bool := false
-  /-- `compare`: the runs are under the provider of uninterpreted rows. -/
-  uninterpreted : Bool := false
-  /-- `compare`: the generators of true statements, each a protocol root and a function root. -/
-  generators : Array (String × String) := #[]
-  mutants : Option Nat := none
+  seeds : Nat := 16
   /-- `trees`: only count the trees and nodes that the run holds. -/
   count : Bool := false
 
@@ -99,29 +90,12 @@ def readOptions : List String → Options → Except String Options
     match seed.toNat? with
     | some n => readOptions rest { options with seed := n }
     | none => .error s!"--seed takes a number, not `{seed}`"
-  | "--baseline" :: directory :: rest, options =>
-    readOptions rest { options with baseline := some directory }
-  | "--write" :: rest, options => readOptions rest { options with write := true }
   | "--runs" :: rest, options => readOptions rest { options with runs := true }
   | "--count" :: rest, options => readOptions rest { options with count := true }
-  | "--uninterpreted" :: rest, options => readOptions rest { options with uninterpreted := true }
-  | "--generator" :: pair :: rest, options =>
-    match pair.splitOn "=" with
-    | [root, generator] =>
-      readOptions rest { options with generators := options.generators.push (root, generator) }
-    | _ => .error s!"--generator takes `<root>=<function root>`, not `{pair}`"
   | "--seeds" :: count :: rest, options =>
     match count.toNat? with
     | some n => readOptions rest { options with seeds := n }
     | none => .error s!"--seeds takes a number, not `{count}`"
-  | "--budget" :: milliseconds :: rest, options =>
-    match milliseconds.toNat? with
-    | some n => readOptions rest { options with budget := some n }
-    | none => .error s!"--budget takes a number of milliseconds, not `{milliseconds}`"
-  | "--mutants" :: count :: rest, options =>
-    match count.toNat? with
-    | some n => readOptions rest { options with mutants := some n }
-    | none => .error s!"--mutants takes a number, not `{count}`"
   | "--repeat" :: count :: rest, options =>
     match count.toNat? with
     | some n => readOptions rest { options with repetitions := n }

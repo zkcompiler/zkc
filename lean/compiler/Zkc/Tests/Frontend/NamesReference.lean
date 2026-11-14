@@ -5,9 +5,9 @@ import Zkc.Tools.Frontend.Generate
 /-!
 # The check of names over the reference
 
-Read from the reference directory: the tests of layer A, every module of `lib/` as a root, and
+Read from the directories of the repository: the tests of layer A, every module of `libraries/` as a root, and
 the worked programs with their example files. A module of a test or of the library is read
-from `lib/`; a worked program also reads `programs/` and `programs/support/`.
+from `libraries/`; a worked program also reads `examples/` and `examples/support/`.
 
 A refusal is the test's when it is in one of the test's own modules (a module `zkc::…` of a test
 stands in place of the library module); a refusal in a module of the library that a test reaches
@@ -97,8 +97,8 @@ def checkCoverage (label : String) (check : NameCheck) (files : Array (String ×
 def splitRefusals (check : NameCheck) (names : Array String) : Array Refusal × Array Refusal :=
   check.refusals.partition fun refusal => names.contains refusal.span.file
 
-def conformanceNamesSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def conformanceNamesSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let mut total := 0
   let mut parserRefused := 0
   let mut accepted := 0
@@ -107,7 +107,7 @@ def conformanceNamesSuite (reference : System.FilePath) : TestM Unit := do
   let mut libraryRefusals : Array String := #[]
   let mut seen : Array String := #[]
   let mut contradictions : Array (String × String) := #[]
-  for path in ← sortedFiles (reference / "conformance") "txt" do
+  for path in ← sortedFiles (repository.conformance) "txt" do
     unless (path.fileName.getD "").startsWith "layer-a-" do continue
     for block in readBlocks (← IO.FS.readFile path) do
       total := total + 1
@@ -160,11 +160,11 @@ def conformanceNamesSuite (reference : System.FilePath) : TestM Unit := do
   -- has 149
   expectTrue (total == 322) s!"expected the 322 tests of layer A, found {total}"
 
-/-- Every module of `lib/` as a root resolves, with every module it reaches. -/
-def libraryNamesSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+/-- Every module of `libraries/` as a root resolves, with every module it reaches. -/
+def libraryNamesSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let mut count := 0
-  for path in ← sortedFiles (reference / "lib") "zkc" do
+  for path in ← sortedFiles (repository.libraries) "zkc" do
     count := count + 1
     let source ← IO.FS.readBinFile path
     let input : SourceInput := { name := path.toString, parsed := parse path.toString source }
@@ -174,13 +174,13 @@ def libraryNamesSuite (reference : System.FilePath) : TestM Unit := do
     if check.refusals.isEmpty then pass
     for refusal in check.refusals do
       failure s!"{path} does not resolve: {refusal.span.file}: {refusal.render}"
-  note s!"{count} modules of lib/"
+  note s!"{count} modules of libraries/"
 
 /-- Every worked program resolves with its example file where there is one, and with every
 module it reaches. -/
-def programNamesSuite (reference : System.FilePath) : TestM Unit := do
-  let programs := reference / "programs"
-  let load ← cachedLoader #[reference / "lib", programs, programs / "support"]
+def programNamesSuite (repository : Repository) : TestM Unit := do
+  let programs := repository.examples
+  let load ← cachedLoader #[repository.libraries, programs, programs / "support"]
   let mut count := 0
   for path in ← sortedFiles programs "zkc" do
     let stem := path.fileStem.getD ""
@@ -204,8 +204,8 @@ def programNamesSuite (reference : System.FilePath) : TestM Unit := do
   note s!"{count} worked programs"
 
 /-- The generated program of the measurements resolves with the library of the reference. -/
-def generatedNamesSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def generatedNamesSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let text := Zkc.Tools.Frontend.Generate.program 50000
   let input : SourceInput := { name := "generated", parsed := parseString "generated" text }
   let check ← checkNames #[input] fun names => (load names : IO _)

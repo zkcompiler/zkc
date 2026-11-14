@@ -231,24 +231,6 @@ mutual
     | arm (region : LocalRegion) (rest : LocalArms)
 end
 
-/-- The `bool` that an instruction is the literal of. -/
-@[expose] def LocalStep.literalBool : LocalStep → Option Bool
-  | .literal (.bool value) => some value
-  | _ => none
-
-/-- A region returns one value, the one with the given number, and does nothing else. -/
-@[expose] def LocalRegion.returnsOnly (number : Nat) : LocalRegion → Bool
-  | .ret [returned] => Nat.beq returned number
-  | _ => false
-
-/-- The `bool` literal that a region with `inputs` inputs returns, when the region is one
-`literal` instruction of a `bool` and the return of that one value: the form that the check
-of facts reads in the regions of an `if`. The result of the first instruction of a region
-has the number of the region's inputs. -/
-@[expose] def LocalRegion.literalBool (inputs : Nat) : LocalRegion → Option Bool
-  | .step instruction next => cond (next.returnsOnly inputs) instruction.literalBool none
-  | _ => none
-
 /-- The arms with the given regions. -/
 @[expose] def LocalArms.ofList : List LocalRegion → LocalArms
   | [] => .none

@@ -1,6 +1,7 @@
 name = "zkc_formal"
 version = "0.0.0"
-defaultTargets = ["ZkcFormal", "ZkcFormalTools", "ZkcFormalTests", "zkc-formal-receipts"]
+defaultTargets = ["ZkcFormal", "ZkcFormalTools", "ZkcFormalTests", "zkc-formal-receipts",
+  "zkc-formal-audit"]
 # a hyphenated name is written in guillemets for Lake to resolve it
 testDriver = "«zkc-formal-receipts»"
 
@@ -9,8 +10,8 @@ autoImplicit = false
 warningAsError = true
 
 [[require]]
-name = "zkc_core"
-path = "../core"
+name = "zkc_compiler"
+path = "../compiler"
 
 [[lean_lib]]
 name = "ZkcFormal"
@@ -34,3 +35,9 @@ allowNonModules = true
 name = "zkc-formal-receipts"
 root = "Zkc.Tests.Formal.Main"
 allowNonModules = true
+
+[[lean_exe]]
+name = "zkc-formal-audit"
+root = "Zkc.Tools.Formal.Audit"
+allowNonModules = true
+needs = ["ZkcFormal"]

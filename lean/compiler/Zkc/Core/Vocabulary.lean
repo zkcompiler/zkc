@@ -28,8 +28,7 @@ of the serialize step, named `layout.canonical.*`, over bytes: `open`, `put` at 
 The numbers of the types:
 
 - `koala-bear`: the order `2130706433 = 2^31 - 2^24 + 1` and the two-adicity 24, with the
-  generator `1791270792` of the subgroup of order `2^24` (`common/catalog/declarations.json`,
-  entry `koala-bear`);
+  generator `1791270792` of the subgroup of order `2^24` (the catalogue entry `koala-bear`);
 - `koala-bear.ext4`: degree 4 over `koala-bear` with `x^4 = 3` (entry
   `koala-bear.ext4-binomial3`); its order is `p^4`, and its two-adicity 26 is the exponent
   of 2 in `p^4 - 1 = (p - 1)(p + 1)(p^2 + 1)`: 24 + 1 + 1. The catalogue gives no generator

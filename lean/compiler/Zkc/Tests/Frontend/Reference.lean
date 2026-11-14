@@ -3,8 +3,9 @@ import Zkc.Tests.Frontend.Harness
 /-!
 # The sources and the conformance tests of the reference
 
-Read from the reference directory given to the test driver (the directory that holds
-`LANGUAGE.md`, `lib/`, `programs/` and `conformance/`).
+Read from the directories of the repository given to the test driver: the conformance tests of
+the reference of the language, the library in source (`libraries/`) and the worked programs
+(`examples/`).
 -/
 
 namespace Zkc.Tests.Frontend
@@ -30,10 +31,10 @@ def sortedFiles (directory : System.FilePath) (extension : String) : IO (Array S
   let selected := files.filter (·.extension == some extension)
   return selected.qsort (·.toString < ·.toString)
 
-/-- Every file of `lib/` and `programs/` parses, and its canonical text parses to the same tree. -/
-def corpusSuite (reference : System.FilePath) : TestM Unit := do
+/-- Every file of `libraries/` and `examples/` parses, and its canonical text parses to the same tree. -/
+def corpusSuite (repository : Repository) : TestM Unit := do
   let mut count := 0
-  for directory in [reference / "lib", reference / "programs"] do
+  for directory in [repository.libraries, repository.examples] do
     for path in ← sortedFiles directory "zkc" do
       count := count + 1
       let source ← IO.FS.readBinFile path
@@ -46,18 +47,18 @@ def corpusSuite (reference : System.FilePath) : TestM Unit := do
         -- text parses to the tree of the source itself
         expectTrue (treeText (canonicalize parsed.tree) == treeText parsed.tree)
           s!"{path}: the canonical tree differs from the tree of the source"
-  note s!"{count} files of lib/ and programs/"
-  expectTrue (count == 44) s!"expected the 44 files of the reference, found {count}"
+  note s!"{count} files of libraries/ and examples/"
+  expectTrue (count == 44) s!"expected the 44 files of libraries/ and examples/, found {count}"
 
 /-- Every program of `conformance/`: a test whose expected refusal is a lexical or grammar rule
 is refused by that rule, every refusal is by a rule that its test names, and the refused tests
 are exactly `expectedRefusals`. The printer keeps the tree of every program that parses. -/
-def conformanceSuite (reference : System.FilePath) : TestM Unit := do
+def conformanceSuite (repository : Repository) : TestM Unit := do
   let mut total := 0
   let mut parsedCount := 0
   let mut refused : Array (String × String) := #[]
   let mut leftToChecker : Array String := #[]
-  for path in ← sortedFiles (reference / "conformance") "txt" do
+  for path in ← sortedFiles (repository.conformance) "txt" do
     for block in readBlocks (← IO.FS.readFile path) do
       total := total + 1
       let rules := refusalRules block.expect

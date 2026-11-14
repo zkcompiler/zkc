@@ -121,7 +121,7 @@ module t
 module inner<k: nat>:
     pub def size() -> nat: 2^k
 def f() -> nat: inner<3>::size()
-=== M-FRA9 | refuse GR6 | `programs/fragments.zkc` with one change: a function literal
+=== M-FRA9 | refuse GR6 | `examples/fragments.zkc` with one change: a function literal
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}

@@ -235,8 +235,8 @@ use zkc::sequence::{
 "
 
 /-- Every public function of `zkc::sequence` runs and gives the result of its definition. -/
-def sequenceRunSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def sequenceRunSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let input : SourceInput := { name := "running", parsed := parseString "running" sequenceProgram }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)
   if let some first := nameCheck.refusals[0]? then
@@ -361,8 +361,8 @@ def g1_multiple(s: Fr) -> G1: G1::generator() * s
 
 /-- The function members of the sorts at `koala-bear`, its quartic extension, `bls12-381.fr` and
 `bls12-381.g1`, and the arithmetic of the extension and of G1, run from source. -/
-def membersRunSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def membersRunSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let input : SourceInput := { name := "members", parsed := parseString "members" membersProgram }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)
   if let some first := nameCheck.refusals[0]? then

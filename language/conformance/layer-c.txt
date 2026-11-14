@@ -617,7 +617,7 @@ scheme T = X:
     offline S
     construction interactive
     commit poly<_, _> with Kzg<Bls12381>(prover_key = sites.pk, verifier_key = sites.vk)
-=== M-SUMX1 | refuse SC3 | `programs/sumcheck_example.zkc` with one change: no round: the body types, but no role sends or draws, so the scheme must state its prover
+=== M-SUMX1 | refuse SC3 | `examples/sumcheck_example.zkc` with one change: no round: the body types, but no role sends or draws, so the scheme must state its prover
 module sumcheck_example
 
 use sumcheck<Fr>::{Sumcheck}
@@ -718,7 +718,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUMX2 | accept | `programs/sumcheck_example.zkc` with one change: an import that is not used
+=== M-SUMX2 | accept | `examples/sumcheck_example.zkc` with one change: an import that is not used
 module sumcheck_example
 
 use sumcheck<Fr>::{Sumcheck}
@@ -819,7 +819,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUMX3 | refuse SC5 | `programs/sumcheck_example.zkc` with one change: a suite whose challenge field is not the field drawn
+=== M-SUMX3 | refuse SC5 | `examples/sumcheck_example.zkc` with one change: a suite whose challenge field is not the field drawn
 module sumcheck_example
 
 use sumcheck<Fr>::{Sumcheck}
@@ -920,7 +920,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SCHX7 | refuse SC5 | `programs/schnorr_example.zkc` with one change: a recovered site is a send
+=== M-SCHX7 | refuse SC5 | `examples/schnorr_example.zkc` with one change: a recovered site is a send
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1044,7 +1044,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX8 | refuse TY5 | `programs/schnorr_example.zkc` with one change: a field of the generated witness
+=== M-SCHX8 | refuse TY5 | `examples/schnorr_example.zkc` with one change: a field of the generated witness
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1168,7 +1168,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX9 | refuse TY13 | `programs/schnorr_example.zkc` with one change: a missing field of the generated statement
+=== M-SCHX9 | refuse TY13 | `examples/schnorr_example.zkc` with one change: a missing field of the generated statement
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1292,7 +1292,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX10 | refuse NL3 | `programs/schnorr_example.zkc` with one change: the generator is a member of the sort
+=== M-SCHX10 | refuse NL3 | `examples/schnorr_example.zkc` with one change: the generator is a member of the sort
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1416,7 +1416,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-GKRX1 | refuse SP5 | `programs/gkr_example.zkc` with one change: two numerals by position
+=== M-GKRX1 | refuse SP5 | `examples/gkr_example.zkc` with one change: two numerals by position
 module gkr_example
 
 use gkr<Fr>::{Gkr}
@@ -1602,7 +1602,7 @@ pub def wiring<d: nat, w: nat>(
     c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
 ) -> (F, F) = primitive("circuit.wiring")
 pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")
-=== M-FRA11 | accept | `programs/fragments.zkc` with one change: `private` is checked for `derived` and `authored` only
+=== M-FRA11 | accept | `examples/fragments.zkc` with one change: `private` is checked for `derived` and `authored` only
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1795,7 +1795,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-FRA13 | accept | `programs/fragments.zkc` with one change: D as an offline role: it receives nothing
+=== M-FRA13 | accept | `examples/fragments.zkc` with one change: D as an offline role: it receives nothing
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -1988,7 +1988,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-CP4 | refuse SC5 | `programs/chaum_pedersen.zkc` with one change: a hash is not a suite
+=== M-CP4 | refuse SC5 | `examples/chaum_pedersen.zkc` with one change: a hash is not a suite
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2047,7 +2047,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-CP8 | accept, warn | `programs/chaum_pedersen.zkc` with one change: both checks at the prover: the scheme is reported (SC8)
+=== M-CP8 | accept, warn | `examples/chaum_pedersen.zkc` with one change: both checks at the prover: the scheme is reported (SC8)
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2106,7 +2106,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-IPA5 | accept | `programs/inner_product.zkc` with one change: no round
+=== M-IPA5 | accept | `examples/inner_product.zkc` with one change: no round
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}

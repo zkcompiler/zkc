@@ -6,8 +6,8 @@ public section
 
 /-! Interpretations of effect trees.
 
-`interpret` and its laws are the part of the maintained `Zkc.Program.Interpretation`
-that a structural theorem about a step needs: an operation of one signature becomes a
+`interpret` and its laws are what a structural theorem about a step needs: an operation of
+one signature becomes a
 process of another with the same reply type, and interpretation commutes with
 sequencing.
 

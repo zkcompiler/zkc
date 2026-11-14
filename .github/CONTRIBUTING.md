@@ -29,12 +29,12 @@ or volume.
 
 | To find out | Read |
 |---|---|
-| What the project is and where it is going | [Architecture](../docs/architecture.md) |
-| What the current checkout actually claims | [Current Status](../docs/status.md) |
-| Which document decides what | [documentation authority map](../docs/README.md) |
-| How to build and run the checks | [Development guide](../docs/development/README.md) and [test scopes](../common/tests/README.md) |
-| Where documentation belongs | [Documentation guide](../docs/development/documentation.md) |
-| The exact semantics of a surface | [Specification](../docs/spec/README.md) |
+| What the project is | [README](../README.md) |
+| What the current checkout supports | [Status](../docs/status.md) |
+| Which document decides what | [Documentation index](../docs/README.md) |
+| How to build and run the checks | [Development guide](../docs/development.md) |
+| The exact rules of the source language | [Language reference](../language/README.md) |
+| The exact semantics of the core language | [Core language specification](../docs/spec/core/README.md) |
 
 ## Submitting a pull request
 
@@ -42,18 +42,15 @@ Work happens on a branch and lands through a pull request; nothing is pushed
 to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`,
 `docs/…`, `test/…`.
 
-1. Run the tests and lint checks affected by the change, using the
-   [test guide](../common/tests/README.md#selecting-checks). Use `just test` for broad
-   integration validation, not for every edit. Run optional suites when their
-   integration boundary changes, and describe the checks actually performed.
-   Automatic CI checks sources, formatting, documentation and the test harness.
-   Native changes also run Rust tests, installed CLI/SDK package checks and
-   package boundary checks, literal example recipes and compact protocol cases
-   selected from library manifest consumers. Compiler,
-   runtime and shared tooling changes select all compact protocol families.
-   Full compiler/protocol integration and optional suites have manual workflow scopes. Run affected checks locally and record their results; see the
-   [maintenance guide](../docs/development/maintenance.md).
+1. Run the checks that the change needs, as the
+   [development guide](../docs/development.md) describes. Every change runs
+   `just check`. A change to the Lean packages, the language reference, the
+   libraries or the examples also runs `just test`, or the part of it that
+   the change affects, locally. CI runs only `just check`; it does not build
+   or test the Lean packages. State what you ran and its result in the pull
+   request.
 2. Open the pull request and write its title and body as described below.
+   The [pull request template](PULL_REQUEST_TEMPLATE.md) gives the sections.
 3. Respond to review on the branch. What review confirms is fixed in the
    same pull request rather than deferred to a later one.
 
@@ -61,8 +58,7 @@ Pull requests merge by squash. For a reviewed batch, constituent pull requests
 may first merge into an explicit integration branch. One final pull request from
 that branch to `main` carries the complete batch and its integration fixes. The
 required CI check applies to that final candidate; merging into the integration
-branch does not mean a package has landed on `main`. See the
-[batch integration procedure](../docs/development/maintenance.md#batch-integration).
+branch does not mean a package has landed on `main`.
 
 ## Commit and pull request messages
 
@@ -103,60 +99,40 @@ belongs in the pull request body, which is what survives the squash.
 
 ## Change requirements
 
-- **Tests.** Test at the level the change acts: tests through the tools for
-  behavior, unit tests for the pure cores, and a negative test for
-  every refusal a change introduces. A file in `compiler/test` is one test to
-  CTest, so a bare `assert` ends it and hides every check after it. Where such
-  a file walks a list of independent inputs, `with case(...)` from
-  `support/cases.py` lets each one fail on its own and names it in the report.
-  It is optional, and blocks that share state belong in one case. A Lean
-  module whose entry point is `def run : IO Unit` has the same choice:
-  `Tests.Checks` records a condition that does not hold and carries on, while
-  a shape error stays fatal because there is no value to go on with.
-- **Semantics.** Update the owning specification: `docs/spec/` for native and
-  shared contracts, `lean/docs/spec/` for independent formal models. Keep
-  intended contracts and implementation coverage distinct; do not weaken a
-  contract to match a missing implementation. Record native coverage in
-  [status](../docs/status.md) and theorem scope in
-  [formal support](../lean/docs/support.md).
-- **Shared contracts.** Update the [contract register](../docs/spec/contracts.md)
-  when changing a cross-component contract. Name the checked producer/consumer
-  boundaries and record missing integrations explicitly. Publish shared
-  specifications before broad migration; independent consumers adapt from
-  them. Changes under `lean/` require the affected formal checks. A native-only
-  change records any unimplemented formal consumer migration without claiming
-  formal correspondence.
+- **Tests.** Test at the level the change acts: programs through the
+  frontend's test driver for the source language, tests of the core for its
+  definitions, and a negative test for every refusal a change introduces.
+- **Semantics.** Update the owning document: the
+  [language reference](../language/LANGUAGE.md) for the source language and
+  the [core language specification](../docs/spec/core/README.md) for the core
+  language. Keep the definition of a language and the coverage of its
+  implementation distinct; do not weaken a definition to match a missing
+  implementation. Record what is implemented in the
+  [status](../docs/status.md).
+- **Proofs.** A theorem does not use `sorry` or an axiom beyond Lean's three,
+  and the imports between the libraries follow their rules; `just audit`
+  checks both. State what a theorem covers in the guide of its package.
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, all zkc-owned formats
-  stay at version `0`, including new foundation formats. Publish schema changes
-  in the owning specification and contract register before migration. Update
-  affected native producers, readers and fixtures together, and record gaps in
-  independently maintained consumers. Maintain one current schema with exact
-  shape and unknown-field validation; do not add compatibility readers. Equal
-  development version tags do not guarantee equal schemas; exact subjects and
-  digests identify the actual artifacts. See the
-  [format version policy](../docs/development/maintenance.md#format-versions).
-- **Independent implementations.** The compiler and native runtime independently
-  validate the executable program carrier. A change to that surface updates both.
-  Formal research checks do not establish correspondence with current native
-  execution unless an explicit maintained bridge states that claim.
-- **Diagnostics.** Identifiers are the stable surface and message prose is
-  not, so a new diagnostic is asserted by a test that names
-  the identifier.
+  stay at version `0`, such as `zkc.core/0`. Publish a schema change in the
+  owning specification with the change to its readers and writers. Maintain one
+  current schema with exact shape and unknown-field validation; do not add
+  compatibility readers. Exact subjects and digests identify the actual
+  artifacts.
+- **Diagnostics.** Rule identifiers are the stable surface and message prose
+  is not, so a new refusal is asserted by a test that names the identifier.
 - **Security rules and judgments.** Keep what a judgment rests on explicit.
   A citation is not a proof of what it cites, and a passing test is not a
   judgment.
-- **External integrations.** Pin exact sources in the manifest that owns them
-  and state the adapter boundary. Code adapted from elsewhere names its source
-  in the file that holds it. One reproduced run is not a conformance claim.
-- **Libraries.** Reusable `.zkc` algorithms belong in `libraries/`; concrete
-  Entries belong in `examples/projects/`. Document public exports and protocol
-  assumptions in the [library guide](../libraries/README.md). Exercise changes
-  through the common compiler and Host, including invalid inputs or proofs.
-- **Documentation.** Update whatever the change makes wrong or incomplete,
-  in the [document that owns it](../docs/development/documentation.md). A design choice that a reader could reasonably
-  have made differently gets a [rationale record](../docs/rationale/README.md)
-  only when its reason does not fit beside the definition; that page states
-  what a record contains and what it never contains.
+- **External dependencies.** Pin exact versions in the file that owns them:
+  `lean-toolchain` and the Lake manifest of a package, or the workflow for an
+  action. Code adapted from elsewhere names its source in the file that holds
+  it.
+- **Libraries.** Reusable `.zkc` algorithms belong in `libraries/`; worked
+  programs belong in `examples/`. Document a public module in
+  [`CORE-LIBRARY.md`](../language/CORE-LIBRARY.md) or
+  [`STANDARD-LIBRARY.md`](../language/STANDARD-LIBRARY.md), whichever owns it.
+- **Documentation.** Update whatever the change makes wrong or incomplete, in
+  the document that owns it, and keep `just check` passing.
 
 Generated files and private development records are not committed.

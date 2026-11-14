@@ -78,3 +78,15 @@ public import Zkc.Frontend.Passes.Stops
 public import Zkc.Frontend.Passes.Placement
 public import Zkc.Frontend.Passes.Events
 public import Zkc.Frontend.Passes.WellFormed
+public import Zkc.Frontend.Elab.Family
+public import Zkc.Frontend.Elab.Function
+public import Zkc.Frontend.Elab.Linear
+public import Zkc.Frontend.Elab.Statements
+public import Zkc.Frontend.Elab.Terms
+public import Zkc.Frontend.Emit.Reports
+public import Zkc.Frontend.Semantics.Instantiate.Remake
+public import Zkc.Frontend.Syntax.Parser.Basic
+public import Zkc.Frontend.Syntax.Parser.Decl
+public import Zkc.Frontend.Syntax.Parser.Expr
+public import Zkc.Frontend.Syntax.Parser.Stmt
+public import Zkc.Frontend.Syntax.UnicodeData

@@ -11,18 +11,18 @@ import Zkc.Core.ProofIdentity
   or that neither sends nor draws without a `prover` line, is refused (SC3); an input that the
   verifier holds alone is refused (SC4); a draw of a group is refused (SC5); a draw of `bool`, a
   `context` line, a suite in source and `construction interactive` wait.
-- With the reference: `scheme Proof = Schnorr<G1>` of `programs/schnorr_example.zkc` with
+- With the reference: `scheme Proof = Schnorr<G1>` of `examples/schnorr_example.zkc` with
   `construction derived(Merlin3Bls12381)`. The constructed program is admitted (elaborated again,
   and its functions and protocols pass the check of facts) and projected; the suite's rows that
   each role applies, with their labels, are the schedule of the README. For the statement
   `(G, 7·G)`, the witness 7 and a fixed nonce, the proof is the bytes committed here, and the
-  bytes that the independent replay `scripts/replay_derived_schnorr.py` computes when Python is
-  available.
+  bytes that the independent replay `scripts/replay_derived_schnorr.py` computes: a `python3`
+  that does not run, or a replay that fails, fails the suite.
   The honest proof is accepted; on the statement validated once, the proof with each byte
   changed, each proper prefix and the proof with one more byte are not, each stopping the
   verifier `reject`, never `undefined`. A proof
   from the sampler's seed is accepted, and one for a wrong witness is not. Every scheme of
-  `programs/` is constructed and admitted, or waits; the derived OR proof of `Or<G1>` and the
+  `examples/` is constructed and admitted, or waits; the derived OR proof of `Or<G1>` and the
   derived Sumcheck proof of `Sumcheck<Fr, 10>` are accepted when honest, and not for another
   statement, a wrong witness or a changed byte.
 -/
@@ -345,8 +345,8 @@ partial def suiteSchedule (package : Zkc.Core.Raw.Package) (role : Nat) : List (
   | some entry => walk entry.body none
   | none => []
 
-/-- The proof that `scripts/replay_derived_schnorr.py` computes, when Python runs; `none` with the
-reason when it does not. -/
+/-- The proof that `scripts/replay_derived_schnorr.py` computes; an error with the reason when
+`python3` does not run it. -/
 def replayProof (identity : String) (nonce : Nat) : IO (Except String String) := do
   let script : System.FilePath := "scripts" / "replay_derived_schnorr.py"
   unless ← script.pathExists do return .error s!"{script} is not found from the working directory"
@@ -360,9 +360,9 @@ def replayProof (identity : String) (nonce : Nat) : IO (Except String String) :=
     return .ok output.stdout.trimAscii.toString
   catch error => return .error s!"python3 does not run: {error}"
 
-def derivedSchnorrSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib", reference / "programs", reference / "programs" / "support"]
-  let path := reference / "programs" / "schnorr_example.zkc"
+def derivedSchnorrSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries, repository.examples, repository.examples / "support"]
+  let path := repository.examples / "schnorr_example.zkc"
   let input : SourceInput := { name := path.toString, parsed := parseString path.toString (← IO.FS.readFile path) }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)
   if let some first := nameCheck.refusals[0]? then
@@ -413,7 +413,7 @@ def derivedSchnorrSuite (reference : System.FilePath) : TestM Unit := do
     | .ok replayed =>
       expectTrue (replayed == hex) s!"schnorr_example: the independent replay gives {replayed}"
       if replayed == hex then note "the independent replay of the derived Schnorr proof gives the same bytes"
-    | .error reason => note s!"the independent replay of the derived Schnorr proof did not run: {reason}"
+    | .error reason => failure s!"the independent replay of the derived Schnorr proof did not run: {reason}"
     expectTrue (isAccepted (verdict completed "Proof" statement proof))
       "schnorr_example: the honest proof is not accepted"
     let runs ← expectProofsRefused "schnorr_example" completed "Proof" statement proof
@@ -457,14 +457,14 @@ def expectSchemeRuns (label : String) (completed : Completed Constructed) (name 
 /-- The schemes of the programs of the reference: each constructed program is admitted and
 projected, and the rest wait; none is refused. The derived OR proof and the derived Sumcheck
 proof run. -/
-def referenceSchemeSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib", reference / "programs", reference / "programs" / "support"]
+def referenceSchemeSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries, repository.examples, repository.examples / "support"]
   let mut constructed : Array String := #[]
   let mut notCopies : Array String := #[]
   let mut waiting := 0
   for stem in ["schnorr_example", "sumcheck_example", "gkr_example", "variants_example", "chaum_pedersen",
       "fragments", "inner_product", "fri_example", "spot_check", "product_check_example", "mldsa_signature"] do
-    let path := reference / "programs" / s!"{stem}.zkc"
+    let path := repository.examples / s!"{stem}.zkc"
     let input : SourceInput := { name := path.toString, parsed := parseString path.toString (← IO.FS.readFile path) }
     let nameCheck ← checkNames #[input] fun names => (load names : IO _)
     if let some first := nameCheck.refusals[0]? then
@@ -505,7 +505,7 @@ def referenceSchemeSuite (reference : System.FilePath) : TestM Unit := do
             (some [numbers values, .number ((claim + 1) % fr)])
       | .waiting _ => waiting := waiting + 1
       | other => failure s!"{stem}: {report.description}: {outcomeText other}"
-  note s!"schemes of programs/: {constructed.size} constructed and admitted ({", ".intercalate constructed.toList}), {waiting} waiting"
+  note s!"schemes of examples/: {constructed.size} constructed and admitted ({", ".intercalate constructed.toList}), {waiting} waiting"
   -- A known defect of the step: a callee that derives a coin at both roles and returns it under
   -- an agreement. When the step declares its threaded states copies, this list becomes empty.
   expectTrue (notCopies == #["scheme Proof = Sumcheck<Fr, 10>"])

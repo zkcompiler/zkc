@@ -606,7 +606,7 @@ of the site that it reserves for the mark of the limit. -/
 /-! ## Laws
 
 One definition of what a value of a law is, read by every source of coins: the coins of a seed
-(`seededCoins`), the data of the comparison of runs (`ValidData`) and a caller's own source.
+(`seededCoins`) and a caller's own source.
 A law makes a value of a closed type from a stream of numbers:
 
 - `bool` and `index<n>`: a number modulo 2 and modulo `n`; `index<0>` has no value;

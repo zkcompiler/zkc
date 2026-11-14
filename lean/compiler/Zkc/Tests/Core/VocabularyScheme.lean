@@ -18,11 +18,11 @@ no premise.
   `fixtures/construction/schnorr-frontend-scheme.json` and
   `schnorr-frontend-scheme.declaration.json` are the files `scheme-Proof.json` and
   `scheme-Proof.declaration.json` that the frontend's tool writes for
-  `programs/schnorr_example.zkc` of the language reference, byte for byte. They were written
-  from `lean/frontend`, with `R` the directory of the reference (`ZKC_LANGUAGE_REFERENCE`), by
+  `examples/schnorr_example.zkc` of the repository, byte for byte. They are written from
+  `lean/compiler` by
 
-      lake exe zkc-check types --library R/lib --library R/programs \
-        --library R/programs/support --packages <directory> R/programs/schnorr_example.zkc
+      lake exe zkc-check types --library ../../libraries --library ../../examples \
+        --library ../../examples/support --packages <directory> ../../examples/schnorr_example.zkc
 
   The package names the vocabulary's rows of the field `bls12-381.fr`, of the group
   `bls12-381.g1`, of the suite `suite.merlin3.bls12-381.fr64be/0` and of the canonical layout

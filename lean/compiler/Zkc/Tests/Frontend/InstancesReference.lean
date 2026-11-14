@@ -4,7 +4,7 @@ import Zkc.Tests.Frontend.Instances
 /-!
 # The check of instances over the reference
 
-The tests of layer A whose names resolve, every module of `lib/` as a root, the worked programs
+The tests of layer A whose names resolve, every module of `libraries/` as a root, the worked programs
 with their example files, and the generated program of the measurements, instantiated from their
 roots, their `// instantiate:` comments and the default instances of their public declarations.
 -/
@@ -44,14 +44,14 @@ def instancesWaitingForTyping : Array (String × String) := #[
   ("M-FRA6", "the size `half` is a `mut` name of a body")]
 
 /-- The worked programs that the check of instances refuses: the rule, the file below
-`programs/`, the line. `stark` reaches `support/fibonacci.zkc`, which binds a module to an asset
+`examples/`, the line. `stark` reaches `support/fibonacci.zkc`, which binds a module to an asset
 whose interface has type members: the form that the reference withdrew (NL9). -/
 def expectedProgramRefusals : Array (String × String × String × Nat) := #[
   ("stark", "NL9", "support/fibonacci.zkc", 9)]
 
 /-- The tests of layer A, from their names to their instances. -/
-def conformanceInstancesSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def conformanceInstancesSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let mut total := 0
   let mut beforeThis := 0
   let mut refusedHere : Array String := #[]
@@ -59,7 +59,7 @@ def conformanceInstancesSuite (reference : System.FilePath) : TestM Unit := do
   let mut accepted := 0
   let mut seen : Array String := #[]
   let mut contradictions : Array (String × String) := #[]
-  for path in ← sortedFiles (reference / "conformance") "txt" do
+  for path in ← sortedFiles (repository.conformance) "txt" do
     unless (path.fileName.getD "").startsWith "layer-a-" do continue
     for block in readBlocks (← IO.FS.readFile path) do
       total := total + 1
@@ -108,13 +108,13 @@ def conformanceInstancesSuite (reference : System.FilePath) : TestM Unit := do
   for entry in refusedHere do note s!"refused: {entry}"
   for entry in waiting do note s!"waiting for typing: {entry}"
 
-/-- Every module of `lib/` as a root: its roots and the default instances of its public
+/-- Every module of `libraries/` as a root: its roots and the default instances of its public
 declarations form, and their signatures evaluate. -/
-def libraryInstancesSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def libraryInstancesSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let mut instances := 0
   let mut defaults := 0
-  for path in ← sortedFiles (reference / "lib") "zkc" do
+  for path in ← sortedFiles (repository.libraries) "zkc" do
     let source ← IO.FS.readBinFile path
     let input : SourceInput := { name := path.toString, parsed := parse path.toString source }
     let nameCheck ← checkNames #[input] fun names => (load names : IO _)
@@ -132,7 +132,7 @@ def libraryInstancesSuite (reference : System.FilePath) : TestM Unit := do
         defaults := defaults + entry.count
         if let some reason := entry.none? then
           note s!"{path.fileName.getD ""}: no default instance of `{nameCheck.program.nameOf entry.declaration}`: {reason}"
-  note s!"modules of lib/: {instances} instances, {defaults} default instances of their own declarations"
+  note s!"modules of libraries/: {instances} instances, {defaults} default instances of their own declarations"
 
 /-- What some instances of the worked programs hold. -/
 def programContents : Array (String × String × String) := #[
@@ -145,9 +145,9 @@ def programContents : Array (String × String × String) := #[
   ("sumcheck", "sums<F = Fr, v = 2>", "(table: [Fr; 8]) -> (Fr, Fr)")]
 
 /-- Every worked program with its example file. -/
-def programInstancesSuite (reference : System.FilePath) : TestM Unit := do
-  let programs := reference / "programs"
-  let load ← cachedLoader #[reference / "lib", programs, programs / "support"]
+def programInstancesSuite (repository : Repository) : TestM Unit := do
+  let programs := repository.examples
+  let load ← cachedLoader #[repository.libraries, programs, programs / "support"]
   for path in ← sortedFiles programs "zkc" do
     let stem := path.fileStem.getD ""
     if stem.endsWith "_example" || path.parent != some programs then continue
@@ -188,8 +188,8 @@ def programInstancesSuite (reference : System.FilePath) : TestM Unit := do
       for refusal in check.refusals do failure s!"{stem}: {refusal.span.file}: {refusal.render}"
 
 /-- The generated program of the measurements: its instances form. -/
-def generatedInstancesSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def generatedInstancesSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let text := Zkc.Tools.Frontend.Generate.program 50000
   let input : SourceInput := { name := "generated", parsed := parseString "generated" text }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)
@@ -201,8 +201,8 @@ def generatedInstancesSuite (reference : System.FilePath) : TestM Unit := do
 
 /-- An instance whose `where` cannot be evaluated here waits, and says for what (SP4): a
 constraint over a member that a module bound to the vocabulary does not give. -/
-def waitingInstanceSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib"]
+def waitingInstanceSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries]
   let text := "module waiting\n\nuse zkc::suites::{Merlin3Bls12381}\nuse zkc::construction::{Suite}\n\npub def f<S: Suite>() -> nat where (S::Units != S::Units): 1\n\npub def top() -> nat: f<Merlin3Bls12381>()\n"
   let input : SourceInput := { name := "waiting", parsed := parseString "waiting" text }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)

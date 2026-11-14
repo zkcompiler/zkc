@@ -9,10 +9,10 @@ import Zkc.Tests.Frontend.Running
   with each message changed, all roles together and the verifier alone against messages given to
   it; a loop with a run-time count, a loop that collects, a choice on a condition, a choice on an
   alternative, a stepped loop.
-- With the reference: interactive Schnorr of `programs/schnorr.zkc` at BLS12-381's G1 and the
-  Chaum–Pedersen protocol of `programs/chaum_pedersen.zkc` at the instance its scheme names, run
-  the same way; the OR proof of `programs/sigma_or.zkc` at G1 with each alternative of its
-  witness, with a wrong witness and with its commitments changed; `Sumcheck<n>` of `programs/sumcheck.zkc` over `bls12-381.fr` and `koala-bear` at
+- With the reference: interactive Schnorr of `examples/schnorr.zkc` at BLS12-381's G1 and the
+  Chaum–Pedersen protocol of `examples/chaum_pedersen.zkc` at the instance its scheme names, run
+  the same way; the OR proof of `examples/sigma_or.zkc` at G1 with each alternative of its
+  witness, with a wrong witness and with its commitments changed; `Sumcheck<n>` of `examples/sumcheck.zkc` over `bls12-381.fr` and `koala-bear` at
   the sizes 0, 1, 2, 3 and 10, honest with the claim that the test computes, with a false claim,
   and with the first round message or challenge changed on the way.
 
@@ -290,9 +290,9 @@ def protocolRunSuite : TestM Unit := do
 /-! ## Over the reference -/
 
 /-- A worked program of the reference, typed with the library. -/
-def referenceProgram (reference : System.FilePath) (stem : String) : TestM (Option TypingCheck) := do
-  let load ← cachedLoader #[reference / "lib"]
-  let path := reference / "programs" / s!"{stem}.zkc"
+def referenceProgram (repository : Repository) (stem : String) : TestM (Option TypingCheck) := do
+  let load ← cachedLoader #[repository.libraries]
+  let path := repository.examples / s!"{stem}.zkc"
   let input : SourceInput := { name := path.toString, parsed := parseString path.toString (← IO.FS.readFile path) }
   let nameCheck ← checkNames #[input] fun names => (load names : IO _)
   if let some first := nameCheck.refusals[0]? then
@@ -313,10 +313,10 @@ def namedSite (package : Zkc.Core.Raw.Package) (definitionPrefix site : String) 
   let number ← sites.findIdx? (· == site)
   return (definition, number)
 
-def referenceProtocolSuite (reference : System.FilePath) : TestM Unit := do
+def referenceProtocolSuite (repository : Repository) : TestM Unit := do
   let some points ← protocolCheck | return
   -- interactive Schnorr at G1, the default instance of the public protocol
-  if let some check ← referenceProgram reference "schnorr" then
+  if let some check ← referenceProgram repository "schnorr" then
     match findRoot check "Schnorr<bls12-381.g1>" with
     | some report =>
       expectTrue (report.outcome matches .admitted _)
@@ -324,7 +324,7 @@ def referenceProtocolSuite (reference : System.FilePath) : TestM Unit := do
       schnorrRuns "schnorr" check "Schnorr<bls12-381.g1>" points
     | none => failure s!"schnorr: no root Schnorr<bls12-381.g1>"
   -- Chaum–Pedersen at the instance that its scheme names: u = g * x and v = h * x
-  if let some check ← referenceProgram reference "chaum_pedersen" then
+  if let some check ← referenceProgram repository "chaum_pedersen" then
     let some report := check.packages.find? (·.description.startsWith "ChaumPedersen")
       | failure "chaum_pedersen: no root of the protocol"
     expectTrue (report.outcome matches .admitted _)
@@ -340,7 +340,7 @@ def referenceProtocolSuite (reference : System.FilePath) : TestM Unit := do
     | _, _, _ => failure "chaum_pedersen: no multiple of the generator"
   -- the OR proof of `sigma_or` at G1: an honest run with each alternative of the witness, and
   -- one with the commitments changed on the way
-  if let some check ← referenceProgram reference "sigma_or" then
+  if let some check ← referenceProgram repository "sigma_or" then
     let root := "Or<bls12-381.g1>"
     let w := 13
     let g := numbers [generatorX, generatorY]
@@ -368,7 +368,7 @@ def referenceProtocolSuite (reference : System.FilePath) : TestM Unit := do
 
 /-! ## Sumcheck over the reference -/
 
-/-- A module that instantiates `Sumcheck` of `programs/sumcheck.zkc` over a field at sizes. -/
+/-- A module that instantiates `Sumcheck` of `examples/sumcheck.zkc` over a field at sizes. -/
 def sumcheckWrapper (field path : String) (sizes : List Nat) : String :=
   s!"module sumcheck_runs
 use sumcheck<{field}>::\{Sumcheck}
@@ -420,8 +420,8 @@ def sumcheckRuns (label : String) (check : TypingCheck) (fieldName : String) (or
 /-- The sizes at which `Sumcheck` runs in the tests. -/
 def sumcheckSizes : List Nat := [0, 1, 2, 3, 10]
 
-def sumcheckRunSuite (reference : System.FilePath) : TestM Unit := do
-  let load ← cachedLoader #[reference / "lib", reference / "programs"]
+def sumcheckRunSuite (repository : Repository) : TestM Unit := do
+  let load ← cachedLoader #[repository.libraries, repository.examples]
   for (field, path, name, order) in [("Fr", "zkc::curves::bls12_381", "Fr", fr),
       ("KoalaBear", "zkc::fields", "KoalaBear", koalaBear)] do
     let label := s!"sumcheck over {field}"

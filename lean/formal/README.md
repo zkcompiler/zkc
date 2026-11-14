@@ -1,7 +1,9 @@
 # Formal
 
 Statements about admitted programs, over the meaning that Core gives them, and their proofs.
-The package requires Core and nothing else; nothing requires it.
+The package requires the package `zkc_compiler` (`../compiler`) and nothing else: its library
+imports only the core, and its tests import checks of the core's tests and read the core's
+fixtures; nothing requires it.
 
 A statement about a protocol is proved in two parts that this package keeps apart.
 
@@ -63,4 +65,7 @@ composes the ten: in the model of any arithmetic, when the claims are the sum of
 the verifier's ten checks pass. It does not reach the instructions after the tenth round or
 the model that runs.
 
-Run `lake build` from this directory.
+Run `lake build`, `lake test` and `lake exe zkc-formal-audit` from this directory. The audit
+(`Zkc.Tools.Audit` of the compiler's package) checks that a module of `Zkc.Formal` imports only
+modules of the core and of the formal library, besides Lean's prelude, and the axioms,
+`@[extern]` and `@[implemented_by]` of its declarations.

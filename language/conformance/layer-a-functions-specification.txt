@@ -79,7 +79,7 @@ def sum_bytes(xs: [byte]) -> nat:
     return total
 // Static iteration count does not make arithmetic cost constant in operand bit length.
 def square(x: nat) -> nat: x * x
-=== M-SUM3 | refuse SX4 | `programs/sumcheck.zkc` with one change: the specification port is not bound
+=== M-SUM3 | refuse SX4 | `examples/sumcheck.zkc` with one change: the specification port is not bound
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
