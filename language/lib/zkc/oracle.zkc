@@ -1,0 +1,76 @@
+// Layer D, carried and not frozen. To change: in `Derived`, `Open` receives the lower handles,
+// the positions and the rows; the law `opened` is replaced by a `reduces` contract of `Open`;
+// `Residual` takes the size of the block; a claim is one handle, one position and one row;
+// the port `data` of `Send` gets a name that does not hide the name `data` of the
+// prelude.
+module zkc::oracle
+
+// Core library.
+
+// [item] What an oracle of the kind holds and answers. The shape of a kind is in its static
+// parameters, so `answer` is total and neither a send nor a query tests anything.
+pub interface Kind:
+    type Data
+    type Position
+    type Row
+    def answer(data: Data, position: Position) -> Row
+
+// [item] A kind of `n` rows of type `T`: a position is an index. The interface of an `oracle def`.
+pub interface Rows<T, n: nat> where (Self: Kind, Data == [T; n], Position == index<n>, Row == T)
+
+// [item] A kind whose handles combine with `+`, `-` and `* scalar`.
+pub interface Linear<F: Field> where (Self: Kind, Data: Group, Data::Scalar == F, Row == F):
+    law linear(a: Data, b: Data, c: F, p: Position):
+        answer(a + b * c, p) == answer(a, p) + answer(b, p) * c
+
+// [item] A derived kind: what a handle stands for, how its data is sent, how a block of claims
+// is opened, and what an opening leaves.
+pub interface Derived where (Self: Kind):
+    type Lower
+    type Residual
+    spec def settled(residual: Residual) -> bool
+    protocol Send roles(H, R)(data: Data @H) -> lower: Lower @H -> R
+    protocol Open<n: nat> roles(H, R)(
+        claims: [Pending<Self>; n] @(H, R)
+    ) -> residual: Residual @(H, R)
+    law opened<n: nat>(claims: [Pending<Self>; n], residual: Residual):
+        settled(residual) == ∀ c ∈ claims, holds(c)
+
+// [item] [row oracle.handle] The handle of an oracle. Sealed.
+pub type Oracle<K: Kind> = primitive("oracle.handle", K)
+
+// [item] [row oracle.claim] A row told and not yet proved. Linear and sealed: formed by a
+// deferred query, by `pending` and by `h at p == v`; consumed by `open`, `return`, a port and
+// `collect`.
+pub type Pending<K: Kind> = primitive("oracle.claim", K)
+
+// [item] [row oracle.data] The data, at a holder.
+pub def data<K: Kind>(h: Oracle<K>) -> K::Data = primitive("oracle.data")
+
+// [item] [row oracle.pending] `h at p == v` inside `open` is this call.
+pub def pending<K: Kind>(
+    h: Oracle<K>, position: K::Position, row: K::Row
+) -> Pending<K> = primitive("oracle.pending")
+
+// [item] [row oracle.lower] The handles that a handle of a derived kind stands for; callable in
+// the module of `K` only.
+pub def lower<K: Kind + Derived>(h: Oracle<K>) -> K::Lower = primitive("oracle.lower")
+
+// [rows] Specification functions on a claim: they read it and never consume it.
+pub spec def handle<K: Kind>(claim: Pending<K>) -> Oracle<K> = primitive("oracle.claim_handle")
+pub spec def position<K: Kind>(
+    claim: Pending<K>
+) -> K::Position = primitive("oracle.claim_position")
+pub spec def row<K: Kind>(claim: Pending<K>) -> K::Row = primitive("oracle.claim_row")
+
+// [source] The claim is true of the data.
+pub spec def holds<K: Kind>(claim: Pending<K>) -> bool:
+    row(claim) == K::answer(data(handle(claim)), position(claim))
+
+// [source] The primitive kind of a table of `rows` rows. A kind is primitive when it does not
+// implement `Derived`; a scheme then names a `Commitment` for it.
+pub module table<T, rows: nat>: Kind + Rows<T, rows>:
+    type Data = [T; rows]
+    type Position = index<rows>
+    type Row = T
+    def answer(data, position): data[position]

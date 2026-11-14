@@ -1,0 +1,11 @@
+module conformance::ambiguity_guard_false_without_continuation_proof
+
+linear struct Ticket:
+    pub value: nat
+def consume(t:Ticket) -> nat:
+    Ticket{value=v} = t
+    return v
+
+def f(t:Ticket) -> nat:
+    guard false else abort
+    return 0

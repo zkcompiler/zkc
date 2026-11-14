@@ -1,0 +1,4 @@
+module conformance::infer_retry_equation
+
+def f<n:nat,m:nat>(xs:[bool;n+m],ys:[bool;m]) -> nat: n
+def main(xs:[bool;5],ys:[bool;2]) -> nat: f(xs,ys)

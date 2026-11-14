@@ -1,0 +1,5 @@
+module conformance::holders_shared_binding_needs_all_facts
+
+protocol P roles(A,B)(xs:[nat;8] @(A,B),i:nat @(A,B)):
+    guard @B i < 8
+    y = xs[i]

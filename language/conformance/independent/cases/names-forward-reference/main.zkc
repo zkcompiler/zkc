@@ -1,0 +1,4 @@
+module conformance::names_forward_reference
+
+def f() -> nat: g(2)
+def g(x: nat) -> nat: x + 1

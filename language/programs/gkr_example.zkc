@@ -1,0 +1,12 @@
+// A scheme of layer C and a goal of layer B over a protocol of layer A.
+module gkr_example
+
+use gkr<Fr>::{Gkr}
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{soundness, random_oracle}
+
+scheme Proof = Gkr<d = 4, w = 2>:
+    construction derived(Merlin3Bls12381)
+
+goal sound = soundness(Proof, model = random_oracle(queries = 2^100)) <= 2^-128

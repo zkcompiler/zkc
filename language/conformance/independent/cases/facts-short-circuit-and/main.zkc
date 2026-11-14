@@ -1,0 +1,3 @@
+module conformance::facts_short_circuit_and
+
+def f(xs:[nat]) -> bool: 0 < length(xs) and xs[0] == 0

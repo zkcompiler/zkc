@@ -1,0 +1,6 @@
+module conformance::facts_no_transitivity
+
+def f(a:nat,b:nat,c:nat) -> nat:
+    guard a <= b
+    guard b <= c
+    return c - a

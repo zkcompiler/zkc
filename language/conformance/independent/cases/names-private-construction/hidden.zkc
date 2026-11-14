@@ -1,0 +1,4 @@
+module conformance::hidden
+
+pub struct R:
+    value:nat

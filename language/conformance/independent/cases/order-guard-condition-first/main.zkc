@@ -1,0 +1,7 @@
+module conformance::order_guard_condition_first
+
+def fail() -> bool:
+    guard false else abort
+    return true
+protocol P roles(A)():
+    guard @A fail() else reject

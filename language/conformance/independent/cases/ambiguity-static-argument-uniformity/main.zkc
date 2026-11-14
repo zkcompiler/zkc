@@ -1,0 +1,7 @@
+module conformance::ambiguity_static_argument_uniformity
+
+def tag<n:nat>(x:nat) -> nat: x + n
+def f() -> [nat;3]:
+    for i in 0..3 collect (ys = x):
+        x = tag<i>(0)
+    return ys

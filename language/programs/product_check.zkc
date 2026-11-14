@@ -1,0 +1,53 @@
+// Layer D, carried and not frozen. To change: the combination `h - g * a` needs a scheme with
+// `combine`; a claim is one handle, one position and one row.
+module product_check
+
+use zkc::algebra::{Pairing}
+use zkc::polynomial::{Polynomial, poly}
+use zkc::oracle::{Linear}
+use zkc::kzg
+
+// Coefficient k of the product of two polynomials of degree at most D.
+pub spec def product_coefficient<F: Field, D: nat>(
+    f: [F; D + 1], g: [F; D + 1], k: index<2 * D + 1>
+) -> F:
+    mut total: F = 0
+    for i in 0..D + 1:
+        if i <= k:
+            j = k - i
+            if j <= D:
+                total := total + f[i] * g[j]
+    return total
+
+// f * g == h as polynomials of degree at most D.
+pub relation Product<F: Field, D: nat>(f: [F; D + 1], g: [F; D + 1], h: [F; D + 1]):
+    ∀ k ∈ 0..2 * D + 1, product_coefficient(f, g, k) == (if k <= D then h[k] else 0)
+
+// f * g == h for three committed polynomials. The verifier asks for f at a point it draws, and
+// opens that claim together with the combination h - g * f(z), which must be zero there.
+pub protocol ProductCheck<F: Field, K: Polynomial<F, D> + Linear<F>, D: nat> roles(P, V)(
+    f: Oracle<K> @P -> V,
+    g: Oracle<K> @P -> V,
+    h: Oracle<K> @P -> V
+):
+    z <- draw F from V to P
+    (a, owed) <- query f at z deferred
+    open owed, (h - g * a) at z == 0
+
+spec for ProductCheck:
+    proves Product(data(f), data(g), data(h))
+    charge sites.z <= 2 * D / F::Order
+
+// The protocol that a scheme closes: the setup role, then the library protocol.
+pub protocol ProductCheckKzg<E: Pairing, D: nat> roles(S, P, V)(
+    f: Oracle<poly<E::Scalar, D>> @P -> V,
+    g: Oracle<poly<E::Scalar, D>> @P -> V,
+    h: Oracle<poly<E::Scalar, D>> @P -> V
+):
+    tau @S <- sample nonzero<E::Scalar>
+    prover_key <- send kzg::powers<E, D + 1>(tau) to P
+    verifier_key <- send kzg::verifier_key<E>(tau) to V
+    ProductCheck<E::Scalar, poly<E::Scalar, D>, D>(f, g, h)
+
+spec for ProductCheckKzg:
+    proves Product(data(f), data(g), data(h))

@@ -1,0 +1,19 @@
+// Layers C and D, carried and not frozen.
+module fri_example
+
+use fri::{LowDegree}
+use zkc::fields::{KoalaBear4}
+use zkc::hash::{Keccak256}
+use zkc::merkle::{Tree}
+use zkc::oracle::{table}
+use zkc::suites::{Poseidon2KoalaBear}
+use zkc::security::{soundness, random_oracle, johnson}
+
+scheme FriTest = LowDegree<
+    KoalaBear4, table<KoalaBear4, 2^20>, LogSize = 20, FinalLog = 4, Layers = 14, Queries = 40
+>:
+    construction derived(Poseidon2KoalaBear)
+    commit table<_, _> with Tree<Keccak256>
+    grind 16 bits at sites.spots
+
+goal sound = soundness(FriTest, model = (random_oracle(queries = 2^80), johnson)) <= 2^-100

@@ -1,0 +1,7 @@
+module conformance::facts_mut_copy
+
+def f() -> index<8>:
+    mut x = 1
+    y = x
+    guard y < 8
+    return y

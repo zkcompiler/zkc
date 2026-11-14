@@ -1,0 +1,316 @@
+Conformance tests of layer A (frozen): lexical structure and grammar (LX, GR).
+One block per test: `=== ID | expect | note`, then the program. See README.md.
+
+=== T-L1 | accept | `//` inside a string is text (LX7)
+module t
+type T = primitive("a//b")
+=== T-L2 | refuse LX3 | a tab as indentation
+module t
+def f(a: nat) -> nat:
+	return a
+=== T-L3 | refuse LX4 | a suite is indented by exactly four spaces
+module t
+def f(a: nat) -> nat:
+        b = a
+    return b
+=== T-L4 | accept | blank and comment-only lines at any column (LX2)
+module t
+def f(a: nat) -> nat:
+    b = a
+  // a comment at an odd column
+
+         // another
+    return b
+=== T-L5 | refuse LX5 | a comparison written without a space
+module t
+def f(a: nat, b: nat) -> bool: a<b
+=== T-L6 | accept | a comparison with spaces
+module t
+def f(a: nat, b: nat) -> bool: a < b
+=== T-L7 | accept | `-x^2` is `-(x^2)`
+module t
+type F = primitive("bls12-381.fr")
+def f(x: F) -> F: -x^2
+=== T-L8 | refuse LX8 | numbers are decimal
+module t
+def f() -> nat: 0x10
+=== T-L9 | refuse LX7 | odd number of hexadecimal digits
+module t
+def f() -> [byte; 1]: hex"0f0"
+=== T-L10 | refuse LX2 | a line continues only inside brackets
+module t
+def f() -> nat: 1 +
+    2
+=== T-L11 | accept | a static argument list over three lines
+module t
+type F = primitive("bls12-381.fr")
+struct Pair<A, B>:
+    pub left: A
+    pub right: B
+type T = Pair<
+    F,
+    [F; 4]
+>
+=== T-P1 | accept | a record pattern at the start of a body is a statement (GR1)
+module t
+struct Pair<T>:
+    pub left: T
+    pub right: T
+def f(p: Pair<nat>) -> nat:
+    Pair{left, right} = p
+    return left
+=== T-P2 | accept | a record construction as an expression body (GR1)
+module t
+struct Pair<T>:
+    pub left: T
+    pub right: T
+def f(a: nat) -> Pair<nat>:
+    Pair{left = a, right = a}
+=== T-P3 | refuse GR2 | an `if` expression as the condition of a guard is parenthesized
+module t
+protocol X roles(P)(c: bool @P, a: bool @P):
+    guard @P if c then a else reject
+=== T-P4 | accept | a member definition and a helper with no parameters (GR4)
+module t
+interface I:
+    def zero() -> nat
+module M: I:
+    def zero(): 0
+    def helper() -> nat: 0
+=== T-Z10b | refuse GR | a loop whose `where` states the type of its state is not in the grammar
+module t
+type F = primitive("bls12-381.fr")
+def f(xs: [F; 8]) -> F:
+    mut rest = xs
+    for i in 0..3 where rest: [F; 2^(3 - i)]:
+        rest := rest[0..2^(2 - i)]
+    return rest[0]
+=== T-Z14 | refuse GR6 | a function literal has no production
+module t
+use zkc::traversal::{fold}
+type F = primitive("bls12-381.fr")
+def total(values: [F]) -> F: fold(values, 0, fn(sum, x) => sum + x)
+=== T-F3 | refuse GR6 | a function type has no production
+module t
+def apply(x: nat, f: fn(nat) -> nat) -> nat: x
+def g(x: nat) -> nat: apply(x, fn(y) => y)
+=== S-K7 | refuse GR6 | `distribution` has no production
+module t
+type F = primitive("bls12-381.fr")
+def decode(bytes: [byte; 32]) -> F = primitive("field.from_bytes")
+distribution D: F = decode
+protocol X roles(P, V)():
+    x @P <- sample D
+    y <- send x to V
+=== R-GR6a | refuse GR6 | `distribution` has no production
+module t
+type F = primitive("bls12-381.fr")
+def decode(bytes: [byte; 32]) -> F: F::from_nat(bytes[0])
+distribution D: F = decode
+=== R-GR6b | refuse GR6 | `affine` has no production
+module t
+affine struct Once:
+    value: nat
+=== R-GR6c | accept | `fn` and `distribution` are not reserved: they are names
+module t
+def fn_of(distribution: nat) -> nat:
+    fn = distribution + 1
+    return fn
+=== N-GR1a | accept | a nested module with a suite and no bound (§5.1)
+module t
+module inner<k: nat>:
+    pub def size() -> nat: 2^k
+def f() -> nat: inner<3>::size()
+=== M-FRA9 | refuse GR6 | `programs/fragments.zkc` with one change: a function literal
+module fragments
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::option::{Option}
+
+pub struct Pair<T>:
+    pub left: T
+    pub right: T
+
+pub linear struct Ticket<F: Field>:
+    point: [F]
+    value: F
+
+pub enum Side:
+    Left
+    Right
+
+pub def pick<T>(pair: Pair<T>, side: Side) -> T:
+    Pair{left, right} = pair
+    mut chosen = left
+    match side:
+        case Left:
+            ()
+        case Right:
+            chosen := right
+    return chosen
+
+pub def swap<T>(pair: Pair<T>) -> Pair<T>: {pair with left = pair.right, right = pair.left}
+
+// `+` on `Pair<F>` is this function: the fixed name `add` in the home module of `Pair`. With
+// `zero`, the type also has `∑`.
+pub def add<F: Field>(a: Pair<F>, b: Pair<F>) -> Pair<F>:
+    Pair{left = a.left + b.left, right = a.right + b.right}
+
+pub def zero<F: Field>() -> Pair<F>: Pair{left = 0, right = 0}
+
+pub def twice<F: Field>(a: Pair<F>) -> Pair<F>: a + a
+
+pub def redeem<F: Field>(ticket: Ticket<F>) -> F:
+    Ticket{point = _, value} = ticket
+    return value
+
+pub def total<F: Field>(values: [F]) -> F: fold(values, 0, fn(s, x) => s + x)
+
+// A read of a collection whose length is a run-time value: the guard gives the fact.
+pub def first<F: Field>(xs: [F]) -> F:
+    guard 0 < length(xs)
+    return xs[0]
+
+// The same read without a stop: the condition of an `if` gives the fact to its first arm.
+pub def first_or_none<F: Field>(xs: [F]) -> Option<F>:
+    if 0 < length(xs) then Some(xs[0]) else None
+
+// The index of a loop over `0..length(xs)` is below the length in its body.
+pub def weighted<F: Field>(xs: [F], weight: F) -> F:
+    mut acc: F = 0
+    for i in 0..length(xs):
+        acc := acc * weight + xs[i]
+    return acc
+
+// A binding of a static term is a static name: it may stand in a size.
+pub def halves<T, n: nat>(xs: [T; 2 * n]) -> ([T; n], [T; n]):
+    half = (2 * n) / 2
+    return (xs[0..half], xs[half..2 * half])
+
+// A group: the literal `0`, a sum of points, a member of the sort, a conversion to a field.
+pub def weighted_generator<G: PrimeOrderGroup, n: nat>(points: [G; n]) -> G:
+    (∑ p ∈ points, p) + G::generator() * G::Scalar::from_nat(n) + 0
+
+// Mathematical forms in specification: an inner product, and a bounded quantifier.
+pub relation Inner<F: Field, n: nat>(a: [F; n], b: [F; n], c: F): c == ⟪a, b⟫
+
+pub relation Ascending<n: nat>(xs: [byte; n + 1]): ∀ i ∈ 0..n, xs[i] <= xs[i + 1]
+
+pub spec def checked(a: [Fr; 4], b: [Fr; 4], c: Fr, xs: [byte; 5]) -> bool:
+    Inner(a, b, c) and Ascending(xs)
+
+// A charge is a `rational`: naturals are converted and `/` is exact.
+pub spec def birthday(queries: nat, bits: nat) -> rational: queries^2 / 2^(bits + 1)
+
+// The functions above at one field: a definition without static parameters is its own instance.
+pub def demo(pair: Pair<Fr>, side: Side, ticket: Ticket<Fr>, values: [Fr], points: [G1; 4]) -> G1:
+    chosen = pick(swap(twice(pair)), side)
+    scalar = chosen + redeem(ticket) + total(values) + first(values) + weighted(values, chosen)
+    return weighted_generator(points) * scalar
+
+pub protocol Ask<F: Field> roles(O, R)() -> (value: F @(O, R), nonce: nonzero<F> @O):
+    nonce @O <- sample nonzero<F>
+    value <- send nonce * nonce to R
+    return (value, nonce)
+
+// A callee with roles (O, R) applied by name; a pattern binder named by an attribute; a loop
+// with a run-time count; a private input; a send to two receivers.
+pub protocol Relay<F: Field, Max: nat> roles(D, P, V)(
+    count: index<Max + 1> @(P, V),
+    seed: [byte; 32] @V private
+) -> total: F @(P, V):
+    mut running: F @(P, V) = 0
+    for _ in 0..count:
+        #[site(step)]
+        (value, _) <- Ask<F>() @(O = P, R = V)
+        running := running + value
+    share @D <- sample F
+    told <- send share to P, V
+    return running + told
+
+scheme Dealt = Relay<Fr, 8>:
+    ideal D
+    prover P
+    construction interactive
+
+// ----------------------------------------------------------------------------------------------
+// The forms of the second part.
+
+// A static name of a module stands in the sizes of its members (TY2).
+nat Limbs = 4
+
+pub def limbs(x: [byte; 8 * Limbs]) -> [[byte; 8]; Limbs]:
+    [x[8 * i..8 * i + 8] for i in 0..Limbs]
+
+// A law of a module: a proposition about its own definitions. It is closed, so the build
+// decides it by evaluation (SP10).
+law limbs_cover(): 8 * Limbs == 32
+
+// `and` gives the facts of its left operand to its right operand (TY9).
+pub def starts_with_zero<F: Field>(xs: [F]) -> bool: 0 < length(xs) and xs[0] == 0
+
+// A literal takes its type from the collection it is appended to, and from the other arm of
+// an `if` (TY6).
+pub def padded<F: Field, n: nat>(xs: [F; n]) -> [F; n + 1]: xs ++ [0]
+
+pub def first_or_zero<F: Field>(xs: [F]) -> F:
+    y = if 0 < length(xs) then xs[0] else 0
+    return y
+
+// An `if` with a static condition is decided at the instance: at `n = 0` the first arm is not
+// typed (TY9).
+pub def first_byte<n: nat>(xs: [byte; n]) -> byte:
+    if 1 <= n then xs[0] else 0
+
+// A range fact on an arithmetic term narrows the range of that term (TY8).
+pub def ratio(z: index<10>, x: index<5>, y: index<5>) -> nat:
+    guard y <= x else refused
+    guard 1 <= x - y else refused
+    return z / (x - y)
+
+// The index of a loop over a static range is static as a tuple position, so the loop is typed
+// per iteration and is stepped (TY10).
+pub def firsts(t: ([byte; 2], [byte; 4], [byte; 8])) -> nat:
+    mut acc: nat = 0
+    for j in 0..3:
+        acc := acc + t[j][0]
+    return acc
+
+// A relation with a `where` (SX3).
+pub relation Sorted<n: nat>(xs: [byte; n]) where (1 <= n): ∀ i ∈ 0..n - 1, xs[i] <= xs[i + 1]
+
+// A specification-only static parameter: only the relation reads it, and a goal gives it its
+// value (SP11).
+section <F: Field, n: nat, spec e: nat>:
+    pub relation NearZero(; xs: [F; n]): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+
+// A definition generic over a module parameter. `+` on `X::T` is the member `add` of the
+// interface (NL6), and `X::T` is opaque in the body (SP12): comparing two values of it would be
+// refused, because `Carrier` declares no `equal`.
+pub interface Carrier:
+    type T
+    def unit() -> T
+    def add(a: T, b: T) -> T
+
+pub module Counted: Carrier:
+    type T = nat
+    def unit(): 1
+    def add(a, b): a + b
+
+pub def twice_and_one<X: Carrier>(x: X::T) -> X::T: x + x + X::unit()
+
+// The type on the wire leaves the sender's facts out (TY14): V receives a `[F]`, and its own
+// guard gives it the size.
+pub protocol Hand<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    m <- send xs to V
+    guard @V length(m) == 8
+    guard @V m[7] == 0
+
+// The sender binds the value at the narrower type before the send: V decodes eight elements,
+// and stops with `reject` otherwise.
+pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    ys: [F; 8] = xs
+    m <- send ys to V
+    guard @V m[7] == 0

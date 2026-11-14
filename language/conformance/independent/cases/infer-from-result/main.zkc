@@ -1,0 +1,4 @@
+module conformance::infer_from_result
+
+def fill<n: nat>() -> [bool;n]: [true;n]
+def main() -> [bool;3]: fill()

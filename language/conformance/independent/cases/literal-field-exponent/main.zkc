@@ -1,0 +1,4 @@
+module conformance::literal_field_exponent
+
+type F = primitive("koala-bear")
+def f(x:F) -> F: x + 2^3

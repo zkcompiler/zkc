@@ -1,0 +1,12 @@
+// Layer B, carried: bounds of the formal library.
+module zkc::proximity
+
+// Standard library, layer 4. The bounds of proximity testing, as the formal library has them.
+
+// [formal]
+pub spec def fold_error<F: Field>(
+    log_size: nat, log_degree: nat
+) -> rational = external("Zkc.Proximity.foldError")
+pub spec def query_error<F: Field>(
+    log_size: nat, log_degree: nat, queries: nat
+) -> rational = external("Zkc.Proximity.queryError")

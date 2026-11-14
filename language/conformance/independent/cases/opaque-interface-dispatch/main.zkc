@@ -1,0 +1,10 @@
+module conformance::opaque_interface_dispatch
+
+interface Combine:
+    type T
+    def add(a:T,b:T) -> T
+module PickLeft: Combine:
+    type T = nat
+    def add(a,b): a
+def combine<X:Combine>(a:X::T,b:X::T) -> X::T: a + b
+def main() -> nat: combine<PickLeft>(2,3)

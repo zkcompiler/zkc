@@ -1,0 +1,5 @@
+module conformance::facts_no_commutativity_recovery
+
+def f(xs:[nat;8],i:nat) -> nat:
+    guard i + 1 < 8
+    return xs[1 + i]

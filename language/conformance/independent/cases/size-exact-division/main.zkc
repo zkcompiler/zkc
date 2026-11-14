@@ -1,0 +1,3 @@
+module conformance::size_exact_division
+
+def f(xs: [nat;12/5]) -> nat: 0

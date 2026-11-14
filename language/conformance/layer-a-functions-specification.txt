@@ -1,0 +1,168 @@
+Conformance tests of layer A (frozen): functions, and the boundary between deployed code and specification (FN, SX1, SX2, SX4, SX10).
+One block per test: `=== ID | expect | note`, then the program. See README.md.
+
+=== T-P6 | refuse SX3 | `;` in the arguments of a function
+module t
+def g(a: nat, b: nat) -> nat: a + b
+def f(a: nat) -> nat: g(a; a)
+=== T-F1 | refuse FN1 | an event in a function
+module t
+def f(x: nat) -> nat:
+    y <- send x to V
+    return y
+=== T-F2 | refuse FN3 | a relation whose formula can stop
+module t
+def checked(x: nat) -> nat:
+    guard x < 4
+    return x
+relation R(x: nat): checked(x) == 0
+spec def use_it(x: nat) -> bool: R(x)
+=== T-X1 | refuse SX2 | a deployed protocol calls a specification function
+module t
+spec def ideal(x: nat) -> nat: x
+protocol X roles(P, V)(a: nat @P):
+    x <- send ideal(a) to V
+=== T-X2 | refuse SX4 | an application that omits a specification port
+module t
+protocol C roles(P, V)(spec p: nat, a: nat @P):
+    x <- send a to V
+protocol X roles(P, V)(a: nat @P):
+    y <- C(a)
+=== R-FN5a | accept | a kernel on a definition with a body that cannot stop
+module t
+type F = primitive("bls12-381.fr")
+#[kernel("test.dot")]
+pub def dot(a: [F; 4], b: [F; 4]) -> F: ∑ i ∈ 0..4, a[i] * b[i]
+=== R-FN5b | refuse FN5 | a kernel on a definition that can stop
+module t
+type F = primitive("bls12-381.fr")
+#[kernel("test.first")]
+pub def first(xs: [F]) -> F:
+    guard 0 < length(xs)
+    return xs[0]
+=== R-FN5c | refuse FN5 | a kernel belongs to a body, not to a row
+module t
+type F = primitive("bls12-381.fr")
+#[kernel("test.inv")]
+pub def inv(x: nonzero<F>) -> nonzero<F> = primitive("field.to_nat")
+=== V-E3 | refuse SX2 | a deployed `def` that calls a `spec def` (refused, as SX2 says)
+module t
+spec def helper(x: nat) -> nat: x
+def f(x: nat) -> nat: helper(x)
+=== V-K1 | refuse FN5 | a kernel stands only on a deployed `def`
+module t
+type F = primitive("bls12-381.fr")
+#[kernel("spec.thing")]
+spec def thing(x: F) -> F: x * x
+=== V-K2 | refuse FN5 | the same for a `spec def` whose body applies a function of the formal library
+module t
+use zkc::polynomial::{value, Poly}
+type F = primitive("bls12-381.fr")
+#[kernel("spec.value")]
+spec def at_one(p: Poly<F, 4>) -> F: value(p, 1)
+=== N-FN5a | refuse FN5 | a kernel stands only on deployed code (FN5)
+module t
+type F = primitive("bls12-381.fr")
+#[kernel("spec.thing")]
+spec def thing(x: F) -> F: x * x
+=== N-SX10a | accept | specification material never changes admission: the program with an unproved law of a module is admitted (SX10)
+module t
+pub def double(x: nat) -> nat: x + x
+law grows(x: nat): x <= double(x)
+=== X-FN7a | accept | a loop over a collection of run-time length is admitted, and the cost of `sum_bytes` is not closed: it is `length(xs)` rows (FN7, CT4)
+module review_dynamic_local_cost
+// CT4 permits local loops whose count is a runtime collection length.
+def sum_bytes(xs: [byte]) -> nat:
+    mut total: nat = 0
+    for x in xs:
+        total := total + x
+    return total
+// Static iteration count does not make arithmetic cost constant in operand bit length.
+def square(x: nat) -> nat: x * x
+=== M-SUM3 | refuse SX4 | `programs/sumcheck.zkc` with one change: the specification port is not bound
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim)
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)

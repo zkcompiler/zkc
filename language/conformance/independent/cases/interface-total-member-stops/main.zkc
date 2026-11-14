@@ -1,0 +1,8 @@
+module conformance::interface_total_member_stops
+
+interface I:
+    def f(x:nat) -> nat
+module M:I:
+    def f(x):
+        guard x != 0
+        return x

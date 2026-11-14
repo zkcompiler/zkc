@@ -1,0 +1,4 @@
+module conformance::sampling_empty_type
+
+protocol P roles(A)():
+    x @A <- sample index<0>

@@ -1,0 +1,5 @@
+module conformance::events_pattern_site_name
+
+protocol P roles(A,B)():
+    #[site(pair)]
+    (x,y) <- draw (bool,bool) from A to B

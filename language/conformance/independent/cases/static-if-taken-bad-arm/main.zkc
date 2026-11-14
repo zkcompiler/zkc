@@ -1,0 +1,5 @@
+module conformance::static_if_taken_bad_arm
+
+def pick<n:nat>(xs:[nat;n]) -> nat:
+    return if n != 0 then 7 else xs[0]
+def main() -> nat: pick<n=0>([])

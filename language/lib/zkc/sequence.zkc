@@ -1,0 +1,52 @@
+module zkc::sequence
+
+// Standard library, layer 2. Collections. Every declaration is source; a kernel is marked.
+
+// Checked access at a run-time position: a guard, then the total form.
+pub def get<T>(values: [T], position: nat) -> T:
+    guard position < length(values) else refused
+    return values[position]
+
+pub def slice<T>(values: [T], start: nat, count: nat) -> [T]:
+    guard start + count <= length(values) else refused
+    return values[start..start + count]
+
+pub def zip<A, B, n: nat>(left: [A; n], right: [B; n]) -> [(A, B); n]:
+    [(left[i], right[i]) for i in 0..n]
+
+pub def enumerate<T, n: nat>(values: [T; n]) -> [(index<n>, T); n]:
+    [(i, values[i]) for i in 0..n]
+
+// The number of flags that are set.
+pub def count<n: nat>(flags: [bool; n]) -> index<n + 1>: ∑ f ∈ flags, if f then 1 else 0
+
+pub def reverse<T, n: nat>(values: [T; n]) -> [T; n]: [values[n - (i + 1)] for i in 0..n]
+
+pub def flatten<T, n: nat, m: nat>(parts: [[T; m]; n]) -> [T; n * m] where (1 <= m):
+    [parts[i / m][i % m] for i in 0..n * m]
+
+// The two halves of a collection of 2^(m + 1) elements.
+pub def low<T, m: nat>(v: [T; 2^(m + 1)]) -> [T; 2^m]: v[0..2^m]
+
+pub def high<T, m: nat>(v: [T; 2^(m + 1)]) -> [T; 2^m]: v[2^m..2^(m + 1)]
+
+// The halves combined with two scalars. One function folds points and scalars: every `Group`
+// has a `Scalar`, and a ring, so also a field, is its own.
+pub def fold<T: Group, m: nat>(v: [T; 2^(m + 1)], s: T::Scalar, t: T::Scalar) -> [T; 2^m]:
+    low(v) * s + high(v) * t
+
+#[kernel("sequence.hadamard")]
+pub def hadamard<F: Field, n: nat>(left: [F; n], right: [F; n]) -> [F; n]:
+    [left[i] * right[i] for i in 0..n]
+
+pub def powers<F: Field, n: nat>(base: F) -> [F; n]: [base ^ i for i in 0..n]
+
+#[kernel("sequence.batch_inverse")]
+pub def batch_inverse<F: Field, n: nat>(values: [nonzero<F>; n]) -> [nonzero<F>; n]:
+    [1 / x for x in values]
+
+// The element at i moves to the position whose k bits are those of i in reverse order. The
+// reduction modulo 2^k states the bound of the sum, which the ranges do not give.
+#[kernel("sequence.bit_reverse")]
+pub def bit_reverse<T, k: nat>(values: [T; 2^k]) -> [T; 2^k]:
+    [values[(∑ j ∈ 0..k, ((i / 2^j) % 2) * 2^(k - (j + 1))) % 2^k] for i in 0..2^k]

@@ -1,0 +1,8 @@
+module conformance::ambiguity_unobserving_container_equality
+
+interface I:
+    type T
+module M:I:
+    type T = nat
+def f<X:I>(x:X::T) -> bool: [x] == [x]
+def main(x:nat) -> bool: f<M>(x)

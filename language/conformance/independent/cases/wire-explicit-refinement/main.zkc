@@ -1,0 +1,7 @@
+module conformance::wire_explicit_refinement
+
+protocol P roles(A,B)(xs:[nat] @A):
+    guard @A length(xs) == 2 else refused
+    narrow: [nat;2] @A = xs
+    m <- send narrow to B
+    y @B = m[1]

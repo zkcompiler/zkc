@@ -1,0 +1,61 @@
+// Layer A: the protocol. Its contract is layer B: the function after `by` is a `def` with a
+// closed cost; a simulator of the derived scheme programs the oracle; the two `zero_knowledge`
+// clauses are labelled.
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order

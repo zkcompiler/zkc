@@ -1,0 +1,4 @@
+module conformance::group_right_scalar
+
+type G = primitive("bls12-381.g1")
+def f(g:G,s:G::Scalar) -> G: g * s

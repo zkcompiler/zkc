@@ -1,0 +1,4 @@
+module conformance::infer_natural_numerals_named
+
+def count<n: nat,m: nat>() -> nat: n + m
+def main() -> nat: count<2,3>()

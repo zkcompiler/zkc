@@ -1,0 +1,12 @@
+// Layer A, carried. The vocabulary gives each field the members `Prime`, `Dimension`,
+// `components` and `from_components`, and a prime field `to_nat`; this source does not
+// declare them.
+module zkc::fields
+
+// Standard library, layer 2. The fields of the vocabulary, bound once: a program imports them.
+
+// [row koala-bear] The prime field of order 2^31 - 2^24 + 1.
+pub type KoalaBear = primitive("koala-bear")
+
+// [row koala-bear.ext4] Its extension of degree four.
+pub type KoalaBear4 = primitive("koala-bear.ext4")

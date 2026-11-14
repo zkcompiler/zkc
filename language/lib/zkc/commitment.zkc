@@ -1,0 +1,49 @@
+// Layer D, carried and not frozen. To change: a combination of digests and states for a
+// `Linear` kind; coins for an opening; binding, extractability and hiding as properties that a
+// goal names; `paired` of the pinned keys as a hypothesis of receipts; the member parameter `n`
+// gets a name that an implementing module will not want for itself; the members that are not
+// `spec` are deployed code.
+module zkc::commitment
+
+// Core library.
+
+use zkc::oracle::{Kind}
+
+// [item] A non-interactive scheme that realizes the primitive kind `K`: what is sent in place
+// of the data, and what proves a block of rows. A scheme is named in a `commit` line and nowhere
+// else; the commit step applies its members. Its configuration is its static arguments.
+pub interface Commitment<K: Kind>:
+    // Public parameters; `()` when the scheme has none.
+    type ProverKey
+    type VerifierKey
+    // The randomness of a commitment: a law, or `()` for a scheme that does not hide.
+    type Blinding
+    type Digest
+    type State
+    // The proof of a block of `n` rows.
+    type Proof<n: nat>
+    // The two keys come from one setup.
+    spec def paired(prover_key: ProverKey, verifier_key: VerifierKey) -> bool
+    def commit(key: ProverKey, data: K::Data, blinding: Blinding) -> (Digest, State)
+    def opening<n: nat>(key: ProverKey, state: State, positions: [K::Position; n]) -> Proof<n>
+    def check<n: nat>(
+        key: VerifierKey,
+        digest: Digest,
+        positions: [K::Position; n],
+        rows: [K::Row; n],
+        proof: Proof<n>
+    ) -> bool
+    // An honest opening of honest data is accepted.
+    law opens<n: nat>(
+        prover_key: ProverKey,
+        verifier_key: VerifierKey,
+        data: K::Data,
+        blinding: Blinding,
+        positions: [K::Position; n]
+    ): not paired(prover_key, verifier_key) or check(
+        verifier_key,
+        commit(prover_key, data, blinding).0,
+        positions,
+        [K::answer(data, p) for p in positions],
+        opening(prover_key, commit(prover_key, data, blinding).1, positions)
+    )

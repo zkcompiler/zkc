@@ -1,0 +1,32 @@
+// Carried. Its functions are layer A; the kind `multilinear` is layer D, which is not
+// frozen.
+module zkc::multilinear
+
+// Standard library, layer 2. A multilinear polynomial in v variables by its values on the
+// Boolean cube, the first variable most significant.
+
+use zkc::oracle::{Kind, Linear}
+use zkc::sequence::{low, high}
+
+// Fix the first variable.
+#[kernel("multilinear.fix_first")]
+pub def fix_first<F: Field, v: nat>(table: [F; 2^(v + 1)], r: F) -> [F; 2^v]:
+    low(table) + (high(table) - low(table)) * r
+
+// The value at a point.
+#[kernel("multilinear.evaluate")]
+pub def evaluate<F: Field, n: nat>(values: [F; 2^n], point: [F; n]) -> F:
+    mut rest = values
+    for i in 0..n:
+        rest := fix_first(rest, point[i])
+    return rest[0]
+
+pub interface Multilinear<F: Field, variables: nat> where (
+    Self: Kind, Data == [F; 2^variables], Position == [F; variables], Row == F
+)
+
+pub module multilinear<F: Field, variables: nat>: Kind + Multilinear<F, variables> + Linear<F>:
+    type Data = [F; 2^variables]
+    type Position = [F; variables]
+    type Row = F
+    def answer(data, position): evaluate(data, position)

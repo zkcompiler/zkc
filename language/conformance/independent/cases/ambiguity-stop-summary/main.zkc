@@ -1,0 +1,7 @@
+module conformance::ambiguity_stop_summary
+
+def fail() -> bool:
+    guard false else exhausted
+    return true
+#[kernel("review.short_circuit")]
+def f() -> bool: false and fail()

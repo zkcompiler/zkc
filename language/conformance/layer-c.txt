@@ -1,0 +1,2227 @@
+Conformance tests of layer C (schemes, Fiat–Shamir, layouts, entries). NOT FROZEN: the layer is carried,
+and its rules can still change; an outcome that rests on a pending change says so in its note.
+One block per test: `=== ID | expect | note`, then the program. See README.md.
+
+=== T-P12 | accept | the line `prover P` (SC3)
+module t
+protocol X roles(P, V)(e: nat @P):
+    x <- send e to V
+scheme S = X:
+    prover P
+    construction interactive
+=== T-Z11 | refuse SP5 | two numerals are written by name
+module t
+protocol Gkr<d: nat, w: nat> roles(P, V)(x: index<d + w + 1> @P):
+    y <- send x to V
+scheme S = Gkr<4, 2>:
+    construction interactive
+=== T-X4 | refuse SC2 | an offline role that receives from an online role
+module t
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(S, P, V)(a: nat @P):
+    x <- send a to S
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    offline S
+    construction derived(Merlin3Bls12381)
+=== T-X5 | refuse SC3 | three online roles under `derived`
+module t
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(D, P, V)(a: nat @P):
+    s @D <- sample index<4>
+    told <- send s to P, V
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    construction derived(Merlin3Bls12381)
+=== T-X6 | refuse SC4 | an input of the verifier alone that is not `private`
+module t
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(P, V)(a: nat @P, seed: nat @V):
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    construction derived(Merlin3Bls12381)
+=== T-X7 | refuse SC5 | `grind` under `construction interactive`
+module t
+protocol X roles(P, V)(a: nat @P):
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    construction interactive
+    grind 16 bits at sites.c
+=== T-X8 | refuse GL3 | a zero-knowledge goal without the clause
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{zero_knowledge}
+protocol X roles(P, V)(a: nat @P):
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    construction derived(Merlin3Bls12381)
+goal zk = zero_knowledge(Sch)
+=== T-X9 | refuse GL4 | a ceiling without a query budget
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{completeness, random_oracle}
+protocol X roles(P, V)(a: nat @P):
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    construction derived(Merlin3Bls12381)
+goal g = completeness(Sch, model = random_oracle) <= 2^-128
+=== T-X10 | refuse EN1 | a function that runs a scheme
+module t
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(P, V)(a: nat @P):
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    construction derived(Merlin3Bls12381)
+def run(proof: Sch::Proof):
+    Sch::verify(Sch::Keys{}, Sch::Statement{}, proof)
+=== T-X11 | accept | a ceiling is a `rational` (TY1)
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{completeness}
+protocol X roles(P, V)(a: nat @P):
+    y <- send a to V
+    c <- draw index<4> from V to P
+scheme Sch = X:
+    construction derived(Merlin3Bls12381)
+goal g = completeness(Sch) <= 2^-128
+=== S-P1 | accept | a verifier with a private input; the prover is the role that sends
+module t
+use zkc::suites::{Merlin3Bls12381}
+type F = primitive("bls12-381.fr")
+def check(seed: [byte; 32], m: F) -> bool = primitive("test.check")
+protocol Designated roles(P, V)(claim: F @(P, V), seed: [byte; 32] @V private):
+    m <- send claim from P to V
+    guard @V check(seed, m)
+scheme D = Designated:
+    construction derived(Merlin3Bls12381)
+=== S-P1b | refuse SC3 | the role that sends also draws
+module t
+use zkc::suites::{Merlin3Bls12381}
+type F = primitive("bls12-381.fr")
+protocol Odd roles(P, V)(claim: F @(P, V)):
+    m <- send claim from P to V
+    c <- draw F from P to V
+scheme D = Odd:
+    construction derived(Merlin3Bls12381)
+=== S-P1c | refuse SC3 | `prover` contradicts the protocol
+module t
+use zkc::suites::{Merlin3Bls12381}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(claim: F @(P, V)):
+    m <- send claim from P to V
+    c <- draw F from V to P
+scheme D = X:
+    prover V
+    construction derived(Merlin3Bls12381)
+=== S-P3 | accept | a payload that depends on the attempt number; the dependency is reported
+module t
+use zkc::suites::{Merlin3Bls12381}
+type F = primitive("bls12-381.fr")
+def lift(k: nat) -> F = primitive("test.lift")
+protocol Try roles(P, V)(x: F @P):
+    k @P <- attempt
+    w <- send x + lift(k) to V
+    c <- draw F from V to P
+scheme D = Try:
+    construction derived(Merlin3Bls12381)
+    retry 4 from sites.k
+=== I-2 | refuse SC5 | a draw of a group element is not derived by the suite
+module t
+use zkc::curves::bls12_381::{G1}
+use zkc::suites::{Merlin3Bls12381}
+protocol Pedersen roles(P, V)(m: G1::Scalar @P):
+    h <- draw G1 from V to P
+    c <- send h * m to V
+scheme S = Pedersen:
+    construction derived(Merlin3Bls12381)
+=== I-2b | accept | the same under `interactive`: a group is a law
+module t
+use zkc::curves::bls12_381::{G1}
+protocol Pedersen roles(P, V)(m: G1::Scalar @P):
+    h <- draw G1 from V to P
+    c <- send h * m to V
+scheme S = Pedersen:
+    prover P
+    construction interactive
+=== I-2c | accept | publishing the seed is written as a draw of bytes
+module t
+use zkc::suites::{Merlin3Bls12381}
+type G = primitive("bls12-381.g1")
+def base_of(seed: [byte; 32]) -> G = primitive("group.hash_to_group")
+protocol Pedersen roles(P, V)(m: G::Scalar @P):
+    seed <- draw [byte; 32] from V to P
+    h = base_of(seed)
+    c <- send h * m to V
+scheme S = Pedersen:
+    construction derived(Merlin3Bls12381)
+=== I-3c | refuse TY15 | the domain is checked at the instantiation
+module t
+use zkc::suites::{Merlin3Bls12381}
+protocol Pick<n: nat> roles(P, V)():
+    x <- draw index<n> from V to P
+scheme S = Pick<0>:
+    construction derived(Merlin3Bls12381)
+=== I-7 | refuse EN1 | a protocol does not run a scheme
+module t
+use zkc::suites::{Merlin3Bls12381}
+type F = primitive("bls12-381.fr")
+protocol Inner roles(P, V)(x: F @(P, V)):
+    y <- send x from P to V
+    c <- draw F from V to P
+scheme In = Inner:
+    construction derived(Merlin3Bls12381)
+protocol Aggregate roles(P, V)(proof: In::Proof @P, statement: In::Statement @(P, V)):
+    supplied <- send proof to V
+    checked @V = In::verify(In::Keys{}, statement, supplied)
+=== R-SX9e | accept | a site in a loop of zero iterations has an empty field in `Run`; the function after `by` is a `def`
+module t
+type F = primitive("bls12-381.fr")
+relation Known(x: F; w: F): x == w
+protocol X<n: nat> roles(P, V)(x: F @(P, V), w: F @P):
+    for i in 0..n:
+        m <- send w to V
+    c <- draw F from V to P
+    z <- send w to V
+    guard @V z == x
+def extract<n: nat>(x: F, runs: X<n>::Runs<2>) -> F: runs[0].z
+spec for X:
+    knowledge Known(x) by extract
+scheme S = X<0>:
+    prover P
+    construction interactive
+=== R-SX9f | accept | the writer of a layout is a generated member
+module t
+use zkc::layout::{canonical}
+use zkc::hash::{Sha256}
+type F = primitive("bls12-381.fr")
+def digest(xs: [(F, index<8>); 4]) -> [byte; 32]: Sha256::hash(canonical::write(xs))
+=== R-SX6l | accept, unchecked | a `knowledge` clause with an external statement; the goal is reported as resting on it
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{knowledge_soundness, random_oracle}
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X<n: nat> roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    for i in 0..n:
+        m <- send base * scalar to V
+        c <- draw G::Scalar from V to P
+        guard @V m == point
+spec for X:
+    knowledge DLog(base, point) by external("Test.extract")
+scheme S = X<3>:
+    construction derived(Merlin3Bls12381)
+goal g = knowledge_soundness(S, model = random_oracle(queries = 2^64))
+=== R-SC8a | accept, warn | a scheme whose verifier performs no guard and no `open` is reported
+module t
+use zkc::suites::{Merlin3Bls12381}
+type G = primitive("bls12-381.g1")
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    m <- send base * scalar to V
+    c <- draw G::Scalar from V to P
+    guard @P m == point
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+=== R-SC5a | refuse SC5 | the suite of `derived` is a module, not a string
+module t
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw F from V to P
+scheme S = X:
+    construction derived("keccak256")
+=== R-SC5b | refuse SC5 | the suite implements `Suite`
+module t
+use zkc::hash::{Keccak256}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw F from V to P
+scheme S = X:
+    construction derived(Keccak256)
+=== R-SC5c | refuse SC5 | a draw in a field that is not the challenge field of the suite
+module t
+use zkc::suites::{Merlin3Bls12381}
+type F = primitive("koala-bear")
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw F from V to P
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+=== R-SC5d | accept | a suite in source, at its static arguments; `nonzero` of the challenge field is derived
+module t
+use zkc::hash::{Keccak256}
+use zkc::suites::{HashChain}
+type F = primitive("koala-bear")
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw (nonzero<F>, [index<7>; 3], bool) from V to P
+    guard @V m == c.0
+scheme S = X:
+    construction derived(HashChain<Keccak256, F>)
+=== R-SC5i | refuse SC5 | the hash of a pin is a module that implements `Hash`, and the digest has its size
+module t
+use zkc::curves::bls12_381::{Fr}
+use zkc::hash::{Sha256}
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(S, P, V)(x: Fr @P):
+    key @S <- sample Fr
+    k <- send key to P, V
+    m <- send x + k to V
+    c <- draw Fr from V to P
+scheme Sch = X:
+    offline S
+    construction derived(Merlin3Bls12381)
+    pin sites.k = Sha256:hex"00ff"
+=== R-SC5j | refuse NL3 | a hash is named by a path
+module t
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381}
+protocol X roles(S, P, V)(x: Fr @P):
+    key @S <- sample Fr
+    k <- send key to P, V
+    m <- send x + k to V
+    c <- draw Fr from V to P
+scheme Sch = X:
+    offline S
+    construction derived(Merlin3Bls12381)
+    pin sites.k = sha256:hex"00ff"
+=== R-GL1a | refuse GL1 | a property is an entry of the vocabulary
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{random_oracle}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw F from V to P
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+goal g = random_oracle(S)
+=== R-GL2a | refuse GL2 | a stage is a word of a goal
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{completeness}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw F from V to P
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+goal g = completeness(S, stage = final)
+=== R-GL3a | refuse GL3 | the scheme has the stage of the goal
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{completeness}
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw F from V to P
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+goal g = completeness(S, stage = committed)
+=== R-GL3b | refuse GL3 | the property admits the stage: honest-verifier zero knowledge is stated before the construction; the function after `by` is a `def`
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{honest_verifier_zero_knowledge}
+type G = primitive("bls12-381.g1")
+protocol X roles(P, V)(base: G @(P, V), scalar: G::Scalar @P):
+    m <- send base * scalar to V
+    c <- draw G::Scalar from V to P
+    z <- send scalar + c to V
+    guard @V base * z == m + base * c
+def simulate(inputs: X::Inputs<V>, coins: X::Coins<V>, z: G::Scalar) -> X::Received<V>:
+    X::Received<V>{m = inputs.base * z - inputs.base * coins.c, z}
+spec for X:
+    zero_knowledge by simulate using coins
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+goal g = honest_verifier_zero_knowledge(S)
+=== R-GL3c | refuse GL3 | the property admits the construction
+module t
+use zkc::security::{unforgeability}
+type F = primitive("bls12-381.fr")
+def keygen(seed: [byte; 32]) -> F: F::from_nat(seed[0])
+protocol X roles(P, V)(x: F @P):
+    m <- send x to V
+    c <- draw F from V to P
+scheme S = X:
+    prover P
+    construction interactive
+goal g = unforgeability(S, keys = keygen)
+=== R-GL4a | refuse GL4 | a ceiling on a `derived` scheme needs a query budget
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+relation Zero(x: F): x == 0
+protocol X roles(P, V)(x: F @(P, V)):
+    c <- draw F from V to P
+    m <- send x * c to V
+    guard @V m == 0
+spec for X:
+    proves @V Zero(x)
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+goal g = soundness(S) <= 2^-100
+=== R-GL4b | accept | the same at the stage `written`, and with the budget
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{soundness, random_oracle}
+type F = primitive("bls12-381.fr")
+relation Zero(x: F): x == 0
+protocol X roles(P, V)(x: F @(P, V)):
+    c <- draw F from V to P
+    m <- send x * c to V
+    guard @V m == 0
+spec for X:
+    proves @V Zero(x)
+    charge sites.c <= 1 / F::Order
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+goal interactive = soundness(S, stage = written) <= 2^-100
+goal derived = soundness(S, model = random_oracle(queries = 2^80)) <= 2^-100
+=== V-S3 | refuse GL3 | `zero_knowledge` against an interactive verifier that may deviate is `by external`; a simulator given honest coins states honest-verifier zero knowledge; the function after `by` is a `def`
+module t
+use zkc::security::{zero_knowledge}
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+def simulate(inputs: X::Inputs<V>, coins: X::Coins<V>, response: G::Scalar) -> X::Received<V>:
+    X::Received<V>{commitment = inputs.base * response - inputs.point * coins.challenge, response}
+spec for X:
+    proves DLog(base, point; scalar)
+    zero_knowledge by simulate using coins
+scheme S = X:
+    prover P
+    construction interactive
+goal z = zero_knowledge(S, stage = written)
+=== V-S4 | refuse GL3 | `programming` where there is no oracle to program; the function after `by` is a `def`
+module t
+use zkc::security::{zero_knowledge}
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+def simulate(inputs: X::Inputs<V>, r: (G::Scalar, G::Scalar)) -> (X::Received<V>, X::Coins<V>):
+    (X::Received<V>{commitment = inputs.base * r.1 - inputs.point * r.0, response = r.1}, X::Coins<V>{challenge = r.0})
+spec for X:
+    proves DLog(base, point; scalar)
+    zero_knowledge by simulate using programming
+scheme S = X:
+    prover P
+    construction interactive
+goal z = zero_knowledge(S, stage = written)
+=== V-S5 | refuse GL3 | `coins` at `constructed`: a derived verifier has no coins; the function after `by` is a `def`
+module t
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{zero_knowledge, random_oracle}
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+def simulate(inputs: X::Inputs<V>, coins: X::Coins<V>, response: G::Scalar) -> X::Received<V>:
+    X::Received<V>{commitment = inputs.base * response - inputs.point * coins.challenge, response}
+spec for X:
+    proves DLog(base, point; scalar)
+    zero_knowledge by simulate using coins
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+goal z = zero_knowledge(S, model = random_oracle, stage = constructed)
+=== V-S13 | refuse GL3 | `trapdoor` on a role that the scheme runs online; and zero knowledge at `written` is `by external`; the function after `by` is a `def`
+module t
+use zkc::security::{zero_knowledge}
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X roles(S, P, V)(base: G @(S, P, V), point: G @(P, V), scalar: G::Scalar @P):
+    t @S <- sample G::Scalar
+    k <- send base * t to P, V
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+def simulate(inputs: X::Inputs<V>, coins: X::Coins<V>, trapdoor: X::Coins<S>, response: G::Scalar) -> X::Received<V>:
+    X::Received<V>{k = inputs.base * trapdoor.t, commitment = inputs.base * response - inputs.point * coins.challenge, response}
+spec for X:
+    proves DLog(base, point; scalar)
+    zero_knowledge by simulate using coins, trapdoor
+scheme T = X:
+    prover P
+    construction interactive
+goal g = zero_knowledge(T, stage = written)
+=== V-S12 | refuse SX6 SX9 | `Runs<3>` over a draw of `bool`: `kᵢ` is at most the number of values of the law; the function after `by` is a `def`
+module t
+use zkc::security::{knowledge_soundness}
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    m <- send base to V
+    c <- draw bool from V to P
+    guard @V m == base
+def extract(base: G, point: G, runs: X::Runs<3>) -> G::Scalar: 0
+spec for X:
+    knowledge DLog(base, point) by extract
+scheme S = X:
+    prover P
+    construction interactive
+goal g = knowledge_soundness(S, stage = written)
+=== V-S14 | refuse SX6 | the function after `by` is a `def`; this search is a `spec def`. As a `def` it is admitted and its cost, of the order of the field, is stated in the receipt
+module t
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::security::{knowledge_soundness}
+relation DLog(base: G1, point: G1; scalar: Fr): point == base * scalar
+protocol X roles(P, V)(base: G1 @(P, V), point: G1 @(P, V), scalar: Fr @P):
+    m <- send base to V
+    c <- draw Fr from V to P
+    guard @V m == base
+spec def search(base: G1, point: G1, runs: X::Runs<1>) -> Fr:
+    found = [Fr::from_nat(i) for i in 0..Fr::Order if base * Fr::from_nat(i) == point]
+    return if 0 < length(found) then found[0] else 0
+spec for X:
+    requires base != 0
+    knowledge DLog(base, point) by search
+scheme S = X:
+    prover P
+    construction interactive
+goal g = knowledge_soundness(S, stage = written)
+=== V-S15 | refuse SX6 | a function bound to `external` is not named after `by`; the clause is written `by external("Anything.discrete_log")`, and is then accepted and reported as resting on it
+module t
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::security::{knowledge_soundness}
+relation DLog(base: G1, point: G1; scalar: Fr): point == base * scalar
+protocol X roles(P, V)(base: G1 @(P, V), point: G1 @(P, V), scalar: Fr @P):
+    m <- send base to V
+    c <- draw Fr from V to P
+    guard @V m == base
+spec def search(base: G1, point: G1, runs: X::Runs<1>) -> Fr = external("Anything.discrete_log")
+spec for X:
+    knowledge DLog(base, point) by search
+scheme S = X:
+    prover P
+    construction interactive
+goal g = knowledge_soundness(S, stage = written)
+=== V-S16 | refuse SX6 | the same for a simulator that finds the witness by search
+module t
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::security::{honest_verifier_zero_knowledge}
+relation DLog(base: G1, point: G1; scalar: Fr): point == base * scalar
+protocol Leak roles(P, V)(base: G1 @(P, V), point: G1 @(P, V), scalar: Fr @P):
+    revealed <- send scalar to V
+    guard @V base * revealed == point
+spec def simulate(inputs: Leak::Inputs<V>, coins: Leak::Coins<V>) -> Leak::Received<V>:
+    found = [Fr::from_nat(i) for i in 0..Fr::Order if inputs.base * Fr::from_nat(i) == inputs.point]
+    return Leak::Received<V>{revealed = if 0 < length(found) then found[0] else 0}
+spec for Leak:
+    requires base != 0
+    proves DLog(base, point; scalar)
+    zero_knowledge by simulate using coins
+scheme S = Leak:
+    prover P
+    construction interactive
+goal g = honest_verifier_zero_knowledge(S, stage = written)
+=== V-E1 | refuse SC5 SX2 | `recover … by f` names deployed code; `f` is a specification function
+module t
+use zkc::layout::{canonical}
+use zkc::suites::{Merlin3Bls12381}
+type G = primitive("bls12-381.g1")
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+spec def recompute(base: G, point: G, challenge: G::Scalar, response: G::Scalar) -> G:
+    base * response - point * challenge
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+    layout canonical:
+        carry sites.challenge
+        recover sites.commitment by recompute
+=== V-E1b | refuse SC5 SX2 NL9 | the same function bound to the formal library
+module t
+use zkc::layout::{canonical}
+use zkc::suites::{Merlin3Bls12381}
+type G = primitive("bls12-381.g1")
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+spec def recompute(base: G, point: G, challenge: G::Scalar, response: G::Scalar) -> G = external("Nowhere.recompute")
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+    layout canonical:
+        carry sites.challenge
+        recover sites.commitment by recompute
+=== V-E2 | refuse SC5 SX2 | `samples derived by f` names deployed code
+module t
+use zkc::suites::{Merlin3Bls12381}
+type G = primitive("bls12-381.g1")
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+spec def nonce_of(secret: G::Scalar, statement: [byte], site: nat, tries: nat) -> [byte; 64]: [0; 64]
+scheme S = X:
+    construction derived(Merlin3Bls12381)
+    samples derived by nonce_of
+=== V-E4 | refuse SP8 NL9 | a member that `Layout` declares `def` is deployed code in every implementing module
+module t
+use zkc::layout::{Layout}
+use zkc::option::{Option}
+module Odd: Layout:
+    type Unit = byte
+    spec def write_natural(n) = external("Nowhere.w")
+    def read_natural(units): None
+    def write_field(x): []
+    def read_field(units): None
+    def write_group(x): []
+    def read_group(units): None
+=== N-SC5a | refuse SC5 | the site of a key has exactly the type that the scheme's module states: eight powers where `Kzg<Bls12381, 3>` takes four
+module t
+use zkc::polynomial::{poly}
+use zkc::kzg::{Kzg, powers, verifier_key}
+use zkc::curves::bls12_381::{Fr, Bls12381}
+protocol X roles(S, P, V)(coefficients: [Fr; 4] @P):
+    tau @S <- sample nonzero<Fr>
+    pk <- send powers<Bls12381, 8>(tau) to P
+    vk <- send verifier_key<Bls12381>(tau) to V
+    h <- send coefficients to V as oracle<poly<Fr, 3>>
+    z <- draw Fr from V to P
+    v <- query h at z
+    guard @V v == 0
+scheme T = X:
+    prover P
+    offline S
+    construction interactive
+    commit poly<_, _> with Kzg<Bls12381>(prover_key = sites.pk, verifier_key = sites.vk)
+=== M-SUMX1 | refuse SC3 | `programs/sumcheck_example.zkc` with one change: no round: the body types, but no role sends or draws, so the scheme must state its prover
+module sumcheck_example
+
+use sumcheck<Fr>::{Sumcheck}
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{completeness, soundness, random_oracle}
+
+scheme Proof = Sumcheck<0>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof) <= 0
+goal sound = soundness(Proof, model = random_oracle(queries = 2^100)) <= 2^-128
+goal ideal_sound = soundness(Proof, model = random_oracle(queries = 2^100), stage = constructed)
+--- file
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)
+=== M-SUMX2 | accept | `programs/sumcheck_example.zkc` with one change: an import that is not used
+module sumcheck_example
+
+use sumcheck<Fr>::{Sumcheck}
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381, Poseidon2KoalaBear}
+use zkc::security::{completeness, soundness, random_oracle}
+
+scheme Proof = Sumcheck<10>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof) <= 0
+goal sound = soundness(Proof, model = random_oracle(queries = 2^100)) <= 2^-128
+goal ideal_sound = soundness(Proof, model = random_oracle(queries = 2^100), stage = constructed)
+--- file
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)
+=== M-SUMX3 | refuse SC5 | `programs/sumcheck_example.zkc` with one change: a suite whose challenge field is not the field drawn
+module sumcheck_example
+
+use sumcheck<Fr>::{Sumcheck}
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{completeness, soundness, random_oracle}
+
+scheme Proof = Sumcheck<10>:
+    construction derived(zkc::suites::Poseidon2KoalaBear)
+
+goal complete = completeness(Proof) <= 0
+goal sound = soundness(Proof, model = random_oracle(queries = 2^100)) <= 2^-128
+goal ideal_sound = soundness(Proof, model = random_oracle(queries = 2^100), stage = constructed)
+--- file
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)
+=== M-SCHX7 | refuse SC5 | `programs/schnorr_example.zkc` with one change: a recovered site is a send
+module schnorr_example
+
+use schnorr::{Schnorr}
+use signature
+use zkc::curves::bls12_381::{G1}
+use zkc::layout::{canonical}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, zero_knowledge,
+    unforgeability, random_oracle
+}
+
+scheme Proof = Schnorr<G1>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof, stage = written) <= 0
+goal special = knowledge_soundness(Proof, stage = written)
+goal view = honest_verifier_zero_knowledge(Proof, stage = written, clause = honest) <= 0
+goal knowledge = knowledge_soundness(Proof, model = random_oracle, statement = fixed)
+goal derived_view = zero_knowledge(
+    Proof, model = random_oracle, stage = constructed, clause = programmed
+)
+
+// The same protocol as a signature: a message and a context in the statement, a derived nonce,
+// and a proof that carries the challenge and omits the commitment.
+scheme Signature = Schnorr<G1>:
+    context message: [byte]
+    context domain: [byte]
+    construction derived(signature::Suite)
+    samples derived by signature::nonce
+    layout canonical:
+        carry sites.challenge
+        recover sites.challenge by signature::commitment
+
+goal forged = unforgeability(Signature, keys = signature::keygen, model = random_oracle)
+
+pub entry def sign(secret: G1::Scalar, message: [byte], domain: [byte]) -> Signature::Proof:
+    statement = Signature::Statement{
+        base = G1::generator(), point = G1::generator() * secret, message, domain
+    }
+    return Signature::prove(statement, Signature::Witness{scalar = secret})
+
+pub entry def check(point: G1, message: [byte], domain: [byte], proof: Signature::Proof):
+    Signature::verify(
+        Signature::Keys{},
+        Signature::Statement{base = G1::generator(), point, message, domain},
+        proof
+    )
+--- file
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order
+--- file
+module signature
+
+// Project library of the Schnorr signature example.
+
+use zkc::construction
+use zkc::curves::bls12_381::{G1}
+
+pub module Suite: construction::Suite = primitive("suite.schnorr-signature")
+pub def nonce(
+    secret: G1::Scalar, statement: [byte], site: nat, tries: nat
+) -> [byte; 64] = primitive("signature.nonce")
+pub def commitment(
+    statement: [byte], challenge: G1::Scalar, response: G1::Scalar
+) -> G1 = primitive("signature.commitment")
+pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
+=== M-SCHX8 | refuse TY5 | `programs/schnorr_example.zkc` with one change: a field of the generated witness
+module schnorr_example
+
+use schnorr::{Schnorr}
+use signature
+use zkc::curves::bls12_381::{G1}
+use zkc::layout::{canonical}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, zero_knowledge,
+    unforgeability, random_oracle
+}
+
+scheme Proof = Schnorr<G1>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof, stage = written) <= 0
+goal special = knowledge_soundness(Proof, stage = written)
+goal view = honest_verifier_zero_knowledge(Proof, stage = written, clause = honest) <= 0
+goal knowledge = knowledge_soundness(Proof, model = random_oracle, statement = fixed)
+goal derived_view = zero_knowledge(
+    Proof, model = random_oracle, stage = constructed, clause = programmed
+)
+
+// The same protocol as a signature: a message and a context in the statement, a derived nonce,
+// and a proof that carries the challenge and omits the commitment.
+scheme Signature = Schnorr<G1>:
+    context message: [byte]
+    context domain: [byte]
+    construction derived(signature::Suite)
+    samples derived by signature::nonce
+    layout canonical:
+        carry sites.challenge
+        recover sites.commitment by signature::commitment
+
+goal forged = unforgeability(Signature, keys = signature::keygen, model = random_oracle)
+
+pub entry def sign(secret: G1::Scalar, message: [byte], domain: [byte]) -> Signature::Proof:
+    statement = Signature::Statement{
+        base = G1::generator(), point = G1::generator() * secret, message, domain
+    }
+    return Signature::prove(statement, Signature::Witness{scalar = message})
+
+pub entry def check(point: G1, message: [byte], domain: [byte], proof: Signature::Proof):
+    Signature::verify(
+        Signature::Keys{},
+        Signature::Statement{base = G1::generator(), point, message, domain},
+        proof
+    )
+--- file
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order
+--- file
+module signature
+
+// Project library of the Schnorr signature example.
+
+use zkc::construction
+use zkc::curves::bls12_381::{G1}
+
+pub module Suite: construction::Suite = primitive("suite.schnorr-signature")
+pub def nonce(
+    secret: G1::Scalar, statement: [byte], site: nat, tries: nat
+) -> [byte; 64] = primitive("signature.nonce")
+pub def commitment(
+    statement: [byte], challenge: G1::Scalar, response: G1::Scalar
+) -> G1 = primitive("signature.commitment")
+pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
+=== M-SCHX9 | refuse TY13 | `programs/schnorr_example.zkc` with one change: a missing field of the generated statement
+module schnorr_example
+
+use schnorr::{Schnorr}
+use signature
+use zkc::curves::bls12_381::{G1}
+use zkc::layout::{canonical}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, zero_knowledge,
+    unforgeability, random_oracle
+}
+
+scheme Proof = Schnorr<G1>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof, stage = written) <= 0
+goal special = knowledge_soundness(Proof, stage = written)
+goal view = honest_verifier_zero_knowledge(Proof, stage = written, clause = honest) <= 0
+goal knowledge = knowledge_soundness(Proof, model = random_oracle, statement = fixed)
+goal derived_view = zero_knowledge(
+    Proof, model = random_oracle, stage = constructed, clause = programmed
+)
+
+// The same protocol as a signature: a message and a context in the statement, a derived nonce,
+// and a proof that carries the challenge and omits the commitment.
+scheme Signature = Schnorr<G1>:
+    context message: [byte]
+    context domain: [byte]
+    construction derived(signature::Suite)
+    samples derived by signature::nonce
+    layout canonical:
+        carry sites.challenge
+        recover sites.commitment by signature::commitment
+
+goal forged = unforgeability(Signature, keys = signature::keygen, model = random_oracle)
+
+pub entry def sign(secret: G1::Scalar, message: [byte], domain: [byte]) -> Signature::Proof:
+    statement = Signature::Statement{
+        base = G1::generator(), point = G1::generator() * secret, message
+    }
+    return Signature::prove(statement, Signature::Witness{scalar = secret})
+
+pub entry def check(point: G1, message: [byte], domain: [byte], proof: Signature::Proof):
+    Signature::verify(
+        Signature::Keys{},
+        Signature::Statement{base = G1::generator(), point, message, domain},
+        proof
+    )
+--- file
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order
+--- file
+module signature
+
+// Project library of the Schnorr signature example.
+
+use zkc::construction
+use zkc::curves::bls12_381::{G1}
+
+pub module Suite: construction::Suite = primitive("suite.schnorr-signature")
+pub def nonce(
+    secret: G1::Scalar, statement: [byte], site: nat, tries: nat
+) -> [byte; 64] = primitive("signature.nonce")
+pub def commitment(
+    statement: [byte], challenge: G1::Scalar, response: G1::Scalar
+) -> G1 = primitive("signature.commitment")
+pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
+=== M-SCHX10 | refuse NL3 | `programs/schnorr_example.zkc` with one change: the generator is a member of the sort
+module schnorr_example
+
+use schnorr::{Schnorr}
+use signature
+use zkc::curves::bls12_381::{G1}
+use zkc::layout::{canonical}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, zero_knowledge,
+    unforgeability, random_oracle
+}
+
+scheme Proof = Schnorr<G1>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof, stage = written) <= 0
+goal special = knowledge_soundness(Proof, stage = written)
+goal view = honest_verifier_zero_knowledge(Proof, stage = written, clause = honest) <= 0
+goal knowledge = knowledge_soundness(Proof, model = random_oracle, statement = fixed)
+goal derived_view = zero_knowledge(
+    Proof, model = random_oracle, stage = constructed, clause = programmed
+)
+
+// The same protocol as a signature: a message and a context in the statement, a derived nonce,
+// and a proof that carries the challenge and omits the commitment.
+scheme Signature = Schnorr<G1>:
+    context message: [byte]
+    context domain: [byte]
+    construction derived(signature::Suite)
+    samples derived by signature::nonce
+    layout canonical:
+        carry sites.challenge
+        recover sites.commitment by signature::commitment
+
+goal forged = unforgeability(Signature, keys = signature::keygen, model = random_oracle)
+
+pub entry def sign(secret: G1::Scalar, message: [byte], domain: [byte]) -> Signature::Proof:
+    statement = Signature::Statement{
+        base = G1::generator(), point = G1::generator() * secret, message, domain
+    }
+    return Signature::prove(statement, Signature::Witness{scalar = secret})
+
+pub entry def check(point: G1, message: [byte], domain: [byte], proof: Signature::Proof):
+    Signature::verify(
+        Signature::Keys{},
+        Signature::Statement{base = generator<G1>(), point, message, domain},
+        proof
+    )
+--- file
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order
+--- file
+module signature
+
+// Project library of the Schnorr signature example.
+
+use zkc::construction
+use zkc::curves::bls12_381::{G1}
+
+pub module Suite: construction::Suite = primitive("suite.schnorr-signature")
+pub def nonce(
+    secret: G1::Scalar, statement: [byte], site: nat, tries: nat
+) -> [byte; 64] = primitive("signature.nonce")
+pub def commitment(
+    statement: [byte], challenge: G1::Scalar, response: G1::Scalar
+) -> G1 = primitive("signature.commitment")
+pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
+=== M-GKRX1 | refuse SP5 | `programs/gkr_example.zkc` with one change: two numerals by position
+module gkr_example
+
+use gkr<Fr>::{Gkr}
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{soundness, random_oracle}
+
+scheme Proof = Gkr<4, 2>:
+    construction derived(Merlin3Bls12381)
+
+goal sound = soundness(Proof, model = random_oracle(queries = 2^100)) <= 2^-128
+--- file
+module gkr<F: Field>
+
+use sumcheck<F>::{Reduce}
+use zkc::multilinear
+use zkc::polynomial::{evaluate}
+use circuits::layered<F>::{
+    Circuit, Gate, values, gate_state, summand, restriction, on_line, wiring, combine
+}
+
+pub relation Outputs<d: nat, w: nat>(c: Circuit<d, w>, inputs: [F; 2^w], outputs: [F; 2^w]):
+    outputs == values(c, inputs, 0)
+
+pub relation LayerValue<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d + 1>, point: [F; w], value: F
+):
+    value == multilinear::evaluate(values(c, inputs, layer), point)
+
+pub protocol Gkr<d: nat, w: nat> roles(P, V)(
+    c: Circuit<d, w> @(P, V),
+    inputs: [F; 2^w] @(P, V),
+    outputs: [F; 2^w] @(P, V)
+):
+    z0 <- draw [F; w] from V to P
+    mut z = z0
+    mut v = multilinear::evaluate(outputs, z0)
+    for i in 0..d:
+        below @P = values(c, inputs, i + 1)
+        reduced <- Reduce<Gate, rounds = 2 * w>(
+            gate_state(c, i, z, below), [], v, spec p = summand(c, inputs, i, z)
+        )
+        q <- send restriction(below, reduced.point) to V
+        guard @V reduced.value == combine(
+            wiring(c, i, z, reduced.point), evaluate(q, 0), evaluate(q, 1)
+        )
+        t <- draw F from V to P
+        z := on_line<w>(reduced.point, t)
+        v := evaluate(q, t)
+    guard @V v == multilinear::evaluate(inputs, z)
+
+spec for Gkr:
+    proves @V Outputs(c, inputs, outputs)
+    through LayerValue(c, inputs, i, z, v) at i
+    charge sites.z0 <= w / F::Order
+    charge sites.t <= w / F::Order
+--- file
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)
+--- file
+module circuits::layered<F: Field>
+
+// Project library of the GKR example: layered circuits, bound to rows of the project.
+
+use sumcheck<F>::{Round}
+use zkc::polynomial::{MvPoly, Poly}
+
+// A circuit of d layers of 2^w gates; layer 0 is the outputs and layer d the inputs.
+pub type Circuit<d: nat, w: nat> = primitive("circuit.layered", F, d, w)
+
+pub def values<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d + 1>
+) -> [F; 2^w] = primitive("circuit.values")
+
+// Rounds over the gate polynomial of one layer: degree 2 in each of 2 * w variables.
+pub module Gate: Round:
+    nat Degree = 2
+    type State<v: nat> = primitive("circuit.gate_state", F, v)
+    type Message = (F, F, F)
+    def message(state) = primitive("circuit.gate_message")
+    def bind(state, r) = primitive("circuit.gate_bind")
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r) = primitive("circuit.gate_evaluate")
+    spec def table(state) = external("Zkc.Circuit.gateTable")
+    spec def polynomial(m) = external("Zkc.Circuit.gatePolynomial")
+
+pub def gate_state<d: nat, w: nat>(
+    c: Circuit<d, w>, layer: index<d>, z: [F; w], below: [F; 2^w]
+) -> Gate::State<2 * w> = primitive("circuit.gate_state_of")
+pub spec def summand<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d>, z: [F; w]
+) -> MvPoly<F, 2 * w, 2> = external("Zkc.Circuit.summand")
+// The coefficients of the restriction of the layer below to the line through the two points.
+pub def restriction<w: nat>(
+    below: [F; 2^w], pair: [F; 2 * w]
+) -> [F; w + 1] = primitive("circuit.restriction")
+pub def on_line<w: nat>(pair: [F; 2 * w], t: F) -> [F; w] = primitive("circuit.on_line")
+pub def wiring<d: nat, w: nat>(
+    c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
+) -> (F, F) = primitive("circuit.wiring")
+pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")
+=== M-FRA11 | accept | `programs/fragments.zkc` with one change: `private` is checked for `derived` and `authored` only
+module fragments
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::option::{Option}
+
+pub struct Pair<T>:
+    pub left: T
+    pub right: T
+
+pub linear struct Ticket<F: Field>:
+    point: [F]
+    value: F
+
+pub enum Side:
+    Left
+    Right
+
+pub def pick<T>(pair: Pair<T>, side: Side) -> T:
+    Pair{left, right} = pair
+    mut chosen = left
+    match side:
+        case Left:
+            ()
+        case Right:
+            chosen := right
+    return chosen
+
+pub def swap<T>(pair: Pair<T>) -> Pair<T>: {pair with left = pair.right, right = pair.left}
+
+// `+` on `Pair<F>` is this function: the fixed name `add` in the home module of `Pair`. With
+// `zero`, the type also has `∑`.
+pub def add<F: Field>(a: Pair<F>, b: Pair<F>) -> Pair<F>:
+    Pair{left = a.left + b.left, right = a.right + b.right}
+
+pub def zero<F: Field>() -> Pair<F>: Pair{left = 0, right = 0}
+
+pub def twice<F: Field>(a: Pair<F>) -> Pair<F>: a + a
+
+pub def redeem<F: Field>(ticket: Ticket<F>) -> F:
+    Ticket{point = _, value} = ticket
+    return value
+
+pub def total<F: Field>(values: [F]) -> F: ∑ x ∈ values, x
+
+// A read of a collection whose length is a run-time value: the guard gives the fact.
+pub def first<F: Field>(xs: [F]) -> F:
+    guard 0 < length(xs)
+    return xs[0]
+
+// The same read without a stop: the condition of an `if` gives the fact to its first arm.
+pub def first_or_none<F: Field>(xs: [F]) -> Option<F>:
+    if 0 < length(xs) then Some(xs[0]) else None
+
+// The index of a loop over `0..length(xs)` is below the length in its body.
+pub def weighted<F: Field>(xs: [F], weight: F) -> F:
+    mut acc: F = 0
+    for i in 0..length(xs):
+        acc := acc * weight + xs[i]
+    return acc
+
+// A binding of a static term is a static name: it may stand in a size.
+pub def halves<T, n: nat>(xs: [T; 2 * n]) -> ([T; n], [T; n]):
+    half = (2 * n) / 2
+    return (xs[0..half], xs[half..2 * half])
+
+// A group: the literal `0`, a sum of points, a member of the sort, a conversion to a field.
+pub def weighted_generator<G: PrimeOrderGroup, n: nat>(points: [G; n]) -> G:
+    (∑ p ∈ points, p) + G::generator() * G::Scalar::from_nat(n) + 0
+
+// Mathematical forms in specification: an inner product, and a bounded quantifier.
+pub relation Inner<F: Field, n: nat>(a: [F; n], b: [F; n], c: F): c == ⟪a, b⟫
+
+pub relation Ascending<n: nat>(xs: [byte; n + 1]): ∀ i ∈ 0..n, xs[i] <= xs[i + 1]
+
+pub spec def checked(a: [Fr; 4], b: [Fr; 4], c: Fr, xs: [byte; 5]) -> bool:
+    Inner(a, b, c) and Ascending(xs)
+
+// A charge is a `rational`: naturals are converted and `/` is exact.
+pub spec def birthday(queries: nat, bits: nat) -> rational: queries^2 / 2^(bits + 1)
+
+// The functions above at one field: a definition without static parameters is its own instance.
+pub def demo(pair: Pair<Fr>, side: Side, ticket: Ticket<Fr>, values: [Fr], points: [G1; 4]) -> G1:
+    chosen = pick(swap(twice(pair)), side)
+    scalar = chosen + redeem(ticket) + total(values) + first(values) + weighted(values, chosen)
+    return weighted_generator(points) * scalar
+
+pub protocol Ask<F: Field> roles(O, R)() -> (value: F @(O, R), nonce: nonzero<F> @O):
+    nonce @O <- sample nonzero<F>
+    value <- send nonce * nonce to R
+    return (value, nonce)
+
+// A callee with roles (O, R) applied by name; a pattern binder named by an attribute; a loop
+// with a run-time count; a private input; a send to two receivers.
+pub protocol Relay<F: Field, Max: nat> roles(D, P, V)(
+    count: index<Max + 1> @(P, V),
+    seed: [byte; 32] @P private
+) -> total: F @(P, V):
+    mut running: F @(P, V) = 0
+    for _ in 0..count:
+        #[site(step)]
+        (value, _) <- Ask<F>() @(O = P, R = V)
+        running := running + value
+    share @D <- sample F
+    told <- send share to P, V
+    return running + told
+
+scheme Dealt = Relay<Fr, 8>:
+    ideal D
+    prover P
+    construction interactive
+
+// ----------------------------------------------------------------------------------------------
+// The forms of the second part.
+
+// A static name of a module stands in the sizes of its members (TY2).
+nat Limbs = 4
+
+pub def limbs(x: [byte; 8 * Limbs]) -> [[byte; 8]; Limbs]:
+    [x[8 * i..8 * i + 8] for i in 0..Limbs]
+
+// A law of a module: a proposition about its own definitions. It is closed, so the build
+// decides it by evaluation (SP10).
+law limbs_cover(): 8 * Limbs == 32
+
+// `and` gives the facts of its left operand to its right operand (TY9).
+pub def starts_with_zero<F: Field>(xs: [F]) -> bool: 0 < length(xs) and xs[0] == 0
+
+// A literal takes its type from the collection it is appended to, and from the other arm of
+// an `if` (TY6).
+pub def padded<F: Field, n: nat>(xs: [F; n]) -> [F; n + 1]: xs ++ [0]
+
+pub def first_or_zero<F: Field>(xs: [F]) -> F:
+    y = if 0 < length(xs) then xs[0] else 0
+    return y
+
+// An `if` with a static condition is decided at the instance: at `n = 0` the first arm is not
+// typed (TY9).
+pub def first_byte<n: nat>(xs: [byte; n]) -> byte:
+    if 1 <= n then xs[0] else 0
+
+// A range fact on an arithmetic term narrows the range of that term (TY8).
+pub def ratio(z: index<10>, x: index<5>, y: index<5>) -> nat:
+    guard y <= x else refused
+    guard 1 <= x - y else refused
+    return z / (x - y)
+
+// The index of a loop over a static range is static as a tuple position, so the loop is typed
+// per iteration and is stepped (TY10).
+pub def firsts(t: ([byte; 2], [byte; 4], [byte; 8])) -> nat:
+    mut acc: nat = 0
+    for j in 0..3:
+        acc := acc + t[j][0]
+    return acc
+
+// A relation with a `where` (SX3).
+pub relation Sorted<n: nat>(xs: [byte; n]) where (1 <= n): ∀ i ∈ 0..n - 1, xs[i] <= xs[i + 1]
+
+// A specification-only static parameter: only the relation reads it, and a goal gives it its
+// value (SP11).
+section <F: Field, n: nat, spec e: nat>:
+    pub relation NearZero(; xs: [F; n]): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+
+// A definition generic over a module parameter. `+` on `X::T` is the member `add` of the
+// interface (NL6), and `X::T` is opaque in the body (SP12): comparing two values of it would be
+// refused, because `Carrier` declares no `equal`.
+pub interface Carrier:
+    type T
+    def unit() -> T
+    def add(a: T, b: T) -> T
+
+pub module Counted: Carrier:
+    type T = nat
+    def unit(): 1
+    def add(a, b): a + b
+
+pub def twice_and_one<X: Carrier>(x: X::T) -> X::T: x + x + X::unit()
+
+// The type on the wire leaves the sender's facts out (TY14): V receives a `[F]`, and its own
+// guard gives it the size.
+pub protocol Hand<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    m <- send xs to V
+    guard @V length(m) == 8
+    guard @V m[7] == 0
+
+// The sender binds the value at the narrower type before the send: V decodes eight elements,
+// and stops with `reject` otherwise.
+pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    ys: [F; 8] = xs
+    m <- send ys to V
+    guard @V m[7] == 0
+=== M-FRA13 | accept | `programs/fragments.zkc` with one change: D as an offline role: it receives nothing
+module fragments
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::option::{Option}
+
+pub struct Pair<T>:
+    pub left: T
+    pub right: T
+
+pub linear struct Ticket<F: Field>:
+    point: [F]
+    value: F
+
+pub enum Side:
+    Left
+    Right
+
+pub def pick<T>(pair: Pair<T>, side: Side) -> T:
+    Pair{left, right} = pair
+    mut chosen = left
+    match side:
+        case Left:
+            ()
+        case Right:
+            chosen := right
+    return chosen
+
+pub def swap<T>(pair: Pair<T>) -> Pair<T>: {pair with left = pair.right, right = pair.left}
+
+// `+` on `Pair<F>` is this function: the fixed name `add` in the home module of `Pair`. With
+// `zero`, the type also has `∑`.
+pub def add<F: Field>(a: Pair<F>, b: Pair<F>) -> Pair<F>:
+    Pair{left = a.left + b.left, right = a.right + b.right}
+
+pub def zero<F: Field>() -> Pair<F>: Pair{left = 0, right = 0}
+
+pub def twice<F: Field>(a: Pair<F>) -> Pair<F>: a + a
+
+pub def redeem<F: Field>(ticket: Ticket<F>) -> F:
+    Ticket{point = _, value} = ticket
+    return value
+
+pub def total<F: Field>(values: [F]) -> F: ∑ x ∈ values, x
+
+// A read of a collection whose length is a run-time value: the guard gives the fact.
+pub def first<F: Field>(xs: [F]) -> F:
+    guard 0 < length(xs)
+    return xs[0]
+
+// The same read without a stop: the condition of an `if` gives the fact to its first arm.
+pub def first_or_none<F: Field>(xs: [F]) -> Option<F>:
+    if 0 < length(xs) then Some(xs[0]) else None
+
+// The index of a loop over `0..length(xs)` is below the length in its body.
+pub def weighted<F: Field>(xs: [F], weight: F) -> F:
+    mut acc: F = 0
+    for i in 0..length(xs):
+        acc := acc * weight + xs[i]
+    return acc
+
+// A binding of a static term is a static name: it may stand in a size.
+pub def halves<T, n: nat>(xs: [T; 2 * n]) -> ([T; n], [T; n]):
+    half = (2 * n) / 2
+    return (xs[0..half], xs[half..2 * half])
+
+// A group: the literal `0`, a sum of points, a member of the sort, a conversion to a field.
+pub def weighted_generator<G: PrimeOrderGroup, n: nat>(points: [G; n]) -> G:
+    (∑ p ∈ points, p) + G::generator() * G::Scalar::from_nat(n) + 0
+
+// Mathematical forms in specification: an inner product, and a bounded quantifier.
+pub relation Inner<F: Field, n: nat>(a: [F; n], b: [F; n], c: F): c == ⟪a, b⟫
+
+pub relation Ascending<n: nat>(xs: [byte; n + 1]): ∀ i ∈ 0..n, xs[i] <= xs[i + 1]
+
+pub spec def checked(a: [Fr; 4], b: [Fr; 4], c: Fr, xs: [byte; 5]) -> bool:
+    Inner(a, b, c) and Ascending(xs)
+
+// A charge is a `rational`: naturals are converted and `/` is exact.
+pub spec def birthday(queries: nat, bits: nat) -> rational: queries^2 / 2^(bits + 1)
+
+// The functions above at one field: a definition without static parameters is its own instance.
+pub def demo(pair: Pair<Fr>, side: Side, ticket: Ticket<Fr>, values: [Fr], points: [G1; 4]) -> G1:
+    chosen = pick(swap(twice(pair)), side)
+    scalar = chosen + redeem(ticket) + total(values) + first(values) + weighted(values, chosen)
+    return weighted_generator(points) * scalar
+
+pub protocol Ask<F: Field> roles(O, R)() -> (value: F @(O, R), nonce: nonzero<F> @O):
+    nonce @O <- sample nonzero<F>
+    value <- send nonce * nonce to R
+    return (value, nonce)
+
+// A callee with roles (O, R) applied by name; a pattern binder named by an attribute; a loop
+// with a run-time count; a private input; a send to two receivers.
+pub protocol Relay<F: Field, Max: nat> roles(D, P, V)(
+    count: index<Max + 1> @(P, V),
+    seed: [byte; 32] @V private
+) -> total: F @(P, V):
+    mut running: F @(P, V) = 0
+    for _ in 0..count:
+        #[site(step)]
+        (value, _) <- Ask<F>() @(O = P, R = V)
+        running := running + value
+    share @D <- sample F
+    told <- send share to P, V
+    return running + told
+
+scheme Dealt = Relay<Fr, 8>:
+    offline D
+    prover P
+    construction interactive
+
+// ----------------------------------------------------------------------------------------------
+// The forms of the second part.
+
+// A static name of a module stands in the sizes of its members (TY2).
+nat Limbs = 4
+
+pub def limbs(x: [byte; 8 * Limbs]) -> [[byte; 8]; Limbs]:
+    [x[8 * i..8 * i + 8] for i in 0..Limbs]
+
+// A law of a module: a proposition about its own definitions. It is closed, so the build
+// decides it by evaluation (SP10).
+law limbs_cover(): 8 * Limbs == 32
+
+// `and` gives the facts of its left operand to its right operand (TY9).
+pub def starts_with_zero<F: Field>(xs: [F]) -> bool: 0 < length(xs) and xs[0] == 0
+
+// A literal takes its type from the collection it is appended to, and from the other arm of
+// an `if` (TY6).
+pub def padded<F: Field, n: nat>(xs: [F; n]) -> [F; n + 1]: xs ++ [0]
+
+pub def first_or_zero<F: Field>(xs: [F]) -> F:
+    y = if 0 < length(xs) then xs[0] else 0
+    return y
+
+// An `if` with a static condition is decided at the instance: at `n = 0` the first arm is not
+// typed (TY9).
+pub def first_byte<n: nat>(xs: [byte; n]) -> byte:
+    if 1 <= n then xs[0] else 0
+
+// A range fact on an arithmetic term narrows the range of that term (TY8).
+pub def ratio(z: index<10>, x: index<5>, y: index<5>) -> nat:
+    guard y <= x else refused
+    guard 1 <= x - y else refused
+    return z / (x - y)
+
+// The index of a loop over a static range is static as a tuple position, so the loop is typed
+// per iteration and is stepped (TY10).
+pub def firsts(t: ([byte; 2], [byte; 4], [byte; 8])) -> nat:
+    mut acc: nat = 0
+    for j in 0..3:
+        acc := acc + t[j][0]
+    return acc
+
+// A relation with a `where` (SX3).
+pub relation Sorted<n: nat>(xs: [byte; n]) where (1 <= n): ∀ i ∈ 0..n - 1, xs[i] <= xs[i + 1]
+
+// A specification-only static parameter: only the relation reads it, and a goal gives it its
+// value (SP11).
+section <F: Field, n: nat, spec e: nat>:
+    pub relation NearZero(; xs: [F; n]): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+
+// A definition generic over a module parameter. `+` on `X::T` is the member `add` of the
+// interface (NL6), and `X::T` is opaque in the body (SP12): comparing two values of it would be
+// refused, because `Carrier` declares no `equal`.
+pub interface Carrier:
+    type T
+    def unit() -> T
+    def add(a: T, b: T) -> T
+
+pub module Counted: Carrier:
+    type T = nat
+    def unit(): 1
+    def add(a, b): a + b
+
+pub def twice_and_one<X: Carrier>(x: X::T) -> X::T: x + x + X::unit()
+
+// The type on the wire leaves the sender's facts out (TY14): V receives a `[F]`, and its own
+// guard gives it the size.
+pub protocol Hand<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    m <- send xs to V
+    guard @V length(m) == 8
+    guard @V m[7] == 0
+
+// The sender binds the value at the narrower type before the send: V decodes eight elements,
+// and stops with `reject` otherwise.
+pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    ys: [F; 8] = xs
+    m <- send ys to V
+    guard @V m[7] == 0
+=== M-CP4 | refuse SC5 | `programs/chaum_pedersen.zkc` with one change: a hash is not a suite
+module chaum_pedersen
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::hash::{Keccak256}
+use zkc::suites::{HashChain}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, random_oracle
+}
+
+section <G: PrimeOrderGroup>:
+    // u and v have the same discrete logarithm x with respect to the bases g and h.
+    relation SameLog(g: G, h: G, u: G, v: G; x: G::Scalar):
+        u == g * x and v == h * x
+
+    protocol ChaumPedersen roles(P, V)(
+        g: G @(P, V),
+        h: G @(P, V),
+        u: G @(P, V),
+        v: G @(P, V),
+        x: G::Scalar @P
+    ):
+        r @P <- sample G::Scalar
+        #[site(commitment)]
+        (a, b) <- send (g * r, h * r) to V
+        c <- draw G::Scalar from V to P
+        z <- send r + c * x to V
+        guard @V g * z == a + u * c
+        guard @V h * z == b + v * c
+
+    // Special soundness: two accepting runs with one commitment and two challenges.
+    def extract(g: G, h: G, u: G, v: G, runs: ChaumPedersen::Runs<2>) -> G::Scalar:
+        difference = runs[0].c - runs[1].c
+        guard difference != 0
+        return (runs[0].z - runs[1].z) / difference
+
+    // The honest verifier's view from its inputs, its challenge and a uniform response.
+    def simulate(
+        inputs: ChaumPedersen::Inputs<V>,
+        coins: ChaumPedersen::Coins<V>,
+        z: G::Scalar
+    ) -> ChaumPedersen::Received<V>:
+        ChaumPedersen::Received<V>{
+            commitment = (inputs.g * z - inputs.u * coins.c, inputs.h * z - inputs.v * coins.c),
+            z
+        }
+
+    spec for ChaumPedersen:
+        proves SameLog(g, h, u, v; x)
+        knowledge SameLog(g, h, u, v) by extract
+        zero_knowledge by simulate using coins
+        charge sites.c <= 1 / G::Scalar::Order
+
+scheme SameLogProof = ChaumPedersen<G1>:
+    construction derived(Keccak256)
+
+goal complete = completeness(SameLogProof)
+goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
+goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
+=== M-CP8 | accept, warn | `programs/chaum_pedersen.zkc` with one change: both checks at the prover: the scheme is reported (SC8)
+module chaum_pedersen
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::hash::{Keccak256}
+use zkc::suites::{HashChain}
+use zkc::security::{
+    completeness, knowledge_soundness, honest_verifier_zero_knowledge, random_oracle
+}
+
+section <G: PrimeOrderGroup>:
+    // u and v have the same discrete logarithm x with respect to the bases g and h.
+    relation SameLog(g: G, h: G, u: G, v: G; x: G::Scalar):
+        u == g * x and v == h * x
+
+    protocol ChaumPedersen roles(P, V)(
+        g: G @(P, V),
+        h: G @(P, V),
+        u: G @(P, V),
+        v: G @(P, V),
+        x: G::Scalar @P
+    ):
+        r @P <- sample G::Scalar
+        #[site(commitment)]
+        (a, b) <- send (g * r, h * r) to V
+        c <- draw G::Scalar from V to P
+        z <- send r + c * x to V
+        guard @P g * z == a + u * c
+        guard @P h * z == b + v * c
+
+    // Special soundness: two accepting runs with one commitment and two challenges.
+    def extract(g: G, h: G, u: G, v: G, runs: ChaumPedersen::Runs<2>) -> G::Scalar:
+        difference = runs[0].c - runs[1].c
+        guard difference != 0
+        return (runs[0].z - runs[1].z) / difference
+
+    // The honest verifier's view from its inputs, its challenge and a uniform response.
+    def simulate(
+        inputs: ChaumPedersen::Inputs<V>,
+        coins: ChaumPedersen::Coins<V>,
+        z: G::Scalar
+    ) -> ChaumPedersen::Received<V>:
+        ChaumPedersen::Received<V>{
+            commitment = (inputs.g * z - inputs.u * coins.c, inputs.h * z - inputs.v * coins.c),
+            z
+        }
+
+    spec for ChaumPedersen:
+        proves SameLog(g, h, u, v; x)
+        knowledge SameLog(g, h, u, v) by extract
+        zero_knowledge by simulate using coins
+        charge sites.c <= 1 / G::Scalar::Order
+
+scheme SameLogProof = ChaumPedersen<G1>:
+    construction derived(HashChain<Keccak256, Fr>)
+
+goal complete = completeness(SameLogProof)
+goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
+goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
+=== M-IPA5 | accept | `programs/inner_product.zkc` with one change: no round
+module inner_product
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::hash::{Keccak256}
+use zkc::sequence::{low, high, fold}
+use zkc::suites::{HashChain}
+use zkc::security::{completeness, knowledge_soundness, random_oracle}
+
+section <G: PrimeOrderGroup>:
+    // P = g^a h^b u^<a, b>, written additively.
+    def commitment<m: nat>(
+        g: [G; 2^m],
+        h: [G; 2^m],
+        u: G,
+        a: [G::Scalar; 2^m],
+        b: [G::Scalar; 2^m]
+    ) -> G:
+        ⟪g, a⟫ + ⟪h, b⟫ + u * ⟪a, b⟫
+
+    relation InnerProductRelation<n: nat>(
+        g: [G; 2^n], h: [G; 2^n], u: G, target: G; a: [G::Scalar; 2^n], b: [G::Scalar; 2^n]
+    ):
+        target == commitment(g, h, u, a, b)
+
+    // A non-trivial discrete-logarithm relation among the generators.
+    relation DiscreteLogRelation<n: nat>(
+        g: [G; 2^n], h: [G; 2^n], u: G; r: [G::Scalar; 2^n], s: [G::Scalar; 2^n], t: G::Scalar
+    ):
+        ⟪g, r⟫ + ⟪h, s⟫ + u * t == 0 and (∃ c ∈ r ++ s ++ [t], c != 0)
+
+    protocol InnerProduct<n: nat> roles(P, V)(
+        g: [G; 2^n] @(P, V),
+        h: [G; 2^n] @(P, V),
+        u: G @(P, V),
+        target: G @(P, V),
+        a: [G::Scalar; 2^n] @P,
+        b: [G::Scalar; 2^n] @P
+    ):
+        mut gk = g
+        mut hk = h
+        mut pk = target
+        mut ak = a
+        mut bk = b
+        for k in 0..n:
+            left <- send commitment(high(gk), low(hk), u, low(ak), high(bk)) to V
+            right <- send commitment(low(gk), high(hk), u, high(ak), low(bk)) to V
+            x <- draw nonzero<G::Scalar> from V to P
+            y = 1 / x
+            gk := fold(gk, y, x)
+            hk := fold(hk, x, y)
+            pk := left * x^2 + pk + right * y^2
+            ak := fold(ak, x, y)
+            bk := fold(bk, y, x)
+        a_last <- send ak[0] to V
+        b_last <- send bk[0] to V
+        guard @V pk == gk[0] * a_last + hk[0] * b_last + u * (a_last * b_last)
+
+    // The extractor of Bulletproofs, Theorem 1, rewinds every round four times: a tree of 4^n
+    // runs. The tree of runs over a loop of challenges has no type yet, so the statement is the
+    // formal library's, and a goal that uses this clause is reported as resting on it.
+    spec for InnerProduct:
+        proves InnerProductRelation(g, h, u, target; a, b)
+        through InnerProductRelation(gk, hk, u, pk; ak, bk) at k
+        knowledge InnerProductRelation(g, h, u, target) by external(
+            "Bulletproofs.InnerProduct.extract"
+        ) or DiscreteLogRelation(g, h, u)
+
+    // The scalars of the folded generators: s[i] is the product over the rounds j of x[j] when
+    // bit j of i is set (the most significant bit is round 0) and of y[j] otherwise.
+    def scalars<n: nat>(x: [G::Scalar; n], y: [G::Scalar; n]) -> [G::Scalar; 2^n]:
+        [(∏ j ∈ 0..n, if (i / 2^(n - j - 1)) % 2 == 1 then x[j] else y[j]) for i in 0..2^n]
+
+    // The same argument with the verifier of section 3.1 of the paper: it keeps the messages
+    // and the challenges and computes the folded generators once, at the end.
+    protocol InnerProductOnce<n: nat> roles(P, V)(
+        g: [G; 2^n] @(P, V),
+        h: [G; 2^n] @(P, V),
+        u: G @(P, V),
+        target: G @(P, V),
+        a: [G::Scalar; 2^n] @P,
+        b: [G::Scalar; 2^n] @P
+    ):
+        mut gk @P = g
+        mut hk @P = h
+        mut ak = a
+        mut bk = b
+        for k in 0..n collect (lefts = left, rights = right, xs = x, ys = y):
+            left <- send commitment(high(gk), low(hk), u, low(ak), high(bk)) to V
+            right <- send commitment(low(gk), high(hk), u, high(ak), low(bk)) to V
+            x <- draw nonzero<G::Scalar> from V to P
+            y = 1 / x
+            gk := fold(gk, y, x)
+            hk := fold(hk, x, y)
+            ak := fold(ak, x, y)
+            bk := fold(bk, y, x)
+        a_last <- send ak[0] to V
+        b_last <- send bk[0] to V
+        folded @V = target + ⟪lefts, [c^2 for c in xs]⟫ + ⟪rights, [c^2 for c in ys]⟫
+        g_last @V = ⟪g, scalars(xs, ys)⟫
+        h_last @V = ⟪h, scalars(ys, xs)⟫
+        guard @V folded == g_last * a_last + h_last * b_last + u * (a_last * b_last)
+
+    spec for InnerProductOnce:
+        proves InnerProductRelation(g, h, u, target; a, b)
+        through InnerProductRelation(
+            gk, hk, u, target + ⟪lefts, [c^2 for c in xs]⟫ + ⟪rights, [c^2 for c in ys]⟫; ak, bk
+        ) at k
+
+scheme InnerProduct8 = InnerProduct<G1, n = 0>:
+    construction derived(HashChain<Keccak256, Fr>)
+
+goal complete = completeness(InnerProduct8)
+goal extractable = knowledge_soundness(InnerProduct8, model = random_oracle(queries = 2^64))
+
+scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
+    construction derived(HashChain<Keccak256, Fr>)
+
+goal complete_once = completeness(InnerProductOnce8)

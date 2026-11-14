@@ -1,0 +1,5 @@
+module conformance::control_no_actor
+
+protocol P roles(A,B)(c:bool @(A,B)):
+    if c:
+        x = 1

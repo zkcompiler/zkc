@@ -1,0 +1,8 @@
+module conformance::grammar_later_scheme_goal
+
+scheme S = P:
+    construction interactive
+    prover A
+goal sound = soundness(S)
+entry def run() -> ():
+    return ()

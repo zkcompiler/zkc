@@ -1,0 +1,5 @@
+module conformance::facts_unguarded_index
+
+def f(xs:[nat;8],i:nat) -> nat:
+    y = xs[i]
+    return y

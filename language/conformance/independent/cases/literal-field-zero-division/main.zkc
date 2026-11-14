@@ -1,0 +1,4 @@
+module conformance::literal_field_zero_division
+
+type F = primitive("koala-bear")
+def f(x:F) -> F: x / 0

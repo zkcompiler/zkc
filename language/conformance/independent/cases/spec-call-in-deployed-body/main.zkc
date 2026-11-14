@@ -1,0 +1,4 @@
+module conformance::spec_call_in_deployed_body
+
+spec def helper(x:nat) -> nat: x
+def f(x:nat) -> nat: helper(x)

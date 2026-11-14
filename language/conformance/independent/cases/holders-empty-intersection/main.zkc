@@ -1,0 +1,4 @@
+module conformance::holders_empty_intersection
+
+protocol P roles(A,B)(a:nat @A,b:nat @B):
+    c = a + b

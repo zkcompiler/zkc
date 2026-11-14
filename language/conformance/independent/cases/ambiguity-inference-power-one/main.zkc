@@ -1,0 +1,4 @@
+module conformance::ambiguity_inference_power_one
+
+def f<n:nat>(xs:[bool;1^n]) -> nat: n
+def main(xs:[bool;1]) -> nat: f(xs)

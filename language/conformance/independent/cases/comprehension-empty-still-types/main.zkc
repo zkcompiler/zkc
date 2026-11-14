@@ -1,0 +1,3 @@
+module conformance::comprehension_empty_still_types
+
+def f() -> [bool;0]: [true + false for i in 0..0]

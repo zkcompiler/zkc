@@ -1,0 +1,9 @@
+module conformance::interface_partial_member
+
+interface I:
+    partial def f(x:nat) -> nat
+module M:I:
+    def f(x):
+        guard x != 0
+        return x
+def main(x:nat) -> nat: M::f(x)

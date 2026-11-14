@@ -7,6 +7,7 @@
 | `libraries/` | Reusable `.zkc` libraries, their public interfaces and protocol contracts |
 | `examples/projects/` | Separately authored Entries and invocation inputs |
 | `examples/relations/` | Relation data JSON |
+| [`language/`](../../language/README.md) | The source language of the compiler route in Lean: reference, library and worked programs in source, conformance tests |
 | `lean/` | Shared formal documentation and tooling; no root Lake package |
 | `lean/program/`, `lean/ir/`, `lean/protocol/`, `lean/verification/` | Independent semantic packages with a Program → IR/Protocol → Verification dependency diamond |
 | `lean/adapters/arklib/`, `lean/adapters/clean/` | Pure upstream adapters |

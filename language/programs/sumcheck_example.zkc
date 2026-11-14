@@ -1,0 +1,14 @@
+// A scheme of layer C and goals of layer B over a protocol of layer A.
+module sumcheck_example
+
+use sumcheck<Fr>::{Sumcheck}
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381}
+use zkc::security::{completeness, soundness, random_oracle}
+
+scheme Proof = Sumcheck<10>:
+    construction derived(Merlin3Bls12381)
+
+goal complete = completeness(Proof) <= 0
+goal sound = soundness(Proof, model = random_oracle(queries = 2^100)) <= 2^-128
+goal ideal_sound = soundness(Proof, model = random_oracle(queries = 2^100), stage = constructed)

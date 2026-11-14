@@ -1,0 +1,42 @@
+// Layer A. It states no specification. A specification of it would name an extractor and a
+// simulator after `by`, and both would be `def`s, as is every function that a `knowledge` or
+// `zero_knowledge` clause names.
+module sigma_or
+
+pub enum Witness<G: PrimeOrderGroup>:
+    Left(G::Scalar)
+    Right(G::Scalar)
+
+// A proof that the prover knows the discrete logarithm of x0 or of x1. Both matches are
+// private to P: no message tells V which alternative P holds.
+pub protocol Or<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V), x0: G @(P, V), x1: G @(P, V),
+    witness: Witness<G> @P
+):
+    nonce @P <- sample G::Scalar
+    simulated_challenge @P <- sample G::Scalar
+    simulated_response @P <- sample G::Scalar
+    mut a0 = base * nonce
+    mut a1 = base * nonce
+    match witness:
+        case Witness::Left(_):
+            a1 := base * simulated_response - x1 * simulated_challenge
+        case Witness::Right(_):
+            a0 := base * simulated_response - x0 * simulated_challenge
+    commitments <- send (a0, a1) to V
+    challenge <- draw G::Scalar from V to P
+    mut e0 = simulated_challenge
+    mut e1 = simulated_challenge
+    mut z0 = simulated_response
+    mut z1 = simulated_response
+    match witness:
+        case Witness::Left(w):
+            e0 := challenge - simulated_challenge
+            z0 := nonce + e0 * w
+        case Witness::Right(w):
+            e1 := challenge - simulated_challenge
+            z1 := nonce + e1 * w
+    reply <- send (e0, e1, z0, z1) to V
+    guard @V reply.0 + reply.1 == challenge
+    guard @V base * reply.2 == commitments.0 + x0 * reply.0
+    guard @V base * reply.3 == commitments.1 + x1 * reply.1

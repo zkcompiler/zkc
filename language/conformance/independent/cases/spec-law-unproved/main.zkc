@@ -1,0 +1,4 @@
+module conformance::spec_law_unproved
+
+def f(x:nat) -> nat: x + 1
+law impossible(): false

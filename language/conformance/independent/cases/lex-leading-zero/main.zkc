@@ -1,0 +1,3 @@
+module conformance::lex_leading_zero
+
+def f() -> nat: 01

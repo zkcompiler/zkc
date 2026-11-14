@@ -1,0 +1,6 @@
+module conformance::facts_guarded_index
+
+def f(xs:[nat;8],i:nat) -> nat:
+    guard i < 8 else refused
+    y = xs[i]
+    return y

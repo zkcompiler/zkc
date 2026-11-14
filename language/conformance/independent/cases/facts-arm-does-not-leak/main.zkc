@@ -1,0 +1,6 @@
+module conformance::facts_arm_does_not_leak
+
+def f(xs:[nat],c:bool) -> nat:
+    if c:
+        guard 0 < length(xs)
+    return xs[0]

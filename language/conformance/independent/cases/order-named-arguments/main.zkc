@@ -1,0 +1,11 @@
+module conformance::order_named_arguments
+
+def fail_abort() -> nat:
+    guard false else abort
+    return 0
+def fail_refused() -> nat:
+    guard false else refused
+    return 0
+def take(a:nat,b:nat) -> nat: a
+
+def main() -> nat: take(b=fail_refused(),a=fail_abort())

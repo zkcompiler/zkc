@@ -1,0 +1,16 @@
+// Layer A, carried. The vocabulary gives `Fr` the members of a field over its prime field and
+// of a `Ring`; the scalar of a group is a `Ring`, and `Fr` is one.
+module zkc::curves::bls12_381
+
+// Standard library, layer 2. The groups and the pairing of BLS12-381, bound once.
+
+use zkc::algebra::{Pairing}
+
+// [rows bls12-381.fr, bls12-381.g1, bls12-381.g2, bls12-381.gt]
+pub type Fr = primitive("bls12-381.fr")
+pub type G1 = primitive("bls12-381.g1")
+pub type G2 = primitive("bls12-381.g2")
+pub type Gt = primitive("bls12-381.gt")
+
+// [row bls12-381]
+pub module Bls12381: Pairing = primitive("bls12-381")

@@ -1,0 +1,6 @@
+module conformance::infer_no_bound_from_fact
+
+def bound<n: nat>(x: index<n>) -> nat: x
+def main(x: nat) -> nat:
+    guard x < 8
+    return bound(x)

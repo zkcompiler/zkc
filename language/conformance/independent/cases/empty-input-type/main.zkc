@@ -1,0 +1,3 @@
+module conformance::empty_input_type
+
+def f(x:index<0>) -> index<0>: x

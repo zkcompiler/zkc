@@ -1,0 +1,6 @@
+module conformance::facts_mut_guard
+
+def f() -> index<8>:
+    mut x = 1
+    guard x < 8
+    return x

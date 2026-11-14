@@ -1,0 +1,5 @@
+module conformance::events_conflicting_site_name
+
+protocol P roles(A,B)():
+    #[site(other)]
+    x <- draw bool from A to B

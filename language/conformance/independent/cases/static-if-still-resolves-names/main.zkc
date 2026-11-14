@@ -1,0 +1,4 @@
+module conformance::static_if_still_resolves_names
+
+def pick<n:nat>() -> nat: if n == 0 then 7 else absent
+def main() -> nat: pick<n=0>()

@@ -1,0 +1,47 @@
+// Layer D, carried and not frozen. To change: `committed` becomes a `def`; it reads one run, so
+// the clause claims the charges as its bound; `e` becomes `spec e: nat`, given by the goals; a
+// ceiling at `committed` or later needs the budget of the commitment's model; the goals rest on
+// the extractability of the commitment.
+module spot_check
+
+use zkc::coset::{Coset}
+use zkc::fields::{KoalaBear}
+use zkc::hash::{Keccak256}
+use zkc::merkle::{Tree}
+use zkc::oracle::{table}
+use zkc::polynomial::{evaluate}
+use zkc::suites::{HashChain}
+use zkc::security::{completeness, knowledge_soundness, random_oracle}
+
+// A table of 2^k rows is committed; q random rows are compared with the values of a public
+// polynomial of d coefficients on a public coset. e is the number of wrong rows that the
+// soundness statement tolerates.
+section <F: TwoAdicField, k: nat, d: nat, q: nat, e: nat> where (k <= F::TwoAdicity):
+    def tabulate(p: [F; d], domain: Coset<F, k>) -> [F; 2^k]:
+        [evaluate(p, domain[i]) for i in 0..2^k]
+
+    // All but at most e rows are the values of the polynomial on the domain.
+    relation Near(p: [F; d], domain: Coset<F, k>; rows: [F; 2^k]):
+        (∑ i ∈ 0..2^k, if rows[i] == evaluate(p, domain[i]) then 0 else 1) <= e
+
+    // One protocol: the prover commits the table, the verifier checks q rows of it.
+    protocol SpotCheck roles(P, V)(p: [F; d] @(P, V), domain: Coset<F, k> @(P, V)):
+        codeword <- send tabulate(p, domain) to V as oracle<table<F, 2^k>>
+        positions <- draw [index<2^k>; q] from V to P
+        rows <- query codeword at positions
+        guard @V ∀ j ∈ 0..q, rows[j] == evaluate(p, domain[positions[j]])
+
+    // The witness is the table that the run committed: an extractor that reads one run.
+    spec def committed(p: [F; d], domain: Coset<F, k>, runs: SpotCheck::Runs<1>) -> [F; 2^k]:
+        runs[0].codeword
+
+    spec for SpotCheck:
+        knowledge Near(p, domain) by committed
+        charge sites.positions <= (1 - e / 2^k)^q
+
+scheme Checked = SpotCheck<KoalaBear, k = 10, d = 4, q = 40, e = 256>:
+    construction derived(HashChain<Keccak256, KoalaBear>)
+    commit table<_, _> with Tree<Keccak256>
+
+goal complete = completeness(Checked)
+goal sound = knowledge_soundness(Checked, model = random_oracle(queries = 2^64)) <= 2^-16

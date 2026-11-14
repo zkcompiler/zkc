@@ -1,0 +1,13 @@
+module conformance::match_exhaustive_payloads
+
+enum Choice:
+    Left(nat)
+    Right(bool)
+def f(v:Choice) -> nat:
+    mut result = 0
+    match v:
+        case Choice::Left(n):
+            result := n
+        case Choice::Right(b):
+            result := if b then 1 else 0
+    return result

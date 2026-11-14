@@ -1,0 +1,4 @@
+module conformance::names_recursive_instance
+
+def f(x: nat) -> nat: g(x)
+def g(x: nat) -> nat: f(x)

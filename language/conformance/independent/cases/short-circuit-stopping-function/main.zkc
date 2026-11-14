@@ -1,0 +1,6 @@
+module conformance::short_circuit_stopping_function
+
+def fail() -> bool:
+    guard false else exhausted
+    return true
+def f() -> bool: false and fail()

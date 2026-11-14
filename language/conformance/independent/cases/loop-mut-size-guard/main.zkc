@@ -1,0 +1,8 @@
+module conformance::loop_mut_size_guard
+
+def f() -> [nat;3]:
+    mut xs: [nat] = []
+    for i in 0..3:
+        xs := xs ++ [i]
+    guard length(xs) == 3
+    return xs

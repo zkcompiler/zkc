@@ -1,0 +1,3 @@
+module conformance::size_runtime_rejected
+
+def f(n: nat, xs: [bool;n]) -> nat: n

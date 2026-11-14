@@ -1,0 +1,7 @@
+module conformance::grammar_later_contract
+
+relation R(x:nat; w:nat): x == w
+spec for P:
+    requires true
+    proves exact: R(x;w)
+    zero_knowledge by external("review.zk")

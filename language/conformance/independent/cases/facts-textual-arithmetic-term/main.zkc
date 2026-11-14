@@ -1,0 +1,5 @@
+module conformance::facts_textual_arithmetic_term
+
+def f(xs:[nat;8],i:nat) -> nat:
+    guard i + 1 < 8
+    return xs[i + 1]

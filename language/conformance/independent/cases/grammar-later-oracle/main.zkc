@@ -1,0 +1,8 @@
+module conformance::grammar_later_oracle
+
+oracle def view<K:Kind>(parent:Oracle<K>): K:
+    at i: i
+protocol P roles(A,B)(xs:[nat;2] @A):
+    h <- send xs to B as oracle<table<nat,2>>
+    pending <- query h from A at [0] deferred
+    open pending

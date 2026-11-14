@@ -1,0 +1,64 @@
+// Layer C, carried and not frozen. To change: the field leaf is one function over
+// `F: Field`, written over `F::components`; the law that a reader accepts only what the
+// writer wrote, as TY14 states it (deterministic, canonical prefix only, the suffix left, no
+// unit for `()` or an empty sized collection); `read_natural` and `read_field` are to form
+// their value by an expression whose range is a fact, not in a `mut`
+// accumulator.
+module zkc::layout
+
+// Core library.
+
+use zkc::option::{Option}
+
+// [item] How the leaves of a value are written as units. The writer and the reader of a
+// tuple, a record, a variant, a collection and an element of an extension field are generated
+// from these members (`L::write<T>`, `L::read<T>`); a reader returns the value and the number of
+// units it took, or `None`. A natural that crosses is below 2^64.
+pub interface Layout:
+    type Unit
+    def write_natural(n: index<2^64>) -> [Unit]
+    def read_natural(units: [Unit]) -> Option<(index<2^64>, nat)>
+    def write_field<F: PrimeField>(x: F) -> [Unit]
+    def read_field<F: PrimeField>(units: [Unit]) -> Option<(F, nat)>
+    def write_group<G: Group>(x: G) -> [Unit]
+    def read_group<G: Group>(units: [Unit]) -> Option<(G, nat)>
+    law natural(n: index<2^64>, rest: [Unit]):
+        read_natural(write_natural(n) ++ rest) == Some((n, length(write_natural(n))))
+    law field<F: PrimeField>(x: F, rest: [Unit]):
+        read_field<F>(write_field(x) ++ rest) == Some((x, length(write_field(x))))
+    law group<G: Group>(x: G, rest: [Unit]):
+        read_group<G>(write_group(x) ++ rest) == Some((x, length(write_group(x))))
+
+// [item] [source] The layout of a scheme without a `layout` line: bytes; a natural as eight
+// bytes and an element of a prime field as `F::Bytes` bytes, least significant first; a group
+// element in the compressed encoding of the vocabulary.
+pub module canonical: Layout:
+    type Unit = byte
+
+    def write_natural(n): [(n / 256^i) % 256 for i in 0..8]
+
+    def read_natural(units):
+        mut result: Option<(index<2^64>, nat)> = None
+        if 8 <= length(units):
+            mut value = 0
+            for i in 0..8:
+                value := value * 256 + units[7 - i]
+            result := Some((value, 8))
+        return result
+
+    def write_field(x): [(F::to_nat(x) / 256^i) % 256 for i in 0..F::Bytes]
+
+    // Refuses an encoding that is not below the order: the encoding is canonical.
+    def read_field(units):
+        mut result: Option<(F, nat)> = None
+        if F::Bytes <= length(units):
+            mut value = 0
+            for i in 0..F::Bytes:
+                value := value * 256 + units[F::Bytes - 1 - i]
+            if value < F::Order:
+                result := Some((F::from_nat(value), F::Bytes))
+        return result
+
+    // [rows group.to_bytes, group.from_bytes]
+    def write_group(x) = primitive("group.to_bytes")
+    def read_group(units) = primitive("group.from_bytes")

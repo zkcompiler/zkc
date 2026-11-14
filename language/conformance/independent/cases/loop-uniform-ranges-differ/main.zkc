@@ -1,0 +1,5 @@
+module conformance::loop_uniform_ranges_differ
+
+protocol P roles(A,B)():
+    for i in 0..3 collect (values = m):
+        m <- send i from A to B

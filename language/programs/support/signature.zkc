@@ -1,0 +1,17 @@
+// Layer C, carried: rows of a project. `nonce` and `commitment` are deployed `def`s, as every
+// function that a scheme line names must be.
+module signature
+
+// Project library of the Schnorr signature example.
+
+use zkc::construction
+use zkc::curves::bls12_381::{G1}
+
+pub module Suite: construction::Suite = primitive("suite.schnorr-signature")
+pub def nonce(
+    secret: G1::Scalar, statement: [byte], site: nat, tries: nat
+) -> [byte; 64] = primitive("signature.nonce")
+pub def commitment(
+    statement: [byte], challenge: G1::Scalar, response: G1::Scalar
+) -> G1 = primitive("signature.commitment")
+pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")

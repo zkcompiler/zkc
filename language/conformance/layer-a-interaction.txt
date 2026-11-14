@@ -1,0 +1,1182 @@
+Conformance tests of layer A (frozen): holders, events, guards, control, role maps, linearity (HO, EV, GU, CT, RM, LN).
+One block per test: `=== ID | expect | note`, then the program. See README.md.
+
+=== T-P7 | refuse EV1 | a function bound with `<-`
+module t
+def g(a: nat) -> nat: a
+protocol X roles(P, V)():
+    x <- g(1)
+=== T-P8 | refuse EV2 | an event after `=`
+module t
+protocol X roles(P, V)(x: nat @P):
+    y = send x to V
+=== T-P9 | refuse RM1 | a positional role map
+module t
+protocol C roles(O, R)():
+    x <- send 1 from O to R
+protocol X roles(P, V)():
+    y <- C() @(P, V)
+=== T-P10 | refuse CT1 | `roles(…)` on a loop has no production
+module t
+protocol X roles(P, V)():
+    for i in 0..3 roles(P, V):
+        x <- send i from P to V
+=== T-P11 | refuse HO3 | `@` after an event
+module t
+protocol X roles(P, V)(e: nat @P):
+    x <- send e to V @P
+=== T-H1 | refuse HO1 HO2 | no role can form the expression
+module t
+protocol X roles(P, V, W)(a: nat @P, b: nat @V):
+    x = a + b
+=== T-H2 | accept, fmt | a binder annotation equal to the computed holders
+module t
+protocol X roles(P, V)(a: nat @(P, V), b: nat @(P, V)):
+    x @(P, V) = a + b
+=== T-H3 | refuse HO2 | a binder annotation that is not a subset
+module t
+protocol X roles(P, V, W)(a: nat @(P, V)):
+    x @(P, W) = a
+=== T-H4 | refuse EV5 | two possible senders
+module t
+protocol X roles(P, V, W)(e: nat @(P, W)):
+    y <- send e to V
+=== T-H5 | refuse GU2 | a guard without roles
+module t
+protocol X roles(P, V, W)(c: bool @(P, V)):
+    guard c
+=== T-H6 | accept | `guard @V c` with one holder is the canonical form and is kept
+module t
+protocol X roles(P, V, W)(c: bool @V):
+    guard @V c
+=== T-H7 | refuse CT2 | a participant that does not hold the condition
+module t
+protocol X roles(P, V, W)(c: bool @P, x: nat @P):
+    if c:
+        y <- send x to V
+=== T-H9 | refuse EV5 | a literal is held by every role, so the sender is written
+module t
+protocol T roles(P, V, W)(n: index<5> @(P, V, W)):
+    for i in 0..n:
+        x = 1
+        y <- send x to V
+=== T-H9b | accept | the same loop with `from P`; its participants are P and V
+module t
+protocol T roles(P, V, W)(n: index<5> @(P, V, W)):
+    for i in 0..n:
+        x = 1
+        y <- send x from P to V
+=== T-H10b | accept | the binding restricted to the role that holds the fact
+module t
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(xs: [F; 8] @(P, V), k: nat @(P, V)):
+    guard @V k < 8
+    x @V = xs[k]
+=== T-H11 | accept | an operation without operands, restricted to one role
+module t
+type F = primitive("bls12-381.fr")
+def blob_domain() -> F: 7
+protocol X roles(P, V)():
+    unity @V = blob_domain()
+    guard @V unity == 7
+=== T-E1 | refuse EV3 | two events with one name
+module t
+protocol X roles(P, V)(a: nat @P):
+    x <- send a to V
+    if x == 0:
+        x <- send a to V
+=== T-E1b | refuse EV3 | two events bound to one name in one suite
+module t
+protocol X roles(P, V)(a: nat @P):
+    x <- send a to V
+    x <- send a to V
+=== T-E2 | accept, fmt | `#[site(x)]` equal to the binder
+module t
+protocol X roles(P, V)(a: nat @P):
+    #[site(x)]
+    x <- send a to V
+=== T-E3 | refuse EV3 | `#[site(y)]` on a binder named x
+module t
+protocol X roles(P, V)(a: nat @P):
+    #[site(y)]
+    x <- send a to V
+=== T-E6 | accept | a send to two receivers is one site with two parts (EV5)
+module t
+type F = primitive("bls12-381.fr")
+protocol X roles(D, P, V)():
+    s @D <- sample F
+    told <- send s to P, V
+=== T-E7 | refuse RM1 | a callee role without a namesake
+module t
+protocol C roles(O, R)():
+    x <- send 1 from O to R
+protocol X roles(P, V)():
+    y <- C()
+=== T-E8 | accept, fmt | a role mapped to its namesake
+module t
+protocol C roles(P, R)():
+    x <- send 1 from P to R
+protocol X roles(P, V)():
+    y <- C() @(P = P, R = V)
+=== T-E9 | refuse HO5 | `attempt` without its role
+module t
+protocol X roles(P, V)():
+    k <- attempt
+=== S-A1 | refuse GU2 | the forgotten send; the guard names V, and V does not hold `response`
+module t
+type G = primitive("bls12-381.g1")
+protocol Schnorr roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response = nonce + challenge * scalar
+    guard @V base * response == commitment + point * challenge
+=== S-A1b | refuse GU2 | a guard in a protocol names the roles that check
+module t
+type G = primitive("bls12-381.g1")
+protocol Schnorr roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response = nonce + challenge * scalar
+    guard base * response == commitment + point * challenge
+=== S-Z1 | refuse CT6 | a range `a..b` with `a > b`
+module t
+type F = primitive("bls12-381.fr")
+def stretch<a: nat, b: nat>() -> [F; b]:
+    mut xs: [F] = [0; a]
+    for i in a..b:
+        xs := xs ++ [0]
+    guard length(xs) == b
+    return xs
+// instantiate: stretch<a = 5, b = 2>
+=== S-H1 | accept | a send to two receivers; agreement among them rests on the sender (EV5)
+module t
+type F = primitive("bls12-381.fr")
+protocol Deal roles(D, P, V)() -> total: F @(P, V):
+    share @D <- sample F
+    told <- send share to P, V
+    return told
+=== I-5c | refuse CT2 | a stopping operation without operands in a branch private to P acts at every role
+module t
+def may_stop() -> nat:
+    guard 1 < 2 else refused
+    return 0
+protocol Ambiguous roles(P, V)(condition: bool @P):
+    if condition:
+        value = may_stop()
+=== I-8a | refuse CT2 | an event with V inside the private match
+module t
+type G = primitive("bls12-381.g1")
+enum Witness:
+    Left(G::Scalar)
+    Right(G::Scalar)
+protocol Or roles(P, V)(witness: Witness @P):
+    match witness:
+        case Witness::Left(w):
+            a <- send w to V
+        case Witness::Right(w):
+            ()
+=== R-EV1a | accept | an application without results needs no binder (EV1)
+module t
+type F = primitive("bls12-381.fr")
+protocol Check roles(P, V)(x: F @(P, V)):
+    m <- send x from P to V
+    guard @V m == x
+protocol X roles(A, B)(x: F @(A, B)):
+    Check(x) @(P = A, V = B)
+    #[site(second)]
+    Check(x) @(P = A, V = B)
+=== R-EV1b | refuse EV1 | an application with results binds them
+module t
+type F = primitive("bls12-381.fr")
+protocol Echo roles(P, V)(x: F @P) -> y: F @(P, V):
+    m <- send x to V
+    return m
+protocol X roles(P, V)(x: F @P):
+    Echo(x)
+=== R-EV1c | refuse EV1 | a call of a function is not a statement
+module t
+type F = primitive("bls12-381.fr")
+def double(x: F) -> F: x + x
+protocol X roles(P, V)(x: F @P):
+    double(x)
+    m <- send x to V
+=== V-F2b | accept | per role: the binding restricted to the verifier
+module t
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(xs: [F] @(P, V), k: nat @(P, V)):
+    guard @V k < length(xs)
+    y @V = xs[k]
+    guard @V y == 0
+=== V-F12 | accept | a protocol `if` evaluated by both roles gives each its fact (sound)
+module t
+type F = primitive("bls12-381.fr")
+protocol X roles(P, V)(xs: [F] @(P, V), k: nat @(P, V)):
+    if k < length(xs):
+        y = xs[k]
+        guard @V y == 0
+=== N-CT1a | accept | in a protocol body an `if` with a static condition is no choice: it has no participants, so V need not hold a condition (CT1)
+module t
+pub protocol X<n: nat> roles(P, V)(x: [byte; n] @P):
+    if 1 <= n:
+        m <- send x[0] to V
+=== N-CT4a | accept | in a function a loop over a range that a run-time natural ends is allowed; the natural is a variable of the cost (CT4, FN7)
+module t
+def triangle(n: nat) -> nat:
+    mut acc: nat = 0
+    for i in 0..n:
+        acc := acc + i
+    return acc
+=== M-SUM2 | refuse GU2 | `programs/sumcheck.zkc` with one change: a guard without its roles
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)
+=== M-SUM7 | refuse HO1 | `programs/sumcheck.zkc` with one change: a coin that P never receives
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge @V <- sample F
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)
+=== M-SCH1 | refuse GU2 | `programs/schnorr.zkc` with one change: the forgotten send
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response = nonce + challenge * scalar
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order
+=== M-SCH4 | refuse HO5 | `programs/schnorr.zkc` with one change: a sample without its role
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order
+=== M-SCH5 | refuse HO3 | `programs/schnorr.zkc` with one change: `@` after an event
+module schnorr
+
+pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
+    point == base * scalar
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V @P
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
+
+// The tree function of special soundness: two accepting runs with one commitment and different
+// challenges. The tree guarantees the condition of the guard.
+pub def response_difference<G: PrimeOrderGroup>(
+    base: G, point: G, runs: Schnorr<G>::Runs<2>
+) -> G::Scalar:
+    gap = runs[0].challenge - runs[1].challenge
+    guard gap != 0
+    return (runs[0].response - runs[1].response) / gap
+
+// The simulator of the honest verifier's view: its inputs, its coins, and one uniform scalar.
+pub def simulate<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    coins: Schnorr<G>::Coins<V>,
+    response: G::Scalar
+) -> Schnorr<G>::Received<V>:
+    Schnorr<G>::Received<V>{
+        commitment = inputs.base * response - inputs.point * coins.challenge,
+        response
+    }
+
+// The simulator of a derived scheme: it chooses the challenge, and the experiment programs the
+// random oracle to return it. Its randomness is a pair: the challenge and the response.
+pub def simulate_programmed<G: PrimeOrderGroup>(
+    inputs: Schnorr<G>::Inputs<V>,
+    randomness: (G::Scalar, G::Scalar)
+) -> (Schnorr<G>::Received<V>, Schnorr<G>::Coins<V>):
+    challenge = randomness.0
+    response = randomness.1
+    return (
+        Schnorr<G>::Received<V>{
+            commitment = inputs.base * response - inputs.point * challenge,
+            response
+        },
+        Schnorr<G>::Coins<V>{challenge}
+    )
+
+spec for Schnorr:
+    proves DLog(base, point; scalar)
+    knowledge DLog(base, point) by response_difference
+    zero_knowledge honest: by simulate using coins
+    zero_knowledge programmed: by simulate_programmed using programming
+    charge sites.challenge <= 1 / G::Scalar::Order
+=== M-GKR2 | accept | `programs/gkr.zkc` with one change: without the restriction both roles compute `below`
+module gkr<F: Field>
+
+use sumcheck<F>::{Reduce}
+use zkc::multilinear
+use zkc::polynomial::{evaluate}
+use circuits::layered<F>::{
+    Circuit, Gate, values, gate_state, summand, restriction, on_line, wiring, combine
+}
+
+pub relation Outputs<d: nat, w: nat>(c: Circuit<d, w>, inputs: [F; 2^w], outputs: [F; 2^w]):
+    outputs == values(c, inputs, 0)
+
+pub relation LayerValue<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d + 1>, point: [F; w], value: F
+):
+    value == multilinear::evaluate(values(c, inputs, layer), point)
+
+pub protocol Gkr<d: nat, w: nat> roles(P, V)(
+    c: Circuit<d, w> @(P, V),
+    inputs: [F; 2^w] @(P, V),
+    outputs: [F; 2^w] @(P, V)
+):
+    z0 <- draw [F; w] from V to P
+    mut z = z0
+    mut v = multilinear::evaluate(outputs, z0)
+    for i in 0..d:
+        below = values(c, inputs, i + 1)
+        reduced <- Reduce<Gate, rounds = 2 * w>(
+            gate_state(c, i, z, below), [], v, spec p = summand(c, inputs, i, z)
+        )
+        q <- send restriction(below, reduced.point) to V
+        guard @V reduced.value == combine(
+            wiring(c, i, z, reduced.point), evaluate(q, 0), evaluate(q, 1)
+        )
+        t <- draw F from V to P
+        z := on_line<w>(reduced.point, t)
+        v := evaluate(q, t)
+    guard @V v == multilinear::evaluate(inputs, z)
+
+spec for Gkr:
+    proves @V Outputs(c, inputs, outputs)
+    through LayerValue(c, inputs, i, z, v) at i
+    charge sites.z0 <= w / F::Order
+    charge sites.t <= w / F::Order
+--- file
+module sumcheck<F: Field>
+
+use zkc::multilinear::{fix_first, evaluate}
+use zkc::polynomial::{
+    MvPoly, Poly, value, first_variable, restrict, restrict_prefix, line, extension, cube,
+    evaluate_at
+}
+
+// The values of a multilinear polynomial in v variables on the Boolean cube, first variable
+// most significant.
+pub type Table<v: nat> = [F; 2^v]
+
+// The sums of the two halves.
+pub def sums<v: nat>(table: Table<v + 1>) -> (F, F):
+    (sum(table[0..2^v]), sum(table[2^v..2^(v + 1)]))
+
+// One round of a sumcheck over a polynomial of degree at most Degree in each variable.
+pub interface Round:
+    nat Degree
+    type State<v: nat>
+    type Message
+    def message<v: nat>(state: State<v + 1>) -> Message
+    def bind<v: nat>(state: State<v + 1>, r: F) -> State<v>
+    def boundary(m: Message) -> F
+    def evaluate(m: Message, r: F) -> F
+    spec def table<v: nat>(state: State<v>) -> MvPoly<F, v, Degree>
+    spec def polynomial(m: Message) -> Poly<F, Degree>
+    law sent<v: nat>(s: State<v + 1>): polynomial(message(s)) == first_variable(table(s))
+    law bound<v: nat>(s: State<v + 1>, r: F): table(bind(s, r)) == restrict(table(s), r)
+    law ends(m: Message): boundary(m) == value(polynomial(m), 0) + value(polynomial(m), 1)
+    law at_point(m: Message, r: F): evaluate(m, r) == value(polynomial(m), r)
+
+// Rounds over a multilinear table: the sums of its two halves.
+pub module Pairs: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state): sums(state)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r): (1 - r) * m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.1)
+
+// The sum of p over the Boolean cube, after its first k variables are fixed to point, is value.
+pub relation PartialSum<D: nat, n: nat, k: nat>(p: MvPoly<F, n + k, D>, point: [F; k], value: F):
+    value == ∑ b ∈ cube<F, n>(), evaluate_at(p, point ++ b)
+
+// `rounds` rounds of sumcheck: a claim about p with k variables fixed becomes a claim with
+// k + rounds variables fixed.
+pub protocol Reduce<R: Round, v: nat, k: nat, rounds: nat> roles(P, V)(
+    spec p: MvPoly<F, v + rounds + k, R::Degree>,
+    state: R::State<v + rounds> @P,
+    prefix: [F; k] @(P, V),
+    claim: F @(P, V)
+) -> (point: [F; k + rounds] @(P, V), value: F @(P, V), residual: R::State<v> @P):
+    mut s = state
+    mut running = claim
+    for i in 0..rounds collect (challenges = challenge):
+        round <- send R::message(s) to V
+        guard @V running == R::boundary(round)
+        challenge <- draw F from V to P
+        s := R::bind(s, challenge)
+        running := R::evaluate(round, challenge)
+    return (prefix ++ challenges, running, s)
+
+spec for Reduce:
+    requires R::table(state) == restrict_prefix(p, prefix)
+    ensures R::table(residual) == restrict_prefix(p, point)
+    reduces @V PartialSum(p, prefix, claim) to PartialSum(p, point, value)
+    through PartialSum(p, prefix ++ challenges, running) at i
+    invariant R::table(s) == restrict_prefix(p, prefix ++ challenges) at i
+    charge sites.challenge <= R::Degree / F::Order
+
+pub relation Sum<n: nat>(values: Table<n>, claim: F):
+    claim == ∑ v ∈ values, v
+
+pub protocol Sumcheck<n: nat> roles(P, V)(
+    values: Table<n> @(P, V),
+    claim: F @(P, V)
+):
+    reduced <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V reduced.value == evaluate(values, reduced.point)
+
+spec for Sumcheck:
+    proves @V Sum(values, claim)
+--- file
+module circuits::layered<F: Field>
+
+// Project library of the GKR example: layered circuits, bound to rows of the project.
+
+use sumcheck<F>::{Round}
+use zkc::polynomial::{MvPoly, Poly}
+
+// A circuit of d layers of 2^w gates; layer 0 is the outputs and layer d the inputs.
+pub type Circuit<d: nat, w: nat> = primitive("circuit.layered", F, d, w)
+
+pub def values<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d + 1>
+) -> [F; 2^w] = primitive("circuit.values")
+
+// Rounds over the gate polynomial of one layer: degree 2 in each of 2 * w variables.
+pub module Gate: Round:
+    nat Degree = 2
+    type State<v: nat> = primitive("circuit.gate_state", F, v)
+    type Message = (F, F, F)
+    def message(state) = primitive("circuit.gate_message")
+    def bind(state, r) = primitive("circuit.gate_bind")
+    def boundary(m): m.0 + m.1
+    def evaluate(m, r) = primitive("circuit.gate_evaluate")
+    spec def table(state) = external("Zkc.Circuit.gateTable")
+    spec def polynomial(m) = external("Zkc.Circuit.gatePolynomial")
+
+pub def gate_state<d: nat, w: nat>(
+    c: Circuit<d, w>, layer: index<d>, z: [F; w], below: [F; 2^w]
+) -> Gate::State<2 * w> = primitive("circuit.gate_state_of")
+pub spec def summand<d: nat, w: nat>(
+    c: Circuit<d, w>, inputs: [F; 2^w], layer: index<d>, z: [F; w]
+) -> MvPoly<F, 2 * w, 2> = external("Zkc.Circuit.summand")
+// The coefficients of the restriction of the layer below to the line through the two points.
+pub def restriction<w: nat>(
+    below: [F; 2^w], pair: [F; 2 * w]
+) -> [F; w + 1] = primitive("circuit.restriction")
+pub def on_line<w: nat>(pair: [F; 2 * w], t: F) -> [F; w] = primitive("circuit.on_line")
+pub def wiring<d: nat, w: nat>(
+    c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
+) -> (F, F) = primitive("circuit.wiring")
+pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")
+=== M-FRA10 | refuse RM1 | `programs/fragments.zkc` with one change: a callee role without a namesake
+module fragments
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::option::{Option}
+
+pub struct Pair<T>:
+    pub left: T
+    pub right: T
+
+pub linear struct Ticket<F: Field>:
+    point: [F]
+    value: F
+
+pub enum Side:
+    Left
+    Right
+
+pub def pick<T>(pair: Pair<T>, side: Side) -> T:
+    Pair{left, right} = pair
+    mut chosen = left
+    match side:
+        case Left:
+            ()
+        case Right:
+            chosen := right
+    return chosen
+
+pub def swap<T>(pair: Pair<T>) -> Pair<T>: {pair with left = pair.right, right = pair.left}
+
+// `+` on `Pair<F>` is this function: the fixed name `add` in the home module of `Pair`. With
+// `zero`, the type also has `∑`.
+pub def add<F: Field>(a: Pair<F>, b: Pair<F>) -> Pair<F>:
+    Pair{left = a.left + b.left, right = a.right + b.right}
+
+pub def zero<F: Field>() -> Pair<F>: Pair{left = 0, right = 0}
+
+pub def twice<F: Field>(a: Pair<F>) -> Pair<F>: a + a
+
+pub def redeem<F: Field>(ticket: Ticket<F>) -> F:
+    Ticket{point = _, value} = ticket
+    return value
+
+pub def total<F: Field>(values: [F]) -> F: ∑ x ∈ values, x
+
+// A read of a collection whose length is a run-time value: the guard gives the fact.
+pub def first<F: Field>(xs: [F]) -> F:
+    guard 0 < length(xs)
+    return xs[0]
+
+// The same read without a stop: the condition of an `if` gives the fact to its first arm.
+pub def first_or_none<F: Field>(xs: [F]) -> Option<F>:
+    if 0 < length(xs) then Some(xs[0]) else None
+
+// The index of a loop over `0..length(xs)` is below the length in its body.
+pub def weighted<F: Field>(xs: [F], weight: F) -> F:
+    mut acc: F = 0
+    for i in 0..length(xs):
+        acc := acc * weight + xs[i]
+    return acc
+
+// A binding of a static term is a static name: it may stand in a size.
+pub def halves<T, n: nat>(xs: [T; 2 * n]) -> ([T; n], [T; n]):
+    half = (2 * n) / 2
+    return (xs[0..half], xs[half..2 * half])
+
+// A group: the literal `0`, a sum of points, a member of the sort, a conversion to a field.
+pub def weighted_generator<G: PrimeOrderGroup, n: nat>(points: [G; n]) -> G:
+    (∑ p ∈ points, p) + G::generator() * G::Scalar::from_nat(n) + 0
+
+// Mathematical forms in specification: an inner product, and a bounded quantifier.
+pub relation Inner<F: Field, n: nat>(a: [F; n], b: [F; n], c: F): c == ⟪a, b⟫
+
+pub relation Ascending<n: nat>(xs: [byte; n + 1]): ∀ i ∈ 0..n, xs[i] <= xs[i + 1]
+
+pub spec def checked(a: [Fr; 4], b: [Fr; 4], c: Fr, xs: [byte; 5]) -> bool:
+    Inner(a, b, c) and Ascending(xs)
+
+// A charge is a `rational`: naturals are converted and `/` is exact.
+pub spec def birthday(queries: nat, bits: nat) -> rational: queries^2 / 2^(bits + 1)
+
+// The functions above at one field: a definition without static parameters is its own instance.
+pub def demo(pair: Pair<Fr>, side: Side, ticket: Ticket<Fr>, values: [Fr], points: [G1; 4]) -> G1:
+    chosen = pick(swap(twice(pair)), side)
+    scalar = chosen + redeem(ticket) + total(values) + first(values) + weighted(values, chosen)
+    return weighted_generator(points) * scalar
+
+pub protocol Ask<F: Field> roles(O, R)() -> (value: F @(O, R), nonce: nonzero<F> @O):
+    nonce @O <- sample nonzero<F>
+    value <- send nonce * nonce to R
+    return (value, nonce)
+
+// A callee with roles (O, R) applied by name; a pattern binder named by an attribute; a loop
+// with a run-time count; a private input; a send to two receivers.
+pub protocol Relay<F: Field, Max: nat> roles(D, P, V)(
+    count: index<Max + 1> @(P, V),
+    seed: [byte; 32] @V private
+) -> total: F @(P, V):
+    mut running: F @(P, V) = 0
+    for _ in 0..count:
+        #[site(step)]
+        (value, _) <- Ask<F>()
+        running := running + value
+    share @D <- sample F
+    told <- send share to P, V
+    return running + told
+
+scheme Dealt = Relay<Fr, 8>:
+    ideal D
+    prover P
+    construction interactive
+
+// ----------------------------------------------------------------------------------------------
+// The forms of the second part.
+
+// A static name of a module stands in the sizes of its members (TY2).
+nat Limbs = 4
+
+pub def limbs(x: [byte; 8 * Limbs]) -> [[byte; 8]; Limbs]:
+    [x[8 * i..8 * i + 8] for i in 0..Limbs]
+
+// A law of a module: a proposition about its own definitions. It is closed, so the build
+// decides it by evaluation (SP10).
+law limbs_cover(): 8 * Limbs == 32
+
+// `and` gives the facts of its left operand to its right operand (TY9).
+pub def starts_with_zero<F: Field>(xs: [F]) -> bool: 0 < length(xs) and xs[0] == 0
+
+// A literal takes its type from the collection it is appended to, and from the other arm of
+// an `if` (TY6).
+pub def padded<F: Field, n: nat>(xs: [F; n]) -> [F; n + 1]: xs ++ [0]
+
+pub def first_or_zero<F: Field>(xs: [F]) -> F:
+    y = if 0 < length(xs) then xs[0] else 0
+    return y
+
+// An `if` with a static condition is decided at the instance: at `n = 0` the first arm is not
+// typed (TY9).
+pub def first_byte<n: nat>(xs: [byte; n]) -> byte:
+    if 1 <= n then xs[0] else 0
+
+// A range fact on an arithmetic term narrows the range of that term (TY8).
+pub def ratio(z: index<10>, x: index<5>, y: index<5>) -> nat:
+    guard y <= x else refused
+    guard 1 <= x - y else refused
+    return z / (x - y)
+
+// The index of a loop over a static range is static as a tuple position, so the loop is typed
+// per iteration and is stepped (TY10).
+pub def firsts(t: ([byte; 2], [byte; 4], [byte; 8])) -> nat:
+    mut acc: nat = 0
+    for j in 0..3:
+        acc := acc + t[j][0]
+    return acc
+
+// A relation with a `where` (SX3).
+pub relation Sorted<n: nat>(xs: [byte; n]) where (1 <= n): ∀ i ∈ 0..n - 1, xs[i] <= xs[i + 1]
+
+// A specification-only static parameter: only the relation reads it, and a goal gives it its
+// value (SP11).
+section <F: Field, n: nat, spec e: nat>:
+    pub relation NearZero(; xs: [F; n]): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+
+// A definition generic over a module parameter. `+` on `X::T` is the member `add` of the
+// interface (NL6), and `X::T` is opaque in the body (SP12): comparing two values of it would be
+// refused, because `Carrier` declares no `equal`.
+pub interface Carrier:
+    type T
+    def unit() -> T
+    def add(a: T, b: T) -> T
+
+pub module Counted: Carrier:
+    type T = nat
+    def unit(): 1
+    def add(a, b): a + b
+
+pub def twice_and_one<X: Carrier>(x: X::T) -> X::T: x + x + X::unit()
+
+// The type on the wire leaves the sender's facts out (TY14): V receives a `[F]`, and its own
+// guard gives it the size.
+pub protocol Hand<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    m <- send xs to V
+    guard @V length(m) == 8
+    guard @V m[7] == 0
+
+// The sender binds the value at the narrower type before the send: V decodes eight elements,
+// and stops with `reject` otherwise.
+pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    ys: [F; 8] = xs
+    m <- send ys to V
+    guard @V m[7] == 0
+=== M-FRA12 | refuse HO1 | `programs/fragments.zkc` with one change: the result is held by P and V
+module fragments
+
+use zkc::curves::bls12_381::{Fr, G1}
+use zkc::option::{Option}
+
+pub struct Pair<T>:
+    pub left: T
+    pub right: T
+
+pub linear struct Ticket<F: Field>:
+    point: [F]
+    value: F
+
+pub enum Side:
+    Left
+    Right
+
+pub def pick<T>(pair: Pair<T>, side: Side) -> T:
+    Pair{left, right} = pair
+    mut chosen = left
+    match side:
+        case Left:
+            ()
+        case Right:
+            chosen := right
+    return chosen
+
+pub def swap<T>(pair: Pair<T>) -> Pair<T>: {pair with left = pair.right, right = pair.left}
+
+// `+` on `Pair<F>` is this function: the fixed name `add` in the home module of `Pair`. With
+// `zero`, the type also has `∑`.
+pub def add<F: Field>(a: Pair<F>, b: Pair<F>) -> Pair<F>:
+    Pair{left = a.left + b.left, right = a.right + b.right}
+
+pub def zero<F: Field>() -> Pair<F>: Pair{left = 0, right = 0}
+
+pub def twice<F: Field>(a: Pair<F>) -> Pair<F>: a + a
+
+pub def redeem<F: Field>(ticket: Ticket<F>) -> F:
+    Ticket{point = _, value} = ticket
+    return value
+
+pub def total<F: Field>(values: [F]) -> F: ∑ x ∈ values, x
+
+// A read of a collection whose length is a run-time value: the guard gives the fact.
+pub def first<F: Field>(xs: [F]) -> F:
+    guard 0 < length(xs)
+    return xs[0]
+
+// The same read without a stop: the condition of an `if` gives the fact to its first arm.
+pub def first_or_none<F: Field>(xs: [F]) -> Option<F>:
+    if 0 < length(xs) then Some(xs[0]) else None
+
+// The index of a loop over `0..length(xs)` is below the length in its body.
+pub def weighted<F: Field>(xs: [F], weight: F) -> F:
+    mut acc: F = 0
+    for i in 0..length(xs):
+        acc := acc * weight + xs[i]
+    return acc
+
+// A binding of a static term is a static name: it may stand in a size.
+pub def halves<T, n: nat>(xs: [T; 2 * n]) -> ([T; n], [T; n]):
+    half = (2 * n) / 2
+    return (xs[0..half], xs[half..2 * half])
+
+// A group: the literal `0`, a sum of points, a member of the sort, a conversion to a field.
+pub def weighted_generator<G: PrimeOrderGroup, n: nat>(points: [G; n]) -> G:
+    (∑ p ∈ points, p) + G::generator() * G::Scalar::from_nat(n) + 0
+
+// Mathematical forms in specification: an inner product, and a bounded quantifier.
+pub relation Inner<F: Field, n: nat>(a: [F; n], b: [F; n], c: F): c == ⟪a, b⟫
+
+pub relation Ascending<n: nat>(xs: [byte; n + 1]): ∀ i ∈ 0..n, xs[i] <= xs[i + 1]
+
+pub spec def checked(a: [Fr; 4], b: [Fr; 4], c: Fr, xs: [byte; 5]) -> bool:
+    Inner(a, b, c) and Ascending(xs)
+
+// A charge is a `rational`: naturals are converted and `/` is exact.
+pub spec def birthday(queries: nat, bits: nat) -> rational: queries^2 / 2^(bits + 1)
+
+// The functions above at one field: a definition without static parameters is its own instance.
+pub def demo(pair: Pair<Fr>, side: Side, ticket: Ticket<Fr>, values: [Fr], points: [G1; 4]) -> G1:
+    chosen = pick(swap(twice(pair)), side)
+    scalar = chosen + redeem(ticket) + total(values) + first(values) + weighted(values, chosen)
+    return weighted_generator(points) * scalar
+
+pub protocol Ask<F: Field> roles(O, R)() -> (value: F @(O, R), nonce: nonzero<F> @O):
+    nonce @O <- sample nonzero<F>
+    value <- send nonce * nonce to R
+    return (value, nonce)
+
+// A callee with roles (O, R) applied by name; a pattern binder named by an attribute; a loop
+// with a run-time count; a private input; a send to two receivers.
+pub protocol Relay<F: Field, Max: nat> roles(D, P, V)(
+    count: index<Max + 1> @(P, V),
+    seed: [byte; 32] @V private
+) -> total: F @(P, V):
+    mut running: F @(P, V) = 0
+    for _ in 0..count:
+        #[site(step)]
+        (value, _) <- Ask<F>() @(O = P, R = V)
+        running := running + value
+    share @D <- sample F
+    told <- send share to P
+    return running + told
+
+scheme Dealt = Relay<Fr, 8>:
+    ideal D
+    prover P
+    construction interactive
+
+// ----------------------------------------------------------------------------------------------
+// The forms of the second part.
+
+// A static name of a module stands in the sizes of its members (TY2).
+nat Limbs = 4
+
+pub def limbs(x: [byte; 8 * Limbs]) -> [[byte; 8]; Limbs]:
+    [x[8 * i..8 * i + 8] for i in 0..Limbs]
+
+// A law of a module: a proposition about its own definitions. It is closed, so the build
+// decides it by evaluation (SP10).
+law limbs_cover(): 8 * Limbs == 32
+
+// `and` gives the facts of its left operand to its right operand (TY9).
+pub def starts_with_zero<F: Field>(xs: [F]) -> bool: 0 < length(xs) and xs[0] == 0
+
+// A literal takes its type from the collection it is appended to, and from the other arm of
+// an `if` (TY6).
+pub def padded<F: Field, n: nat>(xs: [F; n]) -> [F; n + 1]: xs ++ [0]
+
+pub def first_or_zero<F: Field>(xs: [F]) -> F:
+    y = if 0 < length(xs) then xs[0] else 0
+    return y
+
+// An `if` with a static condition is decided at the instance: at `n = 0` the first arm is not
+// typed (TY9).
+pub def first_byte<n: nat>(xs: [byte; n]) -> byte:
+    if 1 <= n then xs[0] else 0
+
+// A range fact on an arithmetic term narrows the range of that term (TY8).
+pub def ratio(z: index<10>, x: index<5>, y: index<5>) -> nat:
+    guard y <= x else refused
+    guard 1 <= x - y else refused
+    return z / (x - y)
+
+// The index of a loop over a static range is static as a tuple position, so the loop is typed
+// per iteration and is stepped (TY10).
+pub def firsts(t: ([byte; 2], [byte; 4], [byte; 8])) -> nat:
+    mut acc: nat = 0
+    for j in 0..3:
+        acc := acc + t[j][0]
+    return acc
+
+// A relation with a `where` (SX3).
+pub relation Sorted<n: nat>(xs: [byte; n]) where (1 <= n): ∀ i ∈ 0..n - 1, xs[i] <= xs[i + 1]
+
+// A specification-only static parameter: only the relation reads it, and a goal gives it its
+// value (SP11).
+section <F: Field, n: nat, spec e: nat>:
+    pub relation NearZero(; xs: [F; n]): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+
+// A definition generic over a module parameter. `+` on `X::T` is the member `add` of the
+// interface (NL6), and `X::T` is opaque in the body (SP12): comparing two values of it would be
+// refused, because `Carrier` declares no `equal`.
+pub interface Carrier:
+    type T
+    def unit() -> T
+    def add(a: T, b: T) -> T
+
+pub module Counted: Carrier:
+    type T = nat
+    def unit(): 1
+    def add(a, b): a + b
+
+pub def twice_and_one<X: Carrier>(x: X::T) -> X::T: x + x + X::unit()
+
+// The type on the wire leaves the sender's facts out (TY14): V receives a `[F]`, and its own
+// guard gives it the size.
+pub protocol Hand<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    m <- send xs to V
+    guard @V length(m) == 8
+    guard @V m[7] == 0
+
+// The sender binds the value at the narrower type before the send: V decodes eight elements,
+// and stops with `reject` otherwise.
+pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
+    guard @P length(xs) == 8
+    ys: [F; 8] = xs
+    m <- send ys to V
+    guard @V m[7] == 0
+=== M-OR1 | refuse CT2 | `programs/sigma_or.zkc` with one change: an event with V in a match that only P can decide
+module sigma_or
+
+pub enum Witness<G: PrimeOrderGroup>:
+    Left(G::Scalar)
+    Right(G::Scalar)
+
+// A proof that the prover knows the discrete logarithm of x0 or of x1. Both matches are
+// private to P: no message tells V which alternative P holds.
+pub protocol Or<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V), x0: G @(P, V), x1: G @(P, V),
+    witness: Witness<G> @P
+):
+    nonce @P <- sample G::Scalar
+    simulated_challenge @P <- sample G::Scalar
+    simulated_response @P <- sample G::Scalar
+    mut a0 = base * nonce
+    mut a1 = base * nonce
+    match witness:
+        case Witness::Left(_):
+            a1 := base * simulated_response - x1 * simulated_challenge
+            told <- send a1 to V
+        case Witness::Right(_):
+            a0 := base * simulated_response - x0 * simulated_challenge
+    commitments <- send (a0, a1) to V
+    challenge <- draw G::Scalar from V to P
+    mut e0 = simulated_challenge
+    mut e1 = simulated_challenge
+    mut z0 = simulated_response
+    mut z1 = simulated_response
+    match witness:
+        case Witness::Left(w):
+            e0 := challenge - simulated_challenge
+            z0 := nonce + e0 * w
+        case Witness::Right(w):
+            e1 := challenge - simulated_challenge
+            z1 := nonce + e1 * w
+    reply <- send (e0, e1, z0, z1) to V
+    guard @V reply.0 + reply.1 == challenge
+    guard @V base * reply.2 == commitments.0 + x0 * reply.0
+    guard @V base * reply.3 == commitments.1 + x1 * reply.1

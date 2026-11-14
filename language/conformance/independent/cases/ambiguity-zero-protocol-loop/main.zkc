@@ -1,0 +1,5 @@
+module conformance::ambiguity_zero_protocol_loop
+
+protocol P roles(A)():
+    for i in 0..0:
+        guard @A false

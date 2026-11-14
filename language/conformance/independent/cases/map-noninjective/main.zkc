@@ -1,0 +1,9 @@
+module conformance::map_noninjective
+
+protocol Child roles(S,R)(x:nat @S) -> result:nat @R:
+    m <- send x to R
+    return m
+
+protocol Parent roles(A,B)(x:nat @A) -> result:nat @A:
+    y <- Child(x) @(S=A,R=A)
+    return y

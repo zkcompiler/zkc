@@ -1,0 +1,6 @@
+module conformance::loop_stepped_collection
+
+def f() -> ([nat;1],[nat;2],[nat;3]):
+    for i in 0..3 collect (parts = xs):
+        xs = [0;i+1]
+    return parts

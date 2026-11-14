@@ -1,0 +1,5 @@
+module conformance::facts_natural_expression_type
+
+def f(i:index<4>) -> index<5>:
+    j = i + 1
+    return j

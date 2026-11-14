@@ -1,0 +1,6 @@
+module conformance::lex_bracket_continuation
+
+def f() -> nat:
+    x = (1 +
+  2)
+    return x

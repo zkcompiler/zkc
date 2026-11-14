@@ -1,0 +1,58 @@
+// Layers C and F, carried and not frozen. To change: `extract` and `simulate` are bound to
+// `external`, so the clauses become `by external("…")`; the alternative `SelfTargetMsis` needs
+// a witness and its function, or is a `requires`; the sampling loops; the transcript of
+// ML-DSA.
+module mldsa_signature
+
+use mldsa
+use mldsa::{
+    Parameters, Parameters65, PublicKey, SecretKey, Vector, Hint, expand, ball, high_bits,
+    low_bits_ok, within, make_hint, hint_ok, use_hint, respond, approximate, ShortSecret,
+    RelaxedSecret, SelfTargetMsis, abort_bound
+}
+use zkc::layout::{canonical}
+use zkc::security::{completeness, unforgeability, random_oracle}
+
+pub protocol Identify<K: Parameters> roles(P, V)(
+    key: PublicKey<K> @(P, V),
+    secret: SecretKey<K> @P
+):
+    k @P <- attempt
+    mask @P <- sample [byte; 64]
+    y = expand<K>(mask)
+    w1 <- send high_bits(key, y) to V
+    seed <- draw [byte; 32] from V to P
+    c = ball<K>(seed)
+    z = respond(y, c, secret)
+    guard @P within(z, K::gamma1 - K::beta) and low_bits_ok(key, secret, y, c) else abort
+    hint = make_hint(key, secret, y, c)
+    guard @P hint_ok(hint) else abort
+    response <- send (z, hint) to V
+    guard @V within(response.0, K::gamma1 - K::beta) and hint_ok(response.1)
+    guard @V w1 == use_hint(response.1, approximate(key, response.0, c))
+
+pub spec def extract<K: Parameters>(
+    key: PublicKey<K>, runs: Identify<K>::Runs<2>
+) -> SecretKey<K> = external("Zkc.MlDsa.extract")
+pub spec def simulate<K: Parameters>(
+    inputs: Identify<K>::Inputs<V>, coins: Identify<K>::Coins<V>, mask: [byte; 64]
+) -> Identify<K>::Received<V> = external("Zkc.MlDsa.simulate")
+
+spec for Identify:
+    proves ShortSecret<K>(key; secret)
+    knowledge RelaxedSecret<K>(key) by extract or SelfTargetMsis<K>(key)
+    zero_knowledge by simulate using coins
+    charge sites.k <= abort_bound<K>()
+
+scheme MlDsa65 = Identify<Parameters65>:
+    context message: [byte]
+    context domain: [byte]
+    construction derived(mldsa::Suite)
+    samples derived by mldsa::expand_mask
+    retry Parameters65::attempts from sites.k
+    layout canonical:
+        carry sites.seed
+        recover sites.w1 by mldsa::recover_commitment
+
+goal complete = completeness(MlDsa65) <= 2^-128
+goal forged = unforgeability(MlDsa65, keys = mldsa::keygen, model = random_oracle)

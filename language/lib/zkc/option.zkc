@@ -1,0 +1,8 @@
+module zkc::option
+
+// Core library.
+
+// [item] [source] A value or nothing: what a reader of a layout and a decoder of a suite return.
+pub enum Option<T>:
+    Some(T)
+    None

@@ -1,0 +1,7 @@
+module conformance::holders_nested_send_call
+
+def positive(x:nat) -> nat:
+    guard 0 < x else abort
+    return x
+protocol P roles(A,B)(x:nat @(A,B)):
+    m <- send positive(x) from A to B

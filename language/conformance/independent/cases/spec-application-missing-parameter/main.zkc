@@ -1,0 +1,8 @@
+module conformance::spec_application_missing_parameter
+
+protocol Child<spec e:nat> roles(A)(x:nat @A):
+    guard @A x == x
+protocol Parent<spec k:nat> roles(A)(x:nat @A):
+    Child(x)
+protocol Root roles(A)(x:nat @A):
+    Parent<spec k=0>(x)

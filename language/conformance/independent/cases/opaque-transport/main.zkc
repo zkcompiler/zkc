@@ -1,0 +1,9 @@
+module conformance::opaque_transport
+
+interface Carrier:
+    type T
+module N: Carrier:
+    type T = nat
+
+def first<X:Carrier>(xs:[X::T;2]) -> X::T: xs[0]
+def main(xs:[nat;2]) -> nat: first<N>(xs)

@@ -1,0 +1,9 @@
+module conformance::opaque_explicit_equality_constraint
+
+interface Carrier:
+    type T
+module N: Carrier:
+    type T = nat
+
+def same<X: Carrier>(a: X::T,b: X::T) -> bool where (X::T == nat): a == b
+def main(a: nat,b: nat) -> bool: same<N>(a,b)

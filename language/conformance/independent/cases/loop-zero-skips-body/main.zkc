@@ -1,0 +1,6 @@
+module conformance::loop_zero_skips_body
+
+def f() -> nat:
+    for i in 0..0:
+        y = true + false
+    return 7

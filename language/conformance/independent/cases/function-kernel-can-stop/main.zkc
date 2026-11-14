@@ -1,0 +1,6 @@
+module conformance::function_kernel_can_stop
+
+#[kernel("review.test")]
+def f(x:nat) -> nat:
+    guard x != 0
+    return x

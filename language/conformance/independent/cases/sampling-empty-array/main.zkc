@@ -1,0 +1,4 @@
+module conformance::sampling_empty_array
+
+protocol P roles(A)():
+    xs @A <- sample [index<0>;0]

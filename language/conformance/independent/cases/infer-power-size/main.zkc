@@ -1,0 +1,4 @@
+module conformance::infer_power_size
+
+def half<T,k: nat>(xs: [T;2^(k+1)]) -> [T;2^k]: xs[0..2^k]
+def main(xs: [nat;8]) -> [nat;4]: half(xs)

@@ -1,0 +1,6 @@
+module conformance::loop_bounded_at_participants
+
+protocol P roles(A,B)(n:nat @(A,B)):
+    guard @(A,B) n <= 3
+    for i in 0..n:
+        m <- send i from A to B

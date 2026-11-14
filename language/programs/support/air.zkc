@@ -1,0 +1,18 @@
+// Layer E, carried and withdrawn: the language has no asset module with abstract types and
+// opaque rows.
+module air
+
+use zkc::coset::{Coset}
+
+pub interface Air<F: TwoAdicField>:
+    nat Width
+    nat Chunks
+    nat Openings
+    nat Constraints
+    nat Degree
+    type Public
+    def extend<h: nat, n: nat>(trace: [[F; Width]; 2^h], domain: Coset<F, n>) -> [[F; Width]; 2^n]
+    def quotient<h: nat, n: nat>(extended: [[F; Width]; 2^n], public: Public, domain: Coset<F, n>, alpha: F) -> [[F; Chunks]; 2^n]
+    def trace_values<h: nat>(trace: [[F; Width]; 2^h], zeta: F) -> [F; Openings]
+    def chunk_values<n: nat>(chunks: [[F; Chunks]; 2^n], domain: Coset<F, n>, zeta: F) -> [F; Chunks]
+    def identity<h: nat>(public: Public, trace: [F; Openings], chunks: [F; Chunks], zeta: F, alpha: F) -> bool

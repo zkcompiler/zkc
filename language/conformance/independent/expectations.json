@@ -1,0 +1,4678 @@
+{
+  "schema": "Expectations of the independent conformance suite; not a zkc artifact format",
+  "cases": [
+    {
+      "id": "lex-bracket-continuation",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "LX2",
+        "LX4",
+        "TY8",
+        "FN4"
+      ],
+      "pair": "lex-continuation",
+      "sources": {
+        "main.zkc": "cases/lex-bracket-continuation/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "x = 3"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f() returns 3."
+      ],
+      "notes": []
+    },
+    {
+      "id": "lex-unbracketed-continuation",
+      "phase": "lexical",
+      "expected": "refuse",
+      "rules": [
+        "LX2"
+      ],
+      "pair": "lex-continuation",
+      "sources": {
+        "main.zkc": "cases/lex-unbracketed-continuation/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "the line ends inside an expression; a logical line continues only inside brackets",
+      "refusal_anchor": "x = 1 +"
+    },
+    {
+      "id": "lex-spaced-comparison",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "LX5",
+        "TY12"
+      ],
+      "pair": "lex-angle",
+      "sources": {
+        "main.zkc": "cases/lex-spaced-comparison/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(1,2) returns true."
+      ],
+      "notes": []
+    },
+    {
+      "id": "lex-touching-comparison",
+      "phase": "lexical",
+      "expected": "refuse",
+      "rules": [
+        "LX5"
+      ],
+      "pair": "lex-angle",
+      "sources": {
+        "main.zkc": "cases/lex-touching-comparison/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "write `a < b` for a comparison; `<` touching a name opens static arguments",
+      "refusal_anchor": "a<b"
+    },
+    {
+      "id": "lex-contextual-name",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "LX9",
+        "§3.4",
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/lex-contextual-name/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.from",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "from = 7"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f() returns 7."
+      ],
+      "notes": [
+        "TY2 additionally classifies the unannotated binding from=7 as a static name; the recorded value type remains nat."
+      ]
+    },
+    {
+      "id": "lex-reserved-name",
+      "phase": "parse",
+      "expected": "refuse",
+      "rules": [
+        "LX9"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/lex-reserved-name/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`roles` is a reserved word",
+      "refusal_anchor": "roles = 7"
+    },
+    {
+      "id": "lex-byte-string",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "LX7",
+        "TY6"
+      ],
+      "pair": "lex-hex",
+      "sources": {
+        "main.zkc": "cases/lex-byte-string/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f() returns [0,255], each element index<256>."
+      ],
+      "notes": []
+    },
+    {
+      "id": "lex-odd-hex",
+      "phase": "lexical",
+      "expected": "refuse",
+      "rules": [
+        "LX7"
+      ],
+      "pair": "lex-hex",
+      "sources": {
+        "main.zkc": "cases/lex-odd-hex/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "hex\"...\" holds an even number of hexadecimal digits",
+      "refusal_anchor": "hex\"00f\""
+    },
+    {
+      "id": "lex-leading-zero",
+      "phase": "lexical",
+      "expected": "refuse",
+      "rules": [
+        "LX8"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/lex-leading-zero/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "A decimal numeral other than 0 has no leading zero; no specific wording supplied.",
+      "refusal_anchor": "01"
+    },
+    {
+      "id": "grammar-element-update",
+      "phase": "parse",
+      "expected": "refuse",
+      "rules": [
+        "GR3"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/grammar-element-update/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`:=` updates a `mut` name, not an element or a field; rebuild the value",
+      "refusal_anchor": "xs[0] := 3"
+    },
+    {
+      "id": "names-forward-reference",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "NL1",
+        "FN6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/names-forward-reference/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "g.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f() returns 3; g(2) returns 3."
+      ],
+      "notes": []
+    },
+    {
+      "id": "names-recursive-instance",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "NL1"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/names-recursive-instance/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`f` refers to itself through `g`; a definition cannot be recursive",
+      "refusal_anchor": "f(x)"
+    },
+    {
+      "id": "names-nested-shadow",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "NL2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/names-nested-shadow/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`x` is already bound at the parameter; a local name is bound once",
+      "refusal_anchor": "x = 1"
+    },
+    {
+      "id": "names-unused-private-instance",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP7"
+      ],
+      "pair": "default-publicity",
+      "sources": {
+        "main.zkc": "cases/names-unused-private-instance/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main() returns 1."
+      ],
+      "notes": [
+        "latent is resolved for names only; no default instances and no accepted typed body claim. latent.xs has only its written schema [nat;n], not an instantiated binder table."
+      ]
+    },
+    {
+      "id": "names-unused-public-instance",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP7",
+        "TY7"
+      ],
+      "pair": "default-publicity",
+      "sources": {
+        "main.zkc": "cases/names-unused-public-instance/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "Index 0 is outside [nat;0], in default instance latent<n=0>.",
+      "refusal_anchor": "xs[0]"
+    },
+    {
+      "id": "names-unreached-unbound",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "NL3",
+        "SP7"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/names-unreached-unbound/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`missing` is not bound: it is no local name, static parameter, declaration or import of this module",
+      "refusal_anchor": "missing"
+    },
+    {
+      "id": "infer-size-from-typed-array",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP6",
+        "SP7"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/infer-size-from-typed-array/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "copy<bool,3>.xs",
+          "type": "[bool;3]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.xs",
+          "type": "[bool;3]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "copy<T=bool,n=3>"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main([true,false,true]) returns the same array."
+      ],
+      "notes": []
+    },
+    {
+      "id": "infer-additive-size",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP6",
+        "TY7"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/infer-additive-size/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "shorten<bool,2>.xs",
+          "type": "[bool;3]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.xs",
+          "type": "[bool;3]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "shorten<T=bool,n=2> from n+1=3"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main([true,false,true]) returns [true,false]."
+      ],
+      "notes": []
+    },
+    {
+      "id": "infer-power-size",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP6",
+        "TY2",
+        "TY7"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/infer-power-size/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "half<nat,2>.xs",
+          "type": "[nat;8]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.xs",
+          "type": "[nat;8]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "half<T=nat,k=2>: 2^(k+1)=8, then k+1=3"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main([0,1,2,3,4,5,6,7]) returns [0,1,2,3]."
+      ],
+      "notes": []
+    },
+    {
+      "id": "infer-product-not-solved",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP6"
+      ],
+      "pair": "infer-product",
+      "sources": {
+        "main.zkc": "cases/infer-product-not-solved/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "cannot infer `n` of `same`; write `same<n = …>`",
+      "refusal_anchor": "same(xs)"
+    },
+    {
+      "id": "infer-product-explicit",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP5",
+        "SP6"
+      ],
+      "pair": "infer-product",
+      "sources": {
+        "main.zkc": "cases/infer-product-explicit/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "same<3>.xs",
+          "type": "[bool;6]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.xs",
+          "type": "[bool;6]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "same<n=3>"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main([true,false,true,false,true,false]) returns its input."
+      ],
+      "notes": []
+    },
+    {
+      "id": "infer-no-bound-from-fact",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP6",
+        "TY4"
+      ],
+      "pair": "infer-fact",
+      "sources": {
+        "main.zkc": "cases/infer-no-bound-from-fact/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "cannot infer `n` of `bound`; write `bound<n = …>`",
+      "refusal_anchor": "bound(x)"
+    },
+    {
+      "id": "infer-fact-explicit-bound",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP6",
+        "TY4",
+        "TY5"
+      ],
+      "pair": "infer-fact",
+      "sources": {
+        "main.zkc": "cases/infer-fact-explicit-bound/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "bound<8>.x",
+          "type": "index<8>",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "after guard: 0 <= x <= 7"
+            ]
+          }
+        }
+      ],
+      "instances": [
+        "bound<n=8>"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "main: reject at guard x < 8; bound cannot stop."
+      ],
+      "execution": [
+        "main(7) returns 7; main(8) stops reject."
+      ],
+      "notes": []
+    },
+    {
+      "id": "infer-from-result",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/infer-from-result/main.zkc"
+      },
+      "binders": [],
+      "instances": [
+        "fill<n=3>, inferred from expected result"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main() returns [true,true,true]."
+      ],
+      "notes": []
+    },
+    {
+      "id": "infer-natural-numerals-named",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP5"
+      ],
+      "pair": "static-names",
+      "sources": {
+        "main.zkc": "cases/infer-natural-numerals-named/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`count` takes the naturals `n`, `m`: write them by name, `count<n = …, m = …>`",
+      "refusal_anchor": "count<2,3>"
+    },
+    {
+      "id": "infer-natural-names",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP5",
+        "SP7"
+      ],
+      "pair": "static-names",
+      "sources": {
+        "main.zkc": "cases/infer-natural-names/main.zkc"
+      },
+      "binders": [],
+      "instances": [
+        "count<n=2,m=3>"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main() returns 5."
+      ],
+      "notes": []
+    },
+    {
+      "id": "size-exact-division",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/size-exact-division/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "the size `12 / 5` is 12 / 5 here: division in a size is exact",
+      "refusal_anchor": "12/5"
+    },
+    {
+      "id": "size-runtime-rejected",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/size-runtime-rejected/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`n` is not a size: `n` is a run-time value; a size is built from static naturals",
+      "refusal_anchor": "[bool;n]"
+    },
+    {
+      "id": "where-function-call",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP4"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/where-function-call/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "the `where` of `f` calls `bound`: a constraint is over static terms, and a call is not one",
+      "refusal_anchor": "bound()"
+    },
+    {
+      "id": "opaque-direct-equality",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP12",
+        "NL6"
+      ],
+      "pair": "opaque-exposure",
+      "sources": {
+        "main.zkc": "cases/opaque-direct-equality/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`==` is not defined for `X::T` in a definition generic over `X`: `Carrier` declares no `equal`",
+      "refusal_anchor": "a == b"
+    },
+    {
+      "id": "opaque-explicit-equality-constraint",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP12",
+        "SP4"
+      ],
+      "pair": "opaque-exposure",
+      "sources": {
+        "main.zkc": "cases/opaque-explicit-equality-constraint/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "same<N>.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "same<N>.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "same<X=N>; X::T=nat in both typings because where explicitly exposes it"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main(2,2) returns true; main(2,3) returns false."
+      ],
+      "notes": []
+    },
+    {
+      "id": "opaque-helper-equality",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP12"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/opaque-helper-equality/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "Equality is unavailable in same<T=opaque X::T>; report the helper and opaque hidden instantiation chain.",
+      "refusal_anchor": "a == b"
+    },
+    {
+      "id": "opaque-interface-dispatch",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP12",
+        "NL6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/opaque-interface-dispatch/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "PickLeft.add.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "PickLeft.add.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "combine<PickLeft>.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "combine<PickLeft>.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "combine<X=PickLeft>"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main() returns 2, not 5; the + site calls PickLeft.add."
+      ],
+      "notes": [
+        "Outside the generic definition, PickLeft::T is nat. Generic operator resolution is retained by source occurrence."
+      ]
+    },
+    {
+      "id": "opaque-transport",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP12",
+        "TY7"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/opaque-transport/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "first<N>.xs",
+          "type": "[nat;2]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.xs",
+          "type": "[nat;2]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "first<X=N>; opaque structural collection projection is permitted."
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main([4,9]) returns 4."
+      ],
+      "notes": []
+    },
+    {
+      "id": "opaque-literal",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP12",
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/opaque-literal/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`0` does not check against `X::T`: a type member has no literals; apply the function that its interface declares for constants",
+      "refusal_anchor": "0"
+    },
+    {
+      "id": "facts-guarded-index",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY4",
+        "TY7",
+        "TY9"
+      ],
+      "pair": "facts-index",
+      "sources": {
+        "main.zkc": "cases/facts-guarded-index/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.xs",
+          "type": "[nat;8]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.i",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "after guard: i in 0..7"
+            ]
+          }
+        },
+        {
+          "binder": "f.y",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "f: refused at i < 8 only."
+      ],
+      "execution": [
+        "f([0,1,2,3,4,5,6,7],7) returns 7; i=8 stops refused."
+      ],
+      "notes": []
+    },
+    {
+      "id": "facts-unguarded-index",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY7"
+      ],
+      "pair": "facts-index",
+      "sources": {
+        "main.zkc": "cases/facts-unguarded-index/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`i` is a `nat`; an index of `xs` is an `index<8>`: take it from a range, or write `guard i < 8`",
+      "refusal_anchor": "xs[i]"
+    },
+    {
+      "id": "facts-natural-expression-type",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY4",
+        "TY8",
+        "TY5"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/facts-natural-expression-type/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.i",
+          "type": "index<4>",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.j",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "1 <= j <= 4"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(3) returns 4 after the result conversion nat -> index<5>."
+      ],
+      "notes": []
+    },
+    {
+      "id": "facts-short-circuit-and",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY9",
+        "HO4"
+      ],
+      "pair": "facts-and-order",
+      "sources": {
+        "main.zkc": "cases/facts-short-circuit-and/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.xs",
+          "type": "[nat]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "only in right operand: 0 < length(xs)"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f([]) returns false without a read; f([0]) true; f([2]) false."
+      ],
+      "notes": []
+    },
+    {
+      "id": "facts-short-circuit-reversed",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY7",
+        "TY9"
+      ],
+      "pair": "facts-and-order",
+      "sources": {
+        "main.zkc": "cases/facts-short-circuit-reversed/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`xs[0]` reads a collection whose length is a run-time value: `0 < length(xs)` is not known",
+      "refusal_anchor": "xs[0]"
+    },
+    {
+      "id": "facts-short-circuit-or",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY9",
+        "HO4"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/facts-short-circuit-or/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.xs",
+          "type": "[nat]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "right operand: length(xs) != 0, hence 1 <= length(xs)"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f([]) true without a read; f([0]) true; f([2]) false."
+      ],
+      "notes": []
+    },
+    {
+      "id": "facts-no-transitivity",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY4",
+        "TY8"
+      ],
+      "pair": "facts-transitivity",
+      "sources": {
+        "main.zkc": "cases/facts-no-transitivity/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`c - a` subtracts naturals: `a <= c` is not known; write `guard a <= c` before it",
+      "refusal_anchor": "c - a"
+    },
+    {
+      "id": "facts-direct-order",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY4",
+        "TY8"
+      ],
+      "pair": "facts-transitivity",
+      "sources": {
+        "main.zkc": "cases/facts-direct-order/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.c",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "f: reject at any of the three guards."
+      ],
+      "execution": [
+        "f(1,2,4) returns 3."
+      ],
+      "notes": [
+        "caller has orders a<=b, b<=c, a<=c after the respective guards; no transitive inference."
+      ]
+    },
+    {
+      "id": "facts-mut-guard",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY9",
+        "TY5"
+      ],
+      "pair": "facts-mut-copy",
+      "sources": {
+        "main.zkc": "cases/facts-mut-guard/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "No range fact is attached to mut x; its nat type cannot convert to index<8>.",
+      "refusal_anchor": "return x"
+    },
+    {
+      "id": "facts-mut-copy",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY4",
+        "TY9"
+      ],
+      "pair": "facts-mut-copy",
+      "sources": {
+        "main.zkc": "cases/facts-mut-copy/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "nat (mut)",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.y",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "after guard: y in 0..7"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "f: reject at y < 8 (syntactic summary, unreachable on this input)."
+      ],
+      "execution": [
+        "f() returns 1."
+      ],
+      "notes": []
+    },
+    {
+      "id": "facts-power-zero",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY8"
+      ],
+      "pair": "facts-power-bound",
+      "sources": {
+        "main.zkc": "cases/facts-power-zero/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f() returns 1; range 1..1 before conversion."
+      ],
+      "notes": []
+    },
+    {
+      "id": "facts-power-zero-too-narrow",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY8",
+        "TY5"
+      ],
+      "pair": "facts-power-bound",
+      "sources": {
+        "main.zkc": "cases/facts-power-zero-too-narrow/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`0^0` can be as large as 1; index<1> is expected",
+      "refusal_anchor": "0^0"
+    },
+    {
+      "id": "facts-indexed-sum",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY8",
+        "TY11"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/facts-indexed-sum/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.units",
+          "type": "[index<256>;2]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.i",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "i in 0..1; range evaluation enumerates i=0,1"
+            ]
+          }
+        },
+        {
+          "binder": "f.result",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "0 <= result <= 255 + 255*256 = 65535"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f([1,2]) returns 513."
+      ],
+      "notes": [
+        "The range of a sum over a static range is evaluated index by index; this does not turn i or result into index types."
+      ]
+    },
+    {
+      "id": "literal-sibling-field",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/literal-sibling-field/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "F",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "For x=1 in KoalaBear, f returns 9. Literal arithmetic is in F; exponent 3 is natural."
+      ],
+      "notes": []
+    },
+    {
+      "id": "literal-field-division",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/literal-field-division/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "F",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(4) returns 2 in F; divisor literal is nonzero<F>."
+      ],
+      "notes": []
+    },
+    {
+      "id": "literal-field-zero-division",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/literal-field-zero-division/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`0` is not a `nonzero` value of `F`",
+      "refusal_anchor": "x / 0"
+    },
+    {
+      "id": "static-if-skips-typing",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY9",
+        "SP7"
+      ],
+      "pair": "static-if",
+      "sources": {
+        "main.zkc": "cases/static-if-skips-typing/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "pick<0>.xs",
+          "type": "[nat;0]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "pick<n=0>; the else arm is not typed"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main() returns 7."
+      ],
+      "notes": []
+    },
+    {
+      "id": "static-if-taken-bad-arm",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY7",
+        "TY9",
+        "SP7"
+      ],
+      "pair": "static-if",
+      "sources": {
+        "main.zkc": "cases/static-if-taken-bad-arm/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "Index 0 is outside [nat;0] in pick<n=0>.",
+      "refusal_anchor": "xs[0]"
+    },
+    {
+      "id": "static-if-still-resolves-names",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP7",
+        "NL3"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/static-if-still-resolves-names/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`absent` is not bound, even though its arm is not typed at this instance.",
+      "refusal_anchor": "absent"
+    },
+    {
+      "id": "wire-fact-does-not-cross",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY4",
+        "TY14",
+        "EV5",
+        "HO2"
+      ],
+      "pair": "wire-fact",
+      "sources": {
+        "main.zkc": "cases/wire-fact-does-not-cross/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.xs",
+          "type": "[nat]",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {
+            "A": [
+              "after guard: length(xs)=2"
+            ]
+          }
+        },
+        {
+          "binder": "P.m",
+          "type": "[nat]",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {
+            "B": [
+              "only after B guard: length(m)=2"
+            ]
+          }
+        },
+        {
+          "binder": "P.y",
+          "type": "nat",
+          "holders": [
+            "B"
+          ],
+          "computed_by": [
+            "B"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "sender": "A",
+          "receivers": [
+            "B"
+          ],
+          "parts": [
+            "value"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "A: refused if its initial length is not 2. B: reject at explicit guard, or at malformed message decoding."
+      ],
+      "execution": [
+        "xs=[4,9], honest send: y=9 at B; both return ().",
+        "xs=[4]: A stops refused before send; B can be blocked."
+      ],
+      "notes": [
+        "The first guard changes neither xs nor m to [nat;2]; do not assert transfer of the sender fact to B."
+      ]
+    },
+    {
+      "id": "wire-fact-missing-receiver-guard",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY14",
+        "TY7"
+      ],
+      "pair": "wire-fact",
+      "sources": {
+        "main.zkc": "cases/wire-fact-missing-receiver-guard/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "B has no fact that 1 < length(m); the sender length fact does not cross.",
+      "refusal_anchor": "m[1]"
+    },
+    {
+      "id": "wire-explicit-refinement",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY5",
+        "TY14",
+        "EV5"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/wire-explicit-refinement/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.xs",
+          "type": "[nat]",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {
+            "A": [
+              "after guard: length(xs)=2"
+            ]
+          }
+        },
+        {
+          "binder": "P.narrow",
+          "type": "[nat;2]",
+          "holders": [
+            "A"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        },
+        {
+          "binder": "P.m",
+          "type": "[nat;2]",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        },
+        {
+          "binder": "P.y",
+          "type": "nat",
+          "holders": [
+            "B"
+          ],
+          "computed_by": [
+            "B"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "sender": "A",
+          "receivers": [
+            "B"
+          ],
+          "parts": [
+            "value"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "A: refused at initial guard. B: reject if the incoming value fails decoding at [nat;2]."
+      ],
+      "execution": [
+        "xs=[4,9], honest run: y=9 at B; all return ().",
+        "A malicious sender supplies a one-element message: B rejects decoding; no m is successfully bound at B."
+      ],
+      "notes": []
+    },
+    {
+      "id": "holders-shared-binding-needs-all-facts",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "HO2",
+        "TY4"
+      ],
+      "pair": "holders-restriction",
+      "sources": {
+        "main.zkc": "cases/holders-shared-binding-needs-all-facts/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "A computes xs[i] without the fact held by B; restrict the binder to @B or guard at A.",
+      "refusal_anchor": "y = xs[i]"
+    },
+    {
+      "id": "holders-restrict-to-knowing-role",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "HO2",
+        "TY4"
+      ],
+      "pair": "holders-restriction",
+      "sources": {
+        "main.zkc": "cases/holders-restrict-to-knowing-role/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.xs",
+          "type": "[nat;8]",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "P.i",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "input",
+          "facts": {
+            "B": [
+              "after guard: i in 0..7"
+            ],
+            "A": []
+          }
+        },
+        {
+          "binder": "P.y",
+          "type": "nat",
+          "holders": [
+            "B"
+          ],
+          "computed_by": [
+            "B"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "B: reject at i<8; no such guard at A."
+      ],
+      "execution": [
+        "xs=[0,1,2,3,4,5,6,7],i=7: y=7 only at B."
+      ],
+      "notes": []
+    },
+    {
+      "id": "holders-nested-send-call",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "HO2",
+        "HO4",
+        "FN2"
+      ],
+      "pair": "holders-hoisting",
+      "sources": {
+        "main.zkc": "cases/holders-nested-send-call/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "positive.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "after guard: 1 <= x"
+            ]
+          }
+        },
+        {
+          "binder": "P.x",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "P.m",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "sender": "A",
+          "receivers": [
+            "B"
+          ],
+          "parts": [
+            "value"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "positive: abort; at this call only A can abort. B may reject decoding or be blocked if A stops."
+      ],
+      "execution": [
+        "x=0: A aborts inside the payload call, no message sent; B does not execute positive.",
+        "x=3: sends 3 and both return ()."
+      ],
+      "notes": []
+    },
+    {
+      "id": "holders-hoisted-shared-call",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "HO2",
+        "HO4",
+        "FN2",
+        "GU4"
+      ],
+      "pair": "holders-hoisting",
+      "sources": {
+        "main.zkc": "cases/holders-hoisted-shared-call/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "positive.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "after guard: 1 <= x"
+            ]
+          }
+        },
+        {
+          "binder": "P.x",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "P.t",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A",
+            "B"
+          ],
+          "facts": {}
+        },
+        {
+          "binder": "P.m",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "sender": "A",
+          "receivers": [
+            "B"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "A and B each can abort in their own positive call; no inter-role order is specified.",
+        "B also rejects if its receive cannot decode a nat, on a run where its local positive call succeeds."
+      ],
+      "execution": [
+        "x=0: each role stops abort before send; this differs from the nested-payload case.",
+        "x=3: t=3 at both roles and m=3 at both roles."
+      ],
+      "notes": []
+    },
+    {
+      "id": "holders-empty-intersection",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "HO1"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/holders-empty-intersection/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "no role can form `a + b`: `a` is held by A and `b` is held by B",
+      "refusal_anchor": "a + b"
+    },
+    {
+      "id": "holders-ambiguous-sender",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "EV5"
+      ],
+      "pair": "sender-selection",
+      "sources": {
+        "main.zkc": "cases/holders-ambiguous-sender/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`x` is held by A, B: write `send … from A to C`",
+      "refusal_anchor": "send x to C"
+    },
+    {
+      "id": "holders-explicit-sender",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "EV5",
+        "HO2"
+      ],
+      "pair": "sender-selection",
+      "sources": {
+        "main.zkc": "cases/holders-explicit-sender/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.x",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "P.y",
+          "type": "nat",
+          "holders": [
+            "A",
+            "C"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "y",
+          "kind": "send",
+          "roles": [
+            "A",
+            "C"
+          ],
+          "sender": "A",
+          "receivers": [
+            "C"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "C may reject decoding nat; no guard stops."
+      ],
+      "execution": [
+        "x=5 in an honest run: y=5 at A,C; B holds x but not y."
+      ],
+      "notes": []
+    },
+    {
+      "id": "loop-uniform-ranges-differ",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY10",
+        "TY16",
+        "HO1",
+        "CT1",
+        "EV3"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/loop-uniform-ranges-differ/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.i",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "loop index",
+          "facts": {
+            "A": [
+              "0 <= i <= 2"
+            ],
+            "B": [
+              "0 <= i <= 2"
+            ]
+          }
+        },
+        {
+          "binder": "P.m",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        },
+        {
+          "binder": "P.values",
+          "type": "[nat;3]",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "collect at each holder",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "occurrences": [
+            "i=0",
+            "i=1",
+            "i=2"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "at": "for i",
+          "participants": [
+            "A",
+            "B"
+          ],
+          "classification": "uniform",
+          "count": 3
+        }
+      ],
+      "stops": [
+        "B may reject message decoding; no guards."
+      ],
+      "execution": [
+        "Both copies of values are [0,1,2] in an honest run."
+      ],
+      "notes": [
+        "Different runtime values/ranges do not create different types; index i is not static in the body positions used here."
+      ]
+    },
+    {
+      "id": "loop-stepped-collection",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY10",
+        "TY16"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/loop-stepped-collection/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.i",
+          "type": "nat (static per iteration)",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "i=0,1,2 respectively"
+            ]
+          }
+        },
+        {
+          "binder": "f.xs",
+          "type": "[nat;1], [nat;2], [nat;3] by iteration",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.parts",
+          "type": "([nat;1],[nat;2],[nat;3])",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [
+        {
+          "at": "for i",
+          "participants": "local caller",
+          "classification": "stepped",
+          "count": 3
+        }
+      ],
+      "stops": [],
+      "execution": [
+        "f() returns ([0],[0,0],[0,0,0]); no widening join for collect."
+      ],
+      "notes": []
+    },
+    {
+      "id": "loop-mut-size-guard",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY10",
+        "TY5",
+        "TY9"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/loop-mut-size-guard/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "TY9 makes no size fact about mut xs, so the return cannot convert [nat] to [nat;3].",
+      "refusal_anchor": "return xs"
+    },
+    {
+      "id": "loop-growing-state",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY10"
+      ],
+      "pair": "loop-runtime-state",
+      "sources": {
+        "main.zkc": "cases/loop-growing-state/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.xs",
+          "type": "[nat;0] -> [nat;1] -> [nat;2] -> [nat;3] (mut)",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.i",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "0 <= i <= 2"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [
+        {
+          "at": "for i",
+          "participants": "local caller",
+          "classification": "stepped because state changes type",
+          "count": 3
+        }
+      ],
+      "stops": [],
+      "execution": [
+        "f() returns [0,1,2]."
+      ],
+      "notes": [
+        "The loop index need not occur in a size; changing state type triggers per-iteration typing."
+      ]
+    },
+    {
+      "id": "loop-runtime-growing-state",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY10"
+      ],
+      "pair": "loop-runtime-state",
+      "sources": {
+        "main.zkc": "cases/loop-runtime-growing-state/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "The runtime loop starts with [nat;0] and ends with [nat;1]; state must widen to the initial type.",
+      "refusal_anchor": "xs := xs ++ [i]"
+    },
+    {
+      "id": "loop-runtime-widened-state",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY10",
+        "CT4"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/loop-runtime-widened-state/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.n",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.xs",
+          "type": "[nat] (mut)",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.i",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {
+            "caller": [
+              "0 <= i; i < n"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [
+        {
+          "at": "for i",
+          "participants": "local caller",
+          "classification": "runtime loop with one state type",
+          "count": "n"
+        }
+      ],
+      "stops": [],
+      "execution": [
+        "f(0)=[]; f(3)=[0,1,2]."
+      ],
+      "notes": [
+        "Local cost depends on n; no numeric native-cost claim."
+      ]
+    },
+    {
+      "id": "loop-zero-skips-body",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY10",
+        "SP7"
+      ],
+      "pair": "loop-versus-comprehension-empty",
+      "sources": {
+        "main.zkc": "cases/loop-zero-skips-body/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.i",
+          "type": "no instantiated binder: zero iterations",
+          "holders": "caller",
+          "computed_by": "none",
+          "facts": {}
+        },
+        {
+          "binder": "f.y",
+          "type": "not typed: zero iterations",
+          "holders": "caller",
+          "computed_by": "none",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [
+        {
+          "at": "for i",
+          "participants": "none",
+          "classification": "zero iterations"
+        }
+      ],
+      "stops": [],
+      "execution": [
+        "f() returns 7; names resolve, body typing is skipped."
+      ],
+      "notes": []
+    },
+    {
+      "id": "comprehension-empty-still-types",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY11",
+        "NL6"
+      ],
+      "pair": "loop-versus-comprehension-empty",
+      "sources": {
+        "main.zkc": "cases/comprehension-empty-still-types/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`+` is not defined for bool and bool; a non-dependent comprehension element is typed even for an empty range.",
+      "refusal_anchor": "true + false"
+    },
+    {
+      "id": "control-private-condition",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "CT1",
+        "CT2"
+      ],
+      "pair": "control-condition",
+      "sources": {
+        "main.zkc": "cases/control-private-condition/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "B acts in this branch and does not hold its condition c, held by A; send it first.",
+      "refusal_anchor": "if c"
+    },
+    {
+      "id": "control-shared-condition",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "CT1",
+        "CT2"
+      ],
+      "pair": "control-condition",
+      "sources": {
+        "main.zkc": "cases/control-shared-condition/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.c",
+          "type": "bool",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "P.x",
+          "type": "nat",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "P.m",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "occurrences": [
+            "only when c=true"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "at": "if c",
+          "participants": [
+            "A",
+            "B"
+          ]
+        }
+      ],
+      "stops": [
+        "B may reject decoding only when the send executes."
+      ],
+      "execution": [
+        "c=false: no send; both return (). c=true,x=4: m=4 at A,B inside the arm only."
+      ],
+      "notes": []
+    },
+    {
+      "id": "control-no-actor",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "CT1",
+        "HO2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/control-no-actor/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "No role acts in this choice: the closed total binding has empty act.",
+      "refusal_anchor": "if c"
+    },
+    {
+      "id": "loop-bounded-at-participants",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "CT4",
+        "TY10",
+        "TY9"
+      ],
+      "pair": "loop-role-bound",
+      "sources": {
+        "main.zkc": "cases/loop-bounded-at-participants/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.n",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "input",
+          "facts": {
+            "A": [
+              "after guard: n in 0..3"
+            ],
+            "B": [
+              "after guard: n in 0..3"
+            ]
+          }
+        },
+        {
+          "binder": "P.i",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": "loop index",
+          "facts": {
+            "A": [
+              "0<=i<=2; i<n"
+            ],
+            "B": [
+              "0<=i<=2; i<n"
+            ]
+          }
+        },
+        {
+          "binder": "P.m",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "occurrences": [
+            "i=0..n-1"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "at": "for i",
+          "participants": [
+            "A",
+            "B"
+          ],
+          "classification": "runtime count, bound 3"
+        }
+      ],
+      "stops": [
+        "Each role rejects at its n<=3 guard if false; B may reject message decoding."
+      ],
+      "execution": [
+        "n=2: sends 0 then 1. n=0: no occurrences."
+      ],
+      "notes": []
+    },
+    {
+      "id": "loop-bound-only-one-role",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "CT4",
+        "TY4"
+      ],
+      "pair": "loop-role-bound",
+      "sources": {
+        "main.zkc": "cases/loop-bound-only-one-role/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "The count has no static bound at B; A's guard does not give B a bound.",
+      "refusal_anchor": "for i in 0..n"
+    },
+    {
+      "id": "map-explicit",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "RM1",
+        "RM2",
+        "RM3",
+        "EV3"
+      ],
+      "pair": "map-names",
+      "sources": {
+        "main.zkc": "cases/map-explicit/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "Child.x",
+          "type": "nat",
+          "holders": [
+            "S"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "Child.m",
+          "type": "nat",
+          "holders": [
+            "S",
+            "R"
+          ],
+          "computed_by": [
+            "S"
+          ],
+          "facts": {}
+        },
+        {
+          "binder": "Parent.x",
+          "type": "nat",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "Parent.y",
+          "type": "nat",
+          "holders": [
+            "B"
+          ],
+          "computed_by": "Child result at B",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "S",
+            "R"
+          ],
+          "definition": "Child"
+        },
+        {
+          "number": 0,
+          "name": "y",
+          "kind": "application",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "definition": "Parent",
+          "callee": "Child",
+          "role_map": {
+            "S": "A",
+            "R": "B"
+          },
+          "nested_path": "Parent.y/Child.m"
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "R may reject decoding; mapped to B."
+      ],
+      "execution": [
+        "Parent(6) returns 6 at B; no parent result at A."
+      ],
+      "notes": []
+    },
+    {
+      "id": "map-arguments-do-not-infer",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "RM1",
+        "RM2"
+      ],
+      "pair": "map-names",
+      "sources": {
+        "main.zkc": "cases/map-arguments-do-not-infer/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "role S of Child has no namesake in Parent: write @(S = …)",
+      "refusal_anchor": "Child(x)"
+    },
+    {
+      "id": "map-noninjective",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "RM1"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/map-noninjective/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "Role map must be injective; S and R both map to A.",
+      "refusal_anchor": "@(S=A,R=A)"
+    },
+    {
+      "id": "events-static-dead-sites",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "EV3",
+        "TY9",
+        "EV7"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/events-static-dead-sites/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.dead",
+          "type": "not instantiated: static dead arm",
+          "holders": [],
+          "computed_by": "none",
+          "facts": {}
+        },
+        {
+          "binder": "P.live",
+          "type": "bool",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "B"
+          ],
+          "facts": {}
+        },
+        {
+          "binder": "P.k",
+          "type": "nat",
+          "holders": [
+            "A"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "dead",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "occurrences": []
+        },
+        {
+          "number": 1,
+          "name": "live",
+          "kind": "draw",
+          "roles": [
+            "B",
+            "A"
+          ],
+          "parts": [
+            "value"
+          ]
+        },
+        {
+          "number": 2,
+          "name": "k",
+          "kind": "attempt",
+          "roles": [
+            "A"
+          ],
+          "parts": [
+            "value"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "at": "if 0 == 1",
+          "participants": [],
+          "classification": "static false; no choice"
+        }
+      ],
+      "stops": [
+        "A may reject decoding live; no guards."
+      ],
+      "execution": [
+        "Fix draw=true: live=true at A,B; k=0 at A; site 0 never occurs."
+      ],
+      "notes": [
+        "No generated record field for dead at this instance; the test requires numbering, not a concrete later-stage record format."
+      ]
+    },
+    {
+      "id": "events-multireceiver-parts",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "EV3",
+        "EV5",
+        "HO6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/events-multireceiver-parts/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.x",
+          "type": "nat",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "P.m",
+          "type": "nat",
+          "holders": [
+            "A",
+            "B",
+            "C"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "m",
+          "kind": "send",
+          "roles": [
+            "A",
+            "B",
+            "C"
+          ],
+          "parts": [
+            "to C",
+            "to B"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "Each receiver may reject decoding independently."
+      ],
+      "execution": [
+        "x=4 and honest A: both receivers obtain 4."
+      ],
+      "notes": [
+        "No guarantee of equality between receivers against malicious A; no universal order of their stops."
+      ]
+    },
+    {
+      "id": "events-pattern-site-name",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "EV3"
+      ],
+      "pair": "site-attribute",
+      "sources": {
+        "main.zkc": "cases/events-pattern-site-name/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.x",
+          "type": "bool",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        },
+        {
+          "binder": "P.y",
+          "type": "bool",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "pair",
+          "kind": "draw",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "parts": [
+            "value"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "B may reject decoding the tuple."
+      ],
+      "execution": [
+        "Fix draw=(true,false): x=true,y=false at both roles."
+      ],
+      "notes": []
+    },
+    {
+      "id": "events-conflicting-site-name",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "EV3"
+      ],
+      "pair": "site-attribute",
+      "sources": {
+        "main.zkc": "cases/events-conflicting-site-name/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "the site of `x <- …` is named `x`; `#[site(other)]` names it otherwise",
+      "refusal_anchor": "#[site(other)]"
+    },
+    {
+      "id": "sampling-empty-array",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY1",
+        "TY15"
+      ],
+      "pair": "sampling-empty",
+      "sources": {
+        "main.zkc": "cases/sampling-empty-array/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "P.xs",
+          "type": "[index<0>;0]",
+          "holders": [
+            "A"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "xs",
+          "kind": "sample",
+          "roles": [
+            "A"
+          ]
+        }
+      ],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "The unique draw is []; A returns ()."
+      ],
+      "notes": []
+    },
+    {
+      "id": "sampling-empty-type",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY15"
+      ],
+      "pair": "sampling-empty",
+      "sources": {
+        "main.zkc": "cases/sampling-empty-type/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`index<0>` is not a law: index<0> has no value, so no distribution of total mass one",
+      "refusal_anchor": "sample index<0>"
+    },
+    {
+      "id": "event-function-binding",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "EV1"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/event-function-binding/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`f` is a function: bind it with `=`",
+      "refusal_anchor": "x <- f()"
+    },
+    {
+      "id": "order-named-arguments",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "HO4",
+        "FN2",
+        "FN6"
+      ],
+      "pair": "order-named",
+      "sources": {
+        "main.zkc": "cases/order-named-arguments/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "take.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "take.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "fail_abort: abort; fail_refused: refused; main has possible call reasons refused,abort in source evaluation order, though its first call always stops."
+      ],
+      "execution": [
+        "main() stops refused; fail_abort and take are not executed."
+      ],
+      "notes": []
+    },
+    {
+      "id": "order-named-arguments-swapped",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "HO4",
+        "FN2",
+        "FN6"
+      ],
+      "pair": "order-named",
+      "sources": {
+        "main.zkc": "cases/order-named-arguments-swapped/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "take.a",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "take.b",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "fail_abort: abort; fail_refused: refused; main call-site order is abort,refused."
+      ],
+      "execution": [
+        "main() stops abort; fail_refused and take are not executed."
+      ],
+      "notes": []
+    },
+    {
+      "id": "order-guard-condition-first",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "HO4",
+        "GU2",
+        "GU3"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/order-guard-condition-first/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "fail: abort; P has abort inside the guard condition, then reject only if that condition returns false."
+      ],
+      "execution": [
+        "A stops abort; the outer reject guard never decides."
+      ],
+      "notes": []
+    },
+    {
+      "id": "linear-once",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "LN1",
+        "LN2"
+      ],
+      "pair": "linear-duplication",
+      "sources": {
+        "main.zkc": "cases/linear-once/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "consume.t",
+          "type": "Ticket (linear)",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "consume.v",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.t",
+          "type": "Ticket (linear)",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(Ticket{value=4}) returns 4; f passes t once, consume destructures it once."
+      ],
+      "notes": []
+    },
+    {
+      "id": "linear-twice",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "LN1",
+        "LN2"
+      ],
+      "pair": "linear-duplication",
+      "sources": {
+        "main.zkc": "cases/linear-twice/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`t` is used twice; a linear value is used exactly once",
+      "refusal_anchor": "consume(t) + consume(t)"
+    },
+    {
+      "id": "linear-wildcard",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "LN3"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/linear-wildcard/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`_` does not match a linear value: open it, return it or pass it on",
+      "refusal_anchor": "_ = t"
+    },
+    {
+      "id": "linear-stopped-arm",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "LN1",
+        "LN2",
+        "GU3"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/linear-stopped-arm/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "consume.t",
+          "type": "Ticket (linear)",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "consume.v",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.t",
+          "type": "Ticket (linear)",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.c",
+          "type": "bool",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [
+        {
+          "at": "if c",
+          "participants": "local caller"
+        }
+      ],
+      "stops": [
+        "f: abort in true arm."
+      ],
+      "execution": [
+        "c=true: abort, no linear obligation on the stopped path. c=false: consume once and return value."
+      ],
+      "notes": []
+    },
+    {
+      "id": "linear-generic-without-bound",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP3",
+        "LN1"
+      ],
+      "pair": "linear-generic",
+      "sources": {
+        "main.zkc": "cases/linear-generic-without-bound/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "Unbounded type parameter T admits freely copied types only; Ticket is linear.",
+      "refusal_anchor": "identity(t)"
+    },
+    {
+      "id": "linear-generic-bound",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP3",
+        "LN1",
+        "LN2"
+      ],
+      "pair": "linear-generic",
+      "sources": {
+        "main.zkc": "cases/linear-generic-bound/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "consume.t",
+          "type": "Ticket (linear)",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "consume.v",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "identity<Ticket>.x",
+          "type": "Ticket (linear)",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.t",
+          "type": "Ticket (linear)",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "identity<T=Ticket>"
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f returns the same ticket, consuming its parameter through identity once."
+      ],
+      "notes": []
+    },
+    {
+      "id": "spec-law-unproved",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP10",
+        "SX10"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/spec-law-unproved/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(4)=5."
+      ],
+      "notes": [
+        "Execution admission: accepted. In stage 1 the closed law is typed and remains an obligation, not evaluated. No goal claim is established. Later false-law build policy is not execution admission."
+      ]
+    },
+    {
+      "id": "spec-call-in-deployed-body",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SX2"
+      ],
+      "pair": "spec-call",
+      "sources": {
+        "main.zkc": "cases/spec-call-in-deployed-body/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`helper` is a specification function; deployed code cannot call it",
+      "refusal_anchor": "helper(x)"
+    },
+    {
+      "id": "spec-call-in-spec-body",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SX1",
+        "SX2"
+      ],
+      "pair": "spec-call",
+      "sources": {
+        "main.zkc": "cases/spec-call-in-spec-body/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "helper.x",
+          "type": "nat",
+          "holders": "ghost",
+          "computed_by": "spec input",
+          "facts": {}
+        },
+        {
+          "binder": "f.x",
+          "type": "nat",
+          "holders": "ghost",
+          "computed_by": "spec input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "Logical evaluation f(3)=3; neither function is in deployed code."
+      ],
+      "notes": []
+    },
+    {
+      "id": "spec-application-parameter",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP11",
+        "SX2"
+      ],
+      "pair": "spec-application",
+      "sources": {
+        "main.zkc": "cases/spec-application-parameter/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "Child.x",
+          "type": "nat",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "Parent.x",
+          "type": "nat",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "Root.x",
+          "type": "nat",
+          "holders": [
+            "A"
+          ],
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "Deployed Parent/Child instances do not contain k/e. Without a goal specification items use defaults."
+      ],
+      "sites": [
+        {
+          "number": 0,
+          "name": null,
+          "kind": "application",
+          "roles": [
+            "A"
+          ],
+          "definition": "Parent",
+          "callee": "Child",
+          "record_field": "site0"
+        },
+        {
+          "number": 0,
+          "name": null,
+          "kind": "application",
+          "roles": [
+            "A"
+          ],
+          "definition": "Root",
+          "callee": "Parent",
+          "record_field": "site0"
+        }
+      ],
+      "controls": [],
+      "stops": [
+        "Child and Parent: syntactic reject guard x==x (never false on equal copies).",
+        "Root propagates the Child guard stop through Parent."
+      ],
+      "execution": [
+        "For any x, Parent returns (). Changing k changes the ghost argument, not the deployed call, role program, or deployment identity."
+      ],
+      "notes": []
+    },
+    {
+      "id": "spec-application-missing-parameter",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP11"
+      ],
+      "pair": "spec-application",
+      "sources": {
+        "main.zkc": "cases/spec-application-missing-parameter/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [
+        "This is source well-formedness refusal. SX10's absolute claim about execution admission needs the qualification discussed in ambiguity-spec-admission."
+      ],
+      "diagnostic": "`Child` has the specification-only parameter `e`: write `Child<spec e = …>(…)`",
+      "refusal_anchor": "Child(x)"
+    },
+    {
+      "id": "spec-static-in-deployed-size",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP11"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/spec-static-in-deployed-size/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [
+        "The source is public to force default-instance checking: a private definition that nothing reaches is not a reliable SP11 refusal without a declaration-wide restriction rule."
+      ],
+      "diagnostic": "`n` is a specification-only static parameter; it does not occur in the type of the port `xs`",
+      "refusal_anchor": "xs:[nat;n]"
+    },
+    {
+      "id": "function-event",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "FN1",
+        "EV2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/function-event/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "an event stands only in a protocol body; a def runs inside one role",
+      "refusal_anchor": "sample bool"
+    },
+    {
+      "id": "function-kernel-can-stop",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "FN5"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/function-kernel-can-stop/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`f` can stop; a kernel is attached to a def whose body cannot stop",
+      "refusal_anchor": "#[kernel(\"review.test\")]"
+    },
+    {
+      "id": "interface-total-member-stops",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP9",
+        "FN2"
+      ],
+      "pair": "interface-partial",
+      "sources": {
+        "main.zkc": "cases/interface-total-member-stops/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`M::f` can stop; I declares f without partial",
+      "refusal_anchor": "def f(x):"
+    },
+    {
+      "id": "interface-partial-member",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP9",
+        "FN2"
+      ],
+      "pair": "interface-partial",
+      "sources": {
+        "main.zkc": "cases/interface-partial-member/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "M.f.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "after guard: x>=1"
+            ]
+          }
+        },
+        {
+          "binder": "main.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "M.f and main: reject."
+      ],
+      "execution": [
+        "main(0) stops reject; main(2) returns 2."
+      ],
+      "notes": []
+    },
+    {
+      "id": "opaque-order-ruling-governs",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "SP7",
+        "SP12"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/opaque-order-ruling-governs/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [
+        "SP7 lists instance typing before opaque typing; SP12 requires opaque typing first. Both refuse this program, for different primary reasons: the expected refusal is that of the opaque typing."
+      ],
+      "diagnostic": "I declares no add for its opaque type member; the refusal is in the opaque typing, as SP12 requires.",
+      "refusal_anchor": "x + x"
+    },
+    {
+      "id": "ambiguity-guard-false-without-continuation-proof",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "LN1",
+        "FN2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-guard-false-without-continuation-proof/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "readings": [
+          "Every execution stops; LN1 says stopped paths owe nothing, hence accept.",
+          "A syntactic success edge remains after every guard; returning without consuming t refuses."
+        ],
+        "missing": "Whether linear checking removes an impossible success path and which condition analysis it uses.",
+        "recommendation": "Specify this explicitly; do not assume a general theorem prover."
+      }
+    },
+    {
+      "id": "ambiguity-zero-protocol-loop",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "TY10",
+        "CT1"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-zero-protocol-loop/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "readings": [
+          "TY10 skips body; CT1 notes zero loops have no participant: accept the empty loop.",
+          "CT1 refuses any loop with no actor, including this one."
+        ],
+        "recommendation": "Make zero iterations an explicit exception if intended."
+      }
+    },
+    {
+      "id": "ambiguity-static-argument-uniformity",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "TY10",
+        "TY16"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-static-argument-uniformity/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "fixed": "Result ys:[nat;3], runtime values [0,1,2], no stops.",
+        "readings": [
+          "All binder and static-argument types are identical: uniform under literal wording.",
+          "Calls use three distinct static argument values/instances: stepped to retain specialization."
+        ],
+        "missing": "Does types-identically compare static argument values/selected callee identity, not just their types?"
+      }
+    },
+    {
+      "id": "ambiguity-unobserving-container-equality",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "SP12",
+        "TY12"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-unobserving-container-equality/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "readings": [
+          "Structural equality recursively needs element equality; refuse opaque X::T.",
+          "TY12 grants equality to the composite collection type, and SP12 explicitly excludes it only on the fresh type."
+        ],
+        "recommendation": "Require recursive admissibility of structural observations; this is not a theorem about reflexivity optimization."
+      }
+    },
+    {
+      "id": "ambiguity-empty-collect-type",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "TY10",
+        "TY16",
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-empty-collect-type/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "fixed": "No iteration executes.",
+        "readings": [
+          "xs is context-polymorphic [] with no concrete element type.",
+          "Body not typed but collected expression supplies nat, giving [nat;0]."
+        ],
+        "missing": "How to assign a concrete binder type when no iteration and no expected type exists."
+      }
+    },
+    {
+      "id": "ambiguity-spec-admission",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "NL3",
+        "SP10",
+        "SX10"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-spec-admission/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "fixed": "Source name resolution must diagnose missing under NL3/SP7.",
+        "readings": [
+          "The source program is refused, changing admission when the law is added.",
+          "Only the specification judgment fails; the deployed f is independently admitted."
+        ],
+        "recommendation": "Name source well-formedness and deployed admission separately; SX10's universal invariance cannot literally include malformed spec source."
+      }
+    },
+    {
+      "id": "literal-field-exponent",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/literal-field-exponent/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "F",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(1)=9 in F; base 2 has field context, exponent 3 is natural."
+      ],
+      "notes": [
+        "The explicit exponent exception governs the general instruction to type literal subexpressions together."
+      ]
+    },
+    {
+      "id": "ambiguity-protocol-if-expression",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "CT5",
+        "GR2",
+        "HO2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-protocol-if-expression/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "readings": [
+          "Binding Expr admits a local if expression, computed at A.",
+          "CT5 says an if in a protocol body is a statement, read as banning any if expression."
+        ],
+        "recommendation": "Clarify that CT5 describes top-level control statements if local expressions are allowed."
+      }
+    },
+    {
+      "id": "grammar-later-contract",
+      "phase": "parse-only",
+      "expected": "parse",
+      "rules": [
+        "GR1",
+        "§5.12"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/grammar-later-contract/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [
+        "P,x,w are unresolved intentionally; only grammar conformance is asserted."
+      ]
+    },
+    {
+      "id": "grammar-later-oracle",
+      "phase": "parse-only",
+      "expected": "parse",
+      "rules": [
+        "§5.9",
+        "§5.10"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/grammar-later-oracle/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [
+        "No kind/interface or oracle semantics are asserted."
+      ]
+    },
+    {
+      "id": "grammar-later-scheme-goal",
+      "phase": "parse-only",
+      "expected": "parse",
+      "rules": [
+        "§5.13"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/grammar-later-scheme-goal/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [
+        "Only grammar; no name resolution, scheme admission or security claim."
+      ]
+    },
+    {
+      "id": "infer-retry-equation",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/infer-retry-equation/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f<3,2>.xs",
+          "type": "[bool;5]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f<3,2>.ys",
+          "type": "[bool;2]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.xs",
+          "type": "[bool;5]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "main.ys",
+          "type": "[bool;2]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [
+        "Set aside n+m=5; solve m=2; retry to obtain n=3."
+      ],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "main([false;5],[false;2]) returns 3."
+      ],
+      "notes": []
+    },
+    {
+      "id": "ambiguity-inference-power-one",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "SP6",
+        "TY2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-inference-power-one/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "readings": [
+          "Step 4 says solve a known-base power equation; every n solves 1^n=1, so it supplies no unique result.",
+          "Leave the equation unsolved and refuse inference."
+        ],
+        "recommendation": "Require a unique natural exponent (e.g. base>=2) or an explicit static argument. Different choices change the returned value."
+      }
+    },
+    {
+      "id": "alias-record-construction",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY3",
+        "TY13"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/alias-record-construction/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.r",
+          "type": "R",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.y",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(5)=5; alias construction and destructuring resolve to R."
+      ],
+      "notes": []
+    },
+    {
+      "id": "names-dot-call",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "NL5",
+        "TY13"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/names-dot-call/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "twice.r",
+          "type": "R",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.r",
+          "type": "R",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f(R{value=3})=6; dot call resolves to the home-module twice(r)."
+      ],
+      "notes": []
+    },
+    {
+      "id": "names-private-construction",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "NL7"
+      ],
+      "pair": null,
+      "sources": {
+        "hidden.zkc": "cases/names-private-construction/hidden.zkc",
+        "main.zkc": "cases/names-private-construction/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "`R` has a field that is not pub; it is built only in conformance::hidden",
+      "refusal_anchor": "R{value=1}"
+    },
+    {
+      "id": "match-exhaustive-payloads",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY13",
+        "TY10"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/match-exhaustive-payloads/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.v",
+          "type": "Choice",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.result",
+          "type": "nat (mut)",
+          "holders": "caller",
+          "computed_by": "caller",
+          "facts": {}
+        },
+        {
+          "binder": "f.n",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "Left payload",
+          "facts": {}
+        },
+        {
+          "binder": "f.b",
+          "type": "bool",
+          "holders": "caller",
+          "computed_by": "Right payload",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [
+        {
+          "at": "match v",
+          "participants": "local caller"
+        }
+      ],
+      "stops": [],
+      "execution": [
+        "f(Choice::Left(9))=9; f(Choice::Right(true))=1; Right payload does not exist in Left arm."
+      ],
+      "notes": []
+    },
+    {
+      "id": "match-duplicate-alternative",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY13"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/match-duplicate-alternative/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "match on Choice has two cases for Right",
+      "refusal_anchor": "case Choice::Right(other)"
+    },
+    {
+      "id": "facts-textual-arithmetic-term",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY4",
+        "TY8",
+        "TY9"
+      ],
+      "pair": "facts-term-text",
+      "sources": {
+        "main.zkc": "cases/facts-textual-arithmetic-term/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.xs",
+          "type": "[nat;8]",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.i",
+          "type": "nat",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {
+            "caller": [
+              "after guard: range(i+1) ends at 7; no inferred bound on i is required"
+            ]
+          }
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "f: reject at i+1<8."
+      ],
+      "execution": [
+        "f([0,1,2,3,4,5,6,7],6)=7; i=7 rejects."
+      ],
+      "notes": []
+    },
+    {
+      "id": "facts-no-commutativity-recovery",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY4",
+        "TY8"
+      ],
+      "pair": "facts-term-text",
+      "sources": {
+        "main.zkc": "cases/facts-no-commutativity-recovery/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "The fact concerns i+1; 1+i is a different term and its upper bound is unknown.",
+      "refusal_anchor": "xs[1 + i]"
+    },
+    {
+      "id": "facts-arm-does-not-leak",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "TY4",
+        "TY7"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/facts-arm-does-not-leak/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "The guard fact inside the arm is not available after the if.",
+      "refusal_anchor": "xs[0]"
+    },
+    {
+      "id": "empty-input-type",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY1"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/empty-input-type/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.x",
+          "type": "index<0>",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "There is no valid concrete input. The total identity function on the empty domain is well typed; do not invent a sample value."
+      ],
+      "notes": []
+    },
+    {
+      "id": "empty-value",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "TY1",
+        "TY6"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/empty-value/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "f() returns the unique empty array."
+      ],
+      "notes": []
+    },
+    {
+      "id": "group-right-scalar",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "SP3",
+        "§3.5"
+      ],
+      "pair": "group-scalar",
+      "sources": {
+        "main.zkc": "cases/group-right-scalar/main.zkc"
+      },
+      "binders": [
+        {
+          "binder": "f.g",
+          "type": "G",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        },
+        {
+          "binder": "f.s",
+          "type": "G::Scalar=bls12-381.fr",
+          "holders": "caller",
+          "computed_by": "input",
+          "facts": {}
+        }
+      ],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [
+        "For s=0, f(g,s) is the group identity."
+      ],
+      "notes": []
+    },
+    {
+      "id": "group-left-scalar",
+      "phase": "semantic",
+      "expected": "refuse",
+      "rules": [
+        "§3.5"
+      ],
+      "pair": "group-scalar",
+      "sources": {
+        "main.zkc": "cases/group-left-scalar/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "diagnostic": "the scalar stands on the right of the point: write g * s",
+      "refusal_anchor": "s * g"
+    },
+    {
+      "id": "short-circuit-stopping-function",
+      "phase": "semantic",
+      "expected": "accept",
+      "rules": [
+        "HO4",
+        "TY9",
+        "FN2"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/short-circuit-stopping-function/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [
+        "fail: exhausted; f is conservatively can-stop by its call under FN2 unless the tool uses the explicit short-circuit elaboration to simplify the summary. Runtime still cannot stop here."
+      ],
+      "execution": [
+        "f() returns false; fail() is not executed."
+      ],
+      "notes": [
+        "Exact can-stop classification is tracked as ambiguity-stop-summary rather than asserting an optimization."
+      ]
+    },
+    {
+      "id": "ambiguity-stop-summary",
+      "phase": "semantic",
+      "expected": "underdetermined",
+      "rules": [
+        "FN2",
+        "FN5",
+        "TY9"
+      ],
+      "pair": null,
+      "sources": {
+        "main.zkc": "cases/ambiguity-stop-summary/main.zkc"
+      },
+      "binders": [],
+      "instances": [],
+      "sites": [],
+      "controls": [],
+      "stops": [],
+      "execution": [],
+      "notes": [],
+      "underdetermined": {
+        "readings": [
+          "FN2 counts any call of a stopping function, so kernel f refuses.",
+          "Short-circuit/static simplification removes the call before stop analysis, so f admits the kernel."
+        ],
+        "missing": "The phase and reachability sensitivity of can-stop analysis; false is not a static comparison under TY9's explicit grammar."
+      }
+    }
+  ]
+}

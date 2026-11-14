@@ -1,0 +1,61 @@
+// Carried. Its functions are layer A; the kind `poly` is layer D. Pending: evaluation and
+// interpolation over an extension.
+module zkc::polynomial
+
+// Standard library, layer 2. Polynomials in one variable by their coefficients, lowest first;
+// the kind of a committed polynomial; the polynomials of the formal library, for contracts.
+
+use zkc::oracle::{Kind, Linear}
+use zkc::sequence::{reverse}
+
+// The value at x.
+#[kernel("polynomial.evaluate")]
+pub def evaluate<F: Field, n: nat>(coefficients: [F; n], x: F) -> F:
+    ∑ i ∈ 0..n, coefficients[i] * x ^ i
+
+// The quotient and the remainder of the division by `X - root`.
+#[kernel("polynomial.divide_linear")]
+pub def divide_linear<F: Field, n: nat>(coefficients: [F; n + 1], root: F) -> ([F; n], F):
+    mut carry: F = 0
+    for i in 0..n collect (quotient = carry):
+        carry := coefficients[n - i] + carry * root
+    return (reverse(quotient), coefficients[0] + carry * root)
+
+// A kind whose data is the coefficients of a polynomial of degree at most `degree`, and whose
+// rows are its values.
+pub interface Polynomial<F: Field, degree: nat> where (
+    Self: Kind, Data == [F; degree + 1], Position == F, Row == F
+)
+
+pub module poly<F: Field, degree: nat>: Kind + Polynomial<F, degree> + Linear<F>:
+    type Data = [F; degree + 1]
+    type Position = F
+    type Row = F
+    def answer(data, position): evaluate(data, position)
+
+// [formal] The polynomials of a contract, as the formal library has them.
+pub spec type Poly<F: Field, D: nat> = external("Zkc.Polynomial.Univariate")
+pub spec type MvPoly<F: Field, n: nat, D: nat> = external("Zkc.Polynomial.Multivariate")
+
+pub spec def evaluate_at<F: Field, n: nat, D: nat>(
+    p: MvPoly<F, n, D>, x: [F; n]
+) -> F = external("Zkc.Polynomial.evaluate")
+pub spec def extension<F: Field, v: nat>(
+    values: [F; 2^v]
+) -> MvPoly<F, v, 1> = external("Zkc.Polynomial.extension")
+pub spec def restrict<F: Field, n: nat, D: nat>(
+    p: MvPoly<F, n + 1, D>, r: F
+) -> MvPoly<F, n, D> = external("Zkc.Polynomial.restrict")
+pub spec def restrict_prefix<F: Field, n: nat, k: nat, D: nat>(
+    p: MvPoly<F, n + k, D>, point: [F; k]
+) -> MvPoly<F, n, D> = external("Zkc.Polynomial.restrictPrefix")
+pub spec def first_variable<F: Field, n: nat, D: nat>(
+    p: MvPoly<F, n + 1, D>
+) -> Poly<F, D> = external("Zkc.Polynomial.firstVariable")
+pub spec def line<F: Field>(a: F, b: F) -> Poly<F, 1> = external("Zkc.Polynomial.line")
+pub spec def value<F: Field, D: nat>(p: Poly<F, D>, x: F) -> F = external("Zkc.Polynomial.value")
+pub spec def of_coefficients<F: Field, D: nat>(
+    coefficients: [F; D + 1]
+) -> Poly<F, D> = external("Zkc.Polynomial.ofCoefficients")
+// The points of the Boolean cube in n variables.
+pub spec def cube<F: Field, n: nat>() -> [[F; n]; 2^n] = external("Zkc.Polynomial.cube")

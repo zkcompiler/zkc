@@ -1,0 +1,5 @@
+module conformance::facts_indexed_sum
+
+def f(units:[byte;2]) -> index<65536>:
+    result = ∑ i ∈ 0..2, units[i] * 256^i
+    return result

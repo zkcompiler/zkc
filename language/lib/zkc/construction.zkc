@@ -1,0 +1,33 @@
+// Layer C, carried and not frozen. To change: the primitive that the model idealizes; a bound
+// on `None` with a stop reason; the decoder distances as obligations; the schedule of the
+// Fiat-Shamir step, with a label for `absorb` and `squeeze`; the member parameter `n` is
+// renamed.
+module zkc::construction
+
+// Core library.
+
+use zkc::layout::{Layout}
+use zkc::option::{Option}
+
+// [item] How a `derived` construction turns the transcript into challenges. The Fiat–Shamir
+// step applies the members: it starts from the proof identity, absorbs every value in the
+// units of `Units`, and decodes each drawn leaf from squeezed units; `None` asks for more
+// units. The draws of `nonzero`, of tuples and of sized collections are derived from the two
+// leaf decoders. The signatures are proposed and not validated against a deployed transcript.
+pub interface Suite:
+    // How a value is absorbed.
+    module Units: Layout
+    type State
+    type Challenge: Field
+    nat ChallengeUnits
+    nat PositionUnits
+    def start(identity: [byte; 32]) -> State
+    def absorb(state: State, units: [Units::Unit]) -> State
+    def squeeze<n: nat>(state: State) -> (State, [Units::Unit; n])
+    def challenge(units: [Units::Unit; ChallengeUnits]) -> Option<Challenge>
+    def position<n: nat>(
+        units: [Units::Unit; PositionUnits]
+    ) -> Option<index<n>> where (1 <= n)
+    // The distance of each decoder from the uniform law.
+    spec def challenge_distance() -> rational
+    spec def position_distance<n: nat>() -> rational where (1 <= n)
