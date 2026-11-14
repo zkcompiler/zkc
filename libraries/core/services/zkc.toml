@@ -1,6 +1,0 @@
-"format" = "zkc.project/0"
-"source-format" = "zkc"
-
-["modules"]
-"zkc::sampling::words" = "words.zkc"
-"zkc::sampling::fields" = "fields.zkc"

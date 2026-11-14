@@ -1,24 +1,8 @@
-# CMake and Cargo build outputs.
-build/
-target/
-# Generated browser glue and matching Wasm artifacts.
-/crates/zkc-web/web/pkg/
-/crates/zkc-web/web/pkg-simd/
-compile_commands.json
-CMakeUserPresets.json
+# Lake build outputs and dependencies.
+.lake/
 
-# Python environments and caches.
-.venv*/
+# Python caches of the repository's scripts.
 __pycache__/
-*.py[co]
-*.egg-info/
-.pytest_cache/
-.ruff_cache/
-
-# Nix result links and local caches.
-/result
-/result-*
-.cache/
 
 # Editor and operating-system metadata.
 .vscode/

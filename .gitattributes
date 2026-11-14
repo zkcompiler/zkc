@@ -1,5 +1,0 @@
-# Unified diff context lines intentionally contain one space on empty lines.
-lean/adapters/clean/compatibility.patch whitespace=-blank-at-eol
-lean/integrations/arklib/compatibility.patch whitespace=-blank-at-eol
-# Exact native printer bytes, including its final blank line, are digest inputs.
-compiler/test/fixtures/entry-components/ordinary*.mlir whitespace=-blank-at-eof

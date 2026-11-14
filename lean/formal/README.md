@@ -1,7 +1,9 @@
 # Formal
 
 Statements about admitted programs, over the meaning that Core gives them, and their proofs.
-The package requires Core and nothing else; nothing requires it.
+The package requires the package `zkc_compiler` (`../compiler`) and nothing else: its library
+imports only the core, and its tests import checks of the core's tests and read the core's
+fixtures; nothing requires it.
 
 A statement about a protocol is proved in two parts that this package keeps apart.
 
@@ -54,8 +56,9 @@ returns a proof and the constructed verifier's program returns on it. What its a
 is the equation of the verifier's check in an arithmetic and the statement; the binding, the
 rows that fit and the test of the relation theorem are evaluated by the kernel.
 
-`Zkc.Tests.Formal.Sumcheck` is about the package that the frontend emits for
-`Sumcheck<Fr, 10>`, whose loop is written out as ten rounds. It links the package with its
+`Zkc.Tests.Formal.Sumcheck` is about a package of `Sumcheck<Fr, 10>`, whose loop is written out
+as ten rounds: the package that an earlier state of the frontend emitted for the worked program
+`sumcheck_example`; the present frontend emits a different one. It links the package with its
 body in pieces of one round, proves the laws of the library functions `sums`, `low`, `high`
 and `fix_first` from their bodies at the ten sizes, one statement per function, proves the
 statement of a round at its piece with the laws of the functions it calls as hypotheses, and
@@ -63,4 +66,8 @@ composes the ten: in the model of any arithmetic, when the claims are the sum of
 the verifier's ten checks pass. It does not reach the instructions after the tenth round or
 the model that runs.
 
-Run `lake build` from this directory.
+Run `lake build`, `lake test` and `lake exe zkc-formal-audit` from this directory. The audit
+(`Zkc.Tools.Audit` of the compiler's package) checks that a module of `Zkc.Formal` imports only
+modules of the core and of the formal library, besides Lean's prelude; and, for every declaration
+of `Zkc.Formal` and of its tests `Zkc.Tests.Formal`, its axioms, `@[extern]` and
+`@[implemented_by]`, and that the kernel accepts it when it is replayed from the built files.

@@ -1,90 +1,101 @@
 # zkc
 
-zkc is a compiler for zero-knowledge **proof protocols**. It makes participant
-computation, interaction and protocol composition explicit so they can be
-analyzed, transformed and executed using cryptographic libraries.
+zkc is a compiler for zero-knowledge proof protocols. A protocol is written in the zkc source
+language with its roles, the values each role holds, the messages they exchange, the challenges
+they draw and the checks that decide acceptance. zkc checks the program, projects it to one
+program per role and constructs a non-interactive proof scheme from it.
 
-A relation describes what is being proved. A protocol describes how participants
-compute, exchange messages, obtain challenges and check the proof. zkc authors
-that protocol in `.zkc` and compiles it through Protocol IR (PIR), built on MLIR, to independently
-executable participant programs.
+zkc is written in Lean. The core language has its meaning in Lean, and the functions that admit
+a program, project it and run it are the ones that the core's theorems are about: the theorems of
+admission state what an admitted program never does, and a formal package proves properties of
+compiled programs over that meaning. The frontend, which reads the source, and the reader of a
+package file are not proved; admission checks what they produce.
 
-The project is under active development. [Implementation status](docs/status.md)
-records supported capabilities and their limits.
+## Repository
+
+| Path | Content |
+|---|---|
+| [`language/`](language/README.md) | the reference of the source language and its conformance tests |
+| [`libraries/`](libraries/) | the library of the source language, in source |
+| [`examples/`](examples/) | worked programs |
+| [`lean/compiler/`](lean/compiler/README.md) | the compiler, one Lake package: the core (`Zkc.Core`), the frontend (`Zkc.Frontend`), their tests and tools |
+| [`lean/formal/`](lean/formal/README.md) | a second Lake package: statements and proofs over the meaning of the core |
+| [`docs/`](docs/README.md) | the status, the development guide and the specification of the core language |
+| [`scripts/`](scripts/) | the document checker |
+
+## What it does now
+
+- The frontend reads `.zkc` source of the frozen layer of the language, and the scheme
+  declarations that derive a proof by Fiat–Shamir, and emits programs of the core language.
+- The core elaborates and admits these programs. Admission checks their types, checks facts so
+  that an admitted program never stops `undefined`, and checks the copies of a value that
+  several roles hold.
+- The core projects a protocol to one program per role, constructs a non-interactive scheme by
+  the Fiat–Shamir and serialize steps, and runs role programs with a total executor.
+- The formal package states and proves properties over the meaning of the core. It has two
+  worked results: the completeness of the Schnorr scheme of
+  [`examples/schnorr_example.zkc`](examples/schnorr_example.zkc), and an invariant of ten rounds
+  of Sumcheck (when the claims are the sum of the table, the verifier's ten checks pass). Neither
+  is a statement of soundness.
+
+zkc does not currently run role programs natively, target WASM or the EVM, or compile the forms
+of the language beyond the frozen layer, such as oracles and commitments, STARK and constraint
+systems. These are being rebuilt on this structure. The [status](docs/status.md) lists what is
+supported. The earlier implementation, which had some of these, is at the tag
+`old-route-2026-11-14`.
 
 ## A protocol in zkc
 
-The [Schnorr library](libraries/protocols/sigma/schnorr/lib.zkc) expresses its exchange
-with explicit roles and random services:
+The Schnorr protocol of [`examples/schnorr.zkc`](examples/schnorr.zkc) proves knowledge of a
+scalar whose multiple of `base` is `point`. Both roles hold `base` and `point`; only the prover
+`P` holds `scalar`. The prover samples a secret nonce and sends a commitment, the verifier `V`
+draws a public challenge, the prover sends a response, and the verifier's guard decides
+acceptance:
 
-```text
-let nonce = nonces.draw();
-let commitment = send P -> V(base * nonce);
-let challenge = challenges.draw();
-let received = send V -> P(challenge);
-let response = send P -> V(nonce + received * scalar);
-let accepted@V = base * response == commitment + point * challenge;
-return (accepted = accepted);
+```zkc
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    base: G @(P, V),
+    point: G @(P, V),
+    scalar: G::Scalar @P
+):
+    nonce @P <- sample G::Scalar
+    commitment <- send base * nonce to V
+    challenge <- draw G::Scalar from V to P
+    response <- send nonce + challenge * scalar to V
+    guard @V base * response == commitment + point * challenge
 ```
 
-Its [Entry](examples/projects/schnorr/main.zkc) selects public inputs, the
-acceptance result and a Fiat–Shamir construction. The compiler derives participant
-transcripts; the Rust Host executes independent prove/verify calls. The
-[Sumcheck project](examples/projects/sumcheck/README.md) demonstrates bounded
-repetition, vector kernels and an actual terminal evaluation.
+[`examples/schnorr_example.zkc`](examples/schnorr_example.zkc) declares a non-interactive scheme
+over the group G1 of BLS12-381. zkc derives its prover and verifier by the Fiat–Shamir step with
+the suite `Merlin3Bls12381` and the canonical layout of the proof:
 
-## How it works
-
-```text
-.zkc Language → Protocol IR
-                 protocol → participant → exec → physical
-                                                       ↓
-                                                 zkc.program/0
-                                                       ↓
-                                     shared Rust Runner + installed kernels
-                                        Entry / proof / joint Hosts
+```zkc
+scheme Proof = Schnorr<G1>:
+    construction derived(Merlin3Bls12381)
 ```
 
-Language checks explicit modules, types, capabilities, resources and selected
-Entries. The compiler preserves mathematical structure through participant
-projection, demand lowering and physical kernel selection. Hosts authenticate
-packages, bind application inputs and setup authority, and manage execution and
-publication. Direct MLIR clients enter the same pipeline.
+## Build and test
 
-The independent [Lean library](lean/README.md) supplies semantic models and
-proofs. Those results concern their stated formal subjects; native pipeline
-correspondence remains open. [Architecture](docs/architecture.md) explains the
-owners, and [assurance](docs/assurance.md) distinguishes formal results, compiler
-checks and bounded tests.
-
-## Try it
-
-On x86_64 Linux, `nix run . -- --help` runs the packaged CLI, including its
-companion compiler. `nix build` creates `result/bin/zkc`.
-
-The supported development environment is x86_64 Linux with Nix. Follow the
-[setup guide](docs/development/README.md#set-up-the-development-checkout), then
-run from the repository root:
+The Lean toolchain is named in `lean/compiler/lean-toolchain` and installed by
+[elan](https://github.com/leanprover/elan). With `elan`, [just](https://github.com/casey/just)
+and `python3`, from the root of the repository:
 
 ```sh
-nix develop
-just setup
-just build
+just build   # build the compiler package, then the formal package
+just test    # build and test both packages, then audit them
+just check   # check the public tree, the documents and the generated Unicode tables
 ```
 
-Then follow the [Schnorr walkthrough](docs/getting-started.md) to compile a source Entry, produce a proof and verify it in a separate process. Its checked-in witness is deliberately public; runtime randomness is fresh.
+The [development guide](docs/development.md) describes the layout, every command and how to run
+part of the tests.
 
-## Explore
+## Read more
 
-| Task | Start here |
-|---|---|
-| Write a protocol or library | [Language](docs/language/README.md), [example projects](examples/projects/README.md) |
-| Develop the compiler or a backend | [Architecture](docs/architecture.md), [development](docs/development/README.md) |
-| Study semantics and verification | [Native specification](docs/spec/README.md), [formal models](lean/docs/README.md) |
-| Assess support and future work | [Status](docs/status.md), [roadmap](docs/roadmap.md) |
-
-The [documentation index](docs/README.md) maps the reference. Contributions follow
-[the contribution guide](.github/CONTRIBUTING.md).
+- [The source language](language/README.md): its reference, its libraries and its conformance
+  tests.
+- [The documentation index](docs/README.md): the status, the development guide and the
+  specification of the core language.
+- [The contribution guide](.github/CONTRIBUTING.md).
 
 ## License
 

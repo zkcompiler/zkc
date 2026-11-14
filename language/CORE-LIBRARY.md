@@ -5,8 +5,9 @@ provides (`LANGUAGE.md` §2.5). It is designed with the language, is shipped wit
 has the version of the language: it cannot change without the reference changing. It has nine
 modules. Eight are source files, given here in full; the ninth, `zkc::security`, has no source
 file: its names are entries of the vocabulary. It is one of a set: `LANGUAGE.md`, the reference
-of the language; this document; `STANDARD-LIBRARY.md`, the libraries above it; `lib/zkc/`, the
-library in source; `programs/`, the worked programs; and `conformance/`, the tests.
+of the language; this document; `STANDARD-LIBRARY.md`, the libraries above it; `conformance/`,
+the tests; and, at the root of the repository, `libraries/zkc/`, the library in source, and
+`examples/`, the worked programs.
 
 *State.* This document follows `LANGUAGE.md`. `zkc::prelude`, `zkc::option`, `zkc::algebra` and
 the interfaces of `zkc::hash` are layer A, which is frozen. The other modules are carried: each
@@ -41,7 +42,7 @@ them.
 A law is listed among the members of its interface: it is an obligation of every implementing
 module, typed at every instance the tools check (SP10).
 
-**How it is checked.** The sources below are the files of `lib/zkc/`, which the test suite of
+**How it is checked.** The sources below are the files of `libraries/zkc/`, which the test suite of
 the frontend checks (`LANGUAGE.md` §11).
 
 ---
@@ -187,7 +188,7 @@ prelude holds the names that the syntax and the fixed tables of the language pro
 language produces with their eliminator (`send … as oracle` produces an `Oracle`, `query … deferred` a `Pending`, and `data`
 reads a handle). A kind is a choice and is imported; `Option` is imported.
 
-`lib/zkc/prelude.zkc`
+`libraries/zkc/prelude.zkc`
 
 ```zkc
 module zkc::prelude
@@ -221,7 +222,7 @@ pub def length<T: linear>(values: [T]) -> nat = primitive("seq.length")
 decoder of a suite (SC5) return it, so does the generated `L::read<T>`, and the field of `P::Run`
 for an event in a choice is an `Option` (§8 of the reference).
 
-`lib/zkc/option.zkc`
+`libraries/zkc/option.zkc`
 
 ```zkc
 module zkc::option
@@ -277,7 +278,7 @@ Group notation is additive and the scalar stands on the right (`LANGUAGE.md` §3
 an ordinary interface: a pairing of the vocabulary is a module, `zkc::curves::bls12_381::Bls12381`,
 and its laws are typed there.
 
-`lib/zkc/algebra.zkc`
+`libraries/zkc/algebra.zkc`
 
 ```zkc
 module zkc::algebra
@@ -400,7 +401,7 @@ and `multilinear` are declared the same way in the standard library, because the
 the evaluation function of those modules. `lower` has no default instance (no module of this
 library implements `Derived`) and is resolved for names only.
 
-`lib/zkc/oracle.zkc`
+`libraries/zkc/oracle.zkc`
 
 ```zkc
 // Layer D, carried and not frozen. To change: in `Derived`, `Open` receives the lower handles,
@@ -502,7 +503,7 @@ of the module; the commit theorem takes it as its premise and the receipt lists 
 that produces a proof is named `opening`: `open` is a reserved word. `Proof` has a static
 parameter, the number of rows proved.
 
-`lib/zkc/commitment.zkc`
+`libraries/zkc/commitment.zkc`
 
 ```zkc
 // Layer D, carried and not frozen. To change: a combination of digests and states for a
@@ -574,7 +575,7 @@ A permutation or a standard byte hash is a row; a sponge, a compression function
 are source over it (`STANDARD-LIBRARY.md`). An extendable-output function is no `Hash`, whose
 `Size` is fixed: `output<count>` gives as many bytes as its static argument asks for.
 
-`lib/zkc/hash.zkc`
+`libraries/zkc/hash.zkc`
 
 ```zkc
 module zkc::hash
@@ -620,7 +621,7 @@ rows. Its readers do not stop: the condition of an `if` gives the fact that a re
 and a reader returns `None` where the units are too few or the encoding is not canonical. The
 three laws are typed at `canonical`. The signatures are proposed and not validated.
 
-`lib/zkc/layout.zkc`
+`libraries/zkc/layout.zkc`
 
 ```zkc
 // Layer C, carried and not frozen. To change: the field leaf is one function over
@@ -704,7 +705,7 @@ exist, and a draw of `index<0>` is no law (TY15). A suite in source and the suit
 catalogue are in `zkc::suites` (`STANDARD-LIBRARY.md`). The signatures are proposed and not
 validated: their test is a byte-exact reproduction of a deployed transcript.
 
-`lib/zkc/construction.zkc`
+`libraries/zkc/construction.zkc`
 
 ```zkc
 // Layer C, carried and not frozen. To change: the primitive that the model idealizes; a bound

@@ -6,13 +6,13 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.{cpp,h,td,zkc}]
-indent_style = space
-indent_size = 2
-
-[*.{rs,py}]
+[*.zkc]
 indent_style = space
 indent_size = 4
 
-[*.{json,yml,yaml,md,mlir,test}]
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,md}]
 indent_style = space

@@ -1,8 +1,0 @@
-"format" = "zkc.project/0"
-"source-format" = "zkc"
-
-["modules"]
-"example" = "main.zkc"
-
-["dependencies"]
-"collections" = "../../../../../libraries/core/collections"

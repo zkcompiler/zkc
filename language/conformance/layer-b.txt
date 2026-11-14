@@ -542,7 +542,7 @@ scheme Checked = Count<8>:
     prover P
     construction interactive
 goal loose = soundness(Checked, spec e = 9)
-=== M-SUM5 | refuse SX6 | `programs/sumcheck.zkc` with one change: two roles could decide
+=== M-SUM5 | refuse SX6 | `examples/sumcheck.zkc` with one change: two roles could decide
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -629,7 +629,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves Sum(values, claim)
-=== M-SUM9 | refuse SX8 | `programs/sumcheck.zkc` with one change: a charge on a send
+=== M-SUM9 | refuse SX8 | `examples/sumcheck.zkc` with one change: a charge on a send
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -716,7 +716,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUM10 | refuse TY8 | `programs/sumcheck.zkc` with one change: `%` in a `rational`
+=== M-SUM10 | refuse TY8 | `examples/sumcheck.zkc` with one change: `%` in a `rational`
 module sumcheck<F: Field>
 
 use zkc::multilinear::{fix_first, evaluate}
@@ -803,7 +803,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SUMX4 | refuse GL3 | `programs/sumcheck_example.zkc` with one change: a stage that the scheme does not have
+=== M-SUMX4 | refuse GL3 | `examples/sumcheck_example.zkc` with one change: a stage that the scheme does not have
 module sumcheck_example
 
 use sumcheck<Fr>::{Sumcheck}
@@ -904,7 +904,7 @@ pub protocol Sumcheck<n: nat> roles(P, V)(
 
 spec for Sumcheck:
     proves @V Sum(values, claim)
-=== M-SCH3 | refuse SX3 | `programs/schnorr.zkc` with one change: the split of the relation
+=== M-SCH3 | refuse SX3 | `examples/schnorr.zkc` with one change: the split of the relation
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -963,7 +963,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCH7 | refuse SX6 | `programs/schnorr.zkc` with one change: a `knowledge` clause with the witness
+=== M-SCH7 | refuse SX6 | `examples/schnorr.zkc` with one change: a `knowledge` clause with the witness
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1022,7 +1022,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCH8 | refuse SX6 | `programs/schnorr.zkc` with one change: an extractor without a statement parameter
+=== M-SCH8 | refuse SX6 | `examples/schnorr.zkc` with one change: an extractor without a statement parameter
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1081,7 +1081,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCH9 | refuse SX6 | `programs/schnorr.zkc` with one change: a simulator with two parameters of randomness
+=== M-SCH9 | refuse SX6 | `examples/schnorr.zkc` with one change: a simulator with two parameters of randomness
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1141,7 +1141,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCH10 | refuse SX6 | `programs/schnorr.zkc` with one change: the simulator is given the coins: the ability is `coins`
+=== M-SCH10 | refuse SX6 | `examples/schnorr.zkc` with one change: the simulator is given the coins: the ability is `coins`
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1200,7 +1200,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using programming
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCH11 | refuse SP3 | `programs/schnorr.zkc` with one change: a member that the sort does not have
+=== M-SCH11 | refuse SP3 | `examples/schnorr.zkc` with one change: a member that the sort does not have
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1259,7 +1259,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Size
-=== M-SCH12 | refuse SX6 | `programs/schnorr.zkc` with one change: the function after `by` is a `def`
+=== M-SCH12 | refuse SX6 | `examples/schnorr.zkc` with one change: the function after `by` is a `def`
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1318,7 +1318,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCH13 | refuse TY7 | `programs/schnorr.zkc` with one change: `Runs<1>` is one run
+=== M-SCH13 | refuse TY7 | `examples/schnorr.zkc` with one change: `Runs<1>` is one run
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1377,7 +1377,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using programming
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCH14 | refuse SX6 | `programs/schnorr.zkc` with one change: a simulator that returns the coins is not given them
+=== M-SCH14 | refuse SX6 | `examples/schnorr.zkc` with one change: a simulator that returns the coins is not given them
 module schnorr
 
 pub relation DLog<G: PrimeOrderGroup>(base: G, point: G; scalar: G::Scalar):
@@ -1436,7 +1436,7 @@ spec for Schnorr:
     zero_knowledge honest: by simulate using coins
     zero_knowledge programmed: by simulate_programmed using coins
     charge sites.challenge <= 1 / G::Scalar::Order
-=== M-SCHX1 | refuse GL3 | `programs/schnorr_example.zkc` with one change: zero knowledge at `constructed` with a simulator that is given coins
+=== M-SCHX1 | refuse GL3 | `examples/schnorr_example.zkc` with one change: zero knowledge at `constructed` with a simulator that is given coins
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1560,7 +1560,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX2 | refuse GL3 | `programs/schnorr_example.zkc` with one change: two `zero_knowledge` clauses, and the goal names neither
+=== M-SCHX2 | refuse GL3 | `examples/schnorr_example.zkc` with one change: two `zero_knowledge` clauses, and the goal names neither
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1684,7 +1684,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX3 | refuse GL3 | `programs/schnorr_example.zkc` with one change: `programming` at `written`: there is no oracle to program
+=== M-SCHX3 | refuse GL3 | `examples/schnorr_example.zkc` with one change: `programming` at `written`: there is no oracle to program
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1808,7 +1808,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX4 | refuse GL3 | `programs/schnorr_example.zkc` with one change: a property that is not stated at the last stage
+=== M-SCHX4 | refuse GL3 | `examples/schnorr_example.zkc` with one change: a property that is not stated at the last stage
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -1932,7 +1932,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX5 | refuse GL2 | `programs/schnorr_example.zkc` with one change: a stage is one of four words
+=== M-SCHX5 | refuse GL2 | `examples/schnorr_example.zkc` with one change: a stage is one of four words
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -2056,7 +2056,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-SCHX6 | refuse GL4 | `programs/schnorr_example.zkc` with one change: a ceiling without a budget
+=== M-SCHX6 | refuse GL4 | `examples/schnorr_example.zkc` with one change: a ceiling without a budget
 module schnorr_example
 
 use schnorr::{Schnorr}
@@ -2180,7 +2180,7 @@ pub def commitment(
     statement: [byte], challenge: G1::Scalar, response: G1::Scalar
 ) -> G1 = primitive("signature.commitment")
 pub def keygen(seed: [byte; 32]) -> (G1::Scalar, G1) = primitive("signature.keygen")
-=== M-GKR4 | refuse SX6 | `programs/gkr.zkc` with one change: a loop that does not exist
+=== M-GKR4 | refuse SX6 | `examples/gkr.zkc` with one change: a loop that does not exist
 module gkr<F: Field>
 
 use sumcheck<F>::{Reduce}
@@ -2354,7 +2354,7 @@ pub def wiring<d: nat, w: nat>(
     c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
 ) -> (F, F) = primitive("circuit.wiring")
 pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")
-=== M-GKR5 | refuse SX8 | `programs/gkr.zkc` with one change: a charge over a run-time value
+=== M-GKR5 | refuse SX8 | `examples/gkr.zkc` with one change: a charge over a run-time value
 module gkr<F: Field>
 
 use sumcheck<F>::{Reduce}
@@ -2528,7 +2528,7 @@ pub def wiring<d: nat, w: nat>(
     c: Circuit<d, w>, layer: index<d>, z: [F; w], pair: [F; 2 * w]
 ) -> (F, F) = primitive("circuit.wiring")
 pub def combine(weights: (F, F), left: F, right: F) -> F = primitive("circuit.combine")
-=== M-FRA20 | refuse TY8 TY2 | `programs/fragments.zkc` with one change: without the `where` the default instance `n = 0` has the range `0..0 - 1`
+=== M-FRA20 | refuse TY8 TY2 | `examples/fragments.zkc` with one change: without the `where` the default instance `n = 0` has the range `0..0 - 1`
 module fragments
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2721,7 +2721,7 @@ pub protocol HandSized<F: Field> roles(P, V)(xs: [F] @P):
     ys: [F; 8] = xs
     m <- send ys to V
     guard @V m[7] == 0
-=== M-CP1 | refuse TY13 | `programs/chaum_pedersen.zkc` with one change: without the attribute the site of the pair has no name
+=== M-CP1 | refuse TY13 | `examples/chaum_pedersen.zkc` with one change: without the attribute the site of the pair has no name
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2779,7 +2779,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-CP2 | refuse SX6 | `programs/chaum_pedersen.zkc` with one change: a simulator is not an extractor
+=== M-CP2 | refuse SX6 | `examples/chaum_pedersen.zkc` with one change: a simulator is not an extractor
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2838,7 +2838,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-CP3 | refuse SX9 | `programs/chaum_pedersen.zkc` with one change: one natural per draw
+=== M-CP3 | refuse SX9 | `examples/chaum_pedersen.zkc` with one change: one natural per draw
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2897,7 +2897,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-CP5 | refuse GL3 | `programs/chaum_pedersen.zkc` with one change: the stage of the property
+=== M-CP5 | refuse GL3 | `examples/chaum_pedersen.zkc` with one change: the stage of the property
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -2956,7 +2956,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof)
-=== M-CP6 | refuse GL4 | `programs/chaum_pedersen.zkc` with one change: a ceiling without a budget
+=== M-CP6 | refuse GL4 | `examples/chaum_pedersen.zkc` with one change: a ceiling without a budget
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3015,7 +3015,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof) <= 2^-100
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-CP7 | refuse SX8 | `programs/chaum_pedersen.zkc` with one change: a charge on a send
+=== M-CP7 | refuse SX8 | `examples/chaum_pedersen.zkc` with one change: a charge on a send
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3074,7 +3074,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-CP9 | refuse SX6 | `programs/chaum_pedersen.zkc` with one change: the function after `by` is a `def`
+=== M-CP9 | refuse SX6 | `examples/chaum_pedersen.zkc` with one change: the function after `by` is a `def`
 module chaum_pedersen
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3133,7 +3133,7 @@ scheme SameLogProof = ChaumPedersen<G1>:
 goal complete = completeness(SameLogProof)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)
-=== M-IPA3 | refuse TY5 | `programs/inner_product.zkc` with one change: the invariant is typed at every boundary
+=== M-IPA3 | refuse TY5 | `examples/inner_product.zkc` with one change: the invariant is typed at every boundary
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3252,7 +3252,7 @@ scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete_once = completeness(InnerProductOnce8)
-=== M-IPA4 | refuse SX3 | `programs/inner_product.zkc` with one change: the alternative is applied to its statement arguments
+=== M-IPA4 | refuse SX3 | `examples/inner_product.zkc` with one change: the alternative is applied to its statement arguments
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}
@@ -3371,7 +3371,7 @@ scheme InnerProductOnce8 = InnerProductOnce<G1, n = 3>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete_once = completeness(InnerProductOnce8)
-=== M-IPA8 | refuse TY6 | `programs/inner_product.zkc` with one change: the identity of a group is `0`
+=== M-IPA8 | refuse TY6 | `examples/inner_product.zkc` with one change: the identity of a group is `0`
 module inner_product
 
 use zkc::curves::bls12_381::{Fr, G1}

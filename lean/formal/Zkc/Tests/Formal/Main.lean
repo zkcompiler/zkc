@@ -11,8 +11,8 @@ open Zkc.Core Zkc.Formal
 
 /-- The files of the texts of the receipts, in the order of `receipts`. -/
 def textFiles : List (List String) :=
-  [[package_file "../core/fixtures/construction/schnorr-frontend-scheme.json",
-      package_file "../core/fixtures/construction/schnorr-frontend-scheme.declaration.json"],
+  [[package_file "../compiler/fixtures/construction/schnorr-frontend-scheme.json",
+      package_file "../compiler/fixtures/construction/schnorr-frontend-scheme.declaration.json"],
     [package_file "fixtures/sumcheck-ten-rounds.json"]]
 
 def main : IO UInt32 := do

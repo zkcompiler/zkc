@@ -1,8 +1,0 @@
-module sample;
-domain Fr = field("bls12-381.fr");
-protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V), coins: Random<Fr> @V) -> (result: Fr @(P,V)) completes {
-  let _ = finish_if @V(go) (result = x);
-  let unused = coins.draw();
-  return (result = x + x);
-}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

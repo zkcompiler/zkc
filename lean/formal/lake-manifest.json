@@ -3,10 +3,10 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "zkc_core",
+   "name": "zkc_compiler",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../core",
+   "dir": "../compiler",
    "copy": false,
    "configFile": "lakefile.toml"}],
  "name": "zkc_formal",

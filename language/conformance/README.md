@@ -18,9 +18,9 @@ heading.
 
 - **One program per test.** A program is one module. Where a test needs several modules, a line
   `--- file` separates them; the first is the module under test.
-- **The library.** A program is checked with the library of `../lib/zkc/`. A module of a test
-  whose header is `module zkc::…` stands in place of the library module of that path: this is how
-  a change to the library is tested.
+- **The library.** A program is checked with the library of `../../libraries/zkc/`. A module of a
+  test whose header is `module zkc::…` stands in place of the library module of that path: this is
+  how a change to the library is tested.
 - **`// instantiate: m<args>`** asks for that instance to be checked as a root (SP7), for a
   definition that no root of the program reaches.
 - **A type bound in a test** (`type F = primitive("bls12-381.fr")`) is a row bound by a module of
@@ -47,8 +47,8 @@ The prefix of an identifier says what the program is:
 | Prefix | Program |
 |---|---|
 | `T-`, `S-`, `I-`, `R-`, `V-`, `N-`, `X-` | a program written for the rule or the form that its note names |
-| `M-` | a worked program of `../programs/` with one change; the whole changed program is the test |
-| `L-` | a module of `../lib/zkc/` with one change, in place of the library module |
+| `M-` | a worked program of `../../examples/` with one change; the whole changed program is the test |
+| `L-` | a module of `../../libraries/zkc/` with one change, in place of the library module |
 
 ## What the tests cover
 
