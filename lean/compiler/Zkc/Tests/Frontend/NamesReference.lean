@@ -158,7 +158,7 @@ def conformanceNamesSuite (repository : Repository) : TestM Unit := do
     unless seen.contains id do failure s!"{id}: expected to be refused by {rule}; not found"
   -- the counts of `conformance/README.md` give 147 tests to `layer-a-types-facts.txt`, which
   -- has 149
-  expectTrue (total == 322) s!"expected the 322 tests of layer A, found {total}"
+  expectTrue (total == 324) s!"expected the 324 tests of layer A, found {total}"
 
 /-- Every module of `libraries/` as a root resolves, with every module it reaches. -/
 def libraryNamesSuite (repository : Repository) : TestM Unit := do

@@ -234,6 +234,14 @@ and its conformance tests in `../../language`, with the independent conformance 
 the driver with an error. It checks:
 
 - every file of `libraries/` and `examples/` parses, and the printer keeps its tree;
+- formatting keeps a program: 36 programs of `Zkc.Tests.Frontend.FormatCases` (a function at the
+  top level, in a module and in a module that implements an interface, with no parameter or
+  one, the result `()` or `nat`, and a body of `return` alone, an `if` expression or a guard
+  then `return`) and their canonical texts are admitted; formatting a canonical text gives it
+  back; and a canonical text has the declarations of its program, of the same kinds, and the
+  same instances holding the same types, as `zkc-check instances --contents` prints them. Every
+  file of `libraries/` and `examples/` keeps its outcome, its declarations and its instances
+  after formatting;
 - every program of `conformance/`: a test whose expected refusal is a lexical or grammar rule is
   refused by that rule, every refusal names a rule of its test, and the refused tests are the
   list in `Zkc.Tests.Frontend.Reference`;
@@ -375,11 +383,12 @@ Where the reference leaves a choice, the code takes the reading marked in its co
 - Comments are not in the tree. The formatter places each before the first construct (item,
   member, statement, case, clause, scheme line) that follows it, at that construct's
   indentation: a comment at the end of a line or inside a bracket moves to its own line.
-- The formatter removes the annotations of FM2 that the text decides (`else reject`, `-> ()`,
-  `#[site(x)]` on the binder `x`, a role mapped to its namesake), writes one role without
-  parentheses and roles in roster order inside a protocol, and prints a body of `return e`
-  alone as an expression body. The rows of FM2 that compare an annotation with what the checker
-  computes are kept.
+- The formatter removes the annotations of FM2 that the text decides (`else reject`, `-> ()`
+  except on a `def` without parameters in the suite of a module, `#[site(x)]` on the binder `x`,
+  a role mapped to its namesake), writes one role without parentheses and roles in roster order
+  inside a protocol, and prints a body of `return e` alone as an expression body, except
+  `return ()`. The rows of FM2 that compare an annotation with what the checker computes are
+  kept.
 
 ## Readings of the reference for names
 

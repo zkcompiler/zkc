@@ -86,6 +86,6 @@ def conformanceSuite (repository : Repository) : TestM Unit := do
     unless refused.any (·.1 == id) do failure s!"{id}: expected to be refused by {rule}; not found"
   note s!"{total} conformance tests: {parsedCount} parse, {refused.size} are refused"
   note s!"{leftToChecker.size} tests that expect a refusal by a rule of the checker parse"
-  expectTrue (total == 502) s!"expected 502 conformance tests, found {total}"
+  expectTrue (total == 504) s!"expected 504 conformance tests, found {total}"
 
 end Zkc.Tests.Frontend
