@@ -1,6 +1,0 @@
-"format" = "zkc.project/0"
-"source-format" = "zkc"
-["modules"]
-"example" = "main.zkc"
-[workspace]
-path = "../../../zkc.workspace.toml"

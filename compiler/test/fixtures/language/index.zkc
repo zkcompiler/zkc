@@ -1,7 +1,0 @@
-module sample;
-fn count<N:nat>()->index { return index<N+1>(); }
-protocol Run roles(P)()->(result:index@P) {
-  let result @P = count<2>();
-  return(result=result);
-}
-entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

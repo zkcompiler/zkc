@@ -1,9 +1,0 @@
-"format" = "zkc.project/0"
-"source-format" = "zkc"
-
-["modules"]
-"stark::sampling" = "lib.zkc"
-
-["dependencies"]
-"algebra" = "../../../core/algebra"
-"polynomial" = "../../../core/polynomial"

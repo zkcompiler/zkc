@@ -1,8 +1,0 @@
-def choose(flag: bool, x: bool, y: bool) -> bool:
-    if flag:
-        x
-    else:
-        y
-pub protocol Run roles(P)(flag: bool @P, x: bool @P, y: bool @P) -> bool @P:
-    result = choose(flag, x, y)
-    return result

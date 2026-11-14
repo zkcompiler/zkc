@@ -1,4 +1,0 @@
-module algebra;
-pub domain Fr = field("bls12-381.fr");
-pub math fn mix(a: Fr, b: Fr) -> Fr { return a * a + b; }
-pub math fn other(a: Fr, b: Fr) -> Fr { return a * b + b; }

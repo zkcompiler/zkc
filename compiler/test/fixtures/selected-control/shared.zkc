@@ -1,7 +1,0 @@
-pub protocol Run roles(P,V)(flag: bool @(P,V), x: bool @(P,V), y: bool @(P,V)) -> bool @(P,V):
-    #[site(choice)]
-    result = if flag:
-        x
-    else:
-        y
-    return result
