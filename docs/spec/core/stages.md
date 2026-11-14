@@ -1,8 +1,9 @@
 # Core language: stages
 
-A stage rewrites one core program into the next. The three stages between the
-original program and the constructed one are the only compilation steps that
-change what a security statement has to assume. Each is defined by a table.
+A stage rewrites one core program into the next. The two stages between the
+program as written and the constructed one, Fiat–Shamir and serialization, are the
+only compilation steps that change what a security statement has to assume. Each is
+defined by a table.
 
 ## Stage tables
 
@@ -11,10 +12,10 @@ parameters and its rows. A row has a pattern and a template.
 
 | Part | Content |
 |---|---|
-| Pattern | an operation form, with conditions on its attributes: owner, receivers, types, the row of a catalogue or oracle table |
+| Pattern | an operation form, with conditions on its attributes: owner, receivers, types, the row of a catalogue table |
 | Template | a region. Its inputs are the matched operation's operands followed by the state values of the roles the row names; its outputs are the operation's results followed by the new state values |
 | State | a type and its initial value per role, or none |
-| Parameters | values the compiler chooses and exports, on which the template may depend |
+| Parameters | values of the declaration on which the template may depend |
 
 The rewrite of a definition replaces every operation that matches a row by the
 row's template, instantiated at the operation's attributes, and leaves every other
@@ -25,54 +26,13 @@ next; the sequences that the loop collects are unchanged.
 
 A template mentions only the matched operation. A stage therefore commutes with
 sequencing, loops, branches and applications, and rewrites one definition at a
-time. The same table is read by the compiler, which performs the rewrite, and by
-the formal library, which recomputes it and compares the result with the exported
-program, and which proves once, for the table, what the rewrite preserves and what
-it costs.
+time. The stages are definitions of the Core package: compilation applies them,
+and what a rewrite preserves is proved once, for the table, about the definition
+that compilation applies.
 
-A choice that does not affect meaning, such as the layout of a batch, is a
-parameter. The compiler records the parameters it chose in the
-[package](package.md); the stage's theorem holds for every parameter value.
-
-## Unfold computed oracles
-
-| Pattern | Template |
-|---|---|
-| `oracle_read(o, site)` on a handle whose origin is `computed(d, …)` | `o` evaluates `d`'s extent test on the captures and each position and stops `refused` at the first failure; evaluates `d`'s position function; reads the parents at those positions in one read; evaluates `d`'s answer function on the captures and the answers |
-| `oracle_compute(o, d)` | the handle becomes the tuple of its parents and captures, in order |
-
-No state, no parameters. The [meaning](meaning.md#reads) of a read of a computed
-handle is already its expansion on the parents, so the stage leaves the process of
-every side unchanged: the same effects in the same order, the same stops for the
-same reasons, the same results. After the stage every handle is `sent`. Functions
-of a computed oracle stay shared definitions; a read calls them.
-
-## Commit oracles
-
-Parameters: for each `sent` oracle row, a commitment scheme of the catalogue; for
-each `oracle_read`, a layout of its openings.
-
-| Pattern | Template |
-|---|---|
-| `oracle_send(s, R, site)` | `s` commits to the table and keeps the opening state; `s` exchanges the commitment with each role of `R` |
-| `oracle_read(o, site)` | for each handle: the holder of the table opens the positions; it exchanges the rows and the openings with `o`; `o` checks each opening against the commitment and stops `reject` on failure |
-
-The handle type becomes the commitment type for a receiver and the table with its
-opening state for the sender. No threaded state.
-
-The layout of a read says how its openings are grouped into messages: one opening
-per position, or one opening for several positions of one or of several handles
-with shared parts sent once. A read is one operation whose positions do not depend
-on its answers, so every layout stays inside that operation and moves nothing
-across a guard, a draw or a later read. A layout is admissible when it covers
-every position of the read once and lets the reader restore the rows in their
-order; the stage checks this. Layouts differ in their messages, so they are
-related through decoding: every admissible layout has a function from its message
-to the per-position openings, and the reader's run on a message is its run on the
-decoded openings, with the same rows and the same stop. A charge is per requested
-position, repeated positions included, whatever the layout shares physically.
-Proof bytes and hash work are separate measures that do depend on the layout. The
-stage's theorem is stated for every admissible layout.
+The parameters of the two stages are in the
+[declaration](contracts.md#the-declaration): the transcript roles, the suite and
+the layout.
 
 ## Fiat–Shamir
 
@@ -93,7 +53,7 @@ this stage.
 
 - The suite's domain separator is absorbed first and names the proof: it includes
   the [proof identity](package.md#identities), which is fixed before this stage
-  runs. Two proofs that share an oracle have different separators.
+  runs.
 - The statement is absorbed next, by an operation of the constructed program.
 - A label is the site: the definition and its local site number. The path of
   applications and the iteration number are not absorbed. Two executions of one
@@ -246,6 +206,7 @@ refuses a well-formed program for any other reason, and its result is well-forme
 
 ## After the last stage
 
-The constructed program contains no oracle operation and, for the transcript
-roles, no `draw`. Application expansion, projection to participants and lowering
-to the execution profiles preserve the meaning of every side.
+The constructed program contains, for the transcript roles, no `draw`. Application
+expansion and projection to role programs preserve the meaning of every side: the
+program of a role is the meaning of its protocol for the side of that role alone.
+How a role program is lowered to native code is not part of this specification.

@@ -13,7 +13,7 @@ consumers, identity domains and cross-subsystem integration gates.
 | Subject | Contract |
 |---|---|
 | Source language | [Definitions, types, bodies, Entries and translation](language/README.md) |
-| Core language | [Model](core/README.md), [types and operations](core/language.md), [meaning](core/meaning.md), [contracts](core/contracts.md), [package format](core/package.md), [stages](core/stages.md) |
+| Core language | [Model](core/README.md), [types and operations](core/language.md), [meaning](core/meaning.md), [agreements and the declaration](core/contracts.md), [package format](core/package.md), [stages](core/stages.md) |
 | Protocol IR | [Profiles](ir/protocols.md), [mathematics](ir/mathematics.md), [numerical units](ir/computation.md), [polynomial recipes](ir/polynomials.md) |
 | Foundation cutover | [Native ownership and semantics](ir/native-foundation.md), [interface changes](formats/foundation-interfaces.md), [shared catalog](formats/contract-declarations.md), [native installation](formats/native-installation.md), [logical types](formats/logical-types.md), [application map](formats/application-map.md); target contracts with support tracked separately |
 | Composition and control | [Applications](ir/composition.md), [iteration](ir/iteration.md), [finite computations](ir/finite.md), [functions](ir/functions.md), [control](ir/control.md), [completion](ir/completion.md) |

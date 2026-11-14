@@ -147,6 +147,7 @@ import Zkc.Tests.Core.Check
 import Zkc.Tests.Core.Choose
 import Zkc.Tests.Core.Claims
 import Zkc.Tests.Core.Closure
+import Zkc.Tests.Core.Compile
 import Zkc.Tests.Core.ConstructAudit
 import Zkc.Tests.Core.ConstructAuditSource
 import Zkc.Tests.Core.ConstructCollecting

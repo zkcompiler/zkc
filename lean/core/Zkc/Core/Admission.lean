@@ -284,6 +284,21 @@ theorem admit_package {package : Raw.Package} {claims : Admission.Claims} {admit
       · cases admits
     · cases admits
 
+/-- What admission returns holds what was stated beside the package, as it was given. -/
+theorem admit_claims {package : Raw.Package} {claims : Admission.Claims} {admitted : Admitted}
+    (admits : admit package claims = .ok admitted) : admitted.claims = claims := by
+  unfold admit at admits
+  split at admits
+  · cases admits
+  · split at admits
+    · split at admits
+      · split at admits
+        · cases admits
+          rfl
+        · cases admits
+      · cases admits
+    · cases admits
+
 namespace Admitted
 
 variable {model : Model}

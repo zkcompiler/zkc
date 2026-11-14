@@ -49,7 +49,21 @@ returns, with the sites in the order of the body and without the check of copies
 a check of the program as written: a step threads the transcript states of the two roles
 without declaring them copies of one value, and after serialization the prover and the
 verifier do not interact. So the statement about `incomplete` is not made of a constructed
-program.
+program. A construction starts from a package admitted as written and records it, and it
+records that what was stated beside the source, other than the keys of its sites, is what
+each step's result was admitted under (`Construction.claims`), so the vocabulary of the rows
+of a constructed package is read from the construction (`Construction.rows_stated`).
+
+`compile` is the one way from a raw package to role programs: admission of the package as a
+program as written, the construction when a scheme is declared, and projection.
+`compile_checked` says that a package that compiles was admitted and that its role programs
+are those of the admitted package or of a construction on it; `Zkc.Tests.Core.Compile` has a
+package for each gate that elaborates, that the gate refuses, and from which nothing is
+compiled. The tool's two checked commands are these functions: `core-tool admit` is `admit`
+and `core-tool compile` is `compile`, with `--vocabulary` to state that the rows and the
+literal data are the vocabulary's. The commands under `core-tool step` apply one definition
+to a package that elaborates; they admit nothing, and print the fixtures that the kernel
+compares with its own evaluation.
 
 The canonical layout is one format per type. A format (`Zkc.Core.Format`) states the
 values it writes, a writer, a reader of a prefix and its width when it is fixed, with

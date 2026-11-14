@@ -1,8 +1,7 @@
 # Core language: the package format
 
-`zkc.core/0` serializes every stage of one compilation, with the contracts and the
-proof declaration, as one JSON value built from arrays, strings and non-negative
-integers. Every reference is a position in a table. A consumer that type-checks a
+`zkc.core/0` serializes one program as one JSON value built from arrays, strings
+and non-negative integers. Every reference is a position in a table. A consumer that type-checks a
 package needs no name lookup, no string comparison and no search.
 
 ## Canonical bytes
@@ -16,14 +15,14 @@ JSON whitespace.
 A package has two identities, for two purposes.
 
 - The **artifact identity** is the SHA-256 of the canonical bytes of the whole
-  package. It names the file. Names, added stages and regenerated parameters
-  change it.
+  package. It names the file. Names change it.
 - The **proof identity** is the SHA-256 of the canonical encoding of
-  `["zkc.core.proof/0", original, proof, parameters]`: the `original` program, the
-  proof declaration, and the stage parameters (the commitment scheme of each oracle
-  row, the layouts, the suite). All of these are fixed before the Fiat–Shamir stage
-  runs; none is a later program, and `names` is not among them. The Fiat–Shamir
-  stage puts the proof identity into the constructed program as a constant.
+  `["zkc.core.proof/0", original, declaration, []]`: the `original` program and the
+  [declaration](contracts.md#the-declaration), which holds the suite and the layout,
+  with the list of online roles always written and without the identity itself. Both
+  are fixed before the Fiat–Shamir stage runs; `names` is not among them. The
+  Fiat–Shamir stage puts the proof identity into the constructed program as a
+  constant.
 
 The `original` program of the proof identity is the closure of the entry: the
 definitions and rows that the entry protocol and the proof declaration reach,
@@ -42,14 +41,19 @@ is what separates the proofs of two packages.
 
 ```text
 package  = ["zkc.core/0", programs, contracts, proof, parameters, names]
-programs = [program, …]                       one per stage, in pipeline order
-program  = [stage, types, records, variants, oracles, operations, definitions]
-stage    = "original" | "unfolded" | "committed" | "constructed"
+programs = [program]
+program  = ["original", types, records, variants, [], operations, definitions]
 ```
 
-`contracts`, `proof` and `parameters` follow the [contract](contracts.md) and
-[stage](stages.md) chapters; each may be the empty array. `names` is a side table
-and carries no meaning.
+A package holds one program. `contracts`, `proof` and `parameters` are the empty
+array, and so is the fifth position of a program; a reader ignores the first three
+and refuses a program whose fifth position is not empty. The
+[declaration](contracts.md#the-declaration) of a scheme is a document of its own.
+`names` is a side table and carries no meaning.
+
+What a [stage](stages.md) returns is printed as a package of the same form. Whether a
+package is a program as written or what a stage returned is not in the package: it
+is stated to [admission](language.md#admission) beside it.
 
 ## Types
 
@@ -62,10 +66,7 @@ use      = "free" | "at_most_once" | "exactly_once"
 variants = [[type, …], …]                     variant declarations: payload types
 type     = "bool" | "nat"
          | ["fin", n] | ["nominal", n] | ["seq", type] | ["seq", type, n]
-         | ["tuple", [type, …]] | ["record", k] | ["variant", k] | ["oracle", n]
-oracles  = [oracleRow, …]
-oracleRow = [row: type, position: type, origin]
-origin   = ["sent"] | ["computed", d, [n, …]]
+         | ["tuple", [type, …]] | ["record", k] | ["variant", k]
 ```
 
 Each type has one spelling, named as the type is. A sequence whose length is a
@@ -108,13 +109,9 @@ owns.
 definitions = [definition, …]                 a definition refers only to earlier ones
 definition  = ["function", flags, [type, …], [type, …], region]
             | ["protocol", flags, roles, [port, …], [port, …], agreements, region]
-            | ["oracle", flags, [n, …], [type, …], position: type, row: type, f, f, f]
-                                               parent rows, capture types; extent test, parent positions, answer
-            | ["relation", flags, [type, …], meaning]
 port        = [type, holder]
 agreements  = [[side, [i, …]], …]             side: 0 inputs, 1 outputs
 flags       = n                                bit 0: specification-only
-meaning     = ["formula", f] | ["external", string]
 ```
 
 `roles` is the number of roles; a holder, an owner or a participant is a role
@@ -207,9 +204,6 @@ Protocol instructions:
                                                    variant, participants with values of it, captures,
                                                    one region per alternative, outputs
 ["apply", d, [r, …], site, [v, …]]                 role map: formal role j runs as the j-th entry
-["oracle_send", s, [r, …], site, v]
-["oracle_compute", o, d, [v, …], [v, …]]           parents, captures
-["oracle_read", o, site, [[v, v], …]]              per handle: handle, array of positions
 ```
 
 A region nested in `["at", r, …]` is a local region over `r`'s values. A `repeat`

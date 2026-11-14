@@ -6,13 +6,27 @@ import Zkc.Core.Pipeline
 import Zkc.Core.Admissible
 import Zkc.Core.Copies
 import Zkc.Core.Retarget
+import Zkc.Core.Construction
 import Zkc.Tools.Core.PrintLinked
 
-/-! The compiled tool: read, elaborate, rewrite, project, print.
+/-! The compiled tool: read, admit, construct, project, print.
 
 Every step between reading and printing is one of the definitions that the theorems of
 this package speak of, compiled. The executable links neither Lean's elaborator nor its
-JSON library. -/
+JSON library.
+
+Two commands are checked. `admit` is `Zkc.Core.admit` on the package as a program as written,
+and `compile` is `Zkc.Core.compile`: admission, the construction of the declared scheme on the
+admitted package with admission after each step, and projection. Neither assembles a check of
+its own, so a check that admission gains is a check that the tool makes. With `--vocabulary`
+the package is stated to have the rows and the literal data of the vocabulary. With `--phases`
+the gates of admission are also timed one by one; those times are measurements and decide
+nothing.
+
+The commands under `step` apply one definition to a package that elaborates. They admit
+nothing, and what they print is not a compiled program: they exist to print the fixtures that
+the kernel compares with its own evaluation of the same definitions, and to look at one step.
+-/
 
 open Zkc Zkc.Core Zkc.Source
 
@@ -109,15 +123,44 @@ def expandedPackage (typed : Typed) (protocol : Raw.Protocol) (origins : List Si
     typed.table.map Operation.strip,
     unelaborateFunctions typed.functions.length typed.program.functions [], [protocol], names⟩
 
-/-- The role programs of the protocols a step produced, with applications kept as calls. -/
-def projectStepped (typed : Typed)
-    (stepped : Stepped typed.typeTable (typed.table.map (·.signature)) typed.functions) :
-    Except String (List Raw.RoleProgram) :=
-  match projectProtocols stepped.protocols with
-  | .error refusal => .error s!"refused by projection: {repr refusal}"
-  | .ok projected =>
-      .ok (unelaborateRolePrograms typed.functions.length projected.headers.length
-        projected.programs [])
+/-- Time a computation that has no refusal of its own. -/
+@[noinline] def measured {α : Type} (label : String) (compute : Unit → α) : IO α := do
+  let start ← IO.monoNanosNow
+  let result ← pure (compute ())
+  let stop ← IO.monoNanosNow
+  IO.eprintln s!"{label}: {(stop - start) / 1000} us"
+  pure result
+
+/-- What is stated beside a package that the tool is given. On the command line a producer
+can state that the rows and the literal data are the vocabulary's; the keys of sites and which
+functions can stop are stated by a producer that has them, through `Zkc.Core.admit`. -/
+def claimsOf (vocabulary : Bool) : Admission.Claims :=
+  if vocabulary then { rows := some Vocabulary.table, literals := some Vocabulary.table } else {}
+
+def describeAdmission (refusals : List Admission.Refusal) : String :=
+  "\n".intercalate (refusals.map fun refusal => s!"  {repr refusal}")
+
+def describeCompilation : CompileRefusal → String
+  | .admission refusals => s!"not admitted as written:\n{describeAdmission refusals}"
+  | .construction .stepped => "not constructed: the package is not a program as written"
+  | .construction (.step refusal) => s!"not constructed: refused by the step: {repr refusal}"
+  | .construction (.derived refusals) =>
+      s!"not constructed: what the Fiat–Shamir step returns is not admitted:\n{describeAdmission refusals}"
+  | .construction (.serialized refusals) =>
+      s!"not constructed: what the serialize step returns is not admitted:\n{describeAdmission refusals}"
+  | .projection refusal => s!"not projected: {repr refusal}"
+
+/-- The gates of admission one by one, each with its time. A measurement: the verdict is
+`Zkc.Core.admit`'s. -/
+def reportPhases (raw : Raw.Package) : IO Unit := do
+  match ← measured "phase: elaborate" fun _ => elaborate raw with
+  | .error _ => IO.eprintln "phases: the package does not elaborate"
+  | .ok typed =>
+      let size ← measured "phase: normal form" fun _ => normalSize typed
+      let admissible ← measured "phase: normal form and check of facts" fun _ =>
+        typed.program.admissible
+      let coherent ← measured "phase: check of copies" fun _ => typed.program.protocols.coherent
+      IO.eprintln s!"phases: normal form of {size} instructions; facts {admissible}; copies {coherent}"
 
 /-! ## Printing a linked package -/
 
@@ -220,27 +263,39 @@ def printStepped (typed : Typed)
   let text ← timed "print" fun _ => pure (Raw.printPackage back).render
   IO.println text
 
-def main (arguments : List String) : IO UInt32 := do
+/-- The checked commands, on a package read from a file. -/
+def checked (command : String) (path : String) (declaration : Option String)
+    (vocabulary phases : Bool) : IO UInt32 := do
+  let source ← IO.FS.readFile path
+  let raw ← timed "parse" fun _ => Raw.parsePackage source
+  let claims := claimsOf vocabulary
+  match command with
+  | "admit" =>
+      let result ← measured "admission" fun _ => admit raw claims
+      if phases then reportPhases raw
+      match result with
+      | .ok admitted =>
+          IO.println s!"admitted as written: {admitted.typed.functions.length} functions, {admitted.typed.protocols.length} protocols{if vocabulary then "; rows and literal data of the vocabulary" else ""}"
+          pure 0
+      | .error refusals =>
+          IO.println s!"not admitted as written:\n{describeAdmission refusals}"
+          pure 1
+  | _ =>
+      let declaration ← declaration.mapM readDeclaration
+      let result ← measured "compilation" fun _ => compile raw claims declaration
+      if phases then reportPhases raw
+      match result with
+      | .ok roles =>
+          let text ← measured "print" fun _ => (Raw.printRolePrograms roles).render
+          IO.println text
+          pure 0
+      | .error refusal =>
+          IO.eprintln (describeCompilation refusal)
+          pure 1
+
+/-- One definition applied to a package that elaborates. Nothing is admitted. -/
+def step (arguments : List String) : IO UInt32 := do
   match arguments with
-  | ["selftest"] =>
-      -- The constants of the concrete data: SHA-256 vectors and the group G1.
-      let mut failed := false
-      for (name, holds) in Concrete.selfTest () do
-        IO.println s!"{name}: {if holds then "holds" else "FAILS"}"
-        failed := failed || !holds
-      pure (if failed then 1 else 0)
-  | "literal" :: path :: directory :: module :: settings =>
-      let options ← match settings.foldlM setting {} with
-        | .ok options => pure options
-        | .error message => throw (IO.userError message)
-      let text ← IO.FS.readFile path
-      let raw ← timed "parse" fun _ => Raw.parsePackage text
-      let typed ← timed "elaborate" fun _ =>
-        ((if options.written then elaborateWritten raw else elaborate raw)).mapError fun refusal =>
-          s!"refused package: {repr refusal}"
-      let source ← timed "print" fun _ => pure (PrintLinked.printPackage options typed raw)
-      writeLinked source options directory module
-      pure 0
   | [command, path, declaration] =>
       let typed ← readTyped path
       let declaration ← readDeclaration declaration
@@ -263,42 +318,23 @@ def main (arguments : List String) : IO UInt32 := do
             (serializeProtocols declaration Identities.written typed.program.protocols).mapError describeRefusal
           printStepped typed serialized
           pure 0
-      | "compile" =>
-          -- Fiat–Shamir, serialize, then the role programs of every protocol, with calls.
-          let constructed ← timed "fiat-shamir" fun _ =>
-            (fiatShamir typed declaration).mapError describeRefusal
-          let serialized ← timed "serialize" fun _ =>
-            (serializeProtocols declaration constructed.identities constructed.protocols).mapError describeRefusal
-          let roles ← timed "project" fun _ => projectStepped typed serialized
-          let text ← timed "print" fun _ => pure (Raw.printRolePrograms roles).render
-          IO.println text
-          pure 0
-      | other => throw (IO.userError s!"unknown command {other}")
+      | other => throw (IO.userError s!"unknown step {other}")
   | [command, path] =>
       let source ← IO.FS.readFile path
       let raw ← timed "parse" fun _ => Raw.parsePackage source
       match command with
-      | "check" =>
+      | "elaborate-written" =>
+          -- Elaboration alone, of a program as written: its sites are numbered without gaps.
           let typed ← timed "elaborate" fun _ =>
             (elaborateWritten raw).mapError fun refusal => s!"refused package: {repr refusal}"
-          IO.println s!"accepted: {typed.functions.length} functions, {typed.protocols.length} protocols"
+          IO.println s!"elaborates as written, not admitted: {typed.functions.length} functions, {typed.protocols.length} protocols"
           pure 0
-      | "admit" =>
-          -- Admission as written, with the time of each gate: elaboration, the normal form of
-          -- every body, the check of facts on it, and the check of copies.
+      | "elaborate" =>
+          -- Elaboration alone, of what a step produced: its sites need not be numbered
+          -- without gaps.
           let typed ← timed "elaborate" fun _ =>
             (elaborate raw).mapError fun refusal => s!"refused package: {repr refusal}"
-          let size ← timed "normal form" fun _ => pure (normalSize typed)
-          let admissible ← timed "normal form and check of facts" fun _ =>
-            pure typed.program.admissible
-          let coherent ← timed "check of copies" fun _ => pure typed.program.protocols.coherent
-          IO.println s!"{typed.functions.length} functions, {typed.protocols.length} protocols; normal form of {size} instructions; facts {admissible}; copies {coherent}"
-          pure (if admissible && coherent then 0 else 1)
-      | "recheck" =>
-          -- A program that a step produced: its sites need not be numbered without gaps.
-          let typed ← timed "elaborate" fun _ =>
-            (elaborate raw).mapError fun refusal => s!"refused package: {repr refusal}"
-          IO.println s!"accepted: {typed.functions.length} functions, {typed.protocols.length} protocols"
+          IO.println s!"elaborates, not admitted: {typed.functions.length} functions, {typed.protocols.length} protocols"
           pure 0
       | "roundtrip" =>
           let typed ← timed "elaborate" fun _ =>
@@ -367,9 +403,45 @@ def main (arguments : List String) : IO UInt32 := do
           let text ← timed "print" fun _ => pure (Raw.printRolePrograms roles).render
           IO.println text
           pure 0
-      | other => throw (IO.userError s!"unknown command {other}")
-  | _ =>
-      IO.eprintln "usage: core-tool (check | recheck | roundtrip | copies | expand | expand-nested | project | calls) <package.json>"
-      IO.eprintln "       core-tool (fiat-shamir | serialize | serialize-authored | compile) <package.json> <declaration.json>"
-      IO.eprintln "       core-tool literal <package.json> <directory> <Module> [setting=value ...]"
-      pure 2
+      | other => throw (IO.userError s!"unknown step {other}")
+  | _ => throw (IO.userError "step: expected a step, a package and, for a step of a scheme, a declaration")
+
+def usage : IO UInt32 := do
+  IO.eprintln "usage: core-tool admit <package.json> [--vocabulary] [--phases]"
+  IO.eprintln "       core-tool compile <package.json> [<declaration.json>] [--vocabulary] [--phases]"
+  IO.eprintln "       core-tool step (elaborate-written | elaborate | roundtrip | copies | expand | expand-nested | project | calls) <package.json>"
+  IO.eprintln "       core-tool step (fiat-shamir | serialize | serialize-authored) <package.json> <declaration.json>"
+  IO.eprintln "       core-tool literal <package.json> <directory> <Module> [setting=value ...]"
+  IO.eprintln "       core-tool selftest"
+  IO.eprintln "admit and compile are Zkc.Core.admit and Zkc.Core.compile. A step applies one"
+  IO.eprintln "definition to a package that elaborates and admits nothing."
+  pure 2
+
+def main (arguments : List String) : IO UInt32 := do
+  let vocabulary := arguments.contains "--vocabulary"
+  let phases := arguments.contains "--phases"
+  match arguments.filter fun argument => argument != "--vocabulary" && argument != "--phases" with
+  | ["selftest"] =>
+      -- The constants of the concrete data: SHA-256 vectors and the group G1.
+      let mut failed := false
+      for (name, holds) in Concrete.selfTest () do
+        IO.println s!"{name}: {if holds then "holds" else "FAILS"}"
+        failed := failed || !holds
+      pure (if failed then 1 else 0)
+  | "literal" :: path :: directory :: module :: settings =>
+      let options ← match settings.foldlM setting {} with
+        | .ok options => pure options
+        | .error message => throw (IO.userError message)
+      let text ← IO.FS.readFile path
+      let raw ← timed "parse" fun _ => Raw.parsePackage text
+      let typed ← timed "elaborate" fun _ =>
+        ((if options.written then elaborateWritten raw else elaborate raw)).mapError fun refusal =>
+          s!"refused package: {repr refusal}"
+      let source ← timed "print" fun _ => pure (PrintLinked.printPackage options typed raw)
+      writeLinked source options directory module
+      pure 0
+  | "step" :: rest => step rest
+  | ["admit", path] => checked "admit" path none vocabulary phases
+  | ["compile", path] => checked "compile" path none vocabulary phases
+  | ["compile", path, declaration] => checked "compile" path (some declaration) vocabulary phases
+  | _ => usage

@@ -16,10 +16,9 @@ variants, and a small structural grammar.
 | `tuple [T₁, …, Tₖ]` | one value of each component, by position. The empty tuple `tuple []` is the unit type, with one value |
 | `record d u [T₁, …, Tₖ]` | one value of each field of record declaration `d`, by position |
 | `variant d [T₁, …, Tₖ]` | the payload of one alternative of variant declaration `d`, tagged by position |
-| `oracle(n)` | a handle of row `n` of the package's oracle table |
 
 A nominal type has no structure in the core. Its algebra is fixed by the catalogue
-operations over it and, in the formal library, by the laws a model satisfies.
+operations over it and by the laws a model satisfies.
 
 A record type and a variant type name a declaration of the package by its number and
 carry the declaration's shape: the field types of a record, with its use, and the
@@ -39,13 +38,6 @@ nominal type has one (`Ty.populated`):
 
 Every nominal type has a value in every [model](meaning.md#models); a type built from
 the nominal types may still have none.
-
-An oracle row records the row type, the position type and the origin of the
-handle: `sent`, or `computed(d, n₁, …, nₖ)` by definition `d` from parent handles of
-oracle rows `n₁ … nₖ`. The origin is part of the type. A handle whose origin would
-change from one loop iteration to the next has no type. The type fixes the shape
-of a computed oracle, not its data: the parents it was built from, the values it
-captured and its extent belong to the handle.
 
 ## Declarations
 
@@ -84,8 +76,6 @@ A program is a list of definitions. A definition refers only to earlier ones.
 |---|---|---|
 | Function | input types, output types | a local region |
 | Protocol | role count, located input types, located output types, agreements | a protocol region |
-| Computed oracle | parent oracle rows, capture types, position type, row type | three functions of the captures and a position: whether the position is in the extent; the ordered positions to read in each parent; and, given the parents' answers, the row |
-| Relation | parameter types | a function returning `bool`, or an external meaning |
 
 A definition may be marked specification-only
 ([contracts](contracts.md#specification-only-programs)). Such a definition is never
@@ -413,6 +403,77 @@ A protocol that passes never stops `undefined`, for any side, and neither does t
 program of any of its roles
 ([meaning](meaning.md#protocols-that-pass-the-check-of-facts)).
 
+## The check of copies
+
+A source value held by several roles is one core value per holder. Where a body
+needs those copies to be one value, a check of the body says that they are.
+
+A `choose` and a `repeat` over a count that is a value stop `incomplete` when the
+copies of the tag, or of the count, that the participants of a side hold differ
+([agreement](meaning.md#agreement)). An application assumes the agreements of the
+callee's inputs, and an agreement of outputs is a promise to callers. The check walks
+a protocol body and gives every value a class and a support.
+
+- **Class.** Values of one class are copies of one value. The copies of an agreement
+  of inputs are one class. An `exchange` gives the receiver's result the class of the
+  value sent. The copies of a `draw` are one class. The results of `at(r, ℓ)` have the
+  classes named by the code `ℓ`, its regions included, and the classes of its
+  operands: two roles that perform the same code on copies of the same values get
+  copies of the same results. The results of an application are classed by the
+  callee's agreements of outputs. The outputs of a `choose` are one class when the
+  values returned are one class in every arm. The values carried by a `repeat` have
+  the coarsest partition that the body keeps; its collections are one class when the
+  values collected are, and its iteration numbers are one class.
+- **Support.** The support of a value is the set of roles that must be in a side for
+  the value to be the value of its class there. It contains the holder. An input has
+  its holder; the result of an `exchange` has the support of the value sent and the
+  receiver; a `draw` gives the owner its own role and a receiver the owner and its
+  own; a local operation gives the supports of its operands and the role; a result
+  of an application has its holder.
+- **Requirement.** A requirement is a list of copies that must be one value: the tags
+  of a `choose`, the counts of a `repeat`, the operands at an agreement of inputs of
+  a callee, the copies of an agreement of outputs. The check refuses a body with a
+  requirement whose copies are not one class.
+
+What the check returns for a protocol is its requirements, each copy with its role
+and its support, those of the protocols it applies included. A side supports them
+when, for every requirement of which it has two or more copies, it contains the
+support of each of those copies. The side of every role supports every requirement.
+
+A protocol that passes, run for a side that supports its requirements on inputs whose
+agreed copies are equal, never stops `incomplete`, whatever its effects are answered,
+and returns outputs whose agreed copies are equal
+([protocols that pass the check of copies](meaning.md#protocols-that-pass-the-check-of-copies)).
+
+## Admission
+
+A package is admitted when it is well formed and passes the checks that make a
+program safe to run. A producer may state facts beside a package; each is checked when
+it is stated.
+
+| Gate | Checks | Always |
+|---|---|---|
+| Elaboration | [well-formedness](#well-formedness) | yes |
+| Facts | every body passes [the check of facts](#the-check-of-facts) on its normal form, and every loop count is below its maximum | yes |
+| Copies | every protocol passes [the check of copies](#the-check-of-copies) | for a program as written |
+| Sites | the sites of every protocol are numbered in the order of its body: without gaps for a program as written, increasing for what a [stage](stages.md) returned | yes |
+| Keys | the table of keys gives every protocol one key per site, and no key twice | when a table of keys is stated |
+| Stops | which functions can stop is what their bodies say | when stated |
+| Rows | every row under a name of the vocabulary is the vocabulary's row at its static arguments. A row under another name is a row of an extension and is not refused | when a vocabulary is stated |
+| Literals | the data of every literal of a nominal type are data of that type in the vocabulary | when a vocabulary is stated |
+
+A program as written is one that a producer wrote. What a stage returns is admitted
+without the check of copies: the Fiat–Shamir stage threads the transcript states of
+the two transcript roles without declaring them copies of one value, and after
+serialization the prover and the verifier do not interact, so no class relates their
+values. What holds of a constructed program in place of the check is the statement
+of each [stage](stages.md#what-the-two-rewrites-preserve).
+
+Admission is the only way to an admitted package, and compilation is the only way
+from a package to role programs: admission of the package as a program as written,
+the stages of the declared scheme on the admitted package with admission after each,
+and projection. No role program is produced from a package that a gate refuses.
+
 ## Protocol operations
 
 Each operation has one owner unless stated. Operands owned by a role are values
@@ -427,9 +488,6 @@ that role holds.
 | `repeat(P, c)` | for each role in `P` a `nat` it holds when `c` is not a number, the carried values, the captures; one region from a `nat` held by each role in `P`, the carried values and the captures to one value per collected entry and the carried values | one sequence per collected entry, held by its holder, then the carried values | the roles in `P` run the region as many times as the count says, each holding the iteration number; each sequence holds the collected values of the iterations in order |
 | `choose(P, t)` | for each role in `P` a tag of type `t` it holds, the captures; the regions of the tag, each over the captures, and the region of an alternative of a variant first over one copy of its payload per role in `P`, held by that role | the common outputs, held by roles in `P` | each role in `P` follows the region its own tag selects; in the region of an alternative of a variant it holds its own payload |
 | `apply(d, ρ, site)` | the inputs of protocol `d` with its roles renamed by the injective map `ρ` | its outputs, renamed | the roles `ρ(0), ρ(1), …` run protocol `d` |
-| `oracle_send(s, R, site)` | a table held by `s` | a handle of a `sent` row for `s` and for each role in `R` | `s` gives the roles in `R` query access to the table |
-| `oracle_compute(o, d)` | the parent handles, in order, and the capture values, held by `o` | a handle of the `computed(d, …)` row | no information moves; the handle denotes the oracle that `d` computes from these parents and captures |
-| `oracle_read(o, site)` | for each of one or more handles held by `o`, an array of positions | for each handle, the array of rows | `o` learns the rows at the positions. The positions of one read are fixed before any of its answers; a position that depends on an answer belongs to a later read |
 
 The tag of a `choose` (`ChoiceTag`) is one of three.
 
@@ -479,8 +537,7 @@ A verifier's challenge is a `draw`. A value a role samples and later reveals is 
 
 ## Sites
 
-Every `exchange`, `draw`, `sample`, `apply`, `oracle_send` and `oracle_read` has a
-site. The sites of a definition are numbered from 0 without gaps, and no two
+Every `exchange`, `draw`, `sample` and `apply` has a site. The sites of a definition are numbered from 0 without gaps, and no two
 operations of the definition share one, in whatever regions or arms they
 occur. A protocol-level `guard` has no site of
 its own; its position in the body identifies it ([package](package.md#regions-and-values)). A site
@@ -500,8 +557,8 @@ A package is well formed when two groups of conditions hold.
   operands; the outputs of a `choose` are held by its participants, and a `choose`
   over a variant has one region per alternative of its declaration; the ports of an
   agreement have one type; a deployed definition applies no specification-only
-  definition. These are the typing rules of the formal library's `Region` over the
-  core dialect.
+  definition. These are the typing rules of `Region` over the two dialects of the
+  core.
 - **Residual conditions.** A protocol has a role. Holders, owners and participants
   are below the definition's role count. A `repeat` or `choose` has a participant;
   its participants are distinct, include every role named inside it, and hold every
@@ -516,6 +573,7 @@ A package is well formed when two groups of conditions hold.
   row that a restricted row names is an earlier pure row with its inputs and the one
   output `bool`. These are decidable conditions over the package's numeric tables.
 
-A consumer accepts a package only when both groups are checked. The formal library
-checks the first by type-checking the terms it builds and the second by deciding
-each condition once.
+The Core package checks both by elaboration: it builds the typed terms of a package,
+which is the first group, and decides each condition of the second once. A package
+elaborates exactly when it is well formed. A well-formed package is a program; that a
+program is safe to run is [admission](#admission).
