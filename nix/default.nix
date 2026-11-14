@@ -207,6 +207,7 @@ in
       clean
       applications
       core
+      formal
       ;
     lake-sources = lakeSources;
     default = zkc;
@@ -225,6 +226,7 @@ in
       inherit leanToolchain environment;
       lean = formal.applications;
       core = formal.core;
+      formal = formal.formal;
       source = sources.leanChecks;
       python3 = python;
     };

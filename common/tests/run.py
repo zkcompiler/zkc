@@ -29,7 +29,7 @@ def run(arguments, *, cwd=ROOT, env=None, stdout=None):
 
 
 # Maintained Lean packages whose closure does not reach Program (support.packages.audited).
-DEPENDENCY_FREE = ("core",)
+DEPENDENCY_FREE = ("core", "formal")
 
 
 def lean_checks():
@@ -88,10 +88,13 @@ def execute(scope, args):
             run([sys.executable, check, *selection])
         # The packages outside Program's closure are outside the core-only selection:
         # they have no standalone client, and core's declaration names overlap the IR
-        # core model's in the theorem ledger.
+        # core model's in the theorem ledger. Each selection includes its closure, so
+        # the checks of formal also cover the core it requires.
         for name in DEPENDENCY_FREE:
             for check in ("check_library.py", "check_package_ownership.py", "audit_imports.py"):
                 run([sys.executable, ROOT / "lean/checks" / check, "--package", name])
+        # Formal's driver prints its receipts and fails when a check of a hypothesis does not hold.
+        run(["lake", "test"], cwd=ROOT / "lean/formal")
     elif scope == "lean-verification":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--package", "verification"])
         run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--package", "verification"])

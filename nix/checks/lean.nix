@@ -4,6 +4,7 @@
   source,
   lean,
   core,
+  formal,
   leanToolchain,
   environment,
   python3,
@@ -27,8 +28,10 @@ stdenvNoCC.mkDerivation {
     export LEAN_NUM_THREADS="$zkc_check_cores"
     cp -R ${lean.library}/share/zkc/lean/. lean/
     chmod -R u+w lean
-    # Nothing that Applications requires reaches Core, so its tree does not contain it.
+    # Nothing that Applications requires reaches Core or Formal, so its tree does not
+    # contain them.
     cp -R ${core.library}/share/zkc/lean/core lean/
+    cp -R ${formal.library}/share/zkc/lean/formal lean/
     chmod -R u+w lean
     python3 common/tests/run.py lean
     runHook postCheck

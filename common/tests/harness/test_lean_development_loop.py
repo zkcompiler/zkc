@@ -56,12 +56,12 @@ def test_core_lane_does_not_load_optional_adapter_records_or_clients(monkeypatch
     assert len(selected) == 2
     assert all("--core-only" in command for command in selected)
     # The dependency-free packages are checked on their own, without records or clients.
-    for name in ("core",):
+    for name in ("core", "formal"):
         own = [c for c in calls if c[-2:] == ["--package", name]]
         assert sorted(Path(c[1]).name for c in own) == [
             "audit_imports.py", "check_library.py", "check_package_ownership.py"]
     # The test drivers of the packages that have one run in their own directories.
-    assert tests == []
+    assert tests == [(["lake", "test"], "formal")]
     # Their declaration audits run in consumer workspaces that also require Program.
     assert [c for c in calls if c[1].endswith("check_consumer_audit.py")] == [
         [sys.executable, str(api.ROOT / "lean/checks/check_consumer_audit.py")]]

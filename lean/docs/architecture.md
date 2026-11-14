@@ -20,9 +20,11 @@ flowchart TD
 
 The Core package is a second foundation: the re-founded core language with its own
 `Zkc.Source.Region`, `PIR.Process` and `Zkc.Core` declarations, its tool's steps and
-their structural theorems. It has no Lake dependency. Because it declares names that
-Program and the core model in IR also declare, the dependency policy keeps its import
-closure disjoint from Program's and IR's.
+their structural theorems. It has no Lake dependency; its dependent is Formal. Because it
+declares names that Program and the core model in IR also declare, the dependency policy
+keeps its import closure disjoint from Program's and IR's. The Formal package states and
+proves properties of admitted programs over Core's meaning; it requires Core alone, and
+the policy lets nothing import it.
 
 ## Proof boundaries
 
