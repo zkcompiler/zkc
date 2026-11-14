@@ -54,7 +54,8 @@ these are compatibility constraints, not accidental duplicate pins.
 
 The Program package owns the Lean and Mathlib selection. IR and Protocol
 depend on Program; Verification joins their dependency branches. ArkLib and
-Clean are separate adapters, and concrete clients live in Applications.
+Clean are separate adapters, and concrete clients live in Applications. Core
+declares no dependency and shares only the toolchain with the other packages.
 Adapter dependencies do not enter ordinary native or core Lean builds. All maintained packages use one Lean toolchain and identical
 revisions for every shared dependency, including dependencies shared only by
 integrations such as CompPoly. Separate packages do not make incompatible
@@ -67,7 +68,7 @@ python3 scripts/update-lean-pins.py --mathlib MATHLIB_COMMIT --arklib ARKLIB_COM
 ```
 
 Omitted integration arguments retain their current revisions. Mathlib selects
-the Lean release. The helper updates all seven package toolchain files and the shared harness selector, the direct
+the Lean release. The helper updates all eight package toolchain files and the shared harness selector, the direct
 requirements and Lake manifests, verifies the resolved dependency set, and
 refreshes Nix source hashes. It does not build proofs or download Mathlib's
 compiled cache. A failed resolution leaves its changes for inspection.

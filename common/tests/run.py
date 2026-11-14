@@ -28,12 +28,18 @@ def run(arguments, *, cwd=ROOT, env=None, stdout=None):
     checked(arguments, cwd=cwd, env=child, stdout=stdout)
 
 
+# Maintained Lean packages whose closure does not reach Program (support.packages.audited).
+DEPENDENCY_FREE = ("core",)
+
+
 def lean_checks():
     # These tools operate on explicitly supplied snapshots or prepared sources.
     snapshot_tools = {"build_replay_tools.py", "check_independent.py", "check_migration.py",
                       "source_responsibility.py", "check_source_construction_cost.py"}
+    # Native comparisons run binaries that this lane does not build.
+    native = {"check_source_admission.py"}
     return sorted(path for path in (ROOT / "lean/checks").glob("*.py")
-                  if path.name not in snapshot_tools | {"check_source_admission.py"})
+                  if path.name not in snapshot_tools | native)
 
 
 def lean_native(args):
@@ -80,6 +86,12 @@ def execute(scope, args):
             if check.name == "check_migration_exporter.py":
                 selection = ["--package", ROOT / "lean/program", "--output", reports / "lean/migration-exporter"]
             run([sys.executable, check, *selection])
+        # The packages outside Program's closure are outside the core-only selection:
+        # they have no standalone client, and core's declaration names overlap the IR
+        # core model's in the theorem ledger.
+        for name in DEPENDENCY_FREE:
+            for check in ("check_library.py", "check_package_ownership.py", "audit_imports.py"):
+                run([sys.executable, ROOT / "lean/checks" / check, "--package", name])
     elif scope == "lean-verification":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--package", "verification"])
         run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--package", "verification"])

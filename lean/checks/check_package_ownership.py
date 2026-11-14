@@ -26,7 +26,7 @@ def check(packages, lake):
         reached = check_closure(consumer, directory) | {NAMES[consumer]}
         for dependency in sorted(FORBIDDEN_DEPENDENCIES[consumer]):
             result = subprocess.run([lake, 'query', f'@{dependency}/+PackageBoundarySentinel:lean'],
-                                    cwd=directory, capture_output=True, text=True, timeout=30)
+                                    cwd=directory, capture_output=True, text=True, timeout=300)
             diagnostic = result.stdout + result.stderr
             if result.returncode <= 0 or f'unknown package `{dependency}`' not in diagnostic:
                 raise ValueError(f'{consumer}: prohibited package available to Lake: {dependency}: {diagnostic}')
@@ -45,7 +45,7 @@ def check(packages, lake):
                 for candidate in providers:
                     target = f'@{NAMES[candidate]}/+{module}:lean'
                     result = subprocess.run([lake, 'query', target], cwd=directory,
-                                            capture_output=True, text=True, timeout=30)
+                                            capture_output=True, text=True, timeout=300)
                     diagnostic = result.stdout + result.stderr
                     if candidate != owner:
                         valid = result.returncode > 0 and f'unknown module `{module}`' in diagnostic

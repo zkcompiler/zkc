@@ -183,6 +183,18 @@ a declaration audit may intentionally select just one client module. -/
 private def dependencyPolicyJson : String := r##"{
   "layers": [
     [
+      "Zkc.Core",
+      "core"
+    ],
+    [
+      "Zkc.Tools.Core",
+      "core"
+    ],
+    [
+      "Zkc.Tests.Core",
+      "core"
+    ],
+    [
       "Zkc.Program",
       "program"
     ],
@@ -300,6 +312,13 @@ private def dependencyPolicyJson : String := r##"{
     ]
   ],
   "allowed": [
+    [
+      "core",
+      [
+        "core",
+        "upstream"
+      ]
+    ],
     [
       "program",
       [

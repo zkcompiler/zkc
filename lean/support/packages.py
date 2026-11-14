@@ -11,10 +11,10 @@ import tomllib
 LEAN = Path(__file__).resolve().parents[1]
 DIRECTORIES = {"program": "program", "ir": "ir", "protocol": "protocol",
                "verification": "verification", "arklib": "adapters/arklib",
-               "clean": "adapters/clean", "applications": "applications"}
+               "clean": "adapters/clean", "applications": "applications", "core": "core"}
 OWNERS = {"program": "Program", "ir": "IR", "protocol": "Protocol",
           "verification": "Verification", "arklib": "ArkLib", "clean": "Clean",
-          "applications": "Applications"}
+          "applications": "Applications", "core": "Core"}
 PACKAGES = {
     name: (LEAN / directory, (f"Zkc.Adapters.{OWNERS[name]}" if name in ("arklib", "clean")
                              else f"Zkc.{OWNERS[name]}",
@@ -24,13 +24,23 @@ PACKAGES = {
 # Applications currently owns no tool modules. Do not retain an empty target.
 PACKAGES["applications"] = (LEAN / "applications", ("Zkc.Applications", "Zkc.Tests.Applications"))
 NAMES = {name: f"zkc_{name}" for name in PACKAGES}
+# Core has no Lake dependency. Its library declares names that the core model in IR
+# also declares (`Zkc.Core.*`, `Zkc.Source.Var`, `PIR.Process`), so the two import
+# closures stay disjoint, and core is not part of the core-only selection, whose
+# declaration records are matched to the theorem ledger by name.
 DEPENDENCIES = {"program": (), "ir": ("program",), "protocol": ("program",),
                 "verification": ("ir", "protocol"), "arklib": ("protocol",),
-                "clean": ("ir",), "applications": ("verification", "arklib", "clean")}
+                "clean": ("ir",), "applications": ("verification", "arklib", "clean"),
+                "core": ()}
 UPSTREAM = {"program": {"mathlib"}, "ir": set(),
             "protocol": {"VCVio", "PolyFun", "CompPoly"}, "verification": set(),
-            "arklib": {"Arklib"}, "clean": {"Clean", "CompPoly"}, "applications": set()}
+            "arklib": {"Arklib"}, "clean": {"Clean", "CompPoly"}, "applications": set(),
+            "core": set()}
 CORE = ("program", "ir", "protocol", "verification")
+# The declaration audit is a Program tool. A package whose closure does not reach
+# Program cannot import it through Lake; its audit runs in a consumer workspace
+# (checks/check_consumer_audit.py) instead of its own tree.
+AUDITOR_OWNER = "program"
 
 
 def below(module, prefix):
@@ -78,6 +88,19 @@ def add_selection(parser):
 
 def selection(args):
     return selected(CORE if args.core_only else args.package)
+
+
+def audited(name):
+    """Whether the package's closure reaches the declaration auditor's owner."""
+    return AUDITOR_OWNER in selected([name])
+
+
+def test_arguments(name, root=LEAN, environment=None):
+    """The arguments of `lake test` for a package with a test driver; None without one."""
+    config = tomllib.loads((package_directory(name, root) / 'lakefile.toml').read_text())
+    if 'testDriver' not in config:
+        return None
+    return []
 
 
 def package_directory(name, root=LEAN):

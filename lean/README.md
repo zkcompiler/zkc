@@ -1,9 +1,9 @@
 # Protocol verification in Lean
 
-The maintained formal libraries share one typed `Region` source and one effectful
-`Process` semantics. Independent structured-source admission supplies an actual
-typed program. The protocol framework supplies quantitative contracts, structural
-proof construction, installation and claim assembly. The mathematical libraries
+The maintained formal libraries other than Core share one typed `Region` source and
+one effectful `Process` semantics. Independent structured-source admission supplies
+an actual typed program. The protocol framework supplies quantitative contracts,
+structural proof construction, installation and claim assembly. The mathematical libraries
 and optional ArkLib and Clean adapters are independent of a native connection.
 
 The former scalar source views, generated subject proofs, constructed-participant
@@ -44,6 +44,7 @@ declarations. An empty native endpoint registry confers no native guarantee.
 | [Verification](verification/README.md) | Mathematical laws instantiated against concrete IR meanings |
 | [ArkLib](adapters/arklib/README.md), [Clean](adapters/clean/README.md) | Explicitly scoped external mathematical adapters |
 | [Applications](applications/README.md) | Surviving concrete downstream consumers |
+| [Core](core/README.md) | The re-founded core language and its tool: elaboration, steps, links, executor and structural theorems. No Lake dependency; its import closure is disjoint from those of the other packages |
 
 Source meaning, mathematical assumptions, source association and a security claim
 are separate judgments. A mathematical law cannot change an admitted operation or

@@ -36,8 +36,10 @@ class LeanArchitecture(unittest.TestCase):
         sys.path.insert(0, str(self.root))
         for relative in ('support/packages.py', 'support/dependencies.py', 'support/lean_headers.py',
                          'support/responsibility.py', 'support/lake.py', 'support/compatibility.py', 'support/invocation.py',
+                         'support/evidence.py',
                          'checks/check_library.py', 'checks/check_package_ownership.py',
-                         'checks/audit_imports.py', 'checks/records/declarations.py', 'reproduce.py'):
+                         'checks/audit_imports.py', 'checks/check_consumer_audit.py',
+                         'checks/records/declarations.py', 'reproduce.py'):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPOSITORY / 'lean' / relative, target)
@@ -107,7 +109,11 @@ class LeanArchitecture(unittest.TestCase):
         self.assertEqual(p.selected(['arklib']), ['program', 'protocol', 'arklib'])
         self.assertEqual(p.selected(['clean']), ['program', 'ir', 'clean'])
         self.assertEqual(p.selected(['verification']), ['program', 'ir', 'protocol', 'verification'])
-        self.assertEqual(p.selected(['applications', 'clean', 'applications']), list(p.PACKAGES))
+        self.assertEqual(p.selected(['applications', 'clean', 'applications']),
+                         [name for name in p.PACKAGES if name not in ('core',)])
+        # Core has no maintained dependency.
+        self.assertEqual(p.selected(['core']), ['core'])
+        self.assertEqual(p.selected(['applications', 'core']), list(p.PACKAGES))
         self.assertEqual(p.selected([]), [])
         for name in ('main', 'proof', 'security', 'unknown'):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'unknown Lean packages'):
@@ -240,7 +246,7 @@ class LeanArchitecture(unittest.TestCase):
         for name in p.PACKAGES:
             outputs = audit.expected(name)
             imports = next(text for path, text in outputs.items() if path.name == 'LibraryImports.lean')
-            generated = next(text for path, text in outputs.items() if path.name == 'Audit.lean')
+            generated = next((text for path, text in outputs.items() if path.name == 'Audit.lean'), None)
             config = tomllib.loads((p.PACKAGES[name][0] / 'lakefile.toml').read_text())
             commands = {entry['root'] for entry in config['lean_exe']}
             generated_modules = {module for module in p.package_modules(name)
@@ -252,6 +258,15 @@ class LeanArchitecture(unittest.TestCase):
                     self.assertEqual(f'import {module}\n' in imports,
                                      module not in generated_modules | commands)
             command_audits = {path: text for path, text in outputs.items() if 'CommandAudits' in path.parts}
+            if not p.audited(name):
+                # Without a Lake path to the auditor only the inventory is generated.
+                self.assertEqual(list(outputs), [next(path for path in outputs if path.name == 'LibraryImports.lean')])
+                self.assertIsNone(generated)
+                for path, text in outputs.items():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(text)
+                self.assertEqual(audit.expected(name), outputs)
+                continue
             self.assertEqual(len(command_audits), len(commands))
             for command in commands:
                 matches = [text for text in command_audits.values() if f'import {command}\n' in text]
@@ -467,7 +482,7 @@ class LeanArchitecture(unittest.TestCase):
             (targets / package['name']).mkdir()
 
         with patch.object(reproduce, 'materialize', side_effect=materialize), patch.object(reproduce, 'prepare', side_effect=prepared.append):
-            pins = reproduce.prepare_dependencies(self.root, [], ['applications'])
+            pins = reproduce.prepare_dependencies(self.root, [], ['applications', 'core'])
         self.assertEqual(len(materialized), len(set(materialized)))
         self.assertEqual(set(pins), set().union(*self.packages.UPSTREAM.values()))
         self.assertEqual(prepared, [directory for directory, _ in self.packages.PACKAGES.values()])
@@ -551,7 +566,7 @@ class LeanArchitecture(unittest.TestCase):
 
         # Accept keyword arguments without invoking Lean.
         with patch.object(checker, 'HeaderParser', side_effect=lambda **_: Headers()):
-            result = checker.check(['applications'], 'unused-lake')
+            result = checker.check(['applications', 'core'], 'unused-lake')
             self.assertEqual(result['packages'], list(self.packages.PACKAGES))
             self.assertEqual(result['modules'], sum(len(self.packages.package_modules(name)) for name in self.packages.PACKAGES))
             source_path = self.packages.module_path('Zkc.Program.Example')
@@ -572,27 +587,112 @@ class LeanArchitecture(unittest.TestCase):
                 checker.check(['ir'], 'unused-lake')
     def test_reproduction_runs_every_selected_build_in_order_and_records_scopes(self):
         reproduce = importlib.import_module('reproduce')
-        args = SimpleNamespace(package=['applications'], core_only=False,
+        args = SimpleNamespace(package=['applications', 'core'], core_only=False,
                                output=Path(self.temporary.name) / 'reproduction',
                                dependency_cache=None, integration_dependency_cache=[], lake='lake')
         built = []
 
         def build(lake, directory, log, env, markers):
             built.append(directory)
-            self.assertIn('DEPENDENCY-AUDIT-PASS', markers)
+            # A package outside Program's closure has no in-package audit markers.
+            self.assertEqual('DEPENDENCY-AUDIT-PASS' in markers, directory.name not in ('core',))
             self.assertNotIn('LEAN_PATH', env)
             self.assertEqual(env['ELAN_TOOLCHAIN'], 'leanprover/lean4:v4.35.0')
             return {'status': 'pass'}
 
-        with patch.object(reproduce, 'prepare_dependencies', return_value={}), patch.object(reproduce.support.lake, 'resolve', return_value='/tools/lake'), patch.object(reproduce.subprocess, 'check_output', return_value='Lean (version 4.35.0)'), patch.object(reproduce.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), patch.object(reproduce, 'checked_build', side_effect=build), patch.object(reproduce, 'clean_control', return_value={'status': 'pass'}) as control, patch.object(reproduce, 'run_clients', return_value={'status': 'pass'}) as clients, patch('builtins.print'):
+        audited_by_consumer, tested = [], []
+        with patch.object(reproduce, 'consumer_audit',
+                          side_effect=lambda lake, work, output, name, env: audited_by_consumer.append(name) or {'status': 'pass'}), \
+                patch.object(reproduce, 'package_tests',
+                             side_effect=lambda lake, name, directory, log, env: tested.append(name) or {'status': 'pass'}), \
+                patch.object(reproduce, 'prepare_dependencies', return_value={}), patch.object(reproduce.support.lake, 'resolve', return_value='/tools/lake'), patch.object(reproduce.subprocess, 'check_output', return_value='Lean (version 4.35.0)'), patch.object(reproduce.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), patch.object(reproduce, 'checked_build', side_effect=build), patch.object(reproduce, 'clean_control', return_value={'status': 'pass'}) as control, patch.object(reproduce, 'run_clients', return_value={'status': 'pass'}) as clients, patch('builtins.print'):
             reproduce.run(args)
         self.assertEqual(built, [self.packages.package_directory(name, args.output / 'lean') for name in self.packages.PACKAGES])
+        self.assertEqual(audited_by_consumer, ['core'])
+        self.assertEqual(tested, ['core'])
         self.assertEqual(control.call_count, 1)
         self.assertEqual(clients.call_count, 1)
         record = json.loads((args.output / 'result.json').read_text())
         self.assertEqual(record['status'], 'pass')
         self.assertEqual(record['audit_scope'], {name: list(roots) for name, (_, roots) in self.packages.PACKAGES.items()})
         self.assertFalse(record['source_drift'])
+
+    def test_reproduction_of_a_dependency_free_package_prepares_program_only_to_audit_it(self):
+        reproduce = importlib.import_module('reproduce')
+        args = SimpleNamespace(package=['core'], core_only=False,
+                               output=Path(self.temporary.name) / 'core-reproduction',
+                               dependency_cache=None, integration_dependency_cache=[], lake='lake')
+        prepared, versions, commands, built = [], [], [], []
+
+        def check_output(command, cwd, env, text):
+            versions.append(Path(cwd).name)
+            return 'Lean (version 4.35.0)'
+
+        def build(lake, directory, log, env, markers):
+            built.append(directory.name)
+            self.assertEqual(markers, [])
+            return {'status': 'pass'}
+
+        with patch.object(reproduce, 'prepare_dependencies',
+                          side_effect=lambda work, caches, names: prepared.append(list(names)) or {}), \
+                patch.object(reproduce.support.lake, 'resolve', return_value='/tools/lake'), \
+                patch.object(reproduce.subprocess, 'check_output', side_effect=check_output), \
+                patch.object(reproduce.subprocess, 'run',
+                             side_effect=lambda command, **_: commands.append(command) or SimpleNamespace(returncode=0)), \
+                patch.object(reproduce, 'checked_build', side_effect=build), \
+                patch.object(reproduce, 'consumer_audit', return_value={'status': 'pass'}) as audit, \
+                patch.object(reproduce, 'package_tests', return_value={'status': 'not-applicable'}), \
+                patch.object(reproduce, 'run_clients') as clients, patch('builtins.print'):
+            reproduce.run(args)
+        # Program's sources and dependencies are prepared for the consumer audit, not built.
+        self.assertEqual(prepared, [['core', 'program']])
+        self.assertEqual(built, ['core'])
+        self.assertEqual(versions, ['core'])
+        self.assertEqual(audit.call_args.args[3], 'core')
+        clients.assert_not_called()
+        library = next(command for command in commands if command[1] == 'checks/check_library.py')
+        self.assertEqual(library[-2:], ['--package', 'core'])
+        record = json.loads((args.output / 'result.json').read_text())
+        self.assertEqual((record['status'], record['audit_tools'], record['clients']),
+                         ('pass', ['program'], {'status': 'not-applicable'}))
+
+    def test_consumer_audit_requires_every_audit_of_a_dependency_free_package(self):
+        consumer = importlib.import_module('checks.check_consumer_audit')
+        audits = importlib.import_module('checks.audit_imports')
+        p = self.packages
+        program = p.PACKAGES['program'][0]
+        for dependency in json.loads((program / 'lake-manifest.json').read_text())['packages']:
+            if dependency['type'] == 'git':
+                (program / '.lake/packages' / dependency['name']).mkdir(parents=True)
+        commands = ['CommandAudits/Core/Commands/First.lean', 'CommandAudits/Core/Standalone.lean']
+        reported = ['Audit.lean', *commands]
+
+        def build(command, cwd, env, stdout, stderr):
+            for path in reported:
+                marker = 'CORE-AUDIT-PASS' if path == 'Audit.lean' else 'COMMAND-AUDIT-PASS'
+                stdout.write(f'info: {path}:4:0: {marker} declarations=3 theorems=1\n'
+                             f'info: {path}:4:0: DEPENDENCY-AUDIT-PASS modules=1 type-references=2 body-references=3\n')
+            return SimpleNamespace(returncode=0)
+
+        with patch.object(consumer.support.lake, 'resolve', return_value='/tools/lake'), \
+                patch.object(consumer.subprocess, 'run', side_effect=build):
+            record = consumer.check(['core'], Path(self.temporary.name) / 'audits', 'lake', self.root)
+            self.assertEqual(record['status'], 'pass')
+            workspace = Path(self.temporary.name) / 'audits/core'
+            generated = audits.generated('core', self.root)
+            tests = p.PACKAGES['core'][0] / 'Zkc/Tests/Core'
+            for path in reported:
+                self.assertEqual((workspace / path).read_text(), generated[tests / path])
+            config = tomllib.loads((workspace / 'lakefile.toml').read_text())
+            self.assertEqual({entry['name'] for entry in config['require']}, {'zkc_program', 'zkc_core'})
+            self.assertTrue((workspace / '.lake/packages/mathlib').is_symlink())
+            reported = ['Audit.lean', commands[0]]
+            record = consumer.check(['core'], Path(self.temporary.name) / 'partial', 'lake', self.root)
+            self.assertEqual(record['status'], 'fail')
+            self.assertEqual(record['packages']['core']['missing'],
+                             [f'{commands[1]}: COMMAND-AUDIT-PASS', f'{commands[1]}: DEPENDENCY-AUDIT-PASS'])
+            with self.assertRaisesRegex(ValueError, 'reaches Program'):
+                consumer.check(['ir'], Path(self.temporary.name) / 'audited', 'lake', self.root)
 
     def test_reproduction_build_failure_cannot_turn_partial_selection_into_pass(self):
         reproduce = importlib.import_module('reproduce')

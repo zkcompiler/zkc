@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import tomllib
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from support.packages import (LEAN, PACKAGES, OWNERS, add_selection, selection,
+from support.packages import (LEAN, PACKAGES, OWNERS, add_selection, selection, audited,
                               package_directory, package_modules, below, tool_module, selected)
 
 AUDITOR = tool_module('program', 'DeclarationAudit')
@@ -38,7 +38,8 @@ def audit_body(roots, marker):
             f'  ZkcTools.DeclarationAudit.check families "{marker}"\n')
 
 
-def expected(name, root=LEAN):
+def generated(name, root=LEAN):
+    """Every generated audit file of a package, whether or not its own tree can build it."""
     directory = package_directory(name, root)
     tests = f'Zkc.Tests.{OWNERS[name]}'
     modules = package_modules(name, root)
@@ -68,12 +69,28 @@ def expected(name, root=LEAN):
                   'ZkcSecurity.Registry.audited ' + lean_names(scopes) +
                   ' "REGISTRY-AUDIT-PASS"\n')
     outputs[directory.joinpath(*tests.split('.')) / 'Audit.lean'] = audit
+    # A command audit is named after its root below `Zkc.<Root>`; roots that would share
+    # that name (a tool and a test driver both called Main) keep their root component.
+    short = [tuple(entry.split('.')[2:]) for entry in entries]
     for entry in entries:
         suffix = entry.split('.')[2:]
+        if short.count(tuple(suffix)) > 1:
+            suffix = entry.split('.')[1:]
         target = directory.joinpath(*tests.split('.'), 'CommandAudits', *suffix).with_suffix('.lean')
         text = banner + f'import {entry}\nimport {AUDITOR}\n\n'
         outputs[target] = text + audit_body([entry], 'COMMAND-AUDIT-PASS')
     return outputs
+
+
+def expected(name, root=LEAN):
+    """The generated audit files kept in the package's source tree."""
+    outputs = generated(name, root)
+    if audited(name):
+        return outputs
+    # Without a Lake path to the auditor the package keeps its exhaustive inventory
+    # only; check_consumer_audit.py builds its other audits in a consumer workspace.
+    inventory = package_directory(name, root).joinpath(*f'Zkc.Tests.{OWNERS[name]}'.split('.')) / 'LibraryImports.lean'
+    return {inventory: outputs[inventory]}
 
 
 def main():

@@ -24,8 +24,9 @@ import time
 import tomllib
 from support.invocation import command as lean_command
 from support.compatibility import prepare
-from support.packages import (PACKAGES, NAMES, DIRECTORIES, add_selection, selection,
-                              selected, package_directory, package_modules, module_path, check_closure)
+from support.packages import (PACKAGES, NAMES, DIRECTORIES, AUDITOR_OWNER, add_selection, selection,
+                              selected, audited, package_directory, package_modules, module_path,
+                              check_closure, test_arguments)
 
 
 HERE = Path(__file__).resolve().parent
@@ -182,6 +183,9 @@ def run_clients(lake, work, output, packages, env):
 
 
 def required_markers(name):
+    if not audited(name):
+        # The package cannot import the auditor; its consumer audit requires these markers.
+        return []
     markers = [name.upper() + '-AUDIT-PASS', 'DEPENDENCY-AUDIT-PASS']
     if name == 'arklib':
         markers.extend(['STARK-POWER-UPSTREAM-AXIOMS-PASS',
@@ -194,12 +198,39 @@ def required_markers(name):
     return markers
 
 
+def package_tests(lake, name, directory, log_path, env):
+    """Run the test driver of a package that has one."""
+    arguments = test_arguments(name, directory.parents[len(Path(DIRECTORIES[name]).parts) - 1], env)
+    if arguments is None:
+        return {'status': 'not-applicable'}
+    with log_path.open('w') as log:
+        result = subprocess.run([lake, 'test', *arguments], cwd=directory, env=env,
+                                stdout=log, stderr=subprocess.STDOUT)
+    return {'status': 'pass' if result.returncode == 0 else 'fail', 'exit_code': result.returncode,
+            'arguments': arguments, 'log_sha256': support.lake.sha(log_path)}
+
+
+def consumer_audit(lake, work, output, name, env):
+    """Audit a package outside Program's closure in a workspace that also requires Program."""
+    result = subprocess.run(['python3', 'checks/check_consumer_audit.py', '--lake', lake,
+                             '--package', name, '--output', str(output)], cwd=work, env=env,
+                            stdout=subprocess.DEVNULL, check=False)
+    receipt = output / 'result.json'
+    if not receipt.is_file():
+        return {'status': 'fail', 'exit_code': result.returncode}
+    return json.loads(receipt.read_text())['packages'][name] | {'exit_code': result.returncode}
+
+
 def run(args):
     names = selection(args)
     if not names:
         raise ValueError('no packages selected for reproduction')
+    # A package outside Program's closure is built and tested without Program, then
+    # audited in a workspace that also requires Program, whose sources and dependencies
+    # are therefore prepared, though Program itself is not built.
+    tools = [AUDITOR_OWNER] if AUDITOR_OWNER not in names and not all(map(audited, names)) else []
     # Source enumeration fails before output creation if migration is incomplete.
-    inputs = build_inputs(HERE, names)
+    inputs = build_inputs(HERE, names + tools)
     output = args.output.resolve()
     if output == HERE or HERE in output.parents:
         raise ValueError('the independent output must be outside the formal harness')
@@ -210,17 +241,24 @@ def run(args):
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(HERE / name, target)
     caches = [path.resolve() for path in [args.dependency_cache, *args.integration_dependency_cache] if path]
-    pins = prepare_dependencies(work, caches, names)
+    pins = prepare_dependencies(work, caches, names + tools)
     options = [option for name in names for option in ('--package', name)]
     env = dict(os.environ)
     for key in ['LEAN_PATH', 'LEAN_SRC_PATH', 'LEAN_SYSROOT', 'LAKE_HOME']:
         env.pop(key, None)
     lake = str(Path(support.lake.resolve(args.lake)).absolute())
-    program = package_directory('program', work)
-    toolchain = (program / 'lean-toolchain').read_text().strip()
+    # The toolchain pin is shared: the harness selector, when present, holds it, every
+    # prepared package repeats it, and Lean's version is read in the first selected package.
+    selector = work / 'lean-toolchain'
+    if not selector.is_file():
+        selector = package_directory(names[0], work) / 'lean-toolchain'
+    toolchain = selector.read_text().strip()
+    for name in names + tools:
+        if (package_directory(name, work) / 'lean-toolchain').read_text().strip() != toolchain:
+            raise ValueError(f'{name}: toolchain differs from the shared pin')
     env['ELAN_TOOLCHAIN'] = toolchain
     version = subprocess.check_output([lake, 'env', 'lean', '--version'],
-                                      cwd=program, env=env, text=True).strip()
+                                      cwd=package_directory(names[0], work), env=env, text=True).strip()
     expected = toolchain.split(':v')[-1]
     found = re.search(r'version (\d+\.\d+\.\d+)', version)
     if found is None or found[1] != expected:
@@ -234,8 +272,14 @@ def run(args):
     start = time.monotonic()
     runs = {}
     for name in names:
-        runs[name] = checked_build(lake, package_directory(name, work),
-                                   output / f'{name}-build.log', env, required_markers(name))
+        directory = package_directory(name, work)
+        runs[name] = checked_build(lake, directory, output / f'{name}-build.log', env, required_markers(name))
+        if runs[name]['status'] == 'pass' and not audited(name):
+            runs[name]['tests'] = package_tests(lake, name, directory, output / f'{name}-tests.log', env)
+            runs[name]['consumer_audit'] = consumer_audit(lake, work, output / f'{name}-consumer-audit', name, env)
+            if not all(runs[name][part]['status'] in ('pass', 'not-applicable')
+                       for part in ('tests', 'consumer_audit')):
+                runs[name]['status'] = 'fail'
         if runs[name]['status'] != 'pass':
             break
     control = {'status': 'not-run'}
@@ -244,14 +288,19 @@ def run(args):
                                 output / 'clean-control.log', env)
     clients = {'status': 'not-run'}
     complete = set(runs) == set(names) and all(run['status'] == 'pass' for run in runs.values())
-    if complete:
-        clients = run_clients(lake, work, output / 'clients', names, env)
-    changed = build_inputs(work, names) != inputs or build_inputs(HERE, names) != inputs
-    passed = (complete and not changed and clients['status'] == 'pass'
+    with_clients = [name for name in names if audited(name)]
+    if complete and with_clients:
+        clients = run_clients(lake, work, output / 'clients', with_clients, env)
+    elif complete:
+        # Only packages that reach Program have standalone clients.
+        clients = {'status': 'not-applicable'}
+    changed = (build_inputs(work, names + tools) != inputs or
+               build_inputs(HERE, names + tools) != inputs)
+    passed = (complete and not changed and clients['status'] in ('pass', 'not-applicable')
               and ('clean' not in names or control['status'] == 'pass'))
     record = {
         'format': 'zkc.formal-reproduction.v0', 'status': 'pass' if passed else 'fail',
-        'packages': names, 'source_drift': changed,
+        'packages': names, 'audit_tools': tools, 'source_drift': changed,
         'elapsed_seconds': round(time.monotonic() - start, 2), 'lake_executable': lake,
         'toolchain': toolchain, 'lean_version': version,
         'build_inputs': inputs, 'builds': runs, 'clean_control': control, 'clients': clients,

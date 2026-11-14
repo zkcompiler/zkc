@@ -59,6 +59,12 @@ def test_source_hash_refresh_reads_each_actual_package_manifest(monkeypatch, tmp
         manifest.write_text(json.dumps({'packages': [pin, {'type': 'path', 'name': 'zkc_program'}]}))
         originals[manifest] = manifest.read_bytes()
         directories[name] = (directory, ())
+    # A package without dependencies locks nothing and contributes no source.
+    core = tmp_path / 'lean/core'
+    core.mkdir(parents=True)
+    (core / 'lake-manifest.json').write_text(json.dumps({'packages': []}))
+    originals[core / 'lake-manifest.json'] = (core / 'lake-manifest.json').read_bytes()
+    directories['core'] = (core, ())
     external = tmp_path / 'compiler/adapters/llzk/pins.json'
     external.parent.mkdir(parents=True)
     external.write_text(json.dumps({'llzk-current': {'url': 'https://example.invalid/llzk', 'revision': 'f' * 40}}))
@@ -70,7 +76,7 @@ def test_source_hash_refresh_reads_each_actual_package_manifest(monkeypatch, tmp
     assert len(calls) == 2
     path, pins, refresh = calls[0]
     assert path == tmp_path / 'nix/lake-sources.json' and not refresh
-    assert {pin['name'] for pin in pins} == set(directories)
+    assert {pin['name'] for pin in pins} == set(directories) - {'core'}
     assert {pin['rev'] for pin in pins} == {f'{index:040x}' for index in range(7)}
     assert all(path.read_bytes() == original for path, original in originals.items())
 
