@@ -6,14 +6,14 @@ import Zkc.Tools.Formal.Evaluate
 
 /-! Ten rounds of Sumcheck keep the claim: a statement over one piece of the body per round.
 
-The subject is the package that the frontend emits for `Sumcheck<Fr, 10>` of the worked
-program `sumcheck_example`: `fixtures/sumcheck-ten-rounds.json` is the package of the root
-`Sumcheck<Fr, 10>` that the frontend's tool writes for `examples/sumcheck_example.zkc` of the
-repository (`zkc-check types … --packages <directory>`), byte for byte. The loop of `Reduce` is
-written out: its body is the ten rounds one after another, each of nine operations, and the
-library functions `sums`, `low`, `high` and `fix_first` are in it once per size of the table.
-The package is linked here with its body in pieces of nine operations, so that a piece is a
-round.
+The subject is a package of `Sumcheck<Fr, 10>` of the worked program `sumcheck_example`:
+`fixtures/sumcheck-ten-rounds.json` is the package of the root `Sumcheck<Fr, 10>` that an
+earlier state of the frontend's tool wrote for `examples/sumcheck_example.zkc` of the repository
+(`zkc-check types … --packages <directory>`); the present frontend emits a different package for
+that root. The loop of `Reduce` is written out: its body is the ten rounds one after another,
+each of nine operations, and the library functions `sums`, `low`, `high` and `fix_first` are in
+it once per size of the table. The package is linked here with its body in pieces of nine
+operations, so that a piece is a round.
 
 1. **The mathematics** (`sum_halves`, `sum_line`, `evaluate_fixFirst`). In any arithmetic: the
    sum of a table is the sum of the sums of its halves; and the line through those two sums, at

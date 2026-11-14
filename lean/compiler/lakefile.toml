@@ -47,7 +47,7 @@ globs = ["Zkc.Tests.Frontend", "Zkc.Tests.Frontend.+"]
 allowNonModules = true
 
 # The audit of the libraries: only its checking function is in the library. The controls under
-# `Zkc.Tools.Audit.Controls` are in no glob, and are built because the audit's executable imports
+# `Zkc.Tools.Audit.Controls` are in no glob, and are built because the audit's executables import
 # them.
 [[lean_lib]]
 name = "ZkcAudit"
@@ -78,4 +78,4 @@ allowNonModules = true
 name = "zkc-audit"
 root = "Zkc.Tools.Audit.Main"
 allowNonModules = true
-needs = ["ZkcCore", "ZkcFrontend"]
+needs = ["ZkcCore", "ZkcFrontend", "ZkcCoreTests"]

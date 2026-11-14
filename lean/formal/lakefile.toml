@@ -40,4 +40,4 @@ allowNonModules = true
 name = "zkc-formal-audit"
 root = "Zkc.Tools.Formal.Audit"
 allowNonModules = true
-needs = ["ZkcFormal"]
+needs = ["ZkcFormal", "ZkcFormalTests"]

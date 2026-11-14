@@ -62,6 +62,7 @@ def main (args : List String) : IO UInt32 := do
   tallies := tallies.push (← runSuite "protocols" protocolCaseSuite)
   tallies := tallies.push (← runSuite "running: protocols" protocolRunSuite)
   tallies := tallies.push (← runSuite "running: protocol constructs" protocolRunTests)
+  tallies := tallies.push (← runSuite "running: the keys of coins" keyingSuite)
   tallies := tallies.push (← runSuite "schemes" schemeSuite)
   tallies := tallies.push (← runSuite "session" sessionSuite)
   tallies := tallies.push (← runSuite "libraries/ and examples/" (corpusSuite repository))

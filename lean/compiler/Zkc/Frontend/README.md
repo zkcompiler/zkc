@@ -8,7 +8,8 @@ of the package `zkc_compiler` (`lean/compiler`), beside the core, whose packages
 whose `elaborate` and check of facts admit them; no library requires the frontend. `just test`
 builds it and runs its test driver against the reference, the library in source and the worked
 programs of the repository, and `just audit` audits its declarations and its imports
-(`lake exe zkc-audit`).
+(`lake exe zkc-audit`) but does not replay them through the kernel: the frontend is the unproved
+part of the compiler, and no theorem of the project rests on it.
 
 | Module | Holds |
 |---|---|
@@ -274,8 +275,8 @@ the driver with an error. It checks:
   their range; no run stops `undefined`; the function members of the sorts at `koala-bear`, its
   quartic extension, `bls12-381.fr` and `bls12-381.g1`, and the arithmetic of the extension and
   of G1, run from source against values stated in the test;
-- without the reference, programs over a small library given in memory for each rule of names,
-  of instances and of the typing of bodies, accepted and refused, for each kind of step of a
+- programs in memory, over a small library also in memory, for each rule of names, of
+  instances and of the typing of bodies, accepted and refused, for each kind of step of a
   resolution, for contents of instances and default instances, the matcher of SP6 on its own, and
   the operations that the emitted packages apply; and runs of emitted functions: the order in
   which arguments and fields are evaluated, sums, a loop of no iteration, the choices on `and`
@@ -288,34 +289,39 @@ the driver with an error. It checks:
   challenge or the response is changed on the way or the scalar is wrong; the verifier alone
   accepts the messages of an honest prover and refuses a wrong response; a loop with a run-time
   count, a loop that collects, a choice on a condition, a choice on an alternative and a stepped
-  loop run to their values; with the reference, the protocol of `examples/schnorr.zkc` at G1 and
-  that of `examples/chaum_pedersen.zkc` at the instance its scheme names run the same way, and
-  `Sumcheck<n>` of `examples/sumcheck.zkc` over `bls12-381.fr` and `koala-bear` at the sizes 0,
-  1, 2, 3 and 10 returns at both roles with the claim that the test computes, and stops the
+  loop run to their values; read from the repository, the protocol of `examples/schnorr.zkc` at
+  G1 and that of `examples/chaum_pedersen.zkc` at the instance its scheme names run the same way,
+  and `Sumcheck<n>` of `examples/sumcheck.zkc` over `bls12-381.fr` and `koala-bear` at the sizes
+  0, 1, 2, 3 and 10 returns at both roles with the claim that the test computes, and stops the
   verifier `reject` with a false claim, a changed first round message, or a changed first
   challenge when a message of the prover follows it. No run stops `undefined`;
-- without the reference, one small protocol for each construct that the tests above do not run,
-  with outputs written from its source: a send to two receivers, three roles, an explicit role
+- one small protocol in memory for each construct that the tests above do not run, with
+  outputs written from its source: a send to two receivers, three roles, an explicit role
   map, an application in a loop, an application without results as a statement, results bound
   by a tuple pattern, a guard at two roles, an `if` of one role, a static `if`, a loop bounded by
   a guard, and a linear value passed on into a message; each with an honest run and, where it
   has a guard, a run that stops there;
+- the keys of the coins of a run (`Zkc.Tests.Frontend.Keys`), on a protocol of two draws whose
+  two sites are exchanged in its package: with the rows of its table of sites exchanged alike,
+  each draw keeps the key of its event and the runs of the two packages agree; with the
+  original's table they differ; a site without a row has no key and cannot be run; a table that
+  gives two sites one key is refused; and with no seed the comparison is incomplete;
 - true statements (`Generators`): Schnorr, Chaum–Pedersen, the OR proof, the inner product at
   one round and Sumcheck at ten rounds, each on the statements of its generator, where every
-  role returns, and on a false statement, where the verifier stops;
-- the session, without the reference: the log counts an error repeated at its place and never
+  role returns, and on a false statement, where a role stops `reject`;
+- the session, on programs in memory: the log counts an error repeated at its place and never
   shows an error as one with a warning; a chain of instantiations that does not end stops at the
   budget of its depth with one incomplete check, no error, and every request on the way
   exhausted, not failed; a reference to a declaration names its file by module path, the same
   whatever the order of the files; an admitted result names the roots it lacks and why, and
   completes only when no error is reported, no check is incomplete and every root asked for is
   held;
-- schemes, without the reference over programs in memory: a derived Schnorr scheme is
-  constructed, admitted, projected and its honest proof accepted; a scheme whose roles both send,
-  whose sender draws, whose `prover` line contradicts the protocol, whose protocol has three roles
-  or that neither sends nor draws without a `prover` line is refused by SC3, an input of the
-  verifier alone by SC4, a draw of G1 by SC5; a draw of `bool`, a `context` line, a suite in
-  source and `construction interactive` wait. With the reference: `scheme Proof = Schnorr<G1>` of
+- schemes, over programs in memory: a derived Schnorr scheme is constructed, admitted, projected
+  and its honest proof accepted; a scheme whose roles both send, whose sender draws, whose
+  `prover` line contradicts the protocol, whose protocol has three roles or that neither sends
+  nor draws without a `prover` line is refused by SC3, an input of the verifier alone by SC4, a
+  draw of G1 by SC5; a draw of `bool`, a `context` line, a suite in source and
+  `construction interactive` wait. Read from the repository: `scheme Proof = Schnorr<G1>` of
   `examples/schnorr_example.zkc` is constructed, its constructed program admitted and projected,
   each role applies the suite's rows with the labels of the schedule above, and its proof for a
   fixed nonce is the committed bytes and the independent replay's; the honest proof is accepted,
@@ -331,10 +337,15 @@ the driver with an error. It checks:
 layer A and every case of the independent suite that the frontend accepts, the test modules of
 the generators and the programs of the run tests): the invariants of the trees, and the second
 reading (`Zkc.Tools.Frontend.Reading`), which evaluates the tree of each protocol root role by
-role and compares what each role does with the run of its emitted package under the core's model
-of the vocabulary's rows, under four seeds, by the keys of the events
-(`Zkc.Tools.Frontend.PackageRuns`). A reading that is observed to differ, or that breaks off, is a
-failure.
+role and compares what each role does with the run of its emitted package, by the keys of the
+events (`Zkc.Tools.Frontend.PackageRuns`). It runs under the core's model of the vocabulary's
+rows only, on inputs and coins drawn from four seeds, and draws no boundary values (zero, one,
+the largest value, the empty collection, the point at infinity) unless a seed happens to give
+one. A root whose package has a row that the model does not compute, such as the rows of
+circuits (`circuit.values`, `circuit.layered`) in the present corpus, or whose run would be too
+long, is counted as incomplete and is not compared: the suite notes these counts and does not
+fail on them. A reading that is observed to differ, or that breaks off, is a failure. The suite
+takes about 24 minutes.
 
 For every program that parses, the printer is checked three ways: the printed tree parses back
 to the same tree (up to spans), the canonical text parses to the canonical tree, and formatting

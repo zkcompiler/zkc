@@ -2,7 +2,7 @@
 """An independent replay of the derived Schnorr proof.
 
 The scheme is `scheme Proof = Schnorr<G1>: construction derived(Merlin3Bls12381)` of
-`reference/programs/schnorr_example.zkc`, with the layout `zkc::layout::canonical`. The script
+`examples/schnorr_example.zkc`, with the layout `zkc::layout::canonical`. The script
 computes the proof that the prover's program writes for a statement, a witness and a nonce from
 published definitions and the schedule of the derived construction, written out below; it uses
 nothing of zkc's code and only Python's standard library.

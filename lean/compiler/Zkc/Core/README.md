@@ -1,6 +1,6 @@
 # Core
 
-The re-founded core language and its tool. `Zkc.Core` holds the library: types, value
+The core language of zkc and its tool. `Zkc.Core` holds the library: types, value
 references by position with a random-access mirror, regions that bind results in
 order, processes, `elaborate` as an ordinary function with its round trip, the tool's
 steps (Fiat–Shamir and serialize threading with their whole-program theorem, expansion,
@@ -248,9 +248,10 @@ mathematics is related to the model that runs through these (`lean/formal`).
 The core is a library of the package `zkc_compiler` (`lean/compiler`), which has no Lake
 dependency; the frontend (`Zkc.Frontend`, in the same package) emits its packages and reads its
 vocabulary, and the formal package (`lean/formal`) states and proves properties over its
-meaning. A module of the core imports only modules of the core and of Lean (`Init`, `Std`,
-`Lean`); `lake exe zkc-audit` checks this, and the axioms, `@[extern]` and `@[implemented_by]`
-of its declarations.
+meaning. A module of the core imports only modules of the core and of Lean's prelude and
+standard library (`Init`, `Std`); `lake exe zkc-audit` checks this, the axioms, `@[extern]` and
+`@[implemented_by]` of its declarations, and that the kernel accepts them when they are
+replayed.
 
 Run `lake build` from `lean/compiler`. It builds the library, the tool and the checks;
 the kernel comparisons, the printed links and their statements are checked by the

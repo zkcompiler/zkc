@@ -4,10 +4,11 @@ Thank you for your interest in contributing. zkc is an early research
 compiler for zero-knowledge protocols, and contributions of all kinds are
 welcome — bug reports, tests, documentation, and code.
 
-One thing to know before you start. Changes to protocol semantics, artifact
-identity, and security claims carry more review than ordinary implementation
-changes, because a mistake there is not a bug in a feature: it changes what
-a sealed artifact means, or what a judgment is taken to have established.
+One thing to know before you start. Changes to the meaning of a language, to
+the identity of a compiled program or a proof, and to security claims carry
+more review than ordinary implementation changes, because a mistake there is
+not a bug in a feature: it changes what a compiled program means, or what a
+judgment is taken to have established.
 The [change requirements](#change-requirements) below say what those changes
 are expected to carry.
 
@@ -109,9 +110,11 @@ belongs in the pull request body, which is what survives the squash.
   implementation distinct; do not weaken a definition to match a missing
   implementation. Record what is implemented in the
   [status](../docs/status.md).
-- **Proofs.** A theorem does not use `sorry` or an axiom beyond Lean's three,
-  and the imports between the libraries follow their rules; `just audit`
-  checks both. State what a theorem covers in the guide of its package.
+- **Proofs.** A theorem of the core, of the formal library or of their tests
+  is accepted by Lean's kernel when it is replayed, and uses neither `sorry`
+  nor an axiom beyond Lean's three; the imports between the libraries follow
+  their rules. `just audit` checks these. State what a theorem covers in the
+  guide of its package.
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, all zkc-owned formats
   stay at version `0`, such as `zkc.core/0`. Publish a schema change in the
@@ -135,4 +138,6 @@ belongs in the pull request body, which is what survives the squash.
 - **Documentation.** Update whatever the change makes wrong or incomplete, in
   the document that owns it, and keep `just check` passing.
 
-Generated files and private development records are not committed.
+Build outputs and private development records are not committed. A generated
+source that is committed, such as the lexer's Unicode tables, is checked
+against its generator by `just check`.

@@ -706,19 +706,23 @@ def compareRoot (results : ResultStore) (root : InstanceId) (side : Side) (seeds
         | .error message => throw s!"the reading breaks off: {message}"
       return (inputs, compareShown first second)
 
+/-- The tables of sites of the protocols of a program, by the names of the protocols. -/
+def siteTables (program : Trees.ProgramTrees) : Array (String × Array PackageRuns.SiteRow) :=
+  Id.run do
+    let mut sites := #[]
+    for entry in program.session.state.results.bodies.entries do
+      let .done (.protocol code) := entry.state | continue
+      sites := sites.push (code.name, code.sites.map fun site =>
+        { event := site.event, part := site.part, iteration := site.iteration })
+    return sites
+
 /-- The readings of the trees of a program's protocol roots against the runs of their
 packages: per root, its description and the verdict. A root whose tree has a refusal, or whose
 package is not complete, is not compared. -/
 def compareProgram (program : Trees.ProgramTrees) (seeds : List Nat) :
     Array (String × PackageRuns.Verdict) := Id.run do
-  let state := program.session.state
-  let results := state.results
-  -- the tables of sites of the protocols, by name
-  let mut sites : Array (String × Array PackageRuns.SiteRow) := #[]
-  for entry in results.bodies.entries do
-    let .done (.protocol code) := entry.state | continue
-    sites := sites.push (code.name, code.sites.map fun site =>
-      { event := site.event, part := site.part, iteration := site.iteration })
+  let results := program.session.state.results
+  let sites := siteTables program
   let held : Array (String × RootPackage) := match (program.session.admitRoots none).completeRoots with
     | .ok (roots, _) => roots.held
     | .error _ => #[]

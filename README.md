@@ -5,10 +5,11 @@ language with its roles, the values each role holds, the messages they exchange,
 they draw and the checks that decide acceptance. zkc checks the program, projects it to one
 program per role and constructs a non-interactive proof scheme from it.
 
-zkc is written in Lean. The definitions that the compiler runs are the definitions that its
-theorems are about: the core language has its meaning in Lean, the theorems of admission state
-what an admitted program never does, and a formal package proves properties of compiled programs
-over that meaning.
+zkc is written in Lean. The core language has its meaning in Lean, and the functions that admit
+a program, project it and run it are the ones that the core's theorems are about: the theorems of
+admission state what an admitted program never does, and a formal package proves properties of
+compiled programs over that meaning. The frontend, which reads the source, and the reader of a
+package file are not proved; admission checks what they produce.
 
 ## Repository
 
@@ -82,7 +83,7 @@ and `python3`, from the root of the repository:
 ```sh
 just build   # build the compiler package, then the formal package
 just test    # build and test both packages, then audit them
-just check   # check the public tree and the documents
+just check   # check the public tree, the documents and the generated Unicode tables
 ```
 
 The [development guide](docs/development.md) describes the layout, every command and how to run

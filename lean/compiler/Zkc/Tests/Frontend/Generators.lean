@@ -179,7 +179,9 @@ def generators : Array (String × String × String × String) := #[
   ("sumcheck_statements", "Sumcheck<Fr, 10>", "statement", "false_statement")
 ]
 
-/-- The seed of the free values and of the coins of the runs. -/
+/-- The seed of the free values and of the coins of the runs. Any seed serves: neither the draws
+by type (`PackageRuns.inputs`) nor the coins of the core's run give a seed a meaning of its own.
+It is fixed so that the suite runs the same statements each time. -/
 def generatorSeed : Nat := 14
 
 /-- The packages of the complete roots of a test module, by their descriptions. -/

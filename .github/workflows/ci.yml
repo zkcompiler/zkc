@@ -19,7 +19,7 @@ defaults:
 
 jobs:
   check:
-    name: Public tree and documents
+    name: Public tree, documents and generated tables
     runs-on: [self-hosted, linux, x64, zkc-ci]
     timeout-minutes: 10
     steps:
@@ -32,6 +32,8 @@ jobs:
         run: bash .github/scripts/public-tree-guard.sh
       - name: Check documentation links, fragments and reachability
         run: python3 scripts/check_docs.py --all
+      - name: Check the generated Unicode tables against the pinned data
+        run: python3 lean/compiler/scripts/generate_unicode_tables.py --check
 
   required:
     name: Required CI
@@ -43,6 +45,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Verify CI isolation and resource budget
+        run: bash .github/scripts/verify-runner.sh
       - name: Require every job to succeed
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
