@@ -187,7 +187,11 @@ Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build a
 current outputs; the [native comparison](protocol/test_clean_air_conformance.py)
 of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
-project/dependency objects. These can be expensive.
+project/dependency objects. A dependency-free package is built and its test driver run
+without Program; Program's sources and dependencies are prepared, not built, only for
+its consumer-workspace audit. These can be expensive. `just test-lean` also builds the
+Core package, which is outside Program's closure, runs its kernel checks and checks its
+sources.
 
 The core lane checks maintained source ownership, declaration/axiom records and
 external consumers. The optional integration lane includes the retained ArkLib and

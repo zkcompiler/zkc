@@ -1,7 +1,11 @@
 # Core language: formal model
 
-The [core language](../../../docs/spec/core/README.md) has a formal model in the IR
-package. A `zkc.core/0` package is imported into typed Lean terms that the kernel
+The IR package holds a formal model of an earlier form of the
+[core language](../../../docs/spec/core/README.md). The language as it is now is
+defined by the [Core package](../../core/README.md), which this model does not
+follow: the model reads the original program of its own three packages, without the
+operations the core owns, `match`, blocks and the checks of admission. In it a
+`zkc.core/0` package is imported into typed Lean terms that the kernel
 checks, and every protocol denotes, for every side, a `PIR.Process` over one effect
 signature. Statements hold for an arbitrary model; laws are hypotheses about the
 model, stated on rows that are named by their catalogue identity.

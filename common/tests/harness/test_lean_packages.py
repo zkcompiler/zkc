@@ -26,6 +26,20 @@ def test_package_selection_is_dependency_ordered():
     assert selected(['verification', 'arklib']) == ['program', 'ir', 'protocol', 'verification', 'arklib']
 
 
+def test_core_package_is_dependency_free_and_disjoint_from_the_ir_core_model():
+    from support.dependencies import permitted
+    from support.packages import DEPENDENCIES, PACKAGES, audited, check_closure, selected
+    assert DEPENDENCIES['core'] == () and selected(['core']) == ['core']
+    assert check_closure('core', PACKAGES['core'][0]) == set()
+    assert not audited('core')
+    assert audited('program')
+    # Both declare names such as Zkc.Source.Var: neither closure may reach the other.
+    assert not permitted('Zkc.Core.Laws', 'Zkc.Program.Region.Basic')
+    assert not permitted('Zkc.IR.Core.Laws', 'Zkc.Core.Laws')
+    assert not permitted('Zkc.Tools.Core.Main', 'Zkc.IR.Core.Meaning')
+    assert permitted('Zkc.Tests.Core.Check', 'Zkc.Tools.Core.PrintLinked')
+
+
 def test_companion_modules_are_declaration_record_inputs():
     declarations = load('companion_record_inputs', 'lean/checks/records/declarations.py')
     from support.packages import package_modules
@@ -176,7 +190,8 @@ def test_partial_or_retired_module_prefix_is_unowned(module):
 def test_selection_retires_old_keys_and_resolves_diamond_once():
     from support.packages import selected
     assert selected(['verification']) == ['program', 'ir', 'protocol', 'verification']
-    assert selected(['applications']) == selected()
+    assert selected(['applications', 'core']) == selected()
+    assert 'core' not in selected(['applications'])
     for old in ('main', 'proof', 'security'):
         with pytest.raises(ValueError, match='unknown Lean packages'): selected([old])
 
@@ -214,7 +229,7 @@ def test_package_cli_selection_is_repeatable_and_exclusive():
 def test_actual_sources_are_partitioned_into_library_and_isolated_command_audits():
     import tomllib
     from checks import audit_imports
-    from support.packages import PACKAGES, package_modules
+    from support.packages import PACKAGES, audited, package_modules
 
     for name, (directory, _) in PACKAGES.items():
         modules = set(package_modules(name))
@@ -230,6 +245,10 @@ def test_actual_sources_are_partitioned_into_library_and_isolated_command_audits
         assert not imported & commands
         assert imported | commands == modules - generated, name
         isolated = [text for path, text in outputs.items() if 'CommandAudits' in path.parts]
+        if not audited(name):
+            # A package outside the auditor's closure keeps its inventory only.
+            assert not isolated and len(outputs) == 1, name
+            continue
         assert len(isolated) == len(commands)
         for command in commands:
             matching = [text for text in isolated if f'import {command}\n' in text]

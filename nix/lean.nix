@@ -35,6 +35,8 @@ stdenvNoCC.mkDerivation {
     chmod -R u+w lean
     cd lean
     mkdir -p ${packageDirectory}/.lake/packages
+    # A package without a Lake dependency has an empty source set.
+    shopt -s nullglob
     for dependency in ${lakeSources}/*; do
       cp -R "$dependency/" "${packageDirectory}/.lake/packages/$(basename "$dependency")"
     done
@@ -43,6 +45,7 @@ stdenvNoCC.mkDerivation {
     for dependency in ${packageDirectory}/.lake/packages/*; do
       git -C "$dependency" reset --mixed HEAD
     done
+    shopt -u nullglob
     python3 -c 'from pathlib import Path; from support.compatibility import prepare; prepare(Path("${packageDirectory}").resolve())'
     export LEAN_NUM_THREADS="$NIX_BUILD_CORES"
     export MATHLIB_NO_CACHE_ON_UPDATE=1

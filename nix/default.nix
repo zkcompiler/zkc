@@ -174,7 +174,11 @@ let
       inherit leanToolchain;
       package = name;
       packageDirectory = lib.removePrefix "lean/" entry.relative;
-      dependencies = map (dependency: formal.${dependency}) entry.dependencies;
+      # The checks run Program's header parser and read its dependency policy, so a
+      # package without a Lake dependency is checked beside Program's tree.
+      dependencies = map (dependency: formal.${dependency}) (
+        if entry.dependencies == [ ] && name != "program" then [ "program" ] else entry.dependencies
+      );
       source = sources.${"lean-${name}"};
       python3 = python;
       lakeSources = lakeSourcesFor (entry.directory + "/lake-manifest.json");
@@ -202,6 +206,7 @@ in
       arklib
       clean
       applications
+      core
       ;
     lake-sources = lakeSources;
     default = zkc;
@@ -219,6 +224,7 @@ in
     lean-checks = pkgs.callPackage ./checks/lean.nix {
       inherit leanToolchain environment;
       lean = formal.applications;
+      core = formal.core;
       source = sources.leanChecks;
       python3 = python;
     };

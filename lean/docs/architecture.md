@@ -1,7 +1,7 @@
 # Formal architecture
 
-The single semantic foundation is `Zkc.Source.Region` interpreted into `PIR.Process`.
-Both are owned by Program. The Protocol framework and concrete IR interpretation
+Outside the Core package, the semantic foundation is `Zkc.Source.Region` interpreted
+into `PIR.Process`. Both are owned by Program. The Protocol framework and concrete IR interpretation
 depend on this foundation independently. Verification connects reusable mathematics
 to concrete meanings; adapters import explicit external libraries; Applications
 contains downstream consumers. Package roots and dependency rules are enforced by
@@ -17,6 +17,12 @@ flowchart TD
   V --> C[Applications]
   A --> C
 ```
+
+The Core package is a second foundation: the re-founded core language with its own
+`Zkc.Source.Region`, `PIR.Process` and `Zkc.Core` declarations, its tool's steps and
+their structural theorems. It has no Lake dependency. Because it declares names that
+Program and the core model in IR also declare, the dependency policy keeps its import
+closure disjoint from Program's and IR's.
 
 ## Proof boundaries
 

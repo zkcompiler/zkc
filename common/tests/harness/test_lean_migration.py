@@ -275,8 +275,9 @@ def test_capture_runs_modules_independently_and_keeps_an_existing_result_on_fail
     assert module.capture_records(tmp_path, ['Old', 'New'], output) == 4
     assert module.read_records([output]).modules == {'Old', 'New'}
     assert [command[-1] for command, _ in calls] == ['New', 'Old']
-    from support.invocation import command as lean_command
-    prefix = lean_command(tmp_path, '-DautoImplicit=false', '-DwarningAsError=true', '--run')
+    with lean_imports():
+        from support.invocation import command as lean_command
+        prefix = lean_command(tmp_path, '-DautoImplicit=false', '-DwarningAsError=true', '--run')
     assert all(command[:len(prefix)] == prefix for command, _ in calls)
     previous = output.read_bytes()
     fail = True

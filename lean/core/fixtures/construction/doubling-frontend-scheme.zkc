@@ -1,0 +1,14 @@
+// A protocol of a prover and a verifier without a relation: the prover announces a flag, the
+// verifier draws a challenge, and the prover answers with the challenge added to itself.
+module doubling
+
+use zkc::curves::bls12_381::{Fr}
+use zkc::suites::{Merlin3Bls12381}
+
+pub protocol Doubling roles(P, V)(flag: bool @P):
+    announced <- send flag to V
+    challenge <- draw Fr from V to P
+    response <- send challenge + challenge to V
+
+scheme Proof = Doubling:
+    construction derived(Merlin3Bls12381)

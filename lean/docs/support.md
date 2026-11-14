@@ -39,6 +39,20 @@ subsequent work. A companion supplies mathematics and meaningful representation
 or admissibility premises; structural slots, frames, cursors and continuations
 belong in common infrastructure.
 
+## Core package
+
+The Core package keeps the re-founded core language: `elaborate` and its round trip,
+admission (the check of facts on a normal form and the check of copies), projection to
+role programs, the construction steps, a total executor, and their theorems. An admitted
+program never performs an undefined operation; a protocol admitted as written never stops
+for copies that differ and keeps the agreements of its header; a role program is the
+protocol for that role; the scheme that the steps derive is complete when the interactive
+protocol is. Its kernel checks compare elaboration and the steps with the tool's output on
+the fixtures. It states no soundness, knowledge or zero-knowledge property, and its theorems
+are not in the ledger; its declarations are audited in a workspace that also requires
+Program. It is independent of the core model in IR. The [package guide](../core/README.md)
+lists the theorems.
+
 ## Independent mathematics
 
 Retained libraries include algebraic rounds, multilinear table laws, commitment

@@ -43,7 +43,8 @@ def maintained(tmp_path, monkeypatch):
     upgrade = load("lean_upgrade", "scripts/update-lean-pins.py")
     packages = {name: (tmp_path / "lean" / directory, ()) for name, directory in {
         "program": "program", "ir": "ir", "protocol": "protocol", "verification": "verification",
-        "arklib": "adapters/arklib", "clean": "adapters/clean", "applications": "applications"}.items()}
+        "arklib": "adapters/arklib", "clean": "adapters/clean", "applications": "applications",
+        "core": "core"}.items()}
     for directory, _ in packages.values():
         directory.mkdir(parents=True)
     monkeypatch.setattr(upgrade, "ROOT", tmp_path)
@@ -53,13 +54,24 @@ def maintained(tmp_path, monkeypatch):
     return upgrade, {name: directory for name, (directory, _) in packages.items()}
 
 
-@pytest.mark.parametrize("defect", [None, "missing", "mathlib", "Arklib", "Clean", "shared", "url", "toolchain"])
+@pytest.mark.parametrize("defect", [None, "missing", "mathlib", "Arklib", "Clean", "shared", "url", "toolchain",
+                                    "undeclared", "unresolved"])
 def test_resolution_checks_all_packages_and_shared_dependencies(maintained, defect):
     upgrade, packages = maintained
     toolchain = "leanprover/lean4:v4.35.0"
     selected = {"mathlib": OLD, "Arklib": NEW, "Clean": NEW}
     for name, directory in packages.items():
         (directory / "lean-toolchain").write_text(toolchain)
+        if name in ("core",):
+            # A package that declares no dependency is checked for its toolchain only.
+            requirement = '[[require]]\nname = "mathlib"\ngit = "x"\nrev = "' + OLD + '"\n'
+            (directory / "lakefile.toml").write_text(
+                'name = "zkc_core"\n' + (requirement if defect == "unresolved" else ""))
+            locked = manifest(mathlib=OLD) if defect == "undeclared" else {"packages": []}
+            if defect == "undeclared":
+                locked["packages"][0]["rev"] = NEW
+            (directory / "lake-manifest.json").write_text(json.dumps(locked))
+            continue
         revisions = {"mathlib": OLD, "batteries": OLD}
         if name in ("protocol", "verification", "arklib", "clean", "applications"):
             revisions["CompPoly"] = OLD

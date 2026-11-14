@@ -1,77 +1,101 @@
 # The core language
 
-The core language is the one typed representation of a protocol that the frontend
-emits, the security-relevant compiler stages rewrite, and the formal library reads.
-A security statement is a statement about the meaning of a core program.
+The core language is the typed representation of a protocol between the source
+language and the programs that its roles run. A producer writes a program of it as
+a package; the Core package (`lean/core`) admits the package, applies the stages
+of a scheme and projects the result to one program per role. Every statement about
+a protocol is a statement about the meaning of a core program.
 
 | Chapter | Content |
 |---|---|
-| [Language](language.md) | Types, holders, definitions, operations, typing and sites |
-| [Meaning](meaning.md) | Effects, the meaning of a program for a set of honest roles, ideal interpretations |
-| [Contracts](contracts.md) | Relations, logical parameters, clauses, specification-only programs, the proof declaration |
-| [Package](package.md) | `zkc.core/0`: the positional serialization of every stage of one compilation |
-| [Stages](stages.md) | Stage tables and the three security-relevant stages |
+| [Language](language.md) | Types, holders, definitions, operations, the check of facts, the check of copies, admission, sites and well-formedness |
+| [Meaning](meaning.md) | Effects, the meaning of a program for a set of roles, what an admitted program never does, runs |
+| [Agreements and the declaration](contracts.md) | Agreements, specification-only programs, the declaration of a scheme |
+| [Package](package.md) | `zkc.core/0`: the positional serialization of a program |
+| [Stages](stages.md) | Stage tables, Fiat–Shamir, serialization, layouts, what the stages preserve |
 
-## Position in the pipeline
+## Position
 
 ```text
-.zkc ─► frontend ─► core₀ ─► core₁ ─► core₂ ─► core₃ ─► expansion ─► projection ─► exec ─► physical
-                    original  unfolded committed constructed
+package (program as written)
+   │  admission
+   ▼
+admitted program ── Fiat–Shamir ── serialization ──► constructed program
+   │                                                      │
+   └───────────────────── projection ─────────────────────┘
+                              ▼
+                        role programs ──► run by the executor
 ```
 
-Every `core` is a program of this language. The frontend's closed, typed model is
-emitted into `core₀` once. Each later `core` is the previous one rewritten by one
-[stage](stages.md). Application expansion, participant projection and the
-execution profiles follow the last stage and preserve meaning.
+A package is a program as its producer wrote it. Admission is the one gate between
+a package and everything after it. The two [stages](stages.md) of a declared scheme
+rewrite the admitted program, and what each returns is admitted again. Projection
+gives the program of each role, of the written protocols or of the constructed
+scheme. The executor of the Core package runs role programs against each other
+under a model of the catalogue's rows.
 
 ## The model in brief
 
-- A program is an ordered list of definitions: pure functions, protocols, computed
-  oracles and relations. A protocol applies another protocol; an application stays
-  an application through every stage.
+- A program is an ordered list of definitions: functions and protocols. A protocol
+  applies another protocol; an application stays an application through every
+  stage.
 - A protocol has numbered roles. Every value in a protocol body has a type and
   exactly one holder, a role. A source value held by several roles is one core
   value per holder.
 - An operation is owned by one role and uses values that role holds. The only
-  operations that move information between roles are `exchange`, `draw` and the
-  oracle operations.
+  operations that move information between roles are `exchange` and `draw`.
 - Randomness is of two kinds. `draw` is a public coin, announced to named
   receivers. `sample` is a secret.
-- The meaning of a protocol is defined for every set of roles taken as the honest
-  side: the process of those roles together, whose effects are the messages that
-  cross the side's boundary and the random replies of its own draws and samples.
+- The meaning of a protocol is defined for every set of its roles taken as a side:
+  the process of those roles together, whose effects are the messages that cross
+  the side's boundary and the random replies of its own draws and samples.
+- A role accepts by returning. A guard is how a body rejects, and a stop of a role
+  is a rejection by that role whatever its reason.
 - Every interaction and random choice carries a site: a number local to its
   definition.
+
+## What this specification covers
+
+It covers what the Core package defines and reads. Three things that an earlier
+version of these chapters described are not part of it.
+
+- **Oracles.** There is no oracle type, row or operation, and no stage that
+  commits to a table. A package whose program has an oracle row is refused. How a
+  protocol publishes data that another role queries is not specified yet.
+- **Properties.** Relations, clauses and claims are not part of a package: the
+  `contracts`, `proof` and `parameters` positions of the envelope are empty. What
+  is stated here of every admitted program is in the [meaning](meaning.md) and
+  [stages](stages.md) chapters; no statement of soundness, knowledge or zero
+  knowledge is part of this specification.
+- **Native execution.** Role programs are run by the executor of the Core package.
+  Their lowering to native code, and the runtime contracts of the existing
+  compiler, are specified by the other chapters of `docs/spec/` and do not read
+  this format.
 
 ## Consumers
 
 | Consumer | Uses |
 |---|---|
-| Compiler stages | read one `core`, write the next |
-| Expansion and projection | read the last `core` |
-| Formal library | type-checks every `core` of a [package](package.md), recomputes each stage from the previous one, and proves properties of the side meanings |
-| Tests | execute side meanings on vectors and compare with the virtual machine |
+| A producer | writes a package and states beside it what [admission](language.md#admission) checks |
+| The Core package | reads a package, admits it, applies the stages of a declaration, projects, runs role programs; its theorems are about these definitions |
+| A proof about a program | reads the meaning of an admitted program for a side |
 
 ## Identity and versions
 
 The format tag is `zkc.core/0`. A package is identified by the SHA-256 of its
 canonical bytes. Tables are positional: a reference is a number, and no consumer
-resolves a reference by name. Names, source spans and digests of external assets
-sit in side tables that carry no meaning.
+resolves a reference by name. Names sit in a side table that carries no meaning.
 
 ## Implementation
 
-The [formal model](../../../lean/docs/spec/core-language.md) implements types (all
-but oracle handles), located types, sides, models, the effect signature, the local
-dialect (`op`, `call`, `if`, `loop`, `guard`, `stop`), the protocol dialect (`at`,
-`exchange`, `draw`, `sample`, `repeat`, `branch`, `apply`), agreements as part of a
-protocol's signature, the meaning of functions, the meaning of protocols for every
-side with the agreement rule, and the residual well-formedness conditions, which
-the kernel decides for every definition it accepts. Its importer reads the program
-of one selected stage (`original` by default) of a `zkc.core/0` package into
-kernel-checked definitions; it type-checks that stage only, and recomputes no
-stage. It is exercised on three hand-written packages: a Schnorr proof (the example
-of the package chapter), a Sumcheck, and a polynomial opening with a setup role.
-The compiler does not yet write packages. Oracle rows and operations, `match`,
-computed oracle and relation definitions, contracts and stage tables are specified
-here and not yet read by any consumer.
+The Core package implements every chapter: the reader and printer of the format,
+elaboration, admission, the meaning, projection, the two stages, the canonical
+layout and the executor. `core-tool admit` and `core-tool compile` are its
+admission and its compilation on a package read from a file
+([package guide](../../../lean/core/README.md)).
+
+The IR package holds a separate model of an earlier form of this language
+(`Zkc.IR.Core`, described in the
+[formal reference](../../../lean/docs/spec/core-language.md)). It reads the
+original program of three hand-written packages and is not a consumer of the
+packages that this specification describes.

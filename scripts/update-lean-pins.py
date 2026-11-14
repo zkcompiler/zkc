@@ -124,6 +124,10 @@ def check(toolchain, selected):
         if (directory / "lean-toolchain").read_text().strip() != toolchain:
             raise ValueError(f"{directory}: toolchain differs from the selected Mathlib release")
         manifest = json.loads((directory / "lake-manifest.json").read_text())
+        if not manifest["packages"] and not tomllib.loads(
+                (directory / "lakefile.toml").read_text()).get("require"):
+            # A package that declares and locks no dependency shares only the toolchain.
+            continue
         resolved = git_revisions(manifest)
         for package in manifest["packages"]:
             if package["type"] != "git":

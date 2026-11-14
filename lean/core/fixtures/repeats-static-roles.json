@@ -1,0 +1,1 @@
+[["role",0,0,[],[["seq","nat",3],"nat"],[[["literal",["nat",1]],["repeat","static",3,[0],[],[[["builtin","nat.add",[],[1,0]],["builtin","nat.mul",[],[0,0]]],[3,2]],["nat"]]],[1,2]]],["role",0,1,[],[["seq","nat",3],"nat"],[[["literal",["nat",0]],["repeat","static",3,[0],[],[[["builtin","nat.add",[],[1,0]]],[2,2]],["nat"]]],[1,2]]]]
