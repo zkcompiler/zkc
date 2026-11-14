@@ -6,8 +6,8 @@ support with IR and Protocol. Its finite Interaction/Region core remains Lean/St
 its mathematical support uses Mathlib. IR depends on Program. Protocol additionally
 uses VCVio, PolyFun and CompPoly. Verification depends on IR and Protocol; optional
 adapters own ArkLib and Clean. Applications depend on the selected verification
-and adapter packages. Core depends on no package; Formal depends on Core alone. The
-two share only the Lean toolchain with the other packages.
+and adapter packages. Core depends on no package; Frontend and Formal depend on Core
+alone. The three share only the Lean toolchain with the other packages.
 See [architecture](architecture.md) for the enforced graph.
 
 | Component | Selected version or exact revision |

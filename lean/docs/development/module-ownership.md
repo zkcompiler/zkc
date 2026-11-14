@@ -84,7 +84,7 @@ global `main` declarations cannot share a Lean environment. The complete registr
 schema and consumer audit runs in Verification, loading the stored declarations
 of its permitted dependencies. Applications does not aggregate another registry.
 Every core package independently checks axioms and dependencies. The auditor is a
-Program tool, so a package whose closure does not reach Program (Core, Formal)
+Program tool, so a package whose closure does not reach Program (Core, Frontend, Formal)
 keeps only `LibraryImports`; `checks/check_consumer_audit.py` writes the same
 `Audit` and `CommandAudits` into a workspace that requires Program and the package
 by path, and requires each of their markers. Command audits of roots that would

@@ -29,7 +29,19 @@ def run(arguments, *, cwd=ROOT, env=None, stdout=None):
 
 
 # Maintained Lean packages whose closure does not reach Program (support.packages.audited).
-DEPENDENCY_FREE = ("core", "formal")
+DEPENDENCY_FREE = ("core", "frontend", "formal")
+
+
+def reference_arguments(root=ROOT, environment=None):
+    """The arguments of the Frontend's test driver.
+
+    The driver reads the language reference of the repository, or the one that
+    ZKC_LANGUAGE_REFERENCE names. In a tree that has neither it runs the tests that need none.
+    """
+    environment = os.environ if environment is None else environment
+    if environment.get("ZKC_LANGUAGE_REFERENCE") or (root / "language/conformance").is_dir():
+        return []
+    return ["--", "--without-reference"]
 
 
 def lean_checks():
@@ -89,10 +101,13 @@ def execute(scope, args):
         # The packages outside Program's closure are outside the core-only selection:
         # they have no standalone client, and core's declaration names overlap the IR
         # core model's in the theorem ledger. Each selection includes its closure, so
-        # the checks of formal also cover the core it requires.
+        # the checks of the frontend and of formal also cover the core they require.
         for name in DEPENDENCY_FREE:
             for check in ("check_library.py", "check_package_ownership.py", "audit_imports.py"):
                 run([sys.executable, ROOT / "lean/checks" / check, "--package", name])
+        run(["lake", "test", *reference_arguments()], cwd=ROOT / "lean/frontend")
+        # Its Unicode tables are generated from the pinned data of common/unicode.
+        run([sys.executable, ROOT / "lean/frontend/scripts/generate_unicode_tables.py", "--check"])
         # Formal's driver prints its receipts and fails when a check of a hypothesis does not hold.
         run(["lake", "test"], cwd=ROOT / "lean/formal")
     elif scope == "lean-verification":

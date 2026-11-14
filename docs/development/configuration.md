@@ -127,9 +127,9 @@ the checkout.
 
 `lean/support/packages.py` owns Python package inventory, full module-prefix
 ownership and dependency closure. `--package NAME` is repeatable; its default
-selects all nine maintained packages. `--core-only` selects Program, IR,
-Protocol and Verification; the Core and Formal packages, which are outside
-Program's closure, are selected by name.
+selects all ten maintained packages. `--core-only` selects Program, IR,
+Protocol and Verification; the Core, Frontend and Formal packages, which are
+outside Program's closure, are selected by name.
 For example:
 
 ```sh
@@ -145,7 +145,7 @@ Build commands enter each package directory in dependency order. `lean/` is
 only a documentation/tooling root; it has no Lake targets. The Nix package
 graph and source inputs are derived from the actual package Lake manifests.
 Module paths use `Zkc.Program`, `Zkc.IR`, `Zkc.Protocol`, `Zkc.Verification`,
-`Zkc.Adapters.ArkLib`, `Zkc.Adapters.Clean`, `Zkc.Applications`, `Zkc.Core` and
-`Zkc.Formal`, with
+`Zkc.Adapters.ArkLib`, `Zkc.Adapters.Clean`, `Zkc.Applications`, `Zkc.Core`,
+`Zkc.Frontend` and `Zkc.Formal`, with
 owner-specific `Zkc.Tools` and `Zkc.Tests` roots. Declaration namespaces and
 theorem identities are independent of these module names.

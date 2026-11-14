@@ -195,6 +195,18 @@ private def dependencyPolicyJson : String := r##"{
       "core"
     ],
     [
+      "Zkc.Frontend",
+      "frontend"
+    ],
+    [
+      "Zkc.Tools.Frontend",
+      "frontend"
+    ],
+    [
+      "Zkc.Tests.Frontend",
+      "frontend"
+    ],
+    [
       "Zkc.Formal",
       "formal"
     ],
@@ -327,6 +339,14 @@ private def dependencyPolicyJson : String := r##"{
     [
       "core",
       [
+        "core",
+        "upstream"
+      ]
+    ],
+    [
+      "frontend",
+      [
+        "frontend",
         "core",
         "upstream"
       ]

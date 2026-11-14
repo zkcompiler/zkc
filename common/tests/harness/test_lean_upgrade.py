@@ -44,7 +44,7 @@ def maintained(tmp_path, monkeypatch):
     packages = {name: (tmp_path / "lean" / directory, ()) for name, directory in {
         "program": "program", "ir": "ir", "protocol": "protocol", "verification": "verification",
         "arklib": "adapters/arklib", "clean": "adapters/clean", "applications": "applications",
-        "core": "core", "formal": "formal"}.items()}
+        "core": "core", "frontend": "frontend", "formal": "formal"}.items()}
     for directory, _ in packages.values():
         directory.mkdir(parents=True)
     monkeypatch.setattr(upgrade, "ROOT", tmp_path)
@@ -62,7 +62,7 @@ def test_resolution_checks_all_packages_and_shared_dependencies(maintained, defe
     selected = {"mathlib": OLD, "Arklib": NEW, "Clean": NEW}
     for name, directory in packages.items():
         (directory / "lean-toolchain").write_text(toolchain)
-        if name in ("core", "formal"):
+        if name in ("core", "frontend", "formal"):
             # A package that declares no dependency is checked for its toolchain only.
             requirement = '[[require]]\nname = "mathlib"\ngit = "x"\nrev = "' + OLD + '"\n'
             (directory / "lakefile.toml").write_text(

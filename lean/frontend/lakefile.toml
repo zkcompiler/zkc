@@ -1,0 +1,46 @@
+name = "zkc_frontend"
+version = "0.0.0"
+defaultTargets = ["ZkcFrontend", "ZkcFrontendTools", "ZkcFrontendTests", "zkc-syntax", "zkc-check", "zkc-frontend-tests"]
+# a hyphenated name is written in guillemets for Lake to resolve it
+testDriver = "«zkc-frontend-tests»"
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[require]]
+name = "zkc_core"
+path = "../core"
+
+[[lean_lib]]
+name = "ZkcFrontend"
+roots = ["Zkc.Frontend"]
+globs = ["Zkc.Frontend", "Zkc.Frontend.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcFrontendTools"
+roots = ["Zkc.Tools.Frontend"]
+globs = ["Zkc.Tools.Frontend", "Zkc.Tools.Frontend.+"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "ZkcFrontendTests"
+roots = ["Zkc.Tests.Frontend"]
+globs = ["Zkc.Tests.Frontend", "Zkc.Tests.Frontend.+"]
+allowNonModules = true
+
+[[lean_exe]]
+name = "zkc-syntax"
+root = "Zkc.Tools.Frontend.Main"
+allowNonModules = true
+
+[[lean_exe]]
+name = "zkc-check"
+root = "Zkc.Tools.Frontend.CheckMain"
+allowNonModules = true
+
+[[lean_exe]]
+name = "zkc-frontend-tests"
+root = "Zkc.Tests.Frontend.Main"
+allowNonModules = true
