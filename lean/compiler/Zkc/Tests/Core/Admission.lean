@@ -7,7 +7,9 @@ import Zkc.Tests.Core.Facts
 A program of two functions is admitted with its whole annotation. Admission stops at the first
 definition that is refused, with every refusal of that definition and nothing of a later one:
 one whose check of facts refuses an application, and one whose elaboration is refused. `check`,
-one definition at a time, gives the headers of the admitted program. A protocol is refused.
+one definition at a time, gives the headers of the admitted program. An association whose key
+names a definition is resolved in the admitted program; one whose key is no definition is
+refused by the rule `association`. A protocol is refused.
 -/
 
 namespace Zkc.Core.AdmissionTests
@@ -102,6 +104,35 @@ example : (admit ⟨[bounded, caller]⟩ noAssociation).map (·.program.headers)
 calls a function that is not there. -/
 example : check ⟨[], []⟩ caller = .error [⟨.callee, at_ 2 1, .callee ⟨1⟩ 0⟩] := by
   rfl
+
+/-! ## The association -/
+
+/-- An association with one instance of the generic declaration with the key 7, at the argument
+3, whose definition has the key `definition`. -/
+def instanceOf (definition : Nat) : Association :=
+  ⟨[⟨⟨7⟩, [.nat 3], ⟨definition⟩⟩], [], [], [], []⟩
+
+/-- What admission says of a program with an association: its refusals, or for each instance
+in the association, its generic declaration, its arguments and the key of the definition found
+in the program. -/
+def resolution (named : NamedProgram field) (association : Association) :
+    List (ProgramRefusal field) ⊕ List (Key × List Static × Key) :=
+  match admit named association with
+  | .ok admitted =>
+      .inr (admitted.association.families.map fun family =>
+        (family.generic, family.arguments, family.subject.key))
+  | .error refusals => .inl refusals
+
+/-- A key that names a definition of the program: admitted, with that definition found. -/
+example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 2) =
+    .inr [(⟨7⟩, [.nat 3], ⟨2⟩)] := by
+  decide
+
+/-- A key that is no definition of the program: refused by the rule `association`, at the
+key. -/
+example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 9) =
+    .inl [refuseWhole ⟨9⟩ .association (.key ⟨9⟩)] := by
+  decide
 
 /-! ## A protocol -/
 

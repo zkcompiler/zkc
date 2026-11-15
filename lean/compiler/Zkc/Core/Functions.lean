@@ -7,18 +7,21 @@ public import Zkc.Core.Program.Syntax
 @[expose] public section
 
 /-!
-What the core gives that is still to be built: its functions, with their types, and nothing
-else. An admitted program and a deployed scheme are data, and what is said of them is defined
-over that data in the other modules of the core.
+The functions of the core, with their types, as a record: what the statements of
+`Statements.lean` are about. For a program of functions, elaboration, admission and the check of
+one definition are built as definitions (`Admission/`); the others are still to be built. An
+admitted program and a deployed scheme are data, and what is said of them is defined over that
+data in the other modules of the core.
 -/
 
 namespace Zkc.Core
 
 /-! ## The functions to be built -/
 
-/-- The functions of elaboration, admission, deployment and execution that are still to be
-built. The printed form of a typed program is the definition `print`, and the elaboration of a
-program of functions is the definition `elaborateFunctions`. -/
+/-- The functions of elaboration, admission, deployment and execution. The printed form of a
+typed program is the definition `print`. For a program of functions, `elaborate`, `admit` and
+`check` are the definitions `elaborateFunctions`, `admit` and `check`, which refuse a protocol;
+the record gets them when protocols are elaborated. The others are still to be built. -/
 structure Functions (V : Vocabulary) where
   /-- The typed program of a program by names, of functions and protocols; the refusals of
   elaboration. -/

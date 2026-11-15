@@ -9,7 +9,7 @@ imported by its root module. A library of tests has no module that imports all o
 it is imported by the modules of its files that are built. For every constant declared in a
 module of a library:
 
-- the axioms it depends on are among `propext`, `Classical.choice` and `Quot.sound`; in
+- the axioms it depends on are among `propext` and `Quot.sound`; in
   particular no proof uses `sorryAx`. The constants that the audited ones use are visited once
   for the whole run (`dependencies`), and a forbidden axiom is traced back to every audited
   constant that reaches it;
@@ -28,9 +28,8 @@ module of a library:
   alone, and a tool that a library of tests imports is replayed with it. The kernel does
   not check unsafe declarations, and the replay skips them and the code of `partial`
   definitions, as Lean's own replay does. A library can be left out of the replay, with the
-  reason (`Library.withoutReplay`): the frontend is, since it is the unproved part of the
-  compiler and no theorem of the project rests on it; a replayed module that imports a module
-  of a library left out is a finding.
+  reason (`Library.withoutReplay`), as the controls below are; a replayed module that imports a
+  module of a library left out is a finding.
 
 The rules on imports hold for a library proper and are read from the headers of the modules: a
 module of the library imports only modules of the library itself and of the prefixes that the
@@ -101,7 +100,7 @@ def isOfLean (module : Name) : Bool :=
   leanLibraries.contains module.getRoot
 
 /-- The axioms that a constant of a library may depend on. -/
-def allowedAxioms : Array Name := #[``propext, ``Classical.choice, ``Quot.sound]
+def allowedAxioms : Array Name := #[``propext, ``Quot.sound]
 
 /-- The kinds of finding. -/
 inductive Rule where
@@ -118,7 +117,7 @@ inductive Rule where
 
 /-- What a rule requires, as a phrase. -/
 def Rule.describe : Rule → String
-  | .axiom_ => "no axiom beyond propext, Classical.choice and Quot.sound"
+  | .axiom_ => "no axiom beyond propext and Quot.sound"
   | .extern => "no `@[extern]`"
   | .implementedBy => "no `@[implemented_by]`"
   | .kernel => "the kernel accepts every declaration when it is replayed"
@@ -362,8 +361,8 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
     for name in (reaching users axiom_).toArray.qsort (·.toString < ·.toString) do
       unless audited.contains name do continue
       let line := if name == axiom_ then
-          s!"{name}: is an axiom other than propext, Classical.choice and Quot.sound"
-        else s!"{name}: depends on the axiom {axiom_}, which is not propext, Classical.choice or Quot.sound"
+          s!"{name}: is an axiom other than propext and Quot.sound"
+        else s!"{name}: depends on the axiom {axiom_}, which is not propext or Quot.sound"
       report := report.add name .axiom_ line
   -- the imports of a library proper
   for library in libraries do

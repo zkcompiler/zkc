@@ -66,6 +66,21 @@ def HList.split {α : Type} {V : α → Type} :
   | [], _, ys => (.nil, ys)
   | _ :: as, _, .cons x rest => let parts := HList.split as rest; (.cons x parts.1, parts.2)
 
+theorem HList.all_cons {α : Type} {F : α → Type} {P : ∀ a, F a → Prop} {a : α} {rest : List α}
+    {v : F a} {vs : HList F rest} : (HList.cons v vs).All P ↔ P a v ∧ vs.All P := Iff.rfl
+
+theorem HList.one {α : Type} {F : α → Type} {a : α} :
+    ∀ (vs : HList F [a]), ∃ v, vs = .cons v .nil
+  | .cons v .nil => ⟨v, rfl⟩
+
+theorem HList.two {α : Type} {F : α → Type} {a b : α} :
+    ∀ (vs : HList F [a, b]), ∃ u v, vs = .cons u (.cons v .nil)
+  | .cons u (.cons v .nil) => ⟨u, v, rfl⟩
+
+theorem HList.three {α : Type} {F : α → Type} {a b c : α} :
+    ∀ (vs : HList F [a, b, c]), ∃ u v w, vs = .cons u (.cons v (.cons w .nil))
+  | .cons u (.cons v (.cons w .nil)) => ⟨u, v, w, rfl⟩
+
 def Env {α : Type} (V : α → Type) (Γ : List α) : Type := ∀ a, Var Γ a → V a
 
 /-! ## Types -/
@@ -303,5 +318,22 @@ namespace Zkc.Core
 
 abbrev Model.Valid {V : Vocabulary} (M : Model V) (τ : V.Ty) (v : M.Val τ) : Prop :=
   Ty.Valid M.toCarriers τ v
+
+section
+variable {V : Vocabulary} {M : Model V}
+
+theorem all_append : ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M.Val bs),
+    (xs.append ys).All M.Valid ↔ xs.All M.Valid ∧ ys.All M.Valid
+  | [], _, .nil, _ => by simp [HList.append, HList.All]
+  | _ :: _, _, .cons x xs, ys => by
+      simp only [HList.append, HList.all_cons, all_append xs ys, and_assoc]
+
+theorem split_append : ∀ (as : List V.Ty) {bs : List V.Ty} (xs : HList M.Val (as ++ bs)),
+    (HList.split as xs).1.append (HList.split as xs).2 = xs
+  | [], _, _ => rfl
+  | _ :: as, _, .cons x rest => by
+      simp only [HList.split, HList.append, split_append as rest]
+
+end
 
 end Zkc.Core

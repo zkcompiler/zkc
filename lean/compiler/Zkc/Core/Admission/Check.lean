@@ -26,8 +26,9 @@ namespace Zkc.Core
 section
 variable {V : Vocabulary}
 
-/-- The check of facts of an elaborated definition: the bounds of its loops. A protocol is
-refused: its role programs are not walked yet. -/
+/-- The check of facts of an elaborated definition: the bounds of its loops. In
+`checkDefinition`, elaboration has already refused a protocol (`elaborateDefinition`), so the
+arm of a protocol is not reached there; it refuses the protocol too. -/
 def Elaborated.facts {hs : Headers V} :
     Elaborated V hs → Except (List (ProgramRefusal V)) (List (Place × Nat))
   | .fn hdr body _ _ => checkFacts (localFactRules V hs.fns) hdr.key none body

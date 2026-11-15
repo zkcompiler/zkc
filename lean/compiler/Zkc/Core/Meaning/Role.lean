@@ -311,14 +311,3 @@ theorem restrict_all (r : Role) {Γ : List (LTy V)} (env : Env (LVal M) Γ) :
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.reveal_hide
-#print axioms Zkc.Core.hideAll_nothings
-#print axioms Zkc.Core.carry_hide
-#print axioms Zkc.Core.fitAllRV_hide
-#print axioms Zkc.Core.enterAll_hide
-#print axioms Zkc.Core.leaveAll_hide
-#print axioms Zkc.Core.collectRV_hide
-#print axioms Zkc.Core.restrict_extend
-#print axioms Zkc.Core.restrict_all
-#print axioms Zkc.Core.roleSem

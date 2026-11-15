@@ -13,10 +13,12 @@ fold over the term with that; the three meanings (a function, a protocol, a role
 this fold at three semantics. Nothing that reads the structure of a term is written per
 dialect.
 
-Three other folds mirror `Term.denote` constructor by constructor: the process with the record
-of its run (`Term.observe`), the property at every instruction (`Term.Everywhere`) and the count
-of the uses of linear values (`Term.linearUses`); and projection maps every constructor. A new constructor of `Term` is
-added to all of them.
+Many definitions are case analyses of a term that mirror `Term.denote` constructor by
+constructor: the process with the record of its run (`Term.observe`), the count of every loop
+that a run reaches (`Term.EveryLoop`), the uses of linear values (`Term.linearUses`), a term's
+addresses and keys (`Program/Term.lean`), projection, elaboration and the printed form, the
+walk of the check of facts, and the proofs about each. A new constructor of `Term` is added to
+all of them.
 -/
 
 namespace Zkc.Core

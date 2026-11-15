@@ -9,8 +9,8 @@ The rule of a call.
 
 A contract of a function is a property of its entry in a table of functions: on inputs that
 satisfy its precondition, every return satisfies what it promises of the results, and every
-stop what it promises of the stops. A law of a total function, which gives its results by a
-mathematical function, is the special case that never stops. The rule of a call installs a
+stop what it promises of the stops. A law of a total function gives its results by a
+mathematical function and never stops. The rule of a call installs a
 contract at an actual call of a body: the operands and the continuation come from the term,
 so that whoever uses the rule proves nothing about the plumbing of the call. A consumer of the
 rule quantifies over every table that has the contract, so it cannot unfold the callee.
@@ -32,12 +32,6 @@ structure Contract (pre : HList M.Val hdr.ins → Prop)
 /-- The law of a total function at its entry in a table: it returns what `model` gives. -/
 structure Law (model : HList M.Val hdr.ins → HList M.Val hdr.outs) : Prop where
   implements : ∀ args, table _ callee args = .done (model args)
-
-/-- A law is the contract that returns what the law gives and never stops. -/
-theorem Law.contract {model : HList M.Val hdr.ins → HList M.Val hdr.outs}
-    (law : Law M table callee model) :
-    Contract M table callee (fun _ => True) (fun args out => out = model args) (fun _ _ => False) :=
-  ⟨fun args _ => by rw [law.implements]; rfl⟩
 
 /-- The rule of a call: at a call of the function in a body, with its operands from the
 environment, every path satisfies what the continuation satisfies on every result that the
@@ -75,7 +69,3 @@ theorem Law.call {model : HList M.Val hdr.ins → HList M.Val hdr.outs}
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.Law.contract
-#print axioms Zkc.Core.Contract.call
-#print axioms Zkc.Core.Law.call

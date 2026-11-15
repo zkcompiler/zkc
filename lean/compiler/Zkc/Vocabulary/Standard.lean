@@ -105,7 +105,10 @@ def literal : TypeKey → Nat → Bool
   | .group _, _ => false
 
 mutual
-  /-- A type is a law: it is finite and has a value. -/
+  /-- A type is a law (TY15): `bool`, a `fin` of a bound that is not zero, a nominal type (the
+  elements of a field, those that are not zero, the elements of a group), a tuple of laws, and a
+  sized sequence of a law or of size zero; not `nat`, a sequence of any length, a record or a
+  variant. -/
   def isLaw : Ty → Bool
     | .bool => true
     | .nat => false
@@ -178,5 +181,3 @@ def standard : Core.Vocabulary where
   decided := decided
 
 end Zkc.Vocabulary
-
-#print axioms Zkc.Vocabulary.decided

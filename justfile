@@ -15,7 +15,7 @@ test:
     cd lean/compiler && lake build && lake test
     just audit
 
-# Audit the compiler package: the kernel's replay of the core and its tests, no `sorry`, no axiom beyond Lean's three, the import rules.
+# Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
 audit:
     cd lean/compiler && lake exe zkc-audit
 

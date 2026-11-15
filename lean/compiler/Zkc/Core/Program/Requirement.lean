@@ -16,6 +16,9 @@ structure Range where
   hi : Option Nat
 deriving DecidableEq, Repr
 
+/-- A natural is in a range. -/
+def Range.Has (r : Range) (n : Nat) : Prop := r.lo ≤ n ∧ ∀ h, r.hi = some h → n ≤ h
+
 /-- A value that a requirement speaks of: an operand of the application by its position, or the
 first result of a written operation applied to operands of the application (a length, the truth
 value of the row that decides a domain). -/

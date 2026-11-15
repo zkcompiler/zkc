@@ -15,9 +15,6 @@ local operation as a whole (`localOp_valid`).
 
 namespace Zkc.Core
 
-theorem HList.all_cons {α : Type} {F : α → Type} {P : ∀ a, F a → Prop} {a : α} {rest : List α}
-    {v : F a} {vs : HList F rest} : (HList.cons v vs).All P ↔ P a v ∧ vs.All P := Iff.rfl
-
 section
 variable {V : Vocabulary} {M : Model V}
 
@@ -198,8 +195,8 @@ theorem HList.toItems_valid {item : V.Ty} : ∀ (count : Nat)
 
 /-! ## The operations that the core owns -/
 
-/-- A value of a natural or a truth value, alone, is valid. -/
-theorem valid_single_trivial {τ : V.Ty} (v : M.Val τ) (valid : M.Valid τ v) :
+/-- A valid value, alone, is a valid list of values. -/
+theorem valid_single {τ : V.Ty} (v : M.Val τ) (valid : M.Valid τ v) :
     (HList.cons v HList.nil : HList M.Val [τ]).All M.Valid :=
   HList.all_cons.mpr ⟨valid, trivial⟩
 
@@ -209,59 +206,59 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
     results.All M.Valid
   | _, _, .natAdd, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .natSub, .cons _ (.cons _ .nil), _, _, e => by
       simp only [ownedOp] at e
       split at e
       · cases e
-        exact valid_single_trivial _ trivial
+        exact valid_single _ trivial
       · cases e
   | _, _, .natMul, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .natDiv, .cons _ (.cons _ .nil), _, _, e => by
       simp only [ownedOp] at e
       split at e
       · cases e
-        exact valid_single_trivial _ trivial
+        exact valid_single _ trivial
       · cases e
   | _, _, .natRem, .cons _ (.cons _ .nil), _, _, e => by
       simp only [ownedOp] at e
       split at e
       · cases e
-        exact valid_single_trivial _ trivial
+        exact valid_single _ trivial
       · cases e
   | _, _, .natPow, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .natEqual, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .natLess, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .boolAnd, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .boolOr, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .boolNot, .cons _ .nil, _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .boolEqual, .cons _ (.cons _ .nil), _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .seqLength .., .cons _ .nil, _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .seqAt .., .cons xs (.cons i .nil), _, valid, e => by
       have items := (HList.all_cons.mp valid).1
       simp only [ownedOp] at e
       split at e
       · rename_i v found
         cases e
-        exact valid_single_trivial _ (items.1 v (List.mem_of_getElem? found))
+        exact valid_single _ (items.1 v (List.mem_of_getElem? found))
       · cases e
   | _, _, .seqSlice _ _ result _, .cons xs (.cons first (.cons second .nil)), _, valid, e => by
       have items := (HList.all_cons.mp valid).1
@@ -270,7 +267,7 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
       · rename_i inside
         cases e
         obtain ⟨ordered, within, fits⟩ := inside
-        refine valid_single_trivial _ ⟨fun v found => items.1 v
+        refine valid_single _ ⟨fun v found => items.1 v
           (List.mem_of_mem_drop (List.mem_of_mem_take found)), fun n same => ?_⟩
         subst same
         have equal := Nat.eq_of_beq_eq_true fits
@@ -281,7 +278,7 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
       have before := (HList.all_cons.mp valid).1
       have after := (HList.all_cons.mp (HList.all_cons.mp valid).2).1
       cases e
-      refine valid_single_trivial _ ⟨fun v found => ?_, fun n same => ?_⟩
+      refine valid_single _ ⟨fun v found => ?_, fun n same => ?_⟩
       · rcases List.mem_append.mp found with found | found
         · exact before.1 v found
         · exact after.1 v found
@@ -295,7 +292,7 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
                 simp only [List.length_append, before.2 a rfl, after.2 b rfl]
   | _, _, .seqFill .., .cons v .nil, _, valid, e => by
       cases e
-      refine valid_single_trivial _ ⟨fun w found => ?_, fun n same => ?_⟩
+      refine valid_single _ ⟨fun w found => ?_, fun n same => ?_⟩
       · rw [List.eq_of_mem_replicate found]
         exact (HList.all_cons.mp valid).1
       · cases same
@@ -306,40 +303,40 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
       split at e
       · rename_i length
         cases e
-        exact valid_single_trivial _ ⟨items.1, fun n same => by cases same; exact length⟩
+        exact valid_single _ ⟨items.1, fun n same => by cases same; exact length⟩
       · cases e
   | _, _, .natBelow _, .cons _ .nil, _, _, e => by
       simp only [ownedOp] at e
       split at e
       · rename_i below
         cases e
-        exact valid_single_trivial _ below
+        exact valid_single _ below
       · cases e
   | _, _, .seqUnsized .., .cons xs .nil, _, valid, e => by
       cases e
-      exact valid_single_trivial _ ⟨(HList.all_cons.mp valid).1.1, fun _ same => by cases same⟩
+      exact valid_single _ ⟨(HList.all_cons.mp valid).1.1, fun _ same => by cases same⟩
   | _, _, .finToNat _, .cons _ .nil, _, _, e => by
       cases e
-      exact valid_single_trivial _ trivial
+      exact valid_single _ trivial
   | _, _, .finWiden _ _ fits, .cons _ .nil, _, valid, e => by
       cases e
-      exact valid_single_trivial _ (Nat.lt_of_lt_of_le (HList.all_cons.mp valid).1 fits)
+      exact valid_single _ (Nat.lt_of_lt_of_le (HList.all_cons.mp valid).1 fits)
   | _, _, .makeSeq _ count, vs, _, valid, e => by
       cases e
       have items := HList.toItems_valid count vs valid
-      exact valid_single_trivial _ ⟨items.1, fun n same => by cases same; exact items.2⟩
+      exact valid_single _ ⟨items.1, fun n same => by cases same; exact items.2⟩
   | _, _, .makeTuple items, vs, _, valid, e => by
       cases e
-      exact valid_single_trivial _ (Tys.ofHList_valid items vs valid)
+      exact valid_single _ (Tys.ofHList_valid items vs valid)
   | _, _, .makeRecord _ _ fields, vs, _, valid, e => by
       cases e
-      exact valid_single_trivial _ (Tys.ofHList_valid fields vs valid)
+      exact valid_single _ (Tys.ofHList_valid fields vs valid)
   | _, _, .getTuple items position _, .cons v .nil, _, valid, e => by
       cases e
-      exact valid_single_trivial _ (Tys.getAt_valid items position v (HList.all_cons.mp valid).1)
+      exact valid_single _ (Tys.getAt_valid items position v (HList.all_cons.mp valid).1)
   | _, _, .getRecord _ fields position _, .cons v .nil, _, valid, e => by
       cases e
-      exact valid_single_trivial _
+      exact valid_single _
         (Tys.getAt_valid fields position v (HList.all_cons.mp valid).1)
   | _, _, .takeTuple items, .cons v .nil, _, valid, e => by
       cases e
@@ -349,7 +346,7 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
       exact Tys.toHList_valid fields v (HList.all_cons.mp valid).1
   | _, _, .variant _ alternatives position, .cons v .nil, _, valid, e => by
       cases e
-      exact valid_single_trivial _
+      exact valid_single _
         (Tys.injectAt_valid alternatives position v (HList.all_cons.mp valid).1)
 
 /-! ## Local operations -/
@@ -397,7 +394,7 @@ theorem localOp_literal_valid (τ : V.Ty) (data : List Nat) (reads : V.Reads τ 
     localOp M table (.literal τ data reads) args = .done results → results.All M.Valid := by
   intro e
   cases e
-  exact valid_single_trivial _ (Ty.readLiteral_valid τ data reads)
+  exact valid_single _ (Ty.readLiteral_valid τ data reads)
 
 /-- A call keeps validity when its callee does. -/
 theorem localOp_call_valid (keeps : FnTable.KeepsValidity table) {hdr : FnHeader V}

@@ -100,6 +100,18 @@ def splitPrefix {T : Type} [DecidableEq T] :
   | _ :: _, [] => none
 
 section
+variable {T : Type}
+
+theorem splitPrefix_append [DecidableEq T] (rest : List T) : ∀ (pre : List T),
+    splitPrefix pre (pre ++ rest) = some ⟨rest, rfl⟩
+  | [] => rfl
+  | a :: pre => by
+      simp only [List.cons_append, splitPrefix, splitPrefix_append rest pre, ↓reduceDIte,
+        Option.map_some]
+
+end
+
+section
 variable {D : Dialect} {Raw Who : Type}
 
 /-- How often a loop that `w` perform runs. -/

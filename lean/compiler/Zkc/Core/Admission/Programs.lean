@@ -108,6 +108,3 @@ theorem typed_functions_sound (p : Typed V) {bounds : List (Place × Nat)}
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.functions_sound
-#print axioms Zkc.Core.typed_functions_sound

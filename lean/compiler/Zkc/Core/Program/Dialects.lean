@@ -132,17 +132,6 @@ inductive OwnedOp (V : Vocabulary) : List V.Ty → List V.Ty → Type where
   | variant (key : Key) (alternatives : Tys V.TypeKey) {τ : V.Ty}
       (position : Var alternatives.toList τ) : OwnedOp V [τ] [.variant key alternatives]
 
-/-- Whether an operation that the core owns has a domain. -/
-def OwnedOp.hasDomain {V : Vocabulary} {ins outs : List V.Ty} : OwnedOp V ins outs → Bool
-  | .natSub => true
-  | .natDiv => true
-  | .natRem => true
-  | .seqAt .. => true
-  | .seqSlice .. => true
-  | .seqSized .. => true
-  | .natBelow _ => true
-  | _ => false
-
 inductive LocalOp (V : Vocabulary) (fns : List (FnHeader V)) : List V.Ty → List V.Ty → Type where
   /-- A row of the vocabulary. -/
   | row (key : V.RowKey) (signature : RowSignature V.TypeKey V.RowKey)

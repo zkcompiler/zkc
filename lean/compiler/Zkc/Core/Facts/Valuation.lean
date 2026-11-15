@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Facts.State
+public import Zkc.Core.Program.Library
 
 @[expose] public section
 
@@ -18,9 +19,6 @@ laws that `OpFacts` satisfies against them.
 -/
 
 namespace Zkc.Core
-
-/-- A natural is in a range. -/
-def Range.Has (r : Range) (n : Nat) : Prop := r.lo ≤ n ∧ ∀ h, r.hi = some h → n ≤ h
 
 namespace FactCheck
 
@@ -57,10 +55,10 @@ def Valuation.fill (ρ : Valuation Val) (lo : Nat) (vs : List Val) : Valuation V
     | none => if lo ≤ i ∧ i < lo + vs.length then vs[i - lo]? else none
 
 /-- The values of identifiers, when each has one. -/
-def lookupAll (ρ : Valuation Val) : List Nat → Option (List Val)
+def valuesOf (ρ : Valuation Val) : List Nat → Option (List Val)
   | [] => some []
   | i :: is =>
-      match ρ i, lookupAll ρ is with
+      match ρ i, valuesOf ρ is with
       | some v, some vs => some (v :: vs)
       | _, _ => none
 
@@ -78,8 +76,8 @@ def BoolAt (R : Reading Val) (ρ : Valuation Val) (id : Nat) (b : Bool) : Prop :
 structure Known.Holds (R : Reading Val) (ρ : Valuation Val) (k : Known) : Prop where
   alive : k.dead = false
   ranges : ∀ id r, (id, r) ∈ k.ranges → ∃ n, NatAt R ρ id n ∧ r.Has n
-  orders : ∀ a b strict, (a, b, strict) ∈ k.orders →
-    ∃ x y, NatAt R ρ a x ∧ NatAt R ρ b y ∧ (if strict then x < y else x ≤ y)
+  orders : ∀ o, o ∈ k.orders →
+    ∃ x y, NatAt R ρ o.first x ∧ NatAt R ρ o.second y ∧ (if o.strict then x < y else x ≤ y)
   truths : ∀ id b, (id, b) ∈ k.truths → BoolAt R ρ id b
   choices : ∀ c, c ∈ k.choices → ρ c.result ≠ none ∧ ∀ b, BoolAt R ρ c.result b →
     b = c.conjunction → BoolAt R ρ c.condition b ∧ BoolAt R ρ c.other b
@@ -92,7 +90,7 @@ variable {Raw : Type}
 operands' values gives results with that value there. -/
 def Consistent (Run : Raw → List Val → List Val → Prop) (ρ : Valuation Val) (tbl : Table Raw) :
     Prop :=
-  ∀ e, e ∈ tbl → ∀ vs, lookupAll ρ e.args = some vs → ∀ j, j < e.count → ∀ v,
+  ∀ e, e ∈ tbl → ∀ vs, valuesOf ρ e.args = some vs → ∀ j, j < e.count → ∀ v,
     ρ (e.lo + j) = some v → ∃ rs, Run e.written vs rs ∧ rs[j]? = some v
 
 /-- A result of an entry has a value only when its operands have. -/
@@ -203,11 +201,11 @@ def _root_.Zkc.Core.Requirement.Relation (R : Reading Val) : Requirement Raw →
 
 /-- The identifiers that the operands of a requirement resolve to have, where there is one,
 values that the operands name. -/
-def Resolved (Run : Raw → List Val → List Val → Prop) (args : List Val) (ρ : Valuation Val) :
+def OperandsAt (Run : Raw → List Val → List Val → Prop) (args : List Val) (ρ : Valuation Val) :
     List (Operand Raw) → List (Option Nat) → Prop
   | [], [] => True
   | o :: os, i :: is => (∀ id, i = some id → ∃ v, ρ id = some v ∧ o.Denotes Run args v) ∧
-      Resolved Run args ρ os is
+      OperandsAt Run args ρ os is
   | _, _ => False
 
 /-- A requirement holds of the operands' values: the values it names are there, and it says
@@ -232,12 +230,6 @@ theorem Valuation.Le.trans {ρ ρ' ρ'' : Valuation Val} (a : ρ.Le ρ') (b : ρ
 theorem Support.mono {ρ : Valuation Val} {n n' : Nat} (h : n ≤ n') (hs : Support n ρ) :
     Support n' ρ := fun i hi => hs i (by omega)
 
-theorem Support.lt {ρ : Valuation Val} {n i : Nat} (hs : Support n ρ) (h : ρ i ≠ none) :
-    i < n := by
-  by_cases hi : n ≤ i
-  · exact absurd (hs i hi) h
-  · omega
-
 theorem NatAt.le {R : Reading Val} {ρ ρ' : Valuation Val} (h : ρ.Le ρ') {id n : Nat} :
     NatAt R ρ id n → NatAt R ρ' id n
   | ⟨v, hv, hn⟩ => ⟨v, h _ _ hv, hn⟩
@@ -255,23 +247,6 @@ theorem NatAt.unique {R : Reading Val} {ρ : Valuation Val} {id n m : Nat} :
       cases hm
       rfl
 
-theorem BoolAt.unique {R : Reading Val} {ρ : Valuation Val} {id : Nat} {b c : Bool} :
-    BoolAt R ρ id b → BoolAt R ρ id c → b = c
-  | ⟨v, hv, hb⟩, ⟨w, hw, hc⟩ => by
-      rw [hv] at hw
-      cases hw
-      rw [hb] at hc
-      cases hc
-      rfl
-
-theorem NatAt.valued {R : Reading Val} {ρ : Valuation Val} {id n : Nat} :
-    NatAt R ρ id n → ρ id ≠ none
-  | ⟨_, hv, _⟩ => by rw [hv]; simp
-
-theorem BoolAt.valued {R : Reading Val} {ρ : Valuation Val} {id : Nat} {b : Bool} :
-    BoolAt R ρ id b → ρ id ≠ none
-  | ⟨_, hv, _⟩ => by rw [hv]; simp
-
 /-- What is known keeps holding as the valuation grows. -/
 theorem Known.Holds.le {R : Reading Val} {ρ ρ' : Valuation Val} (h : ρ.Le ρ') {k : Known}
     (hk : k.Holds R ρ) : k.Holds R ρ' where
@@ -279,9 +254,9 @@ theorem Known.Holds.le {R : Reading Val} {ρ ρ' : Valuation Val} (h : ρ.Le ρ'
   ranges id r m := by
     obtain ⟨n, hn, has⟩ := hk.ranges id r m
     exact ⟨n, hn.le h, has⟩
-  orders a b s m := by
-    obtain ⟨x, y, hx, hy, o⟩ := hk.orders a b s m
-    exact ⟨x, y, hx.le h, hy.le h, o⟩
+  orders o m := by
+    obtain ⟨x, y, hx, hy, ord⟩ := hk.orders o m
+    exact ⟨x, y, hx.le h, hy.le h, ord⟩
   truths id b m := (hk.truths id b m).le h
   choices c m := by
     obtain ⟨valued, imp⟩ := hk.choices c m
@@ -296,31 +271,31 @@ theorem Known.Holds.le {R : Reading Val} {ρ ρ' : Valuation Val} (h : ρ.Le ρ'
 
 /-! ### Lists of values -/
 
-theorem lookupAll_congr {ρ ρ' : Valuation Val} :
-    ∀ {ids : List Nat}, (∀ i, i ∈ ids → ρ i = ρ' i) → lookupAll ρ ids = lookupAll ρ' ids
+theorem valuesOf_congr {ρ ρ' : Valuation Val} :
+    ∀ {ids : List Nat}, (∀ i, i ∈ ids → ρ i = ρ' i) → valuesOf ρ ids = valuesOf ρ' ids
   | [], _ => rfl
   | i :: is, h => by
-      simp only [lookupAll]
+      simp only [valuesOf]
       rw [h i List.mem_cons_self,
-        lookupAll_congr (fun j hj => h j (List.mem_cons_of_mem _ hj))]
+        valuesOf_congr (fun j hj => h j (List.mem_cons_of_mem _ hj))]
 
-theorem lookupAll_length {ρ : Valuation Val} :
-    ∀ {ids : List Nat} {vs : List Val}, lookupAll ρ ids = some vs → vs.length = ids.length
-  | [], vs, h => by simp only [lookupAll, Option.some.injEq] at h; subst h; rfl
+theorem valuesOf_length {ρ : Valuation Val} :
+    ∀ {ids : List Nat} {vs : List Val}, valuesOf ρ ids = some vs → vs.length = ids.length
+  | [], vs, h => by simp only [valuesOf, Option.some.injEq] at h; subst h; rfl
   | i :: is, vs, h => by
-      simp only [lookupAll] at h
+      simp only [valuesOf] at h
       split at h
       · next v vs' _ e2 =>
           cases h
-          simp [lookupAll_length e2]
+          simp [valuesOf_length e2]
       · cases h
 
-theorem lookupAll_get {ρ : Valuation Val} :
-    ∀ {ids : List Nat} {vs : List Val}, lookupAll ρ ids = some vs →
+theorem valuesOf_get {ρ : Valuation Val} :
+    ∀ {ids : List Nat} {vs : List Val}, valuesOf ρ ids = some vs →
       ∀ j, j < ids.length → ρ (ids.getD j 0) = vs[j]?
   | [], _, _, j, hj => absurd hj (Nat.not_lt_zero _)
   | i :: is, vs, h, j, hj => by
-      simp only [lookupAll] at h
+      simp only [valuesOf] at h
       split at h
       · next v vs' e1 e2 =>
           cases h
@@ -328,86 +303,71 @@ theorem lookupAll_get {ρ : Valuation Val} :
           | zero => simpa using e1
           | succ j =>
               simp only [List.getD_cons_succ, List.getElem?_cons_succ]
-              exact lookupAll_get e2 j (by simp at hj; omega)
+              exact valuesOf_get e2 j (by simp at hj; omega)
       · cases h
 
-theorem lookupAll_getElem {ρ : Valuation Val} {ids : List Nat} {vs : List Val}
-    (h : lookupAll ρ ids = some vs) {j i : Nat} (hj : ids[j]? = some i) : ρ i = vs[j]? := by
+theorem valuesOf_getElem {ρ : Valuation Val} {ids : List Nat} {vs : List Val}
+    (h : valuesOf ρ ids = some vs) {j i : Nat} (hj : ids[j]? = some i) : ρ i = vs[j]? := by
   have lt : j < ids.length := by
     rcases List.getElem?_eq_some_iff.mp hj with ⟨lt, _⟩
     exact lt
-  have := lookupAll_get h j lt
+  have := valuesOf_get h j lt
   rw [List.getD_eq_getElem?_getD, hj] at this
   exact this
 
-theorem lookupAll_of_get {ρ : Valuation Val} :
+theorem valuesOf_of_get {ρ : Valuation Val} :
     ∀ {ids : List Nat} {vs : List Val}, vs.length = ids.length →
-      (∀ j, j < ids.length → ρ (ids.getD j 0) = vs[j]?) → lookupAll ρ ids = some vs
+      (∀ j, j < ids.length → ρ (ids.getD j 0) = vs[j]?) → valuesOf ρ ids = some vs
   | [], [], _, _ => rfl
   | [], _ :: _, h, _ => absurd h (fun h => Nat.succ_ne_zero _ h)
   | _ :: _, [], h, _ => absurd h (fun h => Nat.succ_ne_zero _ h.symm)
   | i :: is, v :: vs, hl, h => by
       have h0 := h 0 (by simp)
       simp only [List.getD_cons_zero, List.getElem?_cons_zero] at h0
-      have hr : lookupAll ρ is = some vs :=
-        lookupAll_of_get (by simpa using hl) (fun j hj => by
+      have hr : valuesOf ρ is = some vs :=
+        valuesOf_of_get (by simpa using hl) (fun j hj => by
           have := h (j + 1) (by simp; omega)
           simpa using this)
-      simp [lookupAll, h0, hr]
+      simp [valuesOf, h0, hr]
 
 /-- Identifiers with values have them in every larger valuation. -/
-theorem lookupAll_le {ρ ρ' : Valuation Val} (h : ρ.Le ρ') :
-    ∀ {ids : List Nat} {vs : List Val}, lookupAll ρ ids = some vs → lookupAll ρ' ids = some vs
+theorem valuesOf_le {ρ ρ' : Valuation Val} (h : ρ.Le ρ') :
+    ∀ {ids : List Nat} {vs : List Val}, valuesOf ρ ids = some vs → valuesOf ρ' ids = some vs
   | [], _, e => e
   | i :: is, vs, e => by
-      simp only [lookupAll] at e
+      simp only [valuesOf] at e
       split at e
       · next v vs' e1 e2 =>
           cases e
-          simp [lookupAll, h i v e1, lookupAll_le h e2]
+          simp [valuesOf, h i v e1, valuesOf_le h e2]
       · cases e
 
-theorem lookupAll_mem {ρ : Valuation Val} :
-    ∀ {ids : List Nat} {vs : List Val}, lookupAll ρ ids = some vs → ∀ i, i ∈ ids → ρ i ≠ none
+theorem valuesOf_mem {ρ : Valuation Val} :
+    ∀ {ids : List Nat} {vs : List Val}, valuesOf ρ ids = some vs → ∀ i, i ∈ ids → ρ i ≠ none
   | [], _, _, _, h => nomatch h
   | j :: is, vs, e, i, h => by
-      simp only [lookupAll] at e
+      simp only [valuesOf] at e
       split at e
       · next v vs' e1 e2 =>
           rcases List.mem_cons.mp h with rfl | h
           · rw [e1]; simp
-          · exact lookupAll_mem e2 i h
+          · exact valuesOf_mem e2 i h
       · cases e
 
-theorem lookupAll_of_mem {ρ : Valuation Val} :
-    ∀ {ids : List Nat}, (∀ i, i ∈ ids → ρ i ≠ none) → ∃ vs, lookupAll ρ ids = some vs
+theorem valuesOf_of_mem {ρ : Valuation Val} :
+    ∀ {ids : List Nat}, (∀ i, i ∈ ids → ρ i ≠ none) → ∃ vs, valuesOf ρ ids = some vs
   | [], _ => ⟨[], rfl⟩
   | i :: is, h => by
       obtain ⟨v, hv⟩ := Option.ne_none_iff_exists'.mp (h i List.mem_cons_self)
-      obtain ⟨vs, hvs⟩ := lookupAll_of_mem (ρ := ρ) (fun j hj => h j (List.mem_cons_of_mem _ hj))
-      exact ⟨v :: vs, by simp [lookupAll, hv, hvs]⟩
-
-theorem lookupAll_append {ρ : Valuation Val} :
-    ∀ {as bs : List Nat} {vs ws : List Val}, lookupAll ρ as = some vs → lookupAll ρ bs = some ws →
-      lookupAll ρ (as ++ bs) = some (vs ++ ws)
-  | [], _, vs, _, ha, hb => by
-      simp only [lookupAll, Option.some.injEq] at ha
-      subst ha
-      simpa using hb
-  | i :: is, bs, vs, ws, ha, hb => by
-      simp only [lookupAll] at ha
-      split at ha
-      · next v vs' e1 e2 =>
-          cases ha
-          simp [lookupAll, e1, lookupAll_append e2 hb]
-      · cases ha
+      obtain ⟨vs, hvs⟩ := valuesOf_of_mem (ρ := ρ) (fun j hj => h j (List.mem_cons_of_mem _ hj))
+      exact ⟨v :: vs, by simp [valuesOf, hv, hvs]⟩
 
 /-- The items at positions, of the values of identifiers, are the values of the identifiers
 at those positions. -/
-theorem atPositions_lookupAll {ρ : Valuation Val} {ids : List Nat} {vs : List Val}
-    (h : lookupAll ρ ids = some vs) :
+theorem atPositions_valuesOf {ρ : Valuation Val} {ids : List Nat} {vs : List Val}
+    (h : valuesOf ρ ids = some vs) :
     ∀ {positions : List Nat} {chosen : List Nat}, atPositions ids positions = some chosen →
-      ∃ values, atPositions vs positions = some values ∧ lookupAll ρ chosen = some values
+      ∃ values, atPositions vs positions = some values ∧ valuesOf ρ chosen = some values
   | [], chosen, e => by
       simp only [atPositions, Option.some.injEq] at e
       subst e
@@ -417,19 +377,15 @@ theorem atPositions_lookupAll {ρ : Valuation Val} {ids : List Nat} {vs : List V
       split at e
       · next i rest e1 e2 =>
           cases e
-          obtain ⟨values, hv, hl⟩ := atPositions_lookupAll h e2
-          have hi := lookupAll_getElem h e1
+          obtain ⟨values, hv, hl⟩ := atPositions_valuesOf h e2
+          have hi := valuesOf_getElem h e1
           cases hvp : vs[p]? with
-          | none => rw [hvp] at hi; exact absurd (lookupAll_mem h i (List.mem_of_getElem? e1)) (by
+          | none => rw [hvp] at hi; exact absurd (valuesOf_mem h i (List.mem_of_getElem? e1)) (by
               rw [hi]; simp)
           | some v =>
               rw [hvp] at hi
-              exact ⟨v :: values, by simp [atPositions, hvp, hv], by simp [lookupAll, hi, hl]⟩
+              exact ⟨v :: values, by simp [atPositions, hvp, hv], by simp [valuesOf, hi, hl]⟩
       · cases e
-
-theorem mem_range'_bounds {s n i : Nat} (m : i ∈ List.range' s n) : s ≤ i ∧ i < s + n := by
-  obtain ⟨k, hk, rfl⟩ := List.mem_range'.mp m
-  exact ⟨by omega, by omega⟩
 
 /-! ### Growing valuations -/
 
@@ -456,9 +412,9 @@ theorem setFrom_support {ρ : Valuation Val} {lo : Nat} (hs : Support lo ρ) (vs
   rw [ite_eq_right (by omega)]
   exact hs i (by omega)
 
-theorem lookupAll_setFrom (ρ : Valuation Val) (lo : Nat) (vs : List Val) :
-    lookupAll (ρ.setFrom lo vs) (List.range' lo vs.length) = some vs := by
-  apply lookupAll_of_get (by simp)
+theorem valuesOf_setFrom (ρ : Valuation Val) (lo : Nat) (vs : List Val) :
+    valuesOf (ρ.setFrom lo vs) (List.range' lo vs.length) = some vs := by
+  apply valuesOf_of_get (by simp)
   intro j hj
   simp only [List.length_range'] at hj
   rw [List.getD_eq_getElem?_getD, List.getElem?_range' hj]
@@ -576,7 +532,7 @@ theorem consistent_setFrom {Run : Raw → List Val → List Val → Prop} {ρ : 
       fun j hj => setFrom_low _ _ _ (by omega)⟩
   constructor
   · intro e he vsa hvs j hj v hv
-    rw [lookupAll_congr (fun a ha => (low e he).1 a ha)] at hvs
+    rw [valuesOf_congr (fun a ha => (low e he).1 a ha)] at hvs
     rw [(low e he).2 j hj] at hv
     exact hc e he vsa hvs j hj v hv
   · intro e he j hj hv a ha
@@ -592,7 +548,7 @@ theorem consistent_below {Run : Raw → List Val → List Val → Prop} {ρ : Va
   constructor
   · intro e he vs hvs j hj v hv
     rcases split e he with low | high
-    · rw [lookupAll_congr (fun a ha => below_eq (by have := args e he a ha; omega))] at hvs
+    · rw [valuesOf_congr (fun a ha => below_eq (by have := args e he a ha; omega))] at hvs
       rw [below_eq (by omega)] at hv
       exact hc e he vs hvs j hj v hv
     · rw [below_support ρ t _ (by omega)] at hv; cases hv
@@ -609,11 +565,11 @@ function of its operands, and get those of `rs` otherwise. The table stays true.
 theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuation Val}
     {tbl : Table Raw} {n : Nat} (wf : Table.WF n tbl) (hc : Consistent Run ρ tbl)
     (hcl : Closed ρ tbl) (hs : Support n ρ) {e : Entry Raw} (he : e ∈ tbl) {vs rs : List Val}
-    (hvs : lookupAll ρ e.args = some vs) (hrun : Run e.written vs rs) (hlen : rs.length = e.count)
+    (hvs : valuesOf ρ e.args = some vs) (hrun : Run e.written vs rs) (hlen : rs.length = e.count)
     (hfun : ∀ rs', Run e.written vs rs' → rs' = rs) :
     ρ.Le (ρ.fill e.lo rs) ∧ Support n (ρ.fill e.lo rs) ∧
       Consistent Run (ρ.fill e.lo rs) tbl ∧ Closed (ρ.fill e.lo rs) tbl ∧
-      lookupAll (ρ.fill e.lo rs) (List.range' e.lo e.count) = some rs := by
+      valuesOf (ρ.fill e.lo rs) (List.range' e.lo e.count) = some rs := by
   have le := fill_le ρ e.lo rs
   have hb := (wf.mem he).2
   have at_ : ∀ j, j < e.count → ρ.fill e.lo rs (e.lo + j) = rs[j]? := fun j hj => by
@@ -631,7 +587,7 @@ theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuatio
     apply fill_other
     intro hin
     exact hne (Table.WF.disjoint wf he' he j (e'.lo + j - e.lo) hj (by omega) (by omega))
-  have hargs : lookupAll (ρ.fill e.lo rs) e.args = some vs := lookupAll_le le hvs
+  have hargs : valuesOf (ρ.fill e.lo rs) e.args = some vs := valuesOf_le le hvs
   refine ⟨le, ?_, ?_, ?_, ?_⟩
   · intro i hi
     have := hs i hi
@@ -647,15 +603,15 @@ theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuatio
       exact ⟨rs, hrun, hv⟩
     · have hne : e' ≠ e := fun h => by subst h; exact hin ⟨by omega, by omega⟩
       rw [other e' he' hne j hj] at hv
-      obtain ⟨vs0, hvs0⟩ := lookupAll_of_mem (ρ := ρ) (hcl e' he' j hj (by rw [hv]; simp))
-      rw [lookupAll_le le hvs0] at hvs'
+      obtain ⟨vs0, hvs0⟩ := valuesOf_of_mem (ρ := ρ) (hcl e' he' j hj (by rw [hv]; simp))
+      rw [valuesOf_le le hvs0] at hvs'
       cases hvs'
       exact hc e' he' _ hvs0 j hj v hv
   · intro e' he' j hj hv a ha
     by_cases hin : e.lo ≤ e'.lo + j ∧ e'.lo + j < e.lo + e.count
     · have heq := Table.WF.disjoint wf he' he j (e'.lo + j - e.lo) hj (by omega) (by omega)
       subst heq
-      exact lookupAll_mem hargs a ha
+      exact valuesOf_mem hargs a ha
     · have hne : e' ≠ e := fun h => by subst h; exact hin ⟨by omega, by omega⟩
       rw [other e' he' hne j hj] at hv
       have := hcl e' he' j hj hv a ha
@@ -664,7 +620,7 @@ theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuatio
       cases hρ : ρ a with
       | none => rfl
       | some v => rw [le _ _ hρ] at h0; cases h0
-  · apply lookupAll_of_get (by simp [hlen])
+  · apply valuesOf_of_get (by simp [hlen])
     intro j hj
     simp only [List.length_range'] at hj
     rw [List.getD_eq_getElem?_getD, List.getElem?_range' hj]

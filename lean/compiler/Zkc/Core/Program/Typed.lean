@@ -7,7 +7,10 @@ public import Zkc.Core.Program.Linear
 
 /-!
 A typed program: its definitions, each with what elaboration decided about its body, and
-the lookup of a definition by its key.
+the lookup of a definition by its key. Also one definition elaborated against the headers before
+it (`Elaborated`), the program extended by it (`Typed.add`), whether a function or a local
+operation can stop (`Fn.canStop`, `LocalOp.canStop`), and the definitions that a definition
+reaches by its calls (`Defs.closureOf`).
 -/
 
 namespace Zkc.Core

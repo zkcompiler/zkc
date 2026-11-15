@@ -470,7 +470,10 @@ def «N-TY10g» := check [bytes 4] [.fin 1024] false <| .mk [0] [
       .op ⟨5⟩ [24] plus [21, 23]] [24]),
   .op ⟨6⟩ [12] (narrowTo 1024) [11]] [12]
 
-/-- A sum of weighted bytes, unrolled as the frontend writes it, of `count` terms. -/
+/-- A sum of weighted bytes, `∑ i ∈ 0..count, units[i] * 256^i`, of `count` terms. The index is
+an operand of arithmetic in the element, so the sum is its iterations in sequence, each with the
+index a literal, and its range is taken index by index (`LANGUAGE.md`, TY8, the row of `∑`; §7.5,
+stepped loops). -/
 def weighted (count : Nat) : Region (LocalRaw field) Unit :=
   .mk [0] (terms ++ [.op ⟨1000⟩ [3000] (narrowTo (2 ^ 64)) [total]]) [3000]
 where
@@ -898,6 +901,34 @@ example : rebound [.op ⟨7⟩ [10] plus [14, 1]] = some (.inl
     [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨1, none⟩, some ⟨2, none⟩]]) := by
   decide
 
+
+/-! ## What the calculus of facts does not conclude -/
+
+/-- `guard x <= length(xs)`, `guard t < length(xs) - x`, then `xs[x + t]`: the guard on
+`t < length(xs) - x` is no loop's order for its index, and nothing concludes `x + t < length(xs)`
+(TY4: no arithmetic on both sides). -/
+example : check [elements, .nat, .nat] [F] true (.mk [0, 1, 2] [
+    .op ⟨1⟩ [10] (length elements) [0],
+    .op ⟨2⟩ [11] less [10, 1],
+    .op ⟨3⟩ [12] negation [11],
+    .guard ⟨4⟩ () 12 .refused,
+    .op ⟨5⟩ [13] minus [10, 1],
+    .op ⟨6⟩ [14] less [2, 13],
+    .guard ⟨7⟩ () 14 .refused,
+    .op ⟨8⟩ [15] plus [1, 2],
+    .op ⟨9⟩ [16] (item elements) [0, 15]] [16]) = some (.inl
+    [unjustified 9 (item elements) (.lt (.arg 1) lengthOf) [anyNat, anyNat]]) := by
+  decide
+
+/-- `z / (∑ i ∈ 0..4, 1)`: the sum starts where its initial value starts, at 0 (TY8), so the
+divisor is not known to be at least one. -/
+example : check [.nat] [.nat] false (.mk [0] [
+    .op ⟨1⟩ [10] (natural 0) [],
+    .loop ⟨2⟩ () (.fixed 4) [10] [11]
+      (.mk [20, 21] [.op ⟨3⟩ [22] (natural 1) [], .op ⟨4⟩ [23] plus [21, 22]] [23]),
+    .op ⟨5⟩ [12] quotient [0, 11]] [12]) = some (.inl
+    [unjustified 5 quotient (.atLeast (.arg 1) 1) [some ⟨0, some 4⟩]]) := by
+  decide
 
 /-! ## Code that does not run -/
 

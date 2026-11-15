@@ -27,68 +27,10 @@ theorem Local.stops_of_halts {A : Type} {P : Stop → Prop} :
   | .call op _, _ => nomatch op
 
 /-- Every stop of an operation that the core owns is `undefined`. -/
-theorem ownedOp_halts : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs)
-    (args : HList M.Val ins) (h : Stop), ownedOp M o args = .halt h → h = .undefined
-  | _, _, .natAdd, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natSub, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natMul, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natDiv, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natRem, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natPow, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natEqual, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natLess, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .boolAnd, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .boolOr, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .boolNot, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .boolEqual, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .seqLength _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .seqAt _ _ _, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .seqSlice _ _ _ _, .cons _ (.cons _ (.cons _ .nil)), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .seqConcat _ _ _, .cons _ (.cons _ .nil), _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .seqFill _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .seqSized _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .natBelow _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .seqUnsized _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .finToNat _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .finWiden _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .makeSeq _ _, _, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .makeTuple _, _, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .makeRecord _ _ _, _, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .getTuple _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .getRecord _ _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .takeTuple _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .takeRecord _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
-  | _, _, .variant _ _ _, .cons _ .nil, _, e => by
-      simp only [ownedOp] at e <;> first | (split at e <;> cases e <;> rfl) | cases e
+theorem ownedOp_halts {ins outs : List V.Ty} (o : OwnedOp V ins outs) (args : HList M.Val ins)
+    (h : Stop) : ownedOp M o args = .halt h → h = .undefined := by
+  fun_cases ownedOp M o args <;> intro e <;> simp only [ownedOp] at e <;>
+    first | (split at e <;> cases e <;> rfl) | cases e
 
 /-- A local operation that cannot stop with a reason stops only `undefined`, against callees
 whose headers say that they cannot stop and that stop only `undefined`. -/
@@ -204,5 +146,3 @@ theorem Defs.fnTable_stops_undefined : ∀ {hs : Headers V} (defs : Defs V hs) (
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.Defs.fnTable_stops_undefined

@@ -1,6 +1,5 @@
 module
 
-
 @[expose] public section
 
 /-!
@@ -49,7 +48,6 @@ abbrev Process.Stops {S : Sig} {H A : Type} (P : H → Prop) (p : Process S H A)
 
 /-- No effects. -/
 @[reducible] def NoSig : Sig := ⟨Empty, fun op => nomatch op⟩
-
 
 /-! ## Processes -/
 
@@ -133,7 +131,6 @@ theorem Process.every_iterate_below {S : Sig} {H A : Type} (permitted : ∀ op, 
         (by omega) hb
       simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
 
-
 def Process.mapHalt {S : Sig} {H H' A : Type} (f : H → H') : Process S H A → Process S H' A
   | .done a => .done a
   | .halt payload => .halt (f payload)
@@ -144,7 +141,6 @@ def Process.recover {S : Sig} {H H' A : Type} :
   | .done a, _ => .done a
   | .halt payload, f => f payload
   | .call op k, f => .call op fun reply => (k reply).recover f
-
 
 namespace Process
 
@@ -223,8 +219,3 @@ theorem bind_iterate_fst {X D : Type} {step : Nat → A → Process S H A}
 end Process
 
 end Zkc.Core
-
-#print axioms Zkc.Core.Process.every_bind
-#print axioms Zkc.Core.Process.every_mono
-#print axioms Zkc.Core.Process.every_iterate
-#print axioms Zkc.Core.Process.every_iterate_below

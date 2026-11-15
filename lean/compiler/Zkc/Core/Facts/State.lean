@@ -16,11 +16,14 @@ ones. The table is never scoped: an entry says what a result is, not that it was
 What is known (ranges, orders, truths, the two shapes of a choice, whether the region runs at
 all) is scoped: what is learned in a region is dropped at its exit.
 
-Of the table and of what is known, the walk reads only the functions here: a lookup in the
-table and an entry made in it, the entry of an identifier and how it reads, the range of an
-identifier, whether an order or a truth is known. Each reads the leaf of a tree placed by an
-identifier, or for an application by a number computed from its operands' identifiers
-(`Program/BitTree.lean`): a list, read as a list; nothing else depends on that.
+The walk reads the table and what is known through the functions here (a lookup in the table and
+an entry made in it, the entry of an identifier and how it reads, the range of an identifier,
+whether an order or a truth is known) and through whether a region is dead; how what is known
+enters a region and the range of a carried natural after a loop are in `Walk.lean`. Each of the
+functions here reads the leaf of a tree placed by an identifier, or for an application by a
+number computed from its operands' identifiers (`Program/BitTree.lean`): a list, read as a
+list; nothing else depends on that. The arithmetic of the ranges that this file defines is
+proved beside it.
 -/
 
 namespace Zkc.Core
@@ -42,19 +45,14 @@ def hull (a b : Range) : Range :=
     | some x, some y => some (max x y)
     | _, _ => none⟩
 
-/-- No number is in the range. -/
-def isEmpty (r : Range) : Bool :=
-  match r.hi with
-  | some h => decide (h < r.lo)
-  | none => false
-
 /-- The range of one number. -/
 def point (n : Nat) : Range := ⟨n, some n⟩
 
 /-- The range of no number. -/
 def nothing : Range := ⟨1, some 0⟩
 
-/-- The numbers from the lower end of one range to the upper end of another, less one. -/
+/-- The numbers below a number of the range: from zero to its upper end less one; no number
+when the upper end is zero, every natural when it has none. -/
 def below (r : Range) : Range :=
   match r.hi with
   | some 0 => Range.nothing
@@ -68,6 +66,67 @@ def Range.meet : Option Range → Option Range → Option Range
   | some a, some b => some (a.inter b)
   | some a, none => some a
   | none, b => b
+
+namespace Range
+
+theorem Has.inter {a b : Range} {n : Nat} (ha : a.Has n) (hb : b.Has n) : (a.inter b).Has n := by
+  obtain ⟨la, ua⟩ := ha
+  obtain ⟨lb, ub⟩ := hb
+  refine ⟨Nat.max_le.mpr ⟨la, lb⟩, fun h e => ?_⟩
+  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
+    simp only [Range.inter, Option.some.injEq, reduceCtorEq] at e
+  · subst e; exact ub _ rfl
+  · subst e; exact ua _ rfl
+  · subst e; exact Nat.le_min.mpr ⟨ua _ rfl, ub _ rfl⟩
+
+theorem Has.hull_left {a b : Range} {n : Nat} (ha : a.Has n) : (a.hull b).Has n := by
+  obtain ⟨la, ua⟩ := ha
+  refine ⟨Nat.le_trans (Nat.min_le_left _ _) la, fun h e => ?_⟩
+  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
+    simp only [Range.hull, Option.some.injEq, reduceCtorEq] at e
+  subst e
+  exact Nat.le_trans (ua _ rfl) (Nat.le_max_left _ _)
+
+theorem Has.hull_right {a b : Range} {n : Nat} (hb : b.Has n) : (a.hull b).Has n := by
+  obtain ⟨lb, ub⟩ := hb
+  refine ⟨Nat.le_trans (Nat.min_le_right _ _) lb, fun h e => ?_⟩
+  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
+    simp only [Range.hull, Option.some.injEq, reduceCtorEq] at e
+  subst e
+  exact Nat.le_trans (ub _ rfl) (Nat.le_max_right _ _)
+
+theorem has_point {n m : Nat} : (Range.point n).Has m ↔ m = n :=
+  ⟨fun ⟨l, u⟩ => Nat.le_antisymm (u n rfl) l,
+    fun e => by subst e; exact ⟨Nat.le_refl _, fun h e => by cases e; exact Nat.le_refl _⟩⟩
+
+/-- Below a natural in the range, a natural is in the range below it. -/
+theorem Has.below {r : Range} {c i : Nat} (h : r.Has c) (lt : i < c) : r.below.Has i := by
+  rcases r with ⟨lo, _ | _ | hi⟩
+  · exact ⟨Nat.zero_le _, fun _ e => nomatch e⟩
+  · have := h.2 0 rfl
+    exfalso
+    omega
+  · have := h.2 (hi + 1) rfl
+    exact ⟨Nat.zero_le _, fun h' e => by cases e; omega⟩
+
+end Range
+
+theorem Range.meet_has {a b : Option Range} {r : Range} {n : Nat} (h : Range.meet a b = some r)
+    (ha : ∀ r, a = some r → r.Has n) (hb : ∀ r, b = some r → r.Has n) : r.Has n := by
+  cases a with
+  | none =>
+      simp only [Range.meet] at h
+      exact hb r h
+  | some a =>
+      cases b with
+      | none =>
+          simp only [Range.meet, Option.some.injEq] at h
+          subst h
+          exact ha a rfl
+      | some b =>
+          simp only [Range.meet, Option.some.injEq] at h
+          subst h
+          exact (ha a rfl).inter (hb b rfl)
 
 namespace FactCheck
 
@@ -124,8 +183,6 @@ instance {Raw : Type} : Membership (Entry Raw) (Table Raw) := ⟨fun t e => e �
 
 section
 variable {Raw : Type}
-
-theorem Table.mem_def {e : Entry Raw} {t : Table Raw} : e ∈ t ↔ e ∈ t.entries := Iff.rfl
 
 /-- The table without entries. -/
 def Table.empty : Table Raw :=
@@ -192,12 +249,21 @@ structure ChoiceFact where
   other : Nat
 deriving DecidableEq
 
+/-- An order `first < second` (strict) or `first ≤ second`, and whether a loop made it: the
+order of its index below its count. -/
+structure OrderFact where
+  first : Nat
+  second : Nat
+  strict : Bool
+  byLoop : Bool
+deriving DecidableEq
+
 /-- What is known at a place, each part placed by an identifier. -/
 structure Known where
   /-- Ranges of naturals, by the identifier; several of one identifier are intersected. -/
   ranges : BitTree (Nat × Range)
-  /-- Orders `first < second` (strict) or `first ≤ second`, by the first. -/
-  orders : BitTree (Nat × Nat × Bool)
+  /-- Orders, by the first. -/
+  orders : BitTree OrderFact
   /-- Truth values, by the identifier. -/
   truths : BitTree (Nat × Bool)
   /-- The shapes of choices, by the result. -/
@@ -234,13 +300,15 @@ def addRanges (k : Known) : List Nat → List (Option Range) → Known
   | id :: ids, r :: rs => (k.addRange? id r).addRanges ids rs
   | _, _ => k
 
-/-- Whether `first < second` (strict) or `first ≤ second` is an order that is known. -/
+/-- Whether `first < second` (strict) or `first ≤ second` is an order that is known, whoever
+made it. -/
 def hasOrder (k : Known) (first second : Nat) (strict : Bool) : Bool :=
   (k.orders.find factDepth first).any fun fact =>
-    fact.1 == first && fact.2.1 == second && (fact.2.2 || !strict)
+    fact.first == first && fact.second == second && (fact.strict || !strict)
 
-def addOrder (k : Known) (first second : Nat) (strict : Bool) : Known :=
-  { k with orders := k.orders.insert factDepth first (first, second, strict) }
+/-- An order learned; `byLoop` when a loop made it for its index. -/
+def addOrder (k : Known) (first second : Nat) (strict : Bool) (byLoop : Bool := false) : Known :=
+  { k with orders := k.orders.insert factDepth first ⟨first, second, strict, byLoop⟩ }
 
 /-- Whether the identifier is known to have the truth value. -/
 def hasTruth (k : Known) (id : Nat) (value : Bool) : Bool :=
@@ -340,13 +408,13 @@ def differenceBelow (first second : Nat) (strict : Bool) : Bool :=
   | _ => false
 
 /-- The index of a range that does not start at zero: `first` is `x + t` and `t < second - x`
-is an order. -/
+is the order that a loop made for its index `t`. -/
 def offsetBelow (first second : Nat) : Bool :=
   match tbl.formOf ops first with
   | some (.sum, [x, t]) =>
       (k.orders.find factDepth t).any fun fact =>
-        fact.1 == t && fact.2.2 &&
-          (match tbl.formOf ops fact.2.1 with
+        fact.first == t && fact.strict && fact.byLoop &&
+          (match tbl.formOf ops fact.second with
             | some (.difference, [r, x']) => r == second && x' == x
             | _ => false)
   | _ => false
@@ -420,9 +488,71 @@ def atPositions {α : Type} (xs : List α) : List Nat → Option (List α)
       | some x, some rest => some (x :: rest)
       | _, _ => none
 
+theorem atPositions_length {α : Type} {xs : List α} :
+    ∀ {ps : List Nat} {ys : List α}, atPositions xs ps = some ys → ys.length = ps.length
+  | [], ys, h => by simp only [atPositions, Option.some.injEq] at h; subst h; rfl
+  | p :: ps, ys, h => by
+      simp only [atPositions] at h
+      split at h
+      · next x rest e1 e2 =>
+          cases h
+          simp [atPositions_length e2]
+      · cases h
+
+theorem atPositions_mem {α : Type} {xs : List α} :
+    ∀ {ps : List Nat} {ys : List α}, atPositions xs ps = some ys → ∀ y, y ∈ ys → y ∈ xs
+  | [], ys, h, y, m => by simp only [atPositions, Option.some.injEq] at h; subst h; cases m
+  | p :: ps, ys, h, y, m => by
+      simp only [atPositions] at h
+      split at h
+      · next x rest e1 e2 =>
+          cases h
+          rcases List.mem_cons.mp m with rfl | m
+          · exact List.mem_of_getElem? e1
+          · exact atPositions_mem e2 y m
+      · cases h
+
+theorem atPositions_getElem {α : Type} {xs : List α} :
+    ∀ {ps : List Nat} {ys : List α}, atPositions xs ps = some ys →
+      ∀ (i p : Nat), ps[i]? = some p → ys[i]? = xs[p]?
+  | [], ys, h, i, p, e => by simp at e
+  | q :: ps, ys, h, i, p, e => by
+      simp only [atPositions] at h
+      split at h
+      · next x rest e1 e2 =>
+          cases h
+          cases i with
+          | zero =>
+              simp only [List.getElem?_cons_zero, Option.some.injEq] at e
+              subst e
+              simpa using e1.symm
+          | succ i =>
+              simp only [List.getElem?_cons_succ] at e ⊢
+              exact atPositions_getElem e2 i p e
+      · cases h
+
+theorem atPositions_append {α : Type} (xs : List α) :
+    ∀ (ps qs : List Nat), atPositions xs (ps ++ qs) =
+      (atPositions xs ps).bind fun as => (atPositions xs qs).map fun bs => as ++ bs
+  | [], qs => by simp [atPositions]
+  | p :: ps, qs => by
+      simp only [List.cons_append, atPositions, atPositions_append xs ps qs]
+      cases xs[p]? <;> cases atPositions xs ps <;> simp
+      cases atPositions xs qs <;> simp
+
+theorem atPositions_range {α : Type} (xs : List α) :
+    ∀ n, n ≤ xs.length → atPositions xs (List.range n) = some (xs.take n)
+  | 0, _ => by simp [atPositions]
+  | n + 1, le => by
+      rw [List.range_succ, atPositions_append, atPositions_range xs n (by omega)]
+      simp only [atPositions, List.getElem?_eq_getElem (by omega : n < xs.length),
+        Option.bind_some, Option.map_some, Option.some.injEq]
+      rw [List.take_add_one, List.getElem?_eq_getElem (by omega : n < xs.length)]
+      rfl
+
 /-- The identifier of a value that a requirement speaks of: an operand by its position, or the
 first result of a written operation applied to operands, found in the table or entered. -/
-def resolve [DecidableEq Raw] (argIds : List Nat) (st : St T Raw) :
+def operandId [DecidableEq Raw] (argIds : List Nat) (st : St T Raw) :
     Operand Raw → Option Nat × St T Raw
   | .arg position => (argIds[position]?, st)
   | .apply written positions =>
@@ -460,12 +590,12 @@ def decideRequirement (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) :
   | _, _, _ => false
 
 /-- The identifiers of the values of a requirement, entering applications in the table. -/
-def resolveAll [DecidableEq Raw] (argIds : List Nat) :
+def operandIds [DecidableEq Raw] (argIds : List Nat) :
     List (Operand Raw) → St T Raw → List (Option Nat) × St T Raw
   | [], st => ([], st)
   | operand :: rest, st =>
-      let first := resolve argIds st operand
-      let others := resolveAll argIds rest first.2
+      let first := operandId argIds st operand
+      let others := operandIds argIds rest first.2
       (first.1 :: others.1, others.2)
 
 /-- Check the requirements of an application at a place, in order: each that is not known is
@@ -475,7 +605,7 @@ def checkRequirements [DecidableEq Raw] (ops : OpFacts Raw) (k : Known) (place :
   | [], st => st
   | requirement :: rest, st =>
       let operands := requirement.operands
-      let resolved := resolveAll argIds operands st
+      let resolved := operandIds argIds operands st
       let ranges := List.zipWith (operandRange ops k argIds) operands resolved.1
       let st₁ := resolved.2
       let st₂ :=

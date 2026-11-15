@@ -14,9 +14,15 @@ numbers, as a literal with its data (which reads as its type), or as a call of t
 function with a key (one of the headers before the caller has it). Nobody performs a form of
 control, and nobody owns an attempt.
 
-This is the one place where the local dialect's operations meet their written forms: adding an
-operation that the core owns is a constructor of `OwnedOp`, an entry of `OwnedOp.name` and one
-of `OwnedOp.resolve` here, its meaning and its facts.
+This is where the local dialect's operations meet their written forms. An operation that the
+core owns is described by case analyses in several modules, and adding one adds an arm to each:
+its name (`OwnedName`, `Program/Syntax.lean`) and its constructor (`OwnedOp`,
+`Program/Dialects.lean`); its written form and its resolution here (`OwnedOp.name`,
+`OwnedOp.resolve`, `OwnedOp.resolve_name`); its meaning (`ownedOp`, `Meaning/Local.lean`), with
+the proofs that it keeps validity (`ownedOp_valid`, `Meaning/Validity.lean`) and stops only
+`undefined` (`ownedOp_halts`, `Meaning/Stops.lean`); what the check of facts is told of it
+(`ownedRequires`, `ownedRanges`, `localForm`, `Facts/Local.lean`), with their laws
+(`Facts/LocalLaws.lean`).
 -/
 
 namespace Zkc.Core

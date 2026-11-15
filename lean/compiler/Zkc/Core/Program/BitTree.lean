@@ -168,8 +168,6 @@ def Mem (x : α) : BitTree α → Prop
 
 instance : Membership α (BitTree α) := ⟨fun t x => Mem x t⟩
 
-theorem mem_def {x : α} {t : BitTree α} : x ∈ t ↔ Mem x t := Iff.rfl
-
 theorem not_mem_empty (x : α) : ¬ x ∈ (.leaf [] : BitTree α) := fun m => nomatch m
 
 /-- An item of a leaf is in the tree. -/

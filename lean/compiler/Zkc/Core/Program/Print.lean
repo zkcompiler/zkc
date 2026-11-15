@@ -159,13 +159,6 @@ theorem length_levels : ∀ (Γ : List T), (levels Γ).length = Γ.length
   | [] => rfl
   | _ :: Γ => congrArg (· + 1) (length_levels Γ)
 
-theorem splitPrefix_append [DecidableEq T] (rest : List T) : ∀ (pre : List T),
-    splitPrefix pre (pre ++ rest) = some ⟨rest, rfl⟩
-  | [] => rfl
-  | a :: pre => by
-      simp only [List.cons_append, splitPrefix, splitPrefix_append rest pre, ↓reduceDIte,
-        Option.map_some]
-
 end
 
 /-- A decision of a proposition that holds. -/

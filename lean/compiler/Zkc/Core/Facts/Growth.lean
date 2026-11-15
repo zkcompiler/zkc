@@ -42,7 +42,7 @@ variable {Raw : Type} [DecidableEq Raw] {T : Type}
 
 /-- The state and the identifiers in scope are well formed: the table, and every identifier
 below the next. -/
-def Fits (ids : List Nat) (st : St T Raw) : Prop :=
+def WellFormed (ids : List Nat) (st : St T Raw) : Prop :=
   Table.WF st.next st.table ∧ ∀ i, i ∈ ids → i < st.next
 
 omit [DecidableEq Raw] in
@@ -83,14 +83,14 @@ theorem share_grows (w : Raw) (args : List Nat) (count : Nat) (st : St T Raw)
       simp only
       omega
 
-theorem resolve_grows (argIds : List Nat) (st : St T Raw) (o : Operand Raw)
+theorem operandId_grows (argIds : List Nat) (st : St T Raw) (o : Operand Raw)
     (wf : Table.WF st.next st.table) (hlt : ∀ a, a ∈ argIds → a < st.next) :
-    Table.WF (resolve argIds st o).2.next (resolve argIds st o).2.table ∧
-      St.Grows st (resolve argIds st o).2 := by
+    Table.WF (operandId argIds st o).2.next (operandId argIds st o).2.table ∧
+      St.Grows st (operandId argIds st o).2 := by
   cases o with
   | arg => exact ⟨wf, St.Grows.refl st⟩
   | apply w ps =>
-      simp only [resolve]
+      simp only [operandId]
       split
       · next ids' e =>
           obtain ⟨wf', grows, _⟩ := share_grows w ids' 1 st wf
@@ -98,16 +98,16 @@ theorem resolve_grows (argIds : List Nat) (st : St T Raw) (o : Operand Raw)
           exact ⟨wf', grows⟩
       · exact ⟨wf, St.Grows.refl st⟩
 
-theorem resolveAll_grows (argIds : List Nat) :
+theorem operandIds_grows (argIds : List Nat) :
     ∀ (os : List (Operand Raw)) (st : St T Raw), Table.WF st.next st.table →
       (∀ a, a ∈ argIds → a < st.next) →
-      Table.WF (resolveAll argIds os st).2.next (resolveAll argIds os st).2.table ∧
-        St.Grows st (resolveAll argIds os st).2
+      Table.WF (operandIds argIds os st).2.next (operandIds argIds os st).2.table ∧
+        St.Grows st (operandIds argIds os st).2
   | [], st, wf, _ => ⟨wf, St.Grows.refl st⟩
   | o :: os, st, wf, hlt => by
-      simp only [resolveAll]
-      obtain ⟨wf1, g1⟩ := resolve_grows argIds st o wf hlt
-      obtain ⟨wf2, g2⟩ := resolveAll_grows argIds os _ wf1
+      simp only [operandIds]
+      obtain ⟨wf1, g1⟩ := operandId_grows argIds st o wf hlt
+      obtain ⟨wf2, g2⟩ := operandIds_grows argIds os _ wf1
         (fun a m => Nat.lt_of_lt_of_le (hlt a m) g1.next)
       exact ⟨wf2, g1.trans g2⟩
 
@@ -121,8 +121,8 @@ theorem checkRequirements_grows (ops : OpFacts Raw) (k : Known) (place : Place) 
   | [], st, wf, _ => ⟨wf, St.Grows.refl st⟩
   | req :: rest, st, wf, hlt => by
       simp only [checkRequirements]
-      obtain ⟨wf1, g1⟩ := resolveAll_grows argIds req.operands st wf hlt
-      generalize resolveAll argIds req.operands st = resolved at wf1 g1 ⊢
+      obtain ⟨wf1, g1⟩ := operandIds_grows argIds req.operands st wf hlt
+      generalize operandIds argIds req.operands st = resolved at wf1 g1 ⊢
       split
       · obtain ⟨wf2, g2⟩ := checkRequirements_grows ops k place written argIds rest resolved.2
           wf1 (fun a m => Nat.lt_of_lt_of_le (hlt a m) g1.next)
@@ -220,8 +220,8 @@ mutual
         (st : St D.Ty Raw),
         WalkState definition role (t.addresses blocks) st
             (walk rules definition role blocks t ids k st).st ∧
-          (ids.length = Γ.length → Fits ids st →
-            Fits (walk rules definition role blocks t ids k st).rets
+          (ids.length = Γ.length → WellFormed ids st →
+            WellFormed (walk rules definition role blocks t ids k st).rets
               (walk rules definition role blocks t ids k st).st ∧
             St.Grows st (walk rules definition role blocks t ids k st).st)
     | _, _, .ret xs, ids, k, st => by
@@ -338,7 +338,7 @@ mutual
           at rbt rbn rbr ebd ⊢
         generalize hm : fresh (carried.length + each.length) st₁ = made
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
-          ((afterLoop rules e k (timesBounds k ids times) made.1 ((idsOf ids init).map k.rangeOf)
+          ((afterLoop rules e k (timesBound k ids times) made.1 ((idsOf ids init).map k.rangeOf)
             inBody.1.tail e.rets (carried ++ each.map (D.collected times.size))).enter rules
             (carried ++ each.map (D.collected times.size))) made.2
         have m2r : made.2.refusals = st₁.refusals := by rw [← hm]; rfl
@@ -450,10 +450,10 @@ mutual
         (k : Known) (st : St D.Ty Raw),
         WalkState definition role (Arms.addresses blocks arms) st
             (walkArms rules definition role blocks arms ids k st).2 ∧
-          (ids.length = Γ.length → Fits ids st →
+          (ids.length = Γ.length → WellFormed ids st →
             (∀ e, e ∈ (walkArms rules definition role blocks arms ids k st).1 →
               ∀ i, i ∈ e.rets → i < (walkArms rules definition role blocks arms ids k st).2.next) ∧
-            Fits ids (walkArms rules definition role blocks arms ids k st).2 ∧
+            WellFormed ids (walkArms rules definition role blocks arms ids k st).2 ∧
             St.Grows st (walkArms rules definition role blocks arms ids k st).2)
     | _, _, _, .nil, _, _, st =>
         ⟨⟨⟨[], rfl⟩, [], rfl, fun _ m => nomatch m⟩,

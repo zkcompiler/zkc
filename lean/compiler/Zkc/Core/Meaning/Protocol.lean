@@ -20,7 +20,6 @@ term's shape gives; without the record it is `Term.denote`.
 
 namespace Zkc.Core
 
-
 section
 variable {V : Vocabulary} (M : Model V)
 
@@ -412,5 +411,3 @@ end
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.Term.observe_fst

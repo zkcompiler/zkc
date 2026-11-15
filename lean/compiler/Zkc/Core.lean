@@ -10,6 +10,7 @@ public import Zkc.Core.Program.ElaborateLocal
 public import Zkc.Core.Program.Linear
 public import Zkc.Core.Program.LocalRules
 public import Zkc.Core.Program.Identity
+public import Zkc.Core.Program.Library
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Print
 public import Zkc.Core.Program.PrintProgram

@@ -243,9 +243,3 @@ theorem Proj.unmapped {ρ : Role → Role} {r : Role} (hr : ∀ j, ρ j ≠ r) {
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.Proj.bind
-#print axioms Zkc.Core.Proj.of_map_left
-#print axioms Zkc.Core.Proj.iterate
-#print axioms Zkc.Core.Proj.mapRoles
-#print axioms Zkc.Core.Proj.unmapped

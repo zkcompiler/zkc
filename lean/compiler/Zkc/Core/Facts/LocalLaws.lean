@@ -3,6 +3,7 @@ module
 public import Zkc.Core.Facts.Local
 public import Zkc.Core.Facts.Learning
 public import Zkc.Core.Meaning.Validity
+public import Zkc.Core.Meaning.Stops
 
 @[expose] public section
 
@@ -75,6 +76,11 @@ theorem toDyns_length : ∀ {items : List V.Ty} (vs : HList M.Val items),
   | [], .nil => rfl
   | _ :: _, .cons _ vs => by simp [toDyns, toDyns_length vs]
 
+theorem toDyns_append : ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M.Val bs),
+    toDyns (xs.append ys) = toDyns xs ++ toDyns ys
+  | [], _, .nil, _ => rfl
+  | _ :: _, _, .cons x xs, ys => by simp [HList.append, toDyns, toDyns_append xs ys]
+
 theorem toDyns_inj : ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M.Val bs),
     toDyns xs = toDyns ys → as = bs ∧ HEq xs ys
   | [], [], .nil, .nil, _ => ⟨rfl, HEq.rfl⟩
@@ -106,203 +112,7 @@ theorem valid_of_toDyns : ∀ {items : List V.Ty} {vs : HList M.Val items},
   | _ :: _, .cons v _, h => HList.all_cons.mpr
       ⟨h ⟨_, v⟩ List.mem_cons_self, valid_of_toDyns fun d m => h d (List.mem_cons_of_mem _ m)⟩
 
-theorem HList.one {α : Type} {F : α → Type} {a : α} :
-    ∀ (vs : HList F [a]), ∃ v, vs = .cons v .nil
-  | .cons v .nil => ⟨v, rfl⟩
-
-theorem HList.two {α : Type} {F : α → Type} {a b : α} :
-    ∀ (vs : HList F [a, b]), ∃ u v, vs = .cons u (.cons v .nil)
-  | .cons u (.cons v .nil) => ⟨u, v, rfl⟩
-
-theorem HList.three {α : Type} {F : α → Type} {a b c : α} :
-    ∀ (vs : HList F [a, b, c]), ∃ u v w, vs = .cons u (.cons v (.cons w .nil))
-  | .cons u (.cons v (.cons w .nil)) => ⟨u, v, w, rfl⟩
-
 end
-
-/-! ## Arithmetic of ranges -/
-
-namespace Range
-
-theorem add_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.Has x)
-    (hb : ∀ r, b = some r → r.Has y) : ∀ r, Range.add a b = some r → r.Has (x + y) := by
-  intro r e
-  cases a with
-  | none => simp [Range.add] at e
-  | some a =>
-      cases b with
-      | none => simp [Range.add] at e
-      | some b =>
-          simp only [Range.add, Option.some.injEq] at e
-          subst e
-          obtain ⟨la, ua⟩ := ha a rfl
-          obtain ⟨lb, ub⟩ := hb b rfl
-          refine ⟨by simp only; omega, fun h e => ?_⟩
-          rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;> simp at e
-          have := ua ahi rfl
-          have := ub bhi rfl
-          omega
-
-theorem sub_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.Has x)
-    (hb : ∀ r, b = some r → r.Has y) : ∀ r, Range.sub a b = some r → r.Has (x - y) := by
-  intro r e
-  cases a with
-  | none => simp [Range.sub] at e
-  | some a =>
-      cases b with
-      | none => simp [Range.sub] at e
-      | some b =>
-          simp only [Range.sub, Option.some.injEq] at e
-          subst e
-          obtain ⟨la, ua⟩ := ha a rfl
-          obtain ⟨lb, ub⟩ := hb b rfl
-          rcases a with ⟨alo, ahi⟩
-          rcases b with ⟨blo, _ | bhi⟩
-          · have la : alo ≤ x := la
-            have lb : blo ≤ y := lb
-            refine ⟨Nat.zero_le _, fun h e => ?_⟩
-            cases ahi with
-            | none => cases e
-            | some ahi =>
-                simp only [Option.map_some, Option.some.injEq] at e
-                subst e
-                have := ua ahi rfl
-                omega
-          · have la : alo ≤ x := la
-            have lb : blo ≤ y := lb
-            have hy := ub bhi rfl
-            refine ⟨by show alo - bhi ≤ x - y; omega, fun h e => ?_⟩
-            cases ahi with
-            | none => cases e
-            | some ahi =>
-                simp only [Option.map_some, Option.some.injEq] at e
-                subst e
-                have := ua ahi rfl
-                omega
-
-theorem mul_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.Has x)
-    (hb : ∀ r, b = some r → r.Has y) : ∀ r, Range.mul a b = some r → r.Has (x * y) := by
-  intro r e
-  cases a with
-  | none => simp [Range.mul] at e
-  | some a =>
-      cases b with
-      | none => simp [Range.mul] at e
-      | some b =>
-          simp only [Range.mul, Option.some.injEq] at e
-          subst e
-          obtain ⟨la, ua⟩ := ha a rfl
-          obtain ⟨lb, ub⟩ := hb b rfl
-          refine ⟨Nat.mul_le_mul la lb, fun h e => ?_⟩
-          rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;> simp at e
-          subst e
-          exact Nat.mul_le_mul (ua ahi rfl) (ub bhi rfl)
-
-theorem div_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.Has x)
-    (hb : ∀ r, b = some r → r.Has y) (pos : 1 ≤ y) :
-    ∀ r, Range.div a b = some r → r.Has (x / y) := by
-  intro r e
-  cases a with
-  | none => simp [Range.div] at e
-  | some a =>
-      cases b with
-      | none => simp [Range.div] at e
-      | some b =>
-          simp only [Range.div, Option.some.injEq] at e
-          subst e
-          obtain ⟨la, ua⟩ := ha a rfl
-          obtain ⟨lb, ub⟩ := hb b rfl
-          refine ⟨?_, fun h e => ?_⟩
-          · cases hbh : b.hi with
-            | none => simp
-            | some yh =>
-                simp only
-                have := ub yh hbh
-                exact Nat.le_trans (Nat.div_le_div_right la) (Nat.div_le_div_left this pos)
-          · cases hah : a.hi with
-            | none => rw [hah] at e; cases e
-            | some xh =>
-                rw [hah] at e
-                simp only [Option.map_some, Option.some.injEq] at e
-                subst e
-                exact Nat.le_trans (Nat.div_le_div_right (ua xh hah))
-                  (Nat.div_le_div_left (Nat.max_le.mpr ⟨lb, pos⟩) (by omega))
-
-theorem rem_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.Has x)
-    (hb : ∀ r, b = some r → r.Has y) (pos : 1 ≤ y) :
-    ∀ r, Range.rem a b = some r → r.Has (x % y) := by
-  intro r e
-  cases a with
-  | none => simp [Range.rem] at e
-  | some a =>
-      cases b with
-      | none => simp [Range.rem] at e
-      | some b =>
-          simp only [Range.rem, Option.some.injEq] at e
-          subst e
-          obtain ⟨_, ua⟩ := ha a rfl
-          obtain ⟨_, ub⟩ := hb b rfl
-          have lt := Nat.mod_lt x (by omega : y > 0)
-          have le := Nat.mod_le x y
-          refine ⟨Nat.zero_le _, fun h e => ?_⟩
-          rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-            simp only [Option.some.injEq, reduceCtorEq] at e
-          · subst e
-            have := ub bhi rfl
-            omega
-          · subst e
-            have := ua ahi rfl
-            omega
-          · subst e
-            have := ua ahi rfl
-            have := ub bhi rfl
-            exact Nat.le_min.mpr ⟨by omega, by omega⟩
-
-theorem pow_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.Has x)
-    (hb : ∀ r, b = some r → r.Has y) : ∀ r, Range.pow a b = some r → r.Has (x ^ y) := by
-  intro r e
-  cases a with
-  | none => simp [Range.pow] at e
-  | some a =>
-      cases b with
-      | none => simp [Range.pow] at e
-      | some b =>
-          simp only [Range.pow, Option.some.injEq] at e
-          subst e
-          obtain ⟨la, ua⟩ := ha a rfl
-          obtain ⟨lb, ub⟩ := hb b rfl
-          refine ⟨?_, fun h e => ?_⟩
-          · simp only
-            split
-            · next one =>
-                exact Nat.le_trans (Nat.pow_le_pow_left la _)
-                  (Nat.pow_le_pow_right (by omega) lb)
-            · split
-              · next zero =>
-                  have := ub 0 zero
-                  have : y = 0 := by omega
-                  subst this
-                  simp
-              · exact Nat.zero_le _
-          · rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-              simp only [Option.some.injEq, reduceCtorEq] at e
-            subst e
-            have hx := ua ahi rfl
-            have hy := ub bhi rfl
-            simp only at lb
-            cases x with
-            | zero =>
-                cases y with
-                | zero =>
-                    have : blo = 0 := by omega
-                    subst this
-                    exact Nat.le_max_right _ _
-                | succ y => simp
-            | succ x =>
-                exact Nat.le_trans (Nat.le_trans (Nat.pow_le_pow_left hx _)
-                  (Nat.pow_le_pow_right (by omega) hy)) (Nat.le_max_left _ _)
-
-end Range
 
 /-! ## The laws -/
 
@@ -410,40 +220,6 @@ theorem localRun_form {w : LocalRaw V} {as rs : List (Dyn M)} {f : ResultForm}
         simp only [localOp, ownedOp, Process.done.injEq] at run
         subst run
         exact ⟨_, rfl, _, x, rfl, rfl, rfl⟩
-
-theorem onTwo_has {f : Option Range → Option Range → Option Range} {known : List (Option Range)}
-    {x y z : Nat}
-    (sound : ∀ ka kb, (∀ r, ka = some r → r.Has x) → (∀ r, kb = some r → r.Has y) →
-      ∀ r, f ka kb = some r → r.Has z)
-    (hx : ∀ r, known[0]? = some (some r) → r.Has x)
-    (hy : ∀ r, known[1]? = some (some r) → r.Has y) :
-    ∀ (i : Nat) (r : Range), (Range.onTwo f known)[i]? = some (some r) → i = 0 ∧ r.Has z := by
-  intro i r e
-  match known, hx, hy with
-  | [ka, kb], hx, hy =>
-      simp only [Range.onTwo] at e
-      cases i with
-      | zero =>
-          simp only [List.getElem?_cons_zero, Option.some.injEq] at e
-          exact ⟨rfl, sound ka kb (fun r h => hx r (by simp [h])) (fun r h => hy r (by simp [h]))
-            r e⟩
-      | succ i => simp at e
-  | [], _, _ => simp [Range.onTwo] at e
-  | [_], _, _ => simp [Range.onTwo] at e
-  | _ :: _ :: _ :: _, _, _ => simp [Range.onTwo] at e
-
-theorem onOne_has {known : List (Option Range)} {x : Nat}
-    (hx : ∀ r, known[0]? = some (some r) → r.Has x) :
-    ∀ (i : Nat) (r : Range), (Range.onOne known)[i]? = some (some r) → i = 0 ∧ r.Has x := by
-  intro i r e
-  match known, hx with
-  | [ka], hx =>
-      simp only [Range.onOne] at e
-      cases i with
-      | zero => exact ⟨rfl, hx r (by simpa using e)⟩
-      | succ i => simp at e
-  | [], _ => simp [Range.onOne] at e
-  | _ :: _ :: _, _ => simp [Range.onOne] at e
 
 theorem seqLength_has {item : V.Ty} {size : Option Nat} {len : Nat}
     (hlen : ∀ n, size = some n → len = n) {known : List (Option Range)} {i : Nat} {r : Range}
@@ -629,25 +405,6 @@ theorem localRange_has {τ : V.Ty} {r : Range} (h : localRange τ = some r) (v :
 
 /-! ## What operations require -/
 
-theorem atPositions_append {α : Type} (xs : List α) :
-    ∀ (ps qs : List Nat), atPositions xs (ps ++ qs) =
-      (atPositions xs ps).bind fun as => (atPositions xs qs).map fun bs => as ++ bs
-  | [], qs => by simp [atPositions]
-  | p :: ps, qs => by
-      simp only [List.cons_append, atPositions, atPositions_append xs ps qs]
-      cases xs[p]? <;> cases atPositions xs ps <;> simp
-      cases atPositions xs qs <;> simp
-
-theorem atPositions_range {α : Type} (xs : List α) :
-    ∀ n, n ≤ xs.length → atPositions xs (List.range n) = some (xs.take n)
-  | 0, _ => by simp [atPositions]
-  | n + 1, le => by
-      rw [List.range_succ, atPositions_append, atPositions_range xs n (by omega)]
-      simp only [atPositions, List.getElem?_eq_getElem (by omega : n < xs.length),
-        Option.bind_some, Option.map_some, Option.some.injEq]
-      rw [List.take_add_one, List.getElem?_eq_getElem (by omega : n < xs.length)]
-      rfl
-
 theorem DenotesAll.one {Raw : Type} {Run : Raw → List (Dyn M) → List (Dyn M) → Prop}
     {args : List (Dyn M)} {o : Operand Raw} {vs : List (Dyn M)} (h : DenotesAll Run args [o] vs) :
     ∃ v, vs = [v] ∧ o.Denotes Run args v := by
@@ -727,12 +484,6 @@ theorem localRun_domain {key domain : V.RowKey} {sig : RowSignature V.TypeKey V.
       simp only [Process.done.injEq] at run
       subst run
       rfl
-
-theorem stops_of_halt {α : Type} : ∀ (p : Local α), (∀ h, p = .halt h → h ≠ .undefined) →
-    p.Stops (· ≠ .undefined)
-  | .done _, _ => trivial
-  | .halt h, hh => hh h rfl
-  | .call op _, _ => nomatch op
 
 /-- A row, at operands where what it requires holds, gives its outputs. -/
 theorem row_defined (key : V.RowKey) (sig : RowSignature V.TypeKey V.RowKey)
@@ -936,7 +687,7 @@ theorem localOp_defined
       simp only [localOp, h]
       exact trivial
   | owned op =>
-      apply stops_of_halt
+      apply Local.stops_of_halts
       intro h e
       simp only [localOp] at e
       have hreq : ∀ req, req ∈ ownedRequires op.name.1 op.name.2.1 →

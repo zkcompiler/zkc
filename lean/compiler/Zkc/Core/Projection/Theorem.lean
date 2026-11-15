@@ -69,7 +69,3 @@ theorem projection (p : Typed V) {hdr : ProtocolHeader V} (x : Var p.headers.pro
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.Defs.quiet
-#print axioms Zkc.Core.Defs.sound
-#print axioms Zkc.Core.projection

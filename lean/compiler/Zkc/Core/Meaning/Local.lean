@@ -400,7 +400,3 @@ reason. -/
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.Ty.read_of_scan
-#print axioms Zkc.Core.Ty.read_readLiteral
-#print axioms Zkc.Core.localSem

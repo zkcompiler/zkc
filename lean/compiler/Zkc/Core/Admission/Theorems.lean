@@ -1,13 +1,16 @@
 module
 
 public import Zkc.Core.Admission.Programs
+public import Zkc.Core.Program.Library
 public import Zkc.Core.Meaning.Stops
+public import Zkc.Core.Statements
 
 @[expose] public section
 
 /-!
-The statements of `Statements.lean` about functions, proved of `admit`, `check` and
-`elaborateFunctions`.
+The statements of `Statements.lean` about functions, proved for every record of functions whose
+`admit`, `check` and `elaborate` are `admit`, `check` and `elaborateFunctions`: each theorem has
+the statement as its type.
 
 Admission checks one definition at a time, each against the headers before it: so what it
 returns is the elaboration of what was given (`admitsWhatWasGiven`), and the check of each
@@ -25,18 +28,6 @@ section
 variable {V : Vocabulary}
 
 /-! ## What a step gives -/
-
-theorem ok_of_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β}
-    (h : x.bind f = .ok y) : ∃ v, x = .ok v ∧ f v = .ok y := by
-  cases x with
-  | error _ => cases h
-  | ok v => exact ⟨v, rfl, h⟩
-
-theorem ok_of_map {ε α β : Type} {x : Except ε α} {f : α → β} {y : β}
-    (h : x.map f = .ok y) : ∃ v, x = .ok v ∧ f v = y := by
-  cases x with
-  | error _ => cases h
-  | ok v => exact ⟨v, rfl, Except.ok.inj h⟩
 
 /-- A definition that the check accepts is elaborated, and is a function whose body the check of
 facts accepts with the bounds given. -/
@@ -135,12 +126,17 @@ theorem admit_accepted {named : NamedProgram V} {assoc : Association} {a : Admit
   obtain ⟨q, bounds, resolved, admitted, _, rfl⟩ := admit_ok h
   exact admitFrom_accepted .empty [] named.definitions q bounds rfl admitted
 
-/-! ## The statements -/
+/-! ## The statements
+
+Each theorem has its statement as its type, for any record of functions whose `admit`, `check`
+and `elaborate`, those that the statement reads, are the definitions here. -/
 
 /-- Execution and state: an admitted program is the elaboration of what was given, and its
 association is the resolution in it of the association given. -/
-theorem admitsWhatWasGiven : ∀ named assoc (a : Admitted V), admit named assoc = .ok a →
-    elaborateFunctions named = .ok a.program ∧ resolve a.program assoc = .ok a.association := by
+theorem admitsWhatWasGiven (c : Functions V) (admits : c.admit = admit)
+    (elaborates : c.elaborate = elaborateFunctions) : Statements.admitsWhatWasGiven c := by
+  unfold Statements.admitsWhatWasGiven
+  rw [admits, elaborates]
   intro named assoc a h
   obtain ⟨q, bounds, resolved, admitted, found, rfl⟩ := admit_ok h
   exact ⟨admitFrom_elaborates .empty [] named.definitions q bounds admitted, found⟩
@@ -148,43 +144,48 @@ theorem admitsWhatWasGiven : ∀ named assoc (a : Admitted V), admit named assoc
 /-- A view: what `admit` accepts as a program, `check` accepts one definition at a time, and
 the headers that it gives, which are what an application sees of each definition, are the
 program's. -/
-theorem checkAgrees : ∀ named assoc (a : Admitted V), admit named assoc = .ok a →
-    checkAll check ⟨[], []⟩ named.definitions = .ok a.program.headers := by
+theorem checkAgrees (c : Functions V) (admits : c.admit = admit) (checks : c.check = check) :
+    Statements.checkAgrees c := by
+  unfold Statements.checkAgrees
+  rw [admits, checks]
   intro named assoc a h
   obtain ⟨q, bounds, resolved, admitted, _, rfl⟩ := admit_ok h
   exact admitFrom_checkAll .empty [] named.definitions q bounds admitted
 
 /-- Validity: a function of an admitted program never stops `undefined`, on any valid
 inputs. -/
-theorem functionsSafe : ∀ named assoc (a : Admitted V), admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Var a.program.headers.fns hdr)
-      (ins : HList M.Val hdr.ins), ins.All M.Valid →
-      (fnMeaning M a.program f ins).Stops (· ≠ .undefined) := by
+theorem functionsSafe (c : Functions V) (admits : c.admit = admit) :
+    Statements.functionsSafe c := by
+  unfold Statements.functionsSafe
+  rw [admits]
   intro named assoc a h M
   exact (typed_functions_sound a.program (admit_accepted h) M).1
 
 /-- Validity: a function returns valid values. -/
-theorem functionsKeepValidity : ∀ named assoc (a : Admitted V), admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Var a.program.headers.fns hdr)
-      (ins : HList M.Val hdr.ins) (outs : HList M.Val hdr.outs), ins.All M.Valid →
-      fnMeaning M a.program f ins = .done outs → outs.All M.Valid := by
+theorem functionsKeepValidity (c : Functions V) (admits : c.admit = admit) :
+    Statements.functionsKeepValidity c := by
+  unfold Statements.functionsKeepValidity
+  rw [admits]
   intro named assoc a h M
   exact (typed_functions_sound a.program (admit_accepted h) M).2.1
 
 /-- A view: a function that its header says cannot stop does not stop. -/
-theorem headersSayWhoStops : ∀ named assoc (a : Admitted V), admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Var a.program.headers.fns hdr)
-      (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
-      (fnMeaning M a.program f ins).Stops fun _ => False := by
+theorem headersSayWhoStops (c : Functions V) (admits : c.admit = admit) :
+    Statements.headersSayWhoStops c := by
+  have safe := functionsSafe c admits
+  unfold Statements.headersSayWhoStops
+  unfold Statements.functionsSafe at safe
   intro named assoc a h M hdr f ins valid quiet
   exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ both => both.1 both.2)
-    (Process.every_and _ _ (functionsSafe named assoc a h M hdr f ins valid)
+    (Process.every_and _ _ (safe named assoc a h M hdr f ins valid)
       (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
 
 /-- Validity: what the annotation of an admitted program knows holds, and no loop runs more
 often than its bound. -/
-theorem annotationHolds : ∀ named assoc (a : Admitted V), admit named assoc = .ok a →
-    ∀ M : Model V, Respects M a.annotation a.program := by
+theorem annotationHolds (c : Functions V) (admits : c.admit = admit) :
+    Statements.annotationHolds c := by
+  unfold Statements.annotationHolds
+  rw [admits]
   intro named assoc a h M
   obtain ⟨q, bounds, resolved, admitted, _, rfl⟩ := admit_ok h
   exact Respects.of_functions q
@@ -195,10 +196,3 @@ theorem annotationHolds : ∀ named assoc (a : Admitted V), admit named assoc = 
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.admitsWhatWasGiven
-#print axioms Zkc.Core.checkAgrees
-#print axioms Zkc.Core.functionsSafe
-#print axioms Zkc.Core.functionsKeepValidity
-#print axioms Zkc.Core.headersSayWhoStops
-#print axioms Zkc.Core.annotationHolds

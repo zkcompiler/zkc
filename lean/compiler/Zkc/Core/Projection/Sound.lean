@@ -544,6 +544,3 @@ end
 end
 
 end Zkc.Core
-
-#print axioms Zkc.Core.quiet
-#print axioms Zkc.Core.project_sound

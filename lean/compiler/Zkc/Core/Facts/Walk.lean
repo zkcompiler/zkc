@@ -16,8 +16,8 @@ negation in the other; what a choice, a case analysis or a block returns has the
 ranges that its regions that run give it, and the result of a choice whose other region returns
 a written truth value is remembered as a conjunction or a disjunction. A loop's index has the
 range below its count, a loop of a counted value the order below the count and its bound; a
-carried natural that the body returns as itself plus a term has, after the loop, the range of
-the sum.
+carried natural that the body returns as itself plus a term has, after the loop, the lower end
+of its initial range and the upper end of the sum.
 
 A region is dead, and nothing in it is refused, exactly when what is written says that it never
 runs: the body of a loop of the written count zero; a region where a value of a type that has no
@@ -112,17 +112,17 @@ def bodyKnown {D : Dialect} {Raw : Type} (rules : FactRules D Raw) {w : D.Who} {
   let k₁ := (k.addRange index (indexRange k ids times)).addRange? index (rules.range (D.index w))
   let k₂ := match times with
     | .fixed _ => k₁
-    | .value count _ => k₁.addOrder index (ids.getD count.index 0) true
+    | .value count _ => k₁.addOrder index (ids.getD count.index 0) true (byLoop := true)
   let k₃ := (k₂.addRanges carriedIds (carried.map rules.range)).enter rules (D.index w :: carried)
   match times with
   | .fixed 0 => k₃.kill
   | _ => k₃
 
-/-- How many times a loop runs: at least and at most. -/
-def timesBounds {D : Dialect} {w : D.Who} {Γ : List D.Ty} (k : Known) (ids : List Nat) :
-    Times D w Γ → Nat × Option Nat
-  | .fixed n => (n, some n)
-  | .value count _ => (0, (k.rangeOf (ids.getD count.index 0)).bind (·.hi))
+/-- How many times a loop runs at most. -/
+def timesBound {D : Dialect} {w : D.Who} {Γ : List D.Ty} (k : Known) (ids : List Nat) :
+    Times D w Γ → Option Nat
+  | .fixed n => some n
+  | .value count _ => (k.rangeOf (ids.getD count.index 0)).bind (·.hi)
 
 /-- The term that the body of a loop adds to a carried natural, when it returns it as itself
 plus a term. -/
@@ -132,29 +132,68 @@ def carriedTerm {T Raw : Type} (ops : OpFacts Raw) (body : Exit T Raw) (carriedI
   | some (.sum, [x, y]) => if x = carriedId then some y else if y = carriedId then some x else none
   | _ => none
 
-/-- The range of a natural from an initial range, after at least `low` and at most `high`
-iterations that each add a term of a range. -/
-def Range.afterSums (initial term : Range) (low : Nat) (high : Option Nat) : Range :=
-  ⟨initial.lo + low * term.lo,
+/-- The range of a natural from an initial range, after at most `high` iterations that each add
+a term of a range: it starts where the initial range starts (TY8). -/
+def Range.afterSums (initial term : Range) (high : Option Nat) : Range :=
+  ⟨initial.lo,
     match initial.hi, high, term.hi with
     | some h₀, some n, some ht => some (h₀ + n * ht)
     | _, _, _ => none⟩
 
+namespace Range
+
+theorem afterSums_zero {r₀ rt : Range} {n : Nat} (h : r₀.Has n) :
+    (Range.afterSums r₀ rt (some 0)).Has n := by
+  obtain ⟨lo, hi⟩ := h
+  refine ⟨lo, fun h e => ?_⟩
+  simp only [Range.afterSums] at e
+  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases rt with ⟨lt, _ | ht⟩ <;> simp at e
+  have := hi h₀ rfl
+  omega
+
+theorem afterSums_step {r₀ rt : Range} {i n t : Nat}
+    (h : (Range.afterSums r₀ rt (some i)).Has n) (ht : rt.Has t) :
+    (Range.afterSums r₀ rt (some (i + 1))).Has (n + t) := by
+  obtain ⟨lo, hi⟩ := h
+  obtain ⟨tlo, thi⟩ := ht
+  simp only [Range.afterSums] at lo hi ⊢
+  refine ⟨Nat.le_trans lo (Nat.le_add_right _ _), fun h e => ?_⟩
+  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases rt with ⟨lt, _ | ht'⟩ <;> simp at e hi thi
+  subst e
+  have := hi
+  have := thi
+  rw [Nat.add_mul, Nat.one_mul]
+  omega
+
+theorem afterSums_widen {r₀ rt : Range} {N n : Nat} {high : Option Nat}
+    (h : (Range.afterSums r₀ rt (some N)).Has n)
+    (hhigh : ∀ m, high = some m → N ≤ m) : (Range.afterSums r₀ rt high).Has n := by
+  obtain ⟨lo, hi⟩ := h
+  simp only [Range.afterSums] at lo hi ⊢
+  refine ⟨lo, fun h e => ?_⟩
+  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases high with _ | m <;> rcases rt with ⟨lt, _ | ht⟩ <;>
+    simp at e hi
+  subst e
+  have := hhigh m rfl
+  exact Nat.le_trans hi (Nat.add_le_add_left (Nat.mul_le_mul_right _ this) _)
+
+end Range
+
 /-- The range of a carried natural after a loop: the range of the sum, when the body returns
 it as itself plus a term; the initial range when no iteration can end. -/
 def carriedRange {T Raw : Type} (ops : OpFacts Raw) (body : Exit T Raw) (initial : Option Range)
-    (carriedId returned : Nat) (iterations : Nat × Option Nat) : Option Range :=
-  if body.known.dead || iterations.2 = some 0 then initial
+    (carriedId returned : Nat) (iterations : Option Nat) : Option Range :=
+  if body.known.dead || iterations = some 0 then initial
   else
     match carriedTerm ops body carriedId returned, initial with
     | some t, some r₀ =>
-        (body.known.rangeOf t).map fun rt => Range.afterSums r₀ rt iterations.1 iterations.2
+        (body.known.rangeOf t).map fun rt => Range.afterSums r₀ rt iterations
     | _, _ => none
 
 /-- What is known after a loop of what it gives: the carried values, from what was known of
 their initial values, then the collected ones. -/
 def afterLoop {D : Dialect} {Raw : Type} (rules : FactRules D Raw) (body : Exit D.Ty Raw)
-    (k : Known) (iterations : Nat × Option Nat) :
+    (k : Known) (iterations : Option Nat) :
     List Nat → List (Option Range) → List Nat → List Nat → List D.Ty → Known
   | m :: ms, initial :: initials, carriedId :: carriedIds, returned :: returns, τ :: τs =>
       let r := carriedRange rules.ops body initial carriedId returned iterations
@@ -222,7 +261,7 @@ mutual
           (bodyKnown rules k ids times (inBody.1.headD 0) inBody.1.tail carried) inBody.2
         let made := fresh (carried.length + each.length)
           (recordBound ⟨definition, blocks, some key, role⟩ k ids e.st times)
-        let k₁ := afterLoop rules e k (timesBounds k ids times) made.1
+        let k₁ := afterLoop rules e k (timesBound k ids times) made.1
           ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
           (carried ++ each.map (D.collected times.size))
         walk blocks rest (made.1 ++ ids)
