@@ -15,6 +15,8 @@ Libraries:
   source language ([guide](Zkc/Frontend/README.md)).
 - `ZkcCoreTools`, `ZkcFrontendTools` (`Zkc.Tools.Core`, `Zkc.Tools.Frontend`): the code of the
   executables.
+- `ZkcVocabularyTests` (`Zkc.Tests.Vocabulary`): the checks of the vocabulary's table against
+  the reference, which the kernel runs when they are built.
 - `ZkcCoreTests`, `ZkcFrontendTests` (`Zkc.Tests.Core`, `Zkc.Tests.Frontend`): the checks of the
   core, which the kernel runs when they are built, and the test driver of the frontend.
 - `ZkcAudit` (`Zkc.Tools.Audit`): the audit of the declarations and the imports of a library,
