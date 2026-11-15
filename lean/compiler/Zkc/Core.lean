@@ -46,6 +46,7 @@ public import Zkc.Core.Facts.Soundness
 public import Zkc.Core.Facts.Programs
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
+public import Zkc.Core.Admission.Check
 public import Zkc.Core.World.Layer
 public import Zkc.Core.World.Network
 public import Zkc.Core.World.Runs
