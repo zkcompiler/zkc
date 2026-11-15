@@ -25,24 +25,24 @@ inductive SigmaRow where
   | same
 deriving DecidableEq
 
-abbrev scalar : Ty SigmaType := .nominal .scalar []
-abbrev point : Ty SigmaType := .nominal .point []
+abbrev scalar : Ty SigmaType := .nominal .scalar
+abbrev point : Ty SigmaType := .nominal .point
 
 /-- A vocabulary of a group and its scalars, with one law: a uniform scalar. -/
 def sigmaVocabulary : Vocabulary where
   TypeKey := SigmaType
   RowKey := SigmaRow
   LawKey := Unit
-  row r _ := some <| match r with
+  row r := some <| match r with
     | .base => ⟨[scalar], [point], .pure⟩
     | .add => ⟨[scalar, scalar], [scalar], .pure⟩
     | .mul => ⟨[scalar, scalar], [scalar], .pure⟩
     | .scale => ⟨[scalar, point], [point], .pure⟩
     | .plus => ⟨[point, point], [point], .pure⟩
     | .same => ⟨[point, point], [.bool], .pure⟩
-  law _ _ := some ⟨[], scalar⟩
-  type _ _ := true
-  literal _ _ _ := true
+  law _ := some ⟨[], scalar⟩
+  literal _ _ := true
+  decided key _ _ found kind := by cases key <;> cases found <;> cases kind
 
 def proverRole : Role := 0
 def verifierRole : Role := 1
@@ -53,17 +53,17 @@ def sigmaByNames : NamedProgram sigmaVocabulary where
   definitions := [
     .protocol ⟨0⟩ 2 [⟨scalar, [proverRole]⟩, ⟨point, [proverRole, verifierRole]⟩] []
       (.mk [0, 1] [
-        .op ⟨10⟩ [2] (.event (.given (.coin () []) proverRole []) scalar) [],
-        .op ⟨11⟩ [3] (.compute [proverRole] (.row .base [])) [2],
+        .op ⟨10⟩ [2] (.event (.given (.coin ()) proverRole []) scalar) [],
+        .op ⟨11⟩ [3] (.compute [proverRole] (.row .base)) [2],
         .op ⟨12⟩ [4] (.event (.flow .message proverRole [verifierRole]) point) [3],
-        .op ⟨13⟩ [5] (.event (.given (.coin () []) verifierRole [proverRole]) scalar) [],
-        .op ⟨14⟩ [6] (.compute [proverRole] (.row .mul [])) [5, 0],
-        .op ⟨15⟩ [7] (.compute [proverRole] (.row .add [])) [2, 6],
+        .op ⟨13⟩ [5] (.event (.given (.coin ()) verifierRole [proverRole]) scalar) [],
+        .op ⟨14⟩ [6] (.compute [proverRole] (.row .mul)) [5, 0],
+        .op ⟨15⟩ [7] (.compute [proverRole] (.row .add)) [2, 6],
         .op ⟨16⟩ [8] (.event (.flow .message proverRole [verifierRole]) scalar) [7],
-        .op ⟨17⟩ [9] (.compute [verifierRole] (.row .base [])) [8],
-        .op ⟨18⟩ [10] (.compute [verifierRole] (.row .scale [])) [5, 1],
-        .op ⟨19⟩ [11] (.compute [verifierRole] (.row .plus [])) [4, 10],
-        .op ⟨20⟩ [12] (.compute [verifierRole] (.row .same [])) [9, 11],
+        .op ⟨17⟩ [9] (.compute [verifierRole] (.row .base)) [8],
+        .op ⟨18⟩ [10] (.compute [verifierRole] (.row .scale)) [5, 1],
+        .op ⟨19⟩ [11] (.compute [verifierRole] (.row .plus)) [4, 10],
+        .op ⟨20⟩ [12] (.compute [verifierRole] (.row .same)) [9, 11],
         .guard ⟨21⟩ [verifierRole] 12 .reject]
         [])]
 

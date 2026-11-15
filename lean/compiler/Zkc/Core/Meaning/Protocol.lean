@@ -214,16 +214,16 @@ def observeOp (key : Key) {outs : List (LTy V)} {s : Shape V} :
   | _, _, .flow (τ := τ) kind giver getters _ _, path, .cons v .nil, k =>
       .call (.flow kind giver getters ⟨path, key⟩ τ v) fun _ =>
         (k (.cons v .nil)).map fun out => (out.1, (v, out.2))
-  | _, _, .given (.coin law statics) owner (first :: others) operands τ _ _ _, path, vs, k =>
-      .call (.given (.coin law statics) owner (first :: others) ⟨path, key⟩
+  | _, _, .given (.coin law) owner (first :: others) operands τ _ _ _, path, vs, k =>
+      .call (.given (.coin law) owner (first :: others) ⟨path, key⟩
           (operands.map LTy.ty) (HList.ofLocated M vs) τ) fun v =>
         (k (.cons v .nil)).map fun out => (out.1, (v, out.2))
   | _, _, .given (.request service) owner hearers operands τ _ _ _, path, vs, k =>
       .call (.given (.request service) owner hearers ⟨path, key⟩ (operands.map LTy.ty)
           (HList.ofLocated M vs) τ) fun v =>
         (k (.cons v .nil)).map fun out => (out.1, (v, out.2))
-  | _, _, .given (.coin law statics) owner [] operands τ _ _ _, path, vs, k =>
-      .call (.given (.coin law statics) owner [] ⟨path, key⟩ (operands.map LTy.ty)
+  | _, _, .given (.coin law) owner [] operands τ _ _ _, path, vs, k =>
+      .call (.given (.coin law) owner [] ⟨path, key⟩ (operands.map LTy.ty)
           (HList.ofLocated M vs) τ) fun v => k (.cons v .nil)
   | _, _, .narrow R among, path, vs, k =>
       (protocolOp M fnTable gTable key (.narrow R among) path vs).bind k
@@ -311,11 +311,11 @@ theorem observeOp_fst (key : Key) {outs : List (LTy V)} {s : Shape V} :
   | _, _, .compute R o operands types held, path, vs, k => Process.map_bind k Prod.fst _
   | _, _, .flow kind giver getters _ _, path, .cons v .nil, k => by
       simp only [observeOp, protocolOp, Process.map, Process.bind, Process.map_map]
-  | _, _, .given (.coin law statics) owner (first :: others) operands τ _ _ _, path, vs, k => by
+  | _, _, .given (.coin law) owner (first :: others) operands τ _ _ _, path, vs, k => by
       simp only [observeOp, protocolOp, Process.map, Process.bind, Process.map_map]
   | _, _, .given (.request service) owner hearers operands τ _ _ _, path, vs, k => by
       simp only [observeOp, protocolOp, Process.map, Process.bind, Process.map_map]
-  | _, _, .given (.coin law statics) owner [] operands τ _ _ _, path, vs, k => rfl
+  | _, _, .given (.coin law) owner [] operands τ _ _ _, path, vs, k => rfl
   | _, _, .narrow R among, path, vs, k => Process.map_bind k Prod.fst _
   | _, _, .apply callee roles distinct _ _ fits, path, vs, k => by
       simp only [observeOp, protocolOp]

@@ -14,9 +14,9 @@ open Elaboration
 /-- A function of one operation that the core owns, on the inputs named 0, 1, …; its result is
 named after them. -/
 def one (ins outs : List plain.Ty) (name : OwnedName) (types : List plain.Ty)
-    (statics : List Nat) : NamedProgram plain :=
+    (numbers : List Nat) : NamedProgram plain :=
   single ins outs false (.mk ((List.range ins.length))
-    [.op ⟨1⟩ ((List.range outs.length).map (· + ins.length)) (.owned name types statics)
+    [.op ⟨1⟩ ((List.range outs.length).map (· + ins.length)) (.owned name types numbers)
       (List.range ins.length)]
     ((List.range outs.length).map (· + ins.length)))
 
@@ -128,9 +128,9 @@ example : roundTrips variant := by rfl
 /-! ## Written forms with other types are refused -/
 
 /-- A refusal of the operation of a function of one operation. -/
-def refusedAs (name : OwnedName) (types : List plain.Ty) (statics : List Nat) :
+def refusedAs (name : OwnedName) (types : List plain.Ty) (numbers : List Nat) :
     Option (ProgramRefusal plain) :=
-  some ⟨.owned, at_ 1 1, .operation (.owned name types statics)⟩
+  some ⟨.owned, at_ 1 1, .operation (.owned name types numbers)⟩
 
 example : refusal (one [.nat] [.nat] .seqLength [.nat] []) = refusedAs .seqLength [.nat] [] := by
   decide
@@ -172,6 +172,12 @@ example : refusal (one [.seq token none, .nat, .nat] [.seq token none] .seqSlice
 
 example : refusal (one [token] [.seq token (some 2)] .seqFill [.seq token (some 2)] []) =
     refusedAs .seqFill [.seq token (some 2)] [] := by
+  decide
+
+/-- Giving a sequence a size, whose domain is its length, which cannot be read at a linear
+item. -/
+example : refusal (one [.seq token none] [.seq token (some 2)] .seqSized
+    [.seq token (some 2)] []) = refusedAs .seqSized [.seq token (some 2)] [] := by
   decide
 
 /-- One component of a tuple with a linear component. -/
@@ -234,7 +240,7 @@ example : ownedOp model (.seqConcat .nat (some 2) (some 1))
     .done (.cons ([1, 2, 3] : List Nat) .nil) := rfl
 example : ownedOp model (.seqFill .nat 3 rfl) (.cons (4 : Nat) .nil) =
     .done (.cons ([4, 4, 4] : List Nat) .nil) := rfl
-example : ownedOp model (.seqSized .nat 2) (.cons ([5, 6] : List Nat) .nil) =
+example : ownedOp model (.seqSized .nat 2 rfl) (.cons ([5, 6] : List Nat) .nil) =
     .done (.cons ([5, 6] : List Nat) .nil) := rfl
 example : ownedOp model (.natBelow 4) (.cons (3 : Nat) .nil) = .done (.cons (3 : Nat) .nil) :=
   rfl
@@ -283,7 +289,7 @@ example : ownedOp model (.seqSlice .nat none none rfl)
 example : ownedOp model (.seqSlice .nat none (some 3) rfl)
     (.cons ([5, 6, 7] : List Nat) (.cons (0 : Nat) (.cons (2 : Nat) .nil))) = .halt .undefined :=
   rfl
-example : ownedOp model (.seqSized .nat 2) (.cons ([5] : List Nat) .nil) = .halt .undefined :=
+example : ownedOp model (.seqSized .nat 2 rfl) (.cons ([5] : List Nat) .nil) = .halt .undefined :=
   rfl
 example : ownedOp model (.natBelow 4) (.cons (4 : Nat) .nil) = .halt .undefined := rfl
 

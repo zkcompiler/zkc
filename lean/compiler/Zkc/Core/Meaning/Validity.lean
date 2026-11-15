@@ -71,12 +71,12 @@ mutual
     | .variant _ _, [], _, _, e => by simp [Ty.read] at e
     | .variant _ alternatives, position :: data, v, rest, e =>
         Tys.readAt_valid alternatives position data v rest e
-    | .nominal _ _, [], _, _, e => by simp [Ty.read] at e
-    | .nominal key statics, n :: data, v, rest, e => by
+    | .nominal _, [], _, _, e => by simp [Ty.read] at e
+    | .nominal key, n :: data, v, rest, e => by
         simp only [Ty.read] at e
         split at e
         · rename_i literal
-          obtain ⟨w, value, valid⟩ := M.literals key statics n literal
+          obtain ⟨w, value, valid⟩ := M.literals key n literal
           rw [value] at e
           simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at e
           obtain ⟨rfl, -⟩ := e
@@ -263,7 +263,7 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
         exact (HList.all_cons.mp valid).1
       · cases same
         exact List.length_replicate
-  | _, _, .seqSized _ size, .cons xs .nil, _, valid, e => by
+  | _, _, .seqSized _ size _, .cons xs .nil, _, valid, e => by
       have items := (HList.all_cons.mp valid).1
       simp only [ownedOp] at e
       split at e
@@ -332,20 +332,20 @@ section
 variable {fns : List (FnHeader V)} (table : FnTable M fns)
 
 /-- A row keeps validity, by the model's law. -/
-theorem localOp_row_valid (key : V.RowKey) (statics : List Static)
-    (signature : RowSignature V.TypeKey V.RowKey) (known : V.row key statics = some signature)
+theorem localOp_row_valid (key : V.RowKey)
+    (signature : RowSignature V.TypeKey V.RowKey) (known : V.row key = some signature)
     (args : HList M.Val signature.ins) (results : HList M.Val signature.outs) :
-    args.All M.Valid → localOp M table (.row key statics signature known) args = .done results →
+    args.All M.Valid → localOp M table (.row key signature known) args = .done results →
     results.All M.Valid := by
   intro valid e
-  cases applied : M.apply key statics signature known args with
+  cases applied : M.apply key signature known args with
   | none =>
       simp only [localOp, applied] at e
       cases e
   | some outs =>
       simp only [localOp, applied] at e
       cases e
-      exact M.keeps key statics signature known args _ valid applied
+      exact M.keeps key signature known args _ valid applied
 
 /-- An operation that the core owns keeps validity. -/
 theorem localOp_owned_valid {ins outs : List V.Ty} (o : OwnedOp V ins outs)
@@ -374,8 +374,8 @@ theorem localOp_valid (keeps : FnTable.KeepsValidity table) :
     ∀ {ins outs : List V.Ty} (o : LocalOp V fns ins outs) (args : HList M.Val ins)
       (results : HList M.Val outs), args.All M.Valid → localOp M table o args = .done results →
       results.All M.Valid
-  | _, _, .row key statics signature known, args, results, valid =>
-      localOp_row_valid table key statics signature known args results valid
+  | _, _, .row key signature known, args, results, valid =>
+      localOp_row_valid table key signature known args results valid
   | _, _, .owned o, args, results, valid => localOp_owned_valid table o args results valid
   | _, _, .literal τ data reads, args, results, _ =>
       localOp_literal_valid table τ data reads args results

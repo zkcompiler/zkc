@@ -60,11 +60,11 @@ inductive OwnedName where
   | make | get | take | variant
 deriving DecidableEq, Repr
 
-/-- The operations of a function. An owned operation carries its types and its static
-naturals (a position of `get` and of `variant`). -/
+/-- The operations of a function. An owned operation carries its types and its numbers (a
+position of `get` and of `variant`). -/
 inductive LocalRaw (V : Vocabulary) where
-  | row (key : V.RowKey) (statics : List Static)
-  | owned (name : OwnedName) (at_ : List V.Ty) (statics : List Nat)
+  | row (key : V.RowKey)
+  | owned (name : OwnedName) (at_ : List V.Ty) (numbers : List Nat)
   | literal (τ : V.Ty) (data : List Nat)
   | call (callee : Key)
 deriving DecidableEq

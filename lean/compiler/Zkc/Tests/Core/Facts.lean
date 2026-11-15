@@ -19,31 +19,29 @@ namespace Zkc.Core.FactsTests
 
 /-! ## A vocabulary with a field -/
 
-/-- The rows of a field: equality, addition, multiplication, whether an element is not zero, the
-inverse (restricted to elements that are not zero) and a restricted row whose domain row has
-other inputs, so that nothing decides it. -/
+/-- The rows of a field: equality, addition, multiplication, whether an element is not zero, and
+the inverse, restricted to elements that are not zero. -/
 inductive FieldRow where
-  | equal | add | mul | isNonzero | inverse | lopsided
+  | equal | add | mul | isNonzero | inverse
 deriving DecidableEq
 
 /-- A field element. -/
-def fieldElement : Ty Unit := .nominal () []
+def fieldElement : Ty Unit := .nominal ()
 
 /-- A vocabulary with one nominal type, a field, whose every natural is a literal. -/
 def field : Vocabulary where
   TypeKey := Unit
   RowKey := FieldRow
   LawKey := Empty
-  row r _ := some <| match r with
+  row r := some <| match r with
     | .equal => ⟨[fieldElement, fieldElement], [.bool], .pure⟩
     | .add => ⟨[fieldElement, fieldElement], [fieldElement], .pure⟩
     | .mul => ⟨[fieldElement, fieldElement], [fieldElement], .pure⟩
     | .isNonzero => ⟨[fieldElement], [.bool], .pure⟩
     | .inverse => ⟨[fieldElement], [fieldElement], .restricted .isNonzero⟩
-    | .lopsided => ⟨[fieldElement], [fieldElement], .restricted .equal⟩
-  law r _ := nomatch r
-  type _ _ := true
-  literal _ _ _ := true
+  law r := nomatch r
+  literal _ _ := true
+  decided key _ _ found kind := by cases key <;> cases found <;> cases kind <;> rfl
 
 /-! ## Types and written operations -/
 
@@ -74,7 +72,7 @@ abbrev equal : LocalRaw field := .owned .natEqual [] []
 abbrev negation : LocalRaw field := .owned .boolNot [] []
 abbrev toNat (bound : Nat) : LocalRaw field := .owned .finToNat [.fin bound] []
 abbrev narrowTo (bound : Nat) : LocalRaw field := .owned .natBelow [.fin bound] []
-abbrev fieldRow (r : FieldRow) : LocalRaw field := .row r []
+abbrev fieldRow (r : FieldRow) : LocalRaw field := .row r
 
 /-! ## The verdict -/
 
@@ -750,17 +748,10 @@ example : check [elements] [sizedElements 8] false (.mk [0] [
   decide
 
 /-- The inverse of an element known not to be zero is `N-TY4c`; without the guard it is
-refused, and so is a restricted row whose domain row takes other inputs, guarded or not. -/
+refused. -/
 example : check [F] [F] false (.mk [0] [.op ⟨1⟩ [10] (fieldRow .inverse) [0]] [10]) =
     some (.inl [unjustified 1 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
-  decide
-
-example : check [F] [F] true (.mk [0] [
-    .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
-    .guard ⟨2⟩ () 10 .refused,
-    .op ⟨3⟩ [11] (fieldRow .lopsided) [0]] [11]) =
-    some (.inl [unjustified 3 (fieldRow .lopsided) (.holds (.arg 1)) [none]]) := by
   decide
 
 /-! ## Regions, loops and names -/

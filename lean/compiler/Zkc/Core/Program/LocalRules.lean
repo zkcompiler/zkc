@@ -8,9 +8,9 @@ public import Zkc.Core.Program.Print
 The rules of the local dialect: the written form of each of its operations and the operation
 that a written form names, with the laws that make the printed form of an operation name it.
 
-An operation is written as a row of the vocabulary with its static arguments (the operands
-have its signature's types), as an operation that the core owns with its name, its types and
-its static naturals, as a literal with its data (which reads as its type), or as a call of the
+An operation is written as a row of the vocabulary by its key (the operands have its
+signature's types), as an operation that the core owns with its name, its types and its
+numbers, as a literal with its data (which reads as its type), or as a call of the
 function with a key (one of the headers before the caller has it). Nobody performs a form of
 control, and nobody owns an attempt.
 
@@ -28,7 +28,7 @@ variable {V : Vocabulary}
 
 /-- What is written for an operation that the core owns: its name, the types that its
 arguments are read from (the sequence, tuple, record, variant or `fin` types involved), and
-a position (of a component, a field or an alternative) as its one static natural. -/
+a position (of a component, a field or an alternative) as its one number. -/
 def OwnedOp.name {ins outs : List V.Ty} : OwnedOp V ins outs → OwnedName × List V.Ty × List Nat
   | .natAdd => (.natAdd, [], [])
   | .natSub => (.natSub, [], [])
@@ -47,7 +47,7 @@ def OwnedOp.name {ins outs : List V.Ty} : OwnedOp V ins outs → OwnedName × Li
   | .seqSlice item size result _ => (.seqSlice, [.seq item size, .seq item result], [])
   | .seqConcat item first second => (.seqConcat, [.seq item first, .seq item second], [])
   | .seqFill item count _ => (.seqFill, [.seq item (some count)], [])
-  | .seqSized item size => (.seqSized, [.seq item (some size)], [])
+  | .seqSized item size _ => (.seqSized, [.seq item (some size)], [])
   | .natBelow bound => (.natBelow, [.fin bound], [])
   | .seqUnsized item size => (.seqUnsized, [.seq item (some size)], [])
   | .finToNat bound => (.finToNat, [.fin bound], [])
@@ -62,7 +62,7 @@ def OwnedOp.name {ins outs : List V.Ty} : OwnedOp V ins outs → OwnedName × Li
   | .variant key alternatives position =>
       (.variant, [.variant key alternatives], [position.index])
 
-/-- The operation that the core owns that a name, types and static naturals write, with its
+/-- The operation that the core owns that a name, types and numbers write, with its
 operand types and its result types. `make`, `get` and `take` are told apart by the type. -/
 def OwnedOp.resolve : OwnedName → List V.Ty → List Nat →
     Option ((ins outs : List V.Ty) × OwnedOp V ins outs)
@@ -92,7 +92,8 @@ def OwnedOp.resolve : OwnedName → List V.Ty → List Nat →
       if other = item then some ⟨_, _, .seqConcat item first second⟩ else none
   | .seqFill, [.seq item (some count)], [] =>
       if free : Ty.isLinear V item = false then some ⟨_, _, .seqFill item count free⟩ else none
-  | .seqSized, [.seq item (some size)], [] => some ⟨_, _, .seqSized item size⟩
+  | .seqSized, [.seq item (some size)], [] =>
+      if free : Ty.isLinear V item = false then some ⟨_, _, .seqSized item size free⟩ else none
   | .natBelow, [.fin bound], [] => some ⟨_, _, .natBelow bound⟩
   | .seqUnsized, [.seq item (some size)], [] => some ⟨_, _, .seqUnsized item size⟩
   | .finToNat, [.fin bound], [] => some ⟨_, _, .finToNat bound⟩
@@ -139,7 +140,7 @@ theorem OwnedOp.resolve_name : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins out
       simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, ↓reduceIte]
   | _, _, .seqConcat .. => by simp only [OwnedOp.name, OwnedOp.resolve, ↓reduceIte]
   | _, _, .seqFill _ _ free => by simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte]
-  | _, _, .seqSized .. => rfl
+  | _, _, .seqSized _ _ free => by simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte]
   | _, _, .natBelow _ => rfl
   | _, _, .seqUnsized .. => rfl
   | _, _, .finToNat _ => rfl
@@ -163,7 +164,7 @@ theorem OwnedOp.resolve_name : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins out
 /-- What is written for a local operation. -/
 def LocalOp.print {fns : List (FnHeader V)} {ins res : List V.Ty} :
     LocalOp V fns ins res → LocalRaw V
-  | .row key statics _ _ => .row key statics
+  | .row key _ _ => .row key
   | .owned o => let written := o.name; .owned written.1 written.2.1 written.2.2
   | .literal τ data _ => .literal τ data
   | .call (hdr := hdr) _ => .call hdr.key
@@ -183,15 +184,15 @@ def LocalOp.ofOperands {fns : List (FnHeader V)} (operands ins res : List V.Ty)
 /-- The local operation that is written, on operands of the types given. -/
 def LocalOp.read (fns : List (FnHeader V)) : (written : LocalRaw V) → (operands : List V.Ty) →
     Except (Finding V.Ty (LocalRaw V)) ((res : List V.Ty) × LocalOp V fns operands res)
-  | .row key statics, operands =>
-      match known : V.row key statics with
-      | none => .error ⟨.row, .operation (.row key statics)⟩
+  | .row key, operands =>
+      match known : V.row key with
+      | none => .error ⟨.row, .operation (.row key)⟩
       | some signature =>
           LocalOp.ofOperands operands signature.ins signature.outs
-            (.row key statics signature known)
-  | .owned name types statics, operands =>
-      match OwnedOp.resolve name types statics with
-      | none => .error ⟨.owned, .operation (.owned name types statics)⟩
+            (.row key signature known)
+  | .owned name types numbers, operands =>
+      match OwnedOp.resolve name types numbers with
+      | none => .error ⟨.owned, .operation (.owned name types numbers)⟩
       | some ⟨ins, outs, o⟩ => LocalOp.ofOperands operands ins outs (.owned o)
   | .literal τ data, operands =>
       if reads : V.Reads τ data then LocalOp.ofOperands operands [] [τ] (.literal τ data reads)
@@ -209,7 +210,7 @@ theorem LocalOp.ofOperands_self {fns : List (FnHeader V)} {ins res : List V.Ty}
 before have distinct keys. -/
 theorem LocalOp.read_print {fns : List (FnHeader V)} (distinct : (fns.map (·.key)).Nodup) :
     ∀ {ins res : List V.Ty} (o : LocalOp V fns ins res), LocalOp.read fns o.print ins = .ok ⟨res, o⟩
-  | _, _, .row key statics signature known => by
+  | _, _, .row key signature known => by
       simp only [LocalOp.print, LocalOp.read]
       split
       · rename_i missing

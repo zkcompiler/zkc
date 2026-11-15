@@ -202,8 +202,8 @@ between roles, and a request to a service, which must answer equal inputs alike.
 def Process.markOwn (frame : Frame) {H A : Type} : Process (RSig M) H A → Process (RSig M) H A
   | .done a => .done a
   | .halt payload => .halt payload
-  | .call (.own (.coin law statics) [] at_ ins payload τ) k =>
-      .call (.own (.coin law statics) [] ⟨frame :: at_.path, at_.key⟩ ins payload τ) fun v =>
+  | .call (.own (.coin law) [] at_ ins payload τ) k =>
+      .call (.own (.coin law) [] ⟨frame :: at_.path, at_.key⟩ ins payload τ) fun v =>
         markOwn frame (k v)
   | .call op k => .call op fun reply => markOwn frame (k reply)
 

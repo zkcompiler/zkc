@@ -43,8 +43,8 @@ mutual
     | .tuple items, data => Tys.read items data
     | .record _ _ fields, data => Tys.read fields data
     | .variant _ alternatives, position :: data => Tys.readAt alternatives position data
-    | .nominal key statics, n :: rest =>
-        if V.literal key statics n then (M.literal key statics n).map fun v => (v, rest)
+    | .nominal key, n :: rest =>
+        if V.literal key n then (M.literal key n).map fun v => (v, rest)
         else none
     | _, _ => none
   /-- One value of each type, read in order. -/
@@ -110,12 +110,12 @@ mutual
     | .variant _ _, [], _, e => by simp [Ty.scan] at e
     | .variant _ alternatives, position :: data, rest, e =>
         Tys.readAt_of_scan alternatives position data rest e
-    | .nominal _ _, [], _, e => by simp [Ty.scan] at e
-    | .nominal key statics, n :: data, rest, e => by
-        by_cases lit : V.literal key statics n = true
+    | .nominal _, [], _, e => by simp [Ty.scan] at e
+    | .nominal key, n :: data, rest, e => by
+        by_cases lit : V.literal key n = true
         · simp only [Ty.scan, lit, ↓reduceIte, Option.some.injEq] at e
           subst e
-          obtain ⟨v, hv, _⟩ := M.literals key statics n lit
+          obtain ⟨v, hv, _⟩ := M.literals key n lit
           exact ⟨v, by simp [Ty.read, lit, hv]⟩
         · simp [Ty.scan, lit] at e
   theorem Tys.read_of_scan : ∀ (τs : Tys V.TypeKey) (data rest : List Nat),
@@ -284,7 +284,7 @@ def ownedOp : {ins outs : List V.Ty} → OwnedOp V ins outs → HList M.Val ins 
       let ys : List (M.Val item) := ys
       .done (.cons (xs ++ ys) .nil)
   | _, _, .seqFill _ count _, .cons v .nil => .done (.cons (List.replicate count v) .nil)
-  | _, _, .seqSized item size, .cons xs .nil =>
+  | _, _, .seqSized item size _, .cons xs .nil =>
       let xs : List (M.Val item) := xs
       if xs.length = size then .done (.cons xs .nil) else .halt .undefined
   | _, _, .natBelow bound, .cons n .nil =>
@@ -320,8 +320,8 @@ abbrev FnTable (fns : List (FnHeader V)) : Type :=
 /-- The meaning of a local operation. -/
 def localOp {fns : List (FnHeader V)} (table : FnTable M fns) :
     {ins res : List V.Ty} → LocalOp V fns ins res → HList M.Val ins → Local (HList M.Val res)
-  | _, _, .row key statics signature known, args =>
-      match M.apply key statics signature known args with
+  | _, _, .row key signature known, args =>
+      match M.apply key signature known args with
       | some outs => .done outs
       | none => .halt .undefined
   | _, _, .owned o, args => ownedOp M o args

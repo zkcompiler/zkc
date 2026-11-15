@@ -26,7 +26,7 @@ structure Format.Lawful {A : Type} (f : Format A) : Prop where
 /-- The formats of the nominal carriers of a model, with their laws: what a model gives for
 its values to be written and read. A model of mathematical objects need not have them. -/
 structure Codecs {V : Vocabulary} (M : Model V) where
-  format : ∀ key statics, Format (M.Carrier key statics)
-  lawful : ∀ key statics, (format key statics).Lawful
+  format : ∀ key, Format (M.Carrier key)
+  lawful : ∀ key, (format key).Lawful
 
 end Zkc.Core

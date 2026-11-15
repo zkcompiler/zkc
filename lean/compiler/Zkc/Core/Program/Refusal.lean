@@ -24,9 +24,9 @@ inductive Rule where
   | results
   /-- A region or a function names each of its inputs. -/
   | inputs
-  /-- An operation is a row of the vocabulary at its static arguments. -/
+  /-- An operation is a row of the vocabulary: its key names one. -/
   | row
-  /-- An operation that the core owns is named with its types and its static naturals. -/
+  /-- An operation that the core owns is named with its types and its numbers. -/
   | owned
   /-- The data of a literal reads as its type. -/
   | literal

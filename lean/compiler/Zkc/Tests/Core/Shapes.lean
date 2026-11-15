@@ -17,25 +17,25 @@ def plain : Vocabulary where
   TypeKey := Empty
   RowKey := Empty
   LawKey := Unit
-  row r _ := nomatch r
-  law _ _ := some ⟨[], .nat⟩
-  type r _ := nomatch r
-  literal r _ _ := nomatch r
+  row r := nomatch r
+  law _ := some ⟨[], .nat⟩
+  literal r _ := nomatch r
+  decided r := nomatch r
 
 /-- A model of the plain vocabulary: every natural is in the support of its law. -/
 def plainModel : Model plain where
-  Carrier key _ := nomatch key
-  valid key _ _ := nomatch key
-  literal key _ _ := nomatch key
-  apply row _ _ _ _ := nomatch row
-  inDomain row _ _ _ _ := nomatch row
-  defined row _ _ _ _ := nomatch row
-  total row _ _ _ _ _ := nomatch row
-  decides row _ _ _ _ _ _ _ _ _ _ := nomatch row
-  keeps row _ _ _ _ _ _ _ := nomatch row
-  literals key _ _ _ := nomatch key
-  support _ _ _ _ _ _ := True
-  supported _ _ _ h _ _ _ _ := by
+  Carrier key := nomatch key
+  valid key _ := nomatch key
+  literal key _ := nomatch key
+  apply row _ _ _ := nomatch row
+  inDomain row _ _ _ := nomatch row
+  defined row _ _ _ := nomatch row
+  total row _ _ _ _ := nomatch row
+  decides row _ _ _ _ _ := nomatch row
+  keeps row _ _ _ _ _ _ := nomatch row
+  literals key _ _ := nomatch key
+  support _ _ _ _ _ := True
+  supported _ _ h _ _ _ _ := by
     cases h
     trivial
 
@@ -98,7 +98,7 @@ example : Term (roleDialect plain none 1) [⟨either, [0]⟩] [nat [0, 1]] := pr
 /-- One round: the second role draws a natural that the first hears, and both add it to what
 is carried. -/
 def round : Term (protocolDialect plain none) [nat [0, 1]] [nat [0, 1]] :=
-  .op ⟨1⟩ (.given (.coin () []) 1 [0] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ ha => nomatch ha)
+  .op ⟨1⟩ (.given (.coin ()) 1 [0] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ ha => nomatch ha)
     (by decide)) .nil <|
   .op ⟨2⟩ (.compute [0, 1] (.owned .natAdd) [nat [0, 1], nat [0, 1]] rfl
     (fun a ha r hr => by

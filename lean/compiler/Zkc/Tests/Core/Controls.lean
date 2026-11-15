@@ -36,7 +36,7 @@ def zeroSource : Source plainModel := fun _ τ =>
 
 /-- A protocol of one private sample. -/
 def privateSample : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
-  .op ⟨1⟩ (.given (.coin () []) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩
+  .op ⟨1⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩
     (fun _ h => nomatch h) (by decide)) .nil <| .ret .nil
 
 def sampleHeader : ProtocolHeader Shapes.plain := ⟨⟨44⟩, 2, [], [], shapeOf privateSample⟩
@@ -282,7 +282,7 @@ theorem bare_not_returned : ¬ Ended M
 role, and aborts. -/
 def retriedBody : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
   .attempt ⟨80⟩ [0] ⟨0, rfl⟩
-    (.op ⟨81⟩ (.given (.coin () []) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
+    (.op ⟨81⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
       (by decide)) .nil <|
      .op ⟨84⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
      .op ⟨82⟩ (.compute [0] (.literal .bool [0] rfl) [] rfl (fun _ h => nomatch h)) .nil <|
@@ -303,21 +303,21 @@ def retriedRun (t : Term (protocolDialect Shapes.plain Shapes.none) [] []) :
 /-- The occurrences at which a run asks for private coins, while every coin is `0`. -/
 def sampled : Process (RSig plainModel) (Stop × Unit) (HList (RV plainModel 0) [] × Unit) →
     List Occurrence
-  | .call (.own (.coin _ _) [] at_ _ _ .nat) k => at_ :: sampled (k (0 : Nat))
+  | .call (.own (.coin _) [] at_ _ _ .nat) k => at_ :: sampled (k (0 : Nat))
   | .call (.give _ _ _ _ _) k => sampled (k ())
   | _ => []
 
 /-- The occurrences at which a run gives a message, while every coin is `0`. -/
 def sent : Process (RSig plainModel) (Stop × Unit) (HList (RV plainModel 0) [] × Unit) →
     List Occurrence
-  | .call (.own (.coin _ _) [] _ _ _ .nat) k => sent (k (0 : Nat))
+  | .call (.own (.coin _) [] _ _ _ .nat) k => sent (k (0 : Nat))
   | .call (.give _ _ at_ _ _) k => at_ :: sent (k ())
   | _ => []
 
 /-- How a run ends, while every coin is `0`. -/
 def ending : Process (RSig plainModel) (Stop × Unit) (HList (RV plainModel 0) [] × Unit) →
     Option Stop
-  | .call (.own (.coin _ _) [] _ _ _ .nat) k => ending (k (0 : Nat))
+  | .call (.own (.coin _) [] _ _ _ .nat) k => ending (k (0 : Nat))
   | .call (.give _ _ _ _ _) k => ending (k ())
   | .halt stop => some stop.1
   | _ => Option.none
@@ -337,7 +337,7 @@ theorem retry_exhausted :
 /-- An attempt whose body does nothing, then a private coin. -/
 def coinAfter : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
   .attempt ⟨80⟩ [0] ⟨0, rfl⟩ (.ret .nil) <|
-  .op ⟨85⟩ (.given (.coin () []) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
+  .op ⟨85⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
     (by decide)) .nil <|
   .ret .nil
 
@@ -405,10 +405,10 @@ body has its private coin, a message to the second, a coin of the second that th
 a guard of the first that aborts, and a second message; then a guard of the second. -/
 def signing : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
   .attempt ⟨1⟩ [0] ⟨0, rfl⟩
-    (.op ⟨2⟩ (.given (.coin () []) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
+    (.op ⟨2⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
       (by decide)) .nil <|
      .op ⟨3⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
-     .op ⟨4⟩ (.given (.coin () []) 1 [0] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
+     .op ⟨4⟩ (.given (.coin ()) 1 [0] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
       (by decide)) .nil <|
      .op ⟨5⟩ (.compute [0] (.owned .natLess) [nat [0], nat [0]] rfl
       (fun a ha r hr => by
@@ -463,28 +463,28 @@ def functionVocabulary : Vocabulary where
   TypeKey := Unit
   RowKey := Empty
   LawKey := Empty
-  row r _ := nomatch r
-  law r _ := nomatch r
-  type _ _ := true
-  literal _ _ _ := false
+  row r := nomatch r
+  law r := nomatch r
+  literal _ _ := false
+  decided r := nomatch r
 
 def functionModel : Model functionVocabulary where
-  Carrier _ _ := List Nat → Bool
-  valid _ _ _ := True
-  literal _ _ _ := Option.none
-  apply row _ _ _ _ := nomatch row
-  inDomain row _ _ _ _ := nomatch row
-  defined row _ _ _ _ := nomatch row
-  total row _ _ _ _ _ := nomatch row
-  decides row _ _ _ _ _ _ _ _ _ _ := nomatch row
-  keeps row _ _ _ _ _ _ _ := nomatch row
-  literals _ _ _ h := by cases h
-  support law _ _ _ _ _ := nomatch law
-  supported law _ _ _ _ _ _ _ := nomatch law
+  Carrier _ := List Nat → Bool
+  valid _ _ := True
+  literal _ _ := Option.none
+  apply row _ _ _ := nomatch row
+  inDomain row _ _ _ := nomatch row
+  defined row _ _ _ := nomatch row
+  total row _ _ _ _ := nomatch row
+  decides row _ _ _ _ _ := nomatch row
+  keeps row _ _ _ _ _ _ := nomatch row
+  literals _ _ h := by cases h
+  support law _ _ _ _ := nomatch law
+  supported law _ _ _ _ _ _ := nomatch law
 
 /-- The model of functions has no codecs, so `formats` asks nothing of it. -/
 theorem function_model_has_no_codecs : Codecs functionModel → False :=
-  fun codecs => no_lawful_function_format (codecs.format () []) (codecs.lawful () [])
+  fun codecs => no_lawful_function_format (codecs.format ()) (codecs.lawful ())
 
 /-! ## Linear use -/
 
@@ -542,9 +542,9 @@ theorem nested_prefix_counted :
 theorem runs_fork :
     Fork plainModel
       [.flow .message 0 [1] ⟨[], ⟨1⟩⟩ .nat (3 : Nat),
-        .given (.coin () []) 1 [0] ⟨[], ⟨2⟩⟩ .nat (5 : Nat)]
+        .given (.coin ()) 1 [0] ⟨[], ⟨2⟩⟩ .nat (5 : Nat)]
       [.flow .message 0 [1] ⟨[], ⟨1⟩⟩ .nat (3 : Nat),
-        .given (.coin () []) 1 [0] ⟨[], ⟨2⟩⟩ .nat (6 : Nat)] :=
+        .given (.coin ()) 1 [0] ⟨[], ⟨2⟩⟩ .nat (6 : Nat)] :=
   ⟨[.flow .message 0 [1] ⟨[], ⟨1⟩⟩ .nat (3 : Nat)], _, _, [], [], rfl, rfl,
     rfl, rfl, rfl, rfl, rfl, by decide⟩
 
@@ -552,7 +552,7 @@ theorem runs_fork :
 
 /-- A clause that answers a sample with the layer's state. -/
 def answerSample : Clause Shapes.plain Shapes.none 0 .nat where
-  site := ⟨⟨[], ⟨50⟩⟩, .own (.coin () []) [], [], [.nat]⟩
+  site := ⟨⟨[], ⟨50⟩⟩, .own (.coin ()) [], [], [.nat]⟩
   code := .ret (.cons .head (.cons .head .nil))
 
 /-- A lower layer with that clause, whose start is what it takes. -/
@@ -574,7 +574,7 @@ theorem start_is_pure :
 /-- The clause answers the sample with the state. -/
 theorem lower_clause_answers :
     (Layer.handler plainModel noFns noPrograms lowerLayer).clause
-      (.own (.coin () []) [] ⟨[], ⟨50⟩⟩ [] .nil .nat) (7 : Nat) = .done (7, (7 : Nat)) := rfl
+      (.own (.coin ()) [] ⟨[], ⟨50⟩⟩ [] .nil .nat) (7 : Nat) = .done (7, (7 : Nat)) := rfl
 
 /-! ## A law of a function, installed at its calls -/
 

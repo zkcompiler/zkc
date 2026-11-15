@@ -14,6 +14,15 @@ namespace Zkc.Core
 
 /-! ## The specification association -/
 
+/-- An argument of an instance of a generic declaration, as the association records it: a
+number, or the key of a declaration. Nothing of the vocabulary, of the types or of the dialects
+takes such arguments: a key of the vocabulary says everything that tells its type, row or law
+from another. -/
+inductive Static where
+  | nat (n : Nat)
+  | key (k : Key)
+deriving DecidableEq, Repr
+
 /-- An instance of a generic declaration: the declaration, the checked substitution and the
 key of the instance's definition. What it depends on is computed from the program. -/
 structure FamilyApplication where

@@ -1,6 +1,6 @@
 name = "zkc_compiler"
 version = "0.0.0"
-defaultTargets = ["ZkcCore", "ZkcCoreTests", "ZkcAudit", "zkc-audit"]
+defaultTargets = ["ZkcCore", "ZkcVocabulary", "ZkcCoreTests", "ZkcAudit", "zkc-audit"]
 # the tests of the core are checks that run when the library is built: building it is the test
 testDriver = "ZkcCoreTests"
 
@@ -12,6 +12,12 @@ warningAsError = true
 name = "ZkcCore"
 roots = ["Zkc.Core"]
 globs = ["Zkc.Core", "Zkc.Core.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcVocabulary"
+roots = ["Zkc.Vocabulary"]
+globs = ["Zkc.Vocabulary", "Zkc.Vocabulary.+"]
 requiresModuleSystem = true
 
 [[lean_lib]]
@@ -66,4 +72,4 @@ allowNonModules = true
 name = "zkc-audit"
 root = "Zkc.Tools.Audit.Main"
 allowNonModules = true
-needs = ["ZkcCore", "ZkcCoreTests"]
+needs = ["ZkcCore", "ZkcVocabulary", "ZkcCoreTests"]

@@ -94,10 +94,10 @@ def RV.Valid (r : Role) (a : LTy V) (v : RV M r a) : Prop :=
 at its payload. -/
 def Allows : (kind : GivenKind V) → (ins : List V.Ty) → HList M.Val ins → (τ : V.Ty) →
     M.Val τ → Prop
-  | .coin law statics, ins, payload, τ, v =>
-      M.Valid τ v ∧ ∃ (s : LawSignature V.TypeKey) (h : V.law law statics = some s)
+  | .coin law, ins, payload, τ, v =>
+      M.Valid τ v ∧ ∃ (s : LawSignature V.TypeKey) (h : V.law law = some s)
         (ins_eq : s.ins = ins) (out_eq : s.out = τ),
-        M.support law statics s h (cast (congrArg (HList M.Val) ins_eq.symm) payload)
+        M.support law s h (cast (congrArg (HList M.Val) ins_eq.symm) payload)
           (cast (congrArg M.Val out_eq.symm) v)
   | _, _, _, τ, v => M.Valid τ v
 

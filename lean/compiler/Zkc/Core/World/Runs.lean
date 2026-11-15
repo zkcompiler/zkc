@@ -58,8 +58,8 @@ def Fed (source : Source M) {A : Type} : Protocol M A → Prop
   | .done _ => True
   | .halt _ => True
   | .call (.flow ..) k => Fed source (k ())
-  | .call (.given (.coin law statics) _ (_ :: _) _ ins payload τ) k =>
-      ∀ v, Allows M (.coin law statics) ins payload τ v → Fed source (k v)
+  | .call (.given (.coin law) _ (_ :: _) _ ins payload τ) k =>
+      ∀ v, Allows M (.coin law) ins payload τ v → Fed source (k v)
   | .call (.given _ _ _ at_ _ _ τ) k => ∃ v, source at_ τ = some v ∧ Fed source (k v)
 
 /-- Every answer that the source gives along a run of the protocol is one that the world may

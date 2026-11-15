@@ -58,7 +58,7 @@ def concatSize : Option Nat → Option Nat → Option Nat
 /-- The operations that the core owns: a closed list. Their meaning is the core's, and no model
 chooses it. Seven have a domain and stop `undefined` outside it. An operation that would copy
 a value or drop a part of one (a reading, a length, a slice, a filling) is not typed at a
-linear type. -/
+linear type, nor is giving a sequence a size, whose domain is its length. -/
 inductive OwnedOp (V : Vocabulary) : List V.Ty → List V.Ty → Type where
   -- Naturals
   | natAdd : OwnedOp V [.nat, .nat] [.nat]
@@ -101,7 +101,8 @@ inductive OwnedOp (V : Vocabulary) : List V.Ty → List V.Ty → Type where
       OwnedOp V [item] [.seq item (some count)]
   -- Refining: the value is the operand's, and its type says more
   /-- Its domain: the length is the size. -/
-  | seqSized (item : V.Ty) (size : Nat) : OwnedOp V [.seq item none] [.seq item (some size)]
+  | seqSized (item : V.Ty) (size : Nat) (free : Ty.isLinear V item = false) :
+      OwnedOp V [.seq item none] [.seq item (some size)]
   /-- Its domain: the number is below the bound. -/
   | natBelow (bound : Nat) : OwnedOp V [.nat] [.fin bound]
   -- Widening: the value is the operand's, and its type says less
@@ -143,9 +144,9 @@ def OwnedOp.hasDomain {V : Vocabulary} {ins outs : List V.Ty} : OwnedOp V ins ou
   | _ => false
 
 inductive LocalOp (V : Vocabulary) (fns : List (FnHeader V)) : List V.Ty → List V.Ty → Type where
-  /-- A row of the vocabulary at its static arguments. -/
-  | row (key : V.RowKey) (statics : List Static) (signature : RowSignature V.TypeKey V.RowKey)
-      (known : V.row key statics = some signature) : LocalOp V fns signature.ins signature.outs
+  /-- A row of the vocabulary. -/
+  | row (key : V.RowKey) (signature : RowSignature V.TypeKey V.RowKey)
+      (known : V.row key = some signature) : LocalOp V fns signature.ins signature.outs
   | owned {ins outs} (o : OwnedOp V ins outs) : LocalOp V fns ins outs
   /-- A literal: data that reads as a value of the type. -/
   | literal (τ : V.Ty) (data : List Nat) (reads : V.Reads τ data) : LocalOp V fns [] [τ]
@@ -168,7 +169,7 @@ inductive LocalOp (V : Vocabulary) (fns : List (FnHeader V)) : List V.Ty → Lis
 
 /-- The inputs and the result of what the world gives are those of its kind. -/
 def GivenKind.Typed {V : Vocabulary} : GivenKind V → List V.Ty → V.Ty → Prop
-  | .coin law statics, ins, τ => ∃ s, V.law law statics = some s ∧ s.ins = ins ∧ s.out = τ
+  | .coin law, ins, τ => ∃ s, V.law law = some s ∧ s.ins = ins ∧ s.out = τ
   | .request _, ins, _ => ins.length = 1
 
 /-- Each operand may be used at its port. -/

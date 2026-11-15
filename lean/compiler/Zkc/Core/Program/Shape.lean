@@ -27,7 +27,7 @@ deriving DecidableEq, Repr
 /-- The world gives a value to one role, and to those that hear it. -/
 inductive GivenKind (V : Vocabulary) where
   /-- A coin of a law: a draw when some role hears it, a sample when nobody does. -/
-  | coin (law : V.LawKey) (statics : List Static)
+  | coin (law : V.LawKey)
   /-- A request to a service. -/
   | request (service : Key)
 deriving DecidableEq

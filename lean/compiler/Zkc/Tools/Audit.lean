@@ -88,6 +88,10 @@ def testsAndTools : Array Name := #[`Zkc.Tests, `Zkc.Tools]
 standard library. -/
 def coreImports : Array Name := #[`Init, `Std]
 
+/-- The prefixes outside the vocabulary that a module of the vocabulary may import: those of the
+core, and the core. -/
+def vocabularyImports : Array Name := coreImports.push `Zkc.Core
+
 /-- The first components of the modules of Lean's own libraries: the only modules that the replay
 through the kernel takes as built. -/
 def leanLibraries : Array Name := #[`Init, `Std, `Lean, `Lake]

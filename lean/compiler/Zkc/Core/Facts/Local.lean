@@ -71,8 +71,7 @@ variable {V : Vocabulary}
 def lengthOfType (τ : V.Ty) : LocalRaw V := .owned .seqLength [τ] []
 
 /-- What an operation that the core owns requires of an application, by its operands'
-positions. The length of a sequence of a linear type cannot be written, so nothing is known of
-it: giving such a sequence a size requires a value beyond the operand, which is never known. -/
+positions. -/
 def ownedRequires : OwnedName → List V.Ty → List (Requirement (LocalRaw V))
   | .natSub, _ => [.le (.arg 1) (.arg 0)]
   | .natDiv, _ => [.atLeast (.arg 1) 1]
@@ -85,26 +84,17 @@ def ownedRequires : OwnedName → List V.Ty → List (Requirement (LocalRaw V))
           | some count => [.difference (.arg 2) (.arg 1) count]
           | none => [])
   | .seqSized, [.seq item (some size)] =>
-      if Ty.isLinear V item then [.exactly (.arg 1) size]
-      else [.exactly (.apply (lengthOfType (.seq item none)) [0]) size]
+      [.exactly (.apply (lengthOfType (.seq item none)) [0]) size]
   | .natBelow, [.fin bound] => [.below (.arg 0) bound]
   | _, _ => []
 
-/-- What a row requires: a restricted one, its domain row at the same operands known true. A
-restricted row whose domain row does not decide it (other inputs, or not one truth value)
-requires what nothing can be known of: a value beyond its operands. -/
-def rowRequires (key : V.RowKey) (statics : List Static) : List (Requirement (LocalRaw V)) :=
-  match V.row key statics with
+/-- What a row requires: a restricted one, its domain row at the same operands known true. -/
+def rowRequires (key : V.RowKey) : List (Requirement (LocalRaw V)) :=
+  match V.row key with
   | some signature =>
       match signature.kind with
       | .pure => []
-      | .restricted domain =>
-          match V.row domain statics with
-          | some decider =>
-              if decider.ins = signature.ins ∧ decider.outs = [.bool] then
-                [.holds (.apply (.row domain statics) (List.range signature.ins.length))]
-              else [.holds (.arg signature.ins.length)]
-          | none => [.holds (.arg signature.ins.length)]
+      | .restricted domain => [.holds (.apply (.row domain) (List.range signature.ins.length))]
   | none => []
 
 /-- The range of the result of an operation on two naturals, from those of its operands. -/
@@ -158,7 +148,7 @@ variable (V) in
 def localOpFacts : OpFacts (LocalRaw V) where
   requires
     | .owned name types _ => ownedRequires name types
-    | .row key statics => rowRequires key statics
+    | .row key => rowRequires key
     | _ => []
   ranges
     | .owned name types _, operands => ownedRanges name types operands

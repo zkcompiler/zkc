@@ -9,6 +9,8 @@ Libraries:
 
 - `ZkcCore` (`Zkc.Core`): the core language, its admission and its theorems
   ([guide](Zkc/Core/README.md)).
+- `ZkcVocabulary` (`Zkc.Vocabulary`): the standard vocabulary of the core, its keys and its
+  table ([guide](Zkc/Vocabulary/README.md)).
 - `ZkcFrontend` (`Zkc.Frontend`): the lexer, the parser, the checker and the emitter of the
   source language ([guide](Zkc/Frontend/README.md)).
 - `ZkcCoreTools`, `ZkcFrontendTools` (`Zkc.Tools.Core`, `Zkc.Tools.Frontend`): the code of the

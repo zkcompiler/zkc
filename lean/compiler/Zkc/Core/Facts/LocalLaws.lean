@@ -624,16 +624,6 @@ theorem localRange_has {τ : V.Ty} {r : Range} (h : localRange τ = some r) (v :
 
 /-! ## What operations require -/
 
-theorem toDyns_cast {as bs : List V.Ty} (h : as = bs) (xs : HList M.Val as) :
-    toDyns (cast (congrArg (HList M.Val) h) xs) = toDyns xs := by
-  subst h
-  rfl
-
-theorem all_cast {as bs : List V.Ty} (h : as = bs) (xs : HList M.Val as) :
-    (cast (congrArg (HList M.Val) h) xs).All M.Valid ↔ xs.All M.Valid := by
-  subst h
-  rfl
-
 theorem atPositions_append {α : Type} (xs : List α) :
     ∀ (ps qs : List Nat), atPositions xs (ps ++ qs) =
       (atPositions xs ps).bind fun as => (atPositions xs qs).map fun bs => as ++ bs
@@ -666,17 +656,6 @@ theorem DenotesAll.two {Raw : Type} {Run : Raw → List (Dyn M) → List (Dyn M)
   match vs, h with
   | [v, v'], ⟨d, d', _⟩ => exact ⟨v, v', rfl, d, d'⟩
 
-/-- A requirement at an operand beyond the operands never holds. -/
-theorem not_holds_beyond {Raw : Type} {Run : Raw → List (Dyn M) → List (Dyn M) → Prop}
-    {args : List (Dyn M)} {n : Nat} (beyond : args.length ≤ n)
-    (h : (Requirement.holds (.arg n) : Requirement Raw).Holds Run (localReading M) args) :
-    False := by
-  obtain ⟨vs, d, _⟩ := h
-  obtain ⟨v, _, hv⟩ := DenotesAll.one d
-  simp only [Operand.Denotes] at hv
-  rw [List.getElem?_eq_none beyond] at hv
-  cases hv
-
 /-- Applied to a sequence, its length. -/
 theorem localRun_length {item : V.Ty} {size : Option Nat} {xs : M.Val (.seq item size)}
     {rs : List (Dyn M)}
@@ -707,49 +686,41 @@ theorem localRun_length_intro {item : V.Ty} {size : Option Nat}
 
 /-- The domain row of a restricted row, at its operands, gives whether they are in its
 domain. -/
-theorem localRun_domain_intro {key domain : V.RowKey} {statics : List Static}
-    {sig decider : RowSignature V.TypeKey V.RowKey} (known : V.row key statics = some sig)
-    (hd : V.row domain statics = some decider) (ins : decider.ins = sig.ins)
-    (outs : decider.outs = [.bool]) (kind : sig.kind = .restricted domain)
+theorem localRun_domain_intro {key domain : V.RowKey} {sig : RowSignature V.TypeKey V.RowKey}
+    (known : V.row key = some sig) (kind : sig.kind = .restricted domain)
     (a : HList M.Val sig.ins) (va : a.All M.Valid) :
-    LocalRun M table (.row domain statics) (toDyns a)
-      [⟨.bool, M.inDomain key statics sig known a⟩] := by
-  have decides := M.decides key statics sig known domain decider hd ins outs a kind
-  refine ⟨_, _, .row domain statics decider hd, cast (congrArg (HList M.Val) ins.symm) a,
-    cast (congrArg (HList M.Val) outs.symm) (.cons (M.inDomain key statics sig known a) .nil),
-    rfl, toDyns_cast ins.symm a, by rw [toDyns_cast outs.symm]; rfl, (all_cast ins.symm a).mpr va,
-    (all_cast outs.symm _).mpr (HList.all_cons.mpr ⟨trivial, trivial⟩), ?_⟩
+    LocalRun M table (.row domain) (toDyns a) [⟨.bool, M.inDomain key sig known a⟩] := by
+  refine ⟨_, _, .row domain ⟨sig.ins, [.bool], .pure⟩ (V.decided key sig domain known kind), a,
+    .cons (M.inDomain key sig known a) .nil, rfl, rfl, rfl, va,
+    HList.all_cons.mpr ⟨trivial, trivial⟩, ?_⟩
   simp only [localOp]
-  rw [decides]
+  rw [M.decides key sig known domain kind a]
 
 /-- What the domain row of a restricted row gives at its operands. -/
-theorem localRun_domain {key domain : V.RowKey} {statics : List Static}
-    {sig decider : RowSignature V.TypeKey V.RowKey} (known : V.row key statics = some sig)
-    (hd : V.row domain statics = some decider) (ins : decider.ins = sig.ins)
-    (outs : decider.outs = [.bool]) (kind : sig.kind = .restricted domain)
+theorem localRun_domain {key domain : V.RowKey} {sig : RowSignature V.TypeKey V.RowKey}
+    (known : V.row key = some sig) (kind : sig.kind = .restricted domain)
     (a : HList M.Val sig.ins) {rs : List (Dyn M)}
-    (h : LocalRun M table (.row domain statics) (toDyns a) rs) :
-    rs = [⟨.bool, M.inDomain key statics sig known a⟩] := by
-  have decides := M.decides key statics sig known domain decider hd ins outs a kind
+    (h : LocalRun M table (.row domain) (toDyns a) rs) :
+    rs = [⟨.bool, M.inDomain key sig known a⟩] := by
+  have decides := M.decides key sig known domain kind a
   obtain ⟨ins', res', o, a', r, hp, ha, rfl, _, _, run⟩ := h
   cases o with
   | owned => simp [LocalOp.print] at hp
   | literal => simp [LocalOp.print] at hp
   | call => simp [LocalOp.print] at hp
-  | row domain' statics' sig' known' =>
+  | row domain' sig' known' =>
       simp only [LocalOp.print, LocalRaw.row.injEq] at hp
-      obtain ⟨rfl, rfl⟩ := hp
-      have : sig' = decider := Option.some.inj (known'.symm.trans hd)
+      subst hp
+      have : sig' = ⟨sig.ins, [.bool], .pure⟩ :=
+        Option.some.inj (known'.symm.trans (V.decided key sig _ known kind))
       subst this
       obtain ⟨_, heq⟩ := toDyns_inj a' a ha
-      have ha' : a' = cast (congrArg (HList M.Val) ins.symm) a :=
-        eq_of_heq (heq.trans (cast_heq _ a).symm)
+      have ha' : a' = a := eq_of_heq heq
       subst ha'
       simp only [localOp] at run
       rw [decides] at run
       simp only [Process.done.injEq] at run
       subst run
-      rw [toDyns_cast outs.symm]
       rfl
 
 theorem stops_of_halt {α : Type} : ∀ (p : Local α), (∀ h, p = .halt h → h ≠ .undefined) →
@@ -759,46 +730,33 @@ theorem stops_of_halt {α : Type} : ∀ (p : Local α), (∀ h, p = .halt h → 
   | .call op _, _ => nomatch op
 
 /-- A row, at operands where what it requires holds, gives its outputs. -/
-theorem row_defined (key : V.RowKey) (statics : List Static)
-    (sig : RowSignature V.TypeKey V.RowKey) (known : V.row key statics = some sig)
-    (a : HList M.Val sig.ins)
-    (holds : ∀ req, req ∈ rowRequires key statics →
+theorem row_defined (key : V.RowKey) (sig : RowSignature V.TypeKey V.RowKey)
+    (known : V.row key = some sig) (a : HList M.Val sig.ins)
+    (holds : ∀ req, req ∈ rowRequires key →
       req.Holds (LocalRun M table) (localReading M) (toDyns a)) :
-    ∃ outs, M.apply key statics sig known a = some outs := by
-  have defined := M.defined key statics sig known a
-  suffices h : M.inDomain key statics sig known a = true by
+    ∃ outs, M.apply key sig known a = some outs := by
+  have defined := M.defined key sig known a
+  suffices h : M.inDomain key sig known a = true by
     rw [h] at defined
     exact Option.isSome_iff_exists.mp defined
-  have beyond : (toDyns a).length ≤ sig.ins.length := by simp [toDyns_length]
   cases hk : sig.kind with
-  | pure => exact M.total key statics sig known a hk
+  | pure => exact M.total key sig known a hk
   | restricted domain =>
-      cases hd : V.row domain statics with
-      | none =>
-          have req : rowRequires key statics = [.holds (.arg sig.ins.length)] := by
-            simp only [rowRequires, known, hk, hd]
-          exact (not_holds_beyond beyond (holds _ (by rw [req]; simp))).elim
-      | some decider =>
-          by_cases shape : decider.ins = sig.ins ∧ decider.outs = [.bool]
-          · have req : rowRequires key statics =
-                [.holds (.apply (.row domain statics) (List.range sig.ins.length))] := by
-              simp only [rowRequires, known, hk, hd, shape, and_self, ↓reduceIte]
-            obtain ⟨vs, d, rel⟩ := holds
-              (.holds (.apply (.row domain statics) (List.range sig.ins.length)))
-              (by rw [req]; simp)
-            obtain ⟨v, rfl, hv⟩ := DenotesAll.one d
-            obtain ⟨as, rs, hpos, run, head⟩ := hv
-            rw [← toDyns_length a, atPositions_range _ _ (Nat.le_refl _), List.take_length,
-              Option.some.injEq] at hpos
-            subst hpos
-            have := localRun_domain known hd shape.1 shape.2 hk a run
-            subst this
-            simp only [List.head?_cons, Option.some.injEq] at head
-            subst head
-            simpa [Requirement.Relation, localReading] using rel
-          · have req : rowRequires key statics = [.holds (.arg sig.ins.length)] := by
-              simp only [rowRequires, known, hk, hd, shape, ↓reduceIte]
-            exact (not_holds_beyond beyond (holds _ (by rw [req]; simp))).elim
+      have req : rowRequires key =
+          [.holds (.apply (.row domain) (List.range sig.ins.length))] := by
+        simp only [rowRequires, known, hk]
+      obtain ⟨vs, d, rel⟩ := holds (.holds (.apply (.row domain) (List.range sig.ins.length)))
+        (by rw [req]; simp)
+      obtain ⟨v, rfl, hv⟩ := DenotesAll.one d
+      obtain ⟨as, rs, hpos, run, head⟩ := hv
+      rw [← toDyns_length a, atPositions_range _ _ (Nat.le_refl _), List.take_length,
+        Option.some.injEq] at hpos
+      subst hpos
+      have := localRun_domain known hk a run
+      subst this
+      simp only [List.head?_cons, Option.some.injEq] at head
+      subst head
+      simpa [Requirement.Relation, localReading] using rel
 
 /-! ### Each operation with a domain -/
 
@@ -941,24 +899,18 @@ theorem seqSlice_defined {item : V.Ty} {size result : Option Nat}
   · cases e
   · next outside => exact (outside ⟨ordered, within, fits⟩).elim
 
-theorem seqSized_defined {item : V.Ty} {size : Nat} (xs : M.Val (.seq item none))
+theorem seqSized_defined {item : V.Ty} {size : Nat} {free : Ty.isLinear V item = false}
+    (xs : M.Val (.seq item none))
     (holds : ∀ req, req ∈ ownedRequires .seqSized [.seq item (some size)] →
       Holds (table := table) [⟨.seq item none, xs⟩] req) :
-    ∀ h, ownedOp M (.seqSized item size) (.cons xs .nil) = .halt h → h ≠ .undefined := by
+    ∀ h, ownedOp M (.seqSized item size free) (.cons xs .nil) = .halt h → h ≠ .undefined := by
   intro h e
   have length : (xs : List (M.Val item)).length = size := by
-    cases linear : Ty.isLinear V item with
-    | true =>
-        obtain ⟨vs, d, _⟩ := holds (.exactly (.arg 1) size) (by simp [ownedRequires, linear])
-        obtain ⟨u, _, d1⟩ := DenotesAll.one d
-        simp [Operand.Denotes] at d1
-    | false =>
-        obtain ⟨vs, d, rel⟩ := holds
-          (.exactly (.apply (lengthOfType (.seq item none)) [0]) size)
-          (by simp [ownedRequires, linear])
-        obtain ⟨u, rfl, d1⟩ := DenotesAll.one d
-        rw [denotes_length d1] at rel
-        exact rel _ rfl
+    obtain ⟨vs, d, rel⟩ := holds
+      (.exactly (.apply (lengthOfType (.seq item none)) [0]) size) (by simp [ownedRequires])
+    obtain ⟨u, rfl, d1⟩ := DenotesAll.one d
+    rw [denotes_length d1] at rel
+    exact rel _ rfl
   simp [ownedOp, length] at e
 
 /-- A local operation, applied to valid operands at whose values every requirement of its
@@ -974,8 +926,8 @@ theorem localOp_defined
   cases o with
   | literal => exact trivial
   | call callee => exact safe _ callee a va
-  | row key statics sig known =>
-      obtain ⟨outs, h⟩ := row_defined key statics sig known a (fun req m => holds req m)
+  | row key sig known =>
+      obtain ⟨outs, h⟩ := row_defined key sig known a (fun req m => holds req m)
       simp only [localOp, h]
       exact trivial
   | owned op =>
@@ -1025,28 +977,17 @@ theorem localRequires_runs {ins res : List V.Ty} (o : LocalOp V fns ins res)
   cases o with
   | literal => simp [LocalOp.print, localOpFacts] at m
   | call => simp [LocalOp.print, localOpFacts] at m
-  | row key statics sig known =>
+  | row key sig known =>
       simp only [LocalOp.print, localOpFacts, rowRequires, known] at m
       split at m
       · simp at m
       · next domain hk =>
-          split at m
-          · next decider hd =>
-              split at m
-              · next shape =>
-                  simp only [List.mem_singleton] at m
-                  subst m
-                  simp only [Requirement.operands, List.mem_singleton, Operand.apply.injEq] at mo
-                  obtain ⟨rfl, rfl⟩ := mo
-                  refine ⟨toDyns a, _, ?_, localRun_domain_intro known hd shape.1 shape.2 hk a va,
-                    rfl⟩
-                  rw [← toDyns_length a, atPositions_range _ _ (Nat.le_refl _), List.take_length]
-              · simp only [List.mem_singleton] at m
-                subst m
-                simp [Requirement.operands] at mo
-          · simp only [List.mem_singleton] at m
-            subst m
-            simp [Requirement.operands] at mo
+          simp only [List.mem_singleton] at m
+          subst m
+          simp only [Requirement.operands, List.mem_singleton, Operand.apply.injEq] at mo
+          obtain ⟨rfl, rfl⟩ := mo
+          refine ⟨toDyns a, _, ?_, localRun_domain_intro known hk a va, rfl⟩
+          rw [← toDyns_length a, atPositions_range _ _ (Nat.le_refl _), List.take_length]
   | owned op =>
       simp only [LocalOp.print, localOpFacts] at m
       cases op
@@ -1065,14 +1006,13 @@ theorem localRequires_runs {ins res : List V.Ty} (o : LocalOp V fns ins res)
         all_goals
           obtain ⟨rfl, rfl⟩ := mo
           exact ⟨_, _, rfl, localRun_length_intro ‹_› xs (HList.all_cons.mp va).1, rfl⟩
-      case seqSized =>
+      case seqSized item _ free =>
         obtain ⟨xs, rfl⟩ := HList.one a
-        rename_i item _
-        cases linear : Ty.isLinear V item <;>
-          simp [OwnedOp.name, ownedRequires, linear] at m <;> subst m <;>
-          simp [Requirement.operands] at mo
+        simp [OwnedOp.name, ownedRequires] at m
+        subst m
+        simp [Requirement.operands] at mo
         obtain ⟨rfl, rfl⟩ := mo
-        exact ⟨_, _, rfl, localRun_length_intro linear xs (HList.all_cons.mp va).1, rfl⟩
+        exact ⟨_, _, rfl, localRun_length_intro free xs (HList.all_cons.mp va).1, rfl⟩
       all_goals simp [OwnedOp.name, ownedRequires] at m
       all_goals subst m
       all_goals simp [Requirement.operands] at mo

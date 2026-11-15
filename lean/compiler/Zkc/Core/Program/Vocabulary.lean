@@ -8,7 +8,8 @@ public import Zkc.Core.Program.Identity
 Types, the vocabulary and its models.
 
 The core is parameterised by a vocabulary: the keys of nominal types, of rows and of laws,
-and the signature and the kind of each at its static arguments. The values of `bool`, of
+and the signature and the kind of each at its key. A key says everything that tells one type,
+row or law from another, so nothing stands beside it. The values of `bool`, of
 naturals, of sequences, tuples, records and variants, and the operations on them, are the
 core's own. A model gives each nominal type a carrier and says which values are valid; every
 row keeps validity.
@@ -69,13 +70,6 @@ def Env {α : Type} (V : α → Type) (Γ : List α) : Type := ∀ a, Var Γ a �
 
 /-! ## Types -/
 
-/-- A static argument of a nominal type, of a row or of a law: in an instance every size is
-a literal. -/
-inductive Static where
-  | nat (n : Nat)
-  | key (k : Key)
-deriving DecidableEq, Repr
-
 mutual
   /-- The types of the core, over the keys `K` of nominal types. No type mentions a value. -/
   inductive Ty (K : Type) where
@@ -91,7 +85,7 @@ mutual
     /-- A variant, by the key of its declaration, with the payload of each alternative; an
     alternative without a payload has the empty tuple. -/
     | variant (key : Key) (alternatives : Tys K)
-    | nominal (key : K) (statics : List Static)
+    | nominal (key : K)
   inductive Tys (K : Type) where
     | nil
     | cons (head : Ty K) (rest : Tys K)
@@ -124,16 +118,17 @@ structure Vocabulary where
   [decTypeKey : DecidableEq TypeKey]
   [decRowKey : DecidableEq RowKey]
   [decLawKey : DecidableEq LawKey]
-  /-- The signature and the kind of a row at its static arguments; `none` when the row has
-  no instance there. -/
-  row : RowKey → List Static → Option (RowSignature TypeKey RowKey)
-  law : LawKey → List Static → Option (LawSignature TypeKey)
-  /-- Whether a nominal type has an instance at the static arguments. -/
-  type : TypeKey → List Static → Bool
+  /-- The signature and the kind of a row; `none` when the key names no row. -/
+  row : RowKey → Option (RowSignature TypeKey RowKey)
+  /-- The signature of a law; `none` when the key names no law. -/
+  law : LawKey → Option (LawSignature TypeKey)
   /-- Whether a natural is a literal of a nominal type. -/
-  literal : TypeKey → List Static → Nat → Bool
-  /-- Whether a nominal type is linear at the static arguments: none is, unless said. -/
-  linear : TypeKey → List Static → Bool := fun _ _ => false
+  literal : TypeKey → Nat → Bool
+  /-- Whether a nominal type is linear: none is, unless said. -/
+  linear : TypeKey → Bool := fun _ => false
+  /-- The domain row of a restricted row: pure, with the same inputs, giving one truth value. -/
+  decided : ∀ key signature domain, row key = some signature →
+    signature.kind = .restricted domain → row domain = some ⟨signature.ins, [.bool], .pure⟩
 
 attribute [instance] Vocabulary.decTypeKey Vocabulary.decRowKey Vocabulary.decLawKey
 
@@ -150,7 +145,7 @@ mutual
     | .tuple items => Tys.anyLinear V items
     | .record _ linear fields => linear || Tys.anyLinear V fields
     | .variant _ alternatives => Tys.anyLinear V alternatives
-    | .nominal key statics => V.linear key statics
+    | .nominal key => V.linear key
   /-- One of the types is linear. -/
   def Tys.anyLinear (V : Vocabulary) : Tys V.TypeKey → Bool
     | .nil => false
@@ -175,7 +170,7 @@ mutual
     | .tuple items, data => Tys.scan V items data
     | .record _ _ fields, data => Tys.scan V fields data
     | .variant _ alternatives, position :: data => Tys.scanAt V alternatives position data
-    | .nominal key statics, n :: rest => if V.literal key statics n then some rest else none
+    | .nominal key, n :: rest => if V.literal key n then some rest else none
     | _, _ => none
   def Tys.scan (V : Vocabulary) : Tys V.TypeKey → List Nat → Option (List Nat)
     | .nil, data => some data
@@ -195,10 +190,10 @@ def Vocabulary.Reads (V : Vocabulary) (τ : V.Ty) (data : List Nat) : Prop :=
 /-- What a model chooses: a carrier for each nominal type, and which of its values are
 valid. The values of the other types are the core's. -/
 structure Carriers (V : Vocabulary) where
-  Carrier : V.TypeKey → List Static → Type
-  valid : ∀ key statics, Carrier key statics → Prop
+  Carrier : V.TypeKey → Type
+  valid : ∀ key, Carrier key → Prop
   /-- The value of a literal. -/
-  literal : ∀ key statics, Nat → Option (Carrier key statics)
+  literal : ∀ key, Nat → Option (Carrier key)
 
 mutual
   /-- The values of a type. -/
@@ -210,7 +205,7 @@ mutual
     | .tuple items => items.Val C
     | .record _ _ fields => fields.Val C
     | .variant _ alternatives => alternatives.Choice C
-    | .nominal key statics => C.Carrier key statics
+    | .nominal key => C.Carrier key
   /-- One value of each type. -/
   @[reducible] def Tys.Val {V : Vocabulary} (C : Carriers V) : Tys V.TypeKey → Type
     | .nil => Unit
@@ -233,7 +228,7 @@ mutual
     | .tuple items, vs => items.Valid C vs
     | .record _ _ fields, vs => fields.Valid C vs
     | .variant _ alternatives, v => alternatives.ValidChoice C v
-    | .nominal key statics, v => C.valid key statics v
+    | .nominal key, v => C.valid key v
   def Tys.Valid {V : Vocabulary} (C : Carriers V) : (τs : Tys V.TypeKey) → τs.Val C → Prop
     | .nil, _ => True
     | .cons head rest, (v, vs) => head.Valid C v ∧ rest.Valid C vs
@@ -246,43 +241,38 @@ end
 
 /-- A model of a vocabulary. -/
 structure Model (V : Vocabulary) extends Carriers V where
-  /-- A row at its static arguments; `none` outside the domain of a restricted row. -/
-  apply : ∀ (row : V.RowKey) (statics : List Static) (signature : RowSignature V.TypeKey V.RowKey),
-    V.row row statics = some signature →
+  /-- A row; `none` outside the domain of a restricted row. -/
+  apply : ∀ (row : V.RowKey) (signature : RowSignature V.TypeKey V.RowKey),
+    V.row row = some signature →
     HList (Ty.Val toCarriers) signature.ins → Option (HList (Ty.Val toCarriers) signature.outs)
   /-- Whether the inputs are in the domain of a row. -/
-  inDomain : ∀ (row : V.RowKey) (statics : List Static) (signature : RowSignature V.TypeKey V.RowKey),
-    V.row row statics = some signature → HList (Ty.Val toCarriers) signature.ins → Bool
+  inDomain : ∀ (row : V.RowKey) (signature : RowSignature V.TypeKey V.RowKey),
+    V.row row = some signature → HList (Ty.Val toCarriers) signature.ins → Bool
   /-- A row gives its outputs exactly on its domain. -/
-  defined : ∀ row statics signature (h : V.row row statics = some signature) args,
-    (apply row statics signature h args).isSome = inDomain row statics signature h args
+  defined : ∀ row signature (h : V.row row = some signature) args,
+    (apply row signature h args).isSome = inDomain row signature h args
   /-- A pure row is everywhere in its domain. -/
-  total : ∀ row statics signature (h : V.row row statics = some signature) args,
-    signature.kind = .pure → inDomain row statics signature h args = true
-  /-- The domain of a row restricted by `domain` is what `domain` gives at the same static
-  arguments and the same inputs, when its signature has those inputs and one `bool`
-  output. -/
-  decides : ∀ row statics signature (h : V.row row statics = some signature)
-    (domain : V.RowKey) (decider : RowSignature V.TypeKey V.RowKey)
-    (hd : V.row domain statics = some decider) (ins : decider.ins = signature.ins)
-    (outs : decider.outs = [.bool]) args,
-    signature.kind = .restricted domain →
-    apply domain statics decider hd (cast (congrArg (HList (Ty.Val toCarriers)) ins.symm) args) =
-      some (cast (congrArg (HList (Ty.Val toCarriers)) outs.symm)
-        (.cons (inDomain row statics signature h args) .nil))
+  total : ∀ row signature (h : V.row row = some signature) args,
+    signature.kind = .pure → inDomain row signature h args = true
+  /-- The domain of a restricted row is what its domain row gives at the same inputs. -/
+  decides : ∀ row signature (h : V.row row = some signature) domain
+    (kind : signature.kind = .restricted domain) args,
+    apply domain ⟨signature.ins, [.bool], .pure⟩ (V.decided row signature domain h kind) args =
+      some (.cons (inDomain row signature h args) .nil)
   /-- Every row keeps validity. -/
-  keeps : ∀ row statics signature (h : V.row row statics = some signature) args outs,
-    args.All (Ty.Valid toCarriers) → apply row statics signature h args = some outs → outs.All (Ty.Valid toCarriers)
+  keeps : ∀ row signature (h : V.row row = some signature) args outs,
+    args.All (Ty.Valid toCarriers) → apply row signature h args = some outs →
+      outs.All (Ty.Valid toCarriers)
   /-- A literal of the vocabulary has a value, and the value is valid. -/
-  literals : ∀ key statics n, V.literal key statics n = true →
-    ∃ v, toCarriers.literal key statics n = some v ∧ toCarriers.valid key statics v
+  literals : ∀ key n, V.literal key n = true →
+    ∃ v, toCarriers.literal key n = some v ∧ toCarriers.valid key v
   /-- The support of a law at its inputs. -/
-  support : ∀ (law : V.LawKey) (statics : List Static) (signature : LawSignature V.TypeKey),
-    V.law law statics = some signature →
+  support : ∀ (law : V.LawKey) (signature : LawSignature V.TypeKey),
+    V.law law = some signature →
     HList (Ty.Val toCarriers) signature.ins → signature.out.Val toCarriers → Prop
   /-- What a law gives is valid. -/
-  supported : ∀ law statics signature (h : V.law law statics = some signature) args out,
-    args.All (Ty.Valid toCarriers) → support law statics signature h args out → Ty.Valid toCarriers _ out
+  supported : ∀ law signature (h : V.law law = some signature) args out,
+    args.All (Ty.Valid toCarriers) → support law signature h args out → Ty.Valid toCarriers _ out
 
 abbrev Model.Val {V : Vocabulary} (M : Model V) (τ : V.Ty) : Type := τ.Val M.toCarriers
 
