@@ -1,10 +1,8 @@
 name = "zkc_compiler"
 version = "0.0.0"
-defaultTargets = ["ZkcCore", "ZkcCoreTools", "ZkcCoreTests", "ZkcFrontend", "ZkcFrontendTools",
-  "ZkcFrontendTests", "ZkcAudit", "core-tool", "zkc-syntax", "zkc-check", "zkc-frontend-tests",
-  "zkc-audit"]
-# a hyphenated name is written in guillemets for Lake to resolve it
-testDriver = "«zkc-frontend-tests»"
+defaultTargets = ["ZkcCore", "ZkcCoreTests", "ZkcAudit", "zkc-audit"]
+# the tests of the core are checks that run when the library is built: building it is the test
+testDriver = "ZkcCoreTests"
 
 [leanOptions]
 autoImplicit = false
@@ -15,12 +13,6 @@ name = "ZkcCore"
 roots = ["Zkc.Core"]
 globs = ["Zkc.Core", "Zkc.Core.+"]
 requiresModuleSystem = true
-
-[[lean_lib]]
-name = "ZkcCoreTools"
-roots = ["Zkc.Tools.Core"]
-globs = ["Zkc.Tools.Core.+"]
-allowNonModules = true
 
 [[lean_lib]]
 name = "ZkcCoreTests"
@@ -56,10 +48,6 @@ globs = ["Zkc.Tools.Audit"]
 allowNonModules = true
 
 [[lean_exe]]
-name = "core-tool"
-root = "Zkc.Tools.Core.Main"
-
-[[lean_exe]]
 name = "zkc-syntax"
 root = "Zkc.Tools.Frontend.Main"
 allowNonModules = true
@@ -78,4 +66,4 @@ allowNonModules = true
 name = "zkc-audit"
 root = "Zkc.Tools.Audit.Main"
 allowNonModules = true
-needs = ["ZkcCore", "ZkcFrontend", "ZkcCoreTests"]
+needs = ["ZkcCore", "ZkcCoreTests"]
