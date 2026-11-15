@@ -6,6 +6,7 @@ public import Zkc.Core.Program.Conditions
 public import Zkc.Core.Program.Dialects
 public import Zkc.Core.Program.Elaborate
 public import Zkc.Core.Program.ElaborateLocal
+public import Zkc.Core.Program.Linear
 public import Zkc.Core.Program.LocalRules
 public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Located

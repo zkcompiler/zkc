@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Program.Dialects
+public import Zkc.Core.Program.Linear
 
 @[expose] public section
 

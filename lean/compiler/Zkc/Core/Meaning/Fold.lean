@@ -15,7 +15,7 @@ dialect.
 
 Three other folds mirror `Term.denote` constructor by constructor: the process with the record
 of its run (`Term.observe`), the property at every instruction (`Term.Everywhere`) and the count
-of uses (`Term.uses`); and projection maps every constructor. A new constructor of `Term` is
+of the uses of linear values (`Term.linearUses`); and projection maps every constructor. A new constructor of `Term` is
 added to all of them.
 -/
 

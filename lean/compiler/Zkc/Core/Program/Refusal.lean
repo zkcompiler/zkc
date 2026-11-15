@@ -88,6 +88,10 @@ inductive Detail (T Raw : Type) where
   | stops (header body : Bool)
   /-- A value by its position among those bound at the place, and how often it is used. -/
   | uses (position found : Nat)
+  /-- A value from around the place, by its position in the scope there (the innermost first),
+  with a count of its uses: in the second region of a choice, in the first arm of a case
+  analysis that differs from the first, in the body of a loop. -/
+  | around (position found : Nat)
   /-- Nothing beyond the rule and the place. -/
   | nothing
 deriving DecidableEq

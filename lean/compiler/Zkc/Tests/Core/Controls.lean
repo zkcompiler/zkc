@@ -44,7 +44,7 @@ def sampleHeader : ProtocolHeader Shapes.plain := ⟨⟨44⟩, 2, [], [], shapeO
 def sampleTyped : Typed Shapes.plain := ⟨⟨[], [sampleHeader]⟩,
   .protocol sampleHeader privateSample
     ⟨by simp [Within, ProtocolOp.Within, privateSample, sampleHeader], by decide,
-    by simp [Enclosed, privateSample], rfl, rfl, ⟨_, rfl, rfl⟩, rfl⟩ .nil, by decide⟩
+    by simp [Enclosed, privateSample], rfl, rfl, rfl, rfl⟩ .nil, by decide⟩
 
 /-- The empty source does not feed the private sample, so `complete` asks nothing of it. -/
 theorem empty_source_not_fed :
@@ -78,7 +78,7 @@ def idle : Term (protocolDialect Shapes.plain Shapes.none) [] [] := .ret .nil
 def idleHeader : ProtocolHeader Shapes.plain := ⟨⟨45⟩, 1, [], [], shapeOf idle⟩
 
 def idleTyped : Typed Shapes.plain := ⟨⟨[], [idleHeader]⟩,
-  .protocol idleHeader idle ⟨by simp [Within, idle], by decide, by simp [Enclosed, idle], rfl, rfl, ⟨_, rfl, rfl⟩, rfl⟩ .nil, by decide⟩
+  .protocol idleHeader idle ⟨by simp [Within, idle], by decide, by simp [Enclosed, idle], rfl, rfl, rfl, rfl⟩ .nil, by decide⟩
 
 /-- A scheduler that never takes a step. -/
 def neverSchedule {V : Vocabulary} (c : Functions V) : Functions V :=
@@ -434,12 +434,12 @@ def signingHeader : ProtocolHeader Shapes.plain := ⟨⟨46⟩, 2, [], [], shape
 def signingTyped : Typed Shapes.plain := ⟨⟨[], [signingHeader]⟩,
   .protocol signingHeader signing
     ⟨by simp [Within, ProtocolOp.Within, signing, signingHeader], by decide,
-    by simp [Enclosed, signing], rfl, rfl, ⟨_, rfl, rfl⟩, rfl⟩ .nil, by decide⟩
+    by simp [Enclosed, signing], rfl, rfl, rfl, rfl⟩ .nil, by decide⟩
 
 /-- The four properties of its definition, stated. -/
 theorem signing_accepted : ProtocolConditions signingHeader signing :=
   ⟨by simp [Within, ProtocolOp.Within, signing, signingHeader], by decide,
-    by simp [Enclosed, signing], rfl, rfl, ⟨_, rfl, rfl⟩, rfl⟩
+    by simp [Enclosed, signing], rfl, rfl, rfl, rfl⟩
 
 /-! ## Codecs -/
 
@@ -495,11 +495,11 @@ def ordinaryChoice : Term (localDialect Shapes.plain []) [.bool, .nat] [.nat] :=
     (.op ⟨2⟩ (.literal .nat [0] rfl) .nil (.ret (.cons .head .nil)))
     (.ret (.cons .head .nil))
 
-/-- Neither input is linear, and the choice is accepted. -/
+/-- Neither input is linear: nothing is counted, and the choice is accepted. -/
 theorem ordinary_choice_accepted :
-    ordinaryChoice.uses (Ty.isLinear Shapes.plain) = some [1, 1] ∧
+    ordinaryChoice.linearUses (Ty.isLinear Shapes.plain) [] 0 = .ok [] ∧
       ordinaryChoice.UsedOnce (Ty.isLinear Shapes.plain) :=
-  ⟨by decide, ⟨[1, 1], by decide, by decide⟩⟩
+  ⟨rfl, by decide⟩
 
 /-! ## Who proves -/
 
@@ -591,8 +591,8 @@ def identityBody : Fn Shapes.plain [weightedHeader] identityHeader := .ret (.con
 
 /-- The weighted sum, then the identity, which comes later. -/
 def library : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
-  .fn identityHeader identityBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl, by exact rfl⟩ <|
-  .fn weightedHeader weightedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl, by exact rfl⟩ .nil
+  .fn identityHeader identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ <|
+  .fn weightedHeader weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
 
 def libraryTyped : Typed Shapes.plain := ⟨_, library, by decide⟩
 
@@ -654,7 +654,7 @@ theorem twice_by_the_law (x y : Nat) (path : List Frame) :
 
 /-- The weighted sum alone, moved to the first position. -/
 def movedLibrary : Defs Shapes.plain ⟨[weightedHeader], []⟩ :=
-  .fn weightedHeader weightedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl, by exact rfl⟩ .nil
+  .fn weightedHeader weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
 
 def movedTyped : Typed Shapes.plain := ⟨_, movedLibrary, by decide⟩
 
@@ -669,8 +669,8 @@ theorem moved_law : movedTyped.find ⟨410⟩ = some (.fn movedRef) ∧
 def changedBody : Fn Shapes.plain [] weightedHeader := .ret (.cons .head .nil)
 
 def changedLibrary : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
-  .fn identityHeader identityBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl, by exact rfl⟩ <|
-  .fn weightedHeader changedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl, by exact rfl⟩ .nil
+  .fn identityHeader identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ <|
+  .fn weightedHeader changedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
 
 /-- A changed body under the same key does not keep the law. -/
 theorem changed_body_loses_law :
@@ -711,7 +711,7 @@ def checkedBody : Fn Shapes.plain [] checkedHeader :=
   .guard ⟨421⟩ () .head rfl .reject (.ret (.cons (.tail .head) .nil))
 
 def checkedDefs : Defs Shapes.plain ⟨[checkedHeader], []⟩ :=
-  .fn checkedHeader checkedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl, by exact rfl⟩ .nil
+  .fn checkedHeader checkedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
 
 def checkedTable : FnTable plainModel [checkedHeader] := Defs.fnTable plainModel checkedDefs
 
@@ -777,7 +777,7 @@ def callerHeader : FnHeader Shapes.plain := ⟨⟨412⟩, [.nat, .nat], [.nat], 
 
 /-- A caller of the weighted sum, before the library. -/
 def callerTyped : Typed Shapes.plain :=
-  ⟨_, .fn callerHeader twice ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl, by exact rfl⟩ library, by decide⟩
+  ⟨_, .fn callerHeader twice ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ library, by decide⟩
 
 /-- The closure of the caller has the caller and, twice, the weighted sum that it calls; not
 the identity. -/

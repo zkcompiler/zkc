@@ -61,7 +61,7 @@ def relayHeader : ProtocolHeader plain := ⟨⟨10⟩, 3, [nat [0]], [nat [0, 1,
 
 def relayProgram : Defs plain ⟨[], [relayHeader]⟩ :=
   .protocol relayHeader relay ⟨by simp [Within, ProtocolOp.Within, relay, relayHeader], by decide,
-    by simp [Enclosed, relay], rfl, rfl, ⟨_, rfl, rfl⟩, rfl⟩ .nil
+    by simp [Enclosed, relay], rfl, rfl, rfl, rfl⟩ .nil
 
 /-- The second role's program: it gets the value and gives it on. -/
 example : Term (roleDialect plain none 1) [nat [0]] [nat [0, 1, 2]] := project 1 relay
@@ -131,9 +131,9 @@ def roundsHeader : ProtocolHeader plain :=
 def roundsProgram : Defs plain ⟨[], [roundsHeader, roundHeader]⟩ :=
   .protocol roundsHeader rounds
     ⟨by simp [Within, ProtocolOp.Within, rounds, roundsHeader, roundHeader], by decide,
-    by simp [Enclosed, Within, ProtocolOp.Within, rounds, roundHeader], rfl, rfl, ⟨_, rfl, rfl⟩, rfl⟩ <|
+    by simp [Enclosed, Within, ProtocolOp.Within, rounds, roundHeader], rfl, rfl, rfl, rfl⟩ <|
   .protocol roundHeader round
-    ⟨by simp [Within, ProtocolOp.Within, round, roundHeader], by decide, by simp [Enclosed, round], rfl, rfl, ⟨_, rfl, rfl⟩, rfl⟩ .nil
+    ⟨by simp [Within, ProtocolOp.Within, round, roundHeader], by decide, by simp [Enclosed, round], rfl, rfl, rfl, rfl⟩ .nil
 
 /-- The record of a run of the rounds: per iteration, the record of the round, which is the
 natural drawn. -/

@@ -303,12 +303,20 @@ example : refusal (single [token] [] false (.mk [0] [] [])) =
   decide
 
 /-- A linear value from around a choice that one region uses and the other does not: refused at
-the choice, by its position in the context there, with its count in the second region. -/
+the choice, as a value from around it, by its position in the scope there, with its count in the
+second region. -/
 example : refusal (single [token, .bool] [token] false (.mk [0, 1]
     [.choose ⟨1⟩ () 1 [2]
       (.mk [] [] [0])
       (.mk [] [.op ⟨2⟩ [5] (.owned .make [token] []) []] [5])] [2])) =
-    some ⟨.linear, at_ 1 1, .uses 0 0⟩ := by
+    some ⟨.linear, at_ 1 1, .around 0 0⟩ := by
+  decide
+
+/-- A linear value from around a loop that its body uses: refused at the loop, as a value from
+around it, with its count in the body. -/
+example : refusal (single [token] [.seq token (some 1)] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 1) [] [1] (.mk [5] [] [0])] [1])) =
+    some ⟨.linear, at_ 1 1, .around 0 1⟩ := by
   decide
 
 /-- A variant whose second alternative is linear. -/
