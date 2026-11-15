@@ -1763,7 +1763,7 @@ natural expression is accepted when `hi < s` (TY5).
 | `length(xs)` | `s..s` for `[T; s]`; `0..` narrowed by facts for `[T]` | — |
 | `a + b` | `lo(a) + lo(b) .. hi(a) + hi(b)` | — |
 | `a * b` | `lo(a) * lo(b) .. hi(a) * hi(b)` | — |
-| `a ^ b` | `lo`: `lo(a) ^ lo(b)` when `1 <= lo(a)`; when `lo(a) = 0`, `0` if `1 <= hi(b)` and `1` if `hi(b) = 0`. `hi`: `hi(a) ^ hi(b)`, and at least `1` when `lo(b) = 0`. An end is computed only when its exponent times the number of binary digits of its base is at most 65536; otherwise the lower end is `1` when `1 <= lo(a)` and `0` when not, and the upper end is absent | — |
+| `a ^ b` | `lo`: `lo(a) ^ lo(b)` when `1 <= lo(a)`; when `lo(a) = 0`, `0` if `1 <= hi(b)` and `1` if `hi(b) = 0`. `hi`: `hi(a) ^ hi(b)`, and at least `1` when `lo(b) = 0`. An end is computed only when its exponent times the number of binary digits of its base (one for the base `0`) is at most 65536; otherwise the lower end is `1` when `1 <= lo(a)` and `0` when not, and the upper end is absent | — |
 | `a - b` | `lo(a) - hi(b) .. hi(a) - lo(b)`, not below `0` | `b <= a` known (TY4) |
 | `a / b` | `lo(a) / hi(b) .. hi(a) / lo(b)`, rounded down | `1 <= b` known |
 | `a % b` | `0 .. min(hi(a), hi(b) - 1)` | `1 <= b` known |
