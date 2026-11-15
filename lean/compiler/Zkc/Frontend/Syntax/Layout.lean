@@ -8,7 +8,8 @@ set_option autoImplicit false
 # Breaking a logical line (FM1)
 
 A logical line is a sequence of atoms: text, the opening and closing of a bracket, and the comma
-that separates the items of a bracket. Flat, a comma is `, `. A logical line longer than 100
+that separates the items of a bracket. Flat, a comma is `, `, and a static bracket whose content
+starts with `-` opens with `< `, since `<-` is one token (LX5). A logical line longer than 100
 characters is broken inside a bracket, after its commas, with each item on its own line four
 spaces deeper and the closing bracket on its own line.
 
@@ -31,18 +32,21 @@ def Atom.flat : Atom → String
   | .text value | .opening value | .closing value => value
   | .comma => ", "
 
-def Atom.width (atom : Atom) : Nat := atom.flat.length
-
 def maxWidth : Nat := 100
 
-def flatten (atoms : Array Atom) : String :=
-  atoms.foldl (fun acc atom => acc ++ atom.flat) ""
+/-- The atoms on one line, with a space between a static bracket's `<` and content that starts
+with `-`. -/
+def flatten (atoms : Array Atom) : String := Id.run do
+  let mut text := ""
+  let mut afterStaticOpening := false
+  for atom in atoms do
+    if afterStaticOpening && atom.flat.startsWith "-" then text := text ++ " "
+    text := text ++ atom.flat
+    afterStaticOpening := atom == .opening "<"
+  return text
 
-def widthOf (atoms : Array Atom) (first last : Nat) : Nat := Id.run do
-  let mut width := 0
-  for i in [first:last] do
-    width := width + atoms[i]!.width
-  return width
+def widthOf (atoms : Array Atom) (first last : Nat) : Nat :=
+  (flatten (atoms.extract first last)).length
 
 /-- A bracket that may be broken: where it opens and closes, and its depth. -/
 structure Candidate where
