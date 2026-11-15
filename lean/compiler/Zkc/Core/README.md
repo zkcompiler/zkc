@@ -24,7 +24,7 @@ something imports a module that only proves something.
 | `Program/` | keys, labels, occurrences, sites, places and stops (`Identity`); types, the vocabulary and its models (`Vocabulary`); terms, their addresses and whether their case analyses without an arm give nothing (`Term`); the decision of distinct addresses, with what failed, proved to decide that proposition (`Conditions`); linear use, defined by its decision, which says which value is not used as it must be and where (`Linear`); located types and role maps (`Located`); the record of a run (`Record`); the kinds of events and the shape of a protocol (`Shape`); the three dialects (`Dialects`); projection, the translation of a protocol's term to a role's (`Project`); a typed program, its definitions with what elaboration decided about each body, one definition elaborated against the headers before it and a program extended by it, and the lookup of a definition by its key (`Typed`); the program by names that a frontend gives (`Syntax`); refusals: the rules of the core, what a rule found and the place where it found it, as data (`Refusal`); the elaboration of a region over the rules of a dialect, each refusal made at its place (`Elaborate`); the printed form of a term and its round trip over lawful rules (`Print`); the written form of each operation of a function and its resolution, with their laws, and the rules of the local dialect (`LocalRules`); the elaboration of a function, its printed form and their round trip (`ElaborateLocal`); the printed form of a typed program (`PrintProgram`); what an operation with a domain asks of an application, as data (`Requirement`) |
 | `Meaning/` | events and what a role holds (`Events`); the fold of a term over the semantics of a dialect (`Fold`); the semantics of a function, of a protocol and of a role program (`Local`, `Protocol`, `Role`), with the meaning of every operation that the core owns (`Local`); that every local operation keeps validity (`Validity`); the meanings of a whole program (`Program`); the rule of a call (`Call`) |
 | `Projection/` | the relation of a role's process to a protocol's and its lemmas (`Proj`), the proof for one term (`Sound`), and the theorem for every definition of a program (`Theorem`) |
-| `Facts/` | the property at every instruction that a run reaches and the annotation of an admitted program, which is the bounds of its loops (`Facts`); what the check of facts is told about operations: what a written operation requires, the ranges of its results and how its result reads, and which operations of a dialect compute (`OpFacts`) |
+| `Facts/` | the property at every instruction that a run reaches and the annotation of an admitted program, which is the bounds of its loops (`Facts`); what the check of facts is told about operations: what a written operation requires, the ranges of its results and how its result reads, and which operations of a dialect compute (`OpFacts`); the state of the check, a table of applications by written form and operand identifiers and what is known, with the rules that decide a requirement and learn from a truth value (`State`); the check of facts, one walk over a term of any dialect (`Walk`); what the local dialect tells it (`Local`); what the state says of a run, a valuation of identifiers, and the laws of `OpFacts` as propositions (`Valuation`); that the rules of what is known are true (`Learning`); what the walk does to its state whatever the run (`Growth`); that the local operations satisfy the laws, and that what an operation requires is enough for it (`LocalLaws`); the soundness for a function (`Soundness`) and for the functions of a program (`Programs`) |
 | `Admission/` | the elaboration of one definition against the headers before it, of a program of functions, and its round trip (`Elaboration`); the association of a program and its resolution in it, and an admitted program (`Admission`) |
 | `World/` | the description of a layer (a handler of a role) and its meaning as a handler, the network of the roles, and the runs of a protocol and of one role alone |
 | `Scheme/` | the declaration of a scheme, who proves and who verifies, a deployed scheme and the run of a role under its handlers, and what deployment decides about scopes and keys |
@@ -65,7 +65,18 @@ Proved, with no axiom beyond `propext` and `Quot.sound`:
 - the decision of distinct addresses: the first repeated address, or none exactly when the
   addresses are distinct (`Term.repeatedAddress_eq_none`, `Program/Conditions.lean`). Linear
   use is defined by its decision (`Term.UsedOnce` is `Term.misuse … = none`,
-  `Program/Linear.lean`), so it has no separate statement to prove.
+  `Program/Linear.lean`), so it has no separate statement to prove;
+- the check of facts of a function (`FactCheck.checkFacts_sound`, `Facts/Soundness.lean`): for a
+  body with distinct addresses that `checkFacts (localFactRules V fns)` accepts, against callees
+  with distinct keys that never stop `undefined` on valid inputs and keep validity, on valid
+  inputs the process never stops `undefined`, returns valid values, and every loop as often as
+  a count runs at most the bound given for its place; for a typed program each of whose
+  functions the check accepts (`Defs.checkFunctions`), every function is safe and keeps
+  validity, and the functions' part of `Respects` holds (`functions_sound`,
+  `typed_functions_sound`, `Facts/Programs.lean`). Beneath them: the laws of `localOpFacts`
+  against the meaning (`localOpFacts_lawful`), that the requirements of every local operation
+  are enough for it (`localOp_defined`) and name values that exist (`localRequires_runs`),
+  `Facts/LocalLaws.lean`.
 
 Defined: everything else, from the terms and their meanings to deployment, the network and
 the runs.
@@ -75,15 +86,17 @@ Still to be built:
 - the functions of the record `Functions` (`Functions.lean`), with their types: `elaborate`
   (a program of functions and protocols: the rules of the protocol dialect; for a program of
   functions it is `elaborateFunctions`), `printRole`, `format`, `admit`, `check` (elaboration,
-  then the check of facts), `deploy`, `identity`, `execute`, `schedule`;
+  then the check of facts: of functions it is `Defs.checkFunctions`; role programs are not
+  walked yet), `deploy`, `identity`, `execute`, `schedule`;
 - the theorems that `Statements.lean` states and does not prove, each with what it preserves
   (execution and state, a view, validity or progress): from `roundTrip` and
   `admitsWhatWasGiven` to `complete`, `executorRuns` and `formats`.
 
 `Process/`, `Program/`, `Meaning/` and `Projection/`, and the data of `Admission/`, are what
-the projection theorem and the meanings stand on. `Facts/`, `World/`, `Scheme/`, `Run/` and
-`Format/` are defined and type-checked, and no implementation has exercised them yet: the
-code that first builds one of these parts changes its definitions here first.
+the projection theorem and the meanings stand on; `Facts/` is built for functions. `World/`,
+`Scheme/`, `Run/` and `Format/` are defined and type-checked, and no implementation has
+exercised them yet: the code that first builds one of these parts changes its definitions here
+first.
 
 ## Tests
 
@@ -105,7 +118,12 @@ kernel runs when they are built:
   names that is accepted and one that is refused, compared with the whole refusal (rule, place
   and what the rule found); the latest binding of a name; the case analysis without an arm that
   the printed form cannot tell apart; and the printed form of each accepted program elaborated
-  back to it.
+  back to it;
+- `Facts.lean`: the check of facts on functions written by names: the conformance cases of the
+  reference that a function can express, by their identifiers, accepted or refused as the case
+  says with the whole refusal; for each operation with a domain and for a restricted row, an
+  application accepted and one refused; sharing and the scope of facts in sibling regions, in
+  loops, after a choice and when a name is bound again.
 
 In `lean/compiler`, `lake build` builds the core and its tests, `lake test` builds the tests
 (the library is the test driver), and `lake exe zkc-audit` audits the core and its tests: the

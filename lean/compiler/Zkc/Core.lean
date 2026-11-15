@@ -34,6 +34,15 @@ public import Zkc.Core.Projection.Sound
 public import Zkc.Core.Projection.Theorem
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Facts.OpFacts
+public import Zkc.Core.Facts.State
+public import Zkc.Core.Facts.Walk
+public import Zkc.Core.Facts.Local
+public import Zkc.Core.Facts.Valuation
+public import Zkc.Core.Facts.Learning
+public import Zkc.Core.Facts.Growth
+public import Zkc.Core.Facts.LocalLaws
+public import Zkc.Core.Facts.Soundness
+public import Zkc.Core.Facts.Programs
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
 public import Zkc.Core.World.Layer
