@@ -475,15 +475,10 @@ Where the reference leaves a choice, the code takes the reading marked in its co
   row at the written static arguments of `primitive(…)`, or at the instance's values when none
   are written; a function member of a module bound to a row is the module's row, or
   `<row>.<member>` when its interface has several function members.
-- `and` and `or` are the boolean operations when the right operand applies no operation with a
-  domain and calls nothing that can stop; otherwise a local `if` on the left operand whose other
-  region returns the literal `false` (`true` for `or`), which the core reads as the conjunction
-  (disjunction) and which gives, taken true (false), the facts of the left operand only. The
-  checker gives such a value the same facts. So that every operand's facts reach what needs them
-  (TY9), `(a and b) and c` with `a and b` a local `if` is `a and (b and c)`, `not (a or b) and c`
-  is `not a and (not b and c)`, and a condition with an `and` or an `or` that is a local `if` is
-  taken one operand at a time: the arm of a condition that does not hold then stands once per
-  operand.
+- `and` and `or` are elaborated as the row of §7.4 states. The checker gives the local `if` of an
+  `and` (an `or`) the facts that the core gives it: taken true (false), those of the left operand
+  only. A condition of an `if` with an `and` or an `or` that is a local `if` is taken one operand
+  at a time: the arm of a condition that does not hold then stands once per operand.
 - `==` without a row or a home `equal` is structural: componentwise with `bool.and` for tuples and
   records; for variants a result that starts `false`, set by a `match` on both values where they
   have the same alternative; for collections of elements without a row a result that starts
@@ -542,9 +537,8 @@ Where the reference leaves a choice, the code takes the reading marked in its co
   `Self` that instance, and a law of a module at each instance of the module's scope, both at the
   default values of the law's own parameters where its `where` holds; each typed law leaves an
   obligation and is emitted as a specification-only function where it has a form in the core.
-- In inference a type member of the module that `Self` or a known module parameter stands for is
-  its definition (SP8, TY3), its written arguments giving the member's own parameters; two
-  applications of one fresh type member are matched argument by argument (SP12).
+- In inference (SP6 step 3) the written arguments of a type member of `Self` or of a known module
+  parameter give the member's own parameters.
 - A pattern inside a payload covers every value of its type: a tuple of such patterns, and the
   alternative of a variant with one alternative, whose payload a `match` of one arm takes out.
 - The home module of a type of the vocabulary, for a dot call, is the module of the first

@@ -659,7 +659,7 @@ the core. None has a rule of its own beyond the section cited.
 | `if c: A else: B` | `match c` with the arm of `false` first |
 | `if c then a else b` | a local choice whose arms are the two expressions |
 | `if c` with `c` a static condition, as a statement or an expression | the arm taken at the instance; the other arm is not typed and leaves nothing (TY9) |
-| `a and b`, `a or b` | `if a then b else false`; `if a then true else b`; each is typed as that `if`, so the right operand has the facts of the left operand, or of its negation (TY9); the boolean operation of the core when neither operand can stop |
+| `a and b`, `a or b` | `if a then b else false`; `if a then true else b`; each is typed as that `if`, so the right operand has the facts of the left operand, or of its negation (TY9); the boolean operation of the core in the cases that §7.4 states, in which the right operand can neither stop nor apply an operation that has a domain |
 | `[e for p in D]`, `[e for p in D if c]` | a collection over the domain `D`, elements in the order of `D`: a loop that collects (§7.4) |
 | `∑ ∏ ∀ ∃`, `⟪a, b⟫`; `sum(xs)`, … | the fold of §3.5 over the comprehension: the row of §7.4 on a type of a sort, a loop that carries the accumulator on naturals and `bool`, a loop over `add` from `zero()` (`mul` from `one()`) on a declared type |
 | an operator on a declared type | the call of the function of §3.5 |
@@ -1274,11 +1274,19 @@ and every size in it is a number).
    number, a power of a number. A sequence literal of such elements gives its length only.
 3. *Matching a type.* A parameter type that is an unknown type parameter is solved by the type of
    the argument. An alias is replaced by its definition, with its parameters standing for the
-   written terms. `nonzero<T>` against `nonzero<U>` or against `U` matches `T` against `U`. Two
-   applications of one record, variant, sealed type, `Oracle` or `Pending` are matched argument
-   by argument: a type argument by this step, a natural argument by step 4, a module argument by
-   step 3a. `[T; s]` against `[U; n]` matches `T` against `U` and gives the equation `s = n`;
-   `index<s>` against `index<n>` gives `s = n`. Anything else gives no equation.
+   written terms; so is a type member of `Self`, or of a module parameter whose module is known,
+   by its definition in that module (SP8). `nonzero<T>` against `nonzero<U>` or against `U`
+   matches `T` against `U`. Two applications of one record, variant, sealed type, `spec type`,
+   `Oracle` or `Pending` are matched argument by argument: a type argument by this step, a
+   natural argument by step 4, a module argument by step 3a. A parameter of the type that the
+   parameter type leaves unwritten, because it belongs to a scope around both the callee and the
+   type, is solved by the argument's value for it when it is an unknown. Two applications of one
+   opaque type member (SP12) are matched argument by argument. `[T; s]` against `[U; n]` matches
+   `T` against `U` and gives the equation `s = n`; `[T]` against `[U]` or against `[U; n]`
+   matches `T` against `U`, since a sized collection widens to an unsized one (TY5); `[T; s]`
+   against `[U]` gives no equation, not even `T` against `U`. `index<s>` against `index<n>` gives
+   `s = n`. Two tuples with the same number of components are matched component by component.
+   Anything else gives no equation.
 
    3a. *Matching a module.* A module term that is one unknown name is solved by the module. Two
    applications of one module (`table<T, 2^k>` against `table<Fr, 1024>`) are matched argument
@@ -1312,7 +1320,11 @@ ones (SP11), neither of its own nor of a scope around it, which is its own singl
 module without static parameters is such a root. A member of an interface is not a root: it is
 typed in the implementing modules (item 7). A reference `m<σ>` reached from an instance
 gives the instance of `m` at the values of `σ`; an instance is checked once and remembered by
-its declaration and values.
+its declaration and values. A program is admitted only when the instances reached from its roots
+are finite and none reaches itself (NL1); a family whose static argument decreases to a base case
+meets both. The checker follows a chain of instantiations to a depth that the configuration of
+the build bounds, 256 by default; a deeper chain is an incomplete check (FN7), which neither
+admits nor refuses the program.
 
 At an instantiation the checker does, in this order, and stops at the first failure:
 
@@ -3255,7 +3267,7 @@ by the path of the applications through which its definition was reached, then b
 | a widening (TY5) | `seq.unsized`, `fin.to_nat` and `fin.widen`, operations of the core; the pure row `field.from_nonzero`; for the elements of a collection or the components of a tuple, the collection or the tuple made again from the converted components |
 | `if c: … else: …`, `if c then a else b` | `local.if`; a fact of the condition justifies a refining operation in the arm, at the conversion that needs it, as for a guard |
 | an `if` with a static condition (TY9) | the operations of the arm taken; no `local.if` |
-| `a and b`, `a or b` | `bool.and`, `bool.or` when neither operand can stop; otherwise `local.if`, whose other region returns the literal `false` (for `or`, `true`) |
+| `a and b`, `a or b` | `bool.and`, `bool.or` when `b` can neither stop (FN2) nor apply an operation that has a domain: `nat.sub`, `nat.div`, `nat.rem`, `seq.at`, `seq.slice`, a conversion by a fact (TY5) or of the elements of a collection, a restricted row or a `def` bound to one, a loop over a collection or over a range with a run-time bound; and `a` is not a conjunction (an `and`, or a `not` of an `or`) that is itself a `local.if` (for `or`, a disjunction: an `or`, or a `not` of an `and`). Otherwise `local.if` on `a`, whose region of `true` (for `or`, of `false`) evaluates `b` and whose other region returns the literal `false` (for `or`, `true`); an `a` that is such a conjunction is grouped to the right, `(x and y) and b` as `x and (y and b)`, so that `b` has the facts of both. A `b` of the first case needs no fact of `a` and always gives a value, so both forms give what `if a then b else false` gives (§4.2, TY9) |
 | `match`, `Enum::Name(e)` | `local.match`, each region over the payload of its alternative; `local.variant` |
 | `for i in a..b`, uniform or with a run-time count; `for x in xs` | `local.loop`: the count is a number of the operation for a static range or a sized collection, and a run-time natural otherwise; the index is the iteration number plus the start of the range; the updated `mut` names are the carried values |
 | `for i in a..b`, stepped, or with an index that is static in the body | the iterations in sequence, each with the index a literal (§7.5) |
@@ -3304,7 +3316,7 @@ not rows: the core fixes their meaning (§7.0).
 | Family | Operations | Domain | Applied by | Count |
 |---|---|---|---|---|
 | natural | `nat.add`, `nat.sub`, `nat.mul`, `nat.div`, `nat.rem`, `nat.pow`, `nat.equal`, `nat.less` | `nat.sub` on `b <= a`; `nat.div` and `nat.rem` on `1 <= b` | `+ - * / % ^`, `==`, `< <= > >=` | 8 |
-| `bool` | `bool.and`, `bool.or`, `bool.not`, `bool.equal` | — | `and`, `or` (when no operand can stop), `not`, `==` | 4 |
+| `bool` | `bool.and`, `bool.or`, `bool.not`, `bool.equal` | — | `and`, `or` (in the cases that the row of `a and b` above states), `not`, `==` | 4 |
 | sequence | `seq.at`, `seq.slice`, `seq.concat`, `seq.fill`, `seq.length` | `seq.at` on a position below the length; `seq.slice` on `a <= b`, `b` at most the length and, into a sized result, `b - a` equal to its size | `xs[i]`, `xs[a..b]`, `++`, `[v; n]`, `length` | 5 |
 | refining | `seq.sized`, `nat.below` | the length equal to the size; the number below the bound | a conversion by a fact (TY5) | 2 |
 | widening | `seq.unsized`, `fin.to_nat`, `fin.widen` | — | the widenings of TY5: `[T; s]` to `[T]`, `index<s>` to `nat`, `index<s>` to `index<t>` | 3 |
