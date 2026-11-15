@@ -147,8 +147,8 @@ example : (RoleMap.ofList [2, 0] (by decide)).to 0 = 2 ∧ (RoleMap.ofList [2, 0
 
 /-! ## An attempt, and a request to a service -/
 
-/-- The first role's attempt: with its number it asks a service, and aborts when the answer
-is above the number; a bounded retry runs the body again. The rest gives the answer. -/
+/-- The first role's attempt: with its number it asks a service, and aborts unless the answer
+is below the number; a bounded retry runs the body again. The rest gives the answer. -/
 def attempt : Term (protocolDialect plain none) [] [nat [0]] :=
   .attempt ⟨1⟩ [0] ⟨0, rfl⟩
     (.op ⟨2⟩ (.given (.request ⟨9⟩) 0 [] [nat [0]] .nat rfl
@@ -156,7 +156,7 @@ def attempt : Term (protocolDialect plain none) [] [nat [0]] :=
         simp only [List.mem_singleton] at ha
         subst ha
         decide) (by decide)) (.cons .head .nil) <|
-     .op ⟨3⟩ (.compute [0] (.owned .natLe) [nat [0], nat [0]] rfl
+     .op ⟨3⟩ (.compute [0] (.owned .natLess) [nat [0], nat [0]] rfl
       (fun a ha r hr => by
         simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
         rcases ha with rfl | rfl <;> exact hr)) (.cons .head (.cons (.tail .head) .nil)) <|
@@ -171,7 +171,7 @@ example : (shapeOf attempt).fields = .cons (.key ⟨2⟩) (.val .nat) .nil := rf
 
 /-- The first iteration: the first role turns its natural into a truth value. -/
 def firstStep : Term (protocolDialect plain none) [nat [0]] [⟨.bool, [0]⟩] :=
-  .op ⟨1⟩ (.compute [0] (.owned .natLe) [nat [0], nat [0]] rfl
+  .op ⟨1⟩ (.compute [0] (.owned .natLess) [nat [0], nat [0]] rfl
     (fun a ha r hr => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
       rcases ha with rfl | rfl <;> exact hr)) (.cons .head (.cons .head .nil)) <|
@@ -207,8 +207,8 @@ example : Term (roleDialect plain none 1) [nat [0]] [⟨.bool, [0, 1]⟩] := pro
 /-- The event of the second iteration happens under the frame of that iteration. -/
 example : (stepped.denote (protocolSem plainModel noFns noProtocols) []
     (Env.ofList (.cons (3 : Nat) .nil))) =
-    .call (.flow .message 0 [1] ⟨[.iteration ⟨5⟩ 1], ⟨2⟩⟩ .bool true) fun _ =>
-      .done (.cons true .nil) := rfl
+    .call (.flow .message 0 [1] ⟨[.iteration ⟨5⟩ 1], ⟨2⟩⟩ .bool false) fun _ =>
+      .done (.cons false .nil) := rfl
 
 /-! ## A loop of a written number of iterations -/
 
@@ -257,11 +257,11 @@ example : ((project 1 narrowed).denote (roleSem plainModel 1 noFns noPrograms) [
 /-! ## Owned operations, linear types, equality of types, forks -/
 
 /-- A truth value as the second alternative of `either`. -/
-example : ownedOp plainModel (.inject ⟨7⟩ (.cons .nat (.cons .bool .nil)) (.tail .head))
+example : ownedOp plainModel (.variant ⟨7⟩ (.cons .nat (.cons .bool .nil)) (.tail .head))
     (.cons true .nil) = .done (.cons (.inr (.inl true)) .nil) := rfl
 
 /-- The length of a sequence of a written size. -/
-example : ownedOp plainModel (.seqLength .nat (some 2)) (.cons ([5, 6] : List Nat) .nil) =
+example : ownedOp plainModel (.seqLength .nat (some 2) rfl) (.cons ([5, 6] : List Nat) .nil) =
     .done (.cons 2 .nil) := rfl
 
 /-- A record marked linear is linear, and so is a sequence of it; a tuple of naturals is not. -/

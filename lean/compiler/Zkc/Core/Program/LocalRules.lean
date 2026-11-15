@@ -26,34 +26,96 @@ variable {V : Vocabulary}
 
 /-! ## The operations that the core owns -/
 
-/-- What is written for an operation that the core owns: its name, its types and its static
-naturals. -/
+/-- What is written for an operation that the core owns: its name, the types that its
+arguments are read from (the sequence, tuple, record, variant or `fin` types involved), and
+a position (of a component, a field or an alternative) as its one static natural. -/
 def OwnedOp.name {ins outs : List V.Ty} : OwnedOp V ins outs → OwnedName × List V.Ty × List Nat
   | .natAdd => (.natAdd, [], [])
   | .natSub => (.natSub, [], [])
-  | .natLe => (.natLe, [], [])
+  | .natMul => (.natMul, [], [])
+  | .natDiv => (.natDiv, [], [])
+  | .natRem => (.natRem, [], [])
+  | .natPow => (.natPow, [], [])
+  | .natEqual => (.natEqual, [], [])
+  | .natLess => (.natLess, [], [])
+  | .boolAnd => (.boolAnd, [], [])
+  | .boolOr => (.boolOr, [], [])
   | .boolNot => (.boolNot, [], [])
-  | .seqLength item size => (.seqLength, [.seq item size], [])
-  | .seqAt item size => (.seqAt, [.seq item size], [])
-  | .make key linear fields => (.make, [.record key linear fields], [])
-  | .take key linear fields => (.take, [.record key linear fields], [])
-  | .inject key alternatives position => (.inject, [.variant key alternatives], [position.index])
+  | .boolEqual => (.boolEqual, [], [])
+  | .seqLength item size _ => (.seqLength, [.seq item size], [])
+  | .seqAt item size _ => (.seqAt, [.seq item size], [])
+  | .seqSlice item size result _ => (.seqSlice, [.seq item size, .seq item result], [])
+  | .seqConcat item first second => (.seqConcat, [.seq item first, .seq item second], [])
+  | .seqFill item count _ => (.seqFill, [.seq item (some count)], [])
+  | .seqSized item size => (.seqSized, [.seq item (some size)], [])
+  | .natBelow bound => (.natBelow, [.fin bound], [])
+  | .seqUnsized item size => (.seqUnsized, [.seq item (some size)], [])
+  | .finToNat bound => (.finToNat, [.fin bound], [])
+  | .finWiden bound wider _ => (.finWiden, [.fin bound, .fin wider], [])
+  | .makeSeq item count => (.make, [.seq item (some count)], [])
+  | .makeTuple items => (.make, [.tuple items], [])
+  | .makeRecord key linear fields => (.make, [.record key linear fields], [])
+  | .getTuple items position _ => (.get, [.tuple items], [position.index])
+  | .getRecord key fields position _ => (.get, [.record key false fields], [position.index])
+  | .takeTuple items => (.take, [.tuple items], [])
+  | .takeRecord key linear fields => (.take, [.record key linear fields], [])
+  | .variant key alternatives position =>
+      (.variant, [.variant key alternatives], [position.index])
 
 /-- The operation that the core owns that a name, types and static naturals write, with its
-operand types and its result types. -/
+operand types and its result types. `make`, `get` and `take` are told apart by the type. -/
 def OwnedOp.resolve : OwnedName → List V.Ty → List Nat →
     Option ((ins outs : List V.Ty) × OwnedOp V ins outs)
   | .natAdd, [], [] => some ⟨_, _, .natAdd⟩
   | .natSub, [], [] => some ⟨_, _, .natSub⟩
-  | .natLe, [], [] => some ⟨_, _, .natLe⟩
+  | .natMul, [], [] => some ⟨_, _, .natMul⟩
+  | .natDiv, [], [] => some ⟨_, _, .natDiv⟩
+  | .natRem, [], [] => some ⟨_, _, .natRem⟩
+  | .natPow, [], [] => some ⟨_, _, .natPow⟩
+  | .natEqual, [], [] => some ⟨_, _, .natEqual⟩
+  | .natLess, [], [] => some ⟨_, _, .natLess⟩
+  | .boolAnd, [], [] => some ⟨_, _, .boolAnd⟩
+  | .boolOr, [], [] => some ⟨_, _, .boolOr⟩
   | .boolNot, [], [] => some ⟨_, _, .boolNot⟩
-  | .seqLength, [.seq item size], [] => some ⟨_, _, .seqLength item size⟩
-  | .seqAt, [.seq item size], [] => some ⟨_, _, .seqAt item size⟩
-  | .make, [.record key linear fields], [] => some ⟨_, _, .make key linear fields⟩
-  | .take, [.record key linear fields], [] => some ⟨_, _, .take key linear fields⟩
-  | .inject, [.variant key alternatives], [position] =>
+  | .boolEqual, [], [] => some ⟨_, _, .boolEqual⟩
+  | .seqLength, [.seq item size], [] =>
+      if free : Ty.isLinear V item = false then some ⟨_, _, .seqLength item size free⟩ else none
+  | .seqAt, [.seq item size], [] =>
+      if free : Ty.isLinear V item = false then some ⟨_, _, .seqAt item size free⟩ else none
+  | .seqSlice, [.seq item size, .seq other result], [] =>
+      if other = item then
+        if free : Ty.isLinear V item = false then
+          some ⟨_, _, .seqSlice item size result free⟩
+        else none
+      else none
+  | .seqConcat, [.seq item first, .seq other second], [] =>
+      if other = item then some ⟨_, _, .seqConcat item first second⟩ else none
+  | .seqFill, [.seq item (some count)], [] =>
+      if free : Ty.isLinear V item = false then some ⟨_, _, .seqFill item count free⟩ else none
+  | .seqSized, [.seq item (some size)], [] => some ⟨_, _, .seqSized item size⟩
+  | .natBelow, [.fin bound], [] => some ⟨_, _, .natBelow bound⟩
+  | .seqUnsized, [.seq item (some size)], [] => some ⟨_, _, .seqUnsized item size⟩
+  | .finToNat, [.fin bound], [] => some ⟨_, _, .finToNat bound⟩
+  | .finWiden, [.fin bound, .fin wider], [] =>
+      if le : bound ≤ wider then some ⟨_, _, .finWiden bound wider le⟩ else none
+  | .make, [.seq item (some count)], [] => some ⟨_, _, .makeSeq item count⟩
+  | .make, [.tuple items], [] => some ⟨_, _, .makeTuple items⟩
+  | .make, [.record key linear fields], [] => some ⟨_, _, .makeRecord key linear fields⟩
+  | .get, [.tuple items], [position] =>
+      if free : Tys.anyLinear V items = false then
+        (Var.atIndex items.toList position).map fun found =>
+          ⟨_, _, .getTuple items found.2 free⟩
+      else none
+  | .get, [.record key false fields], [position] =>
+      if free : Tys.anyLinear V fields = false then
+        (Var.atIndex fields.toList position).map fun found =>
+          ⟨_, _, .getRecord key fields found.2 free⟩
+      else none
+  | .take, [.tuple items], [] => some ⟨_, _, .takeTuple items⟩
+  | .take, [.record key linear fields], [] => some ⟨_, _, .takeRecord key linear fields⟩
+  | .variant, [.variant key alternatives], [position] =>
       (Var.atIndex alternatives.toList position).map fun found =>
-        ⟨_, _, .inject key alternatives found.2⟩
+        ⟨_, _, .variant key alternatives found.2⟩
   | _, _, _ => none
 
 /-- Resolving what is written for an operation that the core owns gives the operation. -/
@@ -61,13 +123,39 @@ theorem OwnedOp.resolve_name : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins out
     OwnedOp.resolve o.name.1 o.name.2.1 o.name.2.2 = some ⟨ins, outs, o⟩
   | _, _, .natAdd => rfl
   | _, _, .natSub => rfl
-  | _, _, .natLe => rfl
+  | _, _, .natMul => rfl
+  | _, _, .natDiv => rfl
+  | _, _, .natRem => rfl
+  | _, _, .natPow => rfl
+  | _, _, .natEqual => rfl
+  | _, _, .natLess => rfl
+  | _, _, .boolAnd => rfl
+  | _, _, .boolOr => rfl
   | _, _, .boolNot => rfl
-  | _, _, .seqLength .. => rfl
-  | _, _, .seqAt .. => rfl
-  | _, _, .make .. => rfl
-  | _, _, .take .. => rfl
-  | _, _, .inject _ _ position => by
+  | _, _, .boolEqual => rfl
+  | _, _, .seqLength _ _ free => by simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte]
+  | _, _, .seqAt _ _ free => by simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte]
+  | _, _, .seqSlice _ _ _ free => by
+      simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, ↓reduceIte]
+  | _, _, .seqConcat .. => by simp only [OwnedOp.name, OwnedOp.resolve, ↓reduceIte]
+  | _, _, .seqFill _ _ free => by simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte]
+  | _, _, .seqSized .. => rfl
+  | _, _, .natBelow _ => rfl
+  | _, _, .seqUnsized .. => rfl
+  | _, _, .finToNat _ => rfl
+  | _, _, .finWiden _ _ le => by simp only [OwnedOp.name, OwnedOp.resolve, le, ↓reduceDIte]
+  | _, _, .makeSeq .. => rfl
+  | _, _, .makeTuple _ => rfl
+  | _, _, .makeRecord .. => rfl
+  | _, _, .getTuple _ position free => by
+      simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, Var.atIndex_index position,
+        Option.map_some]
+  | _, _, .getRecord _ _ position free => by
+      simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, Var.atIndex_index position,
+        Option.map_some]
+  | _, _, .takeTuple _ => rfl
+  | _, _, .takeRecord .. => rfl
+  | _, _, .variant _ _ position => by
       simp only [OwnedOp.name, OwnedOp.resolve, Var.atIndex_index position, Option.map_some]
 
 /-! ## The operations of a function -/

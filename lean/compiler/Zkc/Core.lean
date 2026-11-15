@@ -27,6 +27,7 @@ public import Zkc.Core.Meaning.Local
 public import Zkc.Core.Meaning.Program
 public import Zkc.Core.Meaning.Protocol
 public import Zkc.Core.Meaning.Role
+public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Projection.Proj
 public import Zkc.Core.Projection.Sound
 public import Zkc.Core.Projection.Theorem

@@ -107,6 +107,22 @@ theorem Process.every_iterate {S : Sig} {H A : Type} (permitted : ∀ op, S.Repl
       have := Process.every_iterate permitted onHalt step I keeps n (i + 1) b hb
       simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
 
+/-- Iteration up to a count: on every path, the invariant holds after the iterations, when each
+step keeps it from an iteration below the count to the next. -/
+theorem Process.every_iterate_below {S : Sig} {H A : Type} (permitted : ∀ op, S.Reply op → Prop)
+    (onHalt : H → Prop) (step : Nat → A → Process S H A) (I : Nat → A → Prop) (count : Nat)
+    (keeps : ∀ i a, i < count → I i a → (step i a).Every permitted (I (i + 1)) onHalt) :
+    ∀ (n i : Nat) (a : A), i + n ≤ count → I i a →
+      (Process.iterate n step i a).Every permitted (I (i + n)) onHalt
+  | 0, i, a, _, initial => by simpa [Process.iterate, Process.Every] using initial
+  | n + 1, i, a, within, initial => by
+      rw [Process.iterate, Process.every_bind]
+      refine Process.every_mono _ permitted (fun b hb => ?_) (fun _ h => h)
+        (keeps i a (by omega) initial)
+      have := Process.every_iterate_below permitted onHalt step I count keeps n (i + 1) b
+        (by omega) hb
+      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
+
 
 def Process.mapHalt {S : Sig} {H H' A : Type} (f : H → H') : Process S H A → Process S H' A
   | .done a => .done a
@@ -201,3 +217,4 @@ end Zkc.Core
 #print axioms Zkc.Core.Process.every_bind
 #print axioms Zkc.Core.Process.every_mono
 #print axioms Zkc.Core.Process.every_iterate
+#print axioms Zkc.Core.Process.every_iterate_below

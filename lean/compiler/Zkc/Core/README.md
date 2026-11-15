@@ -20,9 +20,9 @@ something imports a module that only proves something.
 
 | Directory | Holds |
 |---|---|
-| `Process/` | processes (well-founded trees of effects), the one property on every path (`Process.Every`) and its rules, handlers, their composition, and the retry of an attempt |
+| `Process/` | processes (well-founded trees of effects), the one property on every path (`Process.Every`) and its rules (iteration among them, with an invariant asked of every step or only of the steps below a count), handlers, their composition, and the retry of an attempt |
 | `Program/` | keys, labels, occurrences, sites, places and stops (`Identity`); types, the vocabulary and its models (`Vocabulary`); terms, their addresses and whether their case analyses without an arm give nothing (`Term`); the decision of distinct addresses, with what failed, proved to decide that proposition (`Conditions`); linear use, defined by its decision, which says which value is not used as it must be and where (`Linear`); located types and role maps (`Located`); the record of a run (`Record`); the kinds of events and the shape of a protocol (`Shape`); the three dialects (`Dialects`); projection, the translation of a protocol's term to a role's (`Project`); a typed program, its definitions with what elaboration decided about each body, one definition elaborated against the headers before it and a program extended by it, and the lookup of a definition by its key (`Typed`); the program by names that a frontend gives (`Syntax`); refusals: the rules of the core, what a rule found and the place where it found it, as data (`Refusal`); the elaboration of a region over the rules of a dialect, each refusal made at its place (`Elaborate`); the printed form of a term and its round trip over lawful rules (`Print`); the written form of each operation of a function and its resolution, with their laws, and the rules of the local dialect (`LocalRules`); the elaboration of a function, its printed form and their round trip (`ElaborateLocal`); the printed form of a typed program (`PrintProgram`) |
-| `Meaning/` | events and what a role holds (`Events`); the fold of a term over the semantics of a dialect (`Fold`); the semantics of a function, of a protocol and of a role program (`Local`, `Protocol`, `Role`); the meanings of a whole program (`Program`); the rule of a call (`Call`) |
+| `Meaning/` | events and what a role holds (`Events`); the fold of a term over the semantics of a dialect (`Fold`); the semantics of a function, of a protocol and of a role program (`Local`, `Protocol`, `Role`), with the meaning of every operation that the core owns (`Local`); that every local operation keeps validity (`Validity`); the meanings of a whole program (`Program`); the rule of a call (`Call`) |
 | `Projection/` | the relation of a role's process to a protocol's and its lemmas (`Proj`), the proof for one term (`Sound`), and the theorem for every definition of a program (`Theorem`) |
 | `Facts/` | the property at every instruction that a run reaches, facts and their reading, and the annotation of an admitted program |
 | `Admission/` | the elaboration of one definition against the headers before it, of a program of functions, and its round trip (`Elaboration`); the association of a program and its resolution in it, and an admitted program (`Admission`) |
@@ -41,7 +41,8 @@ Proved, with no axiom beyond `propext` and `Quot.sound`:
   every role of every protocol of a typed program, run on what the role holds of one input, is
   a projection of the protocol's process; where the protocol returns, the role returns what it
   holds of the results;
-- the rules of proof on every path (`Process.every_bind`, `every_mono`, `every_iterate`), and the
+- the rules of proof on every path (`Process.every_bind`, `every_mono`, `every_iterate`,
+  `every_iterate_below`), and the
   rule of a call (`Contract.call`, `Law.call`, `Law.contract`): a contract of a function, a
   property of its entry in a table, installed at an actual call with the operands and the
   continuation taken from the term;
@@ -57,6 +58,10 @@ Proved, with no axiom beyond `propext` and `Quot.sound`:
   `Program/ElaborateLocal.lean`); the printed form of every typed program of functions
   elaborates as the program (`elaborateFunctions_print`, `Admission/Elaboration.lean`), so also
   that of every program that elaboration gives (`elaborateFunctions_roundTrip`);
+- that every local operation keeps validity: on valid operands, the results that it gives are
+  valid (`localOp_valid`, with `localOp_row_valid`, `localOp_owned_valid`,
+  `localOp_literal_valid`, `localOp_call_valid` and `ownedOp_valid` for the operations that the
+  core owns, `Meaning/Validity.lean`);
 - the decision of distinct addresses: the first repeated address, or none exactly when the
   addresses are distinct (`Term.repeatedAddress_eq_none`, `Program/Conditions.lean`). Linear
   use is defined by its decision (`Term.UsedOnce` is `Term.misuse … = none`,
@@ -92,6 +97,10 @@ kernel runs when they are built:
   of a layer, laws and contracts of functions at their calls, the lookup of a definition), and
   the theorems that are the reasons for the definitions' shape;
 - `Consumers.lean`: each consumer's side, written against the core;
+- `Operations.lean`: for each written name of an operation that the core owns, a function that
+  elaborates and whose printed form elaborates back; written forms with other types refused;
+  the operations that would copy or drop a part refused at a linear type; each meaning at a
+  value, and each domain at a value outside it;
 - `Elaboration.lean`: for each rule of elaboration and each condition of a body, a program by
   names that is accepted and one that is refused, compared with the whole refusal (rule, place
   and what the rule found); the latest binding of a name; the case analysis without an arm that

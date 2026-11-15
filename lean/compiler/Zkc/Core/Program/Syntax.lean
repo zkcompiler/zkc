@@ -52,11 +52,16 @@ end
 
 /-- An operation that the core owns, by name. -/
 inductive OwnedName where
-  | natAdd | natSub | natLe | boolNot | seqLength | seqAt | make | take | inject
+  | natAdd | natSub | natMul | natDiv | natRem | natPow | natEqual | natLess
+  | boolAnd | boolOr | boolNot | boolEqual
+  | seqLength | seqAt | seqSlice | seqConcat | seqFill
+  | seqSized | natBelow
+  | seqUnsized | finToNat | finWiden
+  | make | get | take | variant
 deriving DecidableEq, Repr
 
 /-- The operations of a function. An owned operation carries its types and its static
-naturals (the position of `inject`). -/
+naturals (a position of `get` and of `variant`). -/
 inductive LocalRaw (V : Vocabulary) where
   | row (key : V.RowKey) (statics : List Static)
   | owned (name : OwnedName) (at_ : List V.Ty) (statics : List Nat)

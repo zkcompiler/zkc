@@ -50,29 +50,96 @@ def Tys.toList {K : Type} : Tys K → List (Ty K)
   | .nil => []
   | .cons head rest => head :: rest.toList
 
-/-- The operations that the core owns: a closed list, of which these are some. Their meaning
-is the core's, and no model chooses it. -/
+/-- The size of a concatenation: the sum of the sizes when both sequences have one. -/
+def concatSize : Option Nat → Option Nat → Option Nat
+  | some first, some second => some (first + second)
+  | _, _ => none
+
+/-- The operations that the core owns: a closed list. Their meaning is the core's, and no model
+chooses it. Seven have a domain and stop `undefined` outside it. An operation that would copy
+a value or drop a part of one (a reading, a length, a slice, a filling) is not typed at a
+linear type. -/
 inductive OwnedOp (V : Vocabulary) : List V.Ty → List V.Ty → Type where
+  -- Naturals
   | natAdd : OwnedOp V [.nat, .nat] [.nat]
   /-- Its domain: the second is at most the first. -/
   | natSub : OwnedOp V [.nat, .nat] [.nat]
-  | natLe : OwnedOp V [.nat, .nat] [.bool]
+  | natMul : OwnedOp V [.nat, .nat] [.nat]
+  /-- The quotient, rounded down. Its domain: the second is at least one. -/
+  | natDiv : OwnedOp V [.nat, .nat] [.nat]
+  /-- The remainder. Its domain: the second is at least one. -/
+  | natRem : OwnedOp V [.nat, .nat] [.nat]
+  /-- The power; a number to the power zero is one. -/
+  | natPow : OwnedOp V [.nat, .nat] [.nat]
+  | natEqual : OwnedOp V [.nat, .nat] [.bool]
+  /-- The first is less than the second. -/
+  | natLess : OwnedOp V [.nat, .nat] [.bool]
+  -- Truth values
+  /-- The conjunction; both operands are evaluated. -/
+  | boolAnd : OwnedOp V [.bool, .bool] [.bool]
+  /-- The disjunction; both operands are evaluated. -/
+  | boolOr : OwnedOp V [.bool, .bool] [.bool]
   | boolNot : OwnedOp V [.bool] [.bool]
-  | seqLength (item : V.Ty) (size : Option Nat) : OwnedOp V [.seq item size] [.nat]
-  /-- Its domain: the position is below the length. -/
-  | seqAt (item : V.Ty) (size : Option Nat) : OwnedOp V [.seq item size, .nat] [item]
-  | make (key : Key) (linear : Bool) (fields : Tys V.TypeKey) :
+  | boolEqual : OwnedOp V [.bool, .bool] [.bool]
+  -- Sequences
+  | seqLength (item : V.Ty) (size : Option Nat) (free : Ty.isLinear V item = false) :
+      OwnedOp V [.seq item size] [.nat]
+  /-- The item at a position, counted from zero. Its domain: the position is below the
+  length. -/
+  | seqAt (item : V.Ty) (size : Option Nat) (free : Ty.isLinear V item = false) :
+      OwnedOp V [.seq item size, .nat] [item]
+  /-- The items from a position up to another, the second excluded. Its domain: the first is
+  at most the second, the second at most the length, and their difference is the size of the
+  result when it has one. -/
+  | seqSlice (item : V.Ty) (size result : Option Nat) (free : Ty.isLinear V item = false) :
+      OwnedOp V [.seq item size, .nat, .nat] [.seq item result]
+  /-- The items of the first, then those of the second. -/
+  | seqConcat (item : V.Ty) (first second : Option Nat) :
+      OwnedOp V [.seq item first, .seq item second] [.seq item (concatSize first second)]
+  /-- A written number of copies of a value. -/
+  | seqFill (item : V.Ty) (count : Nat) (free : Ty.isLinear V item = false) :
+      OwnedOp V [item] [.seq item (some count)]
+  -- Refining: the value is the operand's, and its type says more
+  /-- Its domain: the length is the size. -/
+  | seqSized (item : V.Ty) (size : Nat) : OwnedOp V [.seq item none] [.seq item (some size)]
+  /-- Its domain: the number is below the bound. -/
+  | natBelow (bound : Nat) : OwnedOp V [.nat] [.fin bound]
+  -- Widening: the value is the operand's, and its type says less
+  | seqUnsized (item : V.Ty) (size : Nat) : OwnedOp V [.seq item (some size)] [.seq item none]
+  | finToNat (bound : Nat) : OwnedOp V [.fin bound] [.nat]
+  | finWiden (bound wider : Nat) (le : bound ≤ wider) : OwnedOp V [.fin bound] [.fin wider]
+  -- Data
+  /-- A sequence of a written number of items. -/
+  | makeSeq (item : V.Ty) (count : Nat) :
+      OwnedOp V (List.replicate count item) [.seq item (some count)]
+  | makeTuple (items : Tys V.TypeKey) : OwnedOp V items.toList [.tuple items]
+  | makeRecord (key : Key) (linear : Bool) (fields : Tys V.TypeKey) :
       OwnedOp V fields.toList [.record key linear fields]
-  | take (key : Key) (linear : Bool) (fields : Tys V.TypeKey) :
+  /-- One component of a tuple that has no linear component. -/
+  | getTuple (items : Tys V.TypeKey) {τ : V.Ty} (position : Var items.toList τ)
+      (free : Tys.anyLinear V items = false) : OwnedOp V [.tuple items] [τ]
+  /-- One field of a record that is not linear and has no linear field. -/
+  | getRecord (key : Key) (fields : Tys V.TypeKey) {τ : V.Ty} (position : Var fields.toList τ)
+      (free : Tys.anyLinear V fields = false) : OwnedOp V [.record key false fields] [τ]
+  /-- Every component of a tuple: how a tuple with a linear component is used. -/
+  | takeTuple (items : Tys V.TypeKey) : OwnedOp V [.tuple items] items.toList
+  /-- Every field of a record: how a linear record is used. -/
+  | takeRecord (key : Key) (linear : Bool) (fields : Tys V.TypeKey) :
       OwnedOp V [.record key linear fields] fields.toList
   /-- A value as the alternative at a position of a variant: the position is that of an
   alternative of the value's type. -/
-  | inject (key : Key) (alternatives : Tys V.TypeKey) {τ : V.Ty}
+  | variant (key : Key) (alternatives : Tys V.TypeKey) {τ : V.Ty}
       (position : Var alternatives.toList τ) : OwnedOp V [τ] [.variant key alternatives]
 
+/-- Whether an operation that the core owns has a domain. -/
 def OwnedOp.hasDomain {V : Vocabulary} {ins outs : List V.Ty} : OwnedOp V ins outs → Bool
   | .natSub => true
-  | .seqAt _ _ => true
+  | .natDiv => true
+  | .natRem => true
+  | .seqAt .. => true
+  | .seqSlice .. => true
+  | .seqSized .. => true
+  | .natBelow _ => true
   | _ => false
 
 inductive LocalOp (V : Vocabulary) (fns : List (FnHeader V)) : List V.Ty → List V.Ty → Type where

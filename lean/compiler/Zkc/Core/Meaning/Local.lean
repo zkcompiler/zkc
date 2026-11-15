@@ -9,8 +9,8 @@ The meaning of a function: the semantics of the local dialect.
 
 A function is a process with no effect, which may stop. A row of the vocabulary is the
 model's; outside the domain of a restricted row the process stops `undefined`. The operations
-that the core owns have the core's meaning; `natSub` and `seqAt` stop `undefined` outside
-their domains. A literal is read from its data. A call runs the callee's process from the table
+that the core owns have the core's meaning; the seven with a domain stop `undefined` outside
+it. A literal is read from its data. A call runs the callee's process from the table
 of functions.
 -/
 
@@ -180,6 +180,13 @@ def Tys.toHList : (fields : Tys V.TypeKey) → fields.Val M.toCarriers → HList
   | .nil, _ => .nil
   | .cons _ rest, (v, vs) => .cons v (Tys.toHList rest vs)
 
+/-- The field at a position. -/
+def Tys.getAt : (fields : Tys V.TypeKey) → {τ : V.Ty} → Var fields.toList τ →
+    fields.Val M.toCarriers → M.Val τ
+  | .nil, _, position, _ => nomatch position
+  | .cons _ _, _, .head, (v, _) => v
+  | .cons _ rest, _, .tail position, (_, vs) => Tys.getAt rest position vs
+
 /-- A value as the alternative at its position. -/
 def Tys.injectAt : (alternatives : Tys V.TypeKey) → {τ : V.Ty} → Var alternatives.toList τ →
     M.Val τ → alternatives.Choice M.toCarriers
@@ -187,7 +194,26 @@ def Tys.injectAt : (alternatives : Tys V.TypeKey) → {τ : V.Ty} → Var altern
   | .cons _ _, _, .head, v => .inl v
   | .cons _ rest, _, .tail position, v => .inr (Tys.injectAt rest position v)
 
-/-- The meaning of an operation that the core owns. -/
+/-- The items of a sequence, from one value per item. -/
+def HList.toItems {item : V.Ty} : (count : Nat) → HList M.Val (List.replicate count item) →
+    List (M.Val item)
+  | 0, _ => []
+  | count + 1, .cons v vs => v :: HList.toItems count vs
+
+end
+
+/-- Whether a length is a size: the size, when there is one. -/
+def fitsSize : Option Nat → Nat → Bool
+  | some size, length => Nat.beq length size
+  | none, _ => true
+
+section
+variable {V : Vocabulary} (M : Model V)
+
+/-- The meaning of an operation that the core owns. Positions count from zero; a slice
+excludes its upper bound; a concatenation puts the first first; a division rounds down; a
+number to the power zero is one. Outside its domain an operation stops `undefined`; a refining
+or widening operation returns its operand. -/
 def ownedOp : {ins outs : List V.Ty} → OwnedOp V ins outs → HList M.Val ins →
     Local (HList M.Val outs)
   | _, _, .natAdd, .cons a (.cons b .nil) =>
@@ -198,25 +224,91 @@ def ownedOp : {ins outs : List V.Ty} → OwnedOp V ins outs → HList M.Val ins 
       let a : Nat := a
       let b : Nat := b
       if b ≤ a then .done (.cons (a - b) .nil) else .halt .undefined
-  | _, _, .natLe, .cons a (.cons b .nil) =>
+  | _, _, .natMul, .cons a (.cons b .nil) =>
       let a : Nat := a
       let b : Nat := b
-      .done (.cons (decide (a ≤ b)) .nil)
+      .done (.cons (a * b) .nil)
+  | _, _, .natDiv, .cons a (.cons b .nil) =>
+      let a : Nat := a
+      let b : Nat := b
+      if 1 ≤ b then .done (.cons (a / b) .nil) else .halt .undefined
+  | _, _, .natRem, .cons a (.cons b .nil) =>
+      let a : Nat := a
+      let b : Nat := b
+      if 1 ≤ b then .done (.cons (a % b) .nil) else .halt .undefined
+  | _, _, .natPow, .cons a (.cons b .nil) =>
+      let a : Nat := a
+      let b : Nat := b
+      .done (.cons (a ^ b) .nil)
+  | _, _, .natEqual, .cons a (.cons b .nil) =>
+      let a : Nat := a
+      let b : Nat := b
+      .done (.cons (Nat.beq a b) .nil)
+  | _, _, .natLess, .cons a (.cons b .nil) =>
+      let a : Nat := a
+      let b : Nat := b
+      .done (.cons (Nat.blt a b) .nil)
+  | _, _, .boolAnd, .cons a (.cons b .nil) =>
+      let a : Bool := a
+      let b : Bool := b
+      .done (.cons (a && b) .nil)
+  | _, _, .boolOr, .cons a (.cons b .nil) =>
+      let a : Bool := a
+      let b : Bool := b
+      .done (.cons (a || b) .nil)
   | _, _, .boolNot, .cons b .nil =>
       let b : Bool := b
       .done (.cons (!b) .nil)
-  | _, _, .seqLength item _, .cons xs .nil =>
+  | _, _, .boolEqual, .cons a (.cons b .nil) =>
+      let a : Bool := a
+      let b : Bool := b
+      .done (.cons (a == b) .nil)
+  | _, _, .seqLength item _ _, .cons xs .nil =>
       let xs : List (M.Val item) := xs
       .done (.cons xs.length .nil)
-  | _, _, .seqAt item _, .cons xs (.cons i .nil) =>
+  | _, _, .seqAt item _ _, .cons xs (.cons i .nil) =>
       let xs : List (M.Val item) := xs
       let i : Nat := i
       match xs[i]? with
       | some v => .done (.cons v .nil)
       | none => .halt .undefined
-  | _, _, .make _ _ fields, vs => .done (.cons (Tys.ofHList M fields vs) .nil)
-  | _, _, .take _ _ fields, .cons v .nil => .done (Tys.toHList M fields v)
-  | _, _, .inject _ alternatives position, .cons v .nil =>
+  | _, _, .seqSlice item _ result _, .cons xs (.cons first (.cons second .nil)) =>
+      let xs : List (M.Val item) := xs
+      let first : Nat := first
+      let second : Nat := second
+      if first ≤ second ∧ second ≤ xs.length ∧ fitsSize result (second - first) = true then
+        .done (.cons ((xs.drop first).take (second - first)) .nil)
+      else .halt .undefined
+  | _, _, .seqConcat item _ _, .cons xs (.cons ys .nil) =>
+      let xs : List (M.Val item) := xs
+      let ys : List (M.Val item) := ys
+      .done (.cons (xs ++ ys) .nil)
+  | _, _, .seqFill _ count _, .cons v .nil => .done (.cons (List.replicate count v) .nil)
+  | _, _, .seqSized item size, .cons xs .nil =>
+      let xs : List (M.Val item) := xs
+      if xs.length = size then .done (.cons xs .nil) else .halt .undefined
+  | _, _, .natBelow bound, .cons n .nil =>
+      let n : Nat := n
+      if n < bound then .done (.cons n .nil) else .halt .undefined
+  | _, _, .seqUnsized item _, .cons xs .nil =>
+      let xs : List (M.Val item) := xs
+      .done (.cons xs .nil)
+  | _, _, .finToNat _, .cons n .nil =>
+      let n : Nat := n
+      .done (.cons n .nil)
+  | _, _, .finWiden _ _ _, .cons n .nil =>
+      let n : Nat := n
+      .done (.cons n .nil)
+  | _, _, .makeSeq _ count, vs => .done (.cons (HList.toItems M count vs) .nil)
+  | _, _, .makeTuple items, vs => .done (.cons (Tys.ofHList M items vs) .nil)
+  | _, _, .makeRecord _ _ fields, vs => .done (.cons (Tys.ofHList M fields vs) .nil)
+  | _, _, .getTuple items position _, .cons v .nil =>
+      .done (.cons (Tys.getAt M items position v) .nil)
+  | _, _, .getRecord _ fields position _, .cons v .nil =>
+      .done (.cons (Tys.getAt M fields position v) .nil)
+  | _, _, .takeTuple items, .cons v .nil => .done (Tys.toHList M items v)
+  | _, _, .takeRecord _ _ fields, .cons v .nil => .done (Tys.toHList M fields v)
+  | _, _, .variant _ alternatives position, .cons v .nil =>
       .done (.cons (Tys.injectAt M alternatives position v) .nil)
 
 /-! ## Functions -/

@@ -410,7 +410,7 @@ def signing : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
      .op ⟨3⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
      .op ⟨4⟩ (.given (.coin () []) 1 [0] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
       (by decide)) .nil <|
-     .op ⟨5⟩ (.compute [0] (.owned .natLe) [nat [0], nat [0]] rfl
+     .op ⟨5⟩ (.compute [0] (.owned .natLess) [nat [0], nat [0]] rfl
       (fun a ha r hr => by
         simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
         rcases ha with rfl | rfl <;> exact hr))
@@ -419,7 +419,7 @@ def signing : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
      .op ⟨7⟩ (.flow .message 0 [1] (by decide) (by decide))
       (.cons (.tail (.tail (.tail .head))) .nil) <|
      .ret (.cons .head (.cons (.tail (.tail (.tail .head))) .nil))) <|
-  .op ⟨8⟩ (.compute [1] (.owned .natLe) [nat [0, 1], nat [0, 1]] rfl
+  .op ⟨8⟩ (.compute [1] (.owned .natLess) [nat [0, 1], nat [0, 1]] rfl
     (fun a ha r hr => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at ha hr
       rcases ha with rfl | rfl <;> subst hr <;> decide))
