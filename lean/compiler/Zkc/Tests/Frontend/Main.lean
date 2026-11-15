@@ -69,6 +69,10 @@ def main (args : List String) : IO UInt32 := do
   tallies := tallies.push (← runSuite "formatting keeps a program" (formatCaseSuite repository))
   tallies := tallies.push (← runSuite "formatting keeps a program: libraries/ and examples/"
     (corpusFormattingSuite repository))
+  tallies := tallies.push (← runSuite "formatting keeps a program: conformance tests tagged `fmt`"
+    (formatTaggedSuite repository))
+  tallies := tallies.push (← runSuite "formatting keeps a program: independent conformance"
+    (independentFormattingSuite repository))
   tallies := tallies.push (← runSuite "conformance" (conformanceSuite repository))
   tallies := tallies.push (← runSuite "names: conformance of layer A" (conformanceNamesSuite repository))
   tallies := tallies.push (← runSuite "names: libraries/" (libraryNamesSuite repository))

@@ -33,7 +33,7 @@ heading.
 | `accept` | the program is admitted |
 | `accept, warn` | admitted, and a report is required (SC8) |
 | `accept, unchecked` | admitted, and the tool reports what it did not check: a statement that rests on the formal library (GL5), a definition resolved for names only (SP7) |
-| `accept, fmt` | admitted, and the formatter removes a redundant annotation (FM2) |
+| `accept, fmt` | admitted, and it writes an annotation that FM2 makes redundant; its canonical text is admitted with the same meaning (§3.6) |
 | `accept, law false` | admitted for execution; a closed law is found false by evaluation, which is an error of the build by policy and changes no role program and no identity (SP10, SX10) |
 | `refuse R` | refused, by the rule `R` |
 | `refuse R S` | refused; `R` is the rule that this reference names first, and an implementation that reports `S` for the same line also conforms |
@@ -84,12 +84,12 @@ By file:
 | `layer-a-interaction.txt` | 46 | 15 | 31 | 0 |
 | `layer-a-lexical-grammar.txt` | 26 | 12 | 14 | 0 |
 | `layer-a-names-static.txt` | 88 | 30 | 58 | 0 |
-| `layer-a-types-facts.txt` | 149 | 62 | 87 | 0 |
+| `layer-a-types-facts.txt` | 149 | 67 | 82 | 0 |
 | `layer-b.txt` | 77 | 12 | 65 | 0 |
 | `layer-c.txt` | 62 | 17 | 45 | 0 |
 | `layer-d.txt` | 35 | 11 | 23 | 1 |
 | `layer-e.txt` | 6 | 2 | 4 | 0 |
-| total | 504 | 164 | 339 | 1 |
+| total | 504 | 169 | 334 | 1 |
 
 By prefix and layer:
 

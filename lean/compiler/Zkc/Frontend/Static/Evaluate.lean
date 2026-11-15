@@ -1010,7 +1010,8 @@ mutual
             && !declared.contains memberName then
           let interfaceNames := ", ".intercalate (interfaces.toList.map fun (i, _) => program.nameOf i)
           refuse "SP8" ((memberDeclaration.name.map (·.span)).getD moduleName.span)
-            s!"`{name}` defines `{memberName}`, which `{interfaceNames}` does not have"
+            (if interfaces.isEmpty then s!"`{name}` defines `{memberName}` as a member, and implements no interface"
+            else s!"`{name}` defines `{memberName}`, which `{interfaceNames}` does not have")
       return .«module» interfaces members
 
   /-- The conditions that the interfaces of a module instance put on it: the bounds of their

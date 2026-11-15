@@ -565,6 +565,13 @@ module M: I:
         return x
 def g(x: nat) -> nat: M::small(x)
 
+=== member-without-interface | refuse SP8 3 | a module that implements no interface has no member definition (SP8, GR4)
+module t
+module M:
+    def b():
+        return ()
+// says `M` defines `b` as a member, and implements no interface
+
 === rational | refuse TY1 2 | `rational` is a type of specifications (TY1)
 module t
 def bound(e: nat) -> rational: e / 3

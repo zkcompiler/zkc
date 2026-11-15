@@ -864,7 +864,8 @@ def functionRemovedMessage : String :=
   "function types and function literals are not part of the language: write a loop, a comprehension or a binder form"
 
 /-- GR4: after `def Name (`, a `)` followed by `:` or `=`, or a name followed by `,` or `)`,
-make a member definition. `offset` is the position of `def`. -/
+make a member definition. `offset` is the position of `def`. `readsAsMemberDef` states this rule
+on the tree of a `Def`. -/
 def atMemberDef (offset : Nat) : ParseM Bool := do
   if (← peekKind offset) != .kwDef ∨ (← peekKind (offset + 1)) != .identifier
       ∨ (← peekKind (offset + 2)) != .leftParen then
@@ -873,6 +874,17 @@ def atMemberDef (offset : Nat) : ParseM Bool := do
   let second ← peekKind (offset + 4)
   return (first == .rightParen ∧ (second == .colon ∨ second == .equals))
     ∨ (first == .identifier ∧ (second == .comma ∨ second == .rightParen))
+
+/-- GR4 on a tree: whether `value`, printed at `place`, is read back as a member definition. The
+printer writes a `Def` as its kernel attribute on a line of its own, then `pub`, `spec` or
+`entry`, `def Name`, its static parameters, `(`, each parameter as `name: Type`, `)`, `-> Type`,
+`where …`, and `:` or `=`. In the suite of a module, `parseModuleItem` skips the kernel attribute
+and `spec`, and `atMemberDef` finds `def Name ( )` followed by `:` or `=` exactly when none of
+the others is there; a parameter puts `:`, never `,` or `)`, after its name. -/
+def readsAsMemberDef (place : ItemPlace) (value : Def) : Bool :=
+  place == .module && !value.pub && !(value.modifier matches some (.entry _))
+    && value.staticParams.isNone && value.params.isEmpty && value.result.isNone
+    && value.whereClause.isNone
 
 /-- `MemberDef` (§5.11) after its kernel attribute. -/
 def parseMemberDef (start : Token) (kernel : Option KernelAttr) : ParseM MemberDef := do
