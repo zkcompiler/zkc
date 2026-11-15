@@ -1,0 +1,113 @@
+import Zkc.Core.Admission.Theorems
+import Zkc.Tests.Core.Facts
+
+/-!
+`check` and `admit` on programs of functions written by names, run by the kernel.
+
+A program of two functions is admitted with its whole annotation. Admission stops at the first
+definition that is refused, with every refusal of that definition and nothing of a later one:
+one whose check of facts refuses an application, and one whose elaboration is refused. `check`,
+one definition at a time, gives the headers of the admitted program. A protocol is refused.
+-/
+
+namespace Zkc.Core.AdmissionTests
+
+open FactsTests (field natural less plus item elements F lengthOf anyNat)
+
+/-- Nothing beyond the definitions. -/
+def noAssociation : Association := ⟨[], [], [], [], []⟩
+
+/-- What admission says of a program: its refusals, or the bounds of its annotation. -/
+def admission (named : NamedProgram field) : List (ProgramRefusal field) ⊕ List (Place × Nat) :=
+  match admit named noAssociation with
+  | .ok admitted => .inr admitted.annotation.bounds
+  | .error refusals => .inl refusals
+
+/-- The place of an instruction of the function with the key. -/
+def at_ (definition instruction : Nat) : Place := ⟨⟨definition⟩, [], some ⟨instruction⟩, none⟩
+
+/-! ## A program admitted -/
+
+/-- A function that loops as often as its input, which it requires to be below 10. -/
+def bounded : Definition field :=
+  .fn ⟨1⟩ [.nat] [.nat] true none (.mk [0] [
+    .op ⟨1⟩ [10] (natural 10) [],
+    .op ⟨2⟩ [11] less [0, 10],
+    .guard ⟨3⟩ () 11 .reject,
+    .loop ⟨4⟩ () (.count 0) [] [] (.mk [20] [] [])] [0])
+
+/-- A function that calls `bounded` and loops as often as what it returns, which it requires to
+be below 5. -/
+def caller : Definition field :=
+  .fn ⟨2⟩ [.nat] [.nat] true none (.mk [0] [
+    .op ⟨1⟩ [10] (.call ⟨1⟩) [0],
+    .op ⟨2⟩ [11] (natural 5) [],
+    .op ⟨3⟩ [12] less [10, 11],
+    .guard ⟨4⟩ () 12 .reject,
+    .loop ⟨5⟩ () (.count 10) [] [] (.mk [20] [] [])] [10])
+
+/-- Both functions are admitted; the annotation has the bound of each loop, the latest
+definition's first. -/
+example : admission ⟨[bounded, caller]⟩ = .inr [(at_ 2 5, 4), (at_ 1 4, 9)] := by decide
+
+/-! ## The first refused definition, whole -/
+
+/-- A function that adds its inputs. -/
+def addition (key : Nat) : Definition field :=
+  .fn ⟨key⟩ [.nat, .nat] [.nat] false none (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10])
+
+/-- A function that reads an item at an index that nothing bounds. -/
+def unguarded (key : Nat) : Definition field :=
+  .fn ⟨key⟩ [elements, .nat] [F] false none (.mk [0, 1] [.op ⟨1⟩ [10] (item elements) [0, 1]] [10])
+
+/-- A function that reads two items at indices that nothing bounds. -/
+def unguardedTwice (key : Nat) : Definition field :=
+  .fn ⟨key⟩ [elements, .nat, .nat] [F] false none (.mk [0, 1, 2] [
+    .op ⟨1⟩ [10] (item elements) [0, 1],
+    .op ⟨2⟩ [11] (item elements) [0, 2]] [11])
+
+/-- The refusal of the read of an index that nothing bounds, at an instruction of a function. -/
+def unguardedRefusal (key instruction : Nat) : ProgramRefusal field :=
+  ⟨.domain, at_ key instruction,
+    .unjustified (item elements) (.lt (.arg 1) lengthOf) [anyNat, anyNat]⟩
+
+/-- The second function's check of facts refuses both of its reads: admission gives those two
+refusals, and nothing of the third function, which is refused as well. -/
+example : admission ⟨[addition 1, unguardedTwice 2, unguarded 3]⟩ =
+    .inl [unguardedRefusal 2 1, unguardedRefusal 2 2] := by
+  decide
+
+/-- The first function's elaboration refuses an operand that is not in scope: admission gives
+that refusal, and nothing of the second function. -/
+example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none
+      (.mk [0, 1] [.op ⟨1⟩ [2] plus [0, 5]] [2]), unguarded 2]⟩ =
+    .inl [⟨.scope, at_ 1 1, .name 5⟩] := by
+  decide
+
+/-! ## One definition at a time -/
+
+/-- The headers of `bounded` and `caller`. -/
+def boundedHeader : FnHeader field := ⟨⟨1⟩, [.nat], [.nat], true, none⟩
+def callerHeader : FnHeader field := ⟨⟨2⟩, [.nat], [.nat], true, none⟩
+
+/-- `check`, one definition at a time from no headers, gives the headers of the admitted
+program. -/
+example : checkAll check ⟨[], []⟩ [bounded, caller] = .ok ⟨[callerHeader, boundedHeader], []⟩ := by
+  rfl
+example : (admit ⟨[bounded, caller]⟩ noAssociation).map (·.program.headers) =
+    .ok ⟨[callerHeader, boundedHeader], []⟩ := by
+  rfl
+
+/-- `check` gives the refusals of a definition, against the headers before it: `caller` alone
+calls a function that is not there. -/
+example : check ⟨[], []⟩ caller = .error [⟨.callee, at_ 2 1, .callee ⟨1⟩ 0⟩] := by
+  rfl
+
+/-! ## A protocol -/
+
+/-- A protocol is refused: its role programs are not walked yet. -/
+example : admission ⟨[addition 1, .protocol ⟨2⟩ 2 [] [] (.mk [] [] [])]⟩ =
+    .inl [refuseWhole ⟨2⟩ .protocol (.key ⟨2⟩)] := by
+  decide
+
+end Zkc.Core.AdmissionTests

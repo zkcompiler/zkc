@@ -46,6 +46,13 @@ def check (hs : Headers V) (definition : Definition V) :
     Except (List (ProgramRefusal V)) (Headers V) :=
   (checkDefinition hs definition).map fun checked => checked.1.headers
 
+/-- A check of definitions one at a time, each against the headers that the check of those
+before it gave. -/
+def checkAll (step : Headers V → Definition V → Except (List (ProgramRefusal V)) (Headers V)) :
+    Headers V → List (Definition V) → Except (List (ProgramRefusal V)) (Headers V)
+  | hs, [] => .ok hs
+  | hs, definition :: rest => (step hs definition).bind fun hs' => checkAll step hs' rest
+
 /-- The check of definitions in order, after a program and the bounds of its loops. -/
 def admitFrom (p : Typed V) (bounds : List (Place × Nat)) :
     List (Definition V) → Except (List (ProgramRefusal V)) (Typed V × List (Place × Nat))

@@ -94,6 +94,16 @@ theorem Process.every_mono {S : Sig} {H A : Type} (p : Process S H A)
   | halt why => exact stops why h
   | call op next ih => exact fun reply hr => ih reply (h reply hr)
 
+/-- Two properties of the returns and of the stops on every path hold together. -/
+theorem Process.every_and {S : Sig} {H A : Type} (p : Process S H A)
+    (permitted : ∀ op, S.Reply op → Prop) {P Q : A → Prop} {R T : H → Prop}
+    (first : p.Every permitted P R) (second : p.Every permitted Q T) :
+    p.Every permitted (fun a => P a ∧ Q a) (fun h => R h ∧ T h) := by
+  induction p with
+  | done _ => exact ⟨first, second⟩
+  | halt _ => exact ⟨first, second⟩
+  | call _ _ ih => exact fun reply hr => ih reply (first reply hr) (second reply hr)
+
 /-- A loop with a symbolic invariant: when each iteration keeps the invariant, from its number
 to the next, so do any number of iterations. -/
 theorem Process.every_iterate {S : Sig} {H A : Type} (permitted : ∀ op, S.Reply op → Prop)

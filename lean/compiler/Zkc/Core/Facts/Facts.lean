@@ -91,6 +91,7 @@ an admitted program that a consumer reads. What it knows at an instruction is no
 the invariant of its proof. -/
 structure Annotation where
   bounds : List (Place × Nat)
+deriving DecidableEq
 
 /-- The bound that an annotation gives a loop at a place. -/
 def Annotation.boundAt (annotation : Annotation) (place : Place) : Option Nat :=

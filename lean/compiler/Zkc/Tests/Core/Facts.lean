@@ -1,6 +1,4 @@
-import Zkc.Core.Admission.Elaboration
 import Zkc.Core.Facts.Local
-import Zkc.Core.Facts.Programs
 import Zkc.Core.Facts.Walk
 import Zkc.Core.Program.ElaborateLocal
 
@@ -11,8 +9,7 @@ The conformance cases of the reference that a function can express are named by 
 identifiers: each is accepted or refused as the case says, and a refusal is compared whole. Then,
 for each operation with a domain and for a restricted row, an application that is accepted and
 one that is refused; then what sharing and the scope of facts must do in sibling regions, in
-loops, after a choice and when a name is bound again; then the check of the functions of a
-program, which gives the refusals of every function that it refuses.
+loops, after a choice and when a name is bound again.
 -/
 
 namespace Zkc.Core.FactsTests
@@ -899,40 +896,5 @@ example : rebound [.op ⟨7⟩ [10] plus [1, 14]] = accepted := by decide
 example : rebound [.op ⟨7⟩ [10] plus [14, 1]] = some (.inl
     [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨1, none⟩, some ⟨2, none⟩]]) := by
   decide
-
-/-! ## The functions of a program -/
-
-/-- What the check of facts says of every function of a program by names: the refusals of every
-function that it refuses, or the bounds of all their loops; nothing when the program does not
-elaborate. -/
-def programVerdict (named : NamedProgram field) :
-    Option (List (ProgramRefusal field) ⊕ List (Place × Nat)) :=
-  match elaborateFunctions named with
-  | .ok p =>
-      match Defs.checkFunctions p.defs with
-      | .ok bounds => some (.inr bounds)
-      | .error refusals => some (.inl refusals)
-  | .error _ => none
-
-/-- A function that reads an item at an index that nothing bounds. -/
-def unguarded (key : Nat) : Definition field :=
-  .fn ⟨key⟩ [elements, .nat] [F] false none (.mk [0, 1] [.op ⟨1⟩ [10] (item elements) [0, 1]] [10])
-
-/-- A function that adds its inputs. -/
-def addition (key : Nat) : Definition field :=
-  .fn ⟨key⟩ [.nat, .nat] [.nat] false none (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10])
-
-/-- The refusal of the read of `unguarded` in the function with the key. -/
-def unguardedRefusal (key : Nat) : ProgramRefusal field :=
-  ⟨.domain, ⟨⟨key⟩, [], some ⟨1⟩, none⟩,
-    .unjustified (item elements) (.lt (.arg 1) lengthOf) [anyNat, anyNat]⟩
-
-/-- Every function that the check refuses is refused, earlier definitions first. -/
-example : programVerdict ⟨[unguarded 1, addition 2, unguarded 3]⟩ =
-    some (.inl [unguardedRefusal 1, unguardedRefusal 3]) := by
-  decide
-example : programVerdict ⟨[addition 1, unguarded 2]⟩ = some (.inl [unguardedRefusal 2]) := by
-  decide
-example : programVerdict ⟨[addition 1, addition 2]⟩ = accepted := by decide
 
 end Zkc.Core.FactsTests

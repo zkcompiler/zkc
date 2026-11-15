@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Functions
+public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.PrintProgram
 
@@ -40,18 +41,12 @@ def admitsWhatWasGiven : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
     c.elaborate named = .ok a.program ∧ resolve a.program assoc = .ok a.association
 
-/-- The check of the definitions one at a time, each against the headers of those before
-it. -/
-def checkAll : Headers V → List (Definition V) → Except (List (ProgramRefusal V)) (Headers V)
-  | hs, [] => .ok hs
-  | hs, definition :: rest => (c.check hs definition).bind fun hs' => checkAll hs' rest
-
 /-- A view: what `admit` accepts as a program, `check` accepts one definition at a time, and
 the headers that it gives, which are what an application sees of each definition, are the
 program's. -/
 def checkAgrees : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    checkAll c ⟨[], []⟩ named.definitions = .ok a.program.headers
+    checkAll c.check ⟨[], []⟩ named.definitions = .ok a.program.headers
 
 /-! ## Admission -/
 

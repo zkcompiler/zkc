@@ -27,6 +27,7 @@ public import Zkc.Core.Meaning.Events
 public import Zkc.Core.Meaning.Fold
 public import Zkc.Core.Meaning.Local
 public import Zkc.Core.Meaning.Program
+public import Zkc.Core.Meaning.Stops
 public import Zkc.Core.Meaning.Protocol
 public import Zkc.Core.Meaning.Role
 public import Zkc.Core.Meaning.Validity
@@ -43,10 +44,11 @@ public import Zkc.Core.Facts.Learning
 public import Zkc.Core.Facts.Growth
 public import Zkc.Core.Facts.LocalLaws
 public import Zkc.Core.Facts.Soundness
-public import Zkc.Core.Facts.Programs
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
 public import Zkc.Core.Admission.Check
+public import Zkc.Core.Admission.Programs
+public import Zkc.Core.Admission.Theorems
 public import Zkc.Core.World.Layer
 public import Zkc.Core.World.Network
 public import Zkc.Core.World.Runs
