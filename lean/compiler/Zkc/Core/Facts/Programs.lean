@@ -18,40 +18,18 @@ section
 variable {V : Vocabulary}
 
 /-- The check of facts of every function of a program, each against the headers before it: the
-bounds of all their loops, or the refusals of the latest function that it refuses. -/
+bounds of all their loops, or the refusals of every function that it refuses, those of earlier
+definitions first. -/
 def Defs.checkFunctions : {hs : Headers V} → Defs V hs →
     Except (List (Refusal V.Ty (LocalRaw V))) (List (Place × Nat))
   | _, .nil => .ok []
   | _, .fn (hs := hs) hdr body _ rest =>
-      match checkFacts (localFactRules V hs.fns) hdr.key none body, Defs.checkFunctions rest with
-      | .ok mine, .ok others => .ok (mine ++ others)
-      | .error refusals, _ => .error refusals
+      match Defs.checkFunctions rest, checkFacts (localFactRules V hs.fns) hdr.key none body with
+      | .ok others, .ok mine => .ok (mine ++ others)
       | .ok _, .error refusals => .error refusals
+      | .error earlier, .ok _ => .error earlier
+      | .error earlier, .error refusals => .error (earlier ++ refusals)
   | _, .protocol _ _ _ rest => Defs.checkFunctions rest
-
-variable (M : Model V) (annotation : Annotation)
-
-/-- The functions' part of `Defs.Respects`: on valid inputs, no loop of a function runs more often
-than the bound that the annotation gives it. -/
-def Defs.FunctionsRespect : {hs : Headers V} → Defs V hs → Prop
-  | _, .nil => True
-  | _, .fn (hs := hs) hdr body _ rest =>
-      (∀ ins : HList M.Val hdr.ins, ins.All M.Valid →
-        body.Everywhere (localSem M hs.fns (Defs.fnTable M rest)) (fun _ _ => True)
-          (fun _ _ _ => True) (annotation.Bounded hdr.key none) [] [] (Env.ofList ins)) ∧
-        Defs.FunctionsRespect rest
-  | _, .protocol _ _ _ rest => Defs.FunctionsRespect rest
-
-end
-
-/-- The functions of a table never stop `undefined` on valid inputs. -/
-def FnTable.Safe {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)}
-    (table : FnTable M fns) : Prop :=
-  ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
-    (table hdr callee args).Stops (· ≠ .undefined)
-
-section
-variable {V : Vocabulary}
 
 theorem checkFunctions_split {hs : Headers V} {hdr : FnHeader V} {body : Fn V hs.fns hdr}
     {ok : FnConditions body} {rest : Defs V hs} {bounds : List (Place × Nat)}
@@ -60,11 +38,10 @@ theorem checkFunctions_split {hs : Headers V} {hdr : FnHeader V} {body : Fn V hs
       Defs.checkFunctions rest = .ok others ∧ bounds = mine ++ others := by
   simp only [Defs.checkFunctions] at h
   split at h
-  · next mine others e1 e2 =>
+  · next others mine e1 e2 =>
       simp only [Except.ok.injEq] at h
-      exact ⟨mine, others, e1, e2, h.symm⟩
-  · cases h
-  · cases h
+      exact ⟨mine, others, e2, e1, h.symm⟩
+  all_goals cases h
 
 /-- The bounds of the functions of a program are at the places of their definitions. -/
 theorem checkFunctions_places : ∀ {hs : Headers V} (defs : Defs V hs)

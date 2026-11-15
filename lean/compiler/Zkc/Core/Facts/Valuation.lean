@@ -99,11 +99,15 @@ def Consistent (Run : Raw → List Val → List Val → Prop) (ρ : Valuation Va
 def Closed (ρ : Valuation Val) (tbl : Table Raw) : Prop :=
   ∀ e, e ∈ tbl → ∀ j, j < e.count → ρ (e.lo + j) ≠ none → ∀ a, a ∈ e.args → ρ a ≠ none
 
-/-- The table is well formed below `n`: every entry's operands are below its results, the
-results of every entry are below those of every later one, and all are below `n`. -/
-def Table.WF : Nat → Table Raw → Prop
+/-- Entries, the latest first, are well formed below `n`: every entry's operands are below its
+results, the results of every entry are below those of every later one, and all are below
+`n`. -/
+def EntriesWF : Nat → List (Entry Raw) → Prop
   | _, [] => True
-  | n, e :: es => (∀ a, a ∈ e.args → a < e.lo) ∧ e.lo + e.count ≤ n ∧ Table.WF e.lo es
+  | n, e :: es => (∀ a, a ∈ e.args → a < e.lo) ∧ e.lo + e.count ≤ n ∧ EntriesWF e.lo es
+
+/-- The table is well formed below `n`: its entries are. -/
+def Table.WF (n : Nat) (tbl : Table Raw) : Prop := EntriesWF n tbl.entries
 
 /-- The state and a valuation agree: nothing from the next identifier on has a value, the table
 is well formed and true, and every value is valid. -/
@@ -118,7 +122,7 @@ structure Coherent {T : Type} (Run : Raw → List Val → List Val → Prop) (Va
 /-- A state grew from another: identifiers were made and entries added above the old ones. -/
 structure St.Grows {T : Type} (st st' : St T Raw) : Prop where
   next : st.next ≤ st'.next
-  table : ∃ new, st'.table = new ++ st.table ∧ ∀ e, e ∈ new → st.next ≤ e.lo
+  table : ∃ new, st'.table.entries = new ++ st.table.entries ∧ ∀ e, e ∈ new → st.next ≤ e.lo
 
 /-- One step of the walk, of a valuation and a state: the valuation grew and agrees with the
 state, which grew and has the same refusals and bounds. -/
@@ -494,24 +498,24 @@ theorem fill_other {ρ : Valuation Val} {lo : Nat} {vs : List Val} {i : Nat}
 
 /-! ### The table -/
 
-theorem Table.WF.mono {n n' : Nat} (h : n ≤ n') :
-    ∀ {tbl : Table Raw}, Table.WF n tbl → Table.WF n' tbl
+theorem EntriesWF.mono {n n' : Nat} (h : n ≤ n') :
+    ∀ {es : List (Entry Raw)}, EntriesWF n es → EntriesWF n' es
   | [], _ => trivial
   | _ :: _, ⟨h1, h2, h3⟩ => ⟨h1, Nat.le_trans h2 h, h3⟩
 
-theorem Table.WF.mem : ∀ {n : Nat} {tbl : Table Raw} {e : Entry Raw}, Table.WF n tbl → e ∈ tbl →
-    (∀ a, a ∈ e.args → a < e.lo) ∧ e.lo + e.count ≤ n
+theorem EntriesWF.mem : ∀ {n : Nat} {es : List (Entry Raw)} {e : Entry Raw}, EntriesWF n es →
+    e ∈ es → (∀ a, a ∈ e.args → a < e.lo) ∧ e.lo + e.count ≤ n
   | _, [], _, _, h => nomatch h
   | n, e' :: es, e, ⟨h1, h2, h3⟩, h => by
       cases h with
       | head => exact ⟨h1, h2⟩
       | tail _ h =>
-          obtain ⟨a1, a2⟩ := Table.WF.mem h3 h
+          obtain ⟨a1, a2⟩ := EntriesWF.mem h3 h
           exact ⟨a1, Nat.le_trans a2 (Nat.le_trans (Nat.le_add_right _ _) h2)⟩
 
-/-- Two entries of a well-formed table have disjoint results. -/
-theorem Table.WF.disjoint : ∀ {n : Nat} {tbl : Table Raw} {e e' : Entry Raw}, Table.WF n tbl →
-    e ∈ tbl → e' ∈ tbl → ∀ j j', j < e.count → j' < e'.count → e.lo + j = e'.lo + j' → e = e'
+theorem EntriesWF.disjoint : ∀ {n : Nat} {es : List (Entry Raw)} {e e' : Entry Raw},
+    EntriesWF n es → e ∈ es → e' ∈ es →
+      ∀ j j', j < e.count → j' < e'.count → e.lo + j = e'.lo + j' → e = e'
   | _, [], _, _, _, h, _, _, _, _, _, _ => nomatch h
   | _, _ :: _, _, _, ⟨_, _, h3⟩, h, h', j, j', hj, hj', eq => by
       cases h with
@@ -519,29 +523,44 @@ theorem Table.WF.disjoint : ∀ {n : Nat} {tbl : Table Raw} {e e' : Entry Raw}, 
           cases h' with
           | head => rfl
           | tail _ h' =>
-              have := (Table.WF.mem h3 h').2
+              have := (EntriesWF.mem h3 h').2
               exfalso
               omega
       | tail _ h =>
           cases h' with
           | head =>
-              have := (Table.WF.mem h3 h).2
+              have := (EntriesWF.mem h3 h).2
               exfalso
               omega
-          | tail _ h' => exact Table.WF.disjoint h3 h h' j j' hj hj' eq
+          | tail _ h' => exact EntriesWF.disjoint h3 h h' j j' hj hj' eq
+
+theorem Table.WF.mono {n n' : Nat} (h : n ≤ n') {tbl : Table Raw} (wf : Table.WF n tbl) :
+    Table.WF n' tbl :=
+  EntriesWF.mono h wf
+
+theorem Table.WF.mem {n : Nat} {tbl : Table Raw} {e : Entry Raw} (wf : Table.WF n tbl)
+    (m : e ∈ tbl) : (∀ a, a ∈ e.args → a < e.lo) ∧ e.lo + e.count ≤ n :=
+  EntriesWF.mem wf m
+
+/-- Two entries of a well-formed table have disjoint results. -/
+theorem Table.WF.disjoint {n : Nat} {tbl : Table Raw} {e e' : Entry Raw} (wf : Table.WF n tbl)
+    (m : e ∈ tbl) (m' : e' ∈ tbl) :
+    ∀ j j', j < e.count → j' < e'.count → e.lo + j = e'.lo + j' → e = e' :=
+  EntriesWF.disjoint wf m m'
 
 /-- Entries above the support have no values: a table that grows by them stays true. -/
 theorem consistent_extend {Run : Raw → List Val → List Val → Prop} {ρ : Valuation Val}
     {tbl : Table Raw} {n : Nat} (hs : Support n ρ) (hc : Consistent Run ρ tbl) (hd : Closed ρ tbl)
-    {new : Table Raw} (hnew : ∀ e, e ∈ new → n ≤ e.lo) :
-    Consistent Run ρ (new ++ tbl) ∧ Closed ρ (new ++ tbl) := by
+    {tbl' : Table Raw} {new : List (Entry Raw)} (enew : tbl'.entries = new ++ tbl.entries)
+    (hnew : ∀ e, e ∈ new → n ≤ e.lo) :
+    Consistent Run ρ tbl' ∧ Closed ρ tbl' := by
   constructor
   · intro e he vs hvs j hj v hv
-    rcases List.mem_append.mp he with h | h
+    rcases List.mem_append.mp (enew ▸ he : e ∈ new ++ tbl.entries) with h | h
     · rw [hs _ (by have := hnew e h; omega)] at hv; cases hv
     · exact hc e h vs hvs j hj v hv
   · intro e he j hj hv
-    rcases List.mem_append.mp he with h | h
+    rcases List.mem_append.mp (enew ▸ he : e ∈ new ++ tbl.entries) with h | h
     · exact absurd (hs _ (by have := hnew e h; omega)) hv
     · exact hd e h j hj hv
 
@@ -652,30 +671,41 @@ theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuatio
     simp only [Option.getD_some, Nat.one_mul]
     exact at_ j hj
 
-theorem Table.find_spec [DecidableEq Raw] {w : Raw} {args : List Nat} {count lo : Nat} :
-    ∀ {tbl : Table Raw}, tbl.find w args count = some lo →
-      ∃ e, e ∈ tbl ∧ e.written = w ∧ e.args = args ∧ e.count = count ∧ e.lo = lo
-  | [], h => by simp [Table.find] at h
+theorem findIn_spec [DecidableEq Raw] {w : Raw} {args : List Nat} {count lo : Nat} :
+    ∀ {es : List (Entry Raw)}, findIn w args count es = some lo →
+      ∃ e, e ∈ es ∧ e.written = w ∧ e.args = args ∧ e.count = count ∧ e.lo = lo
+  | [], h => by simp [findIn] at h
   | e :: es, h => by
-      simp only [Table.find] at h
+      simp only [findIn] at h
       split at h
       · next hr =>
           cases h
           exact ⟨e, List.mem_cons_self, hr.2.2, hr.1, hr.2.1, rfl⟩
-      · obtain ⟨e', m, r⟩ := Table.find_spec h
+      · obtain ⟨e', m, r⟩ := findIn_spec h
         exact ⟨e', List.mem_cons_of_mem _ m, r⟩
 
-theorem Table.entryOf_spec {id : Nat} : ∀ {tbl : Table Raw} {e : Entry Raw},
-    tbl.entryOf id = some e → e ∈ tbl ∧ e.lo ≤ id ∧ id < e.lo + e.count
-  | [], _, h => by simp [Table.entryOf] at h
+theorem Table.find_spec [DecidableEq Raw] {w : Raw} {args : List Nat} {count lo : Nat}
+    {tbl : Table Raw} (h : tbl.find w args count = some lo) :
+    ∃ e, e ∈ tbl ∧ e.written = w ∧ e.args = args ∧ e.count = count ∧ e.lo = lo := by
+  obtain ⟨e, m, r⟩ := findIn_spec h
+  exact ⟨e, tbl.applications e (BitTree.mem_of_find _ _ _ e m), r⟩
+
+theorem entryIn_spec {id : Nat} : ∀ {es : List (Entry Raw)} {e : Entry Raw},
+    entryIn id es = some e → e ∈ es ∧ e.lo ≤ id ∧ id < e.lo + e.count
+  | [], _, h => by simp [entryIn] at h
   | e' :: es, e, h => by
-      simp only [Table.entryOf] at h
+      simp only [entryIn] at h
       split at h
       · next hr =>
           cases h
           exact ⟨List.mem_cons_self, hr⟩
-      · obtain ⟨m, r⟩ := Table.entryOf_spec h
+      · obtain ⟨m, r⟩ := entryIn_spec h
         exact ⟨List.mem_cons_of_mem _ m, r⟩
+
+theorem Table.entryOf_spec {id : Nat} {tbl : Table Raw} {e : Entry Raw}
+    (h : tbl.entryOf id = some e) : e ∈ tbl ∧ e.lo ≤ id ∧ id < e.lo + e.count := by
+  obtain ⟨m, r⟩ := entryIn_spec h
+  exact ⟨tbl.results e (BitTree.mem_of_find _ _ _ e m), r⟩
 
 /-- An identifier that reads by a form is the first result of an entry of that form. -/
 theorem Table.formOf_spec {ops : OpFacts Raw} {tbl : Table Raw} {id : Nat} {f : ResultForm}

@@ -44,4 +44,15 @@ inductive Requirement (Raw : Type) where
   | bounded (value : Operand Raw)
 deriving DecidableEq
 
+/-- The values that a requirement names, in its order. -/
+def Requirement.operands {Raw : Type} : Requirement Raw → List (Operand Raw)
+  | .le t u => [t, u]
+  | .lt t u => [t, u]
+  | .atLeast t _ => [t]
+  | .below t _ => [t]
+  | .exactly t _ => [t]
+  | .difference t u _ => [t, u]
+  | .holds t => [t]
+  | .bounded t => [t]
+
 end Zkc.Core

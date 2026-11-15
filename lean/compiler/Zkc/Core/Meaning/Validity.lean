@@ -323,6 +323,11 @@ def FnTable.KeepsValidity {fns : List (FnHeader V)} (table : FnTable M fns) : Pr
   ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins) (results : HList M.Val hdr.outs),
     args.All M.Valid → table hdr callee args = .done results → results.All M.Valid
 
+/-- The functions of a table never stop `undefined` on valid inputs. -/
+def FnTable.Safe {fns : List (FnHeader V)} (table : FnTable M fns) : Prop :=
+  ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
+    (table hdr callee args).Stops (· ≠ .undefined)
+
 section
 variable {fns : List (FnHeader V)} (table : FnTable M fns)
 

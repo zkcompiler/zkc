@@ -131,8 +131,7 @@ theorem Coherent.grow {ρ : Valuation (Dyn M)} {st st' : St V.Ty (LocalRaw V)}
     (coh : Coherent (LocalRun M table) (ValidDyn M) ρ st) (grows : St.Grows st st')
     (wf : Table.WF st'.next st'.table) : Coherent (LocalRun M table) (ValidDyn M) ρ st' := by
   obtain ⟨n, new, e, low⟩ := grows
-  obtain ⟨cons, clo⟩ := consistent_extend coh.support coh.consistent coh.closed low
-  rw [← e] at cons clo
+  obtain ⟨cons, clo⟩ := consistent_extend coh.support coh.consistent coh.closed e low
   exact ⟨coh.support.mono n, wf, cons, clo, coh.valid⟩
 
 theorem Coherent.fresh {ρ : Valuation (Dyn M)} {st : St V.Ty (LocalRaw V)}
@@ -1543,6 +1542,7 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
   have splitE : ∀ x, x ∈ e.st.table → x.lo + x.count ≤ st.next ∨ st.next ≤ x.lo := by
     obtain ⟨new, enew, low⟩ := fitsE.2.table
     intro x m
+    have m : x ∈ e.st.table.entries := m
     rw [enew, in2table] at m
     rcases List.mem_append.mp m with m | m
     · right
@@ -1556,6 +1556,7 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
   have subTable : ∀ x, x ∈ st.table → x ∈ e.st.table := by
     obtain ⟨new, enew, _⟩ := fitsE.2.table
     intro x m
+    show x ∈ e.st.table.entries
     rw [enew, in2table]
     exact List.mem_append_right _ m
   have apartB : Apart definition inBody.2 (body.addresses blocks) := fun q m bl key' eq inB =>
@@ -1722,8 +1723,8 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
       inBody.1.tail (env.all init) 0 (env.all init, HList.empties each) := by
     obtain ⟨new, enew, low⟩ := fitsE.2.table
     have ext := consistent_extend inv.coherent.support inv.coherent.consistent inv.coherent.closed
-      (new := new) (fun x m => by have := low x m; rw [in2next] at this; omega)
-    rw [← in2table, ← enew] at ext
+      (tbl' := e.st.table) (new := new) (by rw [enew, in2table])
+      (fun x m => by have := low x m; rw [in2next] at this; omega)
     refine ⟨ρ, Valuation.Le.refl ρ, inv.coherent.support, ext.1, ext.2, inv.coherent.valid,
       env_all_valid (agree_valid inv.agree inv.coherent.valid) init, collectedOK_empties each,
       fun h => absurd h (Nat.lt_irrefl 0), fun _ => rfl, ?_⟩
@@ -1997,7 +1998,7 @@ theorem start_inv {Γ : List V.Ty} (ins : HList M.Val Γ) (valid : ins.All M.Val
     Inv M table (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins))
       (List.range Γ.length) (Env.ofList ins)
       (Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ))
-      ⟨[], Γ.length, [], []⟩ := by
+      ⟨Table.empty, Γ.length, [], []⟩ := by
   have support : Support Γ.length
       (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins)) := by
     have := setFrom_support (ρ := (fun _ => none : Valuation (Dyn M))) (lo := 0)
@@ -2014,7 +2015,8 @@ theorem start_inv {Γ : List V.Ty} (ins : HList M.Val Γ) (valid : ins.All M.Val
       (by rw [toDyns_length]; exact lt)
     rw [Nat.zero_add] at this
     exact this
-  refine ⟨⟨support, trivial, fun _ m => (nomatch m), fun _ m => (nomatch m), validS⟩, by simp,
+  refine ⟨⟨support, trivial, fun _ m => (List.not_mem_nil m).elim,
+    fun _ m => (List.not_mem_nil m).elim, validS⟩, by simp,
     fun i m => List.mem_range.mp m, fun τ x => ?_, ?_⟩
   · have lt := Var.index_lt x
     rw [List.getD_eq_getElem?_getD, List.getElem?_range lt, Option.getD_some, at_ _ lt]
@@ -2022,8 +2024,10 @@ theorem start_inv {Γ : List V.Ty} (ins : HList M.Val Γ) (valid : ins.All M.Val
   · rw [localFactRules_range]
     have empty : Known.empty.Holds (localReading M)
         (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins)) :=
-      ⟨rfl, fun _ _ m => by simp [Known.empty] at m, fun _ _ _ m => by simp [Known.empty] at m,
-        fun _ _ m => by simp [Known.empty] at m, fun _ m => by simp [Known.empty] at m⟩
+      ⟨rfl, fun _ _ m => (BitTree.not_mem_empty _ m).elim,
+        fun _ _ _ m => (BitTree.not_mem_empty _ m).elim,
+        fun _ _ m => (BitTree.not_mem_empty _ m).elim,
+        fun _ m => (BitTree.not_mem_empty _ m).elim⟩
     refine addTypeRanges_holds empty validS fun j m e => ?_
     have lt := (List.getElem?_eq_some_iff.mp e).1
     rw [List.length_range] at lt
@@ -2061,7 +2065,7 @@ theorem checkFacts_sound (distinct : (fns.map (·.key)).Nodup)
   simp only [checkFacts] at accepted
   generalize he : walk (localFactRules V fns) definition none [] body (List.range Γ.length)
     (Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ))
-    ⟨[], Γ.length, [], []⟩ = e at accepted
+    ⟨Table.empty, Γ.length, [], []⟩ = e at accepted
   split at accepted
   · next hr =>
       simp only [Except.ok.injEq] at accepted
@@ -2089,7 +2093,7 @@ theorem checkFacts_places (definition : Key) {Γ outs : List V.Ty}
   obtain ⟨_, new, enew, at_⟩ := (walk_state (localFactRules V fns) definition none [] body
     (List.range Γ.length)
     (Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ))
-    ⟨[], Γ.length, [], []⟩).1
+    ⟨Table.empty, Γ.length, [], []⟩).1
   split at accepted
   · simp only [Except.ok.injEq] at accepted
     intro q m

@@ -123,9 +123,9 @@ theorem rangeIn_mem {id : Nat} :
 theorem Known.Holds.rangeOf {k : Known} (hk : k.Holds R ρ) {id : Nat} {r : Range}
     (h : k.rangeOf id = some r) : ∃ n, NatAt R ρ id n ∧ r.Has n := by
   obtain ⟨r', m⟩ := rangeIn_mem h
-  obtain ⟨n, hn, _⟩ := hk.ranges id r' m
+  obtain ⟨n, hn, _⟩ := hk.ranges id r' (BitTree.mem_of_find _ _ _ _ m)
   refine ⟨n, hn, rangeIn_has (fun r'' m'' => ?_) h⟩
-  obtain ⟨n', hn', has⟩ := hk.ranges id r'' m''
+  obtain ⟨n', hn', has⟩ := hk.ranges id r'' (BitTree.mem_of_find _ _ _ _ m'')
   rw [hn.unique hn']
   exact has
 
@@ -157,22 +157,23 @@ theorem Known.Holds.low_valued {k : Known} (hk : k.Holds R ρ) {id : Nat} (h : 1
 
 theorem Known.Holds.addRange {k : Known} (hk : k.Holds R ρ) {id n : Nat} (hn : NatAt R ρ id n)
     {r : Range} (has : r.Has n) : (k.addRange id r).Holds R ρ := by
-  have all : ∀ r', (id, r') ∈ (id, r) :: k.ranges → r'.Has n := by
+  have all : ∀ r', (id, r') ∈ (k.ranges.insert factDepth id (id, r)).find factDepth id →
+      r'.Has n := by
     intro r' m
-    rcases List.mem_cons.mp m with e | m
-    · cases e; exact has
+    rcases BitTree.mem_insert _ _ _ _ _ (BitTree.mem_of_find _ _ _ _ m) with m | e
     · obtain ⟨n', hn', has'⟩ := hk.ranges id r' m
       rw [hn.unique hn']
       exact has'
+    · cases e; exact has
   refine ⟨?_, ?_, hk.orders, hk.truths, hk.choices⟩
   · simp only [Known.addRange, hk.alive, Bool.false_or]
     split
     · next found e => exact (rangeIn_has all e).not_empty
     · rfl
   · intro id' r' m
-    rcases List.mem_cons.mp m with e | m
-    · cases e; exact ⟨n, hn, has⟩
+    rcases BitTree.mem_insert _ _ _ _ _ m with m | e
     · exact hk.ranges id' r' m
+    · cases e; exact ⟨n, hn, has⟩
 
 theorem Known.Holds.addRange? {k : Known} (hk : k.Holds R ρ) {id : Nat} {o : Option Range}
     (h : ∀ r : Range, o = some r → ∃ n, NatAt R ρ id n ∧ r.Has n) :
@@ -201,17 +202,17 @@ theorem Known.Holds.addOrder {k : Known} (hk : k.Holds R ρ) {a b x y : Nat} {st
     (k.addOrder a b strict).Holds R ρ := by
   refine ⟨hk.alive, hk.ranges, ?_, hk.truths, hk.choices⟩
   intro a' b' s m
-  rcases List.mem_cons.mp m with e | m
-  · cases e; exact ⟨x, y, ha, hb, o⟩
+  rcases BitTree.mem_insert _ _ _ _ _ m with m | e
   · exact hk.orders a' b' s m
+  · cases e; exact ⟨x, y, ha, hb, o⟩
 
 theorem Known.Holds.addTruth {k : Known} (hk : k.Holds R ρ) {id : Nat} {b : Bool}
     (h : BoolAt R ρ id b) : (k.addTruth id b).Holds R ρ := by
   refine ⟨hk.alive, hk.ranges, hk.orders, ?_, hk.choices⟩
   intro id' b' m
-  rcases List.mem_cons.mp m with e | m
-  · cases e; exact h
+  rcases BitTree.mem_insert _ _ _ _ _ m with m | e
   · exact hk.truths id' b' m
+  · cases e; exact h
 
 theorem Known.Holds.addChoice {k : Known} (hk : k.Holds R ρ) {c : ChoiceFact}
     (h : ρ c.result ≠ none ∧ ∀ b, BoolAt R ρ c.result b →
@@ -219,9 +220,9 @@ theorem Known.Holds.addChoice {k : Known} (hk : k.Holds R ρ) {c : ChoiceFact}
     (k.addChoice c).Holds R ρ := by
   refine ⟨hk.alive, hk.ranges, hk.orders, hk.truths, ?_⟩
   intro c' m
-  rcases List.mem_cons.mp m with e | m
-  · cases e; exact h
+  rcases BitTree.mem_insert _ _ _ _ _ m with m | e
   · exact hk.choices c' m
+  · cases e; exact h
 
 theorem Known.Holds.not_kill {k : Known} : ¬ k.kill.Holds R ρ := fun h => by
   have := h.alive
@@ -233,7 +234,7 @@ theorem Known.Holds.hasTruth {k : Known} (hk : k.Holds R ρ) {id : Nat} {b : Boo
   obtain ⟨⟨id', b'⟩, m, e1, e2⟩ := h
   simp only at e1 e2
   subst e1; subst e2
-  exact hk.truths _ _ m
+  exact hk.truths _ _ (BitTree.mem_of_find _ _ _ _ m)
 
 theorem Known.Holds.hasOrder {k : Known} (hk : k.Holds R ρ) {a b : Nat} {strict : Bool}
     (h : k.hasOrder a b strict = true) :
@@ -242,7 +243,7 @@ theorem Known.Holds.hasOrder {k : Known} (hk : k.Holds R ρ) {a b : Nat} {strict
   obtain ⟨⟨a', b', s⟩, m, e⟩ := h
   simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, Bool.not_eq_true'] at e
   obtain ⟨⟨rfl, rfl⟩, e3⟩ := e
-  obtain ⟨x, y, hx, hy, o⟩ := hk.orders a' b' s m
+  obtain ⟨x, y, hx, hy, o⟩ := hk.orders a' b' s (BitTree.mem_of_find _ _ _ _ m)
   refine ⟨x, y, hx, hy, ?_⟩
   cases strict <;> cases s
   · exact o
@@ -447,7 +448,7 @@ theorem assume_holds (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
         split
         · next same =>
             obtain ⟨rfl, rfl⟩ := same
-            obtain ⟨_, imp⟩ := hk.choices c m
+            obtain ⟨_, imp⟩ := hk.choices c (BitTree.mem_of_find _ _ _ _ m)
             obtain ⟨hcond, hother⟩ := imp _ hb rfl
             exact assume_holds lawful hc hcl fuel (assume_holds lawful hc hcl fuel hknown hcond)
               hother
@@ -546,7 +547,7 @@ theorem offsetBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent R
       obtain ⟨⟨t', d, s⟩, m, ⟨rfl, hstrict⟩, hd⟩ := h
       simp only at hstrict
       subst hstrict
-      obtain ⟨t1, d0, ht1, hd0, lt⟩ := hk.orders _ _ _ m
+      obtain ⟨t1, d0, ht1, hd0, lt⟩ := hk.orders _ _ _ (BitTree.mem_of_find _ _ _ _ m)
       simp only [↓reduceIte] at lt
       have := ht1.unique ⟨_, ht, ht0⟩
       subst this
@@ -894,10 +895,10 @@ theorem share_sound [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run) {T : T
         show i < st.next
         omega
   · let e : Entry Raw := ⟨w, argIds, st.next, rs.length⟩
-    have wf' : Table.WF (st.next + rs.length) (e :: st.table) :=
-      ⟨hlt, Nat.le_refl _, coh.wf⟩
-    obtain ⟨cons', clo'⟩ := consistent_extend (new := [e]) coh.support coh.consistent coh.closed
-      (fun e' m => by simp at m; subst m; exact Nat.le_refl _)
+    have wf' : Table.WF (st.next + rs.length) (st.table.add e) :=
+      show EntriesWF _ (e :: st.table.entries) from ⟨hlt, Nat.le_refl _, coh.wf⟩
+    obtain ⟨cons', clo'⟩ := consistent_extend (tbl' := st.table.add e) (new := [e]) coh.support
+      coh.consistent coh.closed rfl (fun e' m => by simp at m; subst m; exact Nat.le_refl _)
     obtain ⟨le, sup, cons, clo, look⟩ := fill_entry wf' cons' clo'
       (coh.support.mono (Nat.le_add_right _ _)) (e := e) List.mem_cons_self hargs run rfl hfun
     refine ⟨ρ.fill st.next rs, ⟨le, ⟨sup, wf', cons, clo, fill_valid coh.valid hvalid⟩,

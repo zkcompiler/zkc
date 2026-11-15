@@ -244,7 +244,7 @@ def checkFacts {D : Dialect} {Raw : Type} (rules : FactRules D Raw) [DecidableEq
     Except (List (Refusal D.Ty Raw)) (List (Place × Nat)) :=
   let ids := List.range Γ.length
   let e := walk rules definition role [] body ids
-    (Known.empty.addRanges ids (Γ.map rules.range)) ⟨[], Γ.length, [], []⟩
+    (Known.empty.addRanges ids (Γ.map rules.range)) ⟨Table.empty, Γ.length, [], []⟩
   match e.st.refusals with
   | [] => .ok e.st.bounds.reverse
   | refusals => .error refusals.reverse

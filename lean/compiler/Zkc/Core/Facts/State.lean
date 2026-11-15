@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Facts.OpFacts
+public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.Refusal
 
 @[expose] public section
@@ -17,8 +18,8 @@ all) is scoped: what is learned in a region is dropped at its exit.
 
 Of the table and of what is known, the walk reads only the functions here: a lookup in the
 table and an entry made in it, the entry of an identifier and how it reads, the range of an
-identifier, whether an order or a truth is known. Each reads a list; nothing else depends on
-that.
+identifier, whether an order or a truth is known. Each reads the leaf of a tree placed by an
+identifier (`Program/BitTree.lean`): a list, read as a list; nothing else depends on that.
 -/
 
 namespace Zkc.Core
@@ -79,25 +80,92 @@ structure Entry (Raw : Type) where
   lo : Nat
   count : Nat
 
-/-- The table, the latest entry first. -/
-abbrev Table (Raw : Type) : Type := List (Entry Raw)
+/-- The depth of the trees of what the check knows: identifiers that agree on these low bits share
+a leaf. -/
+abbrev factDepth : Nat := 12
 
 section
 variable {Raw : Type}
 
-/-- The first result of the entry of the written operation applied to the operands, with the
-number of results: compared by its operands first. -/
-def Table.find [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat) :
-    Table Raw → Option Nat
+/-- Where the table places an entry, to be found as an application: by its first operand's
+identifier, 0 when it has none. -/
+def Entry.key (e : Entry Raw) : Nat := e.args.headD 0
+
+/-- Places an entry at each of the identifiers. -/
+def placeAll (e : Entry Raw) : List Nat → BitTree (Entry Raw) → BitTree (Entry Raw)
+  | [], t => t
+  | id :: ids, t => placeAll e ids (t.insert factDepth id e)
+
+theorem mem_placeAll (e : Entry Raw) : ∀ (ids : List Nat) (t : BitTree (Entry Raw)) (x : Entry Raw),
+    x ∈ placeAll e ids t → x ∈ t ∨ x = e
+  | [], _, _, m => Or.inl m
+  | id :: ids, t, x, m => by
+      rcases mem_placeAll e ids _ x m with m | same
+      · exact BitTree.mem_insert _ _ _ _ x m
+      · exact Or.inr same
+
+end
+
+/-- The table: its entries, the latest first, and the same entries placed by their first
+operand's identifier, to find an application, and by each of their results' identifiers, to find
+what gives an identifier. The walk reads only the placed entries; every placed entry is an
+entry. -/
+structure Table (Raw : Type) where
+  entries : List (Entry Raw)
+  byApplication : BitTree (Entry Raw)
+  byResult : BitTree (Entry Raw)
+  applications : ∀ e, e ∈ byApplication → e ∈ entries
+  results : ∀ e, e ∈ byResult → e ∈ entries
+
+instance {Raw : Type} : Membership (Entry Raw) (Table Raw) := ⟨fun t e => e ∈ t.entries⟩
+
+section
+variable {Raw : Type}
+
+theorem Table.mem_def {e : Entry Raw} {t : Table Raw} : e ∈ t ↔ e ∈ t.entries := Iff.rfl
+
+/-- The table without entries. -/
+def Table.empty : Table Raw :=
+  ⟨[], .leaf [], .leaf [], fun e m => (BitTree.not_mem_empty e m).elim,
+    fun e m => (BitTree.not_mem_empty e m).elim⟩
+
+/-- The table with an entry made. -/
+def Table.add (e : Entry Raw) (tbl : Table Raw) : Table Raw where
+  entries := e :: tbl.entries
+  byApplication := tbl.byApplication.insert factDepth e.key e
+  byResult := placeAll e (List.range' e.lo e.count) tbl.byResult
+  applications x m := by
+    rcases BitTree.mem_insert _ _ _ _ x m with m | same
+    · exact List.mem_cons_of_mem _ (tbl.applications x m)
+    · rw [same]; exact List.mem_cons_self
+  results x m := by
+    rcases mem_placeAll e _ _ x m with m | same
+    · exact List.mem_cons_of_mem _ (tbl.results x m)
+    · rw [same]; exact List.mem_cons_self
+
+/-- The first result of the entry, among entries, of the written operation applied to the
+operands, with the number of results: compared by its operands first. -/
+def findIn [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat) :
+    List (Entry Raw) → Option Nat
   | [] => none
   | e :: es =>
       if e.args = args ∧ e.count = count ∧ e.written = written then some e.lo
-      else Table.find written args count es
+      else findIn written args count es
 
-/-- The entry that gives an identifier. -/
-def Table.entryOf (id : Nat) : Table Raw → Option (Entry Raw)
+/-- The first result of the entry of the written operation applied to the operands, with the
+number of results: among the entries placed at the first operand. -/
+def Table.find [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat)
+    (tbl : Table Raw) : Option Nat :=
+  findIn written args count (tbl.byApplication.find factDepth (args.headD 0))
+
+/-- The entry, among entries, that gives an identifier. -/
+def entryIn (id : Nat) : List (Entry Raw) → Option (Entry Raw)
   | [] => none
-  | e :: es => if e.lo ≤ id ∧ id < e.lo + e.count then some e else Table.entryOf id es
+  | e :: es => if e.lo ≤ id ∧ id < e.lo + e.count then some e else entryIn id es
+
+/-- The entry that gives an identifier: among the entries placed at it. -/
+def Table.entryOf (id : Nat) (tbl : Table Raw) : Option (Entry Raw) :=
+  entryIn id (tbl.byResult.find factDepth id)
 
 /-- How an identifier reads, when it is the first result of an entry whose operation has a
 form: the form and the operands. -/
@@ -121,21 +189,21 @@ structure ChoiceFact where
   other : Nat
 deriving DecidableEq
 
-/-- What is known at a place. -/
+/-- What is known at a place, each part placed by an identifier. -/
 structure Known where
-  /-- Ranges of naturals; several of one identifier are intersected. -/
-  ranges : List (Nat × Range)
-  /-- Orders `first < second` (strict) or `first ≤ second`. -/
-  orders : List (Nat × Nat × Bool)
-  /-- Truth values. -/
-  truths : List (Nat × Bool)
-  /-- The shapes of choices. -/
-  choices : List ChoiceFact
+  /-- Ranges of naturals, by the identifier; several of one identifier are intersected. -/
+  ranges : BitTree (Nat × Range)
+  /-- Orders `first < second` (strict) or `first ≤ second`, by the first. -/
+  orders : BitTree (Nat × Nat × Bool)
+  /-- Truth values, by the identifier. -/
+  truths : BitTree (Nat × Bool)
+  /-- The shapes of choices, by the result. -/
+  choices : BitTree ChoiceFact
   /-- The region never runs. -/
   dead : Bool
 
 /-- Nothing is known. -/
-def Known.empty : Known := ⟨[], [], [], [], false⟩
+def Known.empty : Known := ⟨.leaf [], .leaf [], .leaf [], .leaf [], false⟩
 
 /-- What the ranges say of an identifier, intersected. -/
 def rangeIn (id : Nat) : List (Nat × Range) → Option Range
@@ -146,12 +214,12 @@ def rangeIn (id : Nat) : List (Nat × Range) → Option Range
 namespace Known
 
 /-- The range of an identifier. -/
-def rangeOf (k : Known) (id : Nat) : Option Range := rangeIn id k.ranges
+def rangeOf (k : Known) (id : Nat) : Option Range := rangeIn id (k.ranges.find factDepth id)
 
 /-- A range of an identifier learned; the region is dead when nothing is left. -/
 def addRange (k : Known) (id : Nat) (r : Range) : Known :=
-  let ranges := (id, r) :: k.ranges
-  { k with ranges, dead := k.dead || (match rangeIn id ranges with
+  let ranges := k.ranges.insert factDepth id (id, r)
+  { k with ranges, dead := k.dead || (match rangeIn id (ranges.find factDepth id) with
       | some found => found.isEmpty
       | none => false) }
 
@@ -167,20 +235,21 @@ def addRanges (k : Known) : List Nat → List (Option Range) → Known
 
 /-- Whether `first < second` (strict) or `first ≤ second` is an order that is known. -/
 def hasOrder (k : Known) (first second : Nat) (strict : Bool) : Bool :=
-  k.orders.any fun fact => fact.1 == first && fact.2.1 == second && (fact.2.2 || !strict)
+  (k.orders.find factDepth first).any fun fact =>
+    fact.1 == first && fact.2.1 == second && (fact.2.2 || !strict)
 
 def addOrder (k : Known) (first second : Nat) (strict : Bool) : Known :=
-  { k with orders := (first, second, strict) :: k.orders }
+  { k with orders := k.orders.insert factDepth first (first, second, strict) }
 
 /-- Whether the identifier is known to have the truth value. -/
 def hasTruth (k : Known) (id : Nat) (value : Bool) : Bool :=
-  k.truths.any fun fact => fact.1 == id && fact.2 == value
+  (k.truths.find factDepth id).any fun fact => fact.1 == id && fact.2 == value
 
 def addTruth (k : Known) (id : Nat) (value : Bool) : Known :=
-  { k with truths := (id, value) :: k.truths }
+  { k with truths := k.truths.insert factDepth id (id, value) }
 
 def addChoice (k : Known) (choice : ChoiceFact) : Known :=
-  { k with choices := choice :: k.choices }
+  { k with choices := k.choices.insert factDepth choice.result choice }
 
 def kill (k : Known) : Known := { k with dead := true }
 
@@ -242,7 +311,7 @@ def assume : Nat → Known → Nat → Bool → Known
               if value then k₁ else assume fuel (assume fuel k₁ first false) second false
           | some (.truth written, _) => if written = value then k₁ else k₁.kill
           | _ => k₁
-        k.choices.foldl (fun known choice =>
+        (k.choices.find factDepth id).foldl (fun known choice =>
           if choice.result = id ∧ choice.conjunction = value then
             assume fuel (assume fuel known choice.condition value) choice.other value
           else known) k₂
@@ -277,7 +346,7 @@ is an order. -/
 def offsetBelow (first second : Nat) : Bool :=
   match tbl.formOf ops first with
   | some (.sum, [x, t]) =>
-      k.orders.any fun fact =>
+      (k.orders.find factDepth t).any fun fact =>
         fact.1 == t && fact.2.2 &&
           (match tbl.formOf ops fact.2.1 with
             | some (.difference, [r, x']) => r == second && x' == x
@@ -342,7 +411,7 @@ def share [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat) (st 
   | some lo => (List.range' lo count, st)
   | none =>
       (List.range' st.next count,
-        { st with table := ⟨written, args, st.next, count⟩ :: st.table,
+        { st with table := st.table.add ⟨written, args, st.next, count⟩,
                   next := st.next + count })
 
 /-- The items at the positions, when every one is there. -/
@@ -372,17 +441,6 @@ def operandRange (ops : OpFacts Raw) (k : Known) (argIds : List Nat) :
   | .apply written positions, some id =>
       Range.meet (k.rangeOf id)
         ((ops.ranges written (positions.map fun p => (argIds[p]?).bind k.rangeOf)).head?.join)
-
-/-- The values that a requirement names, in its order. -/
-def _root_.Zkc.Core.Requirement.operands {Raw : Type} : Requirement Raw → List (Operand Raw)
-  | .le t u => [t, u]
-  | .lt t u => [t, u]
-  | .atLeast t _ => [t]
-  | .below t _ => [t]
-  | .exactly t _ => [t]
-  | .difference t u _ => [t, u]
-  | .holds t => [t]
-  | .bounded t => [t]
 
 /-- Whether a requirement is known, from the identifiers and ranges of its values. -/
 def decideRequirement (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) :
