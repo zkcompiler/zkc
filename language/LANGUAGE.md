@@ -1768,7 +1768,7 @@ natural expression is accepted when `hi < s` (TY5).
 | `a / b` | `lo(a) / hi(b) .. hi(a) / lo(b)`, rounded down | `1 <= b` known |
 | `a % b` | `0 .. min(hi(a), hi(b) - 1)` | `1 <= b` known |
 | `if c then a else b` | the smaller `lo`, the larger `hi` | — |
-| `∑ x ∈ D, e` over `n` elements | `0 .. n * hi(e)`; over a static range, when the range of `e` depends on the index, the sum of `hi(e)` taken index by index | — |
+| `∑ x ∈ D, e` over `n` elements | `0 .. n * hi(e)`; over a static range, when the range of `e` depends on the index, the sum of `hi(e)` taken index by index. The range of `e` depends on the index when the index is an operand of `+ * ^ - / %` in `e`; such a sum is its iterations in sequence (§7.5) | — |
 
 The row for `a ^ b` accounts for `0 ^ 0 = 1`: the power is not monotone in its exponent at the
 base `0`. A `∏` of naturals has no row: it has no range, so it is a `nat` without an upper end
@@ -1801,7 +1801,8 @@ on `rational`"; "the exponent of a `rational` is an integer; `<x>` is a `<F>`".
 **TY9. Narrowing.** A guard gives its roles the facts of its condition, read as follows. The
 condition is evaluated completely first. A conjunction `c and d` gives the facts of `c` and of
 `d`. A comparison is turned so that `<` or `<=` stands in it (`a > b` is `b < a`). Then, with `t`
-and `u` terms (TY4) and `s` a static term:
+and `u` terms (TY4) and `s` a static term, or a term whose range is one number (after
+`guard n == 8`, `n` is such a term):
 
 | Condition | Fact |
 |---|---|
@@ -3274,7 +3275,7 @@ by the path of the applications through which its definition was reached, then b
 | `for i in a..b`, uniform or with a run-time count; `for x in xs` | `local.loop`: the count is a number of the operation for a static range or a sized collection, and a run-time natural otherwise; the index is the iteration number plus the start of the range; the updated `mut` names are the carried values |
 | `for i in a..b`, stepped, or with an index that is static in the body | the iterations in sequence, each with the index a literal (§7.5) |
 | `[e for x in D]`, `[e for x in D if c]` | a `local.loop` that collects `e`: with a static count and a sized result over a static range or a sized collection, with a run-time count and an unsized result over a run-time range or an unsized collection; with `if c`, a loop that carries an unsized sequence and appends under the condition. A comprehension typed per element is a `local.make` of its elements |
-| a binder form | on elements of a sort, the row of the form (`seq.sum`, `seq.product`, `seq.inner`) applied to the collected sequence; on naturals and on `bool`, a `local.loop` that carries the accumulator; on a declared type, a `local.loop` that carries the accumulator over `add` from `zero()` (`mul` from `one()`) |
+| a binder form | on elements of a sort, the row of the form (`seq.sum`, `seq.product`, `seq.inner`) applied to the collected sequence; on naturals and on `bool`, a `local.loop` that carries the accumulator, or, for a `∑` of naturals over a static range whose index is an operand of arithmetic in its element (TY8), the iterations in sequence, each with the index a literal (§7.5); on a declared type, a `local.loop` that carries the accumulator over `add` from `zero()` (`mul` from `one()`) |
 | `for … collect (ys = e)` | the collected values of the `local.loop` for a uniform loop; a `local.make` of the per-iteration values for a stepped one |
 | `mut`, `:=` | carried values and region results; nothing at run time |
 | the expression of an expression body, `return e` | `local.yield` |
@@ -3373,8 +3374,9 @@ summary*: the operations among them that can stop, in order, with their reasons.
 | `return (e…)` | the `core.at` operations of each role for what it returns; `core.return` with one output per holder of each result |
 | `#[site(n)]`, a binder, a loop index | annotations |
 
-**Stepped loops.** A static loop that is stepped (TY10), and a static loop whose index is static
-in its body, is its iterations in sequence: each iteration is elaborated with the index as a
+**Stepped loops.** A static loop that is stepped (TY10), a static loop whose index is static
+in its body, and a `∑` of naturals over a static range whose index is an operand of arithmetic in
+its element (TY8), is its iterations in sequence: each iteration is elaborated with the index as a
 literal, so it is closed code with literal sizes, and the core needs no operation for it. A
 collected name is a `local.make` of the per-iteration values at each holder: a `seq<U, n>` when
 they have one type, the tuple otherwise (TY16). A stepped `for` of a function is the same in
