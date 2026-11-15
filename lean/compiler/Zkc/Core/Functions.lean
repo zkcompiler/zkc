@@ -22,7 +22,7 @@ program of functions is the definition `elaborateFunctions`. -/
 structure Functions (V : Vocabulary) where
   /-- The typed program of a program by names, of functions and protocols; the refusals of
   elaboration. -/
-  elaborate : NamedProgram V → Except (List (Refusal V)) (Typed V)
+  elaborate : NamedProgram V → Except (List (ProgramRefusal V)) (Typed V)
   /-- The printed form of a role's code: of its program, and of a clause of a handler. -/
   printRole : ∀ {hs : Headers V} (r : Role) {Γ outs : List (LTy V)},
     Term (roleDialect V hs r) Γ outs → Region (RoleRaw V) (List Role)
@@ -30,12 +30,12 @@ structure Functions (V : Vocabulary) where
   carriers that a model with codecs gives. -/
   format : ∀ (M : Model V), Codecs M → ∀ τ : V.Ty, Format (M.Val τ)
   /-- Admission: elaboration, then the check of facts. -/
-  admit : NamedProgram V → Association → Except (List (Refusal V)) (Admitted V)
+  admit : NamedProgram V → Association → Except (List (ProgramRefusal V)) (Admitted V)
   /-- The check of one definition against the headers of those before it: what `admit` does
   for each definition, and what a frontend calls while a program is being written. It gives
   the headers with the definition's. -/
-  check : Headers V → Definition V → Except (List (Refusal V)) (Headers V)
-  deploy : Admitted V → Declaration → Except (List (Refusal V)) (Deployed V)
+  check : Headers V → Definition V → Except (List (ProgramRefusal V)) (Headers V)
+  deploy : Admitted V → Declaration → Except (List (ProgramRefusal V)) (Deployed V)
   /-- The identity of a deployed scheme: what its proofs and its transcript are bound to. -/
   identity : Deployed V → List Nat
   /-- The executor: one role in a world, to a limit of steps. It reports how the run ended

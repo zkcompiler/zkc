@@ -22,6 +22,28 @@ inductive Var {α : Type} : List α → α → Type where
   | head {a : α} {rest : List α} : Var (a :: rest) a
   | tail {a b : α} {rest : List α} : Var rest a → Var (b :: rest) a
 
+section
+variable {T : Type}
+
+/-- The position of a variable, from the innermost binding. -/
+def Var.index {Γ : List T} {a : T} : Var Γ a → Nat
+  | .head => 0
+  | .tail x => x.index + 1
+
+/-- The variable at a position, with its type. -/
+def Var.atIndex : (Γ : List T) → Nat → Option ((t : T) × Var Γ t)
+  | [], _ => none
+  | t :: _, 0 => some ⟨t, .head⟩
+  | _ :: Γ, n + 1 => (Var.atIndex Γ n).map fun found => ⟨found.1, .tail found.2⟩
+
+theorem Var.atIndex_index : ∀ {Γ : List T} {a : T} (x : Var Γ a),
+    Var.atIndex Γ x.index = some ⟨a, x⟩
+  | _ :: _, _, .head => rfl
+  | _ :: _, _, .tail x => by
+      simp only [Var.index, Var.atIndex, Var.atIndex_index x, Option.map_some]
+
+end
+
 inductive HList {α : Type} (V : α → Type) : List α → Type where
   | nil : HList V []
   | cons {a : α} {rest : List α} : V a → HList V rest → HList V (a :: rest)

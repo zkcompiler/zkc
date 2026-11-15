@@ -2,6 +2,7 @@ module
 
 public import Zkc.Core.Process.Handler
 public import Zkc.Core.Process.Process
+public import Zkc.Core.Program.Conditions
 public import Zkc.Core.Program.Dialects
 public import Zkc.Core.Program.Elaborate
 public import Zkc.Core.Program.ElaborateLocal
@@ -9,7 +10,8 @@ public import Zkc.Core.Program.LocalRules
 public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Print
-public import Zkc.Core.Program.Problem
+public import Zkc.Core.Program.PrintProgram
+public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Program.Project
 public import Zkc.Core.Program.Record
 public import Zkc.Core.Program.Shape
@@ -30,7 +32,6 @@ public import Zkc.Core.Projection.Theorem
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
-public import Zkc.Core.Admission.Refusal
 public import Zkc.Core.World.Layer
 public import Zkc.Core.World.Network
 public import Zkc.Core.World.Runs

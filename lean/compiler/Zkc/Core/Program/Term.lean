@@ -12,7 +12,7 @@ around it. A dialect gives its types, its operations, who performs a form of con
 they may guard, choose, repeat and give. An operation, a guard, a choice, a loop, a block and
 an attempt each have one key, which the producer gives; with the blocks around it, it is the
 instruction's address. What elaboration decides about a body is said here: distinct addresses,
-and linear values used once.
+linear values used once, and case analyses without an arm that give nothing.
 -/
 
 namespace Zkc.Core
@@ -147,6 +147,33 @@ keys, each under its number. -/
 def Term.Distinct {D : Dialect} {Γ outs : List D.Ty} (t : Term D Γ outs) : Prop :=
   (decide (t.addresses []).Nodup &&
     t.blockKeys.all fun k => (t.addresses []).all fun address => address.2 != k) = true
+
+/-! ## What a case analysis without an arm gives -/
+
+/-- Whether a case analysis has an arm. -/
+def Arms.hasArm {D : Dialect} {Γ mid payloads : List D.Ty} : Arms D Γ mid payloads → Bool
+  | .nil => false
+  | .cons .. => true
+
+mutual
+  /-- Whether every case analysis of a term that has no arm gives nothing. A program by names
+  does not write the types of what a case analysis gives: its first arm says them, and without
+  an arm nothing does. -/
+  def Term.armed {D : Dialect} : {Γ outs : List D.Ty} → Term D Γ outs → Bool
+    | _, _, .ret _ => true
+    | _, _, .op _ _ _ rest => Term.armed rest
+    | _, _, .guard _ _ _ _ _ rest => Term.armed rest
+    | _, _, .choose _ _ _ _ _ onTrue onFalse rest =>
+        Term.armed onTrue && Term.armed onFalse && Term.armed rest
+    | _, _, .cases (mid := mid) _ _ _ _ _ arms rest =>
+        (arms.hasArm || mid.isEmpty) && Arms.armed arms && Term.armed rest
+    | _, _, .loop _ _ _ _ _ body rest => Term.armed body && Term.armed rest
+    | _, _, .block _ _ body rest => Term.armed body && Term.armed rest
+    | _, _, .attempt _ _ _ body rest => Term.armed body && Term.armed rest
+  def Arms.armed {D : Dialect} : {Γ mid payloads : List D.Ty} → Arms D Γ mid payloads → Bool
+    | _, _, _, .nil => true
+    | _, _, _, .cons arm rest => Term.armed arm && Arms.armed rest
+end
 
 /-! ## Whether a body can stop -/
 

@@ -18,7 +18,7 @@ def single (ins outs : List plain.Ty) (canStop : Bool) (body : Region (LocalRaw 
   ⟨[.fn ⟨1⟩ ins outs canStop none body]⟩
 
 /-- The first refusal of a program; nothing when it is accepted. -/
-def refusal (named : NamedProgram plain) : Option (Refusal plain) :=
+def refusal (named : NamedProgram plain) : Option (ProgramRefusal plain) :=
   match elaborateFunctions named with
   | .ok _ => none
   | .error refusals => refusals.head?
@@ -26,10 +26,10 @@ def refusal (named : NamedProgram plain) : Option (Refusal plain) :=
 /-- The refusal of the body of a function against the headers before it; nothing when it is
 accepted. -/
 def bodyRefusal (fns : List (FnHeader plain)) (hdr : FnHeader plain)
-    (body : Region (LocalRaw plain) Unit) : Option (Refusal plain) :=
+    (body : Region (LocalRaw plain) Unit) : Option (ProgramRefusal plain) :=
   match elabFn fns hdr body with
   | .ok _ => none
-  | .error problem => some (problem.refusal hdr.key)
+  | .error refusal => some refusal
 
 /-- The place of an instruction of a definition. -/
 def at_ (definition instruction : Nat) : Place := ⟨⟨definition⟩, [], some ⟨instruction⟩, none⟩
@@ -284,22 +284,63 @@ def linear : NamedProgram plain :=
 
 example : refusal linear = none := by decide
 
-/-- A linear value given twice. -/
+/-- A linear value given twice: refused at the instruction that binds it, as the first of the
+values that it binds, used twice. -/
 example : refusal (single [] [token, token] false
     (.mk [] [.op ⟨1⟩ [0] (.owned .make [token] []) []] [0, 0])) =
-    some ⟨.linear, whole 1, .nothing⟩ := by
+    some ⟨.linear, at_ 1 1, .uses 0 2⟩ := by
   decide
 
 /-- A linear value not used. -/
 example : refusal (single [] [] false
     (.mk [] [.op ⟨1⟩ [0] (.owned .make [token] []) []] [])) =
-    some ⟨.linear, whole 1, .nothing⟩ := by
+    some ⟨.linear, at_ 1 1, .uses 0 0⟩ := by
   decide
 
-/-- Two instructions with one key. -/
+/-- A linear input not used: refused at the definition, as its first input. -/
+example : refusal (single [token] [] false (.mk [0] [] [])) =
+    some ⟨.linear, whole 1, .uses 0 0⟩ := by
+  decide
+
+/-- A linear value from around a choice that one region uses and the other does not: refused at
+the choice, by its position in the context there, with its count in the second region. -/
+example : refusal (single [token, .bool] [token] false (.mk [0, 1]
+    [.choose ⟨1⟩ () 1 [2]
+      (.mk [] [] [0])
+      (.mk [] [.op ⟨2⟩ [5] (.owned .make [token] []) []] [5])] [2])) =
+    some ⟨.linear, at_ 1 1, .uses 0 0⟩ := by
+  decide
+
+/-- A variant whose second alternative is linear. -/
+def natOrToken : plain.Ty := .variant ⟨8⟩ (.cons .nat (.cons token .nil))
+
+/-- A linear payload that its arm does not use: refused at the case analysis, by the position
+of the arm. -/
+example : refusal (single [natOrToken] [.nat] false (.mk [0]
+    [.cases ⟨1⟩ () 0 [1]
+      [.mk [9] [] [9],
+       .mk [9] [.op ⟨2⟩ [10] (.literal .nat [0]) []] [10]]] [1])) =
+    some ⟨.linear, at_ 1 1, .uses 1 0⟩ := by
+  decide
+
+/-- Two instructions with one key: refused at the second. -/
 example : refusal (single [.nat, .nat] [.nat] false (.mk [0, 1]
     [.op ⟨1⟩ [2] (.owned .natAdd [] []) [0, 1], .op ⟨1⟩ [3] (.owned .natAdd [] []) [2, 1]] [3])) =
-    some ⟨.distinct, whole 1, .nothing⟩ := by
+    some ⟨.distinct, at_ 1 1, .nothing⟩ := by
+  decide
+
+/-- Two instructions with one key in a block: refused at the second, inside the block. -/
+example : refusal (single [] [.bool] false (.mk []
+    [.block ⟨1⟩ 0 [1] (.mk []
+      [.op ⟨2⟩ [5] (.literal .bool [0]) [], .op ⟨2⟩ [6] (.literal .bool [1]) []] [6])] [1])) =
+    some ⟨.distinct, ⟨⟨1⟩, [(⟨1⟩, 0)], some ⟨2⟩, none⟩, .nothing⟩ := by
+  decide
+
+/-- An instruction whose key is the key of a block: refused at the instruction. -/
+example : refusal (single [] [.bool] false (.mk []
+    [.block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [5] (.literal .bool [0]) []] [5]),
+     .op ⟨1⟩ [2] (.owned .boolNot [] []) [1]] [2])) =
+    some ⟨.distinct, at_ 1 1, .nothing⟩ := by
   decide
 
 /-! ## The latest binding of a name -/
@@ -331,9 +372,10 @@ def gives {Γ outs : List plain.Ty} : Term (localDialect plain []) Γ outs → L
   | _ => []
 
 /-- Two terms that differ only in what a case analysis without an arm gives are printed alike:
-the printed form of a case analysis writes the names of its results, not their types. So the
-round trip holds of a term whose case analyses without an arm give nothing (`Term.armed`), and
-of every term that elaboration gives, and not of every typed term. -/
+the printed form of a case analysis writes the names of its results, not their types. This is
+why what elaboration decides about a body includes that its case analyses without an arm give
+nothing (`FnConditions.armed`): the second term satisfies no conditions, and the round trip
+holds of every typed program. -/
 example : printBody (fun o => LocalOp.print o) (fun _ => ()) (armless [.nat]) =
     printBody (fun o => LocalOp.print o) (fun _ => ()) (armless [.bool]) := rfl
 
@@ -346,7 +388,7 @@ example : (armless []).armed = true ∧ (armless [.nat]).armed = false := by dec
 /-! ## The printed form of each accepted program elaborates to it -/
 
 /-- The printed form of the program that a program elaborates to, elaborated. -/
-def again (named : NamedProgram plain) : Except (List (Refusal plain)) (Typed plain) :=
+def again (named : NamedProgram plain) : Except (List (ProgramRefusal plain)) (Typed plain) :=
   (elaborateFunctions named).bind fun p => elaborateFunctions (print p)
 
 example : again add = elaborateFunctions add := by rfl

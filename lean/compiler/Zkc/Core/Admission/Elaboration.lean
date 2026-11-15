@@ -1,17 +1,17 @@
 module
 
-public import Zkc.Core.Program.ElaborateLocal
-public import Zkc.Core.Admission.Refusal
+public import Zkc.Core.Program.PrintProgram
 
 @[expose] public section
 
 /-!
 The elaboration of a program of functions by names, and its round trip.
 
-The definitions are elaborated in order, each against the program before it: a function's body
-against the headers before it, with a key that none of them has. `elaborateDefinition` is the
-step for one definition; a protocol is refused, since the rules of the protocol dialect are not
-built.
+One definition is elaborated against the headers of those before it, never against their
+bodies (`elaborateDefinition`): a function's body against the headers before it, with a key
+that none of them has; a protocol is refused, since the rules of the protocol dialect are not
+built. A program is the same step for each definition in order, each added to the program
+before it.
 -/
 
 namespace Zkc.Core
@@ -19,38 +19,29 @@ namespace Zkc.Core
 section
 variable {V : Vocabulary}
 
-/-- A program without definitions. -/
-def Typed.empty : Typed V := ⟨⟨[], []⟩, .nil, List.nodup_nil⟩
-
-/-- The elaboration of one definition after the program before it: the program with it. -/
-def elaborateDefinition (p : Typed V) : Definition V → Except (List (Refusal V)) (Typed V)
+/-- The elaboration of one definition against the headers of those before it. -/
+def elaborateDefinition (hs : Headers V) :
+    Definition V → Except (List (ProgramRefusal V)) (Elaborated V hs)
   | .fn key ins outs canStop kernel body =>
-      if repeated : key ∈ p.headers.keys then .error [definitionRefusal key .key]
+      if repeated : key ∈ hs.keys then .error [refuseWhole key .key (.key key)]
       else
-        match elabFn p.headers.fns ⟨key, ins, outs, canStop, kernel⟩ body with
-        | .error problem => .error [problem.refusal key]
-        | .ok ⟨b, ok⟩ =>
-            .ok ⟨⟨⟨key, ins, outs, canStop, kernel⟩ :: p.headers.fns, p.headers.protocols⟩,
-              .fn _ b ok p.defs, List.nodup_cons.mpr ⟨repeated, p.distinct⟩⟩
-  | .protocol key .. => .error [definitionRefusal key .protocol]
+        match elabFn hs.fns ⟨key, ins, outs, canStop, kernel⟩ body with
+        | .error refusal => .error [refusal]
+        | .ok ⟨b, ok⟩ => .ok (.fn ⟨key, ins, outs, canStop, kernel⟩ b ok repeated)
+  | .protocol key .. => .error [refuseWhole key .protocol (.key key)]
 
 /-- The elaboration of definitions in order, after a program. -/
-def elaborateFrom (p : Typed V) : List (Definition V) → Except (List (Refusal V)) (Typed V)
+def elaborateFrom (p : Typed V) : List (Definition V) → Except (List (ProgramRefusal V)) (Typed V)
   | [] => .ok p
-  | definition :: rest => (elaborateDefinition p definition).bind fun p' => elaborateFrom p' rest
+  | definition :: rest =>
+      (elaborateDefinition p.headers definition).bind fun elaborated =>
+        elaborateFrom (p.add elaborated) rest
 
 /-- The typed program of a program of functions by names. -/
-def elaborateFunctions (named : NamedProgram V) : Except (List (Refusal V)) (Typed V) :=
+def elaborateFunctions (named : NamedProgram V) : Except (List (ProgramRefusal V)) (Typed V) :=
   elaborateFrom .empty named.definitions
 
 /-! ## The round trip of a program -/
-
-/-- Whether a program's definitions are functions whose case analyses without an arm give
-nothing. -/
-def Defs.armed : {hs : Headers V} → Defs V hs → Bool
-  | _, .nil => true
-  | _, .fn _ body _ rest => body.armed && rest.armed
-  | _, .protocol .. => false
 
 theorem elaborateFrom_append (p : Typed V) : ∀ (first second : List (Definition V)),
     elaborateFrom p (first ++ second) =
@@ -58,65 +49,51 @@ theorem elaborateFrom_append (p : Typed V) : ∀ (first second : List (Definitio
   | [], _ => rfl
   | definition :: rest, second => by
       simp only [List.cons_append, elaborateFrom]
-      cases elaborateDefinition p definition with
+      cases elaborateDefinition p.headers definition with
       | error _ => rfl
-      | ok q => exact elaborateFrom_append q rest second
+      | ok elaborated => exact elaborateFrom_append (p.add elaborated) rest second
 
 theorem elaborateFrom_print : ∀ {hs : Headers V} (defs : Defs V hs) (distinct : hs.keys.Nodup),
-    defs.armed = true → elaborateFrom .empty defs.print = .ok ⟨hs, defs, distinct⟩
+    hs.protocols = [] → elaborateFrom .empty defs.print = .ok ⟨hs, defs, distinct⟩
   | _, .nil, _, _ => rfl
-  | _, .fn (hs := hs) ⟨key, ins, outs, canStop, kernel⟩ body ok rest, distinct, armed => by
-      simp only [Defs.armed, Bool.and_eq_true] at armed
+  | _, .fn (hs := hs) ⟨key, ins, outs, canStop, kernel⟩ body ok rest, distinct, functions => by
       have absent : key ∉ hs.keys := (List.nodup_cons.mp distinct).1
       have others : hs.keys.Nodup := (List.nodup_cons.mp distinct).2
-      have functions : (hs.fns.map (·.key)).Nodup := (List.nodup_append.mp others).1
-      rw [Defs.print, elaborateFrom_append, elaborateFrom_print rest others armed.2]
+      have fns : (hs.fns.map (·.key)).Nodup := (List.nodup_append.mp others).1
+      rw [Defs.print, elaborateFrom_append, elaborateFrom_print rest others functions]
       simp only [Except.bind, printFn, elaborateFrom, elaborateDefinition, absent, ↓reduceDIte,
-        elabFn_printFn functions body ok armed.1]
-  | _, .protocol .., _, armed => by simp [Defs.armed] at armed
+        elabFn_printFn fns body ok]
+      rfl
+  | _, .protocol .., _, functions => nomatch functions
 
-/-- The round trip of a program: the printed form of a typed program of functions whose case
-analyses without an arm give nothing elaborates as the program. -/
-theorem elaborateFunctions_print (p : Typed V) (armed : p.defs.armed = true) :
+/-- The round trip of a program: the printed form of every typed program of functions
+elaborates as the program. -/
+theorem elaborateFunctions_print (p : Typed V) (functions : p.headers.protocols = []) :
     elaborateFunctions (print p) = .ok p :=
-  elaborateFrom_print p.defs p.distinct armed
+  elaborateFrom_print p.defs p.distinct functions
 
-/-- Elaborating a definition after a program of functions whose case analyses without an arm
-give nothing gives such a program. -/
-theorem elaborateDefinition_armed (p : Typed V) : ∀ (definition : Definition V) (q : Typed V),
-    p.defs.armed = true → elaborateDefinition p definition = .ok q → q.defs.armed = true
-  | .fn _ _ _ _ _ body, _, armed, elaborated => by
-      simp only [elaborateDefinition] at elaborated
+/-- Elaboration after a program of functions gives a program of functions. -/
+theorem elaborateFrom_functions : ∀ (p : Typed V) (definitions : List (Definition V)) (q : Typed V),
+    p.headers.protocols = [] → elaborateFrom p definitions = .ok q → q.headers.protocols = []
+  | _, [], _, functions, elaborated => by
+      cases elaborated
+      exact functions
+  | p, .fn key ins outs canStop kernel body :: rest, q, functions, elaborated => by
+      simp only [elaborateFrom, elaborateDefinition] at elaborated
       split at elaborated
       · cases elaborated
       · split at elaborated
         · cases elaborated
-        · cases elaborated
-          simp only [Defs.armed, armed, Bool.and_true]
-          exact elabFn_armed body ‹elabFn _ _ body = _›
-  | .protocol .., _, _, elaborated => by cases elaborated
+        · simp only [Except.bind] at elaborated
+          apply elaborateFrom_functions _ rest q _ elaborated
+          exact functions
+  | _, .protocol .. :: _, _, _, elaborated => by cases elaborated
 
-theorem elaborateFrom_armed : ∀ (p : Typed V) (definitions : List (Definition V)) (q : Typed V),
-    p.defs.armed = true → elaborateFrom p definitions = .ok q → q.defs.armed = true
-  | _, [], _, armed, elaborated => by
-      cases elaborated
-      exact armed
-  | p, definition :: rest, q, armed, elaborated => by
-      simp only [elaborateFrom] at elaborated
-      cases step : elaborateDefinition p definition with
-      | error _ =>
-          rw [step] at elaborated
-          cases elaborated
-      | ok p' =>
-          rw [step] at elaborated
-          exact elaborateFrom_armed p' rest q
-            (elaborateDefinition_armed p definition p' armed step) elaborated
-
-/-- The round trip of what elaboration gives: elaborating the printed form of an elaborated
-program of functions gives the program. -/
+/-- The round trip of what elaboration gives: the printed form of an elaborated program
+elaborates as the program. -/
 theorem elaborateFunctions_roundTrip (named : NamedProgram V) (p : Typed V)
     (elaborated : elaborateFunctions named = .ok p) : elaborateFunctions (print p) = .ok p :=
-  elaborateFunctions_print p (elaborateFrom_armed .empty _ p rfl elaborated)
+  elaborateFunctions_print p (elaborateFrom_functions .empty _ p rfl elaborated)
 
 end
 

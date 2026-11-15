@@ -22,52 +22,6 @@ of `OwnedOp.resolve` here, its meaning and its facts.
 namespace Zkc.Core
 
 section
-variable {T : Type}
-
-/-- The position of a variable, from the innermost binding. -/
-def Var.index {Γ : List T} {a : T} : Var Γ a → Nat
-  | .head => 0
-  | .tail x => x.index + 1
-
-/-- The variable at a position, with its type. -/
-def Var.atIndex : (Γ : List T) → Nat → Option ((t : T) × Var Γ t)
-  | [], _ => none
-  | t :: _, 0 => some ⟨t, .head⟩
-  | _ :: Γ, n + 1 => (Var.atIndex Γ n).map fun found => ⟨found.1, .tail found.2⟩
-
-theorem Var.atIndex_index : ∀ {Γ : List T} {a : T} (x : Var Γ a),
-    Var.atIndex Γ x.index = some ⟨a, x⟩
-  | _ :: _, _, .head => rfl
-  | _ :: _, _, .tail x => by simp only [Var.index, Var.atIndex, Var.atIndex_index x, Option.map_some]
-
-theorem Var.key_mem (keyOf : T → Key) : ∀ {items : List T} {a : T}, Var items a →
-    keyOf a ∈ items.map keyOf
-  | _ :: _, _, .head => List.mem_cons_self
-  | _ :: _, _, .tail x => List.mem_cons_of_mem _ (Var.key_mem keyOf x)
-
-theorem Var.withKey_absent (keyOf : T → Key) (key : Key) : ∀ {items : List T},
-    key ∉ items.map keyOf → Var.withKey keyOf key items = []
-  | [], _ => rfl
-  | a :: rest, absent => by
-      have other : keyOf a ≠ key := fun same => absent (same ▸ List.mem_cons_self)
-      have later : key ∉ rest.map keyOf := fun found => absent (List.mem_cons_of_mem _ found)
-      simp only [Var.withKey, other, ↓reduceIte, Var.withKey_absent keyOf key later, List.map_nil]
-
-/-- With distinct keys, the variable with the key of an item is that item's. -/
-theorem Var.withKey_key (keyOf : T → Key) : ∀ {items : List T} {a : T} (x : Var items a),
-    (items.map keyOf).Nodup → Var.withKey keyOf (keyOf a) items = [⟨a, x⟩]
-  | _ :: _, _, .head, distinct => by
-      have absent := (List.nodup_cons.mp distinct).1
-      simp only [Var.withKey, ↓reduceIte, Var.withKey_absent keyOf _ absent, List.map_nil]
-  | b :: _, a, .tail x, distinct => by
-      have ⟨absent, others⟩ := List.nodup_cons.mp distinct
-      have other : keyOf b ≠ keyOf a := fun same => absent (same ▸ Var.key_mem keyOf x)
-      simp only [Var.withKey, other, ↓reduceIte, Var.withKey_key keyOf x others, List.map_cons,
-        List.map_nil]
-
-end
-
-section
 variable {V : Vocabulary}
 
 /-! ## The operations that the core owns -/
@@ -119,7 +73,8 @@ theorem OwnedOp.resolve_name : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins out
 /-! ## The operations of a function -/
 
 /-- What is written for a local operation. -/
-def LocalOp.print {fns : List (FnHeader V)} {ins res : List V.Ty} : LocalOp V fns ins res → LocalRaw V
+def LocalOp.print {fns : List (FnHeader V)} {ins res : List V.Ty} :
+    LocalOp V fns ins res → LocalRaw V
   | .row key statics _ _ => .row key statics
   | .owned o => let written := o.name; .owned written.1 written.2.1 written.2.2
   | .literal τ data _ => .literal τ data
@@ -132,29 +87,31 @@ instance Vocabulary.decideReads (τ : V.Ty) (data : List Nat) : Decidable (V.Rea
 /-- A local operation of the operand types given, when they are those that it takes. -/
 def LocalOp.ofOperands {fns : List (FnHeader V)} (operands ins res : List V.Ty)
     (o : LocalOp V fns ins res) :
-    Except (Problem V.Ty (LocalRaw V)) ((res : List V.Ty) × LocalOp V fns operands res) :=
-  if same : operands = ins then .ok ⟨res, cast (congrArg (fun ins => LocalOp V fns ins res) same.symm) o⟩
-  else .error (problemOf .operands (.types ins operands))
+    Except (Finding V.Ty (LocalRaw V)) ((res : List V.Ty) × LocalOp V fns operands res) :=
+  if same : operands = ins then
+    .ok ⟨res, cast (congrArg (fun ins => LocalOp V fns ins res) same.symm) o⟩
+  else .error ⟨.operands, .types ins operands⟩
 
 /-- The local operation that is written, on operands of the types given. -/
 def LocalOp.read (fns : List (FnHeader V)) : (written : LocalRaw V) → (operands : List V.Ty) →
-    Except (Problem V.Ty (LocalRaw V)) ((res : List V.Ty) × LocalOp V fns operands res)
+    Except (Finding V.Ty (LocalRaw V)) ((res : List V.Ty) × LocalOp V fns operands res)
   | .row key statics, operands =>
       match known : V.row key statics with
-      | none => .error (problemOf .row (.operation (.row key statics)))
+      | none => .error ⟨.row, .operation (.row key statics)⟩
       | some signature =>
-          LocalOp.ofOperands operands signature.ins signature.outs (.row key statics signature known)
+          LocalOp.ofOperands operands signature.ins signature.outs
+            (.row key statics signature known)
   | .owned name types statics, operands =>
       match OwnedOp.resolve name types statics with
-      | none => .error (problemOf .owned (.operation (.owned name types statics)))
+      | none => .error ⟨.owned, .operation (.owned name types statics)⟩
       | some ⟨ins, outs, o⟩ => LocalOp.ofOperands operands ins outs (.owned o)
   | .literal τ data, operands =>
       if reads : V.Reads τ data then LocalOp.ofOperands operands [] [τ] (.literal τ data reads)
-      else .error (problemOf .literal (.operation (.literal τ data)))
+      else .error ⟨.literal, .operation (.literal τ data)⟩
   | .call key, operands =>
       match Var.withKey (·.key) key fns with
       | [⟨hdr, callee⟩] => LocalOp.ofOperands operands hdr.ins hdr.outs (.call callee)
-      | found => .error (problemOf .callee (.callee key found.length))
+      | found => .error ⟨.callee, .callee key found.length⟩
 
 theorem LocalOp.ofOperands_self {fns : List (FnHeader V)} {ins res : List V.Ty}
     (o : LocalOp V fns ins res) : LocalOp.ofOperands ins ins res o = .ok ⟨res, o⟩ := by

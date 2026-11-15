@@ -2,7 +2,7 @@ module
 
 public import Zkc.Core.Functions
 public import Zkc.Core.Facts.Facts
-public import Zkc.Core.Program.ElaborateLocal
+public import Zkc.Core.Program.PrintProgram
 
 @[expose] public section
 
@@ -18,7 +18,7 @@ or stop outside what is allowed), or progress (a run goes on or ends as said).
 
 That every role program is a projection of its protocol is not a statement: it is the
 theorem `Zkc.Core.projection` (`Projection/Theorem.lean`). For a program of functions, the
-round trip is the theorem `Zkc.Core.elaborateFunctions_roundTrip` (`Admission/Elaboration.lean`).
+round trip is the theorem `Zkc.Core.elaborateFunctions_print` (`Admission/Elaboration.lean`).
 -/
 
 namespace Zkc.Core
@@ -32,7 +32,7 @@ variable {V : Vocabulary} (c : Functions V)
 /-- Execution and state: elaborating the printed form of a typed program gives the
 program. -/
 def roundTrip : Prop :=
-  ∀ named p, c.elaborate named = .ok p → c.elaborate (print p) = .ok p
+  ∀ p : Typed V, c.elaborate (print p) = .ok p
 
 /-- Execution and state: an admitted program is the elaboration of what was given, and its
 association is the resolution in it of the association given. -/
@@ -42,7 +42,7 @@ def admitsWhatWasGiven : Prop :=
 
 /-- The check of the definitions one at a time, each against the headers of those before
 it. -/
-def checkAll : Headers V → List (Definition V) → Except (List (Refusal V)) (Headers V)
+def checkAll : Headers V → List (Definition V) → Except (List (ProgramRefusal V)) (Headers V)
   | hs, [] => .ok hs
   | hs, definition :: rest => (c.check hs definition).bind fun hs' => checkAll hs' rest
 

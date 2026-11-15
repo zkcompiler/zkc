@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Core.Facts.Facts
-public import Zkc.Core.Admission.Refusal
+public import Zkc.Core.Program.Refusal
 
 @[expose] public section
 
@@ -55,12 +55,12 @@ structure Resolved {V : Vocabulary} (p : Typed V) where
 /-- The resolution of an association in a program: the definition of each family application
 is found by its key, and a key that is no definition of the program is refused. -/
 def resolve {V : Vocabulary} (p : Typed V) (raw : Association) :
-    Except (List (Refusal V)) (Resolved p) :=
+    Except (List (ProgramRefusal V)) (Resolved p) :=
   (raw.families.mapM fun (family : FamilyApplication) =>
       (match p.find family.definition with
       | some subject => .ok ⟨family.generic, family.arguments, subject⟩
-      | none => .error [definitionRefusal family.definition .association] :
-        Except (List (Refusal V)) (ResolvedFamily p))).map
+      | none => .error [refuseWhole family.definition .association (.key family.definition)] :
+        Except (List (ProgramRefusal V)) (ResolvedFamily p))).map
     fun families => ⟨raw, families⟩
 
 

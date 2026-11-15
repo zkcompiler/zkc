@@ -5,9 +5,10 @@ public import Zkc.Core.Program.Syntax
 @[expose] public section
 
 /-!
-The rules of refusal of the core, and what a rule found, as data: the frontend words them. A
-problem is a rule and what it found at an instruction of a body; a refusal (`Admission/`) is a
-problem at a place of a program.
+Refusals: the rules of the core, what a rule found, and the place of a program where it found
+it, as data. Elaboration, the conditions of a body and the check of facts refuse in this one
+form. The core words nothing: a frontend words a refusal from its rule, its place and what was
+found, with its own map from places to source.
 -/
 
 namespace Zkc.Core
@@ -85,30 +86,46 @@ inductive Detail (T Raw : Type) where
   | key (key : Key)
   /-- Whether the header says that the function can stop, and whether its body can. -/
   | stops (header body : Bool)
+  /-- A value by its position among those bound at the place, and how often it is used. -/
+  | uses (position found : Nat)
   /-- Nothing beyond the rule and the place. -/
   | nothing
 deriving DecidableEq
 
-/-- What elaboration finds wrong in a body: the rule, the blocks around the instruction and its
-key when it is at one, and what the rule found. -/
-structure Problem (T Raw : Type) where
+/-- What a rule found, before it is at a place: what the rules of a dialect answer. -/
+structure Finding (T Raw : Type) where
   rule : Rule
-  blocks : List (Key × Nat) := []
-  instruction : Option Key := none
   detail : Detail T Raw
+deriving DecidableEq
 
-/-- A problem of a rule, at an instruction. -/
-def Problem.at {T Raw : Type} (problem : Problem T Raw) (blocks : List (Key × Nat)) (key : Key) :
-    Problem T Raw :=
-  { problem with blocks := blocks, instruction := some key }
+/-- A refusal: a rule, the place of a program that breaks it, and what the rule found there. -/
+structure Refusal (T Raw : Type) where
+  rule : Rule
+  place : Place
+  detail : Detail T Raw
+deriving DecidableEq
 
-/-- A problem of a rule at an instruction. -/
-def problemAt {T Raw : Type} (blocks : List (Key × Nat)) (key : Key) (rule : Rule)
-    (detail : Detail T Raw) : Problem T Raw :=
-  { rule := rule, blocks := blocks, instruction := some key, detail := detail }
+section
+variable {T Raw : Type}
 
-/-- A problem of a rule, about a body as a whole. -/
-def problemOf {T Raw : Type} (rule : Rule) (detail : Detail T Raw) : Problem T Raw :=
-  { rule := rule, detail := detail }
+/-- A refusal at an instruction of a definition, inside the blocks given. -/
+def refuseAt (definition : Key) (blocks : List (Key × Nat)) (instruction : Key) (rule : Rule)
+    (detail : Detail T Raw) : Refusal T Raw :=
+  ⟨rule, ⟨definition, blocks, some instruction, none⟩, detail⟩
+
+/-- A refusal of a definition as a whole. -/
+def refuseWhole (definition : Key) (rule : Rule) (detail : Detail T Raw) : Refusal T Raw :=
+  ⟨rule, ⟨definition, [], none, none⟩, detail⟩
+
+/-- What the rules of a dialect answered, at an instruction of a definition. -/
+def Finding.refuseAt (finding : Finding T Raw) (definition : Key) (blocks : List (Key × Nat))
+    (instruction : Key) : Refusal T Raw :=
+  Zkc.Core.refuseAt definition blocks instruction finding.rule finding.detail
+
+end
+
+/-- A refusal of a program: of a function, with its types and its written operations as
+values. -/
+abbrev ProgramRefusal (V : Vocabulary) : Type := Refusal V.Ty (LocalRaw V)
 
 end Zkc.Core
