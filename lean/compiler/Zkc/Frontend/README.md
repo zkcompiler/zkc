@@ -234,6 +234,22 @@ and its conformance tests in `../../language`, with the independent conformance 
 the driver with an error. It checks:
 
 - every file of `libraries/` and `examples/` parses, and the printer keeps its tree;
+- formatting keeps a program: a source and its canonical text, checked as the same file, have
+  the same outcome (refusals and incomplete checks by rule, the outcome of the package of each
+  root), the same declarations (name, kind, `pub`, kernel attribute, `spec`, `entry`,
+  `partial`), the same instances with the same contents, and emit the same packages of the
+  core. This holds for the 36 programs of `Zkc.Tests.Frontend.FormatCases` (a function at the
+  top level, in a module and in a module that implements an interface, with no parameter or
+  one, the result `()` with a body of `return` alone, an `if` expression or a guard then
+  `return`, or the result `nat` with a body of `return` alone; in a module, a `def` without
+  parameters after `spec`, after a kernel attribute, in a nested module, after `pub` or
+  `entry`, with static parameters, with a `where` and in a section; a member definition of
+  `return ()`; `return` of a call whose result is `()`; a suite of the empty statement alone;
+  comments next to `return ()`), each admitted before and after formatting and checked by the
+  printer; for every file of `libraries/` and `examples/`; for the 5 conformance tests tagged
+  `fmt`, each admitted before and after formatting; and for the 65 cases of one file that the
+  independent conformance suite expects to be accepted. Every file of the independent suite
+  that parses is checked by the printer;
 - every program of `conformance/`: a test whose expected refusal is a lexical or grammar rule is
   refused by that rule, every refusal names a rule of its test, and the refused tests are the
   list in `Zkc.Tests.Frontend.Reference`;
@@ -375,11 +391,13 @@ Where the reference leaves a choice, the code takes the reading marked in its co
 - Comments are not in the tree. The formatter places each before the first construct (item,
   member, statement, case, clause, scheme line) that follows it, at that construct's
   indentation: a comment at the end of a line or inside a bracket moves to its own line.
-- The formatter removes the annotations of FM2 that the text decides (`else reject`, `-> ()`,
-  `#[site(x)]` on the binder `x`, a role mapped to its namesake), writes one role without
-  parentheses and roles in roster order inside a protocol, and prints a body of `return e`
-  alone as an expression body. The rows of FM2 that compare an annotation with what the checker
-  computes are kept.
+- The formatter removes the annotations of FM2 that the text decides (`else reject`, `-> ()`
+  except where removing it makes a member definition (GR4: in the suite of a module, a `def`
+  without `pub`, `entry`, static parameters, parameters or `where`), `#[site(x)]` on the binder
+  `x`, a role mapped to its namesake), writes one role without parentheses and roles in roster
+  order inside a protocol, and prints a body of `return e` alone as an expression body, except
+  `return ()`. The rows of FM2 that compare an annotation with what the checker computes are
+  kept.
 
 ## Readings of the reference for names
 
@@ -410,6 +428,8 @@ Where the reference leaves a choice, the code takes the reading marked in its co
 
 - A sized collection of elements of a `Group` is a `Group` with the scalar of its elements
   (TY11); its `Order` is the number of its values, the order of the elements to the power of the
+- Steps 3 and 4 of SP6 also match an unsized collection and a tuple component by component; a
+  parameter found twice with different values is a conflict that typing reports at the argument.
   size.
 - A module bound to the vocabulary or to an asset has the members that its row or its asset
   gives; a member that they do not give is not known here, and what reads it is not evaluated.

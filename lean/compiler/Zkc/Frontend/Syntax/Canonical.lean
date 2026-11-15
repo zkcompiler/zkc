@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Frontend.Syntax.Tree
+public import Zkc.Frontend.Syntax.Parser.Decl
 
 @[expose] public section
 
@@ -16,10 +16,13 @@ text alone:
   the order of the roster of the enclosing protocol; a role that is not in the roster keeps its
   place after those that are. Outside a protocol the order is kept.
 - FM1: a body that is one expression is printed as an expression body: a `def` body of only
-  `return e` becomes the suite form with the expression alone.
+  `return e` becomes the suite form with the expression alone, except `return ()`, since a line
+  `()` is the empty statement (GR1).
 - FM2: `else reject` on a guard is removed; `-> ()` on a `def` and on a function member of an
-  interface is removed; `#[site(x)]` on an event whose binder is the single name `x` is removed;
-  a role-map entry `O = O` is removed, and the map with it when it is left empty.
+  interface is removed, except on a `def` that the parser would then read as a member definition
+  (GR4): in the suite of a module, one without parameters, static parameters or `where`, and
+  without `pub` or `entry`; `#[site(x)]` on an event whose binder is the single name `x` is
+  removed; a role-map entry `O = O` is removed, and the map with it when it is left empty.
 
 The other rows of FM2 (`@S` on a binder, `from p` on a send or a query, `@R` on `reduces` and
 `proves`, `_ <-` on an application) compare an annotation with what the checker computes, and
@@ -27,6 +30,8 @@ are kept here.
 -/
 
 namespace Zkc.Frontend.Syntax.Canonical
+
+open Parser (ItemPlace readsAsMemberDef)
 
 def orderRoles (roster : Option (Array Name)) (roles : Array Name) : Array Name :=
   match roster with
@@ -100,8 +105,11 @@ mutual
     | .«case» span pattern body => .«case» span pattern (body.map (stmt roster))
 end
 
+/-- A body of only `return e` becomes an expression body (FM1), except `return ()`: a line `()`
+of a suite is the empty statement (GR1), so that body keeps its `return`. -/
 def body : Body → Body
-  | .statements span #[] result => .suiteExpression span result
+  | .statements span #[] result =>
+    if result matches .unit _ then .statements span #[] result else .suiteExpression span result
   | .statements span statements result => .statements span (statements.map (stmt none)) result
   | other => other
 
@@ -109,9 +117,12 @@ def defBinding : DefBinding → DefBinding
   | .body value => .body (body value)
   | other => other
 
-def defNode (value : Def) : Def :=
+/-- A `def` that stands at `place`. Its `-> ()` is removed (FM2) unless the parser would then
+read it as a member definition (GR4). -/
+def defNode (place : ItemPlace) (value : Def) : Def :=
+  let keepsUnit := readsAsMemberDef place { value with result := none }
   { value with
-    result := if value.result.any isUnitType then none else value.result
+    result := if value.result.any isUnitType && !keepsUnit then none else value.result
     binding := defBinding value.binding }
 
 def protocolHead (value : ProtocolHead) : ProtocolHead :=
@@ -140,15 +151,17 @@ def member : Member → Member
   | other => other
 
 mutual
-  partial def item : Item → Item
-    | .«section» (.«section» span sp w items) => .«section» (.«section» span sp w (items.map item))
+  /-- An item that stands at `place`: the file, a section, or the suite of a module. -/
+  partial def item (place : ItemPlace) : Item → Item
+    | .«section» (.«section» span sp w items) =>
+      .«section» (.«section» span sp w (items.map (item .section)))
     | .«module» (.«module» span pub name sp b w moduleBody) =>
       let moduleBody := match moduleBody with
         | .suite items => .suite (items.map moduleItem)
         | other => other
       .«module» (.«module» span pub name sp b w moduleBody)
     | .interface value => .interface { value with members := value.members.map (·.map member) }
-    | .«def» value => .«def» (defNode value)
+    | .«def» value => .«def» (defNode place value)
     | .protocol value => .protocol (protocol value)
     | .relation value =>
       .relation { value with
@@ -159,7 +172,7 @@ mutual
     | other => other
 
   partial def moduleItem : ModuleItem → ModuleItem
-    | .item value => .item (item value)
+    | .item value => .item (item .module value)
     | .memberDef value => .memberDef { value with binding := defBinding value.binding }
     | other => other
 end
@@ -168,6 +181,6 @@ end Canonical
 
 /-- The tree that the formatter prints for `tree` (FM1, FM2). -/
 def canonicalize (tree : File) : File :=
-  { tree with items := tree.items.map Canonical.item }
+  { tree with items := tree.items.map (Canonical.item .file) }
 
 end Zkc.Frontend.Syntax
