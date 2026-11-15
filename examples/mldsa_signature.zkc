@@ -21,7 +21,7 @@ pub protocol Identify<K: Parameters> roles(P, V)(
     mask @P <- sample [byte; 64]
     y = expand<K>(mask)
     w1 <- send high_bits(key, y) to V
-    seed <- draw [byte; 32] from V to P
+    seed <- draw [byte; K::challenge_seed_bytes] from V to P
     c = ball<K>(seed)
     z = respond(y, c, secret)
     guard @P within(z, K::gamma1 - K::beta) and low_bits_ok(key, secret, y, c) else abort
