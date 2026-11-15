@@ -22,12 +22,23 @@ abbrev Prot (V : Vocabulary) (hs : Headers V) (hdr : ProtocolHeader V) : Type :=
 abbrev RoleP (V : Vocabulary) (hs : Headers V) (r : Role) (hdr : ProtocolHeader V) : Type :=
   Term (roleDialect V hs r) hdr.ins hdr.outs
 
+/-- Whether a local operation can stop with a reason: a call of a function that can. -/
+def LocalOp.canStop {V : Vocabulary} {fns : List (FnHeader V)} {ins res : List V.Ty} : LocalOp V fns ins res → Bool
+  | .call (hdr := hdr) _ => hdr.canStop
+  | _ => false
+
+/-- Whether the body of a function can stop with a reason. -/
+def Fn.canStop {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V} (body : Fn V fns hdr) : Bool :=
+  Term.canStop (fun o => LocalOp.canStop o) body
+
 /-- What elaboration decides about the body of a function: its instructions have their own
-addresses, and every value of a linear type is used once. -/
+addresses, every value of a linear type is used once, and its header says whether it can stop
+with a reason as its body does. -/
 structure FnConditions {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
     (body : Fn V fns hdr) : Prop where
   distinct : Term.Distinct body
   linear : body.UsedOnce (fun τ : V.Ty => Ty.isLinear V τ)
+  stops : hdr.canStop = body.canStop
 
 /-- What elaboration decides about the body of a protocol: its roles are those below the
 number in its header (nobody else acts in the body, and its ports and results are held by no

@@ -591,8 +591,8 @@ def identityBody : Fn Shapes.plain [weightedHeader] identityHeader := .ret (.con
 
 /-- The weighted sum, then the identity, which comes later. -/
 def library : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
-  .fn identityHeader identityBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩⟩ <|
-  .fn weightedHeader weightedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩⟩ .nil
+  .fn identityHeader identityBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl⟩ <|
+  .fn weightedHeader weightedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl⟩ .nil
 
 def libraryTyped : Typed Shapes.plain := ⟨_, library, by decide⟩
 
@@ -654,7 +654,7 @@ theorem twice_by_the_law (x y : Nat) (path : List Frame) :
 
 /-- The weighted sum alone, moved to the first position. -/
 def movedLibrary : Defs Shapes.plain ⟨[weightedHeader], []⟩ :=
-  .fn weightedHeader weightedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩⟩ .nil
+  .fn weightedHeader weightedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl⟩ .nil
 
 def movedTyped : Typed Shapes.plain := ⟨_, movedLibrary, by decide⟩
 
@@ -669,8 +669,8 @@ theorem moved_law : movedTyped.find ⟨410⟩ = some (.fn movedRef) ∧
 def changedBody : Fn Shapes.plain [] weightedHeader := .ret (.cons .head .nil)
 
 def changedLibrary : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
-  .fn identityHeader identityBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩⟩ <|
-  .fn weightedHeader changedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩⟩ .nil
+  .fn identityHeader identityBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl⟩ <|
+  .fn weightedHeader changedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl⟩ .nil
 
 /-- A changed body under the same key does not keep the law. -/
 theorem changed_body_loses_law :
@@ -711,7 +711,7 @@ def checkedBody : Fn Shapes.plain [] checkedHeader :=
   .guard ⟨421⟩ () .head rfl .reject (.ret (.cons (.tail .head) .nil))
 
 def checkedDefs : Defs Shapes.plain ⟨[checkedHeader], []⟩ :=
-  .fn checkedHeader checkedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩⟩ .nil
+  .fn checkedHeader checkedBody ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl⟩ .nil
 
 def checkedTable : FnTable plainModel [checkedHeader] := Defs.fnTable plainModel checkedDefs
 
@@ -777,7 +777,7 @@ def callerHeader : FnHeader Shapes.plain := ⟨⟨412⟩, [.nat, .nat], [.nat], 
 
 /-- A caller of the weighted sum, before the library. -/
 def callerTyped : Typed Shapes.plain :=
-  ⟨_, .fn callerHeader twice ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩⟩ library, by decide⟩
+  ⟨_, .fn callerHeader twice ⟨by exact rfl, by exact ⟨_, rfl, rfl⟩, by exact rfl⟩ library, by decide⟩
 
 /-- The closure of the caller has the caller and, twice, the weighted sum that it calls; not
 the identity. -/

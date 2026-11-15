@@ -148,6 +148,27 @@ def Term.Distinct {D : Dialect} {Γ outs : List D.Ty} (t : Term D Γ outs) : Pro
   (decide (t.addresses []).Nodup &&
     t.blockKeys.all fun k => (t.addresses []).all fun address => address.2 != k) = true
 
+/-! ## Whether a body can stop -/
+
+mutual
+  /-- Whether a term can stop with a reason: it has a guard, or an operation that can. -/
+  def Term.canStop {D : Dialect} (opStops : ∀ {ins res : List D.Ty}, D.Op ins res → Bool) :
+      {Γ outs : List D.Ty} → Term D Γ outs → Bool
+    | _, _, .ret _ => false
+    | _, _, .op _ o _ rest => opStops o || Term.canStop opStops rest
+    | _, _, .guard .. => true
+    | _, _, .choose _ _ _ _ _ onTrue onFalse rest =>
+        Term.canStop opStops onTrue || Term.canStop opStops onFalse || Term.canStop opStops rest
+    | _, _, .cases _ _ _ _ _ arms rest => Arms.canStop opStops arms || Term.canStop opStops rest
+    | _, _, .loop _ _ _ _ _ body rest => Term.canStop opStops body || Term.canStop opStops rest
+    | _, _, .block _ _ body rest => Term.canStop opStops body || Term.canStop opStops rest
+    | _, _, .attempt _ _ _ body rest => Term.canStop opStops body || Term.canStop opStops rest
+  def Arms.canStop {D : Dialect} (opStops : ∀ {ins res : List D.Ty}, D.Op ins res → Bool) :
+      {Γ mid payloads : List D.Ty} → Arms D Γ mid payloads → Bool
+    | _, _, _, .nil => false
+    | _, _, _, .cons arm rest => Term.canStop opStops arm || Arms.canStop opStops rest
+end
+
 /-! ## Linear values are used once -/
 
 section

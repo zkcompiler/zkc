@@ -1,24 +1,18 @@
 module
 
 public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Admission.Refusal
 
 @[expose] public section
 
 /-!
-What admission gives: refusals, the association of a program and its resolution, and an
+What admission gives: the association of a program and its resolution, and an
 admitted program.
 -/
 
 namespace Zkc.Core
 
-/-! ## Refusals, the specification association -/
-
-/-- A refusal: a rule, a place, and what the wording needs. The frontend words it. -/
-structure Refusal where
-  rule : String
-  place : Place
-  requirement : String
-  known : List String
+/-! ## The specification association -/
 
 /-- An instance of a generic declaration: the declaration, the checked substitution and the
 key of the instance's definition. What it depends on is computed from the program. -/
@@ -61,13 +55,12 @@ structure Resolved {V : Vocabulary} (p : Typed V) where
 /-- The resolution of an association in a program: the definition of each family application
 is found by its key, and a key that is no definition of the program is refused. -/
 def resolve {V : Vocabulary} (p : Typed V) (raw : Association) :
-    Except (List Refusal) (Resolved p) :=
+    Except (List (Refusal V)) (Resolved p) :=
   (raw.families.mapM fun (family : FamilyApplication) =>
       (match p.find family.definition with
       | some subject => .ok ⟨family.generic, family.arguments, subject⟩
-      | none => .error [⟨"family-definition", ⟨family.definition, [], none, none⟩,
-          "the key of a definition of the program", []⟩] :
-        Except (List Refusal) (ResolvedFamily p))).map
+      | none => .error [definitionRefusal family.definition .association] :
+        Except (List (Refusal V)) (ResolvedFamily p))).map
     fun families => ⟨raw, families⟩
 
 

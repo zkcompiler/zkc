@@ -62,6 +62,7 @@ inductive LocalRaw (V : Vocabulary) where
   | owned (name : OwnedName) (at_ : List V.Ty) (statics : List Nat)
   | literal (τ : V.Ty) (data : List Nat)
   | call (callee : Key)
+deriving DecidableEq
 
 /-- The operations of a protocol. Who computes, who takes part in an event (its class, with
 its type) and who keeps a narrowed value is written; the holders of every value follow. -/

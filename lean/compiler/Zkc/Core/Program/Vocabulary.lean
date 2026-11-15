@@ -31,6 +31,18 @@ def HList.All {α : Type} {V : α → Type} (P : ∀ a, V a → Prop) :
   | [], .nil => True
   | _ :: _, .cons v rest => P _ v ∧ rest.All P
 
+/-- The values of two lists, one after the other. -/
+def HList.append {α : Type} {V : α → Type} :
+    {as bs : List α} → HList V as → HList V bs → HList V (as ++ bs)
+  | [], _, .nil, ys => ys
+  | _ :: _, _, .cons x xs, ys => .cons x (xs.append ys)
+
+/-- The values of a list that is two lists, as the values of each. -/
+def HList.split {α : Type} {V : α → Type} :
+    (as : List α) → {bs : List α} → HList V (as ++ bs) → HList V as × HList V bs
+  | [], _, ys => (.nil, ys)
+  | _ :: as, _, .cons x rest => let parts := HList.split as rest; (.cons x parts.1, parts.2)
+
 def Env {α : Type} (V : α → Type) (Γ : List α) : Type := ∀ a, Var Γ a → V a
 
 /-! ## Types -/

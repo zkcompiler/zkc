@@ -3,7 +3,8 @@
 The core of the zkc compiler: one type of typed terms over three dialects (a function, a
 protocol of all its roles, the program of one role), their meanings as processes, the
 projection of a protocol to the programs of its roles with the theorem that every role program
-is a projection of its protocol, what elaboration decides about a body, the data of an admitted
+is a projection of its protocol, the elaboration of a program of functions by names with its
+printed form and the round trip, what elaboration decides about a body, the data of an admitted
 program and of a deployed scheme, the run of a role under the handlers of its deployment, and
 the types of the functions that are still to be built with the statements that they must
 satisfy. It is the library `ZkcCore` of the package `zkc_compiler` (`lean/compiler`), in the
@@ -20,11 +21,11 @@ something imports a module that only proves something.
 | Directory | Holds |
 |---|---|
 | `Process/` | processes (well-founded trees of effects), the one property on every path (`Process.Every`) and its rules, handlers, their composition, and the retry of an attempt |
-| `Program/` | keys, labels, occurrences, sites, places and stops (`Identity`); types, the vocabulary and its models (`Vocabulary`); terms, their addresses and their linear use (`Term`); located types and role maps (`Located`); the record of a run (`Record`); the kinds of events and the shape of a protocol (`Shape`); the three dialects (`Dialects`); projection, the translation of a protocol's term to a role's (`Project`); a typed program, its definitions with what elaboration decided about each body, and the lookup of a definition by its key (`Typed`); the program by names that a frontend gives (`Syntax`) |
+| `Program/` | keys, labels, occurrences, sites, places and stops (`Identity`); types, the vocabulary and its models (`Vocabulary`); terms, their addresses and their linear use (`Term`); located types and role maps (`Located`); the record of a run (`Record`); the kinds of events and the shape of a protocol (`Shape`); the three dialects (`Dialects`); projection, the translation of a protocol's term to a role's (`Project`); a typed program, its definitions with what elaboration decided about each body, and the lookup of a definition by its key (`Typed`); the program by names that a frontend gives (`Syntax`); the rules of refusal and what a rule finds, as data (`Problem`); the elaboration of a region over the rules of a dialect (`Elaborate`); the printed form of a term and its round trip over lawful rules (`Print`); the written form of each operation of a function and its resolution, with their laws, and the rules of the local dialect (`LocalRules`); the elaboration of a function and the printed form of a typed program (`ElaborateLocal`) |
 | `Meaning/` | events and what a role holds (`Events`); the fold of a term over the semantics of a dialect (`Fold`); the semantics of a function, of a protocol and of a role program (`Local`, `Protocol`, `Role`); the meanings of a whole program (`Program`); the rule of a call (`Call`) |
 | `Projection/` | the relation of a role's process to a protocol's and its lemmas (`Proj`), the proof for one term (`Sound`), and the theorem for every definition of a program (`Theorem`) |
 | `Facts/` | the property at every instruction that a run reaches, facts and their reading, and the annotation of an admitted program |
-| `Admission/` | refusals, the association of a program and its resolution in it, and an admitted program |
+| `Admission/` | refusals (`Refusal`), the elaboration of a program of functions and its round trip (`Elaboration`), the association of a program and its resolution in it, and an admitted program (`Admission`) |
 | `World/` | the description of a layer (a handler of a role) and its meaning as a handler, the network of the roles, and the runs of a protocol and of one role alone |
 | `Scheme/` | the declaration of a scheme, who proves and who verifies, a deployed scheme and the run of a role under its handlers, and what deployment decides about scopes and keys |
 | `Run/` | how a run of the executor ends, the executor, and the prover's and the verifier's runs |
@@ -45,16 +46,26 @@ Proved, with no axiom beyond `propext` and `Quot.sound`:
   property of its entry in a table, installed at an actual call with the operands and the
   continuation taken from the term;
 - that the process with the record of a run is, without the record, the process of the term
-  (`Term.observe_fst`), and the lemmas on `Proj`, on what a role holds and on literals.
+  (`Term.observe_fst`), and the lemmas on `Proj`, on what a role holds and on literals;
+- the round trip: for rules whose laws hold, the printed form of every typed term whose case
+  analyses without an arm give nothing, elaborated in its context with the levels as the names
+  in scope, is the term (`elabBody_print`, `Program/Print.lean`); elaboration gives only such
+  terms (`elabBody_armed`); the local rules are lawful over headers with distinct keys, and the
+  written form of a local operation names it (`localRules_lawful`, `LocalOp.print_injective`,
+  `Program/LocalRules.lean`); the printed form of every typed program of such functions
+  elaborates as the program (`elaborateFunctions_print`, `Admission/Elaboration.lean`), and so
+  does the printed form of every program that elaboration gives
+  (`elaborateFunctions_roundTrip`).
 
 Defined: everything else, from the terms and their meanings to deployment, the network and
 the runs.
 
 Still to be built:
 
-- the functions of the record `Functions` (`Functions.lean`), with their types: `elaborate`,
-  `print`, `printRole`, `format`, `admit`, `check`, `deploy`, `identity`, `execute`,
-  `schedule`;
+- the functions of the record `Functions` (`Functions.lean`), with their types: `elaborate`
+  (a program of functions and protocols: the rules of the protocol dialect; for a program of
+  functions it is `elaborateFunctions`), `printRole`, `format`, `admit`, `check` (elaboration,
+  then the check of facts), `deploy`, `identity`, `execute`, `schedule`;
 - the theorems that `Statements.lean` states and does not prove, each with what it preserves
   (execution and state, a view, validity or progress): from `roundTrip` and
   `admitsWhatWasGiven` to `complete`, `executorRuns` and `formats`.
@@ -75,7 +86,10 @@ kernel runs when they are built:
   and the retry of an attempt, distinct keys, codecs, linear use, who proves, forks, the start
   of a layer, laws and contracts of functions at their calls, the lookup of a definition), and
   the theorems that are the reasons for the definitions' shape;
-- `Consumers.lean`: each consumer's side, written against the core.
+- `Consumers.lean`: each consumer's side, written against the core;
+- `Elaboration.lean`: for each rule of elaboration, a program by names that is accepted and
+  one that is refused with the rule and the place, the latest binding of a name, and the
+  printed form of each accepted program elaborated back to it.
 
 In `lean/compiler`, `lake build` builds the core and its tests, `lake test` builds the tests
 (the library is the test driver), and `lake exe zkc-audit` audits the core and its tests: the

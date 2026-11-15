@@ -2,6 +2,7 @@ module
 
 public import Zkc.Core.Functions
 public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Program.ElaborateLocal
 
 @[expose] public section
 
@@ -16,7 +17,8 @@ process or a run is the same), a view (what one reader sees is the same), validi
 or stop outside what is allowed), or progress (a run goes on or ends as said).
 
 That every role program is a projection of its protocol is not a statement: it is the
-theorem `Zkc.Core.projection` (`Projection/Theorem.lean`).
+theorem `Zkc.Core.projection` (`Projection/Theorem.lean`). For a program of functions, the
+round trip is the theorem `Zkc.Core.elaborateFunctions_roundTrip` (`Admission/Elaboration.lean`).
 -/
 
 namespace Zkc.Core
@@ -30,7 +32,7 @@ variable {V : Vocabulary} (c : Functions V)
 /-- Execution and state: elaborating the printed form of a typed program gives the
 program. -/
 def roundTrip : Prop :=
-  ∀ named p, c.elaborate named = .ok p → c.elaborate (c.print p) = .ok p
+  ∀ named p, c.elaborate named = .ok p → c.elaborate (print p) = .ok p
 
 /-- Execution and state: an admitted program is the elaboration of what was given, and its
 association is the resolution in it of the association given. -/
@@ -40,7 +42,7 @@ def admitsWhatWasGiven : Prop :=
 
 /-- The check of the definitions one at a time, each against the headers of those before
 it. -/
-def checkAll : Headers V → List (Definition V) → Except (List Refusal) (Headers V)
+def checkAll : Headers V → List (Definition V) → Except (List (Refusal V)) (Headers V)
   | hs, [] => .ok hs
   | hs, definition :: rest => (c.check hs definition).bind fun hs' => checkAll hs' rest
 
@@ -256,8 +258,8 @@ definitions that its entry and its declaration reach, and nothing else: not the 
 not the annotation, not another definition. -/
 def identityReads : Prop :=
   ∀ d d' : Deployed V, d.declaration = d'.declaration →
-    (c.print d.admitted.program).definitions.filter (fun definition => decide (definition.key ∈ d.closure)) =
-      (c.print d'.admitted.program).definitions.filter
+    (print d.admitted.program).definitions.filter (fun definition => decide (definition.key ∈ d.closure)) =
+      (print d'.admitted.program).definitions.filter
         (fun definition => decide (definition.key ∈ d'.closure)) →
     c.identity d = c.identity d'
 

@@ -17,24 +17,25 @@ namespace Zkc.Core
 /-! ## The functions to be built -/
 
 /-- The functions of elaboration, admission, deployment and execution that are still to be
-built. -/
+built. The printed form of a typed program is the definition `print`, and the elaboration of a
+program of functions is the definition `elaborateFunctions`. -/
 structure Functions (V : Vocabulary) where
-  /-- The typed program of a program by names; the refusals of elaboration. -/
-  elaborate : NamedProgram V → Except (List Refusal) (Typed V)
-  /-- The printed form of a typed program: each value has its level as its name. -/
-  print : Typed V → NamedProgram V
+  /-- The typed program of a program by names, of functions and protocols; the refusals of
+  elaboration. -/
+  elaborate : NamedProgram V → Except (List (Refusal V)) (Typed V)
   /-- The printed form of a role's code: of its program, and of a clause of a handler. -/
   printRole : ∀ {hs : Headers V} (r : Role) {Γ outs : List (LTy V)},
     Term (roleDialect V hs r) Γ outs → Region (RoleRaw V) (List Role)
   /-- The canonical format of a type: the core's combinators over the formats of the nominal
   carriers that a model with codecs gives. -/
   format : ∀ (M : Model V), Codecs M → ∀ τ : V.Ty, Format (M.Val τ)
-  admit : NamedProgram V → Association → Except (List Refusal) (Admitted V)
+  /-- Admission: elaboration, then the check of facts. -/
+  admit : NamedProgram V → Association → Except (List (Refusal V)) (Admitted V)
   /-- The check of one definition against the headers of those before it: what `admit` does
   for each definition, and what a frontend calls while a program is being written. It gives
   the headers with the definition's. -/
-  check : Headers V → Definition V → Except (List Refusal) (Headers V)
-  deploy : Admitted V → Declaration → Except (List Refusal) (Deployed V)
+  check : Headers V → Definition V → Except (List (Refusal V)) (Headers V)
+  deploy : Admitted V → Declaration → Except (List (Refusal V)) (Deployed V)
   /-- The identity of a deployed scheme: what its proofs and its transcript are bound to. -/
   identity : Deployed V → List Nat
   /-- The executor: one role in a world, to a limit of steps. It reports how the run ended

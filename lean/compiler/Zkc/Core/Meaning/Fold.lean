@@ -49,16 +49,6 @@ namespace HList
 def single {α : Type} {F : α → Type} {a : α} : HList F [a] → F a
   | .cons v .nil => v
 
-def append {α : Type} {V : α → Type} :
-    {as bs : List α} → HList V as → HList V bs → HList V (as ++ bs)
-  | [], _, .nil, ys => ys
-  | _ :: _, _, .cons x xs, ys => .cons x (xs.append ys)
-
-def split {α : Type} {V : α → Type} :
-    (as : List α) → {bs : List α} → HList V (as ++ bs) → HList V as × HList V bs
-  | [], _, ys => (.nil, ys)
-  | _ :: as, _, .cons x rest => let parts := split as rest; (.cons x parts.1, parts.2)
-
 /-- No value collected yet, of each type. -/
 def empties {α : Type} {V : α → Type} : (items : List α) → HList (fun a => List (V a)) items
   | [] => .nil

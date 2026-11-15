@@ -105,7 +105,7 @@ variable {V : Vocabulary} (c : Functions V)
 
 /-- A frontend calls `admit`, `deploy`, `prove` and `verify`, and nothing else of the core. -/
 def compile (named : NamedProgram V) (assoc : Association) (scheme : Declaration) :
-    Except (List Refusal) (Deployed V) := do
+    Except (List (Refusal V)) (Deployed V) := do
   let admitted ← c.admit named assoc
   c.deploy admitted scheme
 
