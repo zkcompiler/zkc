@@ -574,14 +574,18 @@ functions stay callable.
 ### 3.6 Canonical text
 
 The canonical text of a program is what the formatter prints. The formatter changes no meaning:
-it prints the same tokens except for the annotations of FM2.
+it prints the same program, with the layout of FM1, a body of `return e` alone and roles written
+as FM1 states, and the redundant annotations of FM2 removed.
 
 **FM1. Layout.** Four spaces per suite. One space on each side of a binary operator except `^`,
 `..` and `::`; none between a name and its static bracket; one after `,` and after `:`; none
-inside brackets. One blank line between top-level items. A logical line longer than 100
+inside brackets, except one after the `<` of a static bracket whose content starts with `-`, since
+`<-` is one token (LX5). One blank line between top-level items. A logical line longer than 100
 characters is broken inside its outermost bracket, after a `,`, with the closing bracket on its
 own line; a line without such a place stays. Roles in `@( … )`, in a roster order; one role is written without
-parentheses. A body that is one expression is printed as an expression body (GR1).
+parentheses. A body that is one expression is printed as an expression body (GR1), except a body
+of `return ()` alone, which keeps its `return`: a line `()` of a suite is the statement `Empty`
+(§5.8, GR1).
 
 **FM2. Annotations.** For each annotation: when it is redundant (accepted, and removed by the
 formatter), when it is wrong (an error), and when it is kept.
@@ -595,7 +599,7 @@ formatter), when it is wrong (an error), and when it is kept.
 | a role-map entry `O = P` | `O` and `P` are the same name | when so | when `P` is not a role of the caller, or the map is not injective | when the names differ |
 | `else reject` on a guard | `reject` is the default reason | always | — | never |
 | `@R` on `reduces` or `proves` | `R` is the only role that can decide the clause (SX6) | when so | when `R` cannot decide it | when several roles can |
-| `-> ()` on a `def` | the result is the empty tuple | always | — | never |
+| `-> ()` on a `def` | the result is the empty tuple | when not kept | — | on a `def` that without it is a member definition (GR4): in the suite of a module, one without `pub`, `entry`, static parameters, parameters or `where` |
 | a binder `_ <-` or `x <-` on an application without results | — | `_ <-` always | — | a name: it names the site |
 
 **FM3. Never changed.** The roles of a `guard` in a protocol body (GU2); a type annotation on a
@@ -1385,8 +1389,9 @@ interface gives them. `Self` in an interface is the implementing module (in a so
 member's own name is not in scope in its definition. `M<A>::T` is its definition to every reader. An interface is satisfied only by a module that names it: a module
 that implements `Rows<T, n>`, whose `where` requires `Self: Kind`, names both. **Messages:**
 "`<M>` does not define `<member>` of `<I>`"; "`<M>` defines `<member>`, which `<I>` does not
-have"; "`<I>` declares `<write_natural>` as a `def`: `<M>` defines it as deployed code, not as a
-`spec def`"; "`<I>` declares `<table>` as a `spec def`: write `spec def <table>(…)`".
+have"; "`<M>` defines `<member>` as a member, and implements no interface"; "`<I>` declares
+`<write_natural>` as a `def`: `<M>` defines it as deployed code, not as a `spec def`"; "`<I>`
+declares `<table>` as a `spec def`: write `spec def <table>(…)`".
 
 **SP9. `partial`.** A function member written `partial def` may be implemented by a function that
 can stop; one written `def` may not. **Message:** "`<M>::<f>` can stop; `<I>` declares `<f>`
@@ -3684,7 +3689,7 @@ smallest choice that keeps the document set consistent.
 | 17 | The type `Residual` of a derived kind and the batching of several claims by its `Open`; hiding commitments and zero knowledge of oracle protocols | the redesign of derived kinds and of `Commitment`: FRI as a derived kind with a batched opening; the masked inner-product protocol over Pedersen |
 | 18 | Private-coin and designated-verifier protocols; `private` on a send; multi-receiver sends against a sender that does not follow the protocol; handles with several readers; recursive verification | the first library that needs each |
 | 19 | The legacy `construction` blocks and transcript code: their successor is a source suite and a layout | the libraries that use them |
-| 20 | The formatter is specified and not implemented; block comments and string escapes are unexamined | — |
+| 20 | The formatter; block comments and string escapes | closed for FM1, FM3 and the rows of FM2 that the text decides: the formatter follows them, and the tests check that formatting keeps the program. The formatter keeps the annotations of the other rows of FM2, which compare an annotation with what the checker computes; block comments and string escapes are unexamined |
 | 21 | The order of validation | decided: a Lean frontend on layer A, Schnorr and Sumcheck end to end |
 | 22 | The theorem that related interpretations of an interface give related results, for the definitions that the opaque typing admits (SP12) | written in the formal library over the local dialect, with its two uses for constraints |
 | 23 | An error in an arm of a static `if` that no checked instance takes is found late (TY9) | the implementation |

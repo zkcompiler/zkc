@@ -196,6 +196,55 @@ def printerSuite : TestM Unit := do
   -- FM1: a body of `return e` alone is an expression body
   checkFormat "expression body" "module t\ndef f() -> nat:\n    return 1\n"
     "module t\n\ndef f() -> nat:\n    1\n"
+  -- FM1: `return ()` alone keeps its `return`: a line `()` is the empty statement (GR1)
+  checkFormat "unit body" "module t\ndef f() -> ():\n    return ()\n"
+    "module t\n\ndef f():\n    return ()\n"
+  -- FM2: in the suite of a module, `-> ()` stays on a `def` that without it is a member
+  -- definition (GR4): one without parameters, also after `spec` or a kernel attribute
+  checkFormat "unit result kept in a module"
+    "module t\nmodule M:\n    def f() -> (): if true then () else ()\n    def h() -> () = primitive(\"t.h\")\n    spec def s() -> () = external(\"t.s\")\n    #[kernel(\"k\")]\n    def k() -> (): ()\n"
+    "module t\n\nmodule M:\n    def f() -> (): if true then () else ()\n    def h() -> () = primitive(\"t.h\")\n    spec def s() -> () = external(\"t.s\")\n    #[kernel(\"k\")]\n    def k() -> (): ()\n"
+  -- FM2: and goes from every other `def` of a module: with parameters, after `pub` or `entry`,
+  -- with static parameters, with a `where`, and in a section
+  checkFormat "unit result removed in a module"
+    "module t\nmodule M:\n    def g(x: nat) -> (): ()\n    pub def p() -> (): ()\n    entry def e() -> (): ()\n    def n<m: nat>() -> (): ()\n    def w() -> () where (1 > 0): ()\n    section where (1 > 0):\n        def c() -> (): ()\n"
+    "module t\n\nmodule M:\n    def g(x: nat): ()\n    pub def p(): ()\n    entry def e(): ()\n    def n<m: nat>(): ()\n    def w() where (1 > 0): ()\n    section where (1 > 0):\n        def c(): ()\n"
+  -- GR4 as the formatter reads it on the tree of a `def` is the parser's: each `def`, parsed at the
+  -- top level, is read as a member definition in the suite of a module exactly when
+  -- `readsAsMemberDef` says so
+  let definitions : List (List String) := [
+    ["def h(): ()"], ["def h() = primitive(\"t.h\")"], ["spec def h() = external(\"t.h\")"],
+    ["#[kernel(\"k\")]", "def h(): ()"], ["#[kernel(\"k\")]", "spec def h(): ()"],
+    ["#[kernel(\"k\")]", "pub def h(): ()"], ["pub def h(): ()"], ["entry def h(): ()"],
+    ["def h<n: nat>(): ()"], ["def h() where (1 > 0): ()"], ["def h(x: nat): ()"],
+    ["def h() -> (): ()"], ["spec def h() -> () = external(\"t.h\")"]]
+  for lines in definitions do
+    let atTop := "\n".intercalate lines
+    let inModule := "\n".intercalate (lines.map ("    " ++ ·))
+    match parseString "top" s!"module t\n{atTop}\n", parseString "module" s!"module t\nmodule M:\n{inModule}\n" with
+    | .ok top, .ok nested =>
+      match top.tree.items, nested.tree.items with
+      | #[.«def» value], #[.«module» (.«module» _ _ _ _ _ _ (.suite #[item]))] =>
+        expectTrue ((item matches .memberDef _) == Parser.readsAsMemberDef .module value)
+          s!"`{atTop}`: the parser and `readsAsMemberDef` read it differently in a module"
+      | _, _ => failure s!"`{atTop}`: not one `def` at the top level and one item in a module"
+    | _, _ => failure s!"`{atTop}`: refused by the parser"
+  -- FM1: a static bracket whose content starts with `-` opens with `< `, since `<-` is one token
+  -- (LX5): static arguments, `index<…>` as a type and as a static term, and `as oracle<…>`;
+  -- broken, the bracket puts that content on a line of its own, without the space
+  let callee := "".pushn 'g' 70
+  let minusInStaticBrackets := [
+    ("static brackets that start with a minus",
+      "module t\ndef f(x: index< -1+2>) -> nat: g< -1>(x) + h<index<  -1>>() + x.m<  -2, 3>()\nprotocol X roles(P, V)(a: nat @P):\n    x <- send a to V as oracle< -1>\n",
+      "module t\n\ndef f(x: index< -1 + 2>) -> nat: g< -1>(x) + h<index< -1>>() + x.m< -2, 3>()\n\nprotocol X roles(P, V)(a: nat @P):\n    x <- send a to V as oracle< -1>\n"),
+    ("a broken static bracket that starts with a minus",
+      s!"module t\ndef f(x: nat) -> nat: {callee}< -1, 2>(x)\n",
+      s!"module t\n\ndef f(x: nat) -> nat: {callee}<\n    -1,\n    2\n>(x)\n")]
+  for (label, source, expected) in minusInStaticBrackets do
+    checkFormat label source expected
+    match parseString label expected with
+    | .ok parsed => checkPrinter label parsed
+    | .error error => failure s!"{label}: {error.render}"
   -- FM1: one blank line between top-level items, consecutive `use` items as in the source
   checkFormat "blank lines"
     "module t\nuse a::b\nuse a::c\n\n\nuse a::d\ndef f() -> nat: 1\n// about g\n\ndef g() -> nat:\n    x = 1\n\n\n    return x\n"
