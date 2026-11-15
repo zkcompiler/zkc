@@ -14,13 +14,11 @@ attempts that reached it, then its key.
 namespace Zkc.Core
 
 /-- The key of a definition or of an instruction: of the event, the block, the loop, the
-choice, the guard or the application that the instruction is. The producer gives it, by the
-reference's rule (a definition by its declaration and its static arguments, an instruction by
-its site), so that it does not change when something else is inserted. The meaning of an
-interactive protocol does not depend on which keys are chosen; the identity of a deployed
-scheme and its transcript do. The instructions of a definition's body have different keys,
-except that the blocks of one stepped loop repeat them, each under its number; the keys of the
-definitions of a program are different. -/
+choice, the guard or the application that the instruction is. The producer gives it. The meaning
+of an interactive protocol does not depend on which keys are chosen; the identity of a deployed
+scheme and its transcript do. What must hold of keys: the instructions of a definition's body
+have different keys, except that the blocks of one stepped loop repeat them, each under its
+number; the keys of the definitions of a program are different. -/
 structure Key where
   number : Nat
 deriving DecidableEq, Repr, Hashable

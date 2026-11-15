@@ -80,8 +80,8 @@ def rolesSafe : Prop :=
       (r : Role) (path : List Frame) (ins : HList (RV M r) hdr.ins), ins.All (RV.Valid M r) →
       (roleMeaning M a.program p r path ins).StopsWhen (Permitted M) (· ≠ .undefined)
 
-/-- Validity: what the annotation of an admitted program knows holds, and no loop runs more
-often than its bound. -/
+/-- Validity: no loop of an admitted program runs more often than the bound that its
+annotation gives it. -/
 def annotationHolds : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a → ∀ M : Model V, Respects M a.annotation a.program
 

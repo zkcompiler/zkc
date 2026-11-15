@@ -143,7 +143,7 @@ example : roundsHeader.record =
 /-- The role map of a list of distinct roles sends each callee role to the role at its
 position, and back. -/
 example : (RoleMap.ofList [2, 0] (by decide)).to 0 = 2 ∧ (RoleMap.ofList [2, 0] (by decide)).to 1 = 0 ∧
-    (RoleMap.ofList [2, 0] (by decide)).back 2 = 0 := by decide
+    (RoleMap.ofList [2, 0] (by decide)).back 2 = 0 := by decide +kernel
 
 /-! ## An attempt, and a request to a service -/
 
@@ -268,9 +268,9 @@ example : ownedOp plainModel (.seqLength .nat (some 2) rfl) (.cons ([5, 6] : Lis
 example : Ty.isLinear plain (.seq (.record ⟨1⟩ true (.cons .nat .nil)) Option.none) = true ∧
     Ty.isLinear plain (.tuple (.cons .nat (.cons .bool .nil))) = false := ⟨rfl, rfl⟩
 
-example : (Ty.record ⟨1⟩ true .nil : plain.Ty) ≠ .record ⟨1⟩ false .nil := by decide
+example : (Ty.record ⟨1⟩ true .nil : plain.Ty) ≠ .record ⟨1⟩ false .nil := by decide +kernel
 
-example : (nat [0, 1]) ≠ nat [0] := by decide
+example : (nat [0, 1]) ≠ nat [0] := by decide +kernel
 
 /-! ## Who proves -/
 
@@ -292,14 +292,14 @@ def derivedScheme (entry : Key) (kinds : List RoleKind) (prover : Option Role) :
 
 /-- In a round, the second role owns a draw that the first hears: the first proves. -/
 example : proverAndVerifier roundHeader (derivedScheme ⟨20⟩ [.online, .online] Option.none) =
-    some (0, 1) := by decide
+    some (0, 1) := by decide +kernel
 
 /-- A written prover that is not the computed one is refused. -/
 example : proverAndVerifier roundHeader (derivedScheme ⟨20⟩ [.online, .online] (some 1)) =
-    Option.none := by decide
+    Option.none := by decide +kernel
 
 /-- The rounds apply the round: its draw is heard, at the site through the application. -/
-example : roundsHeader.shape.heardCoins = [⟨[⟨2⟩], ⟨1⟩⟩] := by decide
+example : roundsHeader.shape.heardCoins = [⟨[⟨2⟩], ⟨1⟩⟩] := by decide +kernel
 
 /-! ## A deployed scheme, and the run of a role -/
 
@@ -315,7 +315,7 @@ def relayDeployed : Deployed plain where
   stack := fun _ => []
 
 /-- The first role gives to the second, which is online: the first proves. -/
-example : relayDeployed.roles = some (0, 1) := by decide
+example : relayDeployed.roles = some (0, 1) := by decide +kernel
 
 /-- The second role's run under no handlers starts by getting the value from the first, at
 the occurrence of the first event. -/

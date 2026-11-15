@@ -50,7 +50,7 @@ def caller : Definition field :=
 
 /-- Both functions are admitted; the annotation has the bound of each loop, the latest
 definition's first. -/
-example : admission ⟨[bounded, caller]⟩ = .inr [(at_ 2 5, 4), (at_ 1 4, 9)] := by decide
+example : admission ⟨[bounded, caller]⟩ = .inr [(at_ 2 5, 4), (at_ 1 4, 9)] := by decide +kernel
 
 /-! ## The first refused definition, whole -/
 
@@ -77,14 +77,14 @@ def unguardedRefusal (key instruction : Nat) : ProgramRefusal field :=
 refusals, and nothing of the third function, which is refused as well. -/
 example : admission ⟨[addition 1, unguardedTwice 2, unguarded 3]⟩ =
     .inl [unguardedRefusal 2 1, unguardedRefusal 2 2] := by
-  decide
+  decide +kernel
 
 /-- The first function's elaboration refuses an operand that is not in scope: admission gives
 that refusal, and nothing of the second function. -/
 example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none
       (.mk [0, 1] [.op ⟨1⟩ [2] plus [0, 5]] [2]), unguarded 2]⟩ =
     .inl [⟨.scope, at_ 1 1, .name 5⟩] := by
-  decide
+  decide +kernel
 
 /-! ## One definition at a time -/
 
@@ -126,19 +126,19 @@ def resolution (named : NamedProgram field) (association : Association) :
 /-- A key that names a definition of the program: admitted, with that definition found. -/
 example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 2) =
     .inr [(⟨7⟩, [.nat 3], ⟨2⟩)] := by
-  decide
+  decide +kernel
 
 /-- A key that is no definition of the program: refused by the rule `association`, at the
 key. -/
 example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 9) =
     .inl [refuseWhole ⟨9⟩ .association (.key ⟨9⟩)] := by
-  decide
+  decide +kernel
 
 /-! ## A protocol -/
 
 /-- A protocol is refused: its role programs are not walked yet. -/
 example : admission ⟨[addition 1, .protocol ⟨2⟩ 2 [] [] (.mk [] [] [])]⟩ =
     .inl [refuseWhole ⟨2⟩ .protocol (.key ⟨2⟩)] := by
-  decide
+  decide +kernel
 
 end Zkc.Core.AdmissionTests

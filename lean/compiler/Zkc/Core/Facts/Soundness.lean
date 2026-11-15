@@ -437,13 +437,6 @@ theorem localFactRules_written {ins res : List V.Ty} (o : LocalOp V fns ins res)
     (localFactRules V fns).written o = some o.print := rfl
 theorem localFactRules_ops : (localFactRules V fns).ops = localOpFacts V := rfl
 theorem localFactRules_range : (localFactRules V fns).range = localRange := rfl
-theorem localSem_op {ins res : List V.Ty} (key : Key) (o : LocalOp V fns ins res)
-    (path : List Frame) (xs : HList M.Val ins) :
-    (localSem M fns table).op key o path xs = localOp M table o xs := rfl
-theorem localSem_holds {t : V.Ty} (ok : t = .bool) (v : M.Val t) :
-    (localSem M fns table).holds (w := ()) ok v = asBool M ok v := rfl
-theorem localSem_stop (why : Reason) (at_ : Occurrence) :
-    (localSem M fns table).stop () why at_ = .declared why at_ := rfl
 
 /-- What the walk of a term shows of its run, with what holds where it returns. -/
 abbrev Shows (F : List (Place × Nat)) (definition : Key) (blocks : List (Key × Nat))
@@ -545,8 +538,9 @@ theorem op_sound (blocks : List (Key × Nat)) {Γ outs ins res : List V.Ty} (key
   generalize hst₁ : checkRequirements (localOpFacts V) k ⟨definition, blocks, some key, none⟩
     o.print (idsOf ids args) ((localOpFacts V).requires o.print) st = st₁ at hnone recorded ⊢
   generalize hmade : share o.print (idsOf ids args) res.length st₁ = made at hnone recorded ⊢
-  generalize hk₂ : ((k.addRanges made.1 ((localOpFacts V).ranges o.print
-    (List.map k.rangeOf (idsOf ids args)))).addRanges made.1 (List.map localRange res)).enter
+  generalize hk₂ : (((k.addRanges made.1 ((localOpFacts V).ranges o.print
+    (List.map k.rangeOf (idsOf ids args)))).addOffset (localOpFacts V) made.2.table k
+    o.print (idsOf ids args) made.1).addRanges made.1 (List.map localRange res)).enter
     (localFactRules V fns) res = k₂ at hnone recorded ⊢
   have refs₁ : st₁.refusals = [] := by
     obtain ⟨⟨new, e⟩, _⟩ := (walk_state (localFactRules V fns) definition none blocks rest
@@ -587,7 +581,10 @@ theorem op_sound (blocks : List (Key × Nat)) {Γ outs ins res : List V.Ty} (key
           · exact Nat.lt_of_lt_of_le (inv.below i m)
               (Nat.le_trans step₁.grows.next step₂.grows.next)
         · rw [← hk₂, enter_of_valid vr]
-          refine addTypeRanges_holds ((inv.holds.le le).addRanges fun j id rr e1 e2 => ?_)
+          refine addTypeRanges_holds (Known.Holds.addOffset lawful step₂.coherent.consistent
+            step₂.coherent.closed (inv.holds.le le)
+            ((inv.holds.le le).addRanges fun j id rr e1 e2 => ?_) (valuesOf_le le hargs) look
+            fun f hf => lawful.form _ _ _ f hf run)
             step₂.coherent.valid (valuesOf_typed look)
           have known : ∀ (i : Nat) (rr : Range),
               (List.map k.rangeOf (idsOf ids args))[i]? = some (some rr) →
@@ -1974,7 +1971,7 @@ theorem start_inv {Γ : List V.Ty} (ins : HList M.Val Γ) (valid : ins.All M.Val
       (List.range Γ.length) (Env.ofList ins)
       ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
       (localFactRules V fns) Γ)
-      ⟨Table.empty, Γ.length, [], []⟩ := by
+      ⟨Table.empty (localFactRules V fns).place, Γ.length, [], []⟩ := by
   have support : Support Γ.length
       (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins)) := by
     have := setFrom_support (ρ := (fun _ => none : Valuation (Dyn M))) (lo := 0)
@@ -2043,7 +2040,7 @@ theorem checkFacts_sound (distinct : (fns.map (·.key)).Nodup)
   generalize he : walk (localFactRules V fns) definition none [] body (List.range Γ.length)
     ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
       (localFactRules V fns) Γ)
-    ⟨Table.empty, Γ.length, [], []⟩ = e at accepted
+    ⟨Table.empty (localFactRules V fns).place, Γ.length, [], []⟩ = e at accepted
   split at accepted
   · next hr =>
       simp only [Except.ok.injEq] at accepted
@@ -2072,7 +2069,7 @@ theorem checkFacts_places (definition : Key) {Γ outs : List V.Ty}
     (List.range Γ.length)
     ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
       (localFactRules V fns) Γ)
-    ⟨Table.empty, Γ.length, [], []⟩).1
+    ⟨Table.empty (localFactRules V fns).place, Γ.length, [], []⟩).1
   split at accepted
   · simp only [Except.ok.injEq] at accepted
     intro q m

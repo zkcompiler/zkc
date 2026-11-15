@@ -3,9 +3,10 @@ import Zkc.Tests.Core.Shapes
 
 /-!
 The elaboration of functions by names. For each rule, a program that is accepted and one that
-is refused, with the refusal: its rule, its place and what the rule found; the latest binding
-of a name; and the printed form of each accepted program, elaborated back to it. The kernel
-evaluates each.
+is refused, with the refusal: its rule, its place and what the rule found; where a refusal is at
+each construct; the literals of each type; linear use at each construct, and which types are
+linear; the latest binding of a name; and the printed form of each accepted program, elaborated
+back to it. The kernel evaluates each.
 -/
 
 namespace Zkc.Core.Elaboration
@@ -49,52 +50,52 @@ def token : plain.Ty := .record ⟨5⟩ true .nil
 def add : NamedProgram plain :=
   single [.nat, .nat] [.nat] false (.mk [0, 1] [.op ⟨1⟩ [2] (.owned .natAdd [] []) [0, 1]] [2])
 
-example : refusal add = none := by decide
+example : refusal add = none := by decide +kernel
 
 /-- An operand that is not in scope. -/
 example : refusal (single [.nat, .nat] [.nat] false
     (.mk [0, 1] [.op ⟨1⟩ [2] (.owned .natAdd [] []) [0, 5]] [2])) =
     some ⟨.scope, at_ 1 1, .name 5⟩ := by
-  decide
+  decide +kernel
 
 /-- An exit that is not in scope. -/
 example : refusal (single [.nat] [.nat] false (.mk [0] [] [7])) =
     some ⟨.scope, whole 1, .name 7⟩ := by
-  decide
+  decide +kernel
 
 /-- An operand of another type. -/
 example : refusal (single [.bool, .nat] [.nat] false
     (.mk [0, 1] [.op ⟨1⟩ [2] (.owned .natAdd [] []) [0, 1]] [2])) =
     some ⟨.operands, at_ 1 1, .types [.nat, .nat] [.bool, .nat]⟩ := by
-  decide
+  decide +kernel
 
 /-- An operation that the core owns, written with types that it does not take. -/
 example : refusal (single [.nat, .nat] [.nat] false
     (.mk [0, 1] [.op ⟨1⟩ [2] (.owned .natAdd [.nat] []) [0, 1]] [2])) =
     some ⟨.owned, at_ 1 1, .operation (.owned .natAdd [.nat] [])⟩ := by
-  decide
+  decide +kernel
 
 /-- The wrong number of results. -/
 example : refusal (single [.nat, .nat] [.nat] false
     (.mk [0, 1] [.op ⟨1⟩ [2, 3] (.owned .natAdd [] []) [0, 1]] [2])) =
     some ⟨.results, at_ 1 1, .number 1 2⟩ := by
-  decide
+  decide +kernel
 
 /-- The wrong number of inputs. -/
 example : refusal (single [.nat, .nat] [.nat] false (.mk [0] [] [0])) =
     some ⟨.inputs, whole 1, .number 2 1⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Literals -/
 
 def literal : NamedProgram plain :=
   single [] [.bool] false (.mk [] [.op ⟨1⟩ [0] (.literal .bool [1]) []] [0])
 
-example : refusal literal = none := by decide
+example : refusal literal = none := by decide +kernel
 
 example : refusal (single [] [.bool] false (.mk [] [.op ⟨1⟩ [0] (.literal .bool [2]) []] [0])) =
     some ⟨.literal, at_ 1 1, .operation (.literal .bool [2])⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Calls and keys -/
 
@@ -103,36 +104,36 @@ def calls : NamedProgram plain :=
   ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
     .fn ⟨2⟩ [.nat] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩
 
-example : refusal calls = none := by decide
+example : refusal calls = none := by decide +kernel
 
 /-- A callee that is not there. -/
 example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
     .fn ⟨2⟩ [.nat] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨9⟩) [0]] [1])]⟩ =
     some ⟨.callee, at_ 2 1, .callee ⟨9⟩ 0⟩ := by
-  decide
+  decide +kernel
 
 /-- A callee that is there twice: a body against headers with a repeated key, which no program
 has. -/
 example : bodyRefusal [⟨⟨1⟩, [.nat], [.nat], false, none⟩, ⟨⟨1⟩, [.nat], [.nat], false, none⟩]
     ⟨⟨2⟩, [.nat], [.nat], false, none⟩ (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1]) =
     some ⟨.callee, at_ 2 1, .callee ⟨1⟩ 2⟩ := by
-  decide
+  decide +kernel
 
 /-- A call on operands of other types than the callee takes. -/
 example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
     .fn ⟨2⟩ [.bool] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩ =
     some ⟨.operands, at_ 2 1, .types [.nat] [.bool]⟩ := by
-  decide
+  decide +kernel
 
 /-- A repeated key. -/
 example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
     .fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0])]⟩ = some ⟨.key, whole 1, .key ⟨1⟩⟩ := by
-  decide
+  decide +kernel
 
 /-- A protocol: the rules of the protocol dialect are not built. -/
 example : refusal ⟨[.protocol ⟨1⟩ 1 [] [] (.mk [] [] [])]⟩ =
     some ⟨.protocol, whole 1, .key ⟨1⟩⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Guards and stopping -/
 
@@ -140,28 +141,28 @@ example : refusal ⟨[.protocol ⟨1⟩ 1 [] [] (.mk [] [] [])]⟩ =
 def guarded : NamedProgram plain :=
   single [.bool] [.bool] true (.mk [0] [.guard ⟨1⟩ () 0 .reject] [0])
 
-example : refusal guarded = none := by decide
+example : refusal guarded = none := by decide +kernel
 
 /-- A condition that is not a truth value. -/
 example : refusal (single [.nat] [.nat] true (.mk [0] [.guard ⟨1⟩ () 0 .reject] [0])) =
     some ⟨.condition, at_ 1 1, .type .nat⟩ := by
-  decide
+  decide +kernel
 
 /-- A header that says that the function cannot stop, over a body with a guard. -/
 example : refusal (single [.bool] [.bool] false (.mk [0] [.guard ⟨1⟩ () 0 .reject] [0])) =
     some ⟨.stops, whole 1, .stops false true⟩ := by
-  decide
+  decide +kernel
 
 /-- A header that says that the function can stop, over a body that cannot. -/
 example : refusal (single [.nat] [.nat] true (.mk [0] [] [0])) =
     some ⟨.stops, whole 1, .stops true false⟩ := by
-  decide
+  decide +kernel
 
 /-- A call of a function that can stop can stop. -/
 example : refusal ⟨[.fn ⟨1⟩ [.bool] [.bool] true none (.mk [0] [.guard ⟨1⟩ () 0 .reject] [0]),
     .fn ⟨2⟩ [.bool] [.bool] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩ =
     some ⟨.stops, whole 2, .stops false true⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Choices -/
 
@@ -172,7 +173,7 @@ def chosen : NamedProgram plain :=
       (.mk [] [.op ⟨2⟩ [5] (.literal .nat [3]) []] [5])
       (.mk [] [.op ⟨3⟩ [5] (.literal .nat [4]) []] [5])] [1])
 
-example : refusal chosen = none := by decide
+example : refusal chosen = none := by decide +kernel
 
 /-- Regions of a choice that give different types. -/
 example : refusal (single [.bool] [.nat] false (.mk [0]
@@ -180,13 +181,13 @@ example : refusal (single [.bool] [.nat] false (.mk [0]
       (.mk [] [.op ⟨2⟩ [5] (.literal .nat [3]) []] [5])
       (.mk [] [.op ⟨3⟩ [5] (.literal .bool [1]) []] [5])] [1])) =
     some ⟨.regions, at_ 1 1, .types [.nat] [.bool]⟩ := by
-  decide
+  decide +kernel
 
 /-- A choice on a natural. -/
 example : refusal (single [.nat] [.nat] false (.mk [0]
     [.choose ⟨1⟩ () 0 [1] (.mk [] [] [0]) (.mk [] [] [0])] [1])) =
     some ⟨.condition, at_ 1 1, .type .nat⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Case analyses -/
 
@@ -197,25 +198,25 @@ def analysed : NamedProgram plain :=
       [.mk [9] [] [9],
        .mk [9] [.op ⟨2⟩ [10] (.literal .nat [0]) []] [10]]] [1])
 
-example : refusal analysed = none := by decide
+example : refusal analysed = none := by decide +kernel
 
 /-- A subject that is not a variant. -/
 example : refusal (single [.nat] [.nat] false (.mk [0]
     [.cases ⟨1⟩ () 0 [1] [.mk [9] [] [9]]] [1])) =
     some ⟨.variant, at_ 1 1, .type .nat⟩ := by
-  decide
+  decide +kernel
 
 /-- The wrong number of arms. -/
 example : refusal (single [natOrBool] [.nat] false (.mk [0]
     [.cases ⟨1⟩ () 0 [1] [.mk [9] [] [9]]] [1])) =
     some ⟨.arms, at_ 1 1, .number 2 1⟩ := by
-  decide
+  decide +kernel
 
 /-- Arms that give different types. -/
 example : refusal (single [natOrBool] [.nat] false (.mk [0]
     [.cases ⟨1⟩ () 0 [1] [.mk [9] [] [9], .mk [9] [] [9]]] [1])) =
     some ⟨.armTypes, at_ 1 1, .types [.nat] [.bool]⟩ := by
-  decide
+  decide +kernel
 
 /-- An arm without a name for its payload. -/
 example : refusal (single [natOrBool] [.nat] false (.mk [0]
@@ -223,7 +224,7 @@ example : refusal (single [natOrBool] [.nat] false (.mk [0]
       [.mk [] [.op ⟨2⟩ [10] (.literal .nat [0]) []] [10],
        .mk [9] [.op ⟨3⟩ [10] (.literal .nat [0]) []] [10]]] [1])) =
     some ⟨.inputs, at_ 1 1, .number 1 0⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Loops -/
 
@@ -233,7 +234,7 @@ def looped : NamedProgram plain :=
     [.loop ⟨1⟩ () (.fixed 3) [0] [1, 2]
       (.mk [10, 11] [.op ⟨2⟩ [12] (.owned .natAdd [] []) [10, 11]] [12, 10])] [1])
 
-example : refusal looped = none := by decide
+example : refusal looped = none := by decide +kernel
 
 /-- A loop as often as an input says. -/
 def counted : NamedProgram plain :=
@@ -241,20 +242,20 @@ def counted : NamedProgram plain :=
     [.loop ⟨1⟩ () (.count 1) [0] [2]
       (.mk [10, 11] [.op ⟨2⟩ [12] (.owned .natAdd [] []) [10, 11]] [12])] [2])
 
-example : refusal counted = none := by decide
+example : refusal counted = none := by decide +kernel
 
 /-- A body that does not give back the carried types. -/
 example : refusal (single [.nat] [.nat] false (.mk [0]
     [.loop ⟨1⟩ () (.fixed 3) [0] [1]
       (.mk [10, 11] [.op ⟨2⟩ [12] (.literal .bool [0]) []] [12])] [1])) =
     some ⟨.carried, at_ 1 1, .types [.nat] [.bool]⟩ := by
-  decide
+  decide +kernel
 
 /-- A count that is not a natural. -/
 example : refusal (single [.nat, .bool] [.nat] false (.mk [0, 1]
     [.loop ⟨1⟩ () (.count 1) [0] [2] (.mk [10, 11] [] [11])] [2])) =
     some ⟨.count, at_ 1 1, .type .bool⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Blocks and attempts -/
 
@@ -263,18 +264,18 @@ def blocked : NamedProgram plain :=
   single [] [.bool] false (.mk []
     [.block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [5] (.literal .bool [0]) []] [5])] [1])
 
-example : refusal blocked = none := by decide
+example : refusal blocked = none := by decide +kernel
 
 /-- A refusal in a block is at the block's number. -/
 example : refusal (single [] [.bool] false (.mk []
     [.block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [5] (.literal .bool [2]) []] [5])] [1])) =
     some ⟨.literal, ⟨⟨1⟩, [(⟨1⟩, 0)], some ⟨2⟩, none⟩, .operation (.literal .bool [2])⟩ := by
-  decide
+  decide +kernel
 
 /-- An attempt in a function: nobody owns one. -/
 example : refusal (single [] [.nat] false (.mk [] [.attempt ⟨1⟩ () [1] (.mk [5] [] [5])] [1])) =
     some ⟨.attempt, at_ 1 1, .nothing⟩ := by
-  decide
+  decide +kernel
 
 /-! ## Linear values and addresses -/
 
@@ -282,25 +283,25 @@ example : refusal (single [] [.nat] false (.mk [] [.attempt ⟨1⟩ () [1] (.mk 
 def linear : NamedProgram plain :=
   single [] [token] false (.mk [] [.op ⟨1⟩ [0] (.owned .make [token] []) []] [0])
 
-example : refusal linear = none := by decide
+example : refusal linear = none := by decide +kernel
 
 /-- A linear value given twice: refused at the instruction that binds it, as the first of the
 values that it binds, used twice. -/
 example : refusal (single [] [token, token] false
     (.mk [] [.op ⟨1⟩ [0] (.owned .make [token] []) []] [0, 0])) =
     some ⟨.linear, at_ 1 1, .uses 0 2⟩ := by
-  decide
+  decide +kernel
 
 /-- A linear value not used. -/
 example : refusal (single [] [] false
     (.mk [] [.op ⟨1⟩ [0] (.owned .make [token] []) []] [])) =
     some ⟨.linear, at_ 1 1, .uses 0 0⟩ := by
-  decide
+  decide +kernel
 
 /-- A linear input not used: refused at the definition, as its first input. -/
 example : refusal (single [token] [] false (.mk [0] [] [])) =
     some ⟨.linear, whole 1, .uses 0 0⟩ := by
-  decide
+  decide +kernel
 
 /-- A linear value from around a choice that one region uses and the other does not: refused at
 the choice, as a value from around it, by its position in the scope there, with its count in the
@@ -310,14 +311,14 @@ example : refusal (single [token, .bool] [token] false (.mk [0, 1]
       (.mk [] [] [0])
       (.mk [] [.op ⟨2⟩ [5] (.owned .make [token] []) []] [5])] [2])) =
     some ⟨.linear, at_ 1 1, .around 0 0⟩ := by
-  decide
+  decide +kernel
 
 /-- A linear value from around a loop that its body uses: refused at the loop, as a value from
 around it, with its count in the body. -/
 example : refusal (single [token] [.seq token (some 1)] false (.mk [0]
     [.loop ⟨1⟩ () (.fixed 1) [] [1] (.mk [5] [] [0])] [1])) =
     some ⟨.linear, at_ 1 1, .around 0 1⟩ := by
-  decide
+  decide +kernel
 
 /-- A variant whose second alternative is linear. -/
 def natOrToken : plain.Ty := .variant ⟨8⟩ (.cons .nat (.cons token .nil))
@@ -329,27 +330,383 @@ example : refusal (single [natOrToken] [.nat] false (.mk [0]
       [.mk [9] [] [9],
        .mk [9] [.op ⟨2⟩ [10] (.literal .nat [0]) []] [10]]] [1])) =
     some ⟨.linear, at_ 1 1, .uses 1 0⟩ := by
-  decide
+  decide +kernel
 
 /-- Two instructions with one key: refused at the second. -/
 example : refusal (single [.nat, .nat] [.nat] false (.mk [0, 1]
     [.op ⟨1⟩ [2] (.owned .natAdd [] []) [0, 1], .op ⟨1⟩ [3] (.owned .natAdd [] []) [2, 1]] [3])) =
     some ⟨.distinct, at_ 1 1, .nothing⟩ := by
-  decide
+  decide +kernel
 
 /-- Two instructions with one key in a block: refused at the second, inside the block. -/
 example : refusal (single [] [.bool] false (.mk []
     [.block ⟨1⟩ 0 [1] (.mk []
       [.op ⟨2⟩ [5] (.literal .bool [0]) [], .op ⟨2⟩ [6] (.literal .bool [1]) []] [6])] [1])) =
     some ⟨.distinct, ⟨⟨1⟩, [(⟨1⟩, 0)], some ⟨2⟩, none⟩, .nothing⟩ := by
-  decide
+  decide +kernel
 
 /-- An instruction whose key is the key of a block: refused at the instruction. -/
 example : refusal (single [] [.bool] false (.mk []
     [.block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [5] (.literal .bool [0]) []] [5]),
      .op ⟨1⟩ [2] (.owned .boolNot [] []) [1]] [2])) =
     some ⟨.distinct, at_ 1 1, .nothing⟩ := by
-  decide
+  decide +kernel
+
+/-! ## Where a refusal is, at each construct -/
+
+/-- The exit of a region of a choice that is not in scope: refused at the choice. -/
+example : refusal (single [.bool] [.nat] false (.mk [0]
+    [.choose ⟨1⟩ () 0 [1] (.mk [] [] [7]) (.mk [] [] [7])] [1])) =
+    some ⟨.scope, at_ 1 1, .name 7⟩ := by
+  decide +kernel
+
+/-- A guard's condition that is not in scope. -/
+example : refusal (single [.bool] [.bool] true (.mk [0] [.guard ⟨1⟩ () 9 .reject] [0])) =
+    some ⟨.scope, at_ 1 1, .name 9⟩ := by
+  decide +kernel
+
+/-- A choice's condition that is not in scope. -/
+example : refusal (single [.bool] [.nat] false (.mk [0]
+    [.choose ⟨1⟩ () 9 [1] (.mk [] [] [0]) (.mk [] [] [0])] [1])) =
+    some ⟨.scope, at_ 1 1, .name 9⟩ := by
+  decide +kernel
+
+/-- A case analysis's subject that is not in scope. -/
+example : refusal (single [natOrBool] [.nat] false (.mk [0]
+    [.cases ⟨1⟩ () 9 [1] [.mk [9] [] [9], .mk [9] [] [9]]] [1])) =
+    some ⟨.scope, at_ 1 1, .name 9⟩ := by
+  decide +kernel
+
+/-- A loop's carried value that is not in scope. -/
+example : refusal (single [.nat] [.nat] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [9] [1] (.mk [10, 11] [] [11])] [1])) =
+    some ⟨.scope, at_ 1 1, .name 9⟩ := by
+  decide +kernel
+
+/-- A loop's count that is not in scope. -/
+example : refusal (single [.nat] [.nat] false (.mk [0]
+    [.loop ⟨1⟩ () (.count 9) [0] [1] (.mk [10, 11] [] [11])] [1])) =
+    some ⟨.scope, at_ 1 1, .name 9⟩ := by
+  decide +kernel
+
+/-- Of two operands not in scope, the first. -/
+example : refusal (single [.nat] [.nat] false
+    (.mk [0] [.op ⟨1⟩ [2] (.owned .natAdd [] []) [5, 6]] [2])) =
+    some ⟨.scope, at_ 1 1, .name 5⟩ := by
+  decide +kernel
+
+/-- A choice that binds the wrong number of results. -/
+example : refusal (single [.bool] [.bool] false (.mk [0]
+    [.choose ⟨1⟩ () 0 [1, 2] (.mk [] [] [0]) (.mk [] [] [0])] [1])) =
+    some ⟨.results, at_ 1 1, .number 1 2⟩ := by
+  decide +kernel
+
+/-- A case analysis that binds the wrong number of results. -/
+example : refusal (single [natOrBool] [.nat] false (.mk [0]
+    [.cases ⟨1⟩ () 0 [1, 2]
+      [.mk [9] [] [9], .mk [9] [.op ⟨2⟩ [10] (.literal .nat [0]) []] [10]]] [1])) =
+    some ⟨.results, at_ 1 1, .number 1 2⟩ := by
+  decide +kernel
+
+/-- A loop that binds the wrong number of results. -/
+example : refusal (single [.nat] [.nat] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [0] [1, 2, 3] (.mk [10, 11] [] [11])] [1])) =
+    some ⟨.results, at_ 1 1, .number 1 3⟩ := by
+  decide +kernel
+
+/-- A block that binds the wrong number of results. -/
+example : refusal (single [] [.bool] false (.mk []
+    [.block ⟨1⟩ 0 [1, 2] (.mk [] [.op ⟨2⟩ [5] (.literal .bool [0]) []] [5])] [1])) =
+    some ⟨.results, at_ 1 1, .number 1 2⟩ := by
+  decide +kernel
+
+/-- A body of a loop that names fewer inputs than the index and the carried values. -/
+example : refusal (single [.nat] [.nat] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [0] [1] (.mk [10] [] [10])] [1])) =
+    some ⟨.inputs, at_ 1 1, .number 2 1⟩ := by
+  decide +kernel
+
+/-- A refusal after an operation: at the instruction after it. -/
+example : refusal (single [.nat] [.nat] true (.mk [0]
+    [.op ⟨1⟩ [1] (.literal .nat [0]) [], .guard ⟨2⟩ () 1 .reject] [0])) =
+    some ⟨.condition, at_ 1 2, .type .nat⟩ := by
+  decide +kernel
+
+/-- A refusal after a guard. -/
+example : refusal (single [.bool] [.bool] true (.mk [0]
+    [.guard ⟨1⟩ () 0 .reject, .op ⟨2⟩ [5] (.literal .bool [2]) []] [5])) =
+    some ⟨.literal, at_ 1 2, .operation (.literal .bool [2])⟩ := by
+  decide +kernel
+
+/-- A refusal in the first region of a choice. -/
+example : refusal (single [.bool] [.nat] false (.mk [0]
+    [.choose ⟨1⟩ () 0 [1]
+      (.mk [] [.op ⟨2⟩ [5] (.literal .bool [2]) []] [5]) (.mk [] [] [0])] [1])) =
+    some ⟨.literal, at_ 1 2, .operation (.literal .bool [2])⟩ := by
+  decide +kernel
+
+/-- A refusal in the second region of a choice. -/
+example : refusal (single [.bool] [.nat] false (.mk [0]
+    [.choose ⟨1⟩ () 0 [1]
+      (.mk [] [] [0]) (.mk [] [.op ⟨2⟩ [5] (.literal .bool [2]) []] [5])] [1])) =
+    some ⟨.literal, at_ 1 2, .operation (.literal .bool [2])⟩ := by
+  decide +kernel
+
+/-- A refusal after a choice. -/
+example : refusal (single [.bool] [.bool] false (.mk [0]
+    [.choose ⟨1⟩ () 0 [1] (.mk [] [] [0]) (.mk [] [] [0]),
+     .op ⟨2⟩ [5] (.literal .bool [2]) []] [5])) =
+    some ⟨.literal, at_ 1 2, .operation (.literal .bool [2])⟩ := by
+  decide +kernel
+
+/-- A variant of three naturals. -/
+def threeNaturals : plain.Ty := .variant ⟨9⟩ (.cons .nat (.cons .nat (.cons .nat .nil)))
+
+/-- A refusal in the second arm of a case analysis. -/
+example : refusal (single [threeNaturals] [.nat] false (.mk [0]
+    [.cases ⟨1⟩ () 0 [1] [.mk [9] [] [9], .mk [] [] [0], .mk [9] [] [9]]] [1])) =
+    some ⟨.inputs, at_ 1 1, .number 1 0⟩ := by
+  decide +kernel
+
+/-- A refusal in the third arm of a case analysis. -/
+example : refusal (single [threeNaturals] [.nat] false (.mk [0]
+    [.cases ⟨1⟩ () 0 [1] [.mk [9] [] [9], .mk [9] [] [9], .mk [] [] [0]]] [1])) =
+    some ⟨.inputs, at_ 1 1, .number 1 0⟩ := by
+  decide +kernel
+
+/-- A refusal after a case analysis. -/
+example : refusal (single [natOrBool] [.nat] false (.mk [0]
+    [.cases ⟨1⟩ () 0 [1]
+      [.mk [9] [] [9], .mk [9] [.op ⟨2⟩ [10] (.literal .nat [0]) []] [10]],
+     .op ⟨3⟩ [5] (.literal .nat [1, 2]) []] [5])) =
+    some ⟨.literal, at_ 1 3, .operation (.literal .nat [1, 2])⟩ := by
+  decide +kernel
+
+/-- A refusal after a loop. -/
+example : refusal (single [.nat] [.nat] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [0] [1] (.mk [10, 11] [] [11]),
+     .op ⟨2⟩ [5] (.literal .nat []) []] [5])) =
+    some ⟨.literal, at_ 1 2, .operation (.literal .nat [])⟩ := by
+  decide +kernel
+
+/-- A refusal after a block. -/
+example : refusal (single [] [.bool] false (.mk []
+    [.block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [5] (.literal .bool [0]) []] [5]),
+     .op ⟨3⟩ [6] (.literal .bool [2]) []] [6])) =
+    some ⟨.literal, at_ 1 3, .operation (.literal .bool [2])⟩ := by
+  decide +kernel
+
+/-! ## Literals of each type -/
+
+/-- The refusal, or nothing, of a literal of the type with the data. -/
+def literalOf (τ : plain.Ty) (data : List Nat) : Option (ProgramRefusal plain) :=
+  refusal (single [] [τ] false (.mk [] [.op ⟨1⟩ [0] (.literal τ data) []] [0]))
+
+/-- The refusal of a literal of the type with the data. -/
+def literalRefused (τ : plain.Ty) (data : List Nat) : Option (ProgramRefusal plain) :=
+  some ⟨.literal, at_ 1 1, .operation (.literal τ data)⟩
+
+/-- A literal applied to an operand: it takes none. -/
+example : refusal (single [.nat] [.nat] false (.mk [0] [.op ⟨1⟩ [1] (.literal .nat [3]) [0]] [1])) =
+    some ⟨.operands, at_ 1 1, .types [] [.nat]⟩ := by
+  decide +kernel
+
+/-- A natural reads one number: nothing left over, nothing missing. -/
+example : literalOf .nat [1, 2] = literalRefused .nat [1, 2] ∧
+    literalOf .nat [] = literalRefused .nat [] := by
+  decide +kernel
+
+/-- An `index<4>` reads a number below 4. -/
+example : literalOf (.fin 4) [3] = none ∧ literalOf (.fin 4) [4] = literalRefused (.fin 4) [4] := by
+  decide +kernel
+
+/-- A sequence of a size reads that many items. -/
+example : literalOf (.seq (.fin 256) (some 2)) [1, 2] = none ∧
+    literalOf (.seq (.fin 256) (some 2)) [1] = literalRefused (.seq (.fin 256) (some 2)) [1] := by
+  decide +kernel
+
+/-- A sequence of any length reads its length first. -/
+example : literalOf (.seq .nat none) [2, 5, 6] = none ∧
+    literalOf (.seq .nat none) [3, 5, 6] = literalRefused (.seq .nat none) [3, 5, 6] := by
+  decide +kernel
+
+/-- A tuple of a natural and a truth value. -/
+def natAndTruth : plain.Ty := .tuple (.cons .nat (.cons .bool .nil))
+/-- A record of a natural and a truth value. -/
+def natAndTruthRecord : plain.Ty := .record ⟨3⟩ false (.cons .nat (.cons .bool .nil))
+
+/-- A tuple reads each component. -/
+example : literalOf natAndTruth [5, 1] = none ∧
+    literalOf natAndTruth [5, 2] = literalRefused natAndTruth [5, 2] := by
+  decide +kernel
+
+/-- A record reads each field. -/
+example : literalOf natAndTruthRecord [5, 1] = none ∧
+    literalOf natAndTruthRecord [5] = literalRefused natAndTruthRecord [5] := by
+  decide +kernel
+
+/-- A variant reads the position of its alternative, then the payload. -/
+example : literalOf natOrBool [1, 0] = none ∧
+    literalOf natOrBool [2, 0] = literalRefused natOrBool [2, 0] ∧
+    literalOf natOrBool [1, 5] = literalRefused natOrBool [1, 5] := by
+  decide +kernel
+
+/-- A linear record without fields reads no data. -/
+example : literalOf token [] = none := by decide +kernel
+
+/-! ## Linear use at each construct -/
+
+/-- A record of a natural and a linear value: linear, though not marked so. -/
+def natAndToken : plain.Ty := .record ⟨6⟩ false (.cons .nat (.cons token .nil))
+
+/-- A linear value given twice: refused at the definition, as its first input, used twice. -/
+def givenTwice (τ : plain.Ty) : Option (ProgramRefusal plain) :=
+  refusal (single [τ] [τ, τ] false (.mk [0] [] [0, 0]))
+
+/-- Each type with a linear part is linear (LN1): a sequence of linear values, a tuple, a record
+not marked linear and a variant with a linear part. -/
+example : givenTwice (.seq token (some 1)) = some ⟨.linear, whole 1, .uses 0 2⟩ ∧
+    givenTwice (.tuple (.cons token (.cons .nat .nil))) = some ⟨.linear, whole 1, .uses 0 2⟩ ∧
+    givenTwice natAndToken = some ⟨.linear, whole 1, .uses 0 2⟩ ∧
+    givenTwice natOrToken = some ⟨.linear, whole 1, .uses 0 2⟩ := by
+  decide +kernel
+
+/-- A choice gives a linear value that the rest does not use: refused at the choice, as its first
+result. -/
+example : refusal (single [.bool] [] false (.mk [0]
+    [.choose ⟨1⟩ () 0 [1]
+      (.mk [] [.op ⟨2⟩ [5] (.owned .make [token] []) []] [5])
+      (.mk [] [.op ⟨3⟩ [5] (.owned .make [token] []) []] [5])] [])) =
+    some ⟨.linear, at_ 1 1, .uses 0 0⟩ := by
+  decide +kernel
+
+/-- Both regions of a choice give the linear value from around: it is used once, not twice. -/
+example : refusal (single [token, .bool] [token] false (.mk [0, 1]
+    [.choose ⟨1⟩ () 1 [2] (.mk [] [] [0]) (.mk [] [] [0])] [2])) = none := by
+  decide +kernel
+
+/-- A linear value from around a choice, after a natural: refused by its position in the scope
+there, with its count in the second region. -/
+example : refusal (single [.nat, token, .bool] [token] false (.mk [0, 1, 2]
+    [.choose ⟨1⟩ () 2 [3]
+      (.mk [] [] [1]) (.mk [] [.op ⟨2⟩ [5] (.owned .make [token] []) []] [5])] [3])) =
+    some ⟨.linear, at_ 1 1, .around 1 0⟩ := by
+  decide +kernel
+
+/-- The arms of a case analysis that use the linear value from around differently: refused at
+the case analysis, as a value from around it (LN2), with its count in the arm that differs. -/
+example : refusal (single [token, natOrBool] [token] false (.mk [0, 1]
+    [.cases ⟨1⟩ () 1 [2]
+      [.mk [9] [] [0], .mk [9] [.op ⟨2⟩ [10] (.owned .make [token] []) []] [10]]] [2])) =
+    some ⟨.linear, at_ 1 1, .around 0 0⟩ := by
+  decide +kernel
+
+/-- Arms that both give the linear value from around: it is used once. -/
+example : refusal (single [token, natOrBool] [token] false (.mk [0, 1]
+    [.cases ⟨1⟩ () 1 [2] [.mk [9] [] [0], .mk [9] [] [0]]] [2])) = none := by
+  decide +kernel
+
+/-- A case analysis gives a linear value that the rest does not use: refused at the case
+analysis, by its position after the payloads, one per arm. -/
+example : refusal (single [natOrBool] [] false (.mk [0]
+    [.cases ⟨1⟩ () 0 [1]
+      [.mk [9] [.op ⟨2⟩ [10] (.owned .make [token] []) []] [10],
+       .mk [9] [.op ⟨3⟩ [10] (.owned .make [token] []) []] [10]]] [])) =
+    some ⟨.linear, at_ 1 1, .uses 2 0⟩ := by
+  decide +kernel
+
+/-- A linear payload that its arm gives: the subject is used, and the payload too. -/
+example : refusal (single [natOrToken] [token] false (.mk [0]
+    [.cases ⟨1⟩ () 0 [1]
+      [.mk [9] [.op ⟨2⟩ [10] (.owned .make [token] []) []] [10], .mk [9] [] [9]]] [1])) =
+    none := by
+  decide +kernel
+
+/-- A case analysis without arms uses nothing, and is accepted. -/
+example : refusal (single [.variant ⟨3⟩ .nil] [] false (.mk [0] [.cases ⟨1⟩ () 0 [] []] [])) =
+    none := by
+  decide +kernel
+
+/-- A loop that carries a linear value and gives it back: its initial value is used once. -/
+example : refusal (single [token] [token] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [0] [1] (.mk [10, 11] [] [11])] [1])) = none := by
+  decide +kernel
+
+/-- A body that drops the carried linear value: refused at the loop, as its second input. -/
+example : refusal (single [token] [token] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [0] [1]
+      (.mk [10, 11] [.op ⟨2⟩ [12] (.owned .make [token] []) []] [12])] [1])) =
+    some ⟨.linear, at_ 1 1, .uses 1 0⟩ := by
+  decide +kernel
+
+/-- A loop whose carried linear result the rest does not use: refused at the loop, as the value
+after its two inputs. -/
+example : refusal (single [token] [] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [0] [1] (.mk [10, 11] [] [11])] [])) =
+    some ⟨.linear, at_ 1 1, .uses 2 0⟩ := by
+  decide +kernel
+
+/-- The initial value of a carried linear value is a use: given again, the input is used
+twice. -/
+example : refusal (single [token] [token, token] false (.mk [0]
+    [.loop ⟨1⟩ () (.fixed 3) [0] [1] (.mk [10, 11] [] [11])] [1, 0])) =
+    some ⟨.linear, whole 1, .uses 0 2⟩ := by
+  decide +kernel
+
+/-- A block that gives the linear value from around: it is used once. -/
+example : refusal (single [token] [token] false (.mk [0]
+    [.block ⟨1⟩ 0 [1] (.mk [] [] [0])] [1])) = none := by
+  decide +kernel
+
+/-- A block gives a linear value that the rest does not use: refused at the block. -/
+example : refusal (single [] [] false (.mk []
+    [.block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [5] (.owned .make [token] []) []] [5])] [])) =
+    some ⟨.linear, at_ 1 1, .uses 0 0⟩ := by
+  decide +kernel
+
+/-- A linear value made inside a block and not used: the place of the refusal has the block. -/
+example : refusal (single [] [.bool] false (.mk []
+    [.block ⟨1⟩ 0 [1] (.mk []
+      [.op ⟨2⟩ [5] (.owned .make [token] []) [], .op ⟨3⟩ [6] (.literal .bool [0]) []] [6])] [1])) =
+    some ⟨.linear, ⟨⟨1⟩, [(⟨1⟩, 0)], some ⟨2⟩, none⟩, .uses 0 0⟩ := by
+  decide +kernel
+
+/-- Two linear inputs, the second not used: refused by its position after the first. -/
+example : refusal (single [token, token] [token] false (.mk [0, 1] [] [0])) =
+    some ⟨.linear, whole 1, .uses 1 0⟩ := by
+  decide +kernel
+
+/-- The parts of a record of a natural and a linear value, the linear one not used: refused by
+its position after the natural. -/
+example : refusal (single [natAndToken] [.nat] false
+    (.mk [0] [.op ⟨1⟩ [1, 2] (.owned .take [natAndToken] []) [0]] [1])) =
+    some ⟨.linear, at_ 1 1, .uses 1 0⟩ := by
+  decide +kernel
+
+/-- A vocabulary with one nominal type, which is linear, and no row, law or literal. -/
+def linearNominal : Vocabulary where
+  TypeKey := Unit
+  RowKey := Empty
+  LawKey := Empty
+  row r := nomatch r
+  law r := nomatch r
+  literal _ _ := false
+  linear _ := true
+  decided r := nomatch r
+
+/-- The refusal, or nothing, of a function over `linearNominal` that gives its one input as the
+outputs named. -/
+def nominalGiven (exit : List Nat) : Option (ProgramRefusal linearNominal) :=
+  match elaborateFunctions (V := linearNominal)
+      ⟨[.fn ⟨1⟩ [.nominal ()] (exit.map fun _ => .nominal ()) false none (.mk [0] [] exit)]⟩ with
+  | .ok _ => none
+  | .error refusals => refusals.head?
+
+/-- A nominal type that the vocabulary says is linear is linear: given once it is accepted, and
+given twice it is refused. -/
+example : nominalGiven [0] = none ∧
+    nominalGiven [0, 0] = some ⟨.linear, whole 1, .uses 0 2⟩ := by
+  decide +kernel
 
 /-! ## The latest binding of a name -/
 
@@ -357,12 +714,12 @@ example : refusal (single [] [.bool] false (.mk []
 def shadowed : NamedProgram plain :=
   single [.nat] [.bool] false (.mk [0] [.op ⟨1⟩ [0] (.literal .bool [1]) []] [0])
 
-example : refusal shadowed = none := by decide
+example : refusal shadowed = none := by decide +kernel
 
 example : refusal (single [.nat] [.nat] false
     (.mk [0] [.op ⟨1⟩ [0] (.literal .bool [1]) []] [0])) =
     some ⟨.outputs, whole 1, .types [.nat] [.bool]⟩ := by
-  decide
+  decide +kernel
 
 /-! ## A case analysis without an arm -/
 
@@ -391,7 +748,7 @@ example : armless [.nat] ≠ armless [.bool] := fun same => by
   have different := congrArg gives same
   simp [gives, armless] at different
 
-example : (armless []).armed = true ∧ (armless [.nat]).armed = false := by decide
+example : (armless []).armed = true ∧ (armless [.nat]).armed = false := by decide +kernel
 
 /-! ## The printed form of each accepted program elaborates to it -/
 

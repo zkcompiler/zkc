@@ -75,8 +75,9 @@ def resolve {V : Vocabulary} (p : Typed V) (raw : Association) :
 
 /-! ## An admitted program -/
 
-/-- An admitted program: the typed program, what the check of facts knows at each place, and
-the association for proofs, resolved in the program. -/
+/-- An admitted program: the typed program, its annotation (the bound of each loop as often as
+a count whose count has an upper bound, by its place), and the association for proofs, resolved
+in the program. -/
 structure Admitted (V : Vocabulary) where
   program : Typed V
   annotation : Annotation

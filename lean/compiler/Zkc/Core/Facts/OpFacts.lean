@@ -62,5 +62,9 @@ structure FactRules (D : Dialect) (Raw : Type) where
   noValue : D.Ty → Bool
   /-- What the check knows of the written operations. -/
   ops : OpFacts Raw
+  /-- A number for a written operation, by which the table places its applications with their
+  operands' identifiers: any number will do, since the applications placed together are
+  compared whole; operations that it tells apart fall in different places. -/
+  place : Raw → Nat
 
 end Zkc.Core

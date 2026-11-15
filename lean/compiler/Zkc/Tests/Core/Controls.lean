@@ -143,7 +143,7 @@ def colliding : Term (protocolDialect Shapes.plain Shapes.none) [nat [0], nat [2
 /-- They are not `Distinct`, so no program has them. -/
 theorem colliding_not_distinct : ¬ Term.Distinct colliding := by
   unfold Term.Distinct
-  decide
+  decide +kernel
 
 abbrev M := plainModel
 abbrev B (r : Role) := HList (RV M r) ([] : List (LTy Shapes.plain))
@@ -516,13 +516,13 @@ def interactiveScheme : Declaration :=
 
 /-- Declared interactive with a written prover, it has its roles. -/
 theorem interactive_roles : proverAndVerifier twoWayHeader interactiveScheme = some (0, 1) := by
-  decide
+  decide +kernel
 
 /-- Not declared interactive, nothing is inferred from two senders. -/
 theorem derived_two_senders_refused :
     proverAndVerifier twoWayHeader { interactiveScheme with construction := .derived ⟨[]⟩ } =
       Option.none := by
-  decide
+  decide +kernel
 
 /-! ## Forks -/
 

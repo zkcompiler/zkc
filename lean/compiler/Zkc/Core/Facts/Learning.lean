@@ -496,6 +496,99 @@ theorem offsetBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent R
       · cases hd
   · cases h
 
+/-- A sum `x + t` is below the `r` that `offsetBound` gives: `t < r - x` is the order that a
+loop made for `t`, and `r - x` is a difference. -/
+theorem offsetBound_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {x t r a b : Nat}
+    (h : offsetBound ops tbl k x t = some r) (hx : NatAt R ρ x a) (ht : NatAt R ρ t b) :
+    ∃ c, NatAt R ρ r c ∧ a + b < c := by
+  unfold offsetBound at h
+  obtain ⟨⟨t', d, s, l⟩, m, hf⟩ := List.exists_of_findSome?_eq_some h
+  split at hf
+  · next c =>
+      simp only [Bool.and_eq_true, beq_iff_eq] at c
+      obtain ⟨⟨rfl, rfl⟩, -⟩ := c
+      obtain ⟨t1, d0, ht1, hd0, lt⟩ := hk.orders _ (BitTree.mem_of_find _ _ _ _ m)
+      simp only [↓reduceIte] at lt
+      have := ht1.unique ht
+      subst this
+      split at hf
+      · next r' x' e' =>
+          split at hf
+          · next same =>
+              cases hf
+              simp only [beq_iff_eq] at same
+              subst same
+              obtain ⟨vd, hvd, hdn⟩ := hd0
+              obtain ⟨vals', hvals', vr, vx, r0, a1, eq', hr0, ha1, le, hdiff⟩ :=
+                formOf_values lawful hc hcl e' hvd
+              obtain ⟨wr, wx, rfl, hr, hx'⟩ := valuesOf_pair hvals'
+              cases eq'
+              obtain ⟨va, hva, ha⟩ := hx
+              rw [hva] at hx'
+              cases hx'
+              rw [ha] at ha1
+              cases ha1
+              rw [hdn] at hdiff
+              cases hdiff
+              exact ⟨r0, ⟨vr, hr, hr0⟩, by omega⟩
+          · cases hf
+      · cases hf
+  · cases hf
+
+/-- What `offsetRange` says of the first result of an application holds of it, when the form of
+the written operation holds of the operands' values and the result. -/
+theorem offsetRange_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {written : Raw} {args : List Nat} {vs : List Val}
+    {v : Val} (hargs : valuesOf ρ args = some vs)
+    (hform : ∀ f, ops.form written = some f → FormHolds R f vs v) {rr : Range}
+    (h : offsetRange ops tbl k written args = some rr) : ∃ n, R.nat v = some n ∧ rr.Has n := by
+  unfold offsetRange at h
+  split at h
+  · next x t hsum =>
+      cases hb : offsetBound ops tbl k x t with
+      | none => rw [hb] at h; cases h
+      | some r =>
+          rw [hb, Option.bind_some] at h
+          cases hr : k.rangeOf r with
+          | none => rw [hr] at h; cases h
+          | some rr' =>
+              rw [hr, Option.map_some, Option.some.injEq] at h
+              subst h
+              obtain ⟨a', b', x0, y0, eq, hx0, hy0, hv0⟩ := hform .sum hsum
+              obtain ⟨wa, wb, rfl, ha, hb'⟩ := valuesOf_pair hargs
+              cases eq
+              obtain ⟨c, hcr, lt⟩ :=
+                offsetBound_sound lawful hc hcl hk hb ⟨_, ha, hx0⟩ ⟨_, hb', hy0⟩
+              obtain ⟨n, hn, has⟩ := hk.rangeOf hr
+              have := hn.unique hcr
+              subst this
+              exact ⟨x0 + y0, hv0, has.below lt⟩
+  · cases h
+
+/-- What `offsetRange` says of the first result of an application, learned, holds. -/
+theorem Known.Holds.addOffset {k₁ : Known} (lawful : OpFacts.Lawful ops R Run)
+    (hc : Consistent Run ρ tbl) (hcl : Closed ρ tbl) (hk : k.Holds R ρ) (hk₁ : k₁.Holds R ρ)
+    {written : Raw} {args made : List Nat} {vs rs : List Val}
+    (hargs : valuesOf ρ args = some vs) (hres : valuesOf ρ made = some rs)
+    (hform : ∀ f, ops.form written = some f → ∃ r, rs.head? = some r ∧ FormHolds R f vs r) :
+    (k₁.addOffset ops tbl k written args made).Holds R ρ := by
+  cases made with
+  | nil => exact hk₁
+  | cons first rest =>
+      refine hk₁.addRange? fun rr e => ?_
+      simp only [valuesOf] at hres
+      split at hres
+      · next v vs' e1 _ =>
+          cases hres
+          have hform' : ∀ f, ops.form written = some f → FormHolds R f vs v := fun f hf => by
+            obtain ⟨r, head, holds⟩ := hform f hf
+            cases head
+            exact holds
+          obtain ⟨n, hn, has⟩ := offsetRange_sound lawful hc hcl hk hargs hform' e
+          exact ⟨n, ⟨v, e1, hn⟩, has⟩
+      · cases hres
+
 theorem rangesOrder_sound {rf rs : Option Range} {strict : Bool} {x y : Nat}
     (hrf : ∀ r, rf = some r → r.Has x) (hrs : ∀ r, rs = some r → r.Has y)
     (h : rangesOrder rf rs strict = true) : if strict then x < y else x ≤ y := by

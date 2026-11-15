@@ -47,41 +47,41 @@ def verdict (ins outs : List standard.Ty) (canStop : Bool)
 /-- `x + y` on `koala-bear`. -/
 example : refusal [koalaBear, koalaBear] [koalaBear] false
     (.mk [0, 1] [.op ⟨1⟩ [2] (.row (.field .add .koalaBear .all)) [0, 1]] [2]) = none := by
-  decide
+  decide +kernel
 
 /-- `p * s` on `bls12-381.g1`. -/
 example : refusal [g1, fr] [g1] false
     (.mk [0, 1] [.op ⟨1⟩ [2] (.row (.group .scale (.group .g1))) [0, 1]] [2]) = none := by
-  decide
+  decide +kernel
 
 /-- `⟪a, b⟫` on `[koala-bear; 3]`. -/
 example : refusal [.seq koalaBear (some 3), .seq koalaBear (some 3)] [koalaBear] false
     (.mk [0, 1] [.op ⟨1⟩ [2] (.row (.seq .inner (.atom (.field .koalaBear)) (some 3))) [0, 1]]
       [2]) = none := by
-  decide
+  decide +kernel
 
 /-- `Sha256::hash(data)`. -/
 example : refusal [bytes] [sizedBytes 32] false
     (.mk [0] [.op ⟨1⟩ [1] (.row (.hash .sha256)) [0]] [1]) = none := by
-  decide
+  decide +kernel
 
 /-- `Bls12381::pair(a, b)`. -/
 example : refusal [g1, g2] [gt] false
     (.mk [0, 1] [.op ⟨1⟩ [2] (.row .pair) [0, 1]] [2]) = none := by
-  decide
+  decide +kernel
 
 /-- `to_nat` at the extension, which is no prime field: no instance, refused by the rule
 `row`. -/
 example : refusal [koalaBear4] [.nat] false
     (.mk [0] [.op ⟨1⟩ [1] (.row (.field .toNat .koalaBear4 .all)) [0]] [1]) =
     some ⟨.row, at_ 1, .operation (.row (.field .toNat .koalaBear4 .all))⟩ := by
-  decide
+  decide +kernel
 
 /-- `generator` at the target group: no instance. -/
 example : refusal [] [gt] false
     (.mk [] [.op ⟨1⟩ [0] (.row (.group .generator (.group .gt))) []] [0]) =
     some ⟨.row, at_ 1, .operation (.row (.group .generator (.group .gt)))⟩ := by
-  decide
+  decide +kernel
 
 /-! ## The restricted row `field.nonzero` -/
 
@@ -94,7 +94,7 @@ example : verdict [koalaBear] [koalaBearUnits] true (.mk [0] [
     .op ⟨1⟩ [10] isNonzero [0],
     .guard ⟨2⟩ () 10 .refused,
     .op ⟨3⟩ [11] toNonzero [0]] [11]) = some (.inr []) := by
-  decide
+  decide +kernel
 
 /-- `x == 0` is `bool.not(field.is_nonzero(x))`: a guard on its negation justifies
 `field.nonzero(x)` too. -/
@@ -104,7 +104,7 @@ example : verdict [koalaBear] [koalaBearUnits] true (.mk [0] [
     .op ⟨3⟩ [12] negation [11],
     .guard ⟨4⟩ () 12 .refused,
     .op ⟨5⟩ [13] toNonzero [0]] [13]) = some (.inr []) := by
-  decide
+  decide +kernel
 
 /-- Without the guard, `field.nonzero(x)` is refused: its domain row at its operand is not
 known true. -/
@@ -112,7 +112,7 @@ example : verdict [koalaBear] [koalaBearUnits] false (.mk [0] [
     .op ⟨1⟩ [10] toNonzero [0]] [10]) =
     some (.inl [⟨.domain, at_ 1,
       .unjustified toNonzero (.holds (.apply isNonzero [0])) [none]⟩]) := by
-  decide
+  decide +kernel
 
 /-- A guard on another operand justifies nothing of this one. -/
 example : verdict [koalaBear, koalaBear] [koalaBearUnits] true (.mk [0, 1] [
@@ -121,34 +121,34 @@ example : verdict [koalaBear, koalaBear] [koalaBearUnits] true (.mk [0, 1] [
     .op ⟨3⟩ [11] toNonzero [0]] [11]) =
     some (.inl [⟨.domain, at_ 3,
       .unjustified toNonzero (.holds (.apply isNonzero [0])) [none]⟩]) := by
-  decide
+  decide +kernel
 
 /-! ## Literals -/
 
 /-- A literal of a field below its characteristic, and at it. -/
 example : refusal [] [koalaBear] false
     (.mk [] [.op ⟨1⟩ [0] (.literal koalaBear [2130706432]) []] [0]) = none := by
-  decide
+  decide +kernel
 example : refusal [] [koalaBear] false
     (.mk [] [.op ⟨1⟩ [0] (.literal koalaBear [2130706433]) []] [0]) =
     some ⟨.literal, at_ 1, .operation (.literal koalaBear [2130706433])⟩ := by
-  decide
+  decide +kernel
 
 /-- A literal of the elements that are not zero: 1, and not 0. -/
 example : refusal [] [koalaBearUnits] false
     (.mk [] [.op ⟨1⟩ [0] (.literal koalaBearUnits [1]) []] [0]) = none := by
-  decide
+  decide +kernel
 example : refusal [] [koalaBearUnits] false
     (.mk [] [.op ⟨1⟩ [0] (.literal koalaBearUnits [0]) []] [0]) =
     some ⟨.literal, at_ 1, .operation (.literal koalaBearUnits [0])⟩ := by
-  decide
+  decide +kernel
 
 /-- A group has no literal; its zero is the row `group.zero`. -/
 example : refusal [] [g1] false (.mk [] [.op ⟨1⟩ [0] (.literal g1 [0]) []] [0]) =
     some ⟨.literal, at_ 1, .operation (.literal g1 [0])⟩ := by
-  decide
+  decide +kernel
 example : refusal [] [g1] false
     (.mk [] [.op ⟨1⟩ [0] (.row (.group .zero (.group .g1))) []] [0]) = none := by
-  decide
+  decide +kernel
 
 end Zkc.Vocabulary.CoreTests

@@ -21,8 +21,9 @@ an entry made in it, the entry of an identifier and how it reads, the range of a
 whether an order or a truth is known) and through whether a region is dead; how what is known
 enters a region and the range of a carried natural after a loop are in `Walk.lean`. Each of the
 functions here reads the leaf of a tree placed by an identifier, or for an application by a
-number computed from its operands' identifiers (`Program/BitTree.lean`): a list, read as a
-list; nothing else depends on that. The arithmetic of the ranges that this file defines is
+number computed from the number that the dialect gives for its written operation and from its
+operands' identifiers (`Program/BitTree.lean`): a list, read as a list; nothing else depends on
+that. The arithmetic of the ranges that this file defines is
 proved beside it.
 -/
 
@@ -147,11 +148,16 @@ abbrev factDepth : Nat := 12
 section
 variable {Raw : Type}
 
-/-- Where the table places an application, to find it: a number computed from all of its
-operands' identifiers, in order, each multiplying what came before by Knuth's multiplicative
-constant, so that applications that share an operand fall in different leaves. -/
-def applicationKey (args : List Nat) : Nat :=
-  args.foldl (fun key id => key * 2654435761 + id + 1) 0
+/-- A number computed from naturals in order, from a number to start with, each multiplying
+what came before by Knuth's multiplicative constant. -/
+def mixNumbers (start : Nat) (ns : List Nat) : Nat :=
+  ns.foldl (fun key n => key * 2654435761 + n + 1) start
+
+/-- Where the table places an application, to find it: a number computed from the number that
+the dialect gives for its written operation and from all of its operands' identifiers, in order,
+so that applications that share their operands, or have none, fall in different leaves when
+their written operations differ. -/
+def applicationKey (written : Nat) (args : List Nat) : Nat := mixNumbers written args
 
 /-- Places an entry at each of the identifiers. -/
 def placeAll (e : Entry Raw) : List Nat → BitTree (Entry Raw) → BitTree (Entry Raw)
@@ -168,11 +174,13 @@ theorem mem_placeAll (e : Entry Raw) : ∀ (ids : List Nat) (t : BitTree (Entry 
 
 end
 
-/-- The table: its entries, the latest first, and the same entries placed by their operands'
-identifiers (`applicationKey`), to find an application, and by each of their results'
-identifiers, to find what gives an identifier. The walk reads only the placed entries; every
-placed entry is an entry. -/
+/-- The table: its entries, the latest first, and the same entries placed by the number that
+`place` gives for their written operation and by their operands' identifiers
+(`applicationKey`), to find an application, and by each of their results' identifiers, to find
+what gives an identifier. The walk reads only the placed entries; every placed entry is an
+entry. -/
 structure Table (Raw : Type) where
+  place : Raw → Nat
   entries : List (Entry Raw)
   byApplication : BitTree (Entry Raw)
   byResult : BitTree (Entry Raw)
@@ -184,15 +192,18 @@ instance {Raw : Type} : Membership (Entry Raw) (Table Raw) := ⟨fun t e => e �
 section
 variable {Raw : Type}
 
-/-- The table without entries. -/
-def Table.empty : Table Raw :=
-  ⟨[], .leaf [], .leaf [], fun e m => (BitTree.not_mem_empty e m).elim,
+/-- The table without entries, which places applications by the number that `place` gives for
+their written operation. -/
+def Table.empty (place : Raw → Nat) : Table Raw :=
+  ⟨place, [], .leaf [], .leaf [], fun e m => (BitTree.not_mem_empty e m).elim,
     fun e m => (BitTree.not_mem_empty e m).elim⟩
 
 /-- The table with an entry made. -/
 def Table.add (e : Entry Raw) (tbl : Table Raw) : Table Raw where
+  place := tbl.place
   entries := e :: tbl.entries
-  byApplication := tbl.byApplication.insert factDepth (applicationKey e.args) e
+  byApplication :=
+    tbl.byApplication.insert factDepth (applicationKey (tbl.place e.written) e.args) e
   byResult := placeAll e (List.range' e.lo e.count) tbl.byResult
   applications x m := by
     rcases BitTree.mem_insert _ _ _ _ x m with m | same
@@ -216,7 +227,8 @@ def findIn [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat) :
 number of results: among the entries placed where the operands are. -/
 def Table.find [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat)
     (tbl : Table Raw) : Option Nat :=
-  findIn written args count (tbl.byApplication.find factDepth (applicationKey args))
+  findIn written args count
+    (tbl.byApplication.find factDepth (applicationKey (tbl.place written) args))
 
 /-- The entry, among entries, that gives an identifier. -/
 def entryIn (id : Nat) : List (Entry Raw) → Option (Entry Raw)
@@ -460,6 +472,34 @@ def knownDifference (second first : Nat) (rs rf : Option Range) (number : Nat) :
     | _ => false)
 
 end
+
+/-- For a sum `x + t` (by its operands' identifiers), where `t < r - x` is the order that a loop
+made for its index `t`: that `r`, below which the sum is. -/
+def offsetBound {Raw : Type} (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (x t : Nat) :
+    Option Nat :=
+  (k.orders.find factDepth t).findSome? fun fact =>
+    if fact.first == t && fact.strict && fact.byLoop then
+      match tbl.formOf ops fact.second with
+      | some (.difference, [r, x']) => if x' == x then some r else none
+      | _ => none
+    else none
+
+/-- What is known of the first result of an application of a written operation to operands
+beyond what the operation's ranges say: for a sum `x + t` below `r` (`offsetBound`), what is
+below the range of `r` (TY10). -/
+def offsetRange {Raw : Type} (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (written : Raw)
+    (args : List Nat) : Option Range :=
+  match ops.form written, args with
+  | some .sum, [x, t] => (offsetBound ops tbl k x t).bind fun r => (k.rangeOf r).map Range.below
+  | _, _ => none
+
+/-- What is known after an application of a written operation to operands, whose results are
+the identifiers given: with what `offsetRange` says of its first result, read against what was
+known before. -/
+def Known.addOffset {Raw : Type} (k₁ : Known) (ops : OpFacts Raw) (tbl : Table Raw) (k : Known)
+    (written : Raw) (args : List Nat) : List Nat → Known
+  | first :: _ => k₁.addRange? first (offsetRange ops tbl k written args)
+  | [] => k₁
 
 /-! ## The state of the walk -/
 

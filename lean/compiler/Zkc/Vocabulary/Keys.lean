@@ -47,18 +47,21 @@ def characteristic : Field → Nat
 
 /-- The field that an extension is over, with its degree; none for a prime field. -/
 def over : Field → Option (Field × Nat)
+  | .koalaBear => none
   | .koalaBear4 => some (.koalaBear, 4)
-  | _ => none
+  | .bls12381Fr => none
 
 /-- The prime field. -/
 def prime : Field → Field
+  | .koalaBear => .koalaBear
   | .koalaBear4 => .koalaBear
-  | field => field
+  | .bls12381Fr => .bls12381Fr
 
 /-- The dimension over the prime field. -/
 def dimension : Field → Nat
+  | .koalaBear => 1
   | .koalaBear4 => 4
-  | _ => 1
+  | .bls12381Fr => 1
 
 /-- The number of elements. -/
 def order (field : Field) : Nat := field.characteristic ^ field.dimension

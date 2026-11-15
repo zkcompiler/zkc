@@ -15,9 +15,10 @@ learned. A guard learns its condition; a choice learns its condition in one regi
 negation in the other; what a choice, a case analysis or a block returns has the hull of the
 ranges that its regions that run give it, and the result of a choice whose other region returns
 a written truth value is remembered as a conjunction or a disjunction. A loop's index has the
-range below its count, a loop of a counted value the order below the count and its bound; a
-carried natural that the body returns as itself plus a term has, after the loop, the lower end
-of its initial range and the upper end of the sum.
+range below its count, a loop of a counted value the order below the count and its bound, and
+a sum `x + t` of its index `t`, counted below `r - x`, the range below that of `r`; a carried
+natural that the body returns as itself plus a term has, after the loop, the lower end of its
+initial range and the upper end of the sum.
 
 A region is dead, and nothing in it is refused, exactly when what is written says that it never
 runs: the body of a loop of the written count zero; a region where a value of a type that has no
@@ -216,7 +217,9 @@ variable {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : FactRules D Raw)
   (definition : Key) (role : Option Role)
 
 /-- An operation: its requirements decided, its results from the table, what its ranges and the
-types say of them learned. An operation that does not compute gives new values. -/
+types say of them learned; and, for `x + t` below `r` by the order that a loop made for its
+index `t`, the range below that of `r` (TY10). An operation that does not compute gives new
+values. -/
 def opStep (place : Place) {ins res : List D.Ty} (o : D.Op ins res) (argIds : List Nat)
     (k : Known) (st : St D.Ty Raw) : List Nat × Known × St D.Ty Raw :=
   match rules.written o with
@@ -228,7 +231,8 @@ def opStep (place : Place) {ins res : List D.Ty} (o : D.Op ins res) (argIds : Li
         (rules.ops.requires written) st
       let made := share written argIds res.length st₁
       let k₁ := k.addRanges made.1 (rules.ops.ranges written (argIds.map k.rangeOf))
-      (made.1, (k₁.addRanges made.1 (res.map rules.range)).enter rules res, made.2)
+      let k₂ := k₁.addOffset rules.ops made.2.table k written argIds made.1
+      (made.1, (k₂.addRanges made.1 (res.map rules.range)).enter rules res, made.2)
 
 mutual
   /-- The walk of a term, from the identifiers of its context, what is known and the state. -/
@@ -305,7 +309,7 @@ def checkFacts {D : Dialect} {Raw : Type} (rules : FactRules D Raw) [DecidableEq
   let ids := List.range Γ.length
   let e := walk rules definition role [] body ids
     ((Known.empty.addRanges ids (Γ.map rules.range)).enter rules Γ)
-    ⟨Table.empty, Γ.length, [], []⟩
+    ⟨Table.empty rules.place, Γ.length, [], []⟩
   match e.st.refusals with
   | [] => .ok e.st.bounds.reverse
   | refusals => .error refusals.reverse

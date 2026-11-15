@@ -243,23 +243,23 @@ example : row (.seq .inner ofField none) = none := rfl
 /-! ## Literals -/
 
 -- of a field: the numbers below its characteristic, also for the extension
-example : literal (.field .koalaBear) 2130706432 = true := by decide
-example : literal (.field .koalaBear) 2130706433 = false := by decide
-example : literal (.field .koalaBear4) 2130706432 = true := by decide
-example : literal (.field .koalaBear4) 2130706433 = false := by decide
+example : literal (.field .koalaBear) 2130706432 = true := by decide +kernel
+example : literal (.field .koalaBear) 2130706433 = false := by decide +kernel
+example : literal (.field .koalaBear4) 2130706432 = true := by decide +kernel
+example : literal (.field .koalaBear4) 2130706433 = false := by decide +kernel
 example : literal (.field .bls12381Fr)
     52435875175126190479447740508185965837690552500527637822603658699938581184512 = true := by
-  decide
+  decide +kernel
 example : literal (.field .bls12381Fr)
     52435875175126190479447740508185965837690552500527637822603658699938581184513 = false := by
-  decide
+  decide +kernel
 -- of the elements that are not zero: not 0
-example : literal (.nonzero .koalaBear) 0 = false := by decide
-example : literal (.nonzero .koalaBear) 1 = true := by decide
-example : literal (.nonzero .koalaBear) 2130706433 = false := by decide
+example : literal (.nonzero .koalaBear) 0 = false := by decide +kernel
+example : literal (.nonzero .koalaBear) 1 = true := by decide +kernel
+example : literal (.nonzero .koalaBear) 2130706433 = false := by decide +kernel
 -- of a group: none; its zero is the row `group.zero`
-example : literal (.group .g1) 0 = false := by decide
-example : literal (.group .gt) 1 = false := by decide
+example : literal (.group .g1) 0 = false := by decide +kernel
+example : literal (.group .gt) 1 = false := by decide +kernel
 
 /-! ## The uniform law (TY15) -/
 

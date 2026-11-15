@@ -2,9 +2,9 @@ import Zkc.Tests.Core.Elaboration
 
 /-!
 The operations that the core owns. For each written name, a function that elaborates and whose
-printed form elaborates back to it; written forms with other types refused; the operations that
-would copy or drop a part refused at a linear type; each meaning at a value; each domain at a
-value outside it. The kernel evaluates each.
+printed form elaborates back to it; written forms with other types or numbers refused; the
+operations that would copy or drop a part refused at a linear type; each meaning at a value;
+each domain at a value outside it. The kernel evaluates each.
 -/
 
 namespace Zkc.Core.Operations
@@ -63,36 +63,36 @@ def takeTuple := one [pair] [.nat, .bool] .take [pair] []
 def takeRecord := one [handle] [.nat, .bool] .take [handle] []
 def variant := one [.bool] [natOrBool] .variant [natOrBool] [1]
 
-example : refusal natAdd = none := by decide
-example : refusal natSub = none := by decide
-example : refusal natMul = none := by decide
-example : refusal natDiv = none := by decide
-example : refusal natRem = none := by decide
-example : refusal natPow = none := by decide
-example : refusal natEqual = none := by decide
-example : refusal natLess = none := by decide
-example : refusal boolAnd = none := by decide
-example : refusal boolOr = none := by decide
-example : refusal boolNot = none := by decide
-example : refusal boolEqual = none := by decide
-example : refusal seqLength = none := by decide
-example : refusal seqAt = none := by decide
-example : refusal seqSlice = none := by decide
-example : refusal seqConcat = none := by decide
-example : refusal seqFill = none := by decide
-example : refusal seqSized = none := by decide
-example : refusal natBelow = none := by decide
-example : refusal seqUnsized = none := by decide
-example : refusal finToNat = none := by decide
-example : refusal finWiden = none := by decide
-example : refusal makeSeq = none := by decide
-example : refusal makeTuple = none := by decide
-example : refusal makeRecord = none := by decide
-example : refusal getTuple = none := by decide
-example : refusal getRecord = none := by decide
-example : refusal takeTuple = none := by decide
-example : refusal takeRecord = none := by decide
-example : refusal variant = none := by decide
+example : refusal natAdd = none := by decide +kernel
+example : refusal natSub = none := by decide +kernel
+example : refusal natMul = none := by decide +kernel
+example : refusal natDiv = none := by decide +kernel
+example : refusal natRem = none := by decide +kernel
+example : refusal natPow = none := by decide +kernel
+example : refusal natEqual = none := by decide +kernel
+example : refusal natLess = none := by decide +kernel
+example : refusal boolAnd = none := by decide +kernel
+example : refusal boolOr = none := by decide +kernel
+example : refusal boolNot = none := by decide +kernel
+example : refusal boolEqual = none := by decide +kernel
+example : refusal seqLength = none := by decide +kernel
+example : refusal seqAt = none := by decide +kernel
+example : refusal seqSlice = none := by decide +kernel
+example : refusal seqConcat = none := by decide +kernel
+example : refusal seqFill = none := by decide +kernel
+example : refusal seqSized = none := by decide +kernel
+example : refusal natBelow = none := by decide +kernel
+example : refusal seqUnsized = none := by decide +kernel
+example : refusal finToNat = none := by decide +kernel
+example : refusal finWiden = none := by decide +kernel
+example : refusal makeSeq = none := by decide +kernel
+example : refusal makeTuple = none := by decide +kernel
+example : refusal makeRecord = none := by decide +kernel
+example : refusal getTuple = none := by decide +kernel
+example : refusal getRecord = none := by decide +kernel
+example : refusal takeTuple = none := by decide +kernel
+example : refusal takeRecord = none := by decide +kernel
+example : refusal variant = none := by decide +kernel
 
 example : roundTrips natAdd := by rfl
 example : roundTrips natSub := by rfl
@@ -133,65 +133,98 @@ def refusedAs (name : OwnedName) (types : List plain.Ty) (numbers : List Nat) :
   some ⟨.owned, at_ 1 1, .operation (.owned name types numbers)⟩
 
 example : refusal (one [.nat] [.nat] .seqLength [.nat] []) = refusedAs .seqLength [.nat] [] := by
-  decide
+  decide +kernel
 
 /-- The two sequences of a slice are of one item type. -/
 example : refusal (one [.seq .nat none, .nat, .nat] [.seq .bool none] .seqSlice
     [.seq .nat none, .seq .bool none] []) =
     refusedAs .seqSlice [.seq .nat none, .seq .bool none] [] := by
-  decide
+  decide +kernel
 
 /-- A bound is widened, not narrowed. -/
 example : refusal (one [.fin 8] [.fin 4] .finWiden [.fin 8, .fin 4] []) =
     refusedAs .finWiden [.fin 8, .fin 4] [] := by
-  decide
+  decide +kernel
 
 /-- A sequence is made of a written number of items: its type has a size. -/
 example : refusal (one [.nat] [.seq .nat none] .make [.seq .nat none] []) =
     refusedAs .make [.seq .nat none] [] := by
-  decide
+  decide +kernel
 
 /-- A position past the last component. -/
 example : refusal (one [pair] [.nat] .get [pair] [2]) = refusedAs .get [pair] [2] := by
-  decide
+  decide +kernel
+
+/-- Two sequences concatenated are of one item type. -/
+example : refusal (one [.seq .nat none, .seq .bool none] [.seq .nat none] .seqConcat
+    [.seq .nat none, .seq .bool none] []) =
+    refusedAs .seqConcat [.seq .nat none, .seq .bool none] [] := by
+  decide +kernel
+
+/-- `nat.sub` is written with no type. -/
+example : refusal (one [.nat, .nat] [.nat] .natSub [.nat] []) = refusedAs .natSub [.nat] [] := by
+  decide +kernel
+
+/-- `seq.length` is written with no number. -/
+example : refusal (one [.seq .nat none] [.nat] .seqLength [.seq .nat none] [0]) =
+    refusedAs .seqLength [.seq .nat none] [0] := by
+  decide +kernel
+
+/-- `get` is written with one position. -/
+example : refusal (one [pair] [.bool] .get [pair] [1, 0]) = refusedAs .get [pair] [1, 0] := by
+  decide +kernel
+
+/-- `variant` is written with one position. -/
+example : refusal (one [.bool] [natOrBool] .variant [natOrBool] [1, 0]) =
+    refusedAs .variant [natOrBool] [1, 0] := by
+  decide +kernel
+
+/-- `make` of a tuple is written with no number. -/
+example : refusal (one [.nat, .bool] [pair] .make [pair] [0]) = refusedAs .make [pair] [0] := by
+  decide +kernel
+
+/-- `fin.to_nat` is written with one type. -/
+example : refusal (one [.fin 4] [.nat] .finToNat [.fin 4, .fin 4] []) =
+    refusedAs .finToNat [.fin 4, .fin 4] [] := by
+  decide +kernel
 
 /-! ## The operations that would copy or drop a part are not typed at a linear type -/
 
 example : refusal (one [.seq token none] [.nat] .seqLength [.seq token none] []) =
     refusedAs .seqLength [.seq token none] [] := by
-  decide
+  decide +kernel
 
 example : refusal (one [.seq token (some 2), .nat] [token] .seqAt [.seq token (some 2)] []) =
     refusedAs .seqAt [.seq token (some 2)] [] := by
-  decide
+  decide +kernel
 
 example : refusal (one [.seq token none, .nat, .nat] [.seq token none] .seqSlice
     [.seq token none, .seq token none] []) =
     refusedAs .seqSlice [.seq token none, .seq token none] [] := by
-  decide
+  decide +kernel
 
 example : refusal (one [token] [.seq token (some 2)] .seqFill [.seq token (some 2)] []) =
     refusedAs .seqFill [.seq token (some 2)] [] := by
-  decide
+  decide +kernel
 
 /-- Giving a sequence a size, whose domain is its length, which cannot be read at a linear
 item. -/
 example : refusal (one [.seq token none] [.seq token (some 2)] .seqSized
     [.seq token (some 2)] []) = refusedAs .seqSized [.seq token (some 2)] [] := by
-  decide
+  decide +kernel
 
 /-- One component of a tuple with a linear component. -/
 example : refusal (one [.tuple (.cons token (.cons .nat .nil))] [.nat] .get
     [.tuple (.cons token (.cons .nat .nil))] [1]) =
     refusedAs .get [.tuple (.cons token (.cons .nat .nil))] [1] := by
-  decide
+  decide +kernel
 
 /-- One field of a linear record. -/
 example : refusal (one [handle] [.nat] .get [handle] [0]) = refusedAs .get [handle] [0] := by
-  decide
+  decide +kernel
 
 /-- Every field of a linear record is how it is used. -/
-example : refusal (one [handle] [.nat, .bool] .take [handle] []) = none := by decide
+example : refusal (one [handle] [.nat, .bool] .take [handle] []) = none := by decide +kernel
 
 /-! ## Each meaning at a value -/
 

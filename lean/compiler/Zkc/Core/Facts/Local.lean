@@ -53,12 +53,28 @@ def rem : Option Range → Option Range → Option Range
       | none, none => none⟩
   | _, _ => none
 
-/-- The ranges of a power: a number to the power zero is one. -/
+/-- The number of binary digits of a natural, within a number of steps: none for zero. -/
+def digitsWithin : Nat → Nat → Nat
+  | 0, _ => 0
+  | steps + 1, n => if n = 0 then 0 else digitsWithin steps (n / 2) + 1
+
+/-- The number of binary digits of a natural, zero being written with one. -/
+def binaryDigits (n : Nat) : Nat := if n = 0 then 1 else digitsWithin n n
+
+/-- Whether an end of the range of a power is computed: when its exponent times the number of
+binary digits of its base is at most 65536 (TY8). -/
+def powComputed (base exponent : Nat) : Bool := decide (exponent * binaryDigits base ≤ 65536)
+
+/-- The ranges of a power: a number to the power zero is one. An end whose power would be too
+large to compute is not computed: the lower end is then one when the base is at least one, and
+the upper end is absent. -/
 def pow : Option Range → Option Range → Option Range
   | some a, some b =>
-      some ⟨if 1 ≤ a.lo then a.lo ^ b.lo else if b.hi = some 0 then 1 else 0,
+      some ⟨if 1 ≤ a.lo then (if powComputed a.lo b.lo then a.lo ^ b.lo else 1)
+          else if b.hi = some 0 then 1 else 0,
         match a.hi, b.hi with
-        | some x, some y => some (max (x ^ y) (if b.lo = 0 then 1 else 0))
+        | some x, some y =>
+            if powComputed x y then some (max (x ^ y) (if b.lo = 0 then 1 else 0)) else none
         | _, _ => none⟩
   | _, _ => none
 
@@ -217,8 +233,10 @@ theorem pow_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.H
           · simp only
             split
             · next one =>
-                exact Nat.le_trans (Nat.pow_le_pow_left la _)
-                  (Nat.pow_le_pow_right (by omega) lb)
+                split
+                · exact Nat.le_trans (Nat.pow_le_pow_left la _)
+                    (Nat.pow_le_pow_right (by omega) lb)
+                · exact Nat.pow_pos (by omega)
             · split
               · next zero =>
                   have := ub 0 zero
@@ -227,22 +245,25 @@ theorem pow_has {a b : Option Range} {x y : Nat} (ha : ∀ r, a = some r → r.H
                   simp
               · exact Nat.zero_le _
           · rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-              simp only [Option.some.injEq, reduceCtorEq] at e
-            subst e
-            have hx := ua ahi rfl
-            have hy := ub bhi rfl
-            simp only at lb
-            cases x with
-            | zero =>
-                cases y with
-                | zero =>
-                    have : blo = 0 := by omega
-                    subst this
-                    exact Nat.le_max_right _ _
-                | succ y => simp
-            | succ x =>
-                exact Nat.le_trans (Nat.le_trans (Nat.pow_le_pow_left hx _)
-                  (Nat.pow_le_pow_right (by omega) hy)) (Nat.le_max_left _ _)
+              simp only [reduceCtorEq] at e
+            split at e
+            · simp only [Option.some.injEq] at e
+              subst e
+              have hx := ua ahi rfl
+              have hy := ub bhi rfl
+              simp only at lb
+              cases x with
+              | zero =>
+                  cases y with
+                  | zero =>
+                      have : blo = 0 := by omega
+                      subst this
+                      exact Nat.le_max_right _ _
+                  | succ y => simp
+              | succ x =>
+                  exact Nat.le_trans (Nat.le_trans (Nat.pow_le_pow_left hx _)
+                    (Nat.pow_le_pow_right (by omega) hy)) (Nat.le_max_left _ _)
+            · cases e
 
 end Range
 
@@ -378,6 +399,15 @@ def localRange : V.Ty → Option Range
   | .fin bound => some (if bound = 0 then Range.nothing else ⟨0, some (bound - 1)⟩)
   | _ => none
 
+/-- The number by which the table places the applications of a written operation of a function:
+it tells apart the literals by their data, the operations that the core owns by their name and
+numbers, and the calls by their callee; the rows share one. -/
+def localPlace : LocalRaw V → Nat
+  | .row _ => 0
+  | .owned name _ numbers => FactCheck.mixNumbers (4 * name.ctorIdx + 1) numbers
+  | .literal _ data => FactCheck.mixNumbers 2 data
+  | .call callee => 4 * callee.number + 3
+
 variable (V) in
 /-- What the local dialect tells the check of facts: every operation of a function computes, by
 its written form. -/
@@ -386,6 +416,7 @@ def localFactRules (fns : List (FnHeader V)) : FactRules (localDialect V fns) (L
   range := localRange
   noValue := Ty.noValue
   ops := localOpFacts V
+  place := localPlace
 
 end
 
