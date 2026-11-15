@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Program.Syntax
+public import Zkc.Core.Program.Requirement
 
 @[expose] public section
 
@@ -63,6 +64,10 @@ inductive Rule where
   | protocol
   /-- The association of a program names definitions of the program. -/
   | association
+  /-- An application of an operation with a domain is inside it, by what is known there. -/
+  | domain
+  /-- A loop as often as a count repeats at most a number of times that is known. -/
+  | bound
 deriving DecidableEq, Repr
 
 /-- What a rule found, with the types `T` of a dialect and its written operations `Raw` as
@@ -92,6 +97,10 @@ inductive Detail (T Raw : Type) where
   with a count of its uses: in the second region of a choice, in the first arm of a case
   analysis that differs from the first, in the body of a loop. -/
   | around (position found : Nat)
+  /-- An application that is not known to be inside its operation's domain: the written
+  operation, the requirement that is not known, and what is known of the values that the
+  requirement names, in the order in which it names them. -/
+  | unjustified (operation : Raw) (requirement : Requirement Raw) (known : List (Option Range))
   /-- Nothing beyond the rule and the place. -/
   | nothing
 deriving DecidableEq

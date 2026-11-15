@@ -304,7 +304,7 @@ example : roundsHeader.shape.heardCoins = [⟨[⟨2⟩], ⟨1⟩⟩] := by decid
 /-! ## A deployed scheme, and the run of a role -/
 
 /-- Nothing is known, and no loop has a bound. -/
-def emptyAnnotation : Annotation := ⟨fun _ => [], fun _ => Option.none⟩
+def emptyAnnotation : Annotation := ⟨[]⟩
 
 /-- The relay, deployed with no handlers; the third role is offline. -/
 def relayDeployed : Deployed plain where

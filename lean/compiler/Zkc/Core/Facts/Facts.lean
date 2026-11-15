@@ -8,9 +8,8 @@ public import Zkc.Core.Meaning.Program
 What an annotation says, as definitions.
 
 `Term.Everywhere` is a property of every instruction that a run of a term reaches, by the same
-recursion as `Term.denote`. `Fact.Holds` reads the values in scope by level. `Respects` says
-that what the annotation of an admitted program knows holds, and that no loop runs more often
-than its bound, in every function and every role program.
+recursion as `Term.denote`. `Respects` says that no loop runs more often than the bound that the
+annotation of an admitted program gives it, in every function and every role program.
 -/
 
 namespace Zkc.Core
@@ -84,106 +83,35 @@ end
 
 end
 
-/-! ## Facts -/
+/-! ## What the check of facts gives beside its verdict -/
 
-/-- What the check of facts knows of the values in scope, by their levels. These are some
-of its forms. -/
-inductive Fact where
-  | le (a b : Nat)
-  | lt (a b : Nat)
-  | eq (a b : Nat)
-  | truth (a : Nat) (value : Bool)
-
-/-- What is known at each written place, and the bound of every loop. -/
+/-- The bound of every loop as often as a count, by its place: what the check of facts knows of
+an admitted program that a consumer reads. What it knows at an instruction is not data: it is
+the invariant of its proof. -/
 structure Annotation where
-  known : Place → List Fact
-  bounds : Place → Option Nat
+  bounds : List (Place × Nat)
 
-/-- How a dialect's values read as naturals and as truth values: nothing when a value is not
-one, or when the role does not hold it. -/
-structure Reading {D : Dialect} (sem : Semantics D) where
-  nat : ∀ {a : D.Ty}, sem.Val a → Option Nat
-  bool : ∀ {a : D.Ty}, sem.Val a → Option Bool
-
-section
-variable {V : Vocabulary} (M : Model V)
-
-/-- A value as a natural: of `nat` or of a bounded type. -/
-def Ty.readNat : (τ : V.Ty) → M.Val τ → Option Nat
-  | .nat, v => some v
-  | .fin _, v => some v
-  | _, _ => none
-
-/-- A value as a truth value. -/
-def Ty.readBool : (τ : V.Ty) → M.Val τ → Option Bool
-  | .bool, v => some v
-  | _, _ => none
-
-/-- How a function reads its values. -/
-def localReading (fns : List (FnHeader V)) (table : FnTable M fns) : Reading (localSem M fns table) where
-  nat := fun {a} v => Ty.readNat M a v
-  bool := fun {a} v => Ty.readBool M a v
-
-/-- How a role reads what it holds; a value that it does not hold reads as nothing. -/
-def roleReading {hs : Headers V} (r : Role) (fnTable : FnTable M hs.fns)
-    (rTable : RTable M hs.protocols) : Reading (roleSem M r fnTable rTable) where
-  nat := fun {a} v => if h : r ∈ a.holders then Ty.readNat M a.ty (reveal M h v) else none
-  bool := fun {a} v => if h : r ∈ a.holders then Ty.readBool M a.ty (reveal M h v) else none
-
-end
-
-/-- The readings of the values in scope, the innermost first. -/
-def Env.readings {α X : Type} {F : α → Type} (read : ∀ a, F a → Option X) :
-    {Γ : List α} → Env F Γ → List (Option X)
-  | [], _ => []
-  | a :: _, env => read a (env a .head) :: Env.readings read (fun b x => env b (.tail x))
-
-/-- The reading of the value at a level: a level is a position from the outermost
-binding. -/
-def Env.atLevel {α X : Type} {F : α → Type} (read : ∀ a, F a → Option X) {Γ : List α}
-    (env : Env F Γ) (level : Nat) : Option X :=
-  ((Env.readings read env).reverse[level]?).join
-
-/-- A fact holds of the values in scope: the values that it names read as what it says. A
-fact about a value that does not read (one that the role does not hold) does not hold. -/
-def Fact.Holds {D : Dialect} {sem : Semantics D} (reading : Reading sem) {Γ : List D.Ty}
-    (env : Env sem.Val Γ) : Fact → Prop
-  | .le a b => ∃ x y, Env.atLevel (fun _ v => reading.nat v) env a = some x ∧
-      Env.atLevel (fun _ v => reading.nat v) env b = some y ∧ x ≤ y
-  | .lt a b => ∃ x y, Env.atLevel (fun _ v => reading.nat v) env a = some x ∧
-      Env.atLevel (fun _ v => reading.nat v) env b = some y ∧ x < y
-  | .eq a b => ∃ x y, Env.atLevel (fun _ v => reading.nat v) env a = some x ∧
-      Env.atLevel (fun _ v => reading.nat v) env b = some y ∧ x = y
-  | .truth a value => Env.atLevel (fun _ v => reading.bool v) env a = some value
-
-/-! ## What an annotation says -/
-
-/-- The facts that the annotation knows at the place of an instruction (a definition, the
-blocks around it, its key, a role or not) hold of the environment there. -/
-def Annotation.FactsHold (annotation : Annotation) {D : Dialect} {sem : Semantics D}
-    (reading : Reading sem) (definition : Key) (role : Option Role) {Γ : List D.Ty}
-    (blocks : List (Key × Nat)) (key : Key) (env : Env sem.Val Γ) : Prop :=
-  ∀ fact, fact ∈ annotation.known ⟨definition, blocks, some key, role⟩ → fact.Holds reading env
+/-- The bound that an annotation gives a loop at a place. -/
+def Annotation.boundAt (annotation : Annotation) (place : Place) : Option Nat :=
+  (annotation.bounds.find? fun entry => decide (entry.1 = place)).map (·.2)
 
 /-- The loop at the place runs at most as often as the bound that the annotation gives
 there. -/
 def Annotation.Bounded (annotation : Annotation) (definition : Key) (role : Option Role)
     (blocks : List (Key × Nat)) (key : Key) (count : Nat) : Prop :=
-  ∀ bound, annotation.bounds ⟨definition, blocks, some key, role⟩ = some bound → count ≤ bound
+  ∀ bound, annotation.boundAt ⟨definition, blocks, some key, role⟩ = some bound → count ≤ bound
 
 section
 variable {V : Vocabulary} (M : Model V) (annotation : Annotation)
 
 /-- Every function on valid inputs and every role program of every protocol on valid inputs
-and permitted replies: what the annotation knows holds at every instruction reached, and no
-loop runs more often than its bound. -/
+and permitted replies: no loop runs more often than its bound. -/
 def Defs.Respects : {hs : Headers V} → Defs V hs → Prop
   | _, .nil => True
   | _, .fn (hs := hs) hdr body _ rest =>
       (∀ ins : HList M.Val hdr.ins, ins.All M.Valid →
         body.Everywhere (localSem M hs.fns (Defs.fnTable M rest)) (fun _ _ => True)
-          (fun blocks key env => annotation.FactsHold
-            (localReading M hs.fns (Defs.fnTable M rest)) hdr.key none blocks key env)
+          (fun _ _ _ => True)
           (annotation.Bounded hdr.key none) [] [] (Env.ofList ins)) ∧
         Defs.Respects rest
   | _, .protocol (hs := hs) hdr body _ rest =>
@@ -191,9 +119,7 @@ def Defs.Respects : {hs : Headers V} → Defs V hs → Prop
         (project r body).Everywhere
           (roleSem M r (Defs.fnTable (hs := hs) M rest) (Defs.rTable M rest))
           (Permitted M)
-          (fun blocks key env => annotation.FactsHold
-            (roleReading M r (Defs.fnTable (hs := hs) M rest) (Defs.rTable M rest))
-            hdr.key (some r) blocks key env)
+          (fun _ _ _ => True)
           (annotation.Bounded hdr.key (some r)) path [] (Env.ofList ins)) ∧
         Defs.Respects rest
 

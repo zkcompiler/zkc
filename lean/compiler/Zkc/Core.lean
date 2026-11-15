@@ -13,6 +13,7 @@ public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Print
 public import Zkc.Core.Program.PrintProgram
 public import Zkc.Core.Program.Refusal
+public import Zkc.Core.Program.Requirement
 public import Zkc.Core.Program.Project
 public import Zkc.Core.Program.Record
 public import Zkc.Core.Program.Shape
@@ -32,6 +33,7 @@ public import Zkc.Core.Projection.Proj
 public import Zkc.Core.Projection.Sound
 public import Zkc.Core.Projection.Theorem
 public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Facts.OpFacts
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
 public import Zkc.Core.World.Layer
