@@ -245,7 +245,8 @@ the same operation on the same type is not offered, by the table or by a library
 | (f) formal library | properties, models, experiments, bounds, mathematics with a theory there | definitions and theorems of the formal library | its definitions are part of every statement that names them and must be read; its proofs are checked | the object of the formal library; source sees a header |
 | (g) generated member | records and functions that one declaration determines (§8) | a line of §8 and generator code | that of the generator | records by site; functions by their definition in §8 |
 
-Tier (c) is a mark on a declaration of tier (d) or (e), not a place of its own.
+Tier (c) is a mark on a declaration of tier (d) or (e), or on the declaration that names an
+operation that the core owns (`length`), not a place of its own.
 
 ### 2.3 Tests
 
@@ -333,7 +334,7 @@ The fixed tables of the language, each closed and each changed only with the lan
 | sorts | SP3 | `Group`, `Ring`, `PrimeOrderGroup`, `Field`, `PrimeField`, `ExtensionField`, `TwoAdicField` |
 | abilities of a simulator | SX6 | `coins`, `programming`, `trapdoor` |
 | words of a goal | GL2 | the stages `written`, `committed`, `constructed`, `serialized`; `fixed`, `adaptive`; `hidden`, `observed`; `residual` |
-| rows and operations applied without a declaration | §7.4 | 26 rows of the vocabulary, on the sorts, on `nonzero<F>` and on collections of elements of a sort; the function members of the sorts; the 25 operations that the core owns, on the other reserved types |
+| rows and operations applied without a declaration | §7.4 | 26 rows of the vocabulary, on the sorts, on `nonzero<F>` and on collections of elements of a sort; the function members of the sorts; the 26 operations that the core owns, on the other reserved types |
 
 *The core library* is the set of modules that hold a language item or a name that the vocabulary
 provides: `zkc::prelude`, `zkc::option`, `zkc::algebra`, `zkc::oracle`, `zkc::commitment`,
@@ -372,7 +373,7 @@ What the compiler sees in a form as one written thing is the reason it is syntax
 | `primitive`, `asset`, `external`, `#[kernel]`, `#[site]` | bindings and marks | the name of something outside the language; the name of a site |
 | `nonzero<F>`, `index<n>`, `rational` | reserved types (b) | narrowing by a guard, widening, literals, laws, decoding |
 | `byte` | source (e) | nothing: an alias of `index<256>` in the prelude |
-| `length` | item (c), a row | a term of the fact calculus |
+| `length` | item (c), an operation that the core owns | a term of the fact calculus |
 | `Oracle<K>`, `Pending<K>`, `data`, `pending`, `lower` | items (c), rows | what `send … as oracle`, `query … deferred` and `open` produce and consume |
 | `Kind`, `Rows`, `Linear`, `Derived`, `Commitment`, `Hash`, `Layout`, `Suite` | items (c), source | interfaces whose members a rule or a step applies by name |
 | a primitive kind (`table`), a commitment scheme, a suite, a layout | source (e) | nothing: modules that implement the item interfaces |
@@ -655,12 +656,12 @@ the core. None has a rule of its own beyond the section cited.
 | `if c: A else: B` | `match c` with the arm of `false` first |
 | `if c then a else b` | a local choice whose arms are the two expressions |
 | `if c` with `c` a static condition, as a statement or an expression | the arm taken at the instance; the other arm is not typed and leaves nothing (TY9) |
-| `a and b`, `a or b` | `if a then b else false`; `if a then true else b`; each is typed as that `if`, so the right operand has the facts of the left operand, or of its negation (TY9); the boolean operation of the core when neither operand can stop |
+| `a and b`, `a or b` | `if a then b else false`; `if a then true else b`; each is typed as that `if`, so the right operand has the facts of the left operand, or of its negation (TY9); the boolean operation of the core when the right operand cannot stop and applies no operation that has a domain |
 | `[e for p in D]`, `[e for p in D if c]` | a collection over the domain `D`, elements in the order of `D`: a loop that collects (§7.4) |
 | `∑ ∏ ∀ ∃`, `⟪a, b⟫`; `sum(xs)`, … | the fold of §3.5 over the comprehension: the row of §7.4 on a type of a sort, a loop that carries the accumulator on naturals and `bool`, a loop over `add` from `zero()` (`mul` from `one()`) on a declared type |
 | an operator on a declared type | the call of the function of §3.5 |
 | `xs + ys`, `xs * a`, `xs ++ ys`, `xs[i]`, `xs[a..b]`, `[v; n]` | applications of the collection rows and of the sequence operations of the core (§7.4) |
-| a pattern binding | projections; for a linear record, its consumption |
+| a pattern binding | projections; for a linear record or tuple, its consumption |
 | `T{f}` | `T{f = f}` |
 | `{r with f = v}` | a construction of the record type of `r` from the fields of `r` and `v` |
 | a role map by name | the total map from the callee's roles to the caller's, an attribute of `core.apply` |
@@ -1609,7 +1610,9 @@ of its own: a natural has the widest of the ranges that the arms leave it, and t
 of a sum the range of the sum (TY8). *Code that does not run.* A fact is asked where an
 operation is applied. In code that does not run at the instance (the body of a loop or of a
 comprehension over an empty static range, the arm of an alternative that has no value) no
-operation is applied and no fact is asked. *Roles.* A guard performed by a role gives the fact to
+operation is applied and no fact is asked. Facts do not say what runs: an arm or a suite is typed
+whatever is known of its condition, and a name whose ranges have no number in common has that
+range. *Roles.* A guard performed by a role gives the fact to
 that role and to no other. A computation at a role uses the facts of that role; a statement
 computed by several roles needs each fact at each of them (HO2).
 
@@ -1663,7 +1666,8 @@ conversion is a named function, or one of the three conversions by a fact below.
 
 *Conversions by a fact.* Three conversions go against the widening and need a fact at the role
 that computes (TY4): a `[T]` is accepted where a `[T; s]` is expected when the role has the fact
-`length(t) == s` about it; a natural is accepted where an `index<s>` is expected when its range
+`length(t) == s` about it, which no role has of a collection of linear elements (LN2); a natural
+is accepted where an `index<s>` is expected when its range
 ends below `s` (TY8); an `F` is accepted where a `nonzero<F>` is expected when the role has the
 fact that it is not zero. The conversion changes no type of a name: it is made at the place
 where the narrower type is expected, and that is where the refining operation is applied (§7.4). A
@@ -1710,12 +1714,14 @@ A number that is a natural is a `nat` with the range `c..c`. `[e₁, …, eₖ]`
 every `[T; 0]` and every `[T]`, and where no type is expected it joins any collection (TY5). Its
 type where none is expected is `[(); 0]`, and what holds of `[]` holds of every value of that
 type, a declared one included: the only value of `[(); 0]` is `[]`;
-`[v; s]` is `s` copies of `v`; `b"…"` and `hex"…"` are `[byte; k]`. **Messages:** "the only
+`[v; s]` is `s` copies of `v`, which is not linear (LN2);
+`b"…"` and `hex"…"` are `[byte; k]`. **Messages:** "the only
 literal of a group is `0`; `<1>` is not a `<G>`"; "`<2130706433>` is not below the characteristic
 of `<F>`"; "`<0>` is not a `nonzero` value of `<F>`"; "`<1>` does not check against `<X::T>`: a
 type member has no literals; apply the function that its interface declares for constants".
 
-**TY7. Indexing and slices.** `xs[i]` cannot stop.
+**TY7. Indexing and slices.** `xs[i]` cannot stop. A linear collection is not indexed or
+sliced, and a linear tuple is not indexed (LN2).
 
 - On `xs: [T; s]` it needs `hi(i) < s` by the range of `i` (TY8).
 - On `xs: [T]` it needs `i < length(xs)` known at the computing role (TY4).
@@ -1731,7 +1737,9 @@ of a `[T]` whose bounds are not static is a `[T]` also where facts give its boun
 length is then a fact about the name that the slice is bound to. *Open (§10.2 item 28):* no
 rule gives the length of such a slice, of a concatenation or of a filled collection from its
 parts; until one does the fact is not made, and a read through the name needs a guard on its
-length. `[[T]; k]` is `k` collections with `k`
+length. `xs ++ ys` is a `[T; m + n]` when `xs` is a `[T; m]` and `ys` a `[T; n]`, and a `[T]`
+when one of them is unsized, `T` the join of their elements (TY5).
+`[[T]; k]` is `k` collections with `k`
 lengths; a fact about one of them is made on a name bound to it. An operation that reads a
 collection is defined on the domain these conditions describe, and it is applied only under them
 (§7.4).
@@ -1911,7 +1919,9 @@ elements are not ordered; compare `<F>::to_nat(<x>)`", where `to_nat` is a membe
 type or are inferred from the fields (SP6). `{r with f = e}` needs a record of freely copied
 data. A record pattern binds fields; on a linear record it names every field and consumes the
 value. A tuple has no or at least two components; a named component is read by name or by
-position. An alternative is built `Enum::Name(e…)`. `match` is exhaustive, and an alternative has one case: a second case of one alternative is
+position. A field or a component is read on its own (`.f`, `.0`) only from a value with nothing
+linear; a pattern takes a linear one apart (LN2).
+An alternative is built `Enum::Name(e…)`. `match` is exhaustive, and an alternative has one case: a second case of one alternative is
 refused. In an arm, the pattern
 binds the payload of its alternative with the payload's types; a payload of another arm does not
 exist there; a linear payload is linear in the arm (LN1). A name bound in an arm does not leave
@@ -2297,16 +2307,20 @@ removes no path, and no reasoning about conditions is made. *Layer D:*
 layer A the linear types are the `linear struct`s.
 
 **LN2. Uses.** A use is: passing the value to a parameter or a port, returning it, matching it
-with a record pattern (in the module that sees its fields), placing it in a tuple, a collection
-or a linear record that is itself used once, collecting it (TY16), or, for a claim, `open`. A
-value with several holders is used once by one statement, at all of them. A `mut` linear name is
-consumed and assigned in one statement. A linear value has no `==` and is not used inside a loop
-that is outside its scope. A specification expression may
+with a record pattern (in the module that sees its fields) or a tuple pattern, placing it in a
+tuple, a collection or a linear record that is itself used once, collecting it (TY16), or, for a
+claim, `open`. A value with several holders is used once by one statement, at all of them. A
+`mut` linear name is consumed and assigned in one statement. A linear value has no `==`; no
+field or component of it is read on its own (`.f`, `.0`, `t[i]`); it is not indexed or sliced
+(`xs[i]`, `xs[a..b]`), `length` does not take it, and it is not the `v` of `[v; s]`; and it is
+not used inside a loop that is outside its scope. A specification expression may
 mention a linear value (`holds(c)`, `position(c)`): that is not a use, and it neither discharges
 nor duplicates the value. Both arms of a choice use the same linear names. *Layer D:* `open`
 as a use, and the collecting of a claim.
 **Messages:** "`<x>` (line <n>) is never opened, returned or passed on"; "`<x>` is used twice (it
-was bound at line <n>); a linear value is used exactly once".
+was bound at line <n>); a linear value is used exactly once"; "a field or a component of a
+linear value is not read on its own: take the value apart with a pattern"; "`<form>` does not
+apply to a linear value".
 
 **LN3. `_`.** `_` does not match a linear value. **Message:** "`_` does not match a linear
 value: open it, return it or pass it on".
@@ -3070,8 +3084,8 @@ names of definitions, roles, sites, fields and arguments are discardable annotat
 | Module-level record | Holds |
 |---|---|
 | `core.record` | positional field types and a use mark (copied freely, at most once, exactly once) |
-| a variant declaration | the alternatives with their payload types, by position; an alternative without a payload has the empty tuple |
-| `core.operation` | a row of the vocabulary: the vocabulary name, the static arguments, the function type, and the kind: pure, restricted or sampling |
+| a variant declaration | the alternatives with their payload types, by position; an alternative with several payload types has the tuple of them, and an alternative without a payload has the empty tuple |
+| `core.operation` | a row of the vocabulary: its key, the function type, and the kind: pure, restricted or sampling |
 | `core.oracle` | a primitive kind: its data, position and row types, sizes included, and the function of its `answer` |
 | `func.func` | a structured function of the local dialect: whether it can stop, signature, custody of linear results, the name of its kernel when it has one, the specification-only mark |
 | `core.def` | a protocol: role count; one port per holder of each input and output; agreements; one region ending in `core.return` |
@@ -3079,14 +3093,19 @@ names of definitions, roles, sites, fields and arguments are discardable annotat
 | `core.declaration` | a scheme: role kinds, prover, verifier, statement, construction, the functions of its suite and of its layout, the functions and keys of its commitment schemes, search, pins, step parameters |
 | `core.claim` | a goal |
 
-**Rows.** A row has one of three kinds. A *pure* row is a total function of its inputs, and it
-returns no value of a type that may be empty. A *restricted* row is a function on a domain; it
-names its *domain row*, a pure row with the same inputs and the one output `bool`, which decides
-the domain. A *sampling* row is a law: a distribution on its one output. No row stops with a
-reason that a program names. A restricted row applied outside its domain stops with the
-reserved reason `undefined`, which no guard and no function names, and the check of facts
-(§7.1 item 4) admits a program only when every application is inside its domain. That is the
-sense in which no row stops (B6, GU1): an admitted program never stops `undefined`.
+**Rows.** A nominal type and a row of the vocabulary are each named by a *key*, which says
+everything that tells it from another: which field or which group, at all its elements or at its
+nonzero ones, the element and the size of a collection, how many bytes a hash gives, the type a
+law is uniform on. The core has no static arguments beside the key. A row has one of three
+kinds. A *pure* row is a total function of its inputs, and it returns no value of a type that
+may be empty. A *restricted* row is a function on a domain; it names its *domain row*, which
+decides the domain, and in the vocabulary the domain row of every restricted row is a pure row
+with the same inputs and the one output `bool`. A *sampling* row is a law: a distribution on its
+one output. No row stops with a reason that a program names. A restricted row applied outside
+its domain stops with the reserved reason `undefined`, which no guard and no function names, and
+the check of facts (§7.1 item 4) admits a program only when every application is inside its
+domain. That is the sense in which no row stops (B6, GU1): an admitted program never stops
+`undefined`.
 
 **Operations that the core owns.** The values of `bool`, of naturals, of sequences, tuples,
 records and variants are fixed by the core, and so are the operations on them: the arithmetic
@@ -3101,7 +3120,7 @@ does.
 Types: `i1` (`bool`); the count type (`nat`); `fin<n>` (`index<n>`); `seq<T, n>` with `n` a
 literal, and `seq<T>` whose length is a property of the value; tuples; record and variant types
 by the number of their declaration; nominal types of the vocabulary, among them `nonzero<F>`,
-which is a nominal type at the type `F`; the handle type of a `core.oracle` row; an opening
+the nominal type `nonzero` at the field `F`; the handle type of a `core.oracle` row; an opening
 claim, used exactly once. No type mentions a value or a variable: in an instance every size is
 a literal. A type may have no value.
 
@@ -3124,7 +3143,7 @@ A protocol body has no guard of its own: a guard is a local operation, `local.gu
 role performs in a `core.at`.
 
 The local dialect has `local.apply` (a row), the operations that the core owns under their names
-(`nat.add`, `seq.at`, …, among them `local.make`, `local.get` and `local.variant`),
+(`nat.add`, `seq.at`, …, among them `local.make`, `local.get`, `local.take` and `local.variant`),
 `local.literal`, `local.call`, `local.if`, `local.loop`, `local.match`, `local.guard` and
 `local.yield`. `local.loop` is the one loop of local code. Its count is a number of the
 operation or a run-time natural; it carries values from one iteration to the next; and it
@@ -3205,7 +3224,7 @@ by the path of the applications through which its definition was reached, then b
 | `struct`, `linear struct` | `core.record`: positional field types and the use mark; field names are annotations |
 | `enum` | a variant declaration |
 | `def` with a body | a structured `func.func`: whether it can stop (FN2), the signature, for each linear result its custody (fresh, or the input it continues), and the name of its kernel (FN5) |
-| `def … = primitive("row")`, a member `def f(x) = primitive("row")` | `core.operation`: the row at its static arguments; a call applies it |
+| `def … = primitive("row")`, a member `def f(x) = primitive("row")` | `core.operation`: the row at the instance, named by its key (§7.0); a call applies it |
 | `module M: I = primitive("row")` | no operation; its function members are `core.operation` rows of the vocabulary, its natural members numerals |
 | `module M: I = asset(name)` | no operation; its natural members are numerals, and each function member is a constant: the content of the asset decoded at the type of the member, at the digest of the asset |
 | a module that implements `Kind` and not `Derived` | a `core.oracle` row per instance: its three types, with literal sizes, and the `func.func` of `answer` |
@@ -3224,7 +3243,7 @@ by the path of the applications through which its definition was reached, then b
 |---|---|
 | `bool`, `nat` | `i1`; the count type |
 | `index<s>`, `byte` | `fin<n>` with `n` the value of `s`; `fin<256>` |
-| `nonzero<F>` | a nominal type of the vocabulary: `nonzero` at the type `F` |
+| `nonzero<F>` | a nominal type of the vocabulary: `nonzero` at the field `F` |
 | `[T; s]` | `seq<T, n>`, `n` the value of `s` |
 | `[T]` | `seq<T>`; its writing, reading and absorbing rows carry the length |
 | tuples, records, variants | a tuple; the number of the `core.record`; the number of the variant declaration |
@@ -3241,8 +3260,8 @@ by the path of the applications through which its definition was reached, then b
 | an operator on a type of a sort (a field, a ring, a group) or on `nonzero<F>`; a call of a `def` bound to a row | `local.apply` of the row |
 | an operator on naturals or on `bool` | the operation that the core owns (`nat.add`, `bool.not`, …) |
 | an operator or a mathematical form on a declared type; a call of a `def` with a body | `local.call` |
-| number and byte-string literals | `local.literal`. A number checked against a type of sort `Ring` is a literal of that nominal type, whose value the type of the vocabulary gives: `from_nat` of the number (TY6). It applies no row |
-| `[a, b]`, a tuple, `T{…}`, `{r with f = v}`, `.f`, `.0`, a pattern | `local.make`; `local.get`; a pattern on a linear record consumes it |
+| number and byte-string literals | `local.literal`. A number checked against a type of sort `Ring` is a literal of that nominal type, whose value the type of the vocabulary gives: `from_nat` of the number (TY6). It applies no row. A literal of a nominal type is one natural: below the characteristic for a field, and also at least 1 for `nonzero<F>`; a group has no literal, and its `0` is the row `group.zero` |
+| `[a, b]`, a tuple, `T{…}`, `{r with f = v}`, `.f`, `.0`, a pattern | `local.make`; `.f` and `.0` are `local.get`, one field or component of a value with nothing linear; a pattern is `local.take`, every field or component at once, which consumes a value with something linear |
 | `xs[i]`, `xs[a..b]`, `xs ++ ys`, `[v; n]`, `length(xs)` | the operations `seq.at`, `seq.slice`, `seq.concat`, `seq.fill`, `seq.length` of the core; `seq.at` and `seq.slice` are applied on their domain |
 | `xs + ys`, `xs - ys`, `xs * a`, `xs == ys` on collections of elements of a sort | `local.apply` of the rows `seq.add`, `seq.sub`, `seq.scale`, `seq.equal` |
 | `a - b`, `a / b`, `a % b` on naturals | the operations `nat.sub`, `nat.div`, `nat.rem` of the core, applied on their domain |
@@ -3250,8 +3269,8 @@ by the path of the applications through which its definition was reached, then b
 | a widening (TY5) | `seq.unsized`, `fin.to_nat` and `fin.widen`, operations of the core; the pure row `field.from_nonzero`; for the elements of a collection or the components of a tuple, the collection or the tuple made again from the converted components |
 | `if c: … else: …`, `if c then a else b` | `local.if`; a fact of the condition justifies a refining operation in the arm, at the conversion that needs it, as for a guard |
 | an `if` with a static condition (TY9) | the operations of the arm taken; no `local.if` |
-| `a and b`, `a or b` | `bool.and`, `bool.or` when neither operand can stop; otherwise `local.if`, whose other region returns the literal `false` (for `or`, `true`) |
-| `match`, `Enum::Name(e)` | `local.match`, each region over the payload of its alternative; `local.variant` |
+| `a and b`, `a or b` | `bool.and`, `bool.or` when the right operand cannot stop and applies no operation that has a domain; otherwise `local.if`, whose other region returns the literal `false` (for `or`, `true`) |
+| `match`, `Enum::Name(e)` | `local.match`, each region over the payload of its alternative; `local.variant`. The payload of an alternative with several types is the tuple of its values |
 | `for i in a..b`, uniform or with a run-time count; `for x in xs` | `local.loop`: the count is a number of the operation for a static range or a sized collection, and a run-time natural otherwise; the index is the iteration number plus the start of the range; the updated `mut` names are the carried values |
 | `for i in a..b`, stepped, or with an index that is static in the body | the iterations in sequence, each with the index a literal (§7.5) |
 | `[e for x in D]`, `[e for x in D if c]` | a `local.loop` that collects `e`: with a static count and a sized result over a static range or a sized collection, with a run-time count and an unsized result over a run-time range or an unsized collection; with `if c`, a loop that carries an unsized sequence and appends under the condition. A comprehension typed per element is a `local.make` of its elements |
@@ -3282,10 +3301,14 @@ Twenty-six rows. Each is pure, except `field.nonzero`, which is restricted, and 
 which is sampling. A number literal of a field or of a ring is no row: it is a `local.literal`
 of the nominal type. The rows `field.mul`, `field.neg` and `field.pow` are also applied at the
 type `nonzero<F>`, for `*`, prefix `-` and `^` on operands of that type (TY6), and
-`field.inverse` takes and gives a `nonzero<F>`. `seq.inner` on points and scalars is the
-multi-scalar multiplication; its kernel is the fast algorithm. Besides them the frontend applies
-the function members of the sorts, which `zkc::algebra` declares without a body
-(`group.generator`, `field.from_nat`, `field.to_nat`, `field.components`,
+`field.inverse` takes and gives a `nonzero<F>`. No type of the vocabulary is a ring that is not
+a field, so `ring.mul` and `ring.pow` have no instance in it. The rows of the group family are
+at the groups and at the fields of the vocabulary; those of the collection family, `seq.equal`
+among them, at a collection whose element is a group, a field or a sized collection of those,
+and a row at an element that is itself a collection is one row at that type. `seq.inner` on
+points and scalars is the multi-scalar multiplication; its kernel is the fast algorithm. Besides
+them the frontend applies the function members of the sorts, which `zkc::algebra` declares
+without a body (`group.generator`, `field.from_nat`, `field.to_nat`, `field.components`,
 `field.from_components`, `field.embed`, `field.coefficients`, `field.from_coefficients`,
 `field.root`), and the rows that a declaration of the core library binds: the eight rows of
 `zkc::oracle`, the hashes and the extendable-output functions of `zkc::hash`, `group.to_bytes`
@@ -3299,16 +3322,24 @@ not rows: the core fixes their meaning (§7.0).
 | Family | Operations | Domain | Applied by | Count |
 |---|---|---|---|---|
 | natural | `nat.add`, `nat.sub`, `nat.mul`, `nat.div`, `nat.rem`, `nat.pow`, `nat.equal`, `nat.less` | `nat.sub` on `b <= a`; `nat.div` and `nat.rem` on `1 <= b` | `+ - * / % ^`, `==`, `< <= > >=` | 8 |
-| `bool` | `bool.and`, `bool.or`, `bool.not`, `bool.equal` | — | `and`, `or` (when no operand can stop), `not`, `==` | 4 |
+| `bool` | `bool.and`, `bool.or`, `bool.not`, `bool.equal` | — | `and`, `or` (when the right operand cannot stop and applies no operation that has a domain), `not`, `==` | 4 |
 | sequence | `seq.at`, `seq.slice`, `seq.concat`, `seq.fill`, `seq.length` | `seq.at` on a position below the length; `seq.slice` on `a <= b`, `b` at most the length and, into a sized result, `b - a` equal to its size | `xs[i]`, `xs[a..b]`, `++`, `[v; n]`, `length` | 5 |
 | refining | `seq.sized`, `nat.below` | the length equal to the size; the number below the bound | a conversion by a fact (TY5) | 2 |
 | widening | `seq.unsized`, `fin.to_nat`, `fin.widen` | — | the widenings of TY5: `[T; s]` to `[T]`, `index<s>` to `nat`, `index<s>` to `index<t>` | 3 |
-| data | `local.make`, `local.get`, `local.variant` | — | sequence literals, tuples, records, fields, positions and patterns, alternatives | 3 |
+| data | `local.make`, `local.get`, `local.take`, `local.variant` | — | sequence literals, tuples, records; a field or a position; every field or component at once, for a pattern; alternatives | 4 |
 
-Twenty-five operations. One that has a domain is applied only where the facts of the role that
+Twenty-six operations. One that has a domain is applied only where the facts of the role that
 computes put its operands in the domain (TY5, TY7, TY8), and the admission of the core checks
-the application again (§7.1 item 4). `seq.length` is the operation that `zkc::prelude` binds as
-`length`: that binding names an operation of the core as another names a row (NL9).
+the application again (§7.1 item 4). `seq.length`, `seq.at`, `seq.slice`, `seq.fill`,
+`seq.sized` and `local.get` are not applied to a value with something linear (LN2): such a
+tuple or record is taken apart whole by `local.take`. The operations on naturals, the position of
+`seq.at` and the bounds of `seq.slice` take `nat` operands: an operand of type `index<s>` goes
+through `fin.to_nat` first. `nat.below` converts a `nat`, so an `index<t>` narrowed to an
+`index<s>` goes through `fin.to_nat` and then `nat.below`. `a < b` is `nat.less(a, b)` and
+`a > b` is `nat.less(b, a)`; `a >= b` is `bool.not(nat.less(a, b))` and `a <= b` is
+`bool.not(nat.less(b, a))`. Exchanged operands are evaluated first, in the order written (HO4).
+`seq.length` is the operation that `zkc::prelude` binds as `length`: that binding names an
+operation of the core as another names a row (NL9).
 
 ### 7.5 Protocol bodies
 
@@ -3700,6 +3731,7 @@ smallest choice that keeps the document set consistent.
 | 33 | The frozen test `T-P6` cites SX3 for a `;` in the arguments of a call of a function, and FN6 states that refusal | the test accepts both rules: `refuse FN6 SX3` |
 | 34 | **A profile of layer A.** The whole-program tests of layer A (`M-SUM…`, `M-GKR…`, `M-FRA…`, `M-IPA…`, `M-SCH…`) carry declarations of later layers and generated members, and no rule says what an implementation of layer A does with them. Until one does, an implementation of layer A *types* the declarations of layer A (types, records, variants, functions, interfaces and implementing modules, laws, `spec def`s and the formulas of relations, protocols with their events of layer A and the `spec` arguments of their applications), from the roots of SP7 and, in a test, from the instances that a line `// instantiate:` names; it *parses and resolves the names of* the items of later layers and types nothing in them (`spec for` and its clauses, the lines of a `scheme` other than the protocol instance it names, `goal`, `entry def`, `oracle def`); and it *leaves* a root that reaches a form it does not elaborate, and says which: an oracle event or a handle placement (layer D), a generated member of §8 (layers B and C), and `attempt` (EV7), which is of layer A and is not elaborated yet | a rule beside the table of §0.1: which declarations are typed, which later items are parsed and resolved only, which generated signatures a test may assume, and how roots are given |
 | 35 | The catalogue gives no generator for `field.root` at the quartic extension of KoalaBear and at the scalar field of BLS12-381 | the vocabulary states the generators |
+| 36 | **What a model of the vocabulary fixes and this reference does not give**: the polynomial that defines the quartic extension of KoalaBear (`koala-bear.ext4`); the generators of `field.root` (item 35); the encodings of an element of G2 and of Gt, for the compressed encoding of the vocabulary in which `zkc::layout::canonical` writes a group element; and which Keccak `hash.keccak256` is, the original padding or SHA3-256 | the vocabulary states them, with its model |
 
 ### 10.3 Where the criteria did not survive being applied
 
@@ -3746,7 +3778,7 @@ wordings. `GR` without a
 number is a token that no production admits ("expected `:`, found `->`").
 
 The table does not count the rules `SP11`, `SP12`, `FN7` and `SX10`, nor the messages that this
-document gives in NL6, NL9, SP4, SP8, SP10, TY2, TY6, TY13, RM3, FN5, SX6, SC5, GL3 and GL4 beyond
+document gives in NL6, NL9, SP4, SP8, SP10, TY2, TY6, TY13, LN2, RM3, FN5, SX6, SC5, GL3 and GL4 beyond
 those wordings. The message of a range whose start exceeds
 its end is CT6's.
 

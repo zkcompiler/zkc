@@ -33,6 +33,8 @@ them.
 - **item**: a language item (`LANGUAGE.md` §2.4): the sorts, and sixteen other names;
 - *row `name`*: bound to a row of the vocabulary with `primitive("name")`; for a function member
   of a sort, the row that the frontend applies;
+- *operation `name`*: bound to an operation that the core owns with `primitive("name")`
+  (`LANGUAGE.md` §7.4): `length`, to `seq.length`;
 - *source*: a definition with a body, or an interface; *source, kernel `name`*: with a kernel
   (FN5);
 - *sort*: an interface that only the vocabulary implements;
@@ -53,8 +55,9 @@ The vocabulary is defined in the formal library and printed for the tools. The t
 from tables written by hand: the types and modules below, the 26 rows that the
 frontend applies without a declaration (§1.4; `LANGUAGE.md` §7.4), and the rows that a
 declaration of a library binds. A row has one of three kinds: pure, restricted (a function on a
-domain, with the pure row that decides the domain) or sampling. The operations on naturals, on
-`bool` and on sequences as such are not rows of the vocabulary: the core owns them (§1.4).
+domain, with its domain row, a pure row with the same inputs and the one output `bool`, which
+decides the domain) or sampling. The operations on naturals, on `bool` and on sequences as such
+are not rows of the vocabulary: the core owns them (§1.4).
 
 ### 1.1 Types
 
@@ -76,6 +79,9 @@ natural member of the sort is given and that the conditions of the sort hold.
 
 *Open (`LANGUAGE.md` §10.2 item 35).* The table gives no generator for the member `root` of
 `TwoAdicField` (the row `field.root`) at `koala-bear.ext4` and at `bls12-381.fr`.
+
+*Open (`LANGUAGE.md` §10.2 item 36).* The table does not give the polynomial that defines
+`koala-bear.ext4`, nor the encodings of `bls12-381.g2` and `bls12-381.gt`.
 
 **Default representatives.** For each sort the vocabulary states a default representative: the
 type at which a default instance checks a declaration whose type parameter has that sort
@@ -108,6 +114,9 @@ of the table above among equals):
 and `Suite` declares more (§2.8): the module `Units`, the type `State` and the functions. What
 the vocabulary gives for them is settled with layer C.
 
+*Open (`LANGUAGE.md` §10.2 item 36).* The table does not say which Keccak `hash.keccak256` is:
+the original padding or SHA3-256.
+
 ### 1.3 Rows that a declaration of the core library binds
 
 | Row | Declaration | What it is |
@@ -126,7 +135,9 @@ the vocabulary gives for them is settled with layer C.
 | `oracle.handle` | `zkc::oracle::Oracle` | sealed type |
 | `oracle.lower` | `zkc::oracle::lower` | oracle |
 | `oracle.pending` | `zkc::oracle::pending` | oracle |
-| `seq.length` | `zkc::prelude::length` | collection; an operation that the core owns (§1.4), which the declaration names as another names a row |
+
+`zkc::prelude::length` binds no row: it names `seq.length`, an operation that the core owns
+(§1.4), as another declaration names a row.
 
 The function members of the sorts are rows too, applied where a program writes `T::m(…)`:
 `group.generator` (`generator`), `field.from_nat` (`from_nat`), `field.components` (`components`), `field.from_components` (`from_components`), `field.to_nat` (`to_nat`), `field.embed` (`embed`), `field.coefficients` (`coefficients`), `field.from_coefficients` (`from_coefficients`), `field.root` (`root`), `pairing.pair` (`pair`).
@@ -146,10 +157,15 @@ The rows of the vocabulary, 26:
 | sampling | `law.uniform`, at a type that is a law (TY15); one row also at a tuple or a sized collection of laws | sampling |
 
 `field.mul`, `field.neg` and `field.pow` are also rows at the type `nonzero<F>`, and
-`field.inverse` takes and gives a `nonzero<F>`. A number literal of a field or of a ring is no
-row: it is a literal of the nominal type, whose value is `from_nat` of the number (TY6).
+`field.inverse` takes and gives a `nonzero<F>`. No type of the vocabulary is a ring that is not
+a field, so `ring.mul` and `ring.pow` have no instance in it. The rows of the group family are at
+the groups and at the fields of the vocabulary; those of the collection family, `seq.equal`
+among them, at a collection whose element is a group, a field or a sized collection of those. A
+number literal of a field or of a ring is no row: it is a literal of the nominal type, whose
+value is `from_nat` of the number (TY6), and it is one natural: below the characteristic, and
+also at least 1 for `nonzero<F>`. A group has no literal: its `0` is the row `group.zero`.
 
-The operations that the core owns, 25. They are not rows: their meaning is fixed by the core.
+The operations that the core owns, 26. They are not rows: their meaning is fixed by the core.
 
 | Family | Operations | With a domain |
 |---|---|---|
@@ -158,7 +174,7 @@ The operations that the core owns, 25. They are not rows: their meaning is fixed
 | sequence | `seq.at`, `seq.slice`, `seq.concat`, `seq.fill`, `seq.length` | `seq.at`, `seq.slice` |
 | refining | `seq.sized`, `nat.below` | both |
 | widening | `seq.unsized`, `fin.to_nat`, `fin.widen` | — |
-| data | `local.make`, `local.get`, `local.variant` | — |
+| data | `local.make`, `local.get`, `local.take`, `local.variant` | — |
 
 ---
 
@@ -179,7 +195,7 @@ The operations that the core owns, 25. They are not rows: their meaning is fixed
 | `Pending` | re-export of `zkc::oracle` | **item** | |
 | `data` | re-export of `zkc::oracle` | **item** | |
 | `byte` | type | source |  |
-| `length<T>` | function | **item**, row `seq.length` |  |
+| `length<T>` | function | **item**, operation `seq.length` |  |
 
 In scope without `use` are the twelve names of this module and the five functions of the fixed
 table, `sum`, `product`, `all`, `any`, `inner`, which have no declaration: seventeen names. The
@@ -208,8 +224,9 @@ pub use zkc::oracle::{Oracle, Pending, data}
 // [source] A byte. `b"…"` and `hex"…"` are `[byte; k]`.
 pub type byte = index<256>
 
-// [item] [row seq.length] The number of elements of a collection; a term of the fact calculus.
-pub def length<T: linear>(values: [T]) -> nat = primitive("seq.length")
+// [item] [operation seq.length] The number of elements of a collection; a term of the fact
+// calculus.
+pub def length<T>(values: [T]) -> nat = primitive("seq.length")
 ```
 
 ### 2.2 `zkc::option`
