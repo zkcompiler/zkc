@@ -322,29 +322,38 @@ def addChoice (k : Known) (choice : ChoiceFact) : Known :=
 
 def kill (k : Known) : Known := { k with dead := true }
 
-/-- What is known after `first < second`: the order, and the ranges pushed once. -/
+/-- The one number of an identifier, when its range is one number. -/
+def pointOf (k : Known) (id : Nat) : Option Nat :=
+  match k.rangeOf id with
+  | some ⟨lo, some hi⟩ => if lo = hi then some lo else none
+  | _ => none
+
+/-- What is known after `first < second`: the order; and a range of one side only when the
+other side's range is one number. -/
 def pushLess (k : Known) (first second : Nat) : Known :=
-  let rf := k.rangeOf first
-  let rs := k.rangeOf second
+  let pf := k.pointOf first
+  let ps := k.pointOf second
   let k := k.addOrder first second true
-  let k := k.addRange? first (rs.map Range.below)
-  k.addRange? second (rf.map fun r => ⟨r.lo + 1, none⟩)
+  let k := k.addRange? first (ps.map fun p => Range.below (Range.point p))
+  k.addRange? second (pf.map fun p => ⟨p + 1, none⟩)
 
-/-- What is known after `first ≤ second`: the order, and the ranges pushed once. -/
+/-- What is known after `first ≤ second`: the order; and a range of one side only when the
+other side's range is one number. -/
 def pushLe (k : Known) (first second : Nat) : Known :=
-  let rf := k.rangeOf first
-  let rs := k.rangeOf second
+  let pf := k.pointOf first
+  let ps := k.pointOf second
   let k := k.addOrder first second false
-  let k := k.addRange? first (rs.map fun r => ⟨0, r.hi⟩)
-  k.addRange? second (rf.map fun r => ⟨r.lo, none⟩)
+  let k := k.addRange? first (ps.map fun p => ⟨0, some p⟩)
+  k.addRange? second (pf.map fun p => ⟨p, none⟩)
 
-/-- What is known after `first = second`: both orders and both ranges. -/
+/-- What is known after `first = second`: both orders; and the number of one side as the
+other's only when it is one number. -/
 def pushEqual (k : Known) (first second : Nat) : Known :=
-  let rf := k.rangeOf first
-  let rs := k.rangeOf second
+  let pf := k.pointOf first
+  let ps := k.pointOf second
   let k := (k.addOrder first second false).addOrder second first false
-  let k := k.addRange? first rs
-  k.addRange? second rf
+  let k := k.addRange? first (ps.map Range.point)
+  k.addRange? second (pf.map Range.point)
 
 /-- What is known after `first ≠ second`: when one is zero, the other is at least one. -/
 def pushDifferent (k : Known) (first second : Nat) : Known :=

@@ -636,11 +636,11 @@ example : «N-TY8h» = some (.inl
 example : «V-F1d» = accepted := by decide
 example : «V-F1» = some (.inl
     [unjustified 9 (item elements) (.lt (.arg 1) lengthOf)
-      [some ⟨100, none⟩, some ⟨1, none⟩]]) := by
+      [some ⟨100, none⟩, anyNat]]) := by
   decide
 example : «V-F1b» = some (.inl
     [unjustified 6 (item elements) (.lt (.arg 1) lengthOf)
-      [some ⟨100, none⟩, some ⟨1, none⟩]]) := by
+      [some ⟨100, none⟩, anyNat]]) := by
   decide
 example : «V-F1c» = some (.inl
     [unjustified 6 (item (sizedElements 8)) (.below (.arg 1) 8) [some ⟨100, some 107⟩]]) := by
@@ -831,11 +831,11 @@ def carried (inside : Bool) (byCarried : Bool) :=
   [.op ⟨7⟩ [14] (item elements) [0, 1]]) [14]
 
 example : carried true true = some (.inl
-    [unjustified 5 (item elements) (.lt (.arg 1) lengthOf) [anyNat, some ⟨1, none⟩]]) := by
+    [unjustified 5 (item elements) (.lt (.arg 1) lengthOf) [anyNat, anyNat]]) := by
   decide
 example : carried true false = accepted := by decide
 example : carried false true = some (.inl
-    [unjustified 6 (item elements) (.lt (.arg 1) lengthOf) [anyNat, some ⟨1, none⟩]]) := by
+    [unjustified 6 (item elements) (.lt (.arg 1) lengthOf) [anyNat, anyNat]]) := by
   decide
 
 /-- `c := (0 < length(xs)) and (xs[0] == 0)`, then `guard c` and `xs[0]` again; without the
@@ -894,15 +894,25 @@ def rebound (again : List (Instruction (LocalRaw field) Unit)) :=
   .op ⟨8⟩ [15] (item elements) [0, 10]]) [15]
 
 example : rebound [.op ⟨7⟩ [10] plus [10, 14]] = some (.inl
-    [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨2, none⟩, some ⟨2, none⟩]]) := by
+    [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨2, none⟩, anyNat]]) := by
   decide
 example : rebound [.op ⟨7⟩ [10] plus [1, 14]] = accepted := by decide
 example : rebound [.op ⟨7⟩ [10] plus [14, 1]] = some (.inl
-    [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨1, none⟩, some ⟨2, none⟩]]) := by
+    [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨1, none⟩, anyNat]]) := by
   decide
 
 
 /-! ## What the calculus of facts does not conclude -/
+
+/-- `guard i < n` with `n : index<10>`, then `xs[i]` on `[F; 9]`: the range of `n` is not one
+number, so the comparison gives the order only (TY9), and nothing says `i < 9` (TY7). -/
+example : check [sizedElements 9, .nat, .fin 10] [F] true (.mk [0, 1, 2] [
+    .op ⟨1⟩ [10] (toNat 10) [2],
+    .op ⟨2⟩ [11] less [1, 10],
+    .guard ⟨3⟩ () 11 .refused,
+    .op ⟨4⟩ [12] (item (sizedElements 9)) [0, 1]] [12]) = some (.inl
+    [unjustified 4 (item (sizedElements 9)) (.below (.arg 1) 9) [anyNat]]) := by
+  decide
 
 /-- `guard x <= length(xs)`, `guard t < length(xs) - x`, then `xs[x + t]`: the guard on
 `t < length(xs) - x` is no loop's order for its index, and nothing concludes `x + t < length(xs)`

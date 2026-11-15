@@ -158,44 +158,67 @@ theorem Known.Holds.hasOrder {k : Known} (hk : k.Holds R ρ) {a b : Nat} {strict
   · simp at e3
   · exact o
 
+/-- The one number of an identifier, when its range is one number, is its value. -/
+theorem Known.Holds.pointOf_at {k : Known} (hk : k.Holds R ρ) {id n p : Nat}
+    (hn : NatAt R ρ id n) (h : k.pointOf id = some p) : n = p := by
+  simp only [Known.pointOf] at h
+  cases hr : k.rangeOf id with
+  | none => rw [hr] at h; cases h
+  | some r =>
+      rw [hr] at h
+      obtain ⟨lo, hi⟩ := r
+      cases hi with
+      | none => cases h
+      | some hi =>
+          simp only at h
+          split at h
+          · next same =>
+              have hp : lo = p := Option.some.inj h
+              have has := hk.rangeOf_at hn hr
+              have h1 : lo ≤ n := has.1
+              have h2 : n ≤ hi := has.2 hi rfl
+              omega
+          · cases h
+
 theorem Known.Holds.pushLess {k : Known} (hk : k.Holds R ρ) {a b x y : Nat}
     (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (lt : x < y) : (k.pushLess a b).Holds R ρ := by
   simp only [Known.pushLess]
   have h1 := hk.addOrder (strict := true) (byLoop := false) ha hb (by simpa using lt)
   refine (h1.addRange? fun r e => ?_).addRange? fun r e => ?_
-  · cases hs : k.rangeOf b with
+  · cases hs : k.pointOf b with
     | none => rw [hs] at e; cases e
-    | some rb =>
+    | some p =>
         rw [hs] at e
         cases e
-        exact ⟨x, ha, (hk.rangeOf_at hb hs).below lt⟩
-  · cases hf : k.rangeOf a with
+        rw [← hk.pointOf_at hb hs]
+        exact ⟨x, ha, (Range.has_point.mpr rfl : (Range.point y).Has y).below lt⟩
+  · cases hf : k.pointOf a with
     | none => rw [hf] at e; cases e
-    | some ra =>
+    | some p =>
         rw [hf] at e
         cases e
-        have := (hk.rangeOf_at ha hf).1
-        exact ⟨y, hb, by simp only [Range.Has]; exact ⟨by omega, fun _ e => nomatch e⟩⟩
+        rw [← hk.pointOf_at ha hf]
+        exact ⟨y, hb, ⟨by show x + 1 ≤ y; omega, fun _ e => nomatch e⟩⟩
 
 theorem Known.Holds.pushLe {k : Known} (hk : k.Holds R ρ) {a b x y : Nat}
     (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (le : x ≤ y) : (k.pushLe a b).Holds R ρ := by
   simp only [Known.pushLe]
   have h1 := hk.addOrder (strict := false) (byLoop := false) ha hb (by simpa using le)
   refine (h1.addRange? fun r e => ?_).addRange? fun r e => ?_
-  · cases hs : k.rangeOf b with
+  · cases hs : k.pointOf b with
     | none => rw [hs] at e; cases e
-    | some rb =>
+    | some p =>
         rw [hs] at e
         cases e
-        have := (hk.rangeOf_at hb hs).2
-        exact ⟨x, ha, ⟨Nat.zero_le _, fun h e => by have := this h e; omega⟩⟩
-  · cases hf : k.rangeOf a with
+        rw [← hk.pointOf_at hb hs]
+        exact ⟨x, ha, Nat.zero_le _, fun h e => by cases e; exact le⟩
+  · cases hf : k.pointOf a with
     | none => rw [hf] at e; cases e
-    | some ra =>
+    | some p =>
         rw [hf] at e
         cases e
-        have := (hk.rangeOf_at ha hf).1
-        exact ⟨y, hb, ⟨by simp only; omega, fun _ e => nomatch e⟩⟩
+        rw [← hk.pointOf_at ha hf]
+        exact ⟨y, hb, le, fun _ e => nomatch e⟩
 
 theorem Known.Holds.pushEqual {k : Known} (hk : k.Holds R ρ) {a b x : Nat}
     (ha : NatAt R ρ a x) (hb : NatAt R ρ b x) : (k.pushEqual a b).Holds R ρ := by
@@ -203,8 +226,18 @@ theorem Known.Holds.pushEqual {k : Known} (hk : k.Holds R ρ) {a b x : Nat}
   have h1 := (hk.addOrder (strict := false) (byLoop := false) ha hb (by simp)).addOrder
     (strict := false) (byLoop := false) hb ha (by simp)
   refine (h1.addRange? fun r e => ?_).addRange? fun r e => ?_
-  · exact ⟨x, ha, hk.rangeOf_at hb e⟩
-  · exact ⟨x, hb, hk.rangeOf_at ha e⟩
+  · cases hs : k.pointOf b with
+    | none => rw [hs] at e; cases e
+    | some p =>
+        rw [hs] at e
+        cases e
+        exact ⟨x, ha, Range.has_point.mpr (hk.pointOf_at hb hs)⟩
+  · cases hf : k.pointOf a with
+    | none => rw [hf] at e; cases e
+    | some p =>
+        rw [hf] at e
+        cases e
+        exact ⟨x, hb, Range.has_point.mpr (hk.pointOf_at ha hf)⟩
 
 theorem Known.Holds.oneDifferent {k : Known} (hk : k.Holds R ρ) {a b x y : Nat}
     (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (ne : x ≠ y) :

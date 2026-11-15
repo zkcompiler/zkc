@@ -147,9 +147,9 @@ kernel runs when they are built:
   reference that a function can express, by their identifiers, accepted or refused as the case
   says with the whole refusal; for each operation with a domain and for a restricted row, an
   application accepted and one refused; sharing and the scope of facts in sibling regions, in
-  loops, after a choice and when a name is bound again; what the check does not conclude (an
-  order with an offset, the range of a sum from its first value), each refused with the whole
-  refusal; which code does not run: the body of a loop of the written count zero, an arm whose
+  loops, after a choice and when a name is bound again; what the check does not conclude (a
+  range from a comparison with a value whose range is not one number, an order with an offset,
+  the range of a sum from its first value), each refused with the whole refusal; which code does not run: the body of a loop of the written count zero, an arm whose
   payload has no value, a function with an input that has none, and not the arm that a loop's
   index never takes (`N-TY9e`) nor the code after a guard that contradicts what is known;
 - `Admission.lean`: `admit` and `check` on programs of functions: a program of two functions
