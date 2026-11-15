@@ -157,19 +157,7 @@ theorem Known.Holds.low_valued {k : Known} (hk : k.Holds R ρ) {id : Nat} (h : 1
 
 theorem Known.Holds.addRange {k : Known} (hk : k.Holds R ρ) {id n : Nat} (hn : NatAt R ρ id n)
     {r : Range} (has : r.Has n) : (k.addRange id r).Holds R ρ := by
-  have all : ∀ r', (id, r') ∈ (k.ranges.insert factDepth id (id, r)).find factDepth id →
-      r'.Has n := by
-    intro r' m
-    rcases BitTree.mem_insert _ _ _ _ _ (BitTree.mem_of_find _ _ _ _ m) with m | e
-    · obtain ⟨n', hn', has'⟩ := hk.ranges id r' m
-      rw [hn.unique hn']
-      exact has'
-    · cases e; exact has
-  refine ⟨?_, ?_, hk.orders, hk.truths, hk.choices⟩
-  · simp only [Known.addRange, hk.alive, Bool.false_or]
-    split
-    · next found e => exact (rangeIn_has all e).not_empty
-    · rfl
+  refine ⟨hk.alive, ?_, hk.orders, hk.truths, hk.choices⟩
   · intro id' r' m
     rcases BitTree.mem_insert _ _ _ _ _ m with m | e
     · exact hk.ranges id' r' m
@@ -369,13 +357,9 @@ theorem assume_holds (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
       simp only [assume]
       exact hk.addTruth hb
   | fuel + 1, k, id, value, hk, hb => by
-      simp only [assume, hk.alive, Bool.false_eq_true, ↓reduceIte]
+      simp only [assume]
       split
       · exact hk
-      split
-      · next opposite =>
-          have := (hk.hasTruth opposite).unique hb
-          cases value <;> simp at this
       have k₁ := hk.addTruth hb
       have hb0 := hb
       obtain ⟨v, hv, hbool⟩ := hb0
@@ -437,12 +421,6 @@ theorem assume_holds (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
               exact assume_holds lawful hc hcl fuel
                 (assume_holds lawful hc hcl fuel k₁ ⟨_, ha, hx⟩) ⟨_, hb', hy⟩
             · simpa using k₁
-        · next written rest e =>
-            obtain ⟨vs, hvs, hr⟩ := formOf_values lawful hc hcl e hv
-            simp only [FormHolds] at hr
-            rw [hbool] at hr
-            cases hr
-            simpa using k₁
         · exact k₁
       · intro known c m hknown
         split

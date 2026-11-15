@@ -174,6 +174,19 @@ theorem typeRanges_holds {k : Known} {ρ : Valuation (Dyn M)}
       obtain ⟨n, hn, has⟩ := localRange_has e2 d.2 (valid id d hv)
       exact ⟨n, ⟨d, hv, hn⟩, has⟩
 
+/-- Valid values have types that have a value. -/
+theorem any_noValue_of_valid : ∀ {τs : List V.Ty} (vs : HList M.Val τs), vs.All M.Valid →
+    τs.any (localFactRules V fns).noValue = false
+  | [], .nil, _ => rfl
+  | _ :: _, .cons v rest, valid => by
+      simp only [List.any_cons, localNoValue_valid (fns := fns) v (HList.all_cons.mp valid).1,
+        any_noValue_of_valid rest (HList.all_cons.mp valid).2, Bool.false_or]
+
+/-- Valid values of the types come into scope: what is known stays as it is. -/
+theorem enter_of_valid {k : Known} {τs : List V.Ty} {vs : HList M.Val τs}
+    (valid : vs.All M.Valid) : k.enter (localFactRules V fns) τs = k := by
+  simp only [Known.enter, any_noValue_of_valid vs valid, Bool.false_eq_true, ↓reduceIte]
+
 /-! ## What is known after regions -/
 
 /-- What the regions that ran say of a returned value, joined with what others say: nothing, or
@@ -532,9 +545,9 @@ theorem op_sound (blocks : List (Key × Nat)) {Γ outs ins res : List V.Ty} (key
   generalize hst₁ : checkRequirements (localOpFacts V) k ⟨definition, blocks, some key, none⟩
     o.print (idsOf ids args) ((localOpFacts V).requires o.print) st = st₁ at hnone recorded ⊢
   generalize hmade : share o.print (idsOf ids args) res.length st₁ = made at hnone recorded ⊢
-  generalize hk₂ : (k.addRanges made.1 ((localOpFacts V).ranges o.print
-    (List.map k.rangeOf (idsOf ids args)))).addRanges made.1 (List.map localRange res) = k₂
-    at hnone recorded ⊢
+  generalize hk₂ : ((k.addRanges made.1 ((localOpFacts V).ranges o.print
+    (List.map k.rangeOf (idsOf ids args)))).addRanges made.1 (List.map localRange res)).enter
+    (localFactRules V fns) res = k₂ at hnone recorded ⊢
   have refs₁ : st₁.refusals = [] := by
     obtain ⟨⟨new, e⟩, _⟩ := (walk_state (localFactRules V fns) definition none blocks rest
       (made.1 ++ ids) k₂ made.2).1
@@ -573,7 +586,7 @@ theorem op_sound (blocks : List (Key × Nat)) {Γ outs ins res : List V.Ty} (key
           · exact below i m
           · exact Nat.lt_of_lt_of_le (inv.below i m)
               (Nat.le_trans step₁.grows.next step₂.grows.next)
-        · rw [← hk₂]
+        · rw [← hk₂, enter_of_valid vr]
           refine typeRanges_holds ((inv.holds.le le).addRanges fun j id rr e1 e2 => ?_)
             step₂.coherent.valid look
           have known : ∀ (i : Nat) (rr : Range),
@@ -623,8 +636,9 @@ theorem afterRegions_inv {Γ mid : List V.Ty} {exits : List (Exit V.Ty (LocalRaw
     (inv : Inv M table ρ ids env k st₀) (le : ρ.Le ρ₁) {mids : HList M.Val mid}
     (ex : ExitInv M table ρ₁ e st' mids) (grows : St.Grows st₀ st') :
     Inv M table (ρ₁.setFrom st'.next (toDyns mids)) ((fresh mid.length st').1 ++ ids)
-      (Env.extend mids env) (afterRegions (localFactRules V fns) exits k (fresh mid.length st').1
-        mid 0) (fresh mid.length st').2 := by
+      (Env.extend mids env) ((afterRegions (localFactRules V fns) exits k
+        (fresh mid.length st').1 mid 0).enter (localFactRules V fns) mid)
+      (fresh mid.length st').2 := by
   have valid : ∀ v, v ∈ toDyns mids → ValidDyn M v := lookupAll_valid ex.rets ex.coherent.valid
   have coh := Coherent.fresh ex.coherent (toDyns mids) valid
   rw [toDyns_length] at coh
@@ -643,7 +657,8 @@ theorem afterRegions_inv {Γ mid : List V.Ty} {exits : List (Exit V.Ty (LocalRaw
       omega
     · simp only [fresh]
       exact Nat.lt_of_lt_of_le (inv.below i m) (Nat.le_trans grows.next (Nat.le_add_right _ _))
-  · apply afterRegions_holds he ex.holds coh.valid _ _ 0 k (inv.holds.le (le.trans le₂))
+  · rw [enter_of_valid (valid_of_toDyns valid)]
+    apply afterRegions_holds he ex.holds coh.valid _ _ 0 k (inv.holds.le (le.trans le₂))
     intro j m em
     have e1 := lookupAll_getElem look em
     cases hd : (toDyns mids)[j]? with
@@ -713,7 +728,8 @@ theorem block_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} (key 
     k st = e at hnone recorded ebb gb ⊢
   obtain ⟨⟨⟨nr, er⟩, nbr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
     blocks rest ((fresh mid.length e.st).1 ++ ids)
-    (afterRegions (localFactRules V fns) [e] k (fresh mid.length e.st).1 mid 0)
+    ((afterRegions (localFactRules V fns) [e] k (fresh mid.length e.st).1 mid 0).enter
+      (localFactRules V fns) mid)
     (fresh mid.length e.st).2
   have refs : e.st.refusals = [] := by
     rw [hnone] at er
@@ -803,7 +819,8 @@ theorem choose_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} {t :
     at hnone recorded eb ebb gb ⊢
   obtain ⟨⟨⟨nr, er⟩, nbr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
     blocks rest ((fresh mid.length second.st).1 ++ ids)
-    (afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1 mid)
+    ((afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1
+      mid).enter (localFactRules V fns) mid)
     (fresh mid.length second.st).2
   have refsB : second.st.refusals = [] := by
     rw [hnone] at er
@@ -832,12 +849,14 @@ theorem choose_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} {t :
           ∃ ρ', ρ.Le ρ' ∧ ExitInv M table ρ'
             (walk (localFactRules V fns) definition none blocks rest
               ((fresh mid.length second.st).1 ++ ids)
-              (afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1
-                mid) (fresh mid.length second.st).2)
+              ((afterChoice (localFactRules V fns) k cid first second
+                (fresh mid.length second.st).1 mid).enter (localFactRules V fns) mid)
+              (fresh mid.length second.st).2)
             (walk (localFactRules V fns) definition none blocks rest
               ((fresh mid.length second.st).1 ++ ids)
-              (afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1
-                mid) (fresh mid.length second.st).2).st vs) := by
+              ((afterChoice (localFactRules V fns) k cid first second
+                (fresh mid.length second.st).1 mid).enter (localFactRules V fns) mid)
+              (fresh mid.length second.st).2).st vs) := by
     intro b0 ran mem eran hb0 ρ₁ mids le ex
     have grows : St.Grows st second.st := fitsA.2.trans fitsB.2
     have inv' := afterRegions_inv mem inv le ex grows
@@ -861,11 +880,17 @@ theorem choose_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} {t :
               have h2 := (List.getElem?_eq_some_iff.mp hd).1
               omega
             rw [le₂ _ _ (by rw [lookupAll_get ex.rets j lt, hd])])
+    have validMids : mids.All M.Valid :=
+      valid_of_toDyns (lookupAll_valid ex.rets ex.coherent.valid)
     have inv'' : Inv M table (ρ₁.setFrom second.st.next (toDyns mids))
         ((fresh mid.length second.st).1 ++ ids) (Env.extend mids env)
-        (afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1 mid)
-        (fresh mid.length second.st).2 :=
-      ⟨inv'.coherent, inv'.length, inv'.below, inv'.agree, inv'.holds.addChoices choices⟩
+        ((afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1
+          mid).enter (localFactRules V fns) mid)
+        (fresh mid.length second.st).2 := by
+      refine ⟨inv'.coherent, inv'.length, inv'.below, inv'.agree, ?_⟩
+      have holds := inv'.holds
+      rw [enter_of_valid validMids] at holds ⊢
+      exact holds.addChoices choices
     have shows := ihr path _ _ _ _ _ inv'' hnone nodupR apartR
       (recorded.sub fun x m => by simp [m])
     refine ⟨shows.1, ?_⟩
@@ -969,10 +994,12 @@ theorem armsCons_sound (blocks : List (Key × Nat)) {Γ mid payloads : List V.Ty
   simp only [walkArms, localFactRules_range] at hnone recorded ⊢
   simp only [Arms.addresses] at nodup apart recorded
   obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state (localFactRules V fns) definition none
-    blocks arm ((fresh 1 st).1 ++ ids) (k.addRanges (fresh 1 st).1 [localRange payload])
+    blocks arm ((fresh 1 st).1 ++ ids)
+    ((k.addRanges (fresh 1 st).1 [localRange payload]).enter (localFactRules V fns) [payload])
     (fresh 1 st).2
   generalize he : walk (localFactRules V fns) definition none blocks arm ((fresh 1 st).1 ++ ids)
-    (k.addRanges (fresh 1 st).1 [localRange payload]) (fresh 1 st).2 = e
+    ((k.addRanges (fresh 1 st).1 [localRange payload]).enter (localFactRules V fns) [payload])
+    (fresh 1 st).2 = e
     at hnone recorded ea eba ga ⊢
   obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walkArms_state (localFactRules V fns) definition none
     blocks rest ids k e.st
@@ -1001,13 +1028,17 @@ theorem armsCons_sound (blocks : List (Key × Nat)) {Γ mid payloads : List V.Ty
         lookupAll_setFrom ρ st.next [⟨payload, v⟩]
       have le := setFrom_le inv.coherent.support [⟨payload, v⟩]
       have inv' : Inv M table (ρ.setFrom st.next [⟨payload, v⟩]) ((fresh 1 st).1 ++ ids)
-          (Env.cons v env) (k.addRanges (fresh 1 st).1 [localRange payload]) (fresh 1 st).2 :=
+          (Env.cons v env)
+          ((k.addRanges (fresh 1 st).1 [localRange payload]).enter (localFactRules V fns) [payload])
+          (fresh 1 st).2 :=
         ⟨coh, by simp [fresh, inv.length], fun i m => by
           rcases List.mem_append.mp m with m | m
           · exact fitsMade.2.2 i m
           · exact Nat.lt_of_lt_of_le (inv.below i m) fitsMade.2.1.next,
           agree_extend (inv.agree.le le) (HList.cons v HList.nil) _ look,
-          typeRanges_holds (inv.holds.le le) coh.valid look⟩
+          by
+            rw [enter_of_valid (vs := HList.cons v HList.nil) ⟨valid, trivial⟩]
+            exact typeRanges_holds (inv.holds.le le) coh.valid look⟩
       have recA : Recorded definition F (arm.addresses blocks) e.st :=
         (recorded.sub fun x m => List.mem_append_left _ m).strip ebr atr
           (fun x m mr => nodup_apart nodup m mr)
@@ -1051,7 +1082,8 @@ theorem cases_sound (blocks : List (Key × Nat)) {Γ outs mid payloads : List V.
     regions at hnone recorded ea eba ga ⊢
   obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
     blocks rest ((fresh mid.length regions.2).1 ++ ids)
-    (afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid 0)
+    ((afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid 0).enter
+      (localFactRules V fns) mid)
     (fresh mid.length regions.2).2
   have refsR : regions.2.refusals = [] := by
     rw [hnone] at er
@@ -1076,11 +1108,13 @@ theorem cases_sound (blocks : List (Key × Nat)) {Γ outs mid payloads : List V.
         ∃ ρ', ρ.Le ρ' ∧ ExitInv M table ρ'
           (walk (localFactRules V fns) definition none blocks rest
             ((fresh mid.length regions.2).1 ++ ids)
-            (afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid 0)
+            ((afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid
+              0).enter (localFactRules V fns) mid)
             (fresh mid.length regions.2).2)
           (walk (localFactRules V fns) definition none blocks rest
             ((fresh mid.length regions.2).1 ++ ids)
-            (afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid 0)
+            ((afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid
+              0).enter (localFactRules V fns) mid)
             (fresh mid.length regions.2).2).st vs) := by
     intro mids h
     obtain ⟨ρ₁, le, e, he, ex⟩ := h
@@ -1284,12 +1318,20 @@ theorem bodyKnown_holds {Γ carried : List V.Ty} {ρ : Valuation (Dyn M)} {ids :
     | some d =>
         rw [hd] at e1
         exact ⟨d, e1, toDyns_typed vs j d hd⟩
+  have validCarried : vs.All M.Valid := valid_of_toDyns (lookupAll_valid look valid)
+  have entered : ∀ k' : Known, k'.enter (localFactRules V fns) (Ty.nat :: carried) = k' :=
+    fun _ => enter_of_valid (vs := HList.cons (i : M.Val .nat) vs) ⟨trivial, validCarried⟩
   cases times with
   | fixed n =>
-      simp only [bodyKnown, localFactRules_range]
-      exact addTypeRanges_holds k₁ valid carriedOK
+      cases n with
+      | zero => exact absurd lt (Nat.not_lt_zero _)
+      | succ n =>
+          simp only [bodyKnown, localFactRules_range]
+          rw [entered]
+          exact addTypeRanges_holds k₁ valid carriedOK
   | value count ok =>
       simp only [bodyKnown, localFactRules_range]
+      rw [entered]
       exact addTypeRanges_holds (k₁.addOrder hindex (count_at agree count ok) (by simpa using lt))
         valid carriedOK
 
@@ -1523,8 +1565,9 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
   generalize hmade : fresh (carried.length + each.length) st₁ = made at hnone recorded ⊢
   obtain ⟨⟨⟨rr, er⟩, nbr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
     blocks rest (made.1 ++ ids)
-    (afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
+    ((afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
       (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
+      (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter (localFactRules V fns)
       (carried ++ List.map (fun t => Ty.seq t times.size) each)) made.2
   have m2r : made.2.refusals = st₁.refusals := by rw [← hmade]; rfl
   have m2b : made.2.bounds = st₁.bounds := by rw [← hmade]; rfl
@@ -1765,13 +1808,17 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
         (Env.extend (state.1.append ((localSem M fns table).collected times.size state.2)) env)
         (fun vs => ∃ ρ', ρ.Le ρ' ∧ ExitInv M table ρ'
           (walk (localFactRules V fns) definition none blocks rest (made.1 ++ ids)
-            (afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
+            ((afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
               (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
-              (carried ++ List.map (fun t => Ty.seq t times.size) each)) made.2)
+              (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter
+              (localFactRules V fns) (carried ++ List.map (fun t => Ty.seq t times.size) each))
+              made.2)
           (walk (localFactRules V fns) definition none blocks rest (made.1 ++ ids)
-            (afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
+            ((afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
               (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
-              (carried ++ List.map (fun t => Ty.seq t times.size) each)) made.2).st vs) := by
+              (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter
+              (localFactRules V fns) (carried ++ List.map (fun t => Ty.seq t times.size) each))
+              made.2).st vs) := by
     intro state h
     obtain ⟨ρN, la⟩ := h
     have fits : ∀ m, times.size = some m → (localSem M fns table).times times env = m := by
@@ -1805,8 +1852,9 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
     have inv' : Inv M table (ρN.setFrom st₁.next (toDyns (state.1.append
         ((localSem M fns table).collected times.size state.2)))) (made.1 ++ ids)
         (Env.extend (state.1.append ((localSem M fns table).collected times.size state.2)) env)
-        (afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
+        ((afterLoop (localFactRules V fns) e k (timesBounds k ids times) made.1
           (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
+          (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter (localFactRules V fns)
           (carried ++ List.map (fun t => Ty.seq t times.size) each)) made.2 := by
       refine ⟨coh₂, ?_, ?_, agree_extend (inv.agree.le le) _ made.1 look, ?_⟩
       · rw [m1]; simp [inv.length, Nat.add_assoc]
@@ -1818,7 +1866,8 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
           omega
         · rw [m2n, rbn]
           exact Nat.lt_of_lt_of_le (inv.below i m) (Nat.le_trans nextLe (Nat.le_add_right _ _))
-      · apply afterLoop_holds coh₂.valid _ _ _ _ _ k (inv.holds.le le)
+      · rw [enter_of_valid (τs := carried ++ List.map (fun t => Ty.seq t times.size) each) validR]
+        apply afterLoop_holds coh₂.valid _ _ _ _ _ k (inv.holds.le le)
         intro j m em
         have e1 := lookupAll_getElem look em
         cases hd : (toDyns (state.1.append
@@ -1997,7 +2046,8 @@ theorem toDyns_ofList : ∀ {Γ : List V.Ty} (ins : HList M.Val Γ) {τ : V.Ty} 
 theorem start_inv {Γ : List V.Ty} (ins : HList M.Val Γ) (valid : ins.All M.Valid) :
     Inv M table (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins))
       (List.range Γ.length) (Env.ofList ins)
-      (Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ))
+      ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
+      (localFactRules V fns) Γ)
       ⟨Table.empty, Γ.length, [], []⟩ := by
   have support : Support Γ.length
       (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins)) := by
@@ -2028,6 +2078,7 @@ theorem start_inv {Γ : List V.Ty} (ins : HList M.Val Γ) (valid : ins.All M.Val
         fun _ _ _ m => (BitTree.not_mem_empty _ m).elim,
         fun _ _ m => (BitTree.not_mem_empty _ m).elim,
         fun _ m => (BitTree.not_mem_empty _ m).elim⟩
+    rw [enter_of_valid valid]
     refine addTypeRanges_holds empty validS fun j m e => ?_
     have lt := (List.getElem?_eq_some_iff.mp e).1
     rw [List.length_range] at lt
@@ -2064,7 +2115,8 @@ theorem checkFacts_sound (distinct : (fns.map (·.key)).Nodup)
   have inv := start_inv (table := table) ins valid
   simp only [checkFacts] at accepted
   generalize he : walk (localFactRules V fns) definition none [] body (List.range Γ.length)
-    (Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ))
+    ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
+      (localFactRules V fns) Γ)
     ⟨Table.empty, Γ.length, [], []⟩ = e at accepted
   split at accepted
   · next hr =>
@@ -2092,7 +2144,8 @@ theorem checkFacts_places (definition : Key) {Γ outs : List V.Ty}
   simp only [checkFacts] at accepted
   obtain ⟨_, new, enew, at_⟩ := (walk_state (localFactRules V fns) definition none [] body
     (List.range Γ.length)
-    (Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ))
+    ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
+      (localFactRules V fns) Γ)
     ⟨Table.empty, Γ.length, [], []⟩).1
   split at accepted
   · simp only [Except.ok.injEq] at accepted

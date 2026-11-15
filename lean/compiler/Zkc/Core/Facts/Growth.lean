@@ -270,7 +270,8 @@ mutual
             first.st = second at eb ebb atb gb ⊢
         generalize hm : fresh mid.length second.st = made
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
-          (afterChoice rules k (ids.getD c.index 0) first second made.1 mid) made.2
+          ((afterChoice rules k (ids.getD c.index 0) first second made.1 mid).enter rules mid)
+          made.2
         have m2r : made.2.refusals = second.st.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = second.st.bounds := by rw [← hm]; rfl
         refine ⟨⟨⟨rr ++ rb ++ ra, by rw [er, m2r, eb, ea]; simp⟩, nr ++ nb ++ na,
@@ -302,7 +303,7 @@ mutual
           at ea eba ata ga ⊢
         generalize hm : fresh mid.length regions.2 = made
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
-          (afterRegions rules regions.1 k made.1 mid 0) made.2
+          ((afterRegions rules regions.1 k made.1 mid 0).enter rules mid) made.2
         have m2r : made.2.refusals = regions.2.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = regions.2.bounds := by rw [← hm]; rfl
         refine ⟨⟨⟨rr ++ ra, by rw [er, m2r, ea]; simp⟩, nr ++ na,
@@ -337,8 +338,9 @@ mutual
           at rbt rbn rbr ebd ⊢
         generalize hm : fresh (carried.length + each.length) st₁ = made
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
-          (afterLoop rules e k (timesBounds k ids times) made.1 ((idsOf ids init).map k.rangeOf)
-            inBody.1.tail e.rets (carried ++ each.map (D.collected times.size))) made.2
+          ((afterLoop rules e k (timesBounds k ids times) made.1 ((idsOf ids init).map k.rangeOf)
+            inBody.1.tail e.rets (carried ++ each.map (D.collected times.size))).enter rules
+            (carried ++ each.map (D.collected times.size))) made.2
         have m2r : made.2.refusals = st₁.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = st₁.bounds := by rw [← hm]; rfl
         have i2r : inBody.2.refusals = st.refusals := by rw [← hin]; rfl
@@ -382,7 +384,7 @@ mutual
           at ea eba ata ga ⊢
         generalize hm : fresh mid.length e.st = made
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
-          (afterRegions rules [e] k made.1 mid 0) made.2
+          ((afterRegions rules [e] k made.1 mid 0).enter rules mid) made.2
         have m2r : made.2.refusals = e.st.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = e.st.bounds := by rw [← hm]; rfl
         refine ⟨⟨⟨rr ++ ra, by rw [er, m2r, ea]; simp⟩, nr ++ na,
@@ -406,12 +408,13 @@ mutual
         simp only [walk]
         generalize hin : fresh 1 st = inBody
         obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks body (inBody.1 ++ ids)
-          (k.addRanges inBody.1 [rules.range (D.index w)]) inBody.2
+          ((k.addRanges inBody.1 [rules.range (D.index w)]).enter rules [D.index w]) inBody.2
         generalize walk rules definition role blocks body (inBody.1 ++ ids)
-          (k.addRanges inBody.1 [rules.range (D.index w)]) inBody.2 = e at ea eba ata ga ⊢
+          ((k.addRanges inBody.1 [rules.range (D.index w)]).enter rules [D.index w]) inBody.2 = e
+          at ea eba ata ga ⊢
         generalize hm : fresh mid.length e.st = made
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
-          (afterRegions rules [e] k made.1 mid 0) made.2
+          ((afterRegions rules [e] k made.1 mid 0).enter rules mid) made.2
         have m2r : made.2.refusals = e.st.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = e.st.bounds := by rw [← hm]; rfl
         have i2r : inBody.2.refusals = st.refusals := by rw [← hin]; rfl
@@ -459,9 +462,10 @@ mutual
         simp only [walkArms]
         generalize hin : fresh 1 st = made
         obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks arm (made.1 ++ ids)
-          (k.addRanges made.1 [rules.range payload]) made.2
+          ((k.addRanges made.1 [rules.range payload]).enter rules [payload]) made.2
         generalize walk rules definition role blocks arm (made.1 ++ ids)
-          (k.addRanges made.1 [rules.range payload]) made.2 = e at ea eba ata ga ⊢
+          ((k.addRanges made.1 [rules.range payload]).enter rules [payload]) made.2 = e
+          at ea eba ata ga ⊢
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walkArms_state blocks rest ids k e.st
         have i2r : made.2.refusals = st.refusals := by rw [← hin]; rfl
         have i2b : made.2.bounds = st.bounds := by rw [← hin]; rfl

@@ -11,8 +11,8 @@ What the check of facts is told about operations.
 The check walks a term of any dialect. Of an operation it reads its written form: an operation
 that computes is shared by it, and what the check knows of it (what it requires, the ranges of
 its results, how its result reads) is said once per written form, for every dialect whose
-operations compute. A dialect says which of its operations compute, and the range of a natural
-of each of its types.
+operations compute. A dialect says which of its operations compute, the range of a natural of
+each of its types, and which of its types have no value.
 -/
 
 namespace Zkc.Core
@@ -57,6 +57,9 @@ structure FactRules (D : Dialect) (Raw : Type) where
   /-- What the type alone says of a natural of the type; nothing for a type that is not a
   natural. -/
   range : D.Ty → Option Range
+  /-- Whether a type has no value: a region where a value of such a type comes into scope never
+  runs. -/
+  noValue : D.Ty → Bool
   /-- What the check knows of the written operations. -/
   ops : OpFacts Raw
 

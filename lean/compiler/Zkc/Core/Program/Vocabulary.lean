@@ -152,6 +152,27 @@ mutual
     | .cons head rest => Ty.isLinear V head || Tys.anyLinear V rest
 end
 
+mutual
+  /-- A type has no value: `fin 0`; a sized sequence of a positive size whose items have none; a
+  tuple or a record with a component that has none; a variant all of whose alternatives have
+  none, one without alternatives among them. A nominal type is never said to have none. -/
+  def Ty.noValue {K : Type} : Ty K → Bool
+    | .fin bound => bound == 0
+    | .seq item (some (_ + 1)) => Ty.noValue item
+    | .tuple items => Tys.someNoValue items
+    | .record _ _ fields => Tys.someNoValue fields
+    | .variant _ alternatives => Tys.allNoValue alternatives
+    | _ => false
+  /-- One of the types has no value. -/
+  def Tys.someNoValue {K : Type} : Tys K → Bool
+    | .nil => false
+    | .cons head rest => Ty.noValue head || Tys.someNoValue rest
+  /-- Every one of the types has no value. -/
+  def Tys.allNoValue {K : Type} : Tys K → Bool
+    | .nil => true
+    | .cons head rest => Ty.noValue head && Tys.allNoValue rest
+end
+
 /-- Reads as often as a count says. -/
 def scanMany (scan : List Nat → Option (List Nat)) : Nat → List Nat → Option (List Nat)
   | 0, data => some data

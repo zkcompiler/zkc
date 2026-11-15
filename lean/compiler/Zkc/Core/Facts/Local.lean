@@ -168,6 +168,7 @@ its written form. -/
 def localFactRules (fns : List (FnHeader V)) : FactRules (localDialect V fns) (LocalRaw V) where
   written := fun o => some (LocalOp.print o)
   range := localRange
+  noValue := Ty.noValue
   ops := localOpFacts V
 
 end

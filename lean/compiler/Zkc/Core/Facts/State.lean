@@ -19,7 +19,8 @@ all) is scoped: what is learned in a region is dropped at its exit.
 Of the table and of what is known, the walk reads only the functions here: a lookup in the
 table and an entry made in it, the entry of an identifier and how it reads, the range of an
 identifier, whether an order or a truth is known. Each reads the leaf of a tree placed by an
-identifier (`Program/BitTree.lean`): a list, read as a list; nothing else depends on that.
+identifier, or for an application by a number computed from its operands' identifiers
+(`Program/BitTree.lean`): a list, read as a list; nothing else depends on that.
 -/
 
 namespace Zkc.Core
@@ -87,9 +88,11 @@ abbrev factDepth : Nat := 12
 section
 variable {Raw : Type}
 
-/-- Where the table places an entry, to be found as an application: by its first operand's
-identifier, 0 when it has none. -/
-def Entry.key (e : Entry Raw) : Nat := e.args.headD 0
+/-- Where the table places an application, to find it: a number computed from all of its
+operands' identifiers, in order, each multiplying what came before by Knuth's multiplicative
+constant, so that applications that share an operand fall in different leaves. -/
+def applicationKey (args : List Nat) : Nat :=
+  args.foldl (fun key id => key * 2654435761 + id + 1) 0
 
 /-- Places an entry at each of the identifiers. -/
 def placeAll (e : Entry Raw) : List Nat → BitTree (Entry Raw) → BitTree (Entry Raw)
@@ -106,10 +109,10 @@ theorem mem_placeAll (e : Entry Raw) : ∀ (ids : List Nat) (t : BitTree (Entry 
 
 end
 
-/-- The table: its entries, the latest first, and the same entries placed by their first
-operand's identifier, to find an application, and by each of their results' identifiers, to find
-what gives an identifier. The walk reads only the placed entries; every placed entry is an
-entry. -/
+/-- The table: its entries, the latest first, and the same entries placed by their operands'
+identifiers (`applicationKey`), to find an application, and by each of their results'
+identifiers, to find what gives an identifier. The walk reads only the placed entries; every
+placed entry is an entry. -/
 structure Table (Raw : Type) where
   entries : List (Entry Raw)
   byApplication : BitTree (Entry Raw)
@@ -132,7 +135,7 @@ def Table.empty : Table Raw :=
 /-- The table with an entry made. -/
 def Table.add (e : Entry Raw) (tbl : Table Raw) : Table Raw where
   entries := e :: tbl.entries
-  byApplication := tbl.byApplication.insert factDepth e.key e
+  byApplication := tbl.byApplication.insert factDepth (applicationKey e.args) e
   byResult := placeAll e (List.range' e.lo e.count) tbl.byResult
   applications x m := by
     rcases BitTree.mem_insert _ _ _ _ x m with m | same
@@ -153,10 +156,10 @@ def findIn [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat) :
       else findIn written args count es
 
 /-- The first result of the entry of the written operation applied to the operands, with the
-number of results: among the entries placed at the first operand. -/
+number of results: among the entries placed where the operands are. -/
 def Table.find [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat)
     (tbl : Table Raw) : Option Nat :=
-  findIn written args count (tbl.byApplication.find factDepth (args.headD 0))
+  findIn written args count (tbl.byApplication.find factDepth (applicationKey args))
 
 /-- The entry, among entries, that gives an identifier. -/
 def entryIn (id : Nat) : List (Entry Raw) → Option (Entry Raw)
@@ -216,12 +219,10 @@ namespace Known
 /-- The range of an identifier. -/
 def rangeOf (k : Known) (id : Nat) : Option Range := rangeIn id (k.ranges.find factDepth id)
 
-/-- A range of an identifier learned; the region is dead when nothing is left. -/
+/-- A range of an identifier learned. Ranges of an identifier that have no number in common
+leave it the empty range: they never make the region dead. -/
 def addRange (k : Known) (id : Nat) (r : Range) : Known :=
-  let ranges := k.ranges.insert factDepth id (id, r)
-  { k with ranges, dead := k.dead || (match rangeIn id (ranges.find factDepth id) with
-      | some found => found.isEmpty
-      | none => false) }
+  { k with ranges := k.ranges.insert factDepth id (id, r) }
 
 /-- A range learned when there is one. -/
 def addRange? (k : Known) (id : Nat) : Option Range → Known
@@ -289,13 +290,11 @@ variable {Raw : Type} (ops : OpFacts Raw) (tbl : Table Raw)
 
 /-- What is learned from the truth value of an identifier, by what it is in the table and by
 the choices it is the result of. The fuel is the number of identifiers: each step goes to an
-identifier made before. -/
+identifier made before. A truth value learned both ways never makes the region dead. -/
 def assume : Nat → Known → Nat → Bool → Known
   | 0, k, id, value => k.addTruth id value
   | fuel + 1, k, id, value =>
-      if k.dead then k
-      else if k.hasTruth id value then k
-      else if k.hasTruth id (!value) then k.kill
+      if k.hasTruth id value then k
       else
         let k₁ := k.addTruth id value
         let k₂ :=
@@ -309,7 +308,6 @@ def assume : Nat → Known → Nat → Bool → Known
               if value then assume fuel (assume fuel k₁ first true) second true else k₁
           | some (.disjunction, [first, second]) =>
               if value then k₁ else assume fuel (assume fuel k₁ first false) second false
-          | some (.truth written, _) => if written = value then k₁ else k₁.kill
           | _ => k₁
         (k.choices.find factDepth id).foldl (fun known choice =>
           if choice.result = id ∧ choice.conjunction = value then

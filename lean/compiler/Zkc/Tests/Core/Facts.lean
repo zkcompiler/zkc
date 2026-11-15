@@ -9,7 +9,8 @@ The conformance cases of the reference that a function can express are named by 
 identifiers: each is accepted or refused as the case says, and a refusal is compared whole. Then,
 for each operation with a domain and for a restricted row, an application that is accepted and
 one that is refused; then what sharing and the scope of facts must do in sibling regions, in
-loops, after a choice and when a name is bound again.
+loops, after a choice and when a name is bound again; then which code does not run: only what
+is written says so, never what is known.
 -/
 
 namespace Zkc.Core.FactsTests
@@ -895,6 +896,83 @@ example : rebound [.op ⟨7⟩ [10] plus [10, 14]] = some (.inl
 example : rebound [.op ⟨7⟩ [10] plus [1, 14]] = accepted := by decide
 example : rebound [.op ⟨7⟩ [10] plus [14, 1]] = some (.inl
     [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨1, none⟩, some ⟨2, none⟩]]) := by
+  decide
+
+
+/-! ## Code that does not run -/
+
+/-- A condition on a loop's index is not decided at the instance: both arms are checked, and
+the read in the arm that the index never takes is refused (`N-TY9e`). -/
+def «N-TY9e» := check [bytes 4] [.nat] false <| .mk [0] [
+  .op ⟨1⟩ [10] (natural 0) [],
+  .loop ⟨2⟩ () (.fixed 1) [10] [11]
+    (.mk [20, 21] [
+      .op ⟨3⟩ [22] (natural 1) [],
+      .op ⟨4⟩ [23] equal [20, 22],
+      .choose ⟨5⟩ () 23 [24]
+        (.mk [] [
+          .op ⟨6⟩ [30] (natural 5) [],
+          .op ⟨7⟩ [31] (item (bytes 4)) [0, 30],
+          .op ⟨8⟩ [32] (toNat 256) [31],
+          .op ⟨9⟩ [33] plus [21, 32]] [33])
+        (.mk [] [] [21])] [24])] [11]
+
+example : «N-TY9e» = some (.inl
+    [unjustified 7 (item (bytes 4)) (.below (.arg 1) 4) [some (Range.point 5)]]) := by
+  decide
+
+/-- A guard that contradicts what is known of a value does not make what follows dead: the
+value has the empty range, and the read by it is refused. -/
+example : check [elements, .fin 4] [F] true (.mk [0, 1] [
+    .op ⟨1⟩ [10] (toNat 4) [1],
+    .op ⟨2⟩ [11] (natural 9) [],
+    .op ⟨3⟩ [12] less [11, 10],
+    .guard ⟨4⟩ () 12 .reject,
+    .op ⟨5⟩ [13] (item elements) [0, 10]] [13]) = some (.inl
+    [unjustified 5 (item elements) (.lt (.arg 1) lengthOf) [some ⟨10, some 3⟩, anyNat]]) := by
+  decide
+
+/-- `guard n == 0`, then a loop as often as `n`: its body is checked, and the read in it is
+refused. -/
+example : check [elements, .nat] [.nat] true (.mk [0, 1] [
+    .op ⟨1⟩ [10] (natural 0) [],
+    .op ⟨2⟩ [11] equal [1, 10],
+    .guard ⟨3⟩ () 11 .reject,
+    .loop ⟨4⟩ () (.count 1) [] []
+      (.mk [20] [.op ⟨5⟩ [21] (item elements) [0, 20]] [])] [1]) = some (.inl
+    [unjustified 5 (item elements) (.lt (.arg 1) lengthOf) [some Range.nothing, anyNat]]) := by
+  decide
+
+/-- The body of a loop of the written count zero does not run: nothing in it is refused. -/
+example : check [elements, .nat] [.nat] false (.mk [0, 1] [
+    .loop ⟨1⟩ () (.fixed 0) [] []
+      (.mk [20] [.op ⟨2⟩ [21] (item elements) [0, 1]] [])] [1]) = accepted := by
+  decide
+
+/-- The arm of an alternative whose payload has no value does not run: `fin 0`. -/
+example : check [elements, .variant ⟨7⟩ (.cons .nat (.cons (.fin 0) .nil))] [F] false
+    (.mk [0, 1] [
+      .op ⟨1⟩ [10] (element 0) [],
+      .cases ⟨2⟩ () 1 [11]
+        [.mk [20] [] [10],
+         .mk [20] [.op ⟨3⟩ [21] (toNat 0) [20], .op ⟨4⟩ [22] (item elements) [0, 21]] [22]]]
+      [11]) = accepted := by
+  decide
+
+/-- The same of a payload that has no value without being `fin 0`: two items of `fin 0`. -/
+example : check [elements, .variant ⟨7⟩ (.cons .nat (.cons (.seq (.fin 0) (some 2)) .nil))]
+    [F] false (.mk [0, 1] [
+      .op ⟨1⟩ [10] (element 0) [],
+      .cases ⟨2⟩ () 1 [11]
+        [.mk [20] [] [10],
+         .mk [20] [.op ⟨3⟩ [21] (natural 0) [], .op ⟨4⟩ [22] (item elements) [0, 21]] [22]]]
+      [11]) = accepted := by
+  decide
+
+/-- A function with an input that has no value never runs. -/
+example : check [elements, .fin 0] [F] false (.mk [0, 1] [
+    .op ⟨1⟩ [10] (toNat 0) [1],
+    .op ⟨2⟩ [11] (item elements) [0, 10]] [11]) = accepted := by
   decide
 
 end Zkc.Core.FactsTests

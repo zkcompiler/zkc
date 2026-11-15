@@ -21,6 +21,43 @@ theorem HList.all_cons {α : Type} {F : α → Type} {P : ∀ a, F a → Prop} {
 section
 variable {V : Vocabulary} {M : Model V}
 
+/-! ## Types without a value -/
+
+mutual
+  /-- A type of which a value is valid passes the test of having no value. -/
+  theorem Ty.noValue_of_valid {C : Carriers V} : ∀ (τ : V.Ty) (v : τ.Val C), Ty.Valid C τ v →
+      τ.noValue = false
+    | .bool, _, _ => rfl
+    | .nat, _, _ => rfl
+    | .fin 0, _, valid => absurd valid (Nat.not_lt_zero _)
+    | .fin (_ + 1), _, _ => rfl
+    | .seq _ none, _, _ => rfl
+    | .seq _ (some 0), _, _ => rfl
+    | .seq item (some (n + 1)), vs, valid => by
+        match vs, valid with
+        | v :: _, valid => exact Ty.noValue_of_valid item v (valid.1 v List.mem_cons_self)
+        | [], valid => exact absurd (valid.2 (n + 1) rfl) (fun h => Nat.succ_ne_zero n h.symm)
+    | .tuple items, vs, valid => Tys.someNoValue_of_valid items vs valid
+    | .record _ _ fields, vs, valid => Tys.someNoValue_of_valid fields vs valid
+    | .variant _ alternatives, v, valid => Tys.allNoValue_of_valid alternatives v valid
+    | .nominal _, _, _ => rfl
+  /-- Types of which values are valid have none without a value. -/
+  theorem Tys.someNoValue_of_valid {C : Carriers V} : ∀ (τs : Tys V.TypeKey) (vs : τs.Val C),
+      Tys.Valid C τs vs → Tys.someNoValue τs = false
+    | .nil, _, _ => rfl
+    | .cons head rest, (v, vs), ⟨valid, others⟩ => by
+        simp only [Tys.someNoValue, Ty.noValue_of_valid head v valid,
+          Tys.someNoValue_of_valid rest vs others, Bool.or_self]
+  /-- Types of which one has a valid value are not all without a value. -/
+  theorem Tys.allNoValue_of_valid {C : Carriers V} : ∀ (τs : Tys V.TypeKey) (c : τs.Choice C),
+      Tys.ValidChoice C τs c → Tys.allNoValue τs = false
+    | .nil, c, _ => nomatch c
+    | .cons head _, .inl v, valid => by
+        simp only [Tys.allNoValue, Ty.noValue_of_valid head v valid, Bool.false_and]
+    | .cons _ rest, .inr c, valid => by
+        simp only [Tys.allNoValue, Tys.allNoValue_of_valid rest c valid, Bool.and_false]
+end
+
 /-! ## Literals -/
 
 theorem readMany_valid {α : Type} {read : List Nat → Option (α × List Nat)} {P : α → Prop}

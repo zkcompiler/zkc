@@ -18,6 +18,13 @@ a written truth value is remembered as a conjunction or a disjunction. A loop's 
 range below its count, a loop of a counted value the order below the count and its bound; a
 carried natural that the body returns as itself plus a term has, after the loop, the range of
 the sum.
+
+A region is dead, and nothing in it is refused, exactly when what is written says that it never
+runs: the body of a loop of the written count zero; a region where a value of a type that has no
+value comes into scope (an input, the payload of an alternative, a carried value, an index, what
+an operation or a region gives); and what comes after a choice, a case analysis or a block all of
+whose regions are dead. What is known never makes a region dead: ranges of an identifier that
+have no number in common leave it the empty range, and a truth value may be learned both ways.
 -/
 
 namespace Zkc.Core
@@ -47,6 +54,12 @@ def hullOf : Option (Option Range) → Option (Option Range) → Option (Option 
   | r, none => r
   | some (some a), some (some b) => some (some (a.hull b))
   | some _, some _ => some none
+
+/-- What is known when values of the types come into scope: the region is dead when one of the
+types has no value. -/
+def Known.enter {D : Dialect} {Raw : Type} (rules : FactRules D Raw) (k : Known)
+    (τs : List D.Ty) : Known :=
+  if τs.any rules.noValue then k.kill else k
 
 /-- What is known after regions, of the values that they return: the hull of their ranges and
 what the types say; nothing runs after when no region runs. -/
@@ -84,14 +97,15 @@ def afterChoice {D : Dialect} {Raw : Type} (rules : FactRules D Raw) (k : Known)
     (afterRegions rules [first, second] k made mid 0)
 
 /-- What the index of a loop's body is known to be: below its count, which is written or a
-value; dead when the count is zero. -/
+value. -/
 def indexRange {D : Dialect} {w : D.Who} {Γ : List D.Ty} (k : Known) (ids : List Nat) :
     Times D w Γ → Range
   | .fixed n => Range.below (Range.point n)
   | .value count _ => (k.rangeOf (ids.getD count.index 0)).elim ⟨0, none⟩ Range.below
 
 /-- What is known in a loop's body: what is known around it, the range of its index, the order
-below the count, and what the types of the index and the carried values say. -/
+below the count, and what the types of the index and the carried values say; dead when the count
+is written and zero. -/
 def bodyKnown {D : Dialect} {Raw : Type} (rules : FactRules D Raw) {w : D.Who} {Γ : List D.Ty}
     (k : Known) (ids : List Nat) (times : Times D w Γ) (index : Nat) (carriedIds : List Nat)
     (carried : List D.Ty) : Known :=
@@ -99,7 +113,10 @@ def bodyKnown {D : Dialect} {Raw : Type} (rules : FactRules D Raw) {w : D.Who} {
   let k₂ := match times with
     | .fixed _ => k₁
     | .value count _ => k₁.addOrder index (ids.getD count.index 0) true
-  k₂.addRanges carriedIds (carried.map rules.range)
+  let k₃ := (k₂.addRanges carriedIds (carried.map rules.range)).enter rules (D.index w :: carried)
+  match times with
+  | .fixed 0 => k₃.kill
+  | _ => k₃
 
 /-- How many times a loop runs: at least and at most. -/
 def timesBounds {D : Dialect} {w : D.Who} {Γ : List D.Ty} (k : Known) (ids : List Nat) :
@@ -166,13 +183,13 @@ def opStep (place : Place) {ins res : List D.Ty} (o : D.Op ins res) (argIds : Li
   match rules.written o with
   | none =>
       let made := fresh res.length st
-      (made.1, k.addRanges made.1 (res.map rules.range), made.2)
+      (made.1, (k.addRanges made.1 (res.map rules.range)).enter rules res, made.2)
   | some written =>
       let st₁ := checkRequirements rules.ops k place written argIds
         (rules.ops.requires written) st
       let made := share written argIds res.length st₁
       let k₁ := k.addRanges made.1 (rules.ops.ranges written (argIds.map k.rangeOf))
-      (made.1, k₁.addRanges made.1 (res.map rules.range), made.2)
+      (made.1, (k₁.addRanges made.1 (res.map rules.range)).enter rules res, made.2)
 
 mutual
   /-- The walk of a term, from the identifiers of its context, what is known and the state. -/
@@ -191,12 +208,13 @@ mutual
         let second := walk blocks onFalse ids
           (assume rules.ops first.st.table first.st.next k condition false) first.st
         let made := fresh mid.length second.st
-        walk blocks rest (made.1 ++ ids) (afterChoice rules k condition first second made.1 mid)
-          made.2
+        walk blocks rest (made.1 ++ ids)
+          ((afterChoice rules k condition first second made.1 mid).enter rules mid) made.2
     | _, _, .cases (mid := mid) _ _ _ _ _ arms rest, ids, k, st =>
         let regions := walkArms blocks arms ids k st
         let made := fresh mid.length regions.2
-        walk blocks rest (made.1 ++ ids) (afterRegions rules regions.1 k made.1 mid 0) made.2
+        walk blocks rest (made.1 ++ ids)
+          ((afterRegions rules regions.1 k made.1 mid 0).enter rules mid) made.2
     | _, _, .loop (carried := carried) (each := each) key _ times _ init body rest, ids, k,
         st =>
         let inBody := fresh (carried.length + 1) st
@@ -207,17 +225,20 @@ mutual
         let k₁ := afterLoop rules e k (timesBounds k ids times) made.1
           ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
           (carried ++ each.map (D.collected times.size))
-        walk blocks rest (made.1 ++ ids) k₁ made.2
+        walk blocks rest (made.1 ++ ids)
+          (k₁.enter rules (carried ++ each.map (D.collected times.size))) made.2
     | _, _, .block (mid := mid) key number body rest, ids, k, st =>
         let e := walk (blocks ++ [(key, number)]) body ids k st
         let made := fresh mid.length e.st
-        walk blocks rest (made.1 ++ ids) (afterRegions rules [e] k made.1 mid 0) made.2
+        walk blocks rest (made.1 ++ ids) ((afterRegions rules [e] k made.1 mid 0).enter rules mid)
+          made.2
     | _, _, .attempt (mid := mid) _ w _ body rest, ids, k, st =>
         let inBody := fresh 1 st
         let e := walk blocks body (inBody.1 ++ ids)
-          (k.addRanges inBody.1 [rules.range (D.index w)]) inBody.2
+          ((k.addRanges inBody.1 [rules.range (D.index w)]).enter rules [D.index w]) inBody.2
         let made := fresh mid.length e.st
-        walk blocks rest (made.1 ++ ids) (afterRegions rules [e] k made.1 mid 0) made.2
+        walk blocks rest (made.1 ++ ids) ((afterRegions rules [e] k made.1 mid 0).enter rules mid)
+          made.2
   /-- The walk of the arms of a case analysis: each with a new value for its payload. -/
   def walkArms (blocks : List (Key × Nat)) :
       {Γ mid payloads : List D.Ty} → Arms D Γ mid payloads → List Nat → Known → St D.Ty Raw →
@@ -225,8 +246,8 @@ mutual
     | _, _, _, .nil, _, _, st => ([], st)
     | _, _, _, .cons (payload := payload) arm rest, ids, k, st =>
         let made := fresh 1 st
-        let e := walk blocks arm (made.1 ++ ids) (k.addRanges made.1 [rules.range payload])
-          made.2
+        let e := walk blocks arm (made.1 ++ ids)
+          ((k.addRanges made.1 [rules.range payload]).enter rules [payload]) made.2
         let others := walkArms blocks rest ids k e.st
         (e :: others.1, others.2)
 end
@@ -244,7 +265,8 @@ def checkFacts {D : Dialect} {Raw : Type} (rules : FactRules D Raw) [DecidableEq
     Except (List (Refusal D.Ty Raw)) (List (Place × Nat)) :=
   let ids := List.range Γ.length
   let e := walk rules definition role [] body ids
-    (Known.empty.addRanges ids (Γ.map rules.range)) ⟨Table.empty, Γ.length, [], []⟩
+    ((Known.empty.addRanges ids (Γ.map rules.range)).enter rules Γ)
+    ⟨Table.empty, Γ.length, [], []⟩
   match e.st.refusals with
   | [] => .ok e.st.bounds.reverse
   | refusals => .error refusals.reverse

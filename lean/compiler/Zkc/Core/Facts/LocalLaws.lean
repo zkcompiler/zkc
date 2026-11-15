@@ -602,6 +602,11 @@ theorem localOpFacts_lawful (distinct : (fns.map (·.key)).Nodup) :
   form _ _ _ _ hf h := localRun_form hf h
   ranges _ _ _ known h hk := localRun_ranges known h hk
 
+/-- No valid value has a type that the local dialect says has no value. -/
+theorem localNoValue_valid {τ : V.Ty} (v : M.Val τ) (valid : M.Valid τ v) :
+    (localFactRules V fns).noValue τ = false :=
+  Ty.noValue_of_valid τ v valid
+
 /-- What the type of a natural says of it holds of its valid values. -/
 theorem localRange_has {τ : V.Ty} {r : Range} (h : localRange τ = some r) (v : M.Val τ)
     (valid : M.Valid τ v) : ∃ n, (localReading M).nat ⟨τ, v⟩ = some n ∧ r.Has n := by
