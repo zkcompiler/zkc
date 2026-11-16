@@ -5,18 +5,24 @@ public import Zkc.Core.Value.Skeleton
 @[expose] public section
 
 /-!
-The decision that two terms mean the same: the second follows the skeleton of the first.
+Whether a second term follows the skeleton of a first.
 
 Following walks a second term along the skeleton of the first, with the first's table
 (`Term.follows`): the second term's values are found in or added to the table, the operands of
 an operation that commutes in one order whichever way they were written, and each instruction
 that it keeps in order must be the skeleton's next entry, on the same identifiers.
 What a dialect must decide for it is said by `SkelRules`: its types, its performers, and whether
-two operations are the same. `same` decides two definitions, with the inputs of both on the
-same identifiers.
+two operations are the same. `followsSkeleton` decides two definitions, with the inputs of both
+on the same identifiers.
 
-That a term that follows a skeleton runs it, so that two terms of which one follows the other's
-skeleton mean the same, is `Term.follows_runs` and `same_sound` (`Value/Soundness.lean`).
+Following does not decide that the second term is safe. A value has no place in the skeleton, so
+a second term may read a value with a domain before the guard that justifies it in the first,
+or after a loop that ran it only when it iterated, and still follow: where the first stops with
+a reason, such a second term stops `undefined`. That two terms of which one follows the other's
+skeleton mean the same is therefore for two terms that never stop `undefined`
+(`Term.follows_runs` and `followsSkeleton_sound`, `Value/Soundness.lean`). For a function, that
+is its check of facts, which the step of a transformation runs on both (`transform`,
+`Value/Transform.lean`).
 -/
 
 namespace Zkc.Core
@@ -198,7 +204,7 @@ variable [DecidableEq Raw] (rules : ValueRules D Raw)
 
 /-- Whether the second definition follows the skeleton of the first, with the inputs of both on
 the same identifiers. -/
-def same (checks : SkelRules D) {types outs : List D.Ty} (inputs inputs' : Names types)
+def followsSkeleton (checks : SkelRules D) {types outs : List D.Ty} (inputs inputs' : Names types)
     (t : Term D (Ctx.empty.extend inputs) outs) (t' : Term D (Ctx.empty.extend inputs') outs) :
     Bool :=
   let start : St D.Ty Raw := ⟨FactCheck.Table.empty rules.place, types.length, [], []⟩

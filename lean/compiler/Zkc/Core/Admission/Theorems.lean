@@ -24,12 +24,13 @@ function whose body the check of facts accepts, so the program is `Defs.Accepted
 annotation, and the theorem of the check of facts for a program gives `functionsSafe`,
 `functionsKeepValidity` and `annotationHolds`. A function whose header says that it cannot stop
 stops only `undefined` (`Defs.fnTable_stops_undefined`), and never that, so it does not stop
-(`headersSayWhoStops`). Two functions that the decision of the value form finds the same mean
-the same (`functionsSame`): it is the theorem `functions_same_sound` of `Value/Local.lean`. A
-transformation that the step accepts relates functions with the same meaning (`transformSound`,
-the theorem `transform_sound` of `Value/TransformSound.lean`), and a program whose functions
-follow those of another means what the other means (`transformedProgramSame`, the theorem
-`Defs.follows_sound` of `Admission/Programs.lean`).
+(`headersSayWhoStops`). Two accepted functions of which the second follows the skeleton of the
+first mean the same (`functionsSame`): it is the theorem `functions_follow_same` of
+`Value/Local.lean`. A transformation that the step accepts relates functions with the same
+meaning (`transformSound`, the theorem `transform_sound` of `Value/TransformSound.lean`), and
+every function of a program whose functions follow those of another means what the function of
+the other with its header means (`replacedFunctionsSame`, the theorem
+`Defs.functionsFollow_sound` of `Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -210,12 +211,12 @@ theorem headersSayWhoStops (c : Functions V) (admits : c.admit = admit) :
     (Process.every_and _ _ (safe named assoc a h M hdr f ins valid)
       (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
 
-/-- Execution and state: two functions that the decision of the value form finds the same mean
-the same (`functions_same_sound`, `Value/Local.lean`). -/
+/-- Execution and state: two accepted functions of which the second follows the skeleton of the
+first mean the same (`functions_follow_same`, `Value/Local.lean`). -/
 theorem functionsSame : Statements.functionsSame (V := V) :=
   fun _ _ _ inputs inputs' body body' definition definition' _ _ distinctBody distinctBody'
       accepted accepted' decided M table distinct safe keeps quiet ins valid permitted =>
-    functions_same_sound inputs inputs' body body' definition definition' distinctBody
+    functions_follow_same inputs inputs' body body' definition definition' distinctBody
       distinctBody' accepted accepted' decided M table distinct safe keeps quiet ins valid
       permitted
 
@@ -224,12 +225,12 @@ with the same meaning (`transform_sound`, `Value/TransformSound.lean`). -/
 theorem transformSound : Statements.transformSound (V := V) :=
   fun _ _ _ _ _ accepted => transform_sound accepted
 
-/-- Execution and state: a program whose functions follow those of another program over the same
-headers, both accepted by the check of facts, means what the other means, function by function
-(`Defs.follows_sound`, `Admission/Programs.lean`). -/
-theorem transformedProgramSame : Statements.transformedProgramSame (V := V) :=
+/-- Execution and state: every function of a program whose functions follow those of another
+program over the same headers, both accepted by the check of facts, means what the function of
+the other with its header means (`Defs.functionsFollow_sound`, `Admission/Programs.lean`). -/
+theorem replacedFunctionsSame : Statements.replacedFunctionsSame (V := V) :=
   fun _ defs defs' distinct _ _ accepted accepted' follows M hdr f ins valid =>
-    Defs.follows_sound defs defs' distinct accepted accepted' follows M hdr f ins valid
+    Defs.functionsFollow_sound defs defs' distinct accepted accepted' follows M hdr f ins valid
 
 /-- Validity: what the annotation of an admitted program knows holds, and no loop runs more
 often than its bound. -/

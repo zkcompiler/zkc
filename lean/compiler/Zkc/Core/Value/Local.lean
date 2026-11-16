@@ -7,8 +7,8 @@ public import Zkc.Core.Facts.Soundness
 @[expose] public section
 
 /-!
-The value form of the function dialect, and the theorem that the decision is sound for
-functions.
+The value form of the function dialect, and the theorem that two accepted functions of which
+one follows the other's skeleton mean the same.
 
 An operation of a function is a value, written as `LocalOp.print` writes it, unless it can stop
 with a reason (`LocalOp.canStop`: a call of a function whose header says that it can stop); such
@@ -31,9 +31,10 @@ which is lawful over headers with distinct keys (`localSkelRules_lawful`).
 
 So two bodies of functions over the same headers and of the same types, each with distinct
 addresses and accepted by the check of facts, of which the second follows the skeleton of the
-first, mean the same on every valid input, for any replies permitted (`functions_same_sound`); a
-function has no effects, so their processes are equal (`functions_same_equal`). The check of
-facts gives what the decision needs of both: neither stops `undefined` on valid inputs.
+first, mean the same on every valid input, for any replies permitted
+(`functions_follow_same`); a function has no effects, so their processes are equal
+(`functions_follow_equal`). The check of facts gives what following does not decide: neither
+stops `undefined` on valid inputs.
 -/
 
 namespace Zkc.Core
@@ -139,21 +140,22 @@ theorem localSkelRules_lawful {V : Vocabulary} {fns : List (FnHeader V)}
 section
 variable {V : Vocabulary} {fns : List (FnHeader V)}
 
-/-- **Two functions that the decision finds the same mean the same.** For two bodies of
+/-- **Two accepted functions of which the second follows the first mean the same.** For two
+bodies of
 functions over the same headers, with the same input and result types, each with distinct
 addresses and accepted by the check of facts, of which the second follows the skeleton of the
 first: against callees with distinct keys that never stop `undefined` on valid inputs, keep
 validity, and stop only `undefined` where their headers say that they cannot stop, on every
 valid input the two processes mean the same, for any replies permitted. -/
-theorem functions_same_sound {types outs : List V.Ty} (inputs inputs' : Names types)
+theorem functions_follow_same {types outs : List V.Ty} (inputs inputs' : Names types)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
     (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
     (definition definition' : Key) {bounds bounds' : List (Place × Nat)}
     (distinctBody : Term.Distinct body) (distinctBody' : Term.Distinct body')
     (accepted : checkFacts (localFactRules V fns) definition none inputs body = .ok bounds)
     (accepted' : checkFacts (localFactRules V fns) definition' none inputs' body' = .ok bounds')
-    (decided : same (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' =
-      true)
+    (decided : followsSkeleton (localValueRules V fns) (localSkelRules V fns) inputs inputs' body
+      body' = true)
     (M : Model V) (table : FnTable M fns) (distinct : (fns.map (·.key)).Nodup)
     (safe : FnTable.Safe table) (keeps : FnTable.KeepsValidity table)
     (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
@@ -163,8 +165,8 @@ theorem functions_same_sound {types outs : List V.Ty} (inputs inputs' : Names ty
     Process.SameWhen permitted
       (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
       (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins)) :=
-  same_sound (localSem M fns table) permitted (LocalReturns M table) (localValueRules V fns)
-    (localValueRules_binding M table distinct quiet) (localSkelRules V fns)
+  followsSkeleton_sound (localSem M fns table) permitted (LocalReturns M table)
+    (localValueRules V fns) (localValueRules_binding M table distinct quiet) (localSkelRules V fns)
     (localSkelRules_lawful distinct) inputs inputs' body body' decided [] ins
     (Process.every_noSig (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h)
       (FactCheck.checkFacts_sound distinct safe keeps definition inputs body distinctBody
@@ -173,17 +175,17 @@ theorem functions_same_sound {types outs : List V.Ty} (inputs inputs' : Names ty
       (FactCheck.checkFacts_sound distinct safe keeps definition' inputs' body' distinctBody'
         accepted' [] (fun _ _ none => nomatch none) ins valid).2))
 
-/-- Two functions that the decision finds the same have equal processes on every valid input: a
-function has no effects, so meaning the same is equality. -/
-theorem functions_same_equal {types outs : List V.Ty} (inputs inputs' : Names types)
+/-- Two accepted functions of which the second follows the skeleton of the first have equal
+processes on every valid input: a function has no effects, so meaning the same is equality. -/
+theorem functions_follow_equal {types outs : List V.Ty} (inputs inputs' : Names types)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
     (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
     (definition definition' : Key) {bounds bounds' : List (Place × Nat)}
     (distinctBody : Term.Distinct body) (distinctBody' : Term.Distinct body')
     (accepted : checkFacts (localFactRules V fns) definition none inputs body = .ok bounds)
     (accepted' : checkFacts (localFactRules V fns) definition' none inputs' body' = .ok bounds')
-    (decided : same (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' =
-      true)
+    (decided : followsSkeleton (localValueRules V fns) (localSkelRules V fns) inputs inputs' body
+      body' = true)
     (M : Model V) (table : FnTable M fns) (distinct : (fns.map (·.key)).Nodup)
     (safe : FnTable.Safe table) (keeps : FnTable.KeepsValidity table)
     (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
@@ -191,7 +193,7 @@ theorem functions_same_equal {types outs : List V.Ty} (inputs inputs' : Names ty
     (ins : HList M.Val types) (valid : ins.All M.Valid) :
     body.denote (localSem M fns table) [] (Env.empty.extend inputs ins) =
       body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins) :=
-  (functions_same_sound inputs inputs' body body' definition definition' distinctBody
+  (functions_follow_same inputs inputs' body body' definition definition' distinctBody
     distinctBody' accepted accepted' decided M table distinct safe keeps quiet ins valid
     fun _ _ => True).eq_of_noSig
 

@@ -79,12 +79,13 @@ def headersSayWhoStops : Prop :=
       (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
       (fnMeaning M a.program f ins).Stops fun _ => False
 
-/-- Execution and state: two functions that the decision of the value form finds the same mean
-the same. For two bodies of functions over the same headers and of the same types, each with
-distinct addresses and accepted by the check of facts, of which the second follows the skeleton
-of the first (`same`): against callees with distinct keys that never stop `undefined` on valid
-inputs, keep validity, and stop only `undefined` where their headers say that they cannot stop,
-on every valid input the two processes mean the same, for any replies permitted. -/
+/-- Execution and state: two accepted functions of which the second follows the skeleton of the
+first mean the same. For two bodies of functions over the same headers and of the same types,
+each with distinct addresses and accepted by the check of facts, of which the second follows the
+skeleton of the first (`followsSkeleton`): against callees with distinct keys that never stop
+`undefined` on valid inputs, keep validity, and stop only `undefined` where their headers say
+that they cannot stop, on every valid input the two processes mean the same, for any replies
+permitted. Following alone does not give it: the check of facts of the second is a premise. -/
 def functionsSame : Prop :=
   ∀ (fns : List (FnHeader V)) {types outs : List V.Ty} (inputs inputs' : Names types)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
@@ -93,7 +94,8 @@ def functionsSame : Prop :=
     Term.Distinct body → Term.Distinct body' →
     checkFacts (localFactRules V fns) definition none inputs body = .ok bounds →
     checkFacts (localFactRules V fns) definition' none inputs' body' = .ok bounds' →
-    same (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' = true →
+    followsSkeleton (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' =
+      true →
     ∀ (M : Model V) (table : FnTable M fns), (fns.map (·.key)).Nodup → FnTable.Safe table →
       FnTable.KeepsValidity table →
       (∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
@@ -114,15 +116,16 @@ def transformSound : Prop :=
     (step : Transformed V fns hdr), transform fns hdr source target = .ok step →
       step.source.SameAs step.target
 
-/-- Execution and state: a program whose functions were replaced by functions that the decision
-accepts means what the first means. For two programs over the same headers with distinct keys,
-both accepted by the check of facts, whose functions follow one by one (`Defs.follows`): every
-function of the second has, on valid inputs, the meaning of the function of the first with its
-header, the callers of a replaced function included. -/
-def transformedProgramSame : Prop :=
+/-- Execution and state: the functions of a program whose functions were replaced by functions
+that follow them mean what they meant. For two programs over the same headers with distinct
+keys, both accepted by the check of facts, whose functions follow one by one
+(`Defs.functionsFollow`): every function of the second has, on valid inputs, the meaning of the
+function of the first with its header, the callers of a replaced function included. The
+protocols of the two programs are not compared, and nothing is said of them. -/
+def replacedFunctionsSame : Prop :=
   ∀ (hs : Headers V) (defs defs' : Defs V hs), (hs.fns.map (·.key)).Nodup →
     ∀ (bounds bounds' : List (Place × Nat)), Defs.Accepted defs bounds →
-      Defs.Accepted defs' bounds' → Defs.follows defs defs' = true →
+      Defs.Accepted defs' bounds' → Defs.functionsFollow defs defs' = true →
       ∀ (M : Model V) (hdr : FnHeader V) (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins),
         ins.All M.Valid → Defs.fnTable M defs' hdr f ins = Defs.fnTable M defs hdr f ins
 

@@ -5,7 +5,7 @@ public import Zkc.Core.Value.Runs
 @[expose] public section
 
 /-!
-The soundness of the value form and of the decision, for any dialect and any semantics whose
+The soundness of the value form and of following, for any dialect and any semantics whose
 values satisfy the laws of `ValueRules.Binding`.
 
 A term that never stops `undefined` runs its own skeleton, over the table that the skeleton is
@@ -17,7 +17,7 @@ values (`Agrees`). A term that follows a skeleton and never stops `undefined` ru
 table that following gives, when the skeleton's leaves are made in order above every value that
 the run already has (`Term.follows_runs`). So two definitions of which the second follows the
 skeleton of the first mean the same on every input on which neither stops `undefined`
-(`same_sound`).
+(`followsSkeleton_sound`).
 -/
 
 namespace Zkc.Core
@@ -956,10 +956,10 @@ theorem Term.follows_runs (binding : rules.Binding sem Run undefined) (checks : 
 
 /-- Two definitions of which the second follows the skeleton of the first mean the same on
 every input on which neither stops `undefined`. -/
-theorem same_sound (binding : rules.Binding sem Run undefined) (checks : SkelRules D)
+theorem followsSkeleton_sound (binding : rules.Binding sem Run undefined) (checks : SkelRules D)
     (lawful : checks.Lawful) {types outs : List D.Ty} (inputs inputs' : Names types)
     (t : Term D (Ctx.empty.extend inputs) outs) (t' : Term D (Ctx.empty.extend inputs') outs)
-    (decided : same rules checks inputs inputs' t t' = true) (path : List Frame)
+    (decided : followsSkeleton rules checks inputs inputs' t t' = true) (path : List Frame)
     (values : HList sem.Val types)
     (safe : (t.denote sem path (Env.empty.extend inputs values)).Every permitted
       (fun _ => True) (fun stop => ¬ undefined stop))
@@ -967,7 +967,7 @@ theorem same_sound (binding : rules.Binding sem Run undefined) (checks : SkelRul
       (fun _ => True) (fun stop => ¬ undefined stop)) :
     Process.SameWhen permitted (t.denote sem path (Env.empty.extend inputs values))
       (t'.denote sem path (Env.empty.extend inputs' values)) := by
-  simp only [same] at decided
+  simp only [followsSkeleton] at decided
   obtain ⟨st2, followed⟩ := Option.isSome_iff_exists.mp decided
   obtain ⟨support, agrees⟩ := Agrees.start (Run := Run)
     (table := (FactCheck.Table.empty rules.place : Table Raw)) inputs values

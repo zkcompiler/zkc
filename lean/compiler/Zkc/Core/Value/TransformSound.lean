@@ -24,9 +24,10 @@ callees. On valid values in scope, a term of a function returns valid values aga
 that keep validity (`Term.denote_valid`), and it means the same against two tables that agree on
 valid inputs when one of them keeps validity (`Term.denote_tables`): every call is on valid
 values, where the two tables agree. Neither needs the check of facts. With it, a program whose
-functions follow those of another program means what the other means (`Defs.follows_sound`,
-`Admission/Programs.lean`); the second program is taken apart at each definition by
-`Defs.followsFn_true` and `Defs.followsProtocol_true`.
+functions follow those of another program gives every function the meaning of the function of
+the other with its header (`Defs.functionsFollow_sound`, `Admission/Programs.lean`); the second
+program is taken apart at each definition by `Defs.followsFn_true` and
+`Defs.followsProtocol_true`.
 -/
 
 namespace Zkc.Core
@@ -388,7 +389,7 @@ theorem acceptFn_ok {fns : List (FnHeader V)} {hdr : FnHeader V}
       cases accepted
       exact ⟨elaborated, checked⟩
 
-/-- What a stored function is accepted as is determined by it. -/
+/-- The stored form of what a stored function is accepted as is that stored function. -/
 theorem acceptFn_erases {fns : List (FnHeader V)} {hdr : FnHeader V}
     {region : Region (LocalRaw V) Unit} {f : AcceptedFn V fns hdr}
     (accepted : acceptFn fns hdr region = .ok f) : eraseFn f.inputs f.body = region :=
@@ -411,8 +412,8 @@ theorem transform_ok {fns : List (FnHeader V)} {hdr : FnHeader V}
     {source target : Region (LocalRaw V) Unit} {step : Transformed V fns hdr}
     (accepted : transform fns hdr source target = .ok step) :
     acceptFn fns hdr source = .ok step.source ∧ acceptFn fns hdr target = .ok step.target ∧
-      same (localValueRules V fns) (localSkelRules V fns) step.source.inputs step.target.inputs
-        step.source.body step.target.body = true := by
+      followsSkeleton (localValueRules V fns) (localSkelRules V fns) step.source.inputs
+        step.target.inputs step.source.body step.target.body = true := by
   unfold transform at accepted
   split at accepted
   · cases accepted
@@ -432,7 +433,7 @@ theorem transform_sound {fns : List (FnHeader V)} {hdr : FnHeader V}
     (accepted : transform fns hdr source target = .ok step) : step.source.SameAs step.target := by
   intro M table callees ins valid
   obtain ⟨sourceAccepted, targetAccepted, decided⟩ := transform_ok accepted
-  exact functions_same_equal step.source.inputs step.target.inputs step.source.body
+  exact functions_follow_equal step.source.inputs step.target.inputs step.source.body
     step.target.body hdr.key hdr.key step.source.conditions.distinct
     step.target.conditions.distinct (acceptFn_ok sourceAccepted).2 (acceptFn_ok targetAccepted).2
     decided M table callees.distinct callees.safe callees.keeps callees.quiet ins valid
@@ -469,7 +470,8 @@ theorem Defs.followsFn_true {fns : List (FnHeader V)} {protocols : List (Protoco
       ∃ (inputs' : Names hdr.ins) (body' : Fn V fns hdr inputs') (ok' : FnConditions body')
         (rest' : Defs V ⟨fns, protocols⟩),
         HEq defs' (Defs.fn (hs := ⟨fns, protocols⟩) hdr inputs' body' ok' rest') ∧
-          same (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' = true ∧
+          followsSkeleton (localValueRules V fns) (localSkelRules V fns) inputs inputs' body
+            body' = true ∧
           rest rest' = true
   | _, .nil, headers, _ => nomatch headers
   | _, .fn _ inputs' body' ok' rest', rfl, follows => by

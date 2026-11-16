@@ -15,9 +15,10 @@ source that is not accepted. A control: a target that computes another result (a
 replaced by another) is not decided; a target with the operands of a sum exchanged is accepted.
 
 Last, a program of two functions whose first, called by the second, is replaced by what
-`removeUnused` gives: the two programs follow one another (`Defs.follows`), and
-`Defs.follows_sound` gives that the caller means what it meant. A control: replacing the first
-function by one that computes another result, the programs do not follow.
+`removeUnused` gives: the functions of the second follow those of the first
+(`Defs.functionsFollow`), and `Defs.functionsFollow_sound` gives that the caller means what it
+meant. A control: replacing the first function by one that computes another result, the
+functions do not follow.
 -/
 
 namespace Zkc.Core.TransformTests
@@ -392,7 +393,7 @@ example : removeUnused [] calleeBody = .mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]]
   decide +kernel
 
 /-- The functions of the second program follow those of the first, one by one. -/
-example : Defs.follows before after = true := by decide +kernel
+example : Defs.functionsFollow before after = true := by decide +kernel
 
 /-- The program as written is accepted by the check of facts, with no bound. -/
 theorem before_accepted : Defs.Accepted before [] :=
@@ -406,10 +407,10 @@ theorem after_accepted : Defs.Accepted after [] :=
 callee on valid values, where the callee means the same. -/
 example (M : Model field) (ins : HList M.Val callerHeader.ins) (valid : ins.All M.Valid) :
     Defs.fnTable M after callerHeader .head ins = Defs.fnTable M before callerHeader .head ins :=
-  Defs.follows_sound before after (by decide +kernel) before_accepted after_accepted
+  Defs.functionsFollow_sound before after (by decide +kernel) before_accepted after_accepted
     (by decide +kernel) M callerHeader .head ins valid
 
 /-- Control: a callee replaced by one that computes another result does not follow. -/
-example : Defs.follows before other = false := by decide +kernel
+example : Defs.functionsFollow before other = false := by decide +kernel
 
 end Zkc.Core.TransformTests

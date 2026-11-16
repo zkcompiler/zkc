@@ -24,10 +24,10 @@ means is in `Value/TransformSound.lean`: on valid inputs the two have the same m
 is safe by its own check of facts, it is the source of the next step, and the stored forms of
 what the step returns are what it was given.
 
-Two programs over the same headers are compared function by function (`Defs.follows`): each
+Two programs over the same headers are compared function by function (`Defs.functionsFollow`): each
 function of the second follows the skeleton of the function of the first with its header. That
 the functions of the second then mean what those of the first mean, their callers included, is
-`Defs.follows_sound` (`Admission/Programs.lean`).
+`Defs.functionsFollow_sound` (`Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -101,7 +101,7 @@ def acceptFn (fns : List (FnHeader V)) (hdr : FnHeader V) (region : Region (Loca
       | .ok bounds => .ok ⟨inputs, body, conditions, bounds⟩
 
 /-- Why a transformation of a function is not accepted: its source or its target is refused, or
-the decision cannot tell that the target means what the source means. -/
+the target does not follow the skeleton of the source. -/
 inductive TransformRefusal (V : Vocabulary) where
   | source (refusals : List (ProgramRefusal V))
   | target (refusals : List (ProgramRefusal V))
@@ -123,8 +123,8 @@ def transform (fns : List (FnHeader V)) (hdr : FnHeader V)
       match acceptFn fns hdr target with
       | .error refusals => .error (.target refusals)
       | .ok accepted' =>
-          if same (localValueRules V fns) (localSkelRules V fns) accepted.inputs accepted'.inputs
-              accepted.body accepted'.body then .ok ⟨accepted, accepted'⟩
+          if followsSkeleton (localValueRules V fns) (localSkelRules V fns) accepted.inputs
+              accepted'.inputs accepted.body accepted'.body then .ok ⟨accepted, accepted'⟩
           else .error .undecided
 
 /-! ## Two programs over the same headers -/
@@ -140,8 +140,8 @@ def Defs.followsFn (fns : List (FnHeader V)) (protocols : List (ProtocolHeader V
     {hs : Headers V} → Defs V hs → hs = ⟨hdr :: fns, protocols⟩ → Bool
   | _, .nil, same => nomatch same
   | _, .fn (hs := hs) _ inputs' body' _ rest', rfl =>
-      same (localValueRules V hs.fns) (localSkelRules V hs.fns) inputs inputs' body body' &&
-        rest rest'
+      followsSkeleton (localValueRules V hs.fns) (localSkelRules V hs.fns) inputs inputs' body
+        body' && rest rest'
   | _, .protocol .., _ => false
 
 /-- A protocol of the first program, against a program whose headers are said to be the first's
@@ -157,15 +157,18 @@ def Defs.followsProtocol (fns : List (FnHeader V)) (protocols : List (ProtocolHe
 
 /-- Whether the functions of the second program follow the skeletons of those of the first,
 one by one: the two programs have the same headers, and each function is decided against the one
-with its header. A protocol is not compared. Two programs whose functions and protocols come in
+with its header. A protocol is not compared: two programs that differ only in the body of a
+protocol follow, and nothing is concluded of their protocols. Two programs whose functions and
+protocols come in
 another order do not follow. The recursion is on the first program; the second is taken apart at
 each definition by `Defs.followsFn` and `Defs.followsProtocol`. -/
-def Defs.follows : {hs : Headers V} → Defs V hs → Defs V hs → Bool
+def Defs.functionsFollow : {hs : Headers V} → Defs V hs → Defs V hs → Bool
   | _, .nil, _ => true
   | _, .fn (hs := hs) hdr inputs body _ rest, defs' =>
-      Defs.followsFn hs.fns hs.protocols hdr inputs body (fun rest' => Defs.follows rest rest')
-        defs' rfl
+      Defs.followsFn hs.fns hs.protocols hdr inputs body
+        (fun rest' => Defs.functionsFollow rest rest') defs' rfl
   | _, .protocol (hs := hs) hdr _ _ _ rest, defs' =>
-      Defs.followsProtocol hs.fns hs.protocols hdr (fun rest' => Defs.follows rest rest') defs' rfl
+      Defs.followsProtocol hs.fns hs.protocols hdr (fun rest' => Defs.functionsFollow rest rest')
+        defs' rfl
 
 end Zkc.Core

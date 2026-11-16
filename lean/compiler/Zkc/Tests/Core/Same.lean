@@ -2,8 +2,8 @@ import Zkc.Core.Value.Local
 import Zkc.Tests.Core.Facts
 
 /-!
-The decision that two functions mean the same, on functions written by names, elaborated and
-decided by the kernel.
+Whether a function follows the skeleton of another, on functions written by names, elaborated
+and decided by the kernel.
 
 Each pair is two bodies of a function with the key 1 over the same callees, each elaborated
 against them; the decision walks the second along the skeleton of the first. Accepted: a
@@ -41,7 +41,8 @@ def decided (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops stop
   match elabFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body,
       elabFn fns ⟨⟨1⟩, ins, outs, stops', none⟩ body' with
   | .ok ⟨inputs, fn, _⟩, .ok ⟨inputs', fn', _⟩ =>
-      some (same (localValueRules field fns) (localSkelRules field fns) inputs inputs' fn fn')
+      some (followsSkeleton (localValueRules field fns) (localSkelRules field fns) inputs inputs'
+        fn fn')
   | _, _ => none
 
 /-- A callee with the key 9 from a natural to a natural, which can stop or cannot. -/
@@ -250,7 +251,7 @@ example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid)
         (Env.empty.extend aroundGuardsTyped.1 ins))
       (afterGuardsTyped.2.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend afterGuardsTyped.1 ins)) :=
-  functions_same_sound aroundGuardsTyped.1 afterGuardsTyped.1 aroundGuardsTyped.2
+  functions_follow_same aroundGuardsTyped.1 afterGuardsTyped.1 aroundGuardsTyped.2
     afterGuardsTyped.2 ⟨1⟩ ⟨1⟩ (bounds := []) (bounds' := [])
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
@@ -264,7 +265,7 @@ example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid) 
         (Env.empty.extend aroundGuardsTyped.1 ins) =
       afterGuardsTyped.2.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend afterGuardsTyped.1 ins) :=
-  functions_same_equal aroundGuardsTyped.1 afterGuardsTyped.1 aroundGuardsTyped.2
+  functions_follow_equal aroundGuardsTyped.1 afterGuardsTyped.1 aroundGuardsTyped.2
     afterGuardsTyped.2 ⟨1⟩ ⟨1⟩ (bounds := []) (bounds' := [])
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
@@ -284,7 +285,7 @@ example (M : Model field) (ins : HList M.Val [.nat, .nat]) (valid : ins.All M.Va
     sumTyped.2.denote (localSem M [] (noCallees M)) [] (Env.empty.extend sumTyped.1 ins) =
       commutedSumTyped.2.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend commutedSumTyped.1 ins) :=
-  functions_same_equal sumTyped.1 commutedSumTyped.1 sumTyped.2 commutedSumTyped.2 ⟨1⟩ ⟨1⟩
+  functions_follow_equal sumTyped.1 commutedSumTyped.1 sumTyped.2 commutedSumTyped.2 ⟨1⟩ ⟨1⟩
     (bounds := []) (bounds' := [])
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))

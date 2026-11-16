@@ -24,8 +24,8 @@ operation of two operands whose result does not depend on their order has the sm
 identifier first (`ValueRules.order`), so that `x + y` and `y + x` are one value. An effect keeps
 its operands in the order written.
 
-The meaning of a skeleton is in `Value/Runs.lean`; the decision that two terms mean the same, in
-`Value/Follows.lean`.
+The meaning of a skeleton is in `Value/Runs.lean`; whether a second term follows the skeleton
+of a first, in `Value/Follows.lean`.
 -/
 
 namespace Zkc.Core
