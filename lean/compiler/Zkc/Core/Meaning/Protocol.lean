@@ -89,7 +89,7 @@ def mapG (ρ : Role → Role) {A : Type} : Protocol M A → Protocol M A
 /-- The processes of the protocols that a region may apply: each returns its results and
 the record of its run. -/
 abbrev GTable (protocols : List (ProtocolHeader V)) : Type :=
-  ∀ hdr, Var protocols hdr → List Frame → HList (LVal M) hdr.ins →
+  ∀ hdr, Member protocols hdr → List Frame → HList (LVal M) hdr.ins →
     Protocol M (HList (LVal M) hdr.outs × hdr.record.Val M)
 
 /-- The meaning of an operation of a protocol, at its key. -/
@@ -155,15 +155,17 @@ def locatedPick {W : LTy V → Type} (ps : Holders) (f : ∀ τ, M.Val τ → W 
 /-- An attempt in the protocol as written: its body runs once, with the number `0`, and then
 the rest. -/
 theorem attempt_denote {hs : Headers V} (fnTable : FnTable M hs.fns)
-    (gTable : GTable M hs.protocols) {Γ outs mid : List (LTy V)} (key : Key) (w : Holders)
-    (owns : (protocolDialect V hs).Attempt w)
-    (body : Term (protocolDialect V hs) (LTy.index w :: Γ) mid)
-    (rest : Term (protocolDialect V hs) (mid ++ Γ) outs) (path : List Frame)
+    (gTable : GTable M hs.protocols) {Γ : Ctx (LTy V)} {outs mid : List (LTy V)} (key : Key)
+    (w : Holders) (owns : (protocolDialect V hs).Attempt w) (inputs : Names [LTy.index w])
+    (body : Term (protocolDialect V hs) (Γ.extend inputs) mid) (results : Names mid)
+    (rest : Term (protocolDialect V hs) (Γ.extend results) outs) (path : List Frame)
     (env : Env (LVal M) Γ) :
-    (Term.attempt key w owns body rest).denote (protocolSem M fnTable gTable) path env =
+    (Term.attempt key w owns inputs body results rest).denote (protocolSem M fnTable gTable) path
+        env =
       (body.denote (protocolSem M fnTable gTable) path
-          (Env.cons (V := LVal M) (a := LTy.index w) (0 : Nat) env)).bind fun mids =>
-        rest.denote (protocolSem M fnTable gTable) path (Env.extend mids env) := rfl
+          (env.extend inputs (.cons (V := LVal M) (a := LTy.index w) (0 : Nat) .nil))).bind
+        fun mids => rest.denote (protocolSem M fnTable gTable) path (env.extend results mids) :=
+  rfl
 
 /-! ## The record of a run -/
 
@@ -235,17 +237,18 @@ def observeOp (key : Key) {outs : List (LTy V)} {s : Shape V} :
 
 mutual
   /-- The process of a term that returns its results and the record of its run. -/
-  def Term.observe : {Γ outs : List (LTy V)} → (t : Term (protocolDialect V hs) Γ outs) →
-      List Frame → Env (LVal M) Γ → Protocol M (HList (LVal M) outs × (shapeOf t).fields.Val M)
-    | _, _, .ret xs, _, env => .done (env.all xs, ())
-    | _, _, .op key o args rest, path, env =>
-        observeOp M fnTable gTable key o path (env.all args) fun results =>
-          Term.observe rest path (Env.extend results env)
+  def Term.observe : {Γ : Ctx (LTy V)} → {outs : List (LTy V)} →
+      (t : Term (protocolDialect V hs) Γ outs) → List Frame → Env (LVal M) Γ →
+        Protocol M (HList (LVal M) outs × (shapeOf t).fields.Val M)
+    | _, _, .ret exit, _, env => .done (env.all exit, ())
+    | _, _, .op key o operands results rest, path, env =>
+        observeOp M fnTable gTable key o path (env.all operands) fun values =>
+          Term.observe rest path (env.extend results values)
     | _, _, .guard key ps c ok why rest, path, env =>
-        bif (protocolSem M fnTable gTable).holds ok (env _ c) then Term.observe rest path env
+        bif (protocolSem M fnTable gTable).holds ok (env.get c) then Term.observe rest path env
         else .halt (ps, .declared why ⟨path, key⟩)
-    | _, _, .choose (mid := mid) _ _ c ok _ onTrue onFalse rest, path, env =>
-        ((bif (protocolSem M fnTable gTable).holds ok (env _ c) then
+    | _, _, .choose (mid := mid) _ _ c ok _ onTrue onFalse results rest, path, env =>
+        ((bif (protocolSem M fnTable gTable).holds ok (env.get c) then
             (Term.observe onTrue path env).map fun arm =>
               (arm.1, Fields.join M (Fields.present M arm.2)
                 (Shapes.absent M (.cons (shapeOf onFalse) .nil)))
@@ -256,46 +259,48 @@ mutual
           Protocol M (HList (LVal M) mid ×
             (Shapes.fields (.cons (shapeOf onTrue) (.cons (shapeOf onFalse) .nil))).Val M)).bind
           fun arms =>
-            (Term.observe rest path (Env.extend arms.1 env)).map fun out =>
+            (Term.observe rest path (env.extend results arms.1)).map fun out =>
               (out.1, Fields.join M arms.2 out.2)
-    | _, _, .cases _ _ x ok _ arms rest, path, env =>
-        (Arms.observe arms path env ((protocolSem M fnTable gTable).pick ok (env _ x))).bind
+    | _, _, .cases _ _ x ok _ arms results rest, path, env =>
+        (Arms.observe arms path env ((protocolSem M fnTable gTable).pick ok (env.get x))).bind
           fun chosen =>
-            (Term.observe rest path (Env.extend chosen.1 env)).map fun out =>
+            (Term.observe rest path (env.extend results chosen.1)).map fun out =>
               (out.1, Fields.join M chosen.2 out.2)
-    | _, _, .loop (carried := carried) (each := each) key ps times _ init body rest, path, env =>
+    | _, _, .loop (carried := carried) (each := each) key ps times _ initial inputs body results
+        rest, path, env =>
         (Process.iterate ((protocolSem M fnTable gTable).times times env)
           (fun i (state : (protocolSem M fnTable gTable).LoopState carried each ×
               ((shapeOf body).fields.map .many).Val M) =>
             (Term.observe body (path ++ [.iteration key i])
-              (Env.cons ((protocolSem M fnTable gTable).index ps i)
-                (Env.extend state.1.1 env))).map fun out =>
+              (env.extend inputs
+                (.cons ((protocolSem M fnTable gTable).index ps i) state.1.1))).map fun out =>
               (((HList.split carried out.1).1, state.1.2.push (HList.split carried out.1).2),
                 Fields.push M state.2 out.2))
-          0 ((env.all init, HList.empties each), Fields.empty M (shapeOf body).fields)).bind
+          0 ((env.all initial, HList.empties each), Fields.empty M (shapeOf body).fields)).bind
           fun state =>
             (Term.observe rest path
-              (Env.extend (state.1.1.append
-                ((protocolSem M fnTable gTable).collected times.size state.1.2)) env)).map
+              (env.extend results (state.1.1.append
+                ((protocolSem M fnTable gTable).collected times.size state.1.2)))).map
               fun out => (out.1, Fields.join M state.2 out.2)
-    | _, _, .block key number body rest, path, env =>
+    | _, _, .block key number body results rest, path, env =>
         (Term.observe body (path ++ [.iteration key number]) env).bind fun inner =>
-          (Term.observe rest path (Env.extend inner.1 env)).map fun out =>
+          (Term.observe rest path (env.extend results inner.1)).map fun out =>
             (out.1, (inner.2, out.2))
-    | _, _, .attempt _ w _ body rest, path, env =>
-        (Term.observe body path (Env.cons (V := LVal M) (a := LTy.index w) (0 : Nat) env)).bind
+    | _, _, .attempt _ w _ inputs body results rest, path, env =>
+        (Term.observe body path
+            (env.extend inputs (.cons (V := LVal M) (a := LTy.index w) (0 : Nat) .nil))).bind
           fun inner =>
-            (Term.observe rest path (Env.extend inner.1 env)).map fun out =>
+            (Term.observe rest path (env.extend results inner.1)).map fun out =>
               (out.1, Fields.join M inner.2 out.2)
   /-- The process of the region of the alternative that a variant is, with the record of the
   arms: the fields of the arm that ran, and none for the others. -/
-  def Arms.observe : {Γ mid payloads : List (LTy V)} →
+  def Arms.observe : {Γ : Ctx (LTy V)} → {mid payloads : List (LTy V)} →
       (arms : Arms (protocolDialect V hs) Γ mid payloads) → List Frame → Env (LVal M) Γ →
         Pick (LVal M) payloads → Protocol M (HList (LVal M) mid × (shapesOf arms).fields.Val M)
-    | _, _, _, .cons arm rest, path, env, .here v =>
-        (Term.observe arm path (Env.cons v env)).map fun out =>
+    | _, _, _, .cons inputs arm rest, path, env, .here v =>
+        (Term.observe arm path (env.extend inputs (.cons v .nil))).map fun out =>
           (out.1, Fields.join M (Fields.present M out.2) (Shapes.absent M (shapesOf rest)))
-    | _, _, _, .cons arm rest, path, env, .there p =>
+    | _, _, _, .cons _ arm rest, path, env, .there p =>
         (Arms.observe rest path env p).map fun out =>
           (out.1, Fields.join M (Fields.absent M (shapeOf arm).fields) out.2)
 end
@@ -325,27 +330,27 @@ theorem observeOp_fst (key : Key) {outs : List (LTy V)} {s : Shape V} :
 
 mutual
   /-- The process with the record, without the record, is the process of the term. -/
-  theorem Term.observe_fst : ∀ {Γ outs : List (LTy V)} (t : Term (protocolDialect V hs) Γ outs)
-      (path : List Frame) (env : Env (LVal M) Γ),
+  theorem Term.observe_fst : ∀ {Γ : Ctx (LTy V)} {outs : List (LTy V)}
+      (t : Term (protocolDialect V hs) Γ outs) (path : List Frame) (env : Env (LVal M) Γ),
       (Term.observe M fnTable gTable t path env).map Prod.fst =
         t.denote (protocolSem M fnTable gTable) path env
     | _, _, .ret _, _, _ => rfl
-    | _, _, .op key o args rest, path, env => by
-        refine (observeOp_fst M fnTable gTable key o path (env.all args)
-          fun results => Term.observe M fnTable gTable rest path (Env.extend results env)).trans ?_
+    | _, _, .op key o operands results rest, path, env => by
+        refine (observeOp_fst M fnTable gTable key o path (env.all operands) fun values =>
+          Term.observe M fnTable gTable rest path (env.extend results values)).trans ?_
         simp only [Term.denote]
         congr 1
-        funext results
+        funext values
         exact Term.observe_fst rest path _
     | _, _, .guard key ps c ok why rest, path, env => by
         simp only [Term.observe, Term.denote]
-        cases asBool M ok.1 (env _ c)
+        cases asBool M ok.1 (env.get c)
         · rfl
         · exact Term.observe_fst rest path env
-    | _, _, .choose _ _ c ok _ onTrue onFalse rest, path, env => by
+    | _, _, .choose _ _ c ok _ onTrue onFalse _ rest, path, env => by
         simp only [Term.observe, Term.denote]
         rw [Process.map_bind]
-        cases asBool M ok.1 (env _ c)
+        cases asBool M ok.1 (env.get c)
         · simp only [Bool.cond_false]
           rw [← Term.observe_fst onFalse path env, Process.bind_map, Process.bind_map]
           congr 1
@@ -358,14 +363,14 @@ mutual
           funext arm
           rw [Process.map_map]
           exact Term.observe_fst rest path _
-    | _, _, .cases _ _ x ok _ arms rest, path, env => by
+    | _, _, .cases _ _ x ok _ arms _ rest, path, env => by
         simp only [Term.observe, Term.denote]
         rw [Process.map_bind, ← Arms.observe_fst arms path env, Process.bind_map]
         congr 1
         funext chosen
         rw [Process.map_map]
         exact Term.observe_fst rest path _
-    | _, _, .loop key ps times _ init body rest, path, env => by
+    | _, _, .loop key ps times _ initial inputs body _ rest, path, env => by
         simp only [Term.observe, Term.denote]
         rw [Process.map_bind]
         refine Process.bind_iterate_fst ?_ ?_ _ _ _ _
@@ -375,14 +380,14 @@ mutual
         · intro state
           rw [Process.map_map]
           exact Term.observe_fst rest path _
-    | _, _, .block key number body rest, path, env => by
+    | _, _, .block key number body _ rest, path, env => by
         simp only [Term.observe, Term.denote]
         rw [Process.map_bind, ← Term.observe_fst body, Process.bind_map]
         congr 1
         funext inner
         rw [Process.map_map]
         exact Term.observe_fst rest path _
-    | _, _, .attempt key w owns body rest, path, env => by
+    | _, _, .attempt key w owns inputs body _ rest, path, env => by
         rw [attempt_denote]
         simp only [Term.observe]
         rw [Process.map_bind, ← Term.observe_fst body, Process.bind_map]
@@ -390,17 +395,17 @@ mutual
         funext inner
         rw [Process.map_map]
         exact Term.observe_fst rest path _
-  theorem Arms.observe_fst : ∀ {Γ mid payloads : List (LTy V)}
+  theorem Arms.observe_fst : ∀ {Γ : Ctx (LTy V)} {mid payloads : List (LTy V)}
       (arms : Arms (protocolDialect V hs) Γ mid payloads) (path : List Frame)
       (env : Env (LVal M) Γ) (p : Pick (LVal M) payloads),
       (Arms.observe M fnTable gTable arms path env p).map Prod.fst =
         arms.denote (protocolSem M fnTable gTable) path env p
     | _, _, _, .nil, _, _, p => nomatch p
-    | _, _, _, .cons arm rest, path, env, .here v => by
+    | _, _, _, .cons _ arm rest, path, env, .here v => by
         simp only [Arms.observe]
         rw [Process.map_map]
         exact Term.observe_fst arm path _
-    | _, _, _, .cons arm rest, path, env, .there p => by
+    | _, _, _, .cons _ arm rest, path, env, .there p => by
         simp only [Arms.observe]
         rw [Process.map_map]
         exact Arms.observe_fst rest path env p

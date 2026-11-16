@@ -72,9 +72,13 @@ theorem find_insertAux (v : α) :
   | _ + 1, node .., 0, 0, _ => rfl
   | _ + 1, node .., 0, k' + 1, _ => by simp [insertAux, find]
   | fuel + 1, leaf, k + 1, 0, _ => by
-      cases parity : Nat.beq (k % 2) 0 <;> simp [insertAux, find, parity]
+      rw [ite_eq_right (fun same => Nat.succ_ne_zero k same.symm)]
+      cases parity : Nat.beq (k % 2) 0 <;>
+        simp only [insertAux, find, parity, Bool.cond_true, Bool.cond_false]
   | fuel + 1, node .., k + 1, 0, _ => by
-      cases parity : Nat.beq (k % 2) 0 <;> simp [insertAux, find, parity]
+      rw [ite_eq_right (fun same => Nat.succ_ne_zero k same.symm)]
+      cases parity : Nat.beq (k % 2) 0 <;>
+        simp only [insertAux, find, parity, Bool.cond_true, Bool.cond_false]
   | fuel + 1, leaf, k + 1, k' + 1, bound => by
       have inner := find_insertAux v fuel leaf (k / 2) (k' / 2) (by omega)
       simp only [insertAux, find, beq_parity]
@@ -82,7 +86,7 @@ theorem find_insertAux (v : α) :
         simp only [even, even', decide_true, decide_false, Bool.cond_true, Bool.cond_false, find,
           beq_parity, inner] <;>
         first
-          | (have same : (k' / 2 = k / 2) ↔ (k' = k) := by omega
+          | (have same : (k' / 2 = k / 2) ↔ (k' = k) := ⟨fun _ => by omega, fun _ => by omega⟩
              simp [same])
           | (have differ : ¬ (k' = k) := by omega
              simp [differ])
@@ -94,7 +98,7 @@ theorem find_insertAux (v : α) :
         simp only [even, even', decide_true, decide_false, Bool.cond_true, Bool.cond_false, find,
           beq_parity, inZero, inOne] <;>
         first
-          | (have same : (k' / 2 = k / 2) ↔ (k' = k) := by omega
+          | (have same : (k' / 2 = k / 2) ↔ (k' = k) := ⟨fun _ => by omega, fun _ => by omega⟩
              simp [same])
           | (have differ : ¬ (k' = k) := by omega
              simp [differ])

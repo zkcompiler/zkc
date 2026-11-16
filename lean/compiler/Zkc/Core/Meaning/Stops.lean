@@ -35,7 +35,7 @@ theorem ownedOp_halts {ins outs : List V.Ty} (o : OwnedOp V ins outs) (args : HL
 /-- A local operation that cannot stop with a reason stops only `undefined`, against callees
 whose headers say that they cannot stop and that stop only `undefined`. -/
 theorem localOp_stops_undefined {fns : List (FnHeader V)} (table : FnTable M fns)
-    (callees : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+    (callees : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
       (table hdr callee args).Stops (· = .undefined)) :
     ∀ {ins res : List V.Ty} (o : LocalOp V fns ins res) (args : HList M.Val ins),
       LocalOp.canStop o = false → (localOp M table o args).Stops (· = .undefined)
@@ -63,33 +63,34 @@ mutual
   /-- A term that cannot stop with a reason stops only `undefined`, against callees whose
   headers say that they cannot stop and that stop only `undefined`. -/
   theorem Term.stops_undefined
-      (callees : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins),
+      (callees : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins),
         hdr.canStop = false → (table hdr callee args).Stops (· = .undefined)) :
-      ∀ {Γ outs : List V.Ty} (t : Term (localDialect V fns) Γ outs) (path : List Frame)
-        (env : Env M.Val Γ), Term.canStop (fun o => LocalOp.canStop o) t = false →
+      ∀ {Γ : Ctx V.Ty} {outs : List V.Ty} (t : Term (localDialect V fns) Γ outs)
+        (path : List Frame) (env : Env M.Val Γ),
+        Term.canStop (fun o => LocalOp.canStop o) t = false →
         (t.denote (localSem M fns table) path env).Stops (· = .undefined)
     | _, _, .ret _, _, _, _ => trivial
-    | _, _, .op _ o _ rest, path, _, quiet => by
+    | _, _, .op _ o _ _ rest, path, _, quiet => by
         simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
         simp only [Term.denote]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (localOp_stops_undefined M table callees o _ quiet.1)
     | _, _, .guard .., _, _, quiet => by cases quiet
-    | _, _, .choose _ _ _ _ _ onTrue onFalse rest, path, env, quiet => by
+    | _, _, .choose _ _ _ _ _ onTrue onFalse _ rest, path, env, quiet => by
         simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
         simp only [Term.denote]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (cond_every _ (Term.stops_undefined callees onTrue path env quiet.1.1)
             (Term.stops_undefined callees onFalse path env quiet.1.2))
-    | _, _, .cases _ _ _ _ _ arms rest, path, env, quiet => by
+    | _, _, .cases _ _ _ _ _ arms _ rest, path, env, quiet => by
         simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
         simp only [Term.denote]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (Arms.stops_undefined callees arms path env _ quiet.1)
-    | _, _, .loop _ _ _ _ _ body rest, path, _, quiet => by
+    | _, _, .loop _ _ _ _ _ _ body _ rest, path, _, quiet => by
         simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
         simp only [Term.denote]
         apply (Process.every_bind _ _ _ _ _).mpr
@@ -101,26 +102,26 @@ mutual
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ e => e)
           (Term.stops_undefined callees body _ _ quiet.1)
-    | _, _, .block _ _ body rest, path, env, quiet => by
+    | _, _, .block _ _ body _ rest, path, env, quiet => by
         simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
         simp only [Term.denote]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (Term.stops_undefined callees body _ env quiet.1)
-    | _, _, .attempt _ _ owns _ _, _, _, _ => nomatch owns
+    | _, _, .attempt _ _ owns _ _ _ _, _, _, _ => nomatch owns
   /-- The arms of a case analysis that cannot stop with a reason stop only `undefined`. -/
   theorem Arms.stops_undefined
-      (callees : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins),
+      (callees : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins),
         hdr.canStop = false → (table hdr callee args).Stops (· = .undefined)) :
-      ∀ {Γ mid payloads : List V.Ty} (arms : Arms (localDialect V fns) Γ mid payloads)
+      ∀ {Γ : Ctx V.Ty} {mid payloads : List V.Ty} (arms : Arms (localDialect V fns) Γ mid payloads)
         (path : List Frame) (env : Env M.Val Γ) (pick : Pick M.Val payloads),
         Arms.canStop (fun o => LocalOp.canStop o) arms = false →
         (arms.denote (localSem M fns table) path env pick).Stops (· = .undefined)
     | _, _, _, .nil, _, _, pick, _ => nomatch pick
-    | _, _, _, .cons arm _, path, _, .here _, quiet => by
+    | _, _, _, .cons _ arm _, path, _, .here _, quiet => by
         simp only [Arms.canStop, Bool.or_eq_false_iff] at quiet
         exact Term.stops_undefined callees arm path _ quiet.1
-    | _, _, _, .cons _ rest, path, env, .there pick, quiet => by
+    | _, _, _, .cons _ _ rest, path, env, .there pick, quiet => by
         simp only [Arms.canStop, Bool.or_eq_false_iff] at quiet
         exact Arms.stops_undefined callees rest path env pick quiet.2
 end
@@ -133,15 +134,15 @@ variable {V : Vocabulary} (M : Model V)
 /-- In a program, a function whose header says that it cannot stop stops only `undefined`: its
 body cannot stop with a reason (`FnConditions.stops`), and calls only such functions. -/
 theorem Defs.fnTable_stops_undefined : ∀ {hs : Headers V} (defs : Defs V hs) (hdr : FnHeader V)
-    (f : Var hs.fns hdr) (ins : HList M.Val hdr.ins), hdr.canStop = false →
+    (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins), hdr.canStop = false →
     (Defs.fnTable M defs hdr f ins).Stops (· = .undefined)
   | _, .nil, _, f, _, _ => nomatch f
-  | _, .fn _ body ok rest, _, .head, _, quiet =>
+  | _, .fn _ _ body ok rest, _, .head, _, quiet =>
       Term.stops_undefined M (Defs.fnTable M rest)
         (fun hdr' f' ins' quiet' => Defs.fnTable_stops_undefined rest hdr' f' ins' quiet') body
         [] _ (ok.stops.symm.trans quiet)
-  | _, .fn _ _ _ rest, _, .tail f, ins, quiet => Defs.fnTable_stops_undefined rest _ f ins quiet
-  | _, .protocol _ _ _ rest, _, f, ins, quiet => Defs.fnTable_stops_undefined rest _ f ins quiet
+  | _, .fn _ _ _ _ rest, _, .tail f, ins, quiet => Defs.fnTable_stops_undefined rest _ f ins quiet
+  | _, .protocol _ _ _ _ rest, _, f, ins, quiet => Defs.fnTable_stops_undefined rest _ f ins quiet
 
 end
 

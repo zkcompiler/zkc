@@ -166,7 +166,7 @@ theorem Tys.toHList_valid : ∀ (fields : Tys V.TypeKey) (v : fields.Val M.toCar
   | .cons _ rest, (_, vs), ⟨first, others⟩ =>
       HList.all_cons.mpr ⟨first, Tys.toHList_valid rest vs others⟩
 
-theorem Tys.getAt_valid : ∀ (fields : Tys V.TypeKey) {τ : V.Ty} (position : Var fields.toList τ)
+theorem Tys.getAt_valid : ∀ (fields : Tys V.TypeKey) {τ : V.Ty} (position : Member fields.toList τ)
     (v : fields.Val M.toCarriers), Tys.Valid M.toCarriers fields v →
     M.Valid τ (Tys.getAt M fields position v)
   | .nil, _, position, _, _ => nomatch position
@@ -175,7 +175,7 @@ theorem Tys.getAt_valid : ∀ (fields : Tys V.TypeKey) {τ : V.Ty} (position : V
       Tys.getAt_valid rest position vs others
 
 theorem Tys.injectAt_valid : ∀ (alternatives : Tys V.TypeKey) {τ : V.Ty}
-    (position : Var alternatives.toList τ) (v : M.Val τ), M.Valid τ v →
+    (position : Member alternatives.toList τ) (v : M.Val τ), M.Valid τ v →
     Tys.ValidChoice M.toCarriers alternatives (Tys.injectAt M alternatives position v)
   | .nil, _, position, _, _ => nomatch position
   | .cons _ _, _, .head, _, valid => valid
@@ -354,12 +354,12 @@ theorem ownedOp_valid : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins outs) (arg
 /-- The functions of a table keep validity: on valid inputs, the results that each gives are
 valid. -/
 def FnTable.KeepsValidity {fns : List (FnHeader V)} (table : FnTable M fns) : Prop :=
-  ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins) (results : HList M.Val hdr.outs),
+  ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins) (results : HList M.Val hdr.outs),
     args.All M.Valid → table hdr callee args = .done results → results.All M.Valid
 
 /-- The functions of a table never stop `undefined` on valid inputs. -/
 def FnTable.Safe {fns : List (FnHeader V)} (table : FnTable M fns) : Prop :=
-  ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
+  ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
     (table hdr callee args).Stops (· ≠ .undefined)
 
 section
@@ -398,7 +398,7 @@ theorem localOp_literal_valid (τ : V.Ty) (data : List Nat) (reads : V.Reads τ 
 
 /-- A call keeps validity when its callee does. -/
 theorem localOp_call_valid (keeps : FnTable.KeepsValidity table) {hdr : FnHeader V}
-    (callee : Var fns hdr) (args : HList M.Val hdr.ins) (results : HList M.Val hdr.outs) :
+    (callee : Member fns hdr) (args : HList M.Val hdr.ins) (results : HList M.Val hdr.outs) :
     args.All M.Valid → localOp M table (.call callee) args = .done results →
     results.All M.Valid :=
   keeps hdr callee args results
