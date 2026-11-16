@@ -4,7 +4,7 @@ public import Zkc.Core.Functions
 public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
-public import Zkc.Core.Value.Local
+public import Zkc.Core.Value.TransformSound
 
 @[expose] public section
 
@@ -102,6 +102,29 @@ def functionsSame : Prop :=
         Process.SameWhen permitted
           (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
           (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins))
+
+/-- Execution and state: a transformation of a function that the step accepts relates functions
+with the same meaning. When `transform` accepts a source and a target, both elaborated and
+accepted by the check of facts and the target following the skeleton of the source: against
+callees with distinct keys that never stop `undefined` on valid inputs, keep validity, and stop
+only `undefined` where their headers say that they cannot stop, the two return the same on every
+valid input (`AcceptedFn.SameAs`). -/
+def transformSound : Prop :=
+  ∀ (fns : List (FnHeader V)) (hdr : FnHeader V) (source target : Region (LocalRaw V) Unit)
+    (step : Transformed V fns hdr), transform fns hdr source target = .ok step →
+      step.source.SameAs step.target
+
+/-- Execution and state: a program whose functions were replaced by functions that the decision
+accepts means what the first means. For two programs over the same headers with distinct keys,
+both accepted by the check of facts, whose functions follow one by one (`Defs.follows`): every
+function of the second has, on valid inputs, the meaning of the function of the first with its
+header, the callers of a replaced function included. -/
+def transformedProgramSame : Prop :=
+  ∀ (hs : Headers V) (defs defs' : Defs V hs), (hs.fns.map (·.key)).Nodup →
+    ∀ (bounds bounds' : List (Place × Nat)), Defs.Accepted defs bounds →
+      Defs.Accepted defs' bounds' → Defs.follows defs defs' = true →
+      ∀ (M : Model V) (hdr : FnHeader V) (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins),
+        ins.All M.Valid → Defs.fnTable M defs' hdr f ins = Defs.fnTable M defs hdr f ins
 
 /-- Validity: an open role program is safe: on valid inputs and every permitted reply it
 never stops `undefined`, whatever its peers do. -/

@@ -6,7 +6,8 @@ projection of a protocol to the programs of its roles with the theorem that ever
 is a projection of its protocol, the elaboration of a program of functions by names with its
 erased form and the round trip in both directions, what elaboration decides about a body,
 places in a term and replacement, the value form of a term and the decision that two terms mean
-the same, the data of an admitted program and of a deployed scheme, the run of a role under the handlers of
+the same, a transformation of a function as a step that this decision checks, the data of an
+admitted program and of a deployed scheme, the run of a role under the handlers of
 its deployment, and the types of the functions that are still to be built with the statements
 that they must satisfy. It is the library `ZkcCore` of the package `zkc_compiler` (`lean/compiler`), in the
 namespace `Zkc.Core`; it imports only `Init` and `Std`. Each file is a Lean module whose
@@ -29,8 +30,8 @@ and by the root.
 | `Meaning/` | events and what a role holds (`Events`); the fold of a term over the semantics of a dialect, which binds the names of each binding to its values (`Fold`); the semantics of a function, of a protocol and of a role program (`Local`, `Protocol`, `Role`), with the meaning of every operation that the core owns (`Local`); what it is for the functions of a table to keep validity and never stop `undefined`, that every local operation keeps validity, and that a type with a valid value has a value (`Validity`); the meanings of a whole program (`Program`); that a function whose header says that it cannot stop stops only `undefined` (`Stops`); the rule of a call (`Call`); places with their meaning: a term in a wider context means the same, what it is for a run to reach a place and a fact at a place, replacement, and that a term's meaning depends only on the names that it reads (`Place`) |
 | `Projection/` | the relation of a role's process to a protocol's and its lemmas (`Proj`), the proof for one term (`Sound`), and the theorem for every definition of a program (`Theorem`) |
 | `Facts/` | the count of every loop that a run reaches (`Term.EveryLoop`), the annotation of an admitted program, which is the bounds of its loops, and what it is for a program to respect it, in its functions and in its role programs (`Facts`); what the check of facts is told about operations: what a written operation requires, the ranges of its results and how its result reads, which operations of a dialect compute, which of its types have no value, and a number for each written operation by which the table places its applications (`OpFacts`); the state of the check, a table of applications by written form and operand identifiers, placed by a number computed from the written operation's number and those identifiers and by each result's identifier, and what is known, each part placed by an identifier, with the rules that decide a requirement and learn from a truth value, the range below `r` of a sum `x + t` where a loop made the order `t < r - x` for its index, and the lemmas of the ranges that it defines (`State`); the check of facts, one walk over a term of any dialect, which keeps the identifier of each name in scope, in which a region is dead only where what is written says that it never runs, with the range of a carried natural after a loop and its lemmas (`Walk`); what the local dialect tells it, with the arithmetic of ranges (a power's ends computed only when they are small enough) and its lemmas (`Local`); what the state says of a run, a valuation of identifiers, and the laws of `OpFacts` as propositions (`Valuation`); that the rules of what is known are true (`Learning`); what the walk does to its state whatever the run (`Growth`); the local dialect's reading of values and relation of operations, that the local operations satisfy the laws, and that what an operation requires is enough for it (`LocalLaws`); the soundness for a function (`Soundness`) |
-| `Value/` | the value form of a term and the decision that two terms mean the same, for any dialect. The value form is built on the table of the check of facts and its valuations, which still live in `Facts/`: the skeleton of a term, what it keeps in order (effects, guards, every form of control) on identifiers of the table, with the table of its values, and what a dialect says of its operations (`Skeleton`); following a skeleton, the decision (`same`), and what a dialect must decide for it (`Follows`); what building and following a skeleton do to the state (`Growth`); the reading of an identifier from the leaves through the table, the processes that run a skeleton, and that two of them mean the same (`Runs`); that a term runs its own skeleton and a term that follows a skeleton runs it, so that the decision is sound (`Soundness`); the function dialect's value form, its laws, and the soundness of the decision for functions (`Local`) |
-| `Admission/` | the elaboration of one definition against the headers before it, of a program of functions, and its round trip in both directions (`Elaboration`); the association of a program and its resolution in it, with the arguments of an instance of a generic declaration that it records, and an admitted program (`Admission`); the check of one definition against the headers before it (elaborated, then its facts checked), admission as that check for each definition in order, and the acceptance of a typed program by the check of facts as a proposition (`Check`); the soundness of the check of facts for the functions of a program (`Programs`); the statements of `Statements.lean` about functions, each a theorem whose type is the statement, for every record of functions whose functions are `admit`, `check` and `elaborateFunctions`, the round trip from a typed program for those without protocols (`Theorems`) |
+| `Value/` | the value form of a term and the decision that two terms mean the same, for any dialect. The value form is built on the table of the check of facts and its valuations, which still live in `Facts/`: the skeleton of a term, what it keeps in order (effects, guards, every form of control) on identifiers of the table, with the table of its values, and what a dialect says of its operations (`Skeleton`); following a skeleton, the decision (`same`), and what a dialect must decide for it (`Follows`); what building and following a skeleton do to the state (`Growth`); the reading of an identifier from the leaves through the table, the processes that run a skeleton, and that two of them mean the same (`Runs`); that a term runs its own skeleton and a term that follows a skeleton runs it, so that the decision is sound (`Soundness`); the function dialect's value form, its laws, and the soundness of the decision for functions (`Local`); what the decision is told of a function (`localValueRules`, `localSkelRules`), a transformation of a function as a checked step, which elaborates a stored source and a stored target, checks the facts of both and decides that the target follows the skeleton of the source, with what it returns or why it refuses, and whether the functions of a second program over the same headers follow those of a first, one by one (`Transform`); what a step means: the callees that a statement about a function is made against, the meaning of an accepted function, that two accepted functions mean the same, the theorems of a step, and that a term of a function returns valid values on valid values in scope and means the same against two tables of callees that agree on valid inputs (`TransformSound`); two untrusted transformations of a stored function, which drop the operations whose results are not used and share repeated operations, accepted only through the step (`Passes`) |
+| `Admission/` | the elaboration of one definition against the headers before it, of a program of functions, and its round trip in both directions (`Elaboration`); the association of a program and its resolution in it, with the arguments of an instance of a generic declaration that it records, and an admitted program (`Admission`); the check of one definition against the headers before it (elaborated, then its facts checked), admission as that check for each definition in order, and the acceptance of a typed program by the check of facts as a proposition (`Check`); the soundness of the check of facts for the functions of a program, and that a program whose functions follow those of another means what the other means (`Programs`); the statements of `Statements.lean` about functions, each a theorem whose type is the statement, for every record of functions whose functions are `admit`, `check` and `elaborateFunctions`, the round trip from a typed program for those without protocols (`Theorems`) |
 | `World/` | the description of a layer (a handler of a role), whose code reads its inputs by position, in the one context of the core that binds inputs to the names `0, 1, 2, …` (`Ctx.positional`), and its meaning as a handler; the network of the roles, and the runs of a protocol and of one role alone |
 | `Scheme/` | the declaration of a scheme, who proves and who verifies, a deployed scheme and the run of a role under its handlers, and what deployment decides about scopes and keys |
 | `Run/` | how a run of the executor ends, the executor, and the prover's and the verifier's runs |
@@ -103,6 +104,22 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   facts that the decision finds the same mean the same on every valid input, for any replies
   permitted, so that their processes are equal (`functions_same_sound`,
   `functions_same_equal`);
+- transformations as checked steps (`Value/TransformSound.lean`, `Admission/Programs.lean`):
+  what a stored function is accepted as is determined by it (`acceptFn_erases`), and an accepted
+  function never stops `undefined` on valid inputs and returns valid values (`AcceptedFn.safe`); a step
+  that `transform` accepts relates functions with the same meaning on every valid input, against
+  callees with distinct keys that are safe, keep validity and stop only `undefined` where their
+  headers say that they cannot stop (`transform_sound`); the stored forms of what a step returns
+  are what it was given (`transform_erases`), and two steps compose (`transform_then`). On valid
+  values in scope, a term of a function returns valid values against callees that keep validity
+  (`Term.denote_valid`), and means the same against two tables of callees that agree on valid
+  inputs when one keeps validity (`Term.denote_tables`); so a program whose functions follow
+  those of another over the same headers, both accepted by the check of facts, gives every
+  function the meaning on valid inputs of the function of the other with its header, the callers
+  of a replaced function included (`Defs.follows_sound`). This is the family of relations "the
+  same meaning"; the other families (guards compared by segment, representations, reductions)
+  are not built, and neither is the acceptance of a target by the places where its source
+  evaluates an operation with a domain;
 - the check of facts of a function (`FactCheck.checkFacts_sound`, `Facts/Soundness.lean`): for a
   body with distinct addresses that `checkFacts (localFactRules V fns)` accepts, against callees
   with distinct keys that never stop `undefined` on valid inputs and keep validity, on valid
@@ -128,7 +145,10 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   respects its annotation (`annotationHolds`); a function whose header says that it cannot
   stop does not stop (`headersSayWhoStops`), since such a function stops only `undefined`
   (`Defs.fnTable_stops_undefined`, `Meaning/Stops.lean`); two functions that the decision of
-  the value form finds the same mean the same (`functionsSame`, which is `functions_same_sound`).
+  the value form finds the same mean the same (`functionsSame`, which is `functions_same_sound`);
+  a step of transformation that `transform` accepts relates functions with the same meaning
+  (`transformSound`, which is `transform_sound`), and a program whose functions follow those of
+  another means what the other means (`transformedProgramSame`, which is `Defs.follows_sound`).
 
 Defined: everything else, from the terms and their meanings to deployment, the network and
 the runs.
@@ -147,7 +167,10 @@ Still to be built:
   the definitions above for a program of functions (`Admission/Theorems.lean`); `rolesSafe`,
   `realized`, `anyOrder`, `replayed`, `recordsAreValid`, `schedulerRuns`, those of deployment
   from `deployKeeps` to `identityReads`, `executorRuns` and `formats` are not, and neither is
-  `roundTrip` for a program with protocols.
+  `roundTrip` for a program with protocols;
+- for transformations, only the family "the same meaning" is built: the other families of
+  relations (guards compared by segment, representations, reductions), and the acceptance of a
+  target by the places where its source evaluates an operation with a domain, are not.
 
 `Process/`, `Program/`, `Meaning/` and `Projection/`, and the data of `Admission/`, are what
 the projection theorem and the meanings stand on; `Facts/` is built for functions; `Value/` is
@@ -218,6 +241,16 @@ kernel runs when they are built:
   whose leaf is not made above the values in scope and do not mean the same (why following asks
   for `Skel.Fresh`), and an attempt whose end cannot return followed by what stops `undefined`
   (why what follows an attempt runs only from an end that can return);
+- `Transform.lean`: transformations of functions as checked steps: a function with unused and
+  repeated operations, in its body and in a loop, given to `removeUnused` and then to
+  `shareRepeated`, each stored result compared whole, each step accepted by `transform`, and the
+  two steps composed by `transform_then`; a target refused by elaboration, a target refused by
+  the check of facts (an inverse moved above the guard that it is not zero), a target that is
+  accepted but not decided (two guards exchanged), and a source that is not accepted, each with
+  its whole refusal; a target that computes another result, not decided; a program of two
+  functions whose callee is replaced by what `removeUnused` gives, which follows the first, with
+  `Defs.follows_sound` applied to the caller; and a callee replaced by one that computes another
+  result, which does not follow. The decision of equality of stored functions is written there;
 - `Admission.lean`: `admit` and `check` on programs of functions: a program of two functions
   admitted with its whole annotation; admission stopped at the first refused definition, with
   every refusal of it and nothing of a later one, for a refusal of the check of facts and for

@@ -55,6 +55,9 @@ public import Zkc.Core.Value.Growth
 public import Zkc.Core.Value.Runs
 public import Zkc.Core.Value.Soundness
 public import Zkc.Core.Value.Local
+public import Zkc.Core.Value.Transform
+public import Zkc.Core.Value.TransformSound
+public import Zkc.Core.Value.Passes
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
 public import Zkc.Core.Admission.Check

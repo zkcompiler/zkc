@@ -25,7 +25,11 @@ annotation, and the theorem of the check of facts for a program gives `functions
 `functionsKeepValidity` and `annotationHolds`. A function whose header says that it cannot stop
 stops only `undefined` (`Defs.fnTable_stops_undefined`), and never that, so it does not stop
 (`headersSayWhoStops`). Two functions that the decision of the value form finds the same mean
-the same (`functionsSame`): it is the theorem `functions_same_sound` of `Value/Local.lean`.
+the same (`functionsSame`): it is the theorem `functions_same_sound` of `Value/Local.lean`. A
+transformation that the step accepts relates functions with the same meaning (`transformSound`,
+the theorem `transform_sound` of `Value/TransformSound.lean`), and a program whose functions
+follow those of another means what the other means (`transformedProgramSame`, the theorem
+`Defs.follows_sound` of `Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -214,6 +218,18 @@ theorem functionsSame : Statements.functionsSame (V := V) :=
     functions_same_sound inputs inputs' body body' definition definition' distinctBody
       distinctBody' accepted accepted' decided M table distinct safe keeps quiet ins valid
       permitted
+
+/-- Execution and state: a transformation of a function that the step accepts relates functions
+with the same meaning (`transform_sound`, `Value/TransformSound.lean`). -/
+theorem transformSound : Statements.transformSound (V := V) :=
+  fun _ _ _ _ _ accepted => transform_sound accepted
+
+/-- Execution and state: a program whose functions follow those of another program over the same
+headers, both accepted by the check of facts, means what the other means, function by function
+(`Defs.follows_sound`, `Admission/Programs.lean`). -/
+theorem transformedProgramSame : Statements.transformedProgramSame (V := V) :=
+  fun _ defs defs' distinct _ _ accepted accepted' follows M hdr f ins valid =>
+    Defs.follows_sound defs defs' distinct accepted accepted' follows M hdr f ins valid
 
 /-- Validity: what the annotation of an admitted program knows holds, and no loop runs more
 often than its bound. -/

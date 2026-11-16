@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Value.Soundness
+public import Zkc.Core.Value.Transform
 public import Zkc.Core.Facts.Soundness
 
 @[expose] public section
@@ -11,8 +12,9 @@ functions.
 
 An operation of a function is a value, written as `LocalOp.print` writes it, unless it can stop
 with a reason (`LocalOp.canStop`: a call of a function whose header says that it can stop); such
-a call is kept in order (`localValueRules`). The table places the applications as the check of
-facts places them.
+a call is kept in order (`localValueRules`, `Value/Transform.lean`, a module that computes,
+since the step of a transformation runs the decision). The table places the applications as the
+check of facts places them.
 
 A written form gives results on operands when it is the printed form of a local operation that
 returns those results on those operands (`LocalReturns`), whatever the values, valid or not: the
@@ -32,25 +34,6 @@ facts gives what the decision needs of both: neither stops `undefined` on valid 
 namespace Zkc.Core
 
 open FactCheck (Dyn toDyns toDyns_inj)
-
-section
-variable (V : Vocabulary)
-
-/-- What the value form is told of the operations of a function: every operation is a value,
-by its written form, except a call of a function that can stop with a reason, which is kept in
-order. The table places the applications as the check of facts places them. -/
-def localValueRules (fns : List (FnHeader V)) : ValueRules (localDialect V fns) (LocalRaw V) where
-  written := fun o => bif LocalOp.canStop o then none else some (LocalOp.print o)
-  place := (localFactRules V fns).place
-
-/-- What following decides for a function: types and performers by equality, and two operations
-by their written forms. -/
-def localSkelRules (fns : List (FnHeader V)) : SkelRules (localDialect V fns) where
-  sameTy := inferInstanceAs (DecidableEq V.Ty)
-  sameWho := inferInstanceAs (DecidableEq Unit)
-  sameOp := fun o o' => decide (LocalOp.print o = LocalOp.print o')
-
-end
 
 section
 variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
