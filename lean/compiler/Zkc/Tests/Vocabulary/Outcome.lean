@@ -1,12 +1,10 @@
-import Zkc.Core.Facts.Local
-import Zkc.Core.Facts.Walk
-import Zkc.Core.Program.ElaborateLocal
+import Zkc.Core.Transform.Step
 import Zkc.Vocabulary
 
 /-!
 Functions written by names over the standard vocabulary, at the field koala-bear, as the
-conformance cases of the reference give them: each elaborated by `elabFn` and its facts checked
-by `checkFacts`, as `Zkc/Tests/Core/Facts.lean` does over its own small vocabulary. The outcome
+conformance cases of the reference give them: each typed by `typeFn` and its facts checked by
+`TypedFn.check`, as `Zkc/Tests/Core/Facts.lean` does over its own small vocabulary. The outcome
 keeps the refusal of elaboration as well. The cases are in the modules beside this one, each by
 its identifier; a generic definition is written at the instance that the case names, or at its
 default instances (SP7), with every static natural a number, and lowered as §7.4 says.
@@ -82,9 +80,9 @@ deriving DecidableEq
 
 /-- The outcome for a function against the headers before it. -/
 def run (fns : List (FnHeader V)) (hdr : FnHeader V) (body : Region Raw Unit) : Outcome :=
-  match elabFn fns hdr body with
-  | .ok ⟨inputs, fn, _⟩ =>
-      match checkFacts (localFactRules V fns) (localSkelRules V fns) hdr.key none inputs fn with
+  match typeFn fns hdr body with
+  | .ok f =>
+      match f.check with
       | .ok bounds => .accepted bounds
       | .error refusals => .refused refusals
   | .error refusal => .elaboration refusal

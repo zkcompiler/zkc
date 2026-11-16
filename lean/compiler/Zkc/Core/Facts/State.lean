@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Facts.OpFacts
+public import Zkc.Core.Facts.Range
 public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Value.Table
@@ -26,110 +27,10 @@ Each part of what is known is placed by an identifier (`Program/BitTree.lean`): 
 list; nothing else depends on that. A requirement of an application is decided from the
 identifiers and the ranges of the values that it names, an application among them found in the
 table or entered; each that is not known is refused at its place (`checkRequirements`). The
-arithmetic of the ranges that this file defines is proved beside it.
+arithmetic of ranges, with its lemmas, is in `Facts/Range.lean`.
 -/
 
 namespace Zkc.Core
-
-/-! ## Ranges -/
-
-namespace Range
-
-/-- The numbers in both ranges. -/
-def inter (a b : Range) : Range :=
-  ⟨max a.lo b.lo, match a.hi, b.hi with
-    | some x, some y => some (min x y)
-    | some x, none => some x
-    | none, y => y⟩
-
-/-- The numbers between the two ranges, both included. -/
-def hull (a b : Range) : Range :=
-  ⟨min a.lo b.lo, match a.hi, b.hi with
-    | some x, some y => some (max x y)
-    | _, _ => none⟩
-
-/-- The range of one number. -/
-def point (n : Nat) : Range := ⟨n, some n⟩
-
-/-- The range of no number. -/
-def nothing : Range := ⟨1, some 0⟩
-
-/-- The numbers below a number of the range: from zero to its upper end less one; no number
-when the upper end is zero, every natural when it has none. -/
-def below (r : Range) : Range :=
-  match r.hi with
-  | some 0 => Range.nothing
-  | some (h + 1) => ⟨0, some h⟩
-  | none => ⟨0, none⟩
-
-end Range
-
-/-- What two pieces of knowledge of one natural say together; nothing known is the absence. -/
-def Range.meet : Option Range → Option Range → Option Range
-  | some a, some b => some (a.inter b)
-  | some a, none => some a
-  | none, b => b
-
-namespace Range
-
-theorem Has.inter {a b : Range} {n : Nat} (ha : a.Has n) (hb : b.Has n) : (a.inter b).Has n := by
-  obtain ⟨la, ua⟩ := ha
-  obtain ⟨lb, ub⟩ := hb
-  refine ⟨Nat.max_le.mpr ⟨la, lb⟩, fun h e => ?_⟩
-  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-    simp only [Range.inter, Option.some.injEq, reduceCtorEq] at e
-  · subst e; exact ub _ rfl
-  · subst e; exact ua _ rfl
-  · subst e; exact Nat.le_min.mpr ⟨ua _ rfl, ub _ rfl⟩
-
-theorem Has.hull_left {a b : Range} {n : Nat} (ha : a.Has n) : (a.hull b).Has n := by
-  obtain ⟨la, ua⟩ := ha
-  refine ⟨Nat.le_trans (Nat.min_le_left _ _) la, fun h e => ?_⟩
-  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-    simp only [Range.hull, Option.some.injEq, reduceCtorEq] at e
-  subst e
-  exact Nat.le_trans (ua _ rfl) (Nat.le_max_left _ _)
-
-theorem Has.hull_right {a b : Range} {n : Nat} (hb : b.Has n) : (a.hull b).Has n := by
-  obtain ⟨lb, ub⟩ := hb
-  refine ⟨Nat.le_trans (Nat.min_le_right _ _) lb, fun h e => ?_⟩
-  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-    simp only [Range.hull, Option.some.injEq, reduceCtorEq] at e
-  subst e
-  exact Nat.le_trans (ub _ rfl) (Nat.le_max_right _ _)
-
-theorem has_point {n m : Nat} : (Range.point n).Has m ↔ m = n :=
-  ⟨fun ⟨l, u⟩ => Nat.le_antisymm (u n rfl) l,
-    fun e => by subst e; exact ⟨Nat.le_refl _, fun h e => by cases e; exact Nat.le_refl _⟩⟩
-
-/-- Below a natural in the range, a natural is in the range below it. -/
-theorem Has.below {r : Range} {c i : Nat} (h : r.Has c) (lt : i < c) : r.below.Has i := by
-  rcases r with ⟨lo, _ | _ | hi⟩
-  · exact ⟨Nat.zero_le _, fun _ e => nomatch e⟩
-  · have := h.2 0 rfl
-    exfalso
-    omega
-  · have := h.2 (hi + 1) rfl
-    exact ⟨Nat.zero_le _, fun h' e => by cases e; omega⟩
-
-end Range
-
-theorem Range.meet_has {a b : Option Range} {r : Range} {n : Nat} (h : Range.meet a b = some r)
-    (ha : ∀ r, a = some r → r.Has n) (hb : ∀ r, b = some r → r.Has n) : r.Has n := by
-  cases a with
-  | none =>
-      simp only [Range.meet] at h
-      exact hb r h
-  | some a =>
-      cases b with
-      | none =>
-          simp only [Range.meet, Option.some.injEq] at h
-          subst h
-          exact ha a rfl
-      | some b =>
-          simp only [Range.meet, Option.some.injEq] at h
-          subst h
-          exact (ha a rfl).inter (hb b rfl)
 
 namespace FactCheck
 

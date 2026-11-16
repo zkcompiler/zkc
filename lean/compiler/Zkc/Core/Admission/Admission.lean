@@ -1,13 +1,17 @@
 module
 
 public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Program.Refusal
 
 @[expose] public section
 
 /-!
-What admission gives: the association of a program and its resolution, and an
-admitted program.
+What admission gives: the association of a program and its resolution, and an admitted program,
+which carries what admission establishes of it: for every model, its functions never stop
+`undefined` on valid inputs and keep validity, and no loop runs more often than the bound that
+its annotation gives it (`Typed.Assured`). So what is said of the functions of an admitted
+program holds of every admitted program, however it was made.
 -/
 
 namespace Zkc.Core
@@ -75,12 +79,20 @@ def resolve {V : Vocabulary} (p : Typed V) (raw : Association) :
 
 /-! ## An admitted program -/
 
+/-- What admission establishes of a typed program with an annotation, for every model: the
+functions of its table never stop `undefined` on valid inputs and keep validity, and no loop runs
+more often than the bound that the annotation gives it (`Respects`). -/
+def Typed.Assured {V : Vocabulary} (p : Typed V) (annotation : Annotation) : Prop :=
+  ∀ M : Model V, FnTable.Safe (Defs.fnTable M p.defs) ∧
+    FnTable.KeepsValidity (Defs.fnTable M p.defs) ∧ Respects M annotation p
+
 /-- An admitted program: the typed program, its annotation (the bound of each loop as often as
-a count whose count has an upper bound, by its place), and the association for proofs, resolved
-in the program. -/
+a count whose count has an upper bound, by its place), the association for proofs, resolved in
+the program, and that the program is assured with its annotation. -/
 structure Admitted (V : Vocabulary) where
   program : Typed V
   annotation : Annotation
   association : Resolved program
+  assured : program.Assured annotation
 
 end Zkc.Core

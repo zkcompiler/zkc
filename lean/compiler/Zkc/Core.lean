@@ -37,6 +37,7 @@ public import Zkc.Core.Meaning.Stops
 public import Zkc.Core.Meaning.Protocol
 public import Zkc.Core.Meaning.Role
 public import Zkc.Core.Meaning.Validity
+public import Zkc.Core.Meaning.Tables
 public import Zkc.Core.Projection.Proj
 public import Zkc.Core.Projection.Sound
 public import Zkc.Core.Projection.Theorem
@@ -51,6 +52,7 @@ public import Zkc.Core.Value.Runs
 public import Zkc.Core.Value.Agrees
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Facts.OpFacts
+public import Zkc.Core.Facts.Range
 public import Zkc.Core.Facts.State
 public import Zkc.Core.Facts.Walk
 public import Zkc.Core.Facts.Local
@@ -71,6 +73,7 @@ public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
 public import Zkc.Core.Admission.Check
 public import Zkc.Core.Admission.Programs
+public import Zkc.Core.Admission.Admit
 public import Zkc.Core.Admission.Theorems
 public import Zkc.Core.World.Layer
 public import Zkc.Core.World.Network

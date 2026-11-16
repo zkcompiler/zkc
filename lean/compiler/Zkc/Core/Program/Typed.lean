@@ -7,7 +7,8 @@ public import Zkc.Core.Program.Linear
 
 /-!
 A typed program: its definitions, each with the names of its inputs and what elaboration decided
-about its body, and the lookup of a definition by its key. The body of a definition is a term in
+about its body, and the lookup of a definition, and of a protocol (`Typed.findProtocol`), by its
+key. The body of a definition is a term in
 the context of its inputs, by their names; a header has no names, since a caller passes by
 position. Also one definition elaborated against the headers before it (`Elaborated`), the
 program extended by it (`Typed.add`), whether a function or a local operation can stop
@@ -229,6 +230,18 @@ abbrev Subject {V : Vocabulary} (p : Typed V) : Type := Ref p.headers
 /-- The definition of a typed program with the key. -/
 def Typed.find {V : Vocabulary} (p : Typed V) (key : Key) : Option (Subject p) :=
   p.headers.find key
+
+/-- The protocol of a typed program with the key, with its reference among the program's
+protocols. -/
+def Typed.findProtocol {V : Vocabulary} (p : Typed V) (key : Key) :
+    Option ((hdr : ProtocolHeader V) × Member p.headers.protocols hdr) :=
+  (Member.withKey (·.key) key p.headers.protocols).head?
+
+/-- The protocol found with a key has that key. -/
+theorem Typed.findProtocol_key {V : Vocabulary} {p : Typed V} {key : Key}
+    {found : (hdr : ProtocolHeader V) × Member p.headers.protocols hdr}
+    (h : p.findProtocol key = some found) : found.1.key = key :=
+  Member.key_of_withKey (fun hdr : ProtocolHeader V => hdr.key) key (List.mem_of_mem_head? h)
 
 
 /-- The keys of the definitions that the definition with the key reaches by calls and

@@ -1071,7 +1071,8 @@ theorem loop_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried e
       | fixed n => simp only [Times.size, Option.some.injEq] at e'; subst e'; rfl
       | value => cases e'
     have validR : σ.AllValid (state.1.append (σ.sem.collected times.size state.2)) :=
-      (allValid_append _ _).mpr ⟨la.carriedValid, collected_valid laws times.size fits la.collected⟩
+      (allValid_append _ _).mpr ⟨la.carriedValid,
+        collected_valid laws.collect times.size fits la.collected⟩
     have lenR : (σ.sem.dyns (state.1.append (σ.sem.collected times.size state.2))).length =
         carried.length + each.length := by
       rw [σ.sem.dyns_length]

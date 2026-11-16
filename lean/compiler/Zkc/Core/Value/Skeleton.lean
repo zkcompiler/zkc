@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Value.Table
+public import Zkc.Core.Program.Erase
 
 @[expose] public section
 
@@ -26,7 +27,9 @@ identifier first (`ValueRules.order`), so that `x + y` and `y + x` are one value
 its operands in the order written.
 
 What following a skeleton asks a dialect to decide (`SkelRules`: its types, its performers, and
-whether two operations are the same) and whether how often a loop runs follows how often a loop
+whether two operations are the same), which the rules of its elaboration give (`Rules.skel`: two
+operations are the same when they are written alike), lawful when those rules are
+(`Rules.skel_lawful`), and whether how often a loop runs follows how often a loop
 of a skeleton runs (`Times.follows`, which then is the loop's count on the identifiers,
 `Times.follows_eq`) are here too. The meaning of a skeleton is in `Value/Runs.lean`.
 -/
@@ -80,9 +83,9 @@ def Count.size {D : Dialect} {w : D.Who} : Count D w → Option Nat
 section
 variable {D : Dialect}
 
-/-- What following a skeleton compares that a dialect must decide. -/
-structure SkelRules (D : Dialect) where
-  sameTy : DecidableEq D.Ty
+/-- What following a skeleton compares that a dialect must decide: its types, as elaboration
+compares them (`TypeEquality`), who performs, and whether two operations are the same. -/
+structure SkelRules (D : Dialect) extends TypeEquality D where
   sameWho : DecidableEq D.Who
   /-- Whether two operations on operands of the same types are the same operation. -/
   sameOp : ∀ {ins res res' : List D.Ty}, D.Op ins res → D.Op ins res' → Bool
@@ -92,9 +95,23 @@ def SkelRules.Lawful (checks : SkelRules D) : Prop :=
   ∀ {ins res res' : List D.Ty} (o : D.Op ins res) (o' : D.Op ins res'),
     checks.sameOp o o' = true → res = res' ∧ HEq o o'
 
-/-- Whether two lists of types are equal, by the dialect's decision for types. -/
-def SkelRules.sameTys (checks : SkelRules D) : DecidableEq (List D.Ty) :=
-  @instDecidableEqList D.Ty checks.sameTy
+/-- What following decides for a dialect, from the rules by which its regions are elaborated:
+types as the rules compare them, who performs by equality, and two operations by their written
+forms. -/
+def Rules.skel {Raw Who : Type} [DecidableEq Raw] [DecidableEq D.Who] (rules : Rules D Raw Who) :
+    SkelRules D where
+  toTypeEquality := rules.toTypeEquality
+  sameWho := inferInstance
+  sameOp := fun o o' => decide (rules.printOp o = rules.printOp o')
+
+/-- Following is lawful when elaboration's rules are: two operations written alike are read back
+as one operation (`Rules.Lawful`). -/
+theorem Rules.skel_lawful {Raw Who : Type} [DecidableEq Raw] [DecidableEq D.Who]
+    {rules : Rules D Raw Who} (lawful : rules.Lawful) : rules.skel.Lawful := by
+  intro ins res res' o o' found
+  have both := lawful.op o
+  rw [of_decide_eq_true found, lawful.op o'] at both
+  exact Sigma.mk.inj (Except.ok.inj both).symm
 
 /-- Whether how often a loop runs follows how often a loop of a skeleton runs: the same written
 number, or a count of the same type, by the dialect's decision, on the same identifier. -/

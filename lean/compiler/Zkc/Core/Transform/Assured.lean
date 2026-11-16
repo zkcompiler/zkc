@@ -11,7 +11,9 @@ What a pipeline of transformations passes along is a function with the bounds of
 the proposition that it is assured with them (`AssuredFn`). It can be made only with that
 proposition, so a step cannot be taken from a function that nobody assured. There are two ways
 to make one. Admission by the source language's checks (`admitFn`): the stored function
-elaborates and the check of facts accepts it (`TypedFn.check_assured`). A step from an assured
+elaborates and the check of facts accepts it (`TypedFn.check_assured`); it is the one path by
+which a function is admitted, the check of a definition of a program included
+(`checkDefinition`, `Admission/Check.lean`). A step from an assured
 function to a stored target (`AssuredFn.step`): the target elaborates and follows the analysis of
 the source with no refusal and no place that differs (`TypedFn.follows_assured`, from the
 source's safety, which it carries). A step never admits its source again: the source is assured

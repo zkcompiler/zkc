@@ -1,6 +1,4 @@
-import Zkc.Core.Facts.Local
-import Zkc.Core.Facts.Walk
-import Zkc.Core.Program.ElaborateLocal
+import Zkc.Core.Transform.Step
 
 /-!
 The check of facts on functions written by names, elaborated and walked by the kernel.
@@ -84,15 +82,15 @@ abbrev fieldRow (r : FieldRow) : LocalRaw field := .row r
 
 /-! ## The verdict -/
 
-/-- What the check of facts says of the body of a function against the headers before it: its
-refusals, or the bounds of its loops; nothing when the body does not elaborate. -/
+/-- What the check of facts says of the body of a function typed against the headers before it
+(`typeFn`, `TypedFn.check`): its refusals, or the bounds of its loops; nothing when the body does
+not elaborate. -/
 def verdict (fns : List (FnHeader field)) (hdr : FnHeader field)
     (body : Region (LocalRaw field) Unit) :
     Option (List (ProgramRefusal field) ⊕ List (Place × Nat)) :=
-  match elabFn fns hdr body with
-  | .ok ⟨inputs, fn, _⟩ =>
-      match checkFacts (localFactRules field fns) (localSkelRules field fns) hdr.key none
-          inputs fn with
+  match typeFn fns hdr body with
+  | .ok f =>
+      match f.check with
       | .ok bounds => some (.inr bounds)
       | .error refusals => some (.inl refusals)
   | .error _ => none

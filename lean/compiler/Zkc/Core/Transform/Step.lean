@@ -2,7 +2,8 @@ module
 
 public import Zkc.Core.Facts.Walk
 public import Zkc.Core.Facts.Local
-public import Zkc.Core.Facts.LocalLaws
+public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Program.ElaborateLocal
 
 @[expose] public section
@@ -33,12 +34,6 @@ first's own analysis are not read: when the first is safe, by whatever route, th
 assured and means the same. Why a step from one function to a stored one is refused is
 `StepRefusal`; the step itself, which takes an assured function and gives one, is
 `AssuredFn.step` (`Transform/Assured.lean`).
-
-Two programs over the same headers are compared function by function (`Defs.functionsFollow`):
-each function of the second follows the analysis of the function of the first with its header
-with no refusal and no place that differs. That the functions of the second then mean what those
-of the first mean, their callers included, and are safe and keep validity, when the first program
-is accepted, is `Defs.functionsFollow_sound` (`Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -103,7 +98,7 @@ def TypedFn.SameAs (f g : TypedFn V fns hdr) : Prop :=
 
 /-- The check of facts of an elaborated function: its refusals, or the bounds of its loops. -/
 def TypedFn.check (f : TypedFn V fns hdr) : Except (List (ProgramRefusal V)) (List (Place × Nat)) :=
-  checkFacts (localFactRules V fns) (localSkelRules V fns) hdr.key none f.inputs f.body
+  checkFacts (localFactRules V fns) (localRules fns).skel hdr.key none f.inputs f.body
 
 /-- Whether a second function follows the analysis of a first: the refusals of the analysis
 while it follows and the places where it is not the next entry of the first's skeleton, or,
@@ -111,9 +106,9 @@ when there is neither, the bounds of the second's loops. The refusals of the fir
 analysis are not read: the first is assured by whoever gives it. -/
 def TypedFn.follows (source target : TypedFn V fns hdr) :
     Except (List (ProgramRefusal V) × List Place) (List (Place × Nat)) :=
-  let first := analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none source.inputs
+  let first := analyse (localFactRules V fns) (localRules fns).skel hdr.key none source.inputs
     source.body
-  let second := follow (localFactRules V fns) (localSkelRules V fns) hdr.key none first
+  let second := follow (localFactRules V fns) (localRules fns).skel hdr.key none first
     target.inputs target.body
   match second.state.st.refusals, second.state.differs with
   | [], [] => .ok second.state.st.bounds.reverse
@@ -127,45 +122,5 @@ with no refusal, the places where it differs. -/
 inductive StepRefusal (V : Vocabulary) where
   | target (refusals : List (ProgramRefusal V)) (differs : List Place)
   | differs (places : List Place)
-
-/-! ## Two programs over the same headers -/
-
-/-- A function of the first program, against a program whose headers are said to be the first's
-up to that function: when the second's last definition is a function too, whether it follows
-the analysis of the first's with no refusal and no place that differs (`Exit.accepted`) and the
-definitions before it follow (`rest`); a protocol there does not follow. -/
-def Defs.followsFn (fns : List (FnHeader V)) (protocols : List (ProtocolHeader V))
-    (hdr : FnHeader V) (inputs : Names hdr.ins) (body : Fn V fns hdr inputs)
-    (rest : Defs V ⟨fns, protocols⟩ → Bool) :
-    {hs : Headers V} → Defs V hs → hs = ⟨hdr :: fns, protocols⟩ → Bool
-  | _, .nil, impossible => nomatch impossible
-  | _, .fn (hs := hs) _ inputs' body' _ rest', rfl =>
-      (follow (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none
-          (analyse (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none inputs body)
-          inputs' body').accepted && rest rest'
-  | _, .protocol .., _ => false
-
-/-- A protocol of the first program, against a program whose headers are said to be the first's
-up to that protocol: when the second's last definition is a protocol too, whether the
-definitions before it follow (`rest`); the protocols are not compared. A function there does not
-follow. -/
-def Defs.followsProtocol (fns : List (FnHeader V)) (protocols : List (ProtocolHeader V))
-    (hdr : ProtocolHeader V) (rest : Defs V ⟨fns, protocols⟩ → Bool) :
-    {hs : Headers V} → Defs V hs → hs = ⟨fns, hdr :: protocols⟩ → Bool
-  | _, .nil, same => nomatch same
-  | _, .fn .., _ => false
-  | _, .protocol _ _ _ _ rest', rfl => rest rest'
-
-/-- Whether the functions of the second program follow those of the first, one by one: the two
-programs have the same headers, and each function follows the analysis of the one with its
-header with no refusal and no place that differs. A protocol is not compared. -/
-def Defs.functionsFollow : {hs : Headers V} → Defs V hs → Defs V hs → Bool
-  | _, .nil, _ => true
-  | _, .fn (hs := hs) hdr inputs body _ rest, defs' =>
-      Defs.followsFn hs.fns hs.protocols hdr inputs body
-        (fun rest' => Defs.functionsFollow rest rest') defs' rfl
-  | _, .protocol (hs := hs) hdr _ _ _ rest, defs' =>
-      Defs.followsProtocol hs.fns hs.protocols hdr
-        (fun rest' => Defs.functionsFollow rest rest') defs' rfl
 
 end Zkc.Core

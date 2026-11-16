@@ -68,8 +68,6 @@ inductive Rule where
   | association
   /-- An application of an operation with a domain is inside it, by what is known there. -/
   | domain
-  /-- A loop as often as a count repeats at most a number of times that is known. -/
-  | bound
 deriving DecidableEq, Repr
 
 /-- What a rule found, with the types `T` of a dialect and its written operations `Raw` as

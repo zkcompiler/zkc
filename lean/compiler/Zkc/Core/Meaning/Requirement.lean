@@ -41,6 +41,20 @@ def DenotesAll (Run : Raw → List Val → List Val → Prop) (args : List Val) 
   | o :: os, v :: vs => Operand.Denotes Run args o v ∧ DenotesAll Run args os vs
   | _, _ => False
 
+/-- The value that one operand names. -/
+theorem DenotesAll.one {Run : Raw → List Val → List Val → Prop} {args : List Val}
+    {o : Operand Raw} {vs : List Val} (h : DenotesAll Run args [o] vs) :
+    ∃ v, vs = [v] ∧ o.Denotes Run args v := by
+  match vs, h with
+  | [v], ⟨d, _⟩ => exact ⟨v, rfl, d⟩
+
+/-- The values that two operands name. -/
+theorem DenotesAll.two {Run : Raw → List Val → List Val → Prop} {args : List Val}
+    {o o' : Operand Raw} {vs : List Val} (h : DenotesAll Run args [o, o'] vs) :
+    ∃ v v', vs = [v, v'] ∧ o.Denotes Run args v ∧ o'.Denotes Run args v' := by
+  match vs, h with
+  | [v, v'], ⟨d, d', _⟩ => exact ⟨v, v', rfl, d, d'⟩
+
 /-- What a requirement says of the values it names: an order, a bound, a number, a truth
 value. -/
 def Requirement.Relation (R : Reading Val) : Requirement Raw → List Val → Prop

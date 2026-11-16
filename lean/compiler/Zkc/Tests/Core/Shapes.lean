@@ -336,13 +336,89 @@ example : roundsHeader.shape.heardCoins = [⟨[⟨2⟩], ⟨1⟩⟩] := by decid
 /-- Nothing is known, and no loop has a bound. -/
 def emptyAnnotation : Annotation := ⟨[]⟩
 
+/-- A process satisfies on every path what holds of every value that it returns, and stops
+anyhow. -/
+theorem every_of_all {S : Sig} {H A : Type} (permitted : ∀ op, S.Reply op → Prop) {P : A → Prop}
+    (all : ∀ a, P a) : ∀ p : Process S H A, p.Every permitted P (fun _ => True)
+  | .done a => all a
+  | .halt _ => trivial
+  | .call _ k => fun reply _ => every_of_all permitted all (k reply)
+
+section
+variable {D : Dialect} (sem : Semantics D) (permitted : ∀ op, sem.S.Reply op → Prop)
+  {B : List (Key × Nat) → Key → Nat → Prop}
+
+mutual
+  /-- Every loop that a run of a term reaches satisfies what every count does. -/
+  theorem Term.everyLoop_of_all (all : ∀ blocks key count, B blocks key count) :
+      ∀ {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Term D Γ outs) (path : List Frame)
+        (blocks : List (Key × Nat)) (env : Env sem.Val Γ),
+        t.EveryLoop sem permitted B path blocks env
+    | _, _, .ret _, _, _, _ => trivial
+    | _, _, .op _ _ _ _ rest, path, blocks, _ =>
+        every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _
+    | _, _, .guard _ _ _ _ _ rest, path, blocks, env =>
+        fun _ => Term.everyLoop_of_all all rest path blocks env
+    | _, _, .choose _ _ c ok _ onTrue onFalse _ rest, path, blocks, env => by
+        refine ⟨?_, every_of_all permitted
+          (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
+        cases sem.holds ok (env.get c)
+        · exact Term.everyLoop_of_all all onFalse path blocks env
+        · exact Term.everyLoop_of_all all onTrue path blocks env
+    | _, _, .cases _ _ _ _ _ arms _ rest, path, blocks, env =>
+        ⟨Arms.everyLoop_of_all all arms path blocks env _,
+          every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
+    | _, _, .loop key _ _ _ _ _ body _ rest, path, blocks, _ =>
+        ⟨all _ _ _, fun i _ => every_of_all permitted
+            (fun _ => Term.everyLoop_of_all all body (path ++ [.iteration key i]) blocks _) _,
+          every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
+    | _, _, .block key number body _ rest, path, blocks, env =>
+        ⟨Term.everyLoop_of_all all body (path ++ [.iteration key number])
+            (blocks ++ [(key, number)]) env,
+          every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
+    | _, _, .attempt _ _ _ _ body _ rest, path, blocks, _ =>
+        every_of_all permitted (fun _ => ⟨Term.everyLoop_of_all all body path blocks _,
+          every_of_all permitted (fun _ => every_of_all permitted
+            (fun _ => Term.everyLoop_of_all all rest path blocks _) _) _⟩) _
+  /-- Every loop that a run of the arm of an alternative reaches satisfies what every count
+  does. -/
+  theorem Arms.everyLoop_of_all (all : ∀ blocks key count, B blocks key count) :
+      ∀ {Γ : Ctx D.Ty} {mid payloads : List D.Ty} (arms : Arms D Γ mid payloads)
+        (path : List Frame) (blocks : List (Key × Nat)) (env : Env sem.Val Γ)
+        (pick : Pick sem.Val payloads), Arms.EveryLoop sem permitted B arms path blocks env pick
+    | _, _, _, .nil, _, _, _, pick => nomatch pick
+    | _, _, _, .cons _ arm _, path, blocks, _, .here _ =>
+        Term.everyLoop_of_all all arm path blocks _
+    | _, _, _, .cons _ _ rest, path, blocks, env, .there pick =>
+        Arms.everyLoop_of_all all rest path blocks env pick
+end
+
+end
+
+/-- The relay as an admitted program, built by hand since admission refuses a protocol: no
+function, and no loop bounded, which every run respects. -/
+abbrev relayAdmitted : Admitted plain where
+  program := ⟨_, relayProgram, by decide⟩
+  annotation := emptyAnnotation
+  association := ⟨⟨[], [], [], [], []⟩, []⟩
+  assured M := by
+    refine ⟨fun _ f => (nomatch f), fun _ f => (nomatch f), ?_⟩
+    dsimp only [Respects, Defs.Respects, Defs.FunctionsRespect, Defs.ProtocolsRespect,
+      relayProgram]
+    refine ⟨trivial, fun r path ins _ => ?_, trivial⟩
+    apply Term.everyLoop_of_all
+    intro blocks key count bound found
+    simp [Annotation.boundAt, emptyAnnotation] at found
+
 /-- The relay, deployed with no handlers; the third role is offline. -/
 def relayDeployed : Deployed plain where
-  admitted := ⟨⟨_, relayProgram, by decide⟩, emptyAnnotation, ⟨⟨[], [], [], [], []⟩, []⟩⟩
+  admitted := relayAdmitted
   declaration := derivedScheme ⟨10⟩ [.online, .online, .offline] Option.none
-  entry := relayHeader
-  callee := .head
+  found := by decide +kernel
   stack := fun _ => []
+
+/-- The entry of the deployment is the relay, found by the key that the declaration names. -/
+example : relayDeployed.entry = relayHeader := rfl
 
 /-- The first role gives to the second, which is online: the first proves. -/
 example : relayDeployed.roles = some (0, 1) := by decide +kernel

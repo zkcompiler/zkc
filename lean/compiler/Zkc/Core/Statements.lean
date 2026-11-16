@@ -5,6 +5,7 @@ public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
 public import Zkc.Core.Transform.Assured
+public import Zkc.Core.Admission.Programs
 
 @[expose] public section
 
@@ -13,8 +14,8 @@ The statements, as propositions over the types of the core.
 
 Each is a theorem to be proved. None is proved here: this file checks that every statement can
 be said with the types that cross between the parts. Every statement is about what a function
-of `Functions` returns, or about a definition; none has a field of a record of functions as a
-premise or as its subject. Each says what kind of thing it preserves: execution and state (a
+of `Functions` returns, or about a definition, an admitted program among them; none has a field
+of a record of functions as a premise or as its subject. Each says what kind of thing it preserves: execution and state (a
 process or a run is the same), a view (what one reader sees is the same), validity (no value
 or stop outside what is allowed), or progress (a run goes on or ends as said).
 
@@ -58,26 +59,24 @@ def checkAgrees : Prop :=
 /-! ## Admission -/
 
 /-- Validity: a function of an admitted program never stops `undefined`, on any valid
-inputs. -/
+inputs. It is said of every admitted program, however it was made. -/
 def functionsSafe : Prop :=
-  ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
-      (ins : HList M.Val hdr.ins), ins.All M.Valid →
-      (fnMeaning M a.program f ins).Stops (· ≠ .undefined)
+  ∀ (a : Admitted V) (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
+    (ins : HList M.Val hdr.ins), ins.All M.Valid →
+    (fnMeaning M a.program f ins).Stops (· ≠ .undefined)
 
-/-- Validity: a function returns valid values. -/
+/-- Validity: a function of an admitted program returns valid values. -/
 def functionsKeepValidity : Prop :=
-  ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
-      (ins : HList M.Val hdr.ins) (outs : HList M.Val hdr.outs), ins.All M.Valid →
-      fnMeaning M a.program f ins = .done outs → outs.All M.Valid
+  ∀ (a : Admitted V) (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
+    (ins : HList M.Val hdr.ins) (outs : HList M.Val hdr.outs), ins.All M.Valid →
+    fnMeaning M a.program f ins = .done outs → outs.All M.Valid
 
-/-- A view: a function that its header says cannot stop does not stop. -/
+/-- A view: a function of an admitted program that its header says cannot stop does not
+stop. -/
 def headersSayWhoStops : Prop :=
-  ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
-      (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
-      (fnMeaning M a.program f ins).Stops fun _ => False
+  ∀ (a : Admitted V) (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
+    (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
+    (fnMeaning M a.program f ins).Stops fun _ => False
 
 /-- Execution and state: following is a producer of assurance and of sameness. For two
 functions elaborated against the same headers, of which the first is safe, however that is
@@ -129,7 +128,7 @@ def rolesSafe : Prop :=
 /-- Validity: no loop of an admitted program runs more often than the bound that its
 annotation gives it. -/
 def annotationHolds : Prop :=
-  ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a → ∀ M : Model V, Respects M a.annotation a.program
+  ∀ (a : Admitted V) (M : Model V), Respects M a.annotation a.program
 
 /-! ## Runs of every typed program -/
 

@@ -3,6 +3,7 @@ module
 public import Zkc.Core.Facts.Laws
 public import Zkc.Core.Facts.Growth
 public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Meaning.Validity
 
 @[expose] public section
 
@@ -195,12 +196,6 @@ theorem agree_valid {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
     ∀ τ (x : Var Γ τ), σ.Valid ⟨τ, env.get x⟩ := fun τ x => by
   obtain ⟨i, _, hv⟩ := h τ x
   exact valid _ _ hv
-
-theorem env_all_valid {Γ : Ctx D.Ty} {env : Env σ.sem.Val Γ}
-    (h : ∀ τ (x : Var Γ τ), σ.Valid ⟨τ, env.get x⟩) :
-    ∀ {items : List D.Ty} (xs : HList (Var Γ) items), σ.AllValid (env.all xs)
-  | [], .nil => fun _ m => nomatch m
-  | _ :: _, .cons x rest => allValid_cons.mpr ⟨h _ x, env_all_valid h rest⟩
 
 /-- Values that identifiers have are valid when every value is. -/
 theorem allValid_of_valuesOf {ρ : Valuation σ.sem.Dyn} {made : List Nat} {items : List D.Ty}
@@ -1787,45 +1782,6 @@ theorem cases_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid paylo
 
 /-! ### Loops -/
 
-/-- Values collected so far: as many of each type as iterations, each valid. -/
-def CollectedOK (σ : Setting D Raw) :
-    {each : List D.Ty} → HList (fun a => List (σ.sem.Val a)) each → Nat → Prop
-  | [], .nil, _ => True
-  | a :: _, .cons vs rest, i =>
-      vs.length = i ∧ (∀ v, v ∈ vs → σ.Valid ⟨a, v⟩) ∧ CollectedOK σ rest i
-
-omit [DecidableEq Raw] in
-theorem collectedOK_empties : ∀ (each : List D.Ty),
-    CollectedOK σ (HList.empties (V := σ.sem.Val) each) 0
-  | [] => trivial
-  | _ :: rest => ⟨rfl, fun _ m => (nomatch m), collectedOK_empties rest⟩
-
-omit [DecidableEq Raw] in
-theorem collectedOK_push : ∀ {each : List D.Ty} {acc : HList (fun a => List (σ.sem.Val a)) each}
-    {i : Nat} {vs : HList σ.sem.Val each}, CollectedOK σ acc i → σ.AllValid vs →
-    CollectedOK σ (acc.push vs) (i + 1)
-  | [], .nil, _, .nil, _, _ => trivial
-  | _ :: _, .cons xs rest, _, .cons v more, h, all => by
-      obtain ⟨len, valid, others⟩ := h
-      refine ⟨by simp [len], fun w m => ?_, collectedOK_push others (allValid_cons.mp all).2⟩
-      rcases List.mem_cons.mp m with m | m
-      · subst m
-        exact (allValid_cons.mp all).1
-      · exact valid w m
-
-omit [DecidableEq Raw] in
-include laws in
-theorem collected_valid (size : Option Nat) {n : Nat} (fits : ∀ m, size = some m → n = m) :
-    ∀ {each : List D.Ty} {acc : HList (fun a => List (σ.sem.Val a)) each}, CollectedOK σ acc n →
-      σ.AllValid (σ.sem.collected size acc)
-  | [], .nil, _ => fun _ m => nomatch m
-  | a :: _, .cons vs rest, h => by
-      obtain ⟨len, valid, others⟩ := h
-      exact allValid_cons.mpr ⟨laws.collect size a vs.reverse
-          (fun m e => by rw [List.length_reverse, len]; exact fits m e)
-          (fun v m => valid v (List.mem_reverse.mp m)),
-        collected_valid size fits others⟩
-
 include laws in
 omit [DecidableEq Raw] in
 /-- The value of the count of a loop as often as a count reads as the number of iterations. -/
@@ -2054,7 +2010,7 @@ structure LoopAt (e : FactCheck.Exit D.Ty Raw) (initials : List (Option Range))
     (carriedIds : List Nat) {carried each : List D.Ty} (init0 : HList σ.sem.Val carried) (i : Nat)
     (state : HList σ.sem.Val carried × HList (fun a => List (σ.sem.Val a)) each) : Prop where
   carriedValid : σ.AllValid state.1
-  collected : CollectedOK σ state.2 i
+  collected : CollectedOK σ.sem σ.Valid state.2 i
   alive : 0 < i → e.known.dead = false
   initial : i = 0 → state.1 = init0
   sums : ∀ (j : Nat) (r₀ : Range) (t : Nat) (rt : Range), initials[j]? = some (some r₀) →
@@ -2333,7 +2289,8 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried ea
       | fixed n => simp only [Times.size, Option.some.injEq] at e'; subst e'; rfl
       | value => cases e'
     have validR : σ.AllValid (state.1.append (σ.sem.collected times.size state.2)) :=
-      (allValid_append _ _).mpr ⟨la.carriedValid, collected_valid laws times.size fits la.collected⟩
+      (allValid_append _ _).mpr ⟨la.carriedValid,
+        collected_valid laws.collect times.size fits la.collected⟩
     have lenR : (σ.sem.dyns (state.1.append (σ.sem.collected times.size state.2))).length =
         carried.length + each.length := by
       rw [σ.sem.dyns_length]

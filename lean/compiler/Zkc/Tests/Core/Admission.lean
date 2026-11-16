@@ -92,13 +92,17 @@ example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none
 def boundedHeader : FnHeader field := ⟨⟨1⟩, [.nat], [.nat], true, none⟩
 def callerHeader : FnHeader field := ⟨⟨2⟩, [.nat], [.nat], true, none⟩
 
+-- The headers that the checks give are compared whole.
+deriving instance DecidableEq for EventClass, Shape, Shapes, ProtocolHeader, FnHeader, Headers,
+  Except
+
 /-- `check`, one definition at a time from no headers, gives the headers of the admitted
 program. -/
 example : checkAll check ⟨[], []⟩ [bounded, caller] = .ok ⟨[callerHeader, boundedHeader], []⟩ := by
-  rfl
+  decide +kernel
 example : (admit ⟨[bounded, caller]⟩ noAssociation).map (·.program.headers) =
     .ok ⟨[callerHeader, boundedHeader], []⟩ := by
-  rfl
+  decide +kernel
 
 /-- `check` gives the refusals of a definition, against the headers before it: `caller` alone
 calls a function that is not there. -/

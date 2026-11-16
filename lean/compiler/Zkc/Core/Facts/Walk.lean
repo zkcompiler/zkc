@@ -143,52 +143,6 @@ def carriedTerm {T Raw : Type} (ops : OpFacts Raw) (body : Exit T Raw) (carriedI
   | some (.sum, [x, y]) => if x = carriedId then some y else if y = carriedId then some x else none
   | _ => none
 
-/-- The range of a natural from an initial range, after at most `high` iterations that each add
-a term of a range: it starts where the initial range starts (TY8). -/
-def Range.afterSums (initial term : Range) (high : Option Nat) : Range :=
-  ⟨initial.lo,
-    match initial.hi, high, term.hi with
-    | some h₀, some n, some ht => some (h₀ + n * ht)
-    | _, _, _ => none⟩
-
-namespace Range
-
-theorem afterSums_zero {r₀ rt : Range} {n : Nat} (h : r₀.Has n) :
-    (Range.afterSums r₀ rt (some 0)).Has n := by
-  obtain ⟨lo, hi⟩ := h
-  refine ⟨lo, fun h e => ?_⟩
-  simp only [Range.afterSums] at e
-  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases rt with ⟨lt, _ | ht⟩ <;> simp at e
-  have := hi h₀ rfl
-  omega
-
-theorem afterSums_step {r₀ rt : Range} {i n t : Nat}
-    (h : (Range.afterSums r₀ rt (some i)).Has n) (ht : rt.Has t) :
-    (Range.afterSums r₀ rt (some (i + 1))).Has (n + t) := by
-  obtain ⟨lo, hi⟩ := h
-  obtain ⟨tlo, thi⟩ := ht
-  simp only [Range.afterSums] at lo hi ⊢
-  refine ⟨Nat.le_trans lo (Nat.le_add_right _ _), fun h e => ?_⟩
-  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases rt with ⟨lt, _ | ht'⟩ <;> simp at e hi thi
-  subst e
-  have := hi
-  have := thi
-  rw [Nat.add_mul, Nat.one_mul]
-  omega
-
-theorem afterSums_widen {r₀ rt : Range} {N n : Nat} {high : Option Nat}
-    (h : (Range.afterSums r₀ rt (some N)).Has n)
-    (hhigh : ∀ m, high = some m → N ≤ m) : (Range.afterSums r₀ rt high).Has n := by
-  obtain ⟨lo, hi⟩ := h
-  simp only [Range.afterSums] at lo hi ⊢
-  refine ⟨lo, fun h e => ?_⟩
-  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases high with _ | m <;> rcases rt with ⟨lt, _ | ht⟩ <;>
-    simp at e hi
-  subst e
-  have := hhigh m rfl
-  exact Nat.le_trans hi (Nat.add_le_add_left (Nat.mul_le_mul_right _ this) _)
-
-end Range
 
 /-- The range of a carried natural after a loop: the range of the sum, when the body returns
 it as itself plus a term; the initial range when no iteration can end. -/

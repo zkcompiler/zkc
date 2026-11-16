@@ -30,12 +30,6 @@ def ValidRun (sem : Semantics D) (Run : Raw → List sem.Dyn → List sem.Dyn �
     (Valid : sem.Dyn → Prop) (raw : Raw) (operands results : List sem.Dyn) : Prop :=
   Run raw operands results ∧ (∀ v, v ∈ operands → Valid v) ∧ ∀ v, v ∈ results → Valid v
 
-/-- The payload of the alternative of a variant satisfies a predicate of its type. -/
-def Pick.All {α : Type} {V : α → Type} (P : ∀ a, V a → Prop) :
-    {items : List α} → Pick V items → Prop
-  | _, .here v => P _ v
-  | _, .there p => p.All P
-
 /-- The payload of the alternative of a variant is valid. -/
 def PickValid (sem : Semantics D) (Valid : sem.Dyn → Prop) {payloads : List D.Ty}
     (p : Pick sem.Val payloads) : Prop :=

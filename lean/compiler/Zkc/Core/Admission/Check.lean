@@ -2,23 +2,22 @@ module
 
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
-public import Zkc.Core.Facts.Local
-public import Zkc.Core.Facts.Walk
+public import Zkc.Core.Transform.Assured
 
 @[expose] public section
 
 /-!
-The check of one definition, and admission.
+The check of one definition, and the acceptance of a typed program by the check of facts.
 
-One step serves both: a definition is elaborated against the headers of those before it, and
-then its facts are checked. `check` is that step, as a frontend calls it while a program is
-written; `admit` is that step for each definition in order, then the resolution of the
-association in the program. So what admission accepts is what the check accepts one definition
-at a time.
-
-Admission stops at the first definition that is refused and gives every refusal of that
-definition: those of its elaboration, or every application of it that is not known to be inside
-its operation's domain.
+A definition is checked against the headers of those before it: a function whose key no
+definition before it has is admitted (`admitFn`, `Transform/Assured.lean`), elaborated and its
+facts checked, the one path by which a function is admitted, here and in transformations alike; a
+protocol is refused, since the rules of the protocol dialect are not built. `check` is that step,
+as a frontend calls it while a program is written; admission (`admit`, `Admission/Admit.lean`) is
+that step for each definition in order, then the resolution of the association in the program.
+So what admission accepts is what the check accepts one definition at a time. The check of a
+definition gives every refusal of that definition: those of its elaboration, or every
+application of it that is not known to be inside its operation's domain.
 -/
 
 namespace Zkc.Core
@@ -26,21 +25,17 @@ namespace Zkc.Core
 section
 variable {V : Vocabulary}
 
-/-- The check of facts of an elaborated definition: the bounds of its loops. In
-`checkDefinition`, elaboration has already refused a protocol (`elaborateDefinition`), so the
-arm of a protocol is not reached there; it refuses the protocol too. -/
-def Elaborated.facts {hs : Headers V} :
-    Elaborated V hs → Except (List (ProgramRefusal V)) (List (Place × Nat))
-  | .fn hdr inputs body _ _ =>
-      checkFacts (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none inputs body
-  | .protocol hdr .. => .error [refuseWhole hdr.key .protocol (.key hdr.key)]
-
-/-- One definition checked against the headers of those before it: elaborated, with the
-bounds that the check of its facts gives. -/
-def checkDefinition (hs : Headers V) (definition : Definition V) :
-    Except (List (ProgramRefusal V)) (Elaborated V hs × List (Place × Nat)) :=
-  (elaborateDefinition hs definition).bind fun elaborated =>
-    elaborated.facts.map fun bounds => (elaborated, bounds)
+/-- One definition checked against the headers of those before it: a function whose key no
+definition before it has, admitted (`admitFn`: elaborated, and its facts checked), with the
+bounds of its loops. A protocol is refused: the rules of the protocol dialect are not built. -/
+def checkDefinition (hs : Headers V) :
+    Definition V → Except (List (ProgramRefusal V)) (Elaborated V hs × List (Place × Nat))
+  | .fn key ins outs canStop kernel body =>
+      if repeated : key ∈ hs.keys then .error [refuseWhole key .key (.key key)]
+      else (admitFn hs.fns ⟨key, ins, outs, canStop, kernel⟩ body).map fun admitted =>
+        (.fn ⟨key, ins, outs, canStop, kernel⟩ admitted.fn.inputs admitted.fn.body
+          admitted.fn.conditions repeated, admitted.bounds)
+  | .protocol key .. => .error [refuseWhole key .protocol (.key key)]
 
 /-- The check of one definition against the headers of those before it: the headers with the
 definition's. -/
@@ -55,28 +50,13 @@ def checkAll (step : Headers V → Definition V → Except (List (ProgramRefusal
   | hs, [] => .ok hs
   | hs, definition :: rest => (step hs definition).bind fun hs' => checkAll step hs' rest
 
-/-- The check of definitions in order, after a program and the bounds of its loops. -/
-def admitFrom (p : Typed V) (bounds : List (Place × Nat)) :
-    List (Definition V) → Except (List (ProgramRefusal V)) (Typed V × List (Place × Nat))
-  | [] => .ok (p, bounds)
-  | definition :: rest =>
-      (checkDefinition p.headers definition).bind fun checked =>
-        admitFrom (p.add checked.1) (checked.2 ++ bounds) rest
-
-/-- Admission: every definition checked in order, then the association resolved in the
-program. -/
-def admit (named : NamedProgram V) (association : Association) :
-    Except (List (ProgramRefusal V)) (Admitted V) :=
-  (admitFrom .empty [] named.definitions).bind fun admitted =>
-    (resolve admitted.1 association).map fun resolved => ⟨admitted.1, ⟨admitted.2⟩, resolved⟩
-
 /-- The check of facts accepts every function of a program against the headers before it, and
 the bounds are theirs, the latest definition's first. A protocol is passed over: its role
 programs are not walked yet. -/
 def Defs.Accepted : {hs : Headers V} → Defs V hs → List (Place × Nat) → Prop
   | _, .nil, bounds => bounds = []
   | _, .fn (hs := hs) hdr inputs body _ rest, bounds => ∃ mine others,
-      checkFacts (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none inputs body =
+      checkFacts (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none inputs body =
         .ok mine ∧
         Defs.Accepted rest others ∧ bounds = mine ++ others
   | _, .protocol _ _ _ _ rest, bounds => Defs.Accepted rest bounds

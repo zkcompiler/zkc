@@ -5,15 +5,109 @@ public import Zkc.Core.Meaning.Local
 @[expose] public section
 
 /-!
-Every local operation keeps validity: on valid operands, the results that it gives are valid.
+Validity of the values of a meaning, and every local operation keeps validity.
 
-A row keeps validity by the model's law; a literal reads as a valid value; an operation that the
-core owns keeps it by its meaning (a refining operation because it gives its operand only inside
-its domain); a call keeps it when its callee does. The check of facts uses the statement for a
-local operation as a whole (`localOp_valid`).
+For any dialect, validity is a predicate of a value with its type (`Semantics.Dyn`), and values
+of a list are valid when each of them with its type is (membership in `Semantics.dyns`), which is
+`HList.All` of the predicate at each type (`Semantics.dyns_valid_iff`, the one conversion between
+the form of the statements about any dialect and the form of those about functions). The values
+of variables in scope are valid when every value in scope is (`env_all_valid`), and what a loop
+collects is valid when its iterations' values are and the law of the collected values holds
+(`CollectedOK`, `collected_valid`).
+
+On valid operands, every local operation gives valid results. A row keeps validity by the model's
+law; a literal reads as a valid value; an operation that the core owns keeps it by its meaning (a
+refining operation because it gives its operand only inside its domain); a call keeps it when its
+callee does (`FnTable.KeepsValidity`). The check of facts uses the statement for a local operation
+as a whole (`localOp_valid`).
+
+A statement about a function is made against callees (`Callees`): with distinct keys, never
+`undefined` on valid inputs (`FnTable.Safe`), keeping validity, and stopping only `undefined`
+where their headers say that they cannot stop. The values of a function are valid as the model
+says (`ValidDyn`); the payload of the alternative of a valid variant is valid
+(`localPick_valid`), and so is what a loop of a function collects, of the size given
+(`localCollect_valid`).
 -/
 
 namespace Zkc.Core
+
+/-! ## Valid values of any dialect -/
+
+section
+variable {D : Dialect} {sem : Semantics D} {Valid : sem.Dyn → Prop}
+
+/-- **The one conversion between the two forms of validity.** Values with their types are valid
+exactly when each value is valid at its type: the form of the statements about any dialect
+(membership in `sem.dyns`) and the form `HList.All` of the statements about functions. -/
+theorem Semantics.dyns_valid_iff (sem : Semantics D) {Valid : sem.Dyn → Prop} :
+    ∀ {items : List D.Ty} (vs : HList sem.Val items),
+      (∀ v, v ∈ sem.dyns vs → Valid v) ↔ vs.All fun τ v => Valid ⟨τ, v⟩
+  | [], .nil => ⟨fun _ => trivial, fun _ _ found => nomatch found⟩
+  | _ :: _, .cons v rest => by
+      rw [HList.all_cons, ← sem.dyns_valid_iff (Valid := Valid) rest]
+      constructor
+      · intro all
+        exact ⟨all _ List.mem_cons_self, fun w found => all w (List.mem_cons_of_mem _ found)⟩
+      · intro both w found
+        rcases List.mem_cons.mp found with same | found
+        · subst same
+          exact both.1
+        · exact both.2 w found
+
+/-- The values of variables are valid when every value in scope is. -/
+theorem env_all_valid {Γ : Ctx D.Ty} {env : Env sem.Val Γ}
+    (valid : ∀ τ (x : Var Γ τ), Valid ⟨τ, env.get x⟩) :
+    ∀ {items : List D.Ty} (xs : HList (Var Γ) items), ∀ v, v ∈ sem.dyns (env.all xs) → Valid v
+  | [], .nil => fun _ found => nomatch found
+  | _ :: _, .cons x rest => (sem.dyns_valid_iff _).mpr (HList.all_cons.mpr
+      ⟨valid _ x, (sem.dyns_valid_iff _).mp (env_all_valid valid rest)⟩)
+
+variable (sem Valid) in
+/-- Values collected so far by a loop: as many of each type as iterations, each valid. -/
+def CollectedOK : {each : List D.Ty} → HList (fun a => List (sem.Val a)) each → Nat → Prop
+  | [], .nil, _ => True
+  | a :: _, .cons vs rest, i =>
+      vs.length = i ∧ (∀ v, v ∈ vs → Valid ⟨a, v⟩) ∧ CollectedOK rest i
+
+/-- Nothing collected is as many as no iteration. -/
+theorem collectedOK_empties : ∀ (each : List D.Ty),
+    CollectedOK sem Valid (HList.empties (V := sem.Val) each) 0
+  | [] => trivial
+  | _ :: rest => ⟨rfl, fun _ found => (nomatch found), collectedOK_empties rest⟩
+
+/-- One more iteration's valid values keep what is collected valid. -/
+theorem collectedOK_push : ∀ {each : List D.Ty} {acc : HList (fun a => List (sem.Val a)) each}
+    {i : Nat} {vs : HList sem.Val each}, CollectedOK sem Valid acc i →
+    (∀ v, v ∈ sem.dyns vs → Valid v) → CollectedOK sem Valid (acc.push vs) (i + 1)
+  | [], .nil, _, .nil, _, _ => trivial
+  | _ :: _, .cons xs rest, _, .cons v more, collected, all => by
+      obtain ⟨length, valid, others⟩ := collected
+      have parts := HList.all_cons.mp ((sem.dyns_valid_iff (.cons v more)).mp all)
+      refine ⟨by simp [length], fun w found => ?_,
+        collectedOK_push others ((sem.dyns_valid_iff more).mpr parts.2)⟩
+      rcases List.mem_cons.mp found with same | found
+      · subst same
+        exact parts.1
+      · exact valid w found
+
+/-- What a loop collects, as one value of each type, is valid, given the law that the values
+collected of valid values are valid when they are as many as the size given. -/
+theorem collected_valid
+    (collect : ∀ (size : Option Nat) (a : D.Ty) (vs : List (sem.Val a)),
+      (∀ n, size = some n → vs.length = n) → (∀ v, v ∈ vs → Valid ⟨a, v⟩) →
+      Valid ⟨D.collected size a, sem.collect size a vs⟩)
+    (size : Option Nat) {n : Nat} (fits : ∀ m, size = some m → n = m) :
+    ∀ {each : List D.Ty} {acc : HList (fun a => List (sem.Val a)) each},
+      CollectedOK sem Valid acc n → ∀ v, v ∈ sem.dyns (sem.collected size acc) → Valid v
+  | [], .nil, _ => fun _ found => nomatch found
+  | a :: _, .cons vs rest, collected => by
+      obtain ⟨length, valid, others⟩ := collected
+      refine (sem.dyns_valid_iff _).mpr (HList.all_cons.mpr ⟨collect size a vs.reverse
+          (fun m e => by rw [List.length_reverse, length]; exact fits m e)
+          (fun v found => valid v (List.mem_reverse.mp found)), ?_⟩)
+      exact (sem.dyns_valid_iff _).mp (collected_valid collect size fits others)
+
+end
 
 section
 variable {V : Vocabulary} {M : Model V}
@@ -417,6 +511,59 @@ theorem localOp_valid (keeps : FnTable.KeepsValidity table) :
       localOp_call_valid table keeps callee args results valid
 
 end
+
+/-! ## The callees of a function -/
+
+/-- The callees that a statement about a function is made against: distinct keys, never
+`undefined` on valid inputs, valid results, and only `undefined` as a stop where the header says
+that the function cannot stop. -/
+structure Callees (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns) : Prop where
+  distinct : (fns.map (·.key)).Nodup
+  safe : FnTable.Safe table
+  keeps : FnTable.KeepsValidity table
+  quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+    (table hdr callee args).Stops (· = .undefined)
+
+/-- A value of a function with its type is valid in the model: the validity of the values of
+the semantics of a function (`localSem`), with which the statements about any dialect are made for
+functions. -/
+def ValidDyn (M : Model V) (value : (τ : V.Ty) × M.Val τ) : Prop := M.Valid value.1 value.2
+
+/-- The payload of the alternative of a valid value of a variant is valid. -/
+theorem Tys.pick_valid : ∀ (alts : Tys V.TypeKey) (c : alts.Choice M.toCarriers),
+    Tys.ValidChoice M.toCarriers alts c → (Tys.pick M alts c).All M.Valid
+  | .nil, c, _ => nomatch c
+  | .cons _ _, .inl _, h => h
+  | .cons _ rest, .inr c, h => Tys.pick_valid rest c h
+
+theorem pickValid_cast {ps qs : List V.Ty} (h : ps = qs) (p : Pick M.Val ps) :
+    (cast (congrArg (Pick M.Val) h) p).All M.Valid ↔ p.All M.Valid := by
+  subst h
+  rfl
+
+theorem valid_cast {τ τ' : V.Ty} (h : τ = τ') (v : M.Val τ) :
+    M.Valid τ' (cast (congrArg M.Val h) v) ↔ M.Valid τ v := by
+  subst h
+  rfl
+
+/-- The payload of the alternative that a function picks of a valid variant is valid. -/
+theorem localPick_valid {t : V.Ty} {payloads : List V.Ty}
+    (h : ∃ key alternatives, t = .variant key alternatives ∧ payloads = alternatives.toList)
+    (v : M.Val t) (valid : M.Valid t v) : (localPick M h v).All M.Valid := by
+  simp only [localPick]
+  rw [pickValid_cast (by obtain ⟨_, _, e, q⟩ := h; rw [Ty.alternatives_of e, q])]
+  apply Tys.pick_valid
+  have := (valid_cast (Ty.eq_variant h) v).mpr valid
+  exact this
+
+/-- What a loop of a function collects of valid values is valid, when they are as many as the
+size given, if one is given: the law of `collected_valid` for functions. -/
+theorem localCollect_valid {fns : List (FnHeader V)} {table : FnTable M fns} :
+    ∀ (size : Option Nat) (a : V.Ty) (vs : List (M.Val a)), (∀ n, size = some n → vs.length = n) →
+      (∀ v, v ∈ vs → ValidDyn M ⟨a, v⟩) →
+      ValidDyn M
+        ⟨(localDialect V fns).collected size a, (localSem M fns table).collect size a vs⟩ :=
+  fun _ _ _ length valid => ⟨valid, length⟩
 
 end
 

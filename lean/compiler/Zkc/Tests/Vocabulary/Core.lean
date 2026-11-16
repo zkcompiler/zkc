@@ -1,11 +1,9 @@
-import Zkc.Core.Facts.Local
-import Zkc.Core.Facts.Walk
-import Zkc.Core.Program.ElaborateLocal
+import Zkc.Core.Transform.Step
 import Zkc.Tests.Vocabulary.Table
 
 /-!
 The standard vocabulary through the core: functions over it elaborated (`elabFn` against
-`standard`) and their facts checked (`checkFacts`), by the kernel.
+`standard`, typed by `typeFn`) and their facts checked (`TypedFn.check`), by the kernel.
 
 A function that applies a row of each family elaborates, and one that names a key at which the
 row has no instance is refused by the rule `row` at its place. The restricted row
@@ -30,15 +28,15 @@ def refusal (ins outs : List standard.Ty) (canStop : Bool)
   | .ok _ => none
   | .error refusal => some refusal
 
-/-- What the check of facts says of the body of a function with the key 1 and no callee: its
-refusals, or the bounds of its loops; nothing when the body does not elaborate. -/
+/-- What the check of facts says of the body of a function with the key 1 and no callee
+(`typeFn`, `TypedFn.check`): its refusals, or the bounds of its loops; nothing when the body does
+not elaborate. -/
 def verdict (ins outs : List standard.Ty) (canStop : Bool)
     (body : Region (LocalRaw standard) Unit) :
     Option (List (ProgramRefusal standard) ⊕ List (Place × Nat)) :=
-  match elabFn [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body with
-  | .ok ⟨inputs, fn, _⟩ =>
-      match checkFacts (localFactRules standard []) (localSkelRules standard []) ⟨1⟩ none inputs
-          fn with
+  match typeFn [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body with
+  | .ok f =>
+      match f.check with
       | .ok bounds => some (.inr bounds)
       | .error refusals => some (.inl refusals)
   | .error _ => none
