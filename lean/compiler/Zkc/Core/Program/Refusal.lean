@@ -54,6 +54,8 @@ inductive Rule where
   | outputs
   /-- The instructions of a body have their own addresses. -/
   | distinct
+  /-- A definition binds each of its names at one place. -/
+  | assignment
   /-- Every value of a linear type is used once. -/
   | linear
   /-- The header of a function says whether it can stop with a reason, as its body does. -/
@@ -73,7 +75,7 @@ deriving DecidableEq, Repr
 /-- What a rule found, with the types `T` of a dialect and its written operations `Raw` as
 values. -/
 inductive Detail (T Raw : Type) where
-  /-- A name that is not in scope. -/
+  /-- A name: one that is not in scope, or one that is bound a second time. -/
   | name (name : Name)
   /-- The types expected and the types found. -/
   | types (expected found : List T)
@@ -91,12 +93,12 @@ inductive Detail (T Raw : Type) where
   | key (key : Key)
   /-- Whether the header says that the function can stop, and whether its body can. -/
   | stops (header body : Bool)
-  /-- A value by its position among those bound at the place, and how often it is used. -/
-  | uses (position found : Nat)
-  /-- A value from around the place, by its position in the scope there (the innermost first),
-  with a count of its uses: in the second region of a choice, in the first arm of a case
-  analysis that differs from the first, in the body of a loop. -/
-  | around (position found : Nat)
+  /-- A value bound at the place, by its name, and how often it is used. -/
+  | uses (name : Name) (found : Nat)
+  /-- A value from around the place, by its name, with a count of its uses: in the second
+  region of a choice, in the first arm of a case analysis that differs from the first, in the
+  body of a loop. -/
+  | around (name : Name) (found : Nat)
   /-- An application that is not known to be inside its operation's domain: the written
   operation, the requirement that is not known, and what is known of the values that the
   requirement names, in the order in which it names them. -/

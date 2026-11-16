@@ -14,7 +14,7 @@ public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Library
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Erase
-public import Zkc.Core.Program.PrintProgram
+public import Zkc.Core.Program.EraseProgram
 public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Program.Requirement
 public import Zkc.Core.Program.Project

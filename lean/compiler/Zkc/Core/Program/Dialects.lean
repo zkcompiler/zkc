@@ -9,7 +9,10 @@ public import Zkc.Core.Program.Shape
 /-!
 The three dialects: the local one (a function), the protocol one (all roles; located
 types) and the role one (one role; the same located types, read as what the role holds). A
-term carries the proof of each "held by at least", so projection is total.
+context of a protocol and of a role program has the same names at the same located types
+(`Ctx (LTy V)`). A term carries the proof of each "held by at least", so projection is total.
+A callee is named by its place among the headers (`Member`), and a component, a field or an
+alternative by its place among the types.
 -/
 
 namespace Zkc.Core
@@ -117,11 +120,12 @@ inductive OwnedOp (V : Vocabulary) : List V.Ty → List V.Ty → Type where
   | makeRecord (key : Key) (linear : Bool) (fields : Tys V.TypeKey) :
       OwnedOp V fields.toList [.record key linear fields]
   /-- One component of a tuple that has no linear component. -/
-  | getTuple (items : Tys V.TypeKey) {τ : V.Ty} (position : Var items.toList τ)
+  | getTuple (items : Tys V.TypeKey) {τ : V.Ty} (position : Member items.toList τ)
       (free : Tys.anyLinear V items = false) : OwnedOp V [.tuple items] [τ]
   /-- One field of a record that is not linear and has no linear field. -/
-  | getRecord (key : Key) (fields : Tys V.TypeKey) {τ : V.Ty} (position : Var fields.toList τ)
-      (free : Tys.anyLinear V fields = false) : OwnedOp V [.record key false fields] [τ]
+  | getRecord (key : Key) (fields : Tys V.TypeKey) {τ : V.Ty}
+      (position : Member fields.toList τ) (free : Tys.anyLinear V fields = false) :
+      OwnedOp V [.record key false fields] [τ]
   /-- Every component of a tuple: how a tuple with a linear component is used. -/
   | takeTuple (items : Tys V.TypeKey) : OwnedOp V [.tuple items] items.toList
   /-- Every field of a record: how a linear record is used. -/
@@ -130,7 +134,7 @@ inductive OwnedOp (V : Vocabulary) : List V.Ty → List V.Ty → Type where
   /-- A value as the alternative at a position of a variant: the position is that of an
   alternative of the value's type. -/
   | variant (key : Key) (alternatives : Tys V.TypeKey) {τ : V.Ty}
-      (position : Var alternatives.toList τ) : OwnedOp V [τ] [.variant key alternatives]
+      (position : Member alternatives.toList τ) : OwnedOp V [τ] [.variant key alternatives]
 
 inductive LocalOp (V : Vocabulary) (fns : List (FnHeader V)) : List V.Ty → List V.Ty → Type where
   /-- A row of the vocabulary. -/
@@ -139,7 +143,7 @@ inductive LocalOp (V : Vocabulary) (fns : List (FnHeader V)) : List V.Ty → Lis
   | owned {ins outs} (o : OwnedOp V ins outs) : LocalOp V fns ins outs
   /-- A literal: data that reads as a value of the type. -/
   | literal (τ : V.Ty) (data : List Nat) (reads : V.Reads τ data) : LocalOp V fns [] [τ]
-  | call {hdr} (callee : Var fns hdr) : LocalOp V fns hdr.ins hdr.outs
+  | call {hdr} (callee : Member fns hdr) : LocalOp V fns hdr.ins hdr.outs
 
 @[reducible] def localDialect (V : Vocabulary) (fns : List (FnHeader V)) : Dialect where
   Ty := V.Ty
@@ -187,7 +191,7 @@ inductive ProtocolOp (V : Vocabulary) (hs : Headers V) : List (LTy V) → List (
       ProtocolOp V hs [⟨τ, H⟩] [⟨τ, R⟩]
   /-- The caller's roles run an earlier definition: the callee's role `j` is played by the
   caller's role `roles[j]`. -/
-  | apply {hdr} (callee : Var hs.protocols hdr) (roles : List Role) (distinct : roles.Nodup)
+  | apply {hdr} (callee : Member hs.protocols hdr) (roles : List Role) (distinct : roles.Nodup)
       (covers : roles.length = hdr.roles) (operands : List (LTy V))
       (fits : Fits operands (hdr.ins.map (LTy.map (RoleMap.ofList roles distinct).to))) :
       ProtocolOp V hs operands (hdr.outs.map (LTy.map (RoleMap.ofList roles distinct).to))
@@ -221,24 +225,25 @@ def ProtocolOp.Within {V : Vocabulary} {hs : Headers V} {ins outs : List (LTy V)
 mutual
   /-- Every role that acts in the region is one of `parts`. -/
   def Within {V : Vocabulary} {hs : Headers V} (parts : List Role) :
-      {Γ outs : List (LTy V)} → Term (protocolDialect V hs) Γ outs → Prop
+      {Γ : Ctx (LTy V)} → {outs : List (LTy V)} → Term (protocolDialect V hs) Γ outs → Prop
     | _, _, .ret _ => True
-    | _, _, .op _ o _ rest => ProtocolOp.Within parts o ∧ Within parts rest
+    | _, _, .op _ o _ _ rest => ProtocolOp.Within parts o ∧ Within parts rest
     | _, _, .guard _ ps _ _ _ rest => (∀ r, r ∈ ps → r ∈ parts) ∧ Within parts rest
-    | _, _, .choose _ ps _ _ _ onTrue onFalse rest =>
+    | _, _, .choose _ ps _ _ _ onTrue onFalse _ rest =>
         (∀ r, r ∈ ps → r ∈ parts) ∧ Within parts onTrue ∧ Within parts onFalse ∧
           Within parts rest
-    | _, _, .cases _ ps _ _ _ arms rest =>
+    | _, _, .cases _ ps _ _ _ arms _ rest =>
         (∀ r, r ∈ ps → r ∈ parts) ∧ WithinArms parts arms ∧ Within parts rest
-    | _, _, .loop _ ps _ _ _ body rest =>
+    | _, _, .loop _ ps _ _ _ _ body _ rest =>
         (∀ r, r ∈ ps → r ∈ parts) ∧ Within parts body ∧ Within parts rest
-    | _, _, .block _ _ body rest => Within parts body ∧ Within parts rest
-    | _, _, .attempt _ w _ body rest =>
+    | _, _, .block _ _ body _ rest => Within parts body ∧ Within parts rest
+    | _, _, .attempt _ w _ _ body _ rest =>
         (∀ r, r ∈ w → r ∈ parts) ∧ Within parts body ∧ Within parts rest
   def WithinArms {V : Vocabulary} {hs : Headers V} (parts : List Role) :
-      {Γ mid payloads : List (LTy V)} → Arms (protocolDialect V hs) Γ mid payloads → Prop
+      {Γ : Ctx (LTy V)} → {mid payloads : List (LTy V)} →
+        Arms (protocolDialect V hs) Γ mid payloads → Prop
     | _, _, _, .nil => True
-    | _, _, _, .cons arm rest => Within parts arm ∧ WithinArms parts rest
+    | _, _, _, .cons _ arm rest => Within parts arm ∧ WithinArms parts rest
 end
 
 mutual
@@ -246,22 +251,23 @@ mutual
   them has no part in the regions, so its program passes over them. Every role may act in the
   body of an attempt, and runs it. -/
   def Enclosed {V : Vocabulary} {hs : Headers V} :
-      {Γ outs : List (LTy V)} → Term (protocolDialect V hs) Γ outs → Prop
+      {Γ : Ctx (LTy V)} → {outs : List (LTy V)} → Term (protocolDialect V hs) Γ outs → Prop
     | _, _, .ret _ => True
-    | _, _, .op _ _ _ rest => Enclosed rest
+    | _, _, .op _ _ _ _ rest => Enclosed rest
     | _, _, .guard _ _ _ _ _ rest => Enclosed rest
-    | _, _, .choose _ ps _ _ _ onTrue onFalse rest =>
+    | _, _, .choose _ ps _ _ _ onTrue onFalse _ rest =>
         Within ps onTrue ∧ Within ps onFalse ∧ Enclosed onTrue ∧ Enclosed onFalse ∧
           Enclosed rest
-    | _, _, .cases _ ps _ _ _ arms rest =>
+    | _, _, .cases _ ps _ _ _ arms _ rest =>
         WithinArms ps arms ∧ EnclosedArms arms ∧ Enclosed rest
-    | _, _, .loop _ ps _ _ _ body rest => Within ps body ∧ Enclosed body ∧ Enclosed rest
-    | _, _, .block _ _ body rest => Enclosed body ∧ Enclosed rest
-    | _, _, .attempt _ _ _ body rest => Enclosed body ∧ Enclosed rest
+    | _, _, .loop _ ps _ _ _ _ body _ rest => Within ps body ∧ Enclosed body ∧ Enclosed rest
+    | _, _, .block _ _ body _ rest => Enclosed body ∧ Enclosed rest
+    | _, _, .attempt _ _ _ _ body _ rest => Enclosed body ∧ Enclosed rest
   def EnclosedArms {V : Vocabulary} {hs : Headers V} :
-      {Γ mid payloads : List (LTy V)} → Arms (protocolDialect V hs) Γ mid payloads → Prop
+      {Γ : Ctx (LTy V)} → {mid payloads : List (LTy V)} →
+        Arms (protocolDialect V hs) Γ mid payloads → Prop
     | _, _, _, .nil => True
-    | _, _, _, .cons arm rest => Enclosed arm ∧ EnclosedArms rest
+    | _, _, _, .cons _ arm rest => Enclosed arm ∧ EnclosedArms rest
 end
 
 /-- The part of the shape that one operation is. -/
@@ -277,20 +283,21 @@ mutual
   /-- The shape of a term: its events by key, with loops, choices, applications and blocks
   kept. -/
   def shapeOf {V : Vocabulary} {hs : Headers V} :
-      {Γ outs : List (LTy V)} → Term (protocolDialect V hs) Γ outs → Shape V
+      {Γ : Ctx (LTy V)} → {outs : List (LTy V)} → Term (protocolDialect V hs) Γ outs → Shape V
     | _, _, .ret _ => .nil
-    | _, _, .op key o _ rest => ProtocolOp.shape key o (shapeOf rest)
+    | _, _, .op key o _ _ rest => ProtocolOp.shape key o (shapeOf rest)
     | _, _, .guard key ps _ _ why rest => .guard key ps why (shapeOf rest)
-    | _, _, .choose key ps _ _ _ onTrue onFalse rest =>
+    | _, _, .choose key ps _ _ _ onTrue onFalse _ rest =>
         .choice key ps (.cons (shapeOf onTrue) (.cons (shapeOf onFalse) .nil)) (shapeOf rest)
-    | _, _, .cases key ps _ _ _ arms rest => .choice key ps (shapesOf arms) (shapeOf rest)
-    | _, _, .loop key ps _ _ _ body rest => .loop key ps (shapeOf body) (shapeOf rest)
-    | _, _, .block key number body rest => .block key number (shapeOf body) (shapeOf rest)
-    | _, _, .attempt key w _ body rest => .attempt key w (shapeOf body) (shapeOf rest)
+    | _, _, .cases key ps _ _ _ arms _ rest => .choice key ps (shapesOf arms) (shapeOf rest)
+    | _, _, .loop key ps _ _ _ _ body _ rest => .loop key ps (shapeOf body) (shapeOf rest)
+    | _, _, .block key number body _ rest => .block key number (shapeOf body) (shapeOf rest)
+    | _, _, .attempt key w _ _ body _ rest => .attempt key w (shapeOf body) (shapeOf rest)
   def shapesOf {V : Vocabulary} {hs : Headers V} :
-      {Γ mid payloads : List (LTy V)} → Arms (protocolDialect V hs) Γ mid payloads → Shapes V
+      {Γ : Ctx (LTy V)} → {mid payloads : List (LTy V)} →
+        Arms (protocolDialect V hs) Γ mid payloads → Shapes V
     | _, _, _, .nil => .nil
-    | _, _, _, .cons arm rest => .cons (shapeOf arm) (shapesOf rest)
+    | _, _, _, .cons _ arm rest => .cons (shapeOf arm) (shapesOf rest)
 end
 
 /-! ## The role dialect -/
@@ -321,7 +328,7 @@ inductive RoleOp (V : Vocabulary) (hs : Headers V) (r : Role) :
       (mine : r ∈ hearers) : RoleOp V hs r [] [⟨τ, Holders.ofList (owner :: hearers)⟩]
   /-- The role's part of an application: the program of the role that it plays in the
   callee, which does nothing when it plays none of the callee's roles. -/
-  | apply {hdr} (callee : Var hs.protocols hdr) (roles : List Role) (distinct : roles.Nodup)
+  | apply {hdr} (callee : Member hs.protocols hdr) (roles : List Role) (distinct : roles.Nodup)
       (covers : roles.length = hdr.roles) (operands : List (LTy V))
       (fits : Fits operands (hdr.ins.map (LTy.map (RoleMap.ofList roles distinct).to))) :
       RoleOp V hs r operands (hdr.outs.map (LTy.map (RoleMap.ofList roles distinct).to))

@@ -22,7 +22,8 @@ performs, and decide the conditions that a form of control asks of who performs 
 types of its subject and of what it gives.
 
 Every function here is defined by structural recursion and every decision is a `Decidable`
-instance that reduces, so that elaboration runs in the kernel.
+instance that reduces, so that elaboration runs in the kernel. Elaboration gives only terms whose
+case analyses without an arm give nothing (`elabBody_armed`).
 -/
 
 namespace Zkc.Core
@@ -356,6 +357,157 @@ mutual
                     .ok (.cons inputs (cast (congrArg (Term D (Γ.extend inputs)) same) a) others)
     | payloads, arms => .error (refuseAt definition blocks key .arms
       (.number payloads.length arms.length))
+end
+
+/-! ## What elaboration gives -/
+
+variable (rules : Rules D Raw Who)
+
+mutual
+  /-- Elaboration gives a term whose case analyses without an arm give nothing. -/
+  theorem elabBody_armed : ∀ {definition : Key} {Γ : Ctx D.Ty} {blocks : List (Key × Nat)}
+      {owner : Option Key} (instructions : List (Instruction Raw Who)) (exit : List Name)
+      {outs : List D.Ty} {t : Term D Γ outs},
+      elabBody rules definition Γ blocks owner instructions exit = .ok ⟨outs, t⟩ →
+      t.armed = true
+    | _, _, _, _, [], _, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        split at elaborated
+        · cases elaborated
+        · cases elaborated
+          rfl
+    | _, _, _, _, .op .. :: rest, exit, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             simp only [Term.armed]
+             exact elabBody_armed rest exit ‹_›)
+    | _, _, _, _, .guard .. :: rest, exit, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             simp only [Term.armed]
+             exact elabBody_armed rest exit ‹_›)
+    | _, _, _, _, .choose _ _ _ _ onTrue onFalse :: rest, exit, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             subst_vars
+             simp only [Term.armed, cast_eq, Bool.and_eq_true]
+             exact ⟨⟨elabClosed_armed onTrue ‹elabClosed rules _ _ _ _ onTrue = _›,
+               elabClosed_armed onFalse ‹elabClosed rules _ _ _ _ onFalse = _›⟩,
+               elabBody_armed rest exit ‹_›⟩)
+    | _, _, _, _, .cases _ _ _ _ arms :: rest, exit, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             simp only [Term.armed, Bool.and_eq_true]
+             exact ⟨elabCases_armed arms ‹elabCases rules _ _ _ _ _ arms = _›,
+               elabBody_armed rest exit ‹_›⟩)
+    | _, _, _, _, .loop _ _ _ _ _ body :: rest, exit, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             subst_vars
+             simp only [Term.armed, cast_eq, Bool.and_eq_true]
+             exact ⟨elabRegion_armed body ‹elabRegion rules _ _ _ _ _ body = _›,
+               elabBody_armed rest exit ‹_›⟩)
+    | _, _, _, _, .block _ _ _ body :: rest, exit, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             simp only [Term.armed, Bool.and_eq_true]
+             exact ⟨elabClosed_armed body ‹elabClosed rules _ _ _ _ body = _›,
+               elabBody_armed rest exit ‹_›⟩)
+    | _, _, _, _, .attempt _ _ _ body :: rest, exit, _, _, elaborated => by
+        simp only [elabBody] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             simp only [Term.armed, Bool.and_eq_true]
+             exact ⟨elabRegion_armed body ‹elabRegion rules _ _ _ _ _ body = _›,
+               elabBody_armed rest exit ‹_›⟩)
+  /-- Elaboration gives a region whose case analyses without an arm give nothing. -/
+  theorem elabRegion_armed : ∀ {definition : Key} {Γ : Ctx D.Ty} {blocks : List (Key × Nat)}
+      {key : Key} {ins : List D.Ty} (region : Region Raw Who) {outs : List D.Ty}
+      {inputs : Names ins} {t : Term D (Γ.extend inputs) outs},
+      elabRegion rules definition Γ blocks key ins region = .ok ⟨outs, inputs, t⟩ →
+      t.armed = true
+    | _, _, _, _, _, .mk _ body exit, _, _, _, elaborated => by
+        simp only [elabRegion] at elaborated
+        split at elaborated
+        · cases elaborated
+        · split at elaborated
+          · cases elaborated
+          · cases elaborated
+            exact elabBody_armed body exit ‹_›
+  /-- Elaboration gives a region without inputs whose case analyses without an arm give
+  nothing. -/
+  theorem elabClosed_armed : ∀ {definition : Key} {Γ : Ctx D.Ty} {blocks : List (Key × Nat)}
+      {key : Key} (region : Region Raw Who) {outs : List D.Ty} {t : Term D Γ outs},
+      elabClosed rules definition Γ blocks key region = .ok ⟨outs, t⟩ → t.armed = true
+    | _, _, _, _, .mk [] body exit, _, _, elaborated => by
+        simp only [elabClosed] at elaborated
+        exact elabBody_armed body exit elaborated
+    | _, _, _, _, .mk (_ :: _) _ _, _, _, elaborated => by
+        simp only [elabClosed] at elaborated
+        cases elaborated
+  /-- Elaboration gives arms of a case analysis that say what they give and whose case
+  analyses without an arm give nothing. -/
+  theorem elabCases_armed : ∀ {definition : Key} {Γ : Ctx D.Ty} {blocks : List (Key × Nat)}
+      {key : Key} {payloads : List D.Ty} (regions : List (Region Raw Who)) {mid : List D.Ty}
+      {arms : Arms D Γ mid payloads},
+      elabCases rules definition Γ blocks key payloads regions = .ok ⟨mid, arms⟩ →
+      (arms.hasArm || mid.isEmpty) = true ∧ Arms.armed arms = true
+    | _, _, _, _, [], [], _, _, elaborated => by
+        cases elaborated
+        exact ⟨rfl, rfl⟩
+    | _, _, _, _, [], _ :: _, _, _, elaborated => by cases elaborated
+    | _, _, _, _, _ :: _, [], _, _, elaborated => by cases elaborated
+    | _, _, _, _, _ :: _, arm :: others, _, _, elaborated => by
+        simp only [elabCases] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             simp only [Arms.hasArm, Arms.armed, Bool.true_or, Bool.and_eq_true]
+             exact ⟨trivial, elabRegion_armed arm ‹elabRegion rules _ _ _ _ _ arm = _›,
+               elabArms_armed others ‹_›⟩)
+  /-- Elaboration gives arms after the first whose case analyses without an arm give
+  nothing. -/
+  theorem elabArms_armed : ∀ {definition : Key} {Γ : Ctx D.Ty} {blocks : List (Key × Nat)}
+      {key : Key} {mid payloads : List D.Ty} (regions : List (Region Raw Who))
+      {arms : Arms D Γ mid payloads},
+      elabArms rules definition Γ blocks key mid payloads regions = .ok arms →
+      Arms.armed arms = true
+    | _, _, _, _, _, [], [], _, elaborated => by
+        cases elaborated
+        rfl
+    | _, _, _, _, _, [], _ :: _, _, elaborated => by cases elaborated
+    | _, _, _, _, _, _ :: _, [], _, elaborated => by cases elaborated
+    | _, _, _, _, _, _ :: _, arm :: others, _, elaborated => by
+        simp only [elabArms] at elaborated
+        repeat' split at elaborated
+        all_goals first
+          | (cases elaborated; done)
+          | (cases elaborated
+             subst_vars
+             simp only [Arms.armed, cast_eq, Bool.and_eq_true]
+             exact ⟨elabRegion_armed arm ‹elabRegion rules _ _ _ _ _ arm = _›,
+               elabArms_armed others ‹_›⟩)
 end
 
 end
