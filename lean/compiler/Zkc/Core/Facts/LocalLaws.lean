@@ -891,8 +891,9 @@ theorem natEqual_symmetric (first second : Nat) : Nat.beq first second = Nat.beq
 
 /-- The local operations that are values satisfy the laws of the value form: one that is a
 value returns what its printed form gives, or stops `undefined`; a printed form gives one
-result; and a printed form that commutes, which is that of an operation that the core owns whose
-meaning is symmetric in its two operands, gives the same result on them exchanged. Its
+result; and a printed form that commutes, which is that of the sum or the product of naturals or
+of an equality, whose meaning is symmetric in its two operands, gives the same result on them
+exchanged. Its
 hypotheses: the callees have distinct keys, so that a printed form names one operation; and a
 callee whose header says that it cannot stop stops only `undefined`, since a call of it is a
 value. -/
@@ -948,8 +949,8 @@ theorem localFactRules_binding (distinct : (fns.map (·.key)).Nodup)
           obtain ⟨rfl, rfl, -⟩ := sameArgs
           refine ⟨_, _, .owned _, .cons b (.cons a .nil), returned, rfl, rfl, sameResults, ?_⟩
           rw [← ran]
-          simp only [localOp, ownedOp, Nat.add_comm, Nat.mul_comm, Bool.and_comm, Bool.or_comm,
-            Bool.beq_comm, natEqual_symmetric]
+          simp only [localOp, ownedOp, Nat.add_comm, Nat.mul_comm, Bool.beq_comm,
+            natEqual_symmetric]
 
 end
 

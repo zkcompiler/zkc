@@ -13,10 +13,14 @@ The value side: the process of a body that never stops `undefined` runs the skel
 analysis over the table of the analysis (`analyse_runs`), and two bodies of which the second
 follows the analysis of the first with no place that differs mean the same on every input on
 which neither stops `undefined` (`follow_same`). The facts side: a body that the analysis refuses
-nowhere is safe and respects its loop bounds (`analyse_safe`), and so is a body that follows an
-accepted body with no refusal and no place that differs (`follow_safe`); nothing is assumed of
-the safety of either. Together: the analysis of a definition is sound (`analyse_sound`), and a
-definition that follows an accepted definition is safe and means the same (`follow_sound`).
+nowhere is safe and respects its loop bounds (`analyse_safe`), and so is a body that follows the
+analysis of a first body with no refusal and no place that differs (`follow_safe`), which does
+not need the first body to be accepted. That the two mean the same needs the first to be safe
+too: `follow_same` asks it, and `follow_sound` has it from the first being accepted. Nothing is
+assumed of the safety of the body that follows; the facts side asks that the addresses of the
+body that it is about be distinct, which elaboration decides. Together: the analysis of a
+definition is sound (`analyse_sound`), and a definition that follows an accepted definition is
+safe and means the same (`follow_sound`).
 -/
 
 namespace Zkc.Core.Analysis
@@ -269,7 +273,7 @@ bodies with distinct addresses and the same types, of which the first is refused
 second follows the first with no refusal and no place that differs, on valid inputs and
 permitted replies: every loop of the second respects the bound recorded for it, the second never
 stops `undefined` and returns valid values, and the two processes mean the same. Nothing is
-assumed of the safety of the second. -/
+assumed of the safety of the second; its addresses are distinct, which elaboration decides. -/
 theorem follow_sound (laws : rules.Lawful sem permitted R Run Valid undefined)
     (lawful : checks.Lawful) (definition definition' : Key) (role : Option Role)
     {types outs : List D.Ty} (inputs inputs' : Names types)

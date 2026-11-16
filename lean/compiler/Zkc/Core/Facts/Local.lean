@@ -13,10 +13,12 @@ Per written operation: what it requires (the table of requirements), the ranges 
 results from those of its operands (the table of ranges of arithmetic), and how its result
 reads. One value for `LocalRaw V`: a role program's computations are local operations and read
 it too. Every operation of a function is a value, by its written form, except a call of a
-function that can stop with a reason, which is kept in order; and the operations that the core
-owns whose meaning is symmetric in two operands of one type commute (`OwnedName.commutes`), a
-row of the vocabulary and a call do not (`localFactRules`). Following decides types and
-performers by equality and two operations by their written forms (`localSkelRules`).
+function that can stop with a reason, which is kept in order. The sum and the product of
+naturals and the equalities commute (`OwnedName.commutes`); the conjunction and the disjunction,
+whose meaning is symmetric too, keep the order written, since the check of facts learns their
+operands in that order; a row of the vocabulary and a call do not commute (`localFactRules`).
+Following decides types and performers by equality and two operations by their written forms
+(`localSkelRules`).
 -/
 
 namespace Zkc.Core
@@ -412,14 +414,24 @@ def localPlace : LocalRaw V → Nat
   | .literal _ data => FactCheck.mixNumbers 2 data
   | .call callee => 4 * callee.number + 3
 
-/-- Whether an operation that the core owns gives, on two operands of one type, a result that
-does not depend on their order, for all values (`Meaning/Local.lean`): the sum and the product
-of naturals, the conjunction and the disjunction of truth values, and the equality of naturals
-and of truth values. Not the difference, the quotient, the remainder, the power or the order of
-naturals; not a concatenation, nor a sequence, a tuple or a record made of two values of one
-type, whose order is in the result. -/
+/-- Whether the table places the two operands of an operation that the core owns in one order,
+the smaller identifier first, whichever way they were written: the sum and the product of
+naturals, and the equality of naturals and of truth values, each of which gives, on two operands
+of one type, a result that does not depend on their order, for all values (`Meaning/Local.lean`).
+An equality of naturals, learned true or false, teaches the check of facts the same in either
+order, since both sides are read before either is learned (`Known.pushEqual`,
+`Known.pushDifferent`); the equality of truth values has no form, and teaches nothing. Not the
+conjunction and the disjunction of truth values: their meaning is symmetric, but the check of
+facts learns the operands of a conjunction learned true, and of a disjunction learned false, one
+after the other in the order of the table's entry (`assume`, `Facts/State.lean`), and what the
+second teaches can depend on what the first taught (`Known.pushLess` reads the number of the
+other side when it learns); so their operands are placed, and learned, in the order written, as
+the source's `and` and `or` are. Not the difference, the quotient, the remainder, the power or
+the order of naturals; not a concatenation, nor a sequence, a tuple or a record made of two
+values of one type, whose order is in the result. -/
 def OwnedName.commutes : OwnedName → Bool
-  | .natAdd | .natMul | .natEqual | .boolAnd | .boolOr | .boolEqual => true
+  | .natAdd | .natMul | .natEqual | .boolEqual => true
+  | .boolAnd | .boolOr => false
   | .natSub | .natDiv | .natRem | .natPow | .natLess | .boolNot => false
   | .seqLength | .seqAt | .seqSlice | .seqConcat | .seqFill | .seqSized | .natBelow => false
   | .seqUnsized | .finToNat | .finWiden | .make | .get | .take | .variant => false
@@ -440,8 +452,7 @@ def LocalRaw.commutes : LocalRaw V → Bool
 variable (V) in
 /-- What the local dialect tells the analysis: every operation of a function is a value, by its
 written form, except a call of a function that can stop with a reason, which is kept in order;
-an operation that the core owns whose meaning is symmetric in its two operands commutes
-(`LocalRaw.commutes`). -/
+the sum and the product of naturals and the equalities commute (`LocalRaw.commutes`). -/
 def localFactRules (fns : List (FnHeader V)) : FactRules (localDialect V fns) (LocalRaw V) where
   written := fun o => bif LocalOp.canStop o then none else some (LocalOp.print o)
   commutes := LocalRaw.commutes

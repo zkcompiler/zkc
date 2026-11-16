@@ -85,7 +85,8 @@ addresses, of which the first is accepted by the check of facts and the second f
 analysis with no refusal and no place that differs (`Analysis.follow`): against callees with
 distinct keys that never stop `undefined` on valid inputs, keep validity, and stop only
 `undefined` where their headers say that they cannot stop (`Callees`), on every valid input the
-two processes mean the same, for any replies permitted. Nothing is assumed of the second. -/
+two processes mean the same, for any replies permitted. Nothing is assumed of the safety of the
+second; its addresses are distinct, which elaboration decides. -/
 def functionsSame : Prop :=
   ∀ (fns : List (FnHeader V)) (M : Model V) (table : FnTable M fns), Callees M table →
     ∀ {types outs : List V.Ty} (inputs inputs' : Names types)

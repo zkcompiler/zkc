@@ -252,7 +252,13 @@ theorem Known.Holds.pushDifferent {k : Known} (hk : k.Holds R ρ) {a b x y : Nat
     (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (ne : x ≠ y) :
     (k.pushDifferent a b).Holds R ρ := by
   simp only [Known.pushDifferent]
-  exact (hk.oneDifferent ha hb ne).oneDifferent hb ha (Ne.symm ne)
+  have learned := hk.oneDifferent ha hb ne
+  by_cases zero : k.rangeOf a = some (Range.point 0)
+  · rw [ite_eq_left zero]
+    have := Range.has_point.mp (hk.rangeOf_at ha zero)
+    exact learned.addRange hb ⟨by show 1 ≤ y; omega, fun _ e => nomatch e⟩
+  · rw [ite_eq_right zero]
+    exact learned
 
 /-! ## Assuming a truth value -/
 

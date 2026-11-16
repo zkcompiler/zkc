@@ -17,9 +17,13 @@ table of callees with distinct keys that never stop `undefined` on valid inputs,
 and stop only `undefined` where their headers say that they cannot stop (`Callees`): this is
 `transform_sound`, from the theorem of following for functions (`functions_follow_same`, from
 `Analysis.follow_sound` and the laws of the function dialect). The target was not analysed by
-itself: that it is safe follows from its following the source (`transform_target_safe`). The
-target of one step is elaborated from the stored function that the next step is given, so two
-steps compose (`transform_then`). What a stored function is accepted as is determined by it
+itself: that it is safe, and that every loop of it respects the bound that the step recorded for
+it, follow from its following the source (`transform_target_safe`, `transform_target_bounds`);
+nothing proves that the check of facts alone accepts it. The target of one step is elaborated
+from the stored function that the next step is given, so two steps compose (`transform_then`),
+when the middle function is itself accepted as a source; two steps from one source give targets
+with the same meaning (`transform_both`), so a chain of transformations can be validated against
+the one source that was admitted. What a stored function is accepted as is determined by it
 (`acceptFn_erases`), so the stored forms of what a step returns are what it was given
 (`transform_erases`).
 
@@ -386,7 +390,8 @@ functions of which the first is accepted by the check of facts and the second fo
 analysis with no refusal and no place that differs mean the same on every valid input, for any
 replies permitted, against callees with distinct keys that never stop `undefined` on valid
 inputs, keep validity, and stop only `undefined` where their headers say that they cannot stop.
-Nothing is assumed of the second. -/
+Nothing is assumed of the safety of the second; its addresses are distinct, which elaboration
+decides. -/
 theorem functions_follow_same {table : FnTable M fns} (callees : Callees M table)
     {types outs : List V.Ty} (inputs inputs' : Names types)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
@@ -524,6 +529,58 @@ theorem transform_target_safe {hdr : FnHeader V} {source target : Region (LocalR
   rw [localDyns_eq_toDyns M table] at returned
   exact valid_of_toDyns returned
 
+open Analysis in
+/-- The bounds of the target of a step are those that the analysis recorded while the target
+followed the source. -/
+theorem transform_target_recorded {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
+    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step) :
+    step.target.bounds = (follow (localFactRules V fns) (localSkelRules V fns) hdr.key none
+      (analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none step.source.inputs
+        step.source.body) step.target.inputs step.target.body).state.st.bounds.reverse := by
+  unfold transform at accepted
+  split at accepted
+  · cases accepted
+  · dsimp only at accepted
+    split at accepted
+    · cases accepted
+    · split at accepted
+      · cases accepted
+      · split at accepted
+        · cases accepted
+          rfl
+        · cases accepted
+        · cases accepted
+
+open Analysis FactCheck in
+/-- **The loops of the target of a step respect their bounds.** For a step that is accepted,
+against callees with distinct keys that never stop `undefined` on valid inputs, keep validity,
+and stop only `undefined` where their headers say that they cannot stop, on valid inputs: every
+loop that a run of the target reaches respects the bound that the step recorded for it, for every
+annotation whose entries at this definition are among the target's bounds. The target was not
+analysed by itself: the bounds are those recorded while it followed the source
+(`Analysis.follow_sound`). -/
+theorem transform_target_bounds {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
+    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step)
+    (M : Model V) (table : FnTable M fns) (callees : Callees M table) (F : List (Place × Nat))
+    (recorded : ∀ p b, (p, b) ∈ F → p.definition = hdr.key → p.role = none →
+      (p, b) ∈ step.target.bounds)
+    (ins : HList M.Val hdr.ins) (valid : ins.All M.Valid) :
+    step.target.body.EveryLoop (localSem M fns table) (fun _ _ => True)
+      (Annotation.Bounded ⟨F⟩ hdr.key none) [] [] (Env.empty.extend step.target.inputs ins) := by
+  obtain ⟨sourceAccepted, _, followed⟩ := transform_ok accepted
+  have bounds := transform_target_recorded accepted
+  exact (follow_sound (localFactRules V fns) (localSkelRules V fns) (localSem M fns table)
+    (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
+    (localFactRules_lawful M table callees.distinct callees.safe callees.keeps callees.quiet _)
+    (localSkelRules_lawful callees.distinct) hdr.key hdr.key none step.source.inputs
+    step.target.inputs step.source.body step.target.body step.source.conditions.distinct
+    step.target.conditions.distinct (checkFacts_ok (acceptFn_ok sourceAccepted).2).1 followed F
+    (fun p b inside here unowned => by
+      have mine := recorded p b inside here unowned
+      rw [bounds] at mine
+      exact List.mem_reverse.mp mine)
+    ins (by rw [localDyns_eq_toDyns M table]; exact toDyns_valid valid)).1
+
 /-- The stored forms of what a step returns are what it was given. -/
 theorem transform_erases {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
     {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step) :
@@ -545,6 +602,21 @@ theorem transform_then {hdr : FnHeader V} {first middle last : Region (LocalRaw 
     ((transform_ok accepted).2.1.symm.trans (acceptFn_ok (transform_ok accepted').1).1)
   rw [transform_sound accepted M table callees ins valid,
     AcceptedFn.meaning_eq middleOnce M table ins]
+  exact transform_sound accepted' M table callees ins valid
+
+/-- Two steps from one source give targets with the same meaning: the source is accepted as one
+thing, and each target means what it means. A chain of transformations is so validated against
+the one source that was admitted; `transform_then` is for when the middle function is itself
+accepted as a source. -/
+theorem transform_both {hdr : FnHeader V} {first middle last : Region (LocalRaw V) Unit}
+    {step step' : Transformed V fns hdr}
+    (accepted : transform fns hdr first middle = .ok step)
+    (accepted' : transform fns hdr first last = .ok step') :
+    step.target.SameAs step'.target := by
+  intro M table callees ins valid
+  have sourceOnce : step.source = step'.source :=
+    Except.ok.inj ((transform_ok accepted).1.symm.trans (transform_ok accepted').1)
+  rw [← transform_sound accepted M table callees ins valid, sourceOnce]
   exact transform_sound accepted' M table callees ins valid
 
 /-! ## Two programs over the same headers -/

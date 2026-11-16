@@ -2,8 +2,8 @@ import Zkc.Core.Transform.StepSound
 import Zkc.Tests.Core.Facts
 
 /-!
-Whether a function follows another, on functions written by names, elaborated and walked by the
-kernel.
+Following: whether a function follows the analysis of another, on functions written by names,
+elaborated and walked by the kernel.
 
 Each pair is two bodies of a function with the key 1 over the same callees, each elaborated
 against them; the first is analysed, and the second follows its analysis
@@ -13,27 +13,34 @@ against them; the first is analysed, and the second follows its analysis
 guards in the other order, with one computation that nothing uses; computations moved around
 guards that stay in their order; a computation moved out of a loop; the same program with other
 names for its values; a call of a function that cannot stop, shared; `x + y` against `y + x`,
-since addition commutes; a product and a sum with their operands exchanged inside a loop after a
+since addition commutes, and `x == y` against `y == x`, of naturals and of truth values, since
+an equality commutes; a product and a sum with their operands exchanged inside a loop after a
 guard. Refused: `x - y` against `y - x`; `(x + y) + z` against `x + (y + z)` (associativity is
-not a law that following knows); a row of the vocabulary with its operands exchanged; two guards
-in the other order; a guard dropped; a call of a function that can stop moved across a guard;
-two loops against one loop that computes the same; a different key on a guard.
+not a law that following knows); a row of the vocabulary with its operands exchanged; a
+conjunction with its operands exchanged, since the check of facts learns them in the order
+written; two guards in the other order; a guard dropped; a call of a function that can stop
+moved across a guard; two loops against one loop that computes the same; a different key on a
+guard.
 
 Then each instruction that following keeps in order, accepted: a choice, a case analysis, a
 block, a loop as often as a value says and a call of a function that can stop, each the same
 program with other names; a value moved out of a region of a choice and one moved into it; a
-value moved across a call of a function that can stop. And refused, each by one comparison: only
-a guard's condition differs, only a loop's initial values, only a block's number, only the
-operand of a call of a function that can stop. Then the theorem for functions, applied to two
-pairs, the second of them `x + y` and `y + x`: the two processes are equal on valid inputs.
+value moved across a call of a function that can stop. And refused, each pair differing in one
+thing and refused by the comparison of that thing: a guard's condition, a guard's reason, a
+choice's condition, the subject of a case analysis, a loop's initial values, a loop's count, a
+block's number, a block's key, the operand of a call of a function that can stop, its callee and
+its key. Then the theorem for functions, applied to two pairs, the second of them `x + y` and
+`y + x`: the two processes are equal on valid inputs.
 
-Last, the two controls on the definitions of the value form, on the walk of the analysis over a
-toy dialect: why following asks for leaves made in order (`Skel.Fresh`), and why what follows an
-attempt runs only from an end of the attempt that can return (`Skel.Runs.attempt`).
+Last, on the walk of the analysis over a toy dialect, which has attempts: an attempt followed by
+the same attempt with other names, accepted, and by one with another key, which differs at the
+attempt; and the two controls on the definitions of the value form: why following asks for
+leaves made in order (`Skel.Fresh`), and why what follows an attempt runs only from an end of the
+attempt that can return (`Skel.Runs.attempt`).
 -/
-namespace Zkc.Core.SameTests
+namespace Zkc.Core.FollowingTests
 
-open FactsTests (field F plus minus times natural fieldRow natOrTruth)
+open FactsTests (field F plus minus times natural less equal conjunction fieldRow natOrTruth)
 
 -- What the check of facts returns is compared whole.
 deriving instance DecidableEq for Except
@@ -162,6 +169,22 @@ operands in the order of `x + y`, so the two are one value. -/
 example : decided [] [.nat, .nat] [.nat] false false sum commutedSum = some true := by
   decide +kernel
 
+/-- The equality of truth values. -/
+abbrev sameTruth : LocalRaw field := .owned .boolEqual [] []
+
+/-- `x == y` against `y == x`, of naturals: the whole verdict accepts it, since the equality
+commutes. -/
+example : safelyFollows [] [.nat, .nat] [.bool] false false
+    (.mk [0, 1] [.op ⟨1⟩ [10] equal [0, 1]] [10])
+    (.mk [0, 1] [.op ⟨1⟩ [10] equal [1, 0]] [10]) = some true := by
+  decide +kernel
+
+/-- `x == y` against `y == x`, of truth values: accepted too. -/
+example : safelyFollows [] [.bool, .bool] [.bool] false false
+    (.mk [0, 1] [.op ⟨1⟩ [10] sameTruth [0, 1]] [10])
+    (.mk [0, 1] [.op ⟨1⟩ [10] sameTruth [1, 0]] [10]) = some true := by
+  decide +kernel
+
 /-- A product and a sum with their operands exchanged, inside a loop that comes after a guard,
 and the product again after the loop: each is the value of the first. -/
 example : decided [] [.nat, .nat, .bool] [.nat, .nat] true true
@@ -202,6 +225,21 @@ model. -/
 example : decided [] [F, F] [F] false false
     (.mk [0, 1] [.op ⟨1⟩ [10] (fieldRow .add) [0, 1]] [10])
     (.mk [0, 1] [.op ⟨1⟩ [10] (fieldRow .add) [1, 0]] [10]) = some false := by
+  decide +kernel
+
+/-- `t := a < b; f := 5; e := b == f`, then `c := e && t` (or `c := t && e`) and `guard c`. -/
+def conjunctionOf (equalityFirst : Bool) : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] less [0, 1],
+  .op ⟨2⟩ [11] (natural 5) [],
+  .op ⟨3⟩ [12] equal [1, 11],
+  .op ⟨4⟩ [13] conjunction (if equalityFirst then [12, 10] else [10, 12]),
+  .guard ⟨5⟩ () 13 .reject] [0]
+
+/-- `c := e && t` against `c := t && e`: refused. The conjunction does not commute for the table,
+since the check of facts learns its operands in the order written (`FactsTests.learnedInOrder`):
+the two are other values, and the guard of the second is not the skeleton's entry. -/
+example : decided [] [.nat, .nat] [.nat] true true (conjunctionOf true) (conjunctionOf false) =
+    some false := by
   decide +kernel
 
 /-- Two guards in the other order: which one stops first is kept. -/
@@ -368,6 +406,38 @@ example : decided [] [.bool, .bool] [] true true
     (.mk [0, 1] [.guard ⟨1⟩ () 1 .reject] []) = some false := by
   decide +kernel
 
+/-- Only a guard's reason differs, with the same key and the same condition: refused by the
+comparison of the reasons, since the reason is what the guard stops with. -/
+example : decided [] [.bool] [] true true
+    (.mk [0] [.guard ⟨1⟩ () 0 .reject] [])
+    (.mk [0] [.guard ⟨1⟩ () 0 .refused] []) = some false := by
+  decide +kernel
+
+/-- A choice on the truth value given, among two, whose regions give the sum and the product of
+two naturals. -/
+def choiceOn (condition : Nat) : Region (LocalRaw field) Unit := .mk [0, 1, 2, 3] [
+  .choose ⟨1⟩ () condition [10]
+    (.mk [] [.op ⟨2⟩ [20] plus [2, 3]] [20])
+    (.mk [] [.op ⟨3⟩ [30] times [2, 3]] [30])] [10]
+
+/-- Only a choice's condition differs: refused by the comparison of the condition's identifier. -/
+example : decided [] [.bool, .bool, .nat, .nat] [.nat] false false (choiceOn 0) (choiceOn 1) =
+    some false := by
+  decide +kernel
+
+/-- A case analysis of the value given, among two of a natural or a truth value: the natural plus
+the third input, or the third input. -/
+def casesOn (subject : Nat) : Region (LocalRaw field) Unit := .mk [0, 1, 2] [
+  .cases ⟨1⟩ () subject [10]
+    [.mk [20] [.op ⟨2⟩ [21] plus [20, 2]] [21],
+     .mk [30] [] [2]]] [10]
+
+/-- Only the subject of a case analysis differs: refused by the comparison of the subject's
+identifier. -/
+example : decided [] [natOrTruth, natOrTruth, .nat] [.nat] false false (casesOn 0) (casesOn 1) =
+    some false := by
+  decide +kernel
+
 /-- Only a loop's initial values differ: refused by the comparison of the identifiers of the
 initial values. -/
 example : decided [] [.nat, .nat] [.nat] false false
@@ -378,10 +448,27 @@ example : decided [] [.nat, .nat] [.nat] false false
     some false := by
   decide +kernel
 
+/-- A loop as often as the natural given says, among two, which adds the iteration number to what
+it carries from the first input. -/
+def countedBy (count : Nat) : Region (LocalRaw field) Unit := .mk [0, 1, 2] [
+  .loop ⟨1⟩ () (.count count) [0] [10] (.mk [20, 21] [.op ⟨2⟩ [22] plus [21, 20]] [22])] [10]
+
+/-- Only a loop's count differs: refused by the comparison of the count's identifier. -/
+example : decided [] [.nat, .nat, .nat] [.nat] false false (countedBy 1) (countedBy 2) =
+    some false := by
+  decide +kernel
+
 /-- Only a block's number differs: refused by the comparison of the numbers. -/
 example : decided [] [.nat, .nat] [.nat] false false blocked
     (.mk [0, 1] [
       .block ⟨1⟩ 1 [10] (.mk [] [.op ⟨2⟩ [20] plus [0, 1]] [20]),
+      .op ⟨3⟩ [11] times [10, 0]] [11]) = some false := by
+  decide +kernel
+
+/-- Only a block's key differs: refused by the comparison of the keys. -/
+example : decided [] [.nat, .nat] [.nat] false false blocked
+    (.mk [0, 1] [
+      .block ⟨4⟩ 0 [10] (.mk [] [.op ⟨2⟩ [20] plus [0, 1]] [20]),
       .op ⟨3⟩ [11] times [10, 0]] [11]) = some false := by
   decide +kernel
 
@@ -390,6 +477,23 @@ the identifiers of the effect's operands. -/
 example : decided [callee true] [.nat, .nat] [.nat] true true
     (.mk [0, 1] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10])
     (.mk [0, 1] [.op ⟨1⟩ [10] (.call ⟨9⟩) [1]] [10]) = some false := by
+  decide +kernel
+
+/-- A second callee, with the key 8, from a natural to a natural, which can stop too. -/
+def otherCallee : FnHeader field := ⟨⟨8⟩, [.nat], [.nat], true, none⟩
+
+/-- Only the callee of a call of a function that can stop differs, between two callees of one
+header but their keys: refused by the comparison of the effects' written operations. -/
+example : decided [callee true, otherCallee] [.nat] [.nat] true true
+    (.mk [0] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10])
+    (.mk [0] [.op ⟨1⟩ [10] (.call ⟨8⟩) [0]] [10]) = some false := by
+  decide +kernel
+
+/-- Only the key of a call of a function that can stop differs: refused by the comparison of the
+effects' keys, since where it stops is part of what it does. -/
+example : decided [callee true] [.nat] [.nat] true true
+    (.mk [0] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10])
+    (.mk [0] [.op ⟨2⟩ [10] (.call ⟨9⟩) [0]] [10]) = some false := by
   decide +kernel
 
 /-! ## The theorem for functions -/
@@ -529,6 +633,45 @@ def toyChecks : SkelRules toy where
   sameWho := inferInstanceAs (DecidableEq Unit)
   sameOp := fun _ _ => true
 
+/-! ### An attempt followed
+
+A function has no attempt, so following an attempt is exercised in the toy dialect: the analysis
+of a term with an attempt, and a second term that follows it (`Analysis.follow`). -/
+
+/-- An attempt with the key 1 whose body asks and gives the reply, with the names `0` for its
+number, `1` for the reply and `2` for what it gives, which is returned. -/
+def attempted : Term toy Ctx.empty [()] :=
+  .attempt ⟨1⟩ () trivial (.cons 0 .nil)
+    (.op ⟨2⟩ ToyOp.ask .nil (.cons 1 .nil) (.ret (.cons ⟨1, rfl⟩ .nil)))
+    (.cons 2 .nil) (.ret (.cons ⟨2, rfl⟩ .nil))
+
+/-- The same attempt with other names: `5`, `6` and `7`. -/
+def attemptedOtherNames : Term toy Ctx.empty [()] :=
+  .attempt ⟨1⟩ () trivial (.cons 5 .nil)
+    (.op ⟨2⟩ ToyOp.ask .nil (.cons 6 .nil) (.ret (.cons ⟨6, rfl⟩ .nil)))
+    (.cons 7 .nil) (.ret (.cons ⟨7, rfl⟩ .nil))
+
+/-- The same attempt with the key 3. -/
+def attemptedOtherKey : Term toy Ctx.empty [()] :=
+  .attempt ⟨3⟩ () trivial (.cons 0 .nil)
+    (.op ⟨2⟩ ToyOp.ask .nil (.cons 1 .nil) (.ret (.cons ⟨1, rfl⟩ .nil)))
+    (.cons 2 .nil) (.ret (.cons ⟨2, rfl⟩ .nil))
+
+/-- The attempt with other names follows the analysis of the first: the attempt is the
+skeleton's entry, the leaves of its number and of what it gives are the entry's, and the call in
+its body is the entry's next. The whole verdict accepts it. -/
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none .nil attempted) .nil
+    attemptedOtherNames).accepted = true := by
+  decide +kernel
+
+/-- The attempt with another key differs, at the attempt: where it stops is part of what it
+does. -/
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none .nil attempted) .nil
+    attemptedOtherKey).state.differs = [⟨⟨1⟩, [], some ⟨3⟩, none⟩] := by
+  decide +kernel
+
 /-! ### Leaves made in order -/
 
 /-- The context of the name `0`. -/
@@ -623,4 +766,4 @@ example : ¬ Skel.Runs toySem (fun _ _ => False) (fun _ _ _ => False)
   intro runs
   cases runs
 
-end Zkc.Core.SameTests
+end Zkc.Core.FollowingTests

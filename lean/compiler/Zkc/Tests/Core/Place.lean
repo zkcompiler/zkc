@@ -4,7 +4,7 @@ import Zkc.Tests.Core.Shapes
 /-!
 Places inside a term, with their meaning, on terms of a dialect of truth values written by hand.
 
-The dialect is written here: the dialect of the controls of `Same.lean` has no condition, so no
+The dialect is written here: the toy dialect of `Following.lean` has no condition, so no
 guard, and a function has no attempt. Its values are truth values, it has no effect, a guard
 holds when its condition is true, and an attempt has the number `false`.
 

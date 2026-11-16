@@ -8,14 +8,16 @@ public import Zkc.Core.Value.Table
 @[expose] public section
 
 /-!
-What the check of facts knows, the rules that decide what is known, and the check of the
+What the analysis knows, the rules that decide what is known, and the check of the
 requirements of an application.
 
-The check walks a term over the table of applications and its state (`Value/Table.lean`).
-Beside them it keeps what is known (ranges, orders, truths, the two shapes of a choice, whether
-the region runs at all), which is scoped: what is learned in a region is dropped at its exit.
-How an identifier reads, when it is the first result of an entry whose operation has a form, is
-what the dialect tells the check of the entry's operation (`Table.formOf`).
+The analysis walks a term over the table of applications and its state (`Value/Table.lean`;
+the walk is `Analysis.walk`, `Facts/Walk.lean`). Beside them it keeps what is known (ranges,
+orders, truths, the two shapes of a choice, whether the region runs at all), which this file
+defines with what is learned from a truth value (`assume`), and which is scoped: what is learned
+in a region is dropped at its exit. How an identifier reads, when it is the first result of an
+entry whose operation has a form, is what the dialect tells the analysis of the entry's
+operation (`Table.formOf`).
 
 The walk reads what is known through the functions here (how an identifier reads, the range of an
 identifier, whether an order or a truth is known) and through whether a region is dead; how what
@@ -264,10 +266,13 @@ def pushEqual (k : Known) (first second : Nat) : Known :=
   let k := k.addRange? first (ps.map Range.point)
   k.addRange? second (pf.map Range.point)
 
-/-- What is known after `first ≠ second`: when one is zero, the other is at least one. -/
+/-- What is known after `first ≠ second`: when one is zero, the other is at least one. Both
+ranges are read before either is learned, as in the other rules, so the two orders of the
+operands teach the same. -/
 def pushDifferent (k : Known) (first second : Nat) : Known :=
-  let k := if k.rangeOf second = some (Range.point 0) then k.addRange first ⟨1, none⟩ else k
-  if k.rangeOf first = some (Range.point 0) then k.addRange second ⟨1, none⟩ else k
+  let learned :=
+    if k.rangeOf second = some (Range.point 0) then k.addRange first ⟨1, none⟩ else k
+  if k.rangeOf first = some (Range.point 0) then learned.addRange second ⟨1, none⟩ else learned
 
 end Known
 

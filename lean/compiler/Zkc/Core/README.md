@@ -32,7 +32,7 @@ and by the root.
 | `Projection/` | the relation of a role's process to a protocol's and its lemmas (`Proj`), the proof for one term (`Sound`), and the theorem for every definition of a program (`Theorem`) |
 | `Value/` | the value form of a term, for any dialect: the table of applications by written form and operand identifiers, placed by a number computed from the written operation's number and those identifiers and by each result's identifier, the state that carries it (the next identifier, and the refusals and the bounds of loops that the analysis finds), and the identifiers of the names in scope (`Table`); valuations of identifiers, what the table says of a valuation, a well-formed table, a state and a valuation that agree, and the growth of the state as identifiers are made and applications shared, which keeps every name in scope with an identifier below the next (`Valuation`); the skeleton of a term, what it keeps in order (effects, guards, every form of control) on identifiers of the table, what the value form reads of the operations of a dialect (`ValueRules`), and what a dialect must decide for following a skeleton (`Skeleton`); the leaves of a skeleton, apart from the table, below a number and made in order, as the table grows (`Leaves`); the reading of an identifier from the leaves through the table, the processes that run a skeleton, and that two of them mean the same (`Runs`); names that agree with a table, the count of a loop on identifiers, and what a shared application reads, with the operands of an operation that commutes in the table's order (`Agrees`). An application of an operation that a dialect says commutes is placed in the table with its two operands in one order, the smaller identifier first, whichever way they were written (`ValueRules.order`) |
 | `Facts/` | the count of every loop that a run reaches (`Term.EveryLoop`), the annotation of an admitted program, which is the bounds of its loops, and what it is for a program to respect it, in its functions and in its role programs (`Facts`); what the analysis is told about the operations of a dialect, the one description of them (`FactRules`): which operations are values and how they are written, which written operations commute, what a written operation requires, the ranges of its results and how its result reads, which types have no value, and a number for each written operation by which the table places its applications, with the part that the value form reads (`FactRules.values`) (`OpFacts`); what the analysis knows beside the table of `Value/`, each part placed by an identifier, and how an identifier reads by the operation that gave it, with the rules that decide a requirement, which read a sum with its operands in either order, and learn from a truth value, the range below `r` of a sum of `x` and `t`, in either order, where a loop made the order `t < r - x` for its index, the check of the requirements of an application, and the lemmas of the ranges that it defines (`State`); the analysis, one walk over a term of any dialect, which keeps the identifier of each name in scope, shares each value in the table, decides the requirements of a value from what is known where it is evaluated, learns from guards, choices, loops and the ranges of operations, records the bound of each counted loop and gives the skeleton of the term, or, given the analysis of another term, follows its skeleton and records each place where the term is not the skeleton's next entry (`Analysis.walk`, `Analysis.analyse`, `Analysis.follow`), in which a region is dead only where what is written says that it never runs, with the range of a carried natural after a loop and its lemmas; and the check of facts, the refusals of the analysis or the bounds that it recorded (`checkFacts`) (`Walk`); what the local dialect tells it: which operations of a function are values and which commute, the arithmetic of ranges (a power's ends computed only when they are small enough) and its lemmas, and what following decides for a function (`localFactRules`, `localSkelRules`) (`Local`); what what is known and the requirements say of a valuation of identifiers, one step of the walk, and the laws of `OpFacts` as propositions (`Valuation`); that the rules of what is known are true (`Learning`); the laws that a dialect proves of its rules and its semantics (`FactRules.Lawful`, `Laws`); what the walk does to its state, to the places that differ and to the skeleton, whatever the run, on which the runs of the walk and its soundness both rest, and that the check of facts gives bounds at the places of its definition (`Growth`); that a term runs the skeleton of its walk (`WalkRuns`); the soundness of the walk where no skeleton is followed (`Soundness`) and while one is followed (`SoundnessFollowing`); the theorems of the analysis (`Theorems`); the local dialect's reading of values and relation of operations, the laws of the function dialect, the callees that a statement about a function is made against, and the soundness of the check of facts for a function (`LocalLaws`) |
-| `Transform/` | transformations of functions, on the analysis of `Facts/`: a transformation of a function as a checked step, which elaborates a stored source and analyses it, elaborates a stored target and follows the analysis of the source with it, with what it returns or why it refuses (the source refused, the target refused by elaboration or by the analysis while it follows, or the places where the target differs), and whether the functions of a second program over the same headers follow those of a first, one by one (`Step`); what a step means: the meaning of an accepted function, that two functions of which the second follows the first mean the same, the theorems of a step, and that a term of a function returns valid values on valid values in scope and means the same against two tables of callees that agree on valid inputs (`StepSound`); two untrusted transformations of a stored function, which drop the operations whose results are not used and share repeated operations, accepted only through the step (`Passes`). The operations of a function that commute, each placed in the table with its two operands in one order, are the sum and the product of naturals, the conjunction and the disjunction of truth values, and the equality of naturals and of truth values (`OwnedName.commutes`, `Facts/Local.lean`) |
+| `Transform/` | transformations of functions, on the analysis of `Facts/`: a transformation of a function as a checked step, which elaborates a stored source and analyses it, elaborates a stored target and follows the analysis of the source with it, with what it returns or why it refuses (the source refused, the target refused by elaboration or by the analysis while it follows, with the places where it differs if any, or the places where the target differs), and whether the functions of a second program over the same headers follow those of a first, one by one (`Step`); what a step means: the meaning of an accepted function, that two functions of which the second follows the first mean the same, the theorems of a step, and that a term of a function returns valid values on valid values in scope and means the same against two tables of callees that agree on valid inputs (`StepSound`); two untrusted transformations of a stored function, which drop the operations whose results are not used and share repeated operations, accepted only through the step (`Passes`). The operations of a function that commute, each placed in the table with its two operands in one order, are the sum and the product of naturals and the equality of naturals and of truth values (`OwnedName.commutes`, `Facts/Local.lean`); the conjunction and the disjunction of truth values, whose meaning is symmetric too, keep the order written, since the check of facts learns their operands in that order |
 | `Admission/` | the elaboration of one definition against the headers before it, of a program of functions, and its round trip in both directions (`Elaboration`); the association of a program and its resolution in it, with the arguments of an instance of a generic declaration that it records, and an admitted program (`Admission`); the check of one definition against the headers before it (elaborated, then its facts checked), admission as that check for each definition in order, and the acceptance of a typed program by the check of facts as a proposition (`Check`); the soundness of the check of facts for the functions of a program, and that a program whose functions follow those of another means what the other means (`Programs`); the statements of `Statements.lean` about functions, each a theorem whose type is the statement, for every record of functions whose functions are `admit`, `check` and `elaborateFunctions`, the round trip from a typed program for those without protocols (`Theorems`) |
 | `World/` | the description of a layer (a handler of a role), whose code reads its inputs by position, in the one context of the core that binds inputs to the names `0, 1, 2, …` (`Ctx.positional`), and its meaning as a handler; the network of the roles, and the runs of a protocol and of one role alone |
 | `Scheme/` | the declaration of a scheme, who proves and who verifies, a deployed scheme and the run of a role under its handlers, and what deployment decides about scopes and keys |
@@ -102,7 +102,9 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   returns valid values, and its process runs the skeleton of the analysis over its table
   (`Analysis.analyse_sound`, `Facts/Theorems.lean`); a body that follows the analysis of such a
   body with no refusal and no place that differs is safe in the same way and means the same as it
-  (`Analysis.follow_sound`), and nothing is assumed of the second. Beneath them: what the walk
+  (`Analysis.follow_sound`). Nothing is assumed of the safety of the second; its addresses are
+  distinct, which elaboration decides; and that it is safe does not need the first to be accepted
+  (`Analysis.follow_safe`), only that the two mean the same does. Beneath them: what the walk
   adds to its state, how it grows it, and the skeleton that it builds (`Analysis.Facts.walk_adds`,
   `Analysis.Facts.walk_grows`, `Analysis.Facts.walk_skeleton`, `Facts/Growth.lean`),
   that a body runs the skeleton that the walk builds or follows
@@ -118,8 +120,8 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   and stop only `undefined` where their headers say that they cannot stop (`Callees`), the rules
   of the function dialect are lawful for the semantics of a function, for any permitted replies
   (`localFactRules_lawful`): the local operations that are values satisfy the laws of the value
-  form (`localFactRules_binding`), among them that the six operations that the core owns whose
-  meaning is symmetric give the same result on their operands exchanged, for all values; what the
+  form (`localFactRules_binding`), among them that the four operations that the core owns that
+  commute give the same result on their operands exchanged, for all values; what the
   analysis knows of the written operations is true;
   the requirements of every local operation are enough for it (`localOp_defined`) and name values
   that exist (`localRequires_runs`); following is lawful over headers with distinct keys
@@ -138,13 +140,19 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   bodies of functions of which the first is accepted by the check of facts and the second follows
   its analysis with no refusal and no place that differs mean the same on every valid input, for
   any replies permitted, so that their processes are equal (`functions_follow_same`,
-  `functions_follow_equal`); the stored form of what a stored function is accepted as is that
-  stored function (`acceptFn_erases`), and an accepted function never stops `undefined` on valid
-  inputs and returns valid values (`AcceptedFn.safe`); a step that `transform` accepts relates
-  functions with the same meaning on every valid input, against `Callees` (`transform_sound`); its
-  target, which is not analysed by itself, never stops `undefined` on valid inputs and returns
-  valid values (`transform_target_safe`); the stored forms of what a step returns are what it was
-  given (`transform_erases`), and two steps compose (`transform_then`). On valid values in scope,
+  `functions_follow_equal`). `AcceptedFn` is the record of a function with its body and the
+  bounds of its loops; the stored form of what a stored function is accepted as is that stored
+  function (`acceptFn_erases`), and a function that `acceptFn` returned never stops `undefined` on
+  valid inputs and returns valid values (`AcceptedFn.safe`). A step that `transform` accepts
+  relates functions with the same meaning on every valid input, against `Callees`
+  (`transform_sound`); its target, which is not analysed by itself, and of which nothing proves
+  that the check of facts alone accepts it, never stops `undefined` on valid inputs and returns valid
+  values (`transform_target_safe`), and every loop that a run of it reaches respects the bound
+  that the step recorded for it (`transform_target_bounds`); the stored forms of what a step
+  returns are what it was given (`transform_erases`); two steps compose when the middle function
+  is accepted as a source (`transform_then`), and two steps from one source give targets with the
+  same meaning (`transform_both`), so a chain of transformations is validated against the one
+  source that was admitted. On valid values in scope,
   a term of a function returns valid values against callees that keep validity
   (`Term.denote_valid`), and means the same against two tables of callees that agree on valid
   inputs when one keeps validity (`Term.denote_tables`); so a program whose functions follow those
@@ -266,50 +274,62 @@ kernel runs when they are built:
   value, a function with an input that has none, and not the arm that a loop's index never
   takes (`N-TY9e`) nor the code after a guard that contradicts what is known; what each
   condition teaches (`and`, `or`, `==`, `!=`, an order, a sum, a difference, the shapes of a
-  choice); what case analyses, choices, blocks, payloads and carried sums give of a natural;
+  choice), and that the operands of a conjunction are learned in the order written: `e && t`
+  accepted and `t && e` refused, where `e` gives a number that `t` needs, and that an equality
+  learned false teaches the same in either order of its operands; what case analyses, choices,
+  blocks, payloads and carried sums give of a natural;
   the ranges of each arithmetic operation and conversion; code that does not run after an
   operation or a loop whose results have no value; the place of a refusal and of a bound inside
   a block, and the order of the bounds; and which types have no value;
-- `Same.lean`: whether a function follows another, on pairs of functions written by names,
-  elaborated, the first analysed and the second following its analysis, with whether the second
-  differs nowhere (`decided`) and the whole verdict, no place that differs and no refusal
-  (`safelyFollows`): a repeated computation shared, computations reordered between guards or
-  moved around them with the guards in their order, a computation moved out of a loop, other
-  names for the values, a call of a function that cannot stop shared, `x + y` against `y + x`,
-  and a product and a sum with their operands exchanged in a loop after a guard, each accepted;
-  `x - y` against `y - x`, `(x + y) + z` against `x + (y + z)` (following does not know
-  associativity), a row of the vocabulary with its operands exchanged, guards in the other order,
-  a guard dropped, a call of a function that can stop moved across a guard, two loops against one
-  (following does not fuse loops), and another key on a guard, each refused; each instruction
-  kept in order, accepted: a choice, a case analysis, a block, a loop as often as a value says and
-  a call of a function that can stop, each with other names, a value moved out of and into a
-  region of a choice, and a value moved across a call of a function that can stop; pairs that
-  differ only in a guard's condition, a loop's initial values, a block's number or the operand of
-  a call of a function that can stop, each refused by that comparison; the theorem for functions
-  applied to two pairs accepted whole, `x + y` and `y + x` the second; and the two controls on
-  the definitions of the value form, on the walk of the analysis over a toy dialect: two terms
-  that follow one skeleton whose leaf is not made above the values in scope, with no place that
-  differs, and do not mean the same (why following asks for `Skel.Fresh`), and an attempt whose
-  end cannot return followed by what stops `undefined`, whose term runs the skeleton that the
-  walk builds (why what follows an attempt runs only from an end that can return);
+- `Following.lean`: whether a function follows the analysis of another, on pairs of functions
+  written by names, elaborated, the first analysed and the second following its analysis, with
+  whether the second differs nowhere (`decided`) and the whole verdict, no place that differs and
+  no refusal (`safelyFollows`): a repeated computation shared, computations reordered between
+  guards or moved around them with the guards in their order, a computation moved out of a loop,
+  other names for the values, a call of a function that cannot stop shared, `x + y` against
+  `y + x`, `x == y` against `y == x` of naturals and of truth values, and a product and a sum with
+  their operands exchanged in a loop after a guard, each accepted; `x - y` against `y - x`,
+  `(x + y) + z` against `x + (y + z)` (following does not know associativity), a row of the
+  vocabulary with its operands exchanged, `e && t` against `t && e` (a conjunction keeps the order
+  written), guards in the other order, a guard dropped, a call of a function that can stop moved
+  across a guard, two loops against one (following does not fuse loops), and another key on a
+  guard, each refused; each instruction kept in order, accepted: a choice, a case analysis, a
+  block, a loop as often as a value says and a call of a function that can stop, each with other
+  names, a value moved out of and into a region of a choice, and a value moved across a call of a
+  function that can stop; pairs that differ in one thing, each refused by the comparison of that
+  thing: a guard's condition or reason, a choice's condition, the subject of a case analysis, a
+  loop's initial values or count, a block's number or key, and the operand, the callee or the key
+  of a call of a function that can stop; the theorem for functions applied to two pairs accepted
+  whole, `x + y` and `y + x` the second; and, on the walk of the analysis over a toy dialect, an
+  attempt followed by the same attempt with other names, accepted, and by one with another key,
+  which differs at the attempt, and the two controls on the definitions of the value form: two
+  terms that follow one skeleton whose leaf is not made above the values in scope, with no place
+  that differs, and do not mean the same (why following asks for `Skel.Fresh`), and an attempt
+  whose end cannot return followed by what stops `undefined`, whose term runs the skeleton that
+  the walk builds (why what follows an attempt runs only from an end that can return);
 - `Transform.lean`: transformations of functions as checked steps: a function with unused and
   repeated operations, in its body and in a loop, given to `removeUnused` and then to
   `shareRepeated`, each stored result compared whole, each step accepted by `transform`, and the
   two steps composed by `transform_then`; the two passes on a function with a choice, a case
   analysis and a block, with unused and repeated operations inside and around them, each result
-  compared whole and each step accepted; a target refused by elaboration; three targets that
-  read a value with a domain before what justifies it (an inverse moved above the guard that it
-  is not zero, read before a choice in whose region it was justified, read before a loop in whose
-  body a guard justified it), which follow their source with no place that differs and which the
-  analysis refuses while it follows, so that the step refuses each with the target's refusal; a
-  target that differs from its source (two guards exchanged), refused with the place where it
-  differs, and a source that is not accepted, each with its whole refusal; a target that computes
-  another result, refused where it returns; a target with the operands of a sum exchanged,
-  accepted; a program of two
-  functions whose callee is replaced by what `removeUnused` gives, which follows the first, with
+  compared whole and each step accepted; one accepted function whose loop runs as often as a
+  value with an upper end, and one accepted step from it, with `checkFacts_sound`,
+  `AcceptedFn.safe`, `transform_target_safe`, `transform_target_bounds`, `transform_erases` and
+  `transform_both` applied to them; a target refused by elaboration; three targets that read a
+  value with a domain before what justifies it (an inverse moved above the guard that it is not
+  zero, read before a choice in whose region it was justified, read before a loop in whose body a
+  guard justified it), which follow their source with no place that differs and which the
+  analysis refuses while it follows, so that the step refuses each with the target's refusal, and
+  the control that, in the field of two elements written there, the first of these targets stops
+  `undefined` on the input zero where the source stops at its guard; a target refused while it
+  follows that also differs, refused with both; a target that differs from its source (two guards
+  exchanged), refused with the place where it differs, and a source that is not accepted, each
+  with its whole refusal; a target that computes another result, refused where it returns; a
+  target with the operands of a sum exchanged, accepted; a program of two functions whose callee
+  is replaced by what `removeUnused` gives, which follows the first, with
   `Defs.functionsFollow_sound` applied to the caller; and a callee replaced by one that computes
-  another result, which does not follow. The decision of equality of stored functions is written
-  there;
+  another result, which does not follow and whose meaning on a concrete input is another. The
+  decision of equality of stored functions is written there;
 - `Place.lean`: places inside a term, on a dialect of truth values written there (it has guards
   and attempts): replacement (`Hole.fill_same`) of a value that nothing uses in the body of a
   loop inside an attempt, and there of the carried value by the input, which differ only on

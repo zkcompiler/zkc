@@ -1,37 +1,47 @@
 import Zkc.Core.Admission.Programs
 import Zkc.Core.Transform.Passes
 import Zkc.Tests.Core.Facts
-import Zkc.Tests.Core.Same
+import Zkc.Tests.Core.Following
 
 /-!
 Transformations of functions as checked steps, on functions written by names, run by the kernel.
+
+The controls on meanings run in a model written here, the field of two elements.
 
 A function with unused and repeated operations is transformed twice by the untrusted passes:
 `removeUnused`, then `shareRepeated` of what it gave. Each stored result is compared whole with
 what is expected, `transform` accepts each step, and `transform_then` composes the two. The two
 passes again on a function with a choice, a case analysis and a block, with unused and repeated
-operations inside and around them: each stored result compared whole, each step accepted.
+operations inside and around them: each stored result compared whole, each step accepted. Then
+one function whose loop runs as often as a value with an upper end, and one step from it, with
+each theorem applied to them: `checkFacts_sound` and `AcceptedFn.safe` to the function, and
+`transform_target_safe`, `transform_target_bounds` (the loop of the target bounded as the step
+recorded), `transform_erases` and `transform_both` (with a second step from the same source) to
+the step.
 
 Then the refusals, each whole: a target that elaboration refuses. Three targets that follow their
-source with no place that differs (`SameTests.decided`) and that the analysis refuses while it
-follows (`SameTests.safelyFollows`), since a value has no place in the skeleton and its
+source with no place that differs (`FollowingTests.decided`) and that the analysis refuses while
+it follows (`FollowingTests.safelyFollows`), since a value has no place in the skeleton and its
 requirements are decided where the target evaluates it: an operation with a domain moved above
 the guard that justified it, read before a choice in whose region it was justified, and read
 before a loop in whose body a guard justified it; the step refuses each with the target's
-refusal. A target that elaborates but differs from its source (two guards exchanged), refused
-with the place where it differs, and a source that is not accepted. A control: a target that
-computes another result (an operand replaced by another) differs where it returns; a target
-with the operands of a sum exchanged is accepted.
+refusal. The control on the first: in the field of two elements, on the input zero, that target
+stops `undefined`, and the source stops at its guard with its reason. A target that is refused
+while it follows and also differs, refused with both. A target that elaborates but differs from
+its source (two guards exchanged), refused with the place where it differs, and a source that is
+not accepted. A control: a target that computes another result (an operand replaced by another)
+differs where it returns; a target with the operands of a sum exchanged is accepted.
 
 Last, a program of two functions whose first, called by the second, is replaced by what
 `removeUnused` gives: the functions of the second follow those of the first
 (`Defs.functionsFollow`), and `Defs.functionsFollow_sound` gives that the caller means what it
 meant. A control: replacing the first function by one that computes another result, the
-functions do not follow.
+functions do not follow, and that function's meaning is another on a concrete input.
 -/
 namespace Zkc.Core.TransformTests
 
-open FactsTests (field F plus times natural element fieldRow natOrTruth unjustified place)
+open FactsTests (field F plus times natural element toNat fieldRow natOrTruth unjustified place)
+open FollowingTests (noCallees noCallees_callees)
 
 -- What a step and the check of facts return are compared whole.
 deriving instance DecidableEq for TransformRefusal
@@ -225,6 +235,78 @@ theorem ok_of_accepted {ε α : Type} : ∀ {r : Except ε α} (found : (accepte
   | .ok _, _ => rfl
   | .error _, found => nomatch found
 
+/-- A function by names, elaborated against the headers before it; nothing when it does not
+elaborate. -/
+def typed (fns : List (FnHeader field)) (hdr : FnHeader field)
+    (region : Region (LocalRaw field) Unit) :
+    Option ((inputs : Names hdr.ins) × (body : Fn field fns hdr inputs) ×' FnConditions body) :=
+  match elabFn fns hdr region with
+  | .ok elaborated => some elaborated
+  | .error _ => none
+
+/-! ## The field of two elements
+
+A model of the vocabulary with a field, in which the controls on meanings run: an element is a
+truth value, `true` the element that is not zero. -/
+
+/-- The carriers of the field of two elements: every element is valid, and a literal is its
+number modulo two. -/
+def twoCarriers : Carriers field where
+  Carrier _ := Bool
+  valid _ _ := True
+  literal _ n := some (n % 2 == 1)
+
+/-- The rows of the field of two elements: equality, addition (exclusive or), multiplication
+(and), whether an element is not zero, and the inverse, which is defined only on the element that
+is not zero and is that element. -/
+def twoApply : (row : FactsTests.FieldRow) → (signature : RowSignature Unit FactsTests.FieldRow) →
+    field.row row = some signature → HList (Ty.Val twoCarriers) signature.ins →
+    Option (HList (Ty.Val twoCarriers) signature.outs)
+  | .equal, _, rfl, .cons x (.cons y .nil) => some (.cons (!(Bool.xor x y)) .nil)
+  | .add, _, rfl, .cons x (.cons y .nil) => some (.cons (Bool.xor x y) .nil)
+  | .mul, _, rfl, .cons x (.cons y .nil) => some (.cons (Bool.and x y) .nil)
+  | .isNonzero, _, rfl, .cons x .nil => some (.cons x .nil)
+  | .inverse, _, rfl, .cons x .nil => bif x then some (.cons x .nil) else none
+
+/-- The domains of the rows of the field of two elements: the inverse's is the element that is not
+zero; every other row is total. -/
+def twoInDomain : (row : FactsTests.FieldRow) →
+    (signature : RowSignature Unit FactsTests.FieldRow) → field.row row = some signature →
+    HList (Ty.Val twoCarriers) signature.ins → Bool
+  | .inverse, _, rfl, .cons x .nil => x
+  | .equal, _, _, _ => true
+  | .add, _, _, _ => true
+  | .mul, _, _, _ => true
+  | .isNonzero, _, _, _ => true
+
+/-- The field of two elements. -/
+def twoModel : Model field where
+  toCarriers := twoCarriers
+  apply := twoApply
+  inDomain := twoInDomain
+  defined row signature known args := by
+    cases row <;> cases known
+    all_goals first
+      | (obtain ⟨x, y, rfl⟩ := HList.two args; cases x <;> cases y <;> rfl)
+      | (obtain ⟨x, rfl⟩ := HList.one args; cases x <;> rfl)
+  total row signature known args pure := by
+    cases row <;> cases known
+    all_goals first
+      | rfl
+      | cases pure
+  decides row signature known domain restricted args := by
+    cases row <;> cases known <;> cases restricted
+    obtain ⟨x, rfl⟩ := HList.one args
+    cases x <;> rfl
+  keeps row signature known args outs _ applied := by
+    cases row <;> cases known
+    all_goals first
+      | (obtain ⟨x, y, rfl⟩ := HList.two args; cases applied; exact ⟨trivial, trivial⟩)
+      | (obtain ⟨x, rfl⟩ := HList.one args; cases x <;> cases applied <;> exact ⟨trivial, trivial⟩)
+  literals _ _ _ := ⟨_, rfl, trivial⟩
+  support law _ _ _ _ := nomatch law
+  supported law _ _ _ _ _ _ := nomatch law
+
 /-! ## Two steps -/
 
 /-- A function with the key 1 of two naturals and a truth value, which can stop. -/
@@ -365,6 +447,112 @@ example : refusal (transform [] regionsHeader regionsWithoutUnused
     (shareRepeated [] regionsWithoutUnused)) = none := by
   decide +kernel
 
+/-! ## The theorems on one function and one step
+
+One function whose loop runs as often as a value with an upper end, accepted by the check of
+facts with that bound, and one step from it to what `removeUnused` gives: each theorem of a step,
+and the soundness of the check of facts, applied to them in every model. -/
+
+/-- A function with the key 1 of an index below 4 and a natural. -/
+def boundedHeader : FnHeader field := ⟨⟨1⟩, [.fin 4, .nat], [.nat], false, none⟩
+
+/-- `n := index as a natural`, the square of the natural, which nothing uses, and a loop as often
+as `n` says, which adds the iteration number to what it carries from the natural. -/
+def boundedSource : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] (toNat 4) [0],
+  .op ⟨2⟩ [11] times [1, 1],
+  .loop ⟨3⟩ () (.count 10) [1] [12] (.mk [20, 21] [.op ⟨4⟩ [22] plus [21, 20]] [22])] [12]
+
+/-- What `removeUnused` gives: the square dropped. -/
+def boundedTarget : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] (toNat 4) [0],
+  .loop ⟨3⟩ () (.count 10) [1] [12] (.mk [20, 21] [.op ⟨4⟩ [22] plus [21, 20]] [22])] [12]
+
+example : removeUnused [] boundedSource = boundedTarget := by decide +kernel
+
+/-- The source with the sum in the loop written with its operands exchanged. -/
+def boundedExchanged : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] (toNat 4) [0],
+  .op ⟨2⟩ [11] times [1, 1],
+  .loop ⟨3⟩ () (.count 10) [1] [12] (.mk [20, 21] [.op ⟨4⟩ [22] plus [20, 21]] [22])] [12]
+
+/-- The source, accepted by the check of facts. -/
+def boundedFn : AcceptedFn field [] boundedHeader :=
+  (accepted? (acceptFn [] boundedHeader boundedSource)).get (by decide +kernel)
+
+/-- The step from the source to what `removeUnused` gives, accepted. -/
+def boundedStep : Transformed field [] boundedHeader :=
+  (accepted? (transform [] boundedHeader boundedSource boundedTarget)).get (by decide +kernel)
+
+/-- The step from the source to the source with the sum exchanged, accepted. -/
+def exchangedStep : Transformed field [] boundedHeader :=
+  (accepted? (transform [] boundedHeader boundedSource boundedExchanged)).get (by decide +kernel)
+
+/-- What `acceptFn` returned. -/
+theorem boundedFn_accepted : acceptFn [] boundedHeader boundedSource = .ok boundedFn :=
+  ok_of_accepted (by decide +kernel)
+
+/-- What `transform` returned. -/
+theorem boundedStep_accepted :
+    transform [] boundedHeader boundedSource boundedTarget = .ok boundedStep :=
+  ok_of_accepted (by decide +kernel)
+
+/-- The loop runs at most 3 times, the upper end of the index: the check of facts gives that
+bound at the loop, and so does the step for its target, while it follows. -/
+example : boundedFn.bounds = [(place 3, 3)] ∧ boundedStep.target.bounds = [(place 3, 3)] := by
+  decide +kernel
+
+/-- The soundness of the check of facts, on the accepted function: on valid inputs its loop runs
+at most 3 times, and it never stops `undefined` and returns valid values. -/
+example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
+    boundedFn.body.EveryLoop (localSem M [] (noCallees M)) (fun _ _ => True)
+        (Annotation.Bounded ⟨[(place 3, 3)]⟩ ⟨1⟩ none) [] []
+        (Env.empty.extend boundedFn.inputs ins) ∧
+      (boundedFn.body.denote (localSem M [] (noCallees M)) []
+        (Env.empty.extend boundedFn.inputs ins)).Every (fun _ _ => True)
+        (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
+  checkFacts_sound (noCallees_callees M) ⟨1⟩ boundedFn.inputs boundedFn.body
+    boundedFn.conditions.distinct
+    (acceptFn_ok boundedFn_accepted).2
+    [(place 3, 3)] (fun _ _ inside _ _ => by
+      rw [show boundedFn.bounds = [(place 3, 3)] by decide +kernel]
+      exact inside)
+    ins valid
+
+/-- An accepted function is safe (`AcceptedFn.safe`). -/
+example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
+    (boundedFn.meaning M (noCallees M) ins).Every (fun _ _ => True)
+      (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
+  AcceptedFn.safe boundedFn_accepted M (noCallees M) (noCallees_callees M) ins valid
+
+/-- The target of the step is safe (`transform_target_safe`). -/
+example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
+    (boundedStep.target.meaning M (noCallees M) ins).Every (fun _ _ => True)
+      (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
+  transform_target_safe boundedStep_accepted M (noCallees M) (noCallees_callees M) ins valid
+
+/-- The loop of the target runs at most as often as the bound that the step recorded for it
+(`transform_target_bounds`). -/
+example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
+    boundedStep.target.body.EveryLoop (localSem M [] (noCallees M)) (fun _ _ => True)
+      (Annotation.Bounded ⟨[(place 3, 3)]⟩ ⟨1⟩ none) [] []
+      (Env.empty.extend boundedStep.target.inputs ins) :=
+  transform_target_bounds boundedStep_accepted M (noCallees M) (noCallees_callees M)
+    [(place 3, 3)] (fun _ _ inside _ _ => by
+      rw [show boundedStep.target.bounds = [(place 3, 3)] by decide +kernel]
+      exact inside)
+    ins valid
+
+/-- The stored forms of what the step returns are what it was given (`transform_erases`). -/
+example : eraseFn boundedStep.source.inputs boundedStep.source.body = boundedSource ∧
+    eraseFn boundedStep.target.inputs boundedStep.target.body = boundedTarget :=
+  transform_erases boundedStep_accepted
+
+/-- Two steps from the one source: their targets, the source without the square and the source
+with the sum exchanged, have the same meaning (`transform_both`). -/
+example : boundedStep.target.SameAs exchangedStep.target :=
+  transform_both boundedStep_accepted (ok_of_accepted (by decide +kernel))
+
 /-! ## Refusals -/
 
 /-- A function with the key 1 of two naturals. -/
@@ -375,7 +563,7 @@ def sumBody : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus 
 
 /-- A target that elaboration refuses: an operand that is not in scope. -/
 example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 5]] [10])) =
-    some (.target [⟨.scope, place 1, .name 5⟩]) := by
+    some (.target [⟨.scope, place 1, .name 5⟩] []) := by
   decide +kernel
 
 /-! ### A value read before what justifies it
@@ -384,8 +572,8 @@ A value has no place in the skeleton, so a target may read an operation with a d
 source does not justify it and still follow with no place that differs. The analysis decides the
 value's requirements where the target evaluates it, while it follows, and refuses it there. Each
 pair is one source and one target: the target follows the source with no place that differs
-(`SameTests.decided`), the whole verdict of following refuses it (`SameTests.safelyFollows`), and
-`transform` refuses the target, with its whole refusal. -/
+(`FollowingTests.decided`), the whole verdict of following refuses it
+(`FollowingTests.safelyFollows`), and `transform` refuses the target, with its whole refusal. -/
 
 /-- A function with the key 1 of a field element, which can stop. -/
 def inverse : FnHeader field := ⟨⟨1⟩, [F], [F], true, none⟩
@@ -404,15 +592,45 @@ def inverseAboveGuard : Region (LocalRaw field) Unit := .mk [0] [
 
 /-- The inverse moved above the guard follows with no place that differs: the guard is the
 skeleton's entry, and the inverse a value of the table. The whole verdict refuses it. -/
-example : SameTests.decided [] [F] [F] true true inverseGuarded inverseAboveGuard = some true ∧
-    SameTests.safelyFollows [] [F] [F] true true inverseGuarded inverseAboveGuard = some false := by
+example : FollowingTests.decided [] [F] [F] true true inverseGuarded inverseAboveGuard =
+      some true ∧
+    FollowingTests.safelyFollows [] [F] [F] true true inverseGuarded inverseAboveGuard =
+      some false := by
   decide +kernel
 
 /-- And the step refuses the target, while it follows: the inverse moved above the guard that it
 is not zero. -/
 example : refusal (transform [] inverse inverseGuarded inverseAboveGuard) =
     some (.target [unjustified 3 (fieldRow .inverse)
-      (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
+      (.holds (.apply (fieldRow .isNonzero) [0])) [none]] []) := by
+  decide +kernel
+
+/-- The inverse after its guard, elaborated. -/
+def inverseGuardedTyped := (typed [] inverse inverseGuarded).get (by decide +kernel)
+
+/-- The inverse moved above its guard, elaborated. -/
+def inverseAboveGuardTyped := (typed [] inverse inverseAboveGuard).get (by decide +kernel)
+
+/-- Control: what the refusal keeps out. In the field of two elements, on the input zero, the
+target stops `undefined`, at the inverse that it reads before its guard... -/
+example : inverseAboveGuardTyped.2.1.denote (localSem twoModel [] (noCallees twoModel)) []
+    (Env.empty.extend inverseAboveGuardTyped.1 (.cons false .nil)) = .halt .undefined := by
+  rfl
+
+/-- ...while the source stops at its guard, with its reason. -/
+example : inverseGuardedTyped.2.1.denote (localSem twoModel [] (noCallees twoModel)) []
+    (Env.empty.extend inverseGuardedTyped.1 (.cons false .nil)) =
+      .halt (.declared .refused ⟨[], ⟨2⟩⟩) := by
+  rfl
+
+/-- A target that is refused while it follows and also differs, at a guard with another key: the
+refusal gives both, the refusal of the analysis and the place where the target differs. -/
+example : refusal (transform [] inverse inverseGuarded (.mk [0] [
+    .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
+    .op ⟨3⟩ [11] (fieldRow .inverse) [0],
+    .guard ⟨4⟩ () 10 .refused] [11])) =
+    some (.target [unjustified 3 (fieldRow .inverse)
+      (.holds (.apply (fieldRow .isNonzero) [0])) [none]] [place 4]) := by
   decide +kernel
 
 /-- A function with the key 1 of a field element, which cannot stop. -/
@@ -436,9 +654,9 @@ def inverseBeforeChoice : Region (LocalRaw field) Unit := .mk [0] [
 
 /-- The inverse read before the choice follows with no place that differs: the first region gives
 the same value of the table. The whole verdict refuses it. -/
-example : SameTests.decided [] [F] [F] false false inverseInRegion inverseBeforeChoice =
+example : FollowingTests.decided [] [F] [F] false false inverseInRegion inverseBeforeChoice =
       some true ∧
-    SameTests.safelyFollows [] [F] [F] false false inverseInRegion inverseBeforeChoice =
+    FollowingTests.safelyFollows [] [F] [F] false false inverseInRegion inverseBeforeChoice =
       some false := by
   decide +kernel
 
@@ -446,7 +664,7 @@ example : SameTests.decided [] [F] [F] false false inverseInRegion inverseBefore
 element. -/
 example : refusal (transform [] inverseOrZero inverseInRegion inverseBeforeChoice) =
     some (.target [unjustified 3 (fieldRow .inverse)
-      (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
+      (.holds (.apply (fieldRow .isNonzero) [0])) [none]] []) := by
   decide +kernel
 
 /-- A function with the key 1 of a field element and a natural, which can stop. -/
@@ -472,9 +690,9 @@ def inverseBeforeLoop : Region (LocalRaw field) Unit := .mk [0, 1] [
 /-- The inverse read before the loop follows with no place that differs: the guard stays in the
 body, and the body gives the same value of the table. On zero iterations and the element zero,
 the source returns zero and the target stops `undefined`. The whole verdict refuses it. -/
-example : SameTests.decided [] [F, .nat] [F] true true inverseInLoop inverseBeforeLoop =
+example : FollowingTests.decided [] [F, .nat] [F] true true inverseInLoop inverseBeforeLoop =
       some true ∧
-    SameTests.safelyFollows [] [F, .nat] [F] true true inverseInLoop inverseBeforeLoop =
+    FollowingTests.safelyFollows [] [F, .nat] [F] true true inverseInLoop inverseBeforeLoop =
       some false := by
   decide +kernel
 
@@ -482,7 +700,7 @@ example : SameTests.decided [] [F, .nat] [F] true true inverseInLoop inverseBefo
 element. -/
 example : refusal (transform [] inverseRepeated inverseInLoop inverseBeforeLoop) =
     some (.target [unjustified 5 (fieldRow .inverse)
-      (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
+      (.holds (.apply (fieldRow .isNonzero) [0])) [none]] []) := by
   decide +kernel
 
 /-! ### A target that differs, and a source not accepted -/
@@ -533,15 +751,6 @@ def calleeBody : Region (LocalRaw field) Unit :=
 /-- The caller: the callee on `(x, x)`, plus `x`. -/
 def callerBody : Region (LocalRaw field) Unit :=
   .mk [0] [.op ⟨1⟩ [10] (.call ⟨1⟩) [0, 0], .op ⟨2⟩ [11] plus [10, 0]] [11]
-
-/-- A function by names, elaborated against the headers before it; nothing when it does not
-elaborate. -/
-def typed (fns : List (FnHeader field)) (hdr : FnHeader field)
-    (region : Region (LocalRaw field) Unit) :
-    Option ((inputs : Names hdr.ins) × (body : Fn field fns hdr inputs) ×' FnConditions body) :=
-  match elabFn fns hdr region with
-  | .ok elaborated => some elaborated
-  | .error _ => none
 
 /-- The callee as written, elaborated. -/
 def calleeBefore := (typed [] calleeHeader calleeBody).get (by decide +kernel)
@@ -594,5 +803,16 @@ example (M : Model field) (ins : HList M.Val callerHeader.ins) (valid : ins.All 
 
 /-- Control: a callee replaced by one that computes another result does not follow. -/
 example : Defs.functionsFollow before other = false := by decide +kernel
+
+/-- And its meaning is another, in every model: on `(1, 2)` the callee as written returns 3, and
+the one that replaces it 2. -/
+example (M : Model field) :
+    Defs.fnTable M other calleeHeader (.tail .head) (.cons (1 : Nat) (.cons (2 : Nat) .nil)) ≠
+      Defs.fnTable M before calleeHeader (.tail .head)
+        (.cons (1 : Nat) (.cons (2 : Nat) .nil)) := by
+  intro same
+  change (Process.done (.cons (2 : Nat) .nil) : Local (HList M.Val [.nat])) =
+    .done (.cons (3 : Nat) .nil) at same
+  simp at same
 
 end Zkc.Core.TransformTests

@@ -71,7 +71,9 @@ structure FactRules.Lawful (rules : FactRules D Raw) (sem : Semantics D)
           ∃ operands results, atPositions (sem.dyns values) positions = some operands ∧
             ValidRun sem Run Valid written operands results ∧ results.length = 1
   /-- An operation kept in order, on valid operands and permitted replies, never stops
-  `undefined` and returns valid values. -/
+  `undefined` and returns valid values. Such an operation has no requirement here: nothing is
+  checked of its operands, so a callee that is safe only under a precondition is not covered
+  (contracts of definitions are a later piece). -/
   effect : ∀ {ins res : List D.Ty} (o : D.Op ins res), rules.written o = none →
     ∀ (key : Key) (path : List Frame) (values : HList sem.Val ins),
       (∀ v, v ∈ sem.dyns values → Valid v) →

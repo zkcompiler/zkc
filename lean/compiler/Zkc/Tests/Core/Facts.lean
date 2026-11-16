@@ -16,8 +16,10 @@ a choice, and for a new name bound where a program would bind a name again, whic
 refuses by the rule `assignment`; a loop over a range whose end is a run-time value, its index
 written as a sum in either order; a power too large to compute; what the calculus of facts does
 not conclude; then which code does not run: only what is written says so, never what is known;
-and, for each rule of the calculus, a case that only it decides: what a condition teaches, what
-regions give of a natural, the ranges of arithmetic, code that does not run after an operation
+and, for each rule of the calculus, a case that only it decides: what a condition teaches, the
+operands of a conjunction learned in the order written, whose verdict depends on that order, an
+equality learned false, whose verdict does not depend on the order of its operands, what regions
+give of a natural, the ranges of arithmetic, code that does not run after an operation
 or a loop, places and the order of bounds, and which types have no value.
 -/
 
@@ -1263,6 +1265,46 @@ example : check [elements, .nat, .nat] [F] true (.mk [0, 1, 2] [
     .op ⟨10⟩ [19] (item elements) [0, 2],
     .op ⟨11⟩ [20] (fieldRow .add) [18, 19]] [20]) = accepted := by
   decide +kernel
+
+/-- `t := a < b; f := 5; e := b == f`, then `c := e && t` (or `c := t && e`), `guard c` and
+`xs[a]` on a sequence of five naturals. The operands of a conjunction learned true are learned
+one after the other, in the order written: the conjunction does not commute for the table. -/
+def learnedInOrder (equalityFirst : Bool) :=
+  check [naturals 5, .nat, .nat] [.nat] true <| .mk [0, 1, 2] [
+  .op ⟨1⟩ [10] less [1, 2],
+  .op ⟨2⟩ [11] (natural 5) [],
+  .op ⟨3⟩ [12] equal [2, 11],
+  .op ⟨4⟩ [13] conjunction (if equalityFirst then [12, 10] else [10, 12]),
+  .guard ⟨5⟩ () 13 .reject,
+  .op ⟨6⟩ [14] (item (naturals 5)) [0, 1]] [14]
+
+/-- `c := e && t`: accepted. `e` is learned first and gives `b` the number 5; then `t` gives `a`
+the range below it, `0..4`, which the read needs. -/
+example : learnedInOrder true = accepted := by decide +kernel
+
+/-- `c := t && e`: refused at the read, with nothing known of `a`. `t` is learned first, while
+nothing is known of `b`, so `a` gets no upper end; that `b` is 5, learned after, does not come
+back to `a`. This is the order of learning, as for the source's `and`, whose second operand runs
+only where the first is true. -/
+example : learnedInOrder false = some (.inl
+    [unjustified 6 (item (naturals 5)) (.below (.arg 1) 5) [anyNat]]) := by
+  decide +kernel
+
+/-- `z := 0; w := toNat i` for `i : fin 1`, `guard !(z == w)`, then `x / z` or `x / w`. Both
+operands of the equality are known to be zero, so nothing after the guard runs. What an equality
+learned false teaches does not depend on the order of its operands, which the table places by
+their identifiers: each of the two is at least one. -/
+def differentFromZero (byLiteral : Bool) :=
+  check [.nat, .fin 1] [.nat] true <| .mk [0, 1] [
+  .op ⟨1⟩ [10] (natural 0) [],
+  .op ⟨2⟩ [11] (toNat 1) [1],
+  .op ⟨3⟩ [12] equal [10, 11],
+  .op ⟨4⟩ [13] negation [12],
+  .guard ⟨5⟩ () 13 .reject,
+  .op ⟨6⟩ [14] quotient [0, if byLiteral then 10 else 11]] [14]
+
+example : differentFromZero true = accepted := by decide +kernel
+example : differentFromZero false = accepted := by decide +kernel
 
 /-- `guard a == b`, then `a - b` and `b - a`: an equality gives both orders (TY9). -/
 example : check [.nat, .nat] [.nat] true (.mk [0, 1] [

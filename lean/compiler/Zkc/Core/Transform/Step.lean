@@ -17,10 +17,12 @@ it elaborates the target and follows the analysis of the source with it (`Analys
 must be the next entry of the source's skeleton, its values join the source's table, and its
 requirements are decided from what is known where it evaluates them. What the step returns is
 data: the two accepted functions (`Transformed`), or why it refuses (`TransformRefusal`): the
-source refused, the target refused by elaboration or by the analysis while it follows, or the
-places where the target is not the next entry of the source's skeleton. What its success means
-is in `Transform/StepSound.lean`: on valid inputs the two have the same meaning, the target is
-safe, two steps compose, and the stored forms of what the step returns are what it was given.
+source refused, the target refused by elaboration or by the analysis while it follows (with the
+places where it is not the next entry of the source's skeleton, if any), or, with no refusal,
+those places. What its success means is in `Transform/StepSound.lean`: on valid inputs the two
+have the same meaning, the target is safe and every loop of it respects the bound recorded for
+it, two steps compose, two steps from one source give targets with the same meaning, and the
+stored forms of what the step returns are what it was given.
 
 Two programs over the same headers are compared function by function (`Defs.functionsFollow`):
 each function of the second follows the analysis of the function of the first with its header
@@ -39,7 +41,8 @@ variable {V : Vocabulary}
 
 /-- A function accepted against the headers before it: its input names, its body with what
 elaboration decided about it, and the bounds of its loops that the analysis gives (by its own
-check of facts, or while it follows the function that it replaces). -/
+check of facts, or while it follows the function that it replaces). The target of a step is
+accepted while it follows: nothing proves that the check of facts alone accepts it. -/
 structure AcceptedFn (V : Vocabulary) (fns : List (FnHeader V)) (hdr : FnHeader V) where
   inputs : Names hdr.ins
   body : Fn V fns hdr inputs
@@ -57,11 +60,13 @@ def acceptFn (fns : List (FnHeader V)) (hdr : FnHeader V) (region : Region (Loca
       | .ok bounds => .ok ⟨inputs, body, conditions, bounds⟩
 
 /-- Why a transformation of a function is not accepted: its source is refused; its target is
-refused, by elaboration or by the analysis while it follows the source; or the target is not
-the next entry of the source's skeleton at the places given. -/
+refused, by elaboration (with no place that differs, since it was not walked) or by the analysis
+while it follows the source, with the places where it is not the next entry of the source's
+skeleton, if any; or, with no refusal, the target is not the next entry of the source's skeleton
+at the places given. -/
 inductive TransformRefusal (V : Vocabulary) where
   | source (refusals : List (ProgramRefusal V))
-  | target (refusals : List (ProgramRefusal V))
+  | target (refusals : List (ProgramRefusal V)) (differs : List Place)
   | differs (places : List Place)
 
 /-- A step of transformation of one function: the source, accepted by the check of facts, and
@@ -85,7 +90,7 @@ def transform (fns : List (FnHeader V)) (hdr : FnHeader V)
       | refusal :: refusals => .error (.source (refusal :: refusals).reverse)
       | [] =>
           match elabFn fns hdr target with
-          | .error refusal => .error (.target [refusal])
+          | .error refusal => .error (.target [refusal] [])
           | .ok ⟨inputs', body', conditions'⟩ =>
               let second := follow (localFactRules V fns) (localSkelRules V fns) hdr.key none first
                 inputs' body'
@@ -94,7 +99,8 @@ def transform (fns : List (FnHeader V)) (hdr : FnHeader V)
                   .ok ⟨⟨inputs, body, conditions, first.state.st.bounds.reverse⟩,
                     ⟨inputs', body', conditions', second.state.st.bounds.reverse⟩⟩
               | [], place :: places => .error (.differs (place :: places).reverse)
-              | refusal :: refusals, _ => .error (.target (refusal :: refusals).reverse)
+              | refusal :: refusals, places =>
+                  .error (.target (refusal :: refusals).reverse places.reverse)
 
 /-! ## Two programs over the same headers -/
 

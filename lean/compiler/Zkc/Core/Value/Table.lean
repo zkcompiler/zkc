@@ -40,8 +40,8 @@ structure Entry (Raw : Type) where
   lo : Nat
   count : Nat
 
-/-- The depth of the trees of what the check knows: identifiers that agree on these low bits share
-a leaf. -/
+/-- The depth of the trees of the table, here, and of what the analysis knows (`Known`,
+`Facts/State.lean`): numbers that agree on these low bits share a leaf. -/
 abbrev factDepth : Nat := 12
 
 section
