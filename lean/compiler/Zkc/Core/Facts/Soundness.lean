@@ -104,14 +104,6 @@ theorem dyns_append : ∀ {as bs : List D.Ty} (xs : HList sem.Val as) (ys : HLis
       show (⟨_, x⟩ :: sem.dyns (xs.append ys)) = ⟨_, x⟩ :: (sem.dyns xs ++ sem.dyns ys)
       rw [dyns_append xs ys]
 
-/-- The values of a list that is two lists, split and put together, are the values. -/
-theorem split_append {α : Type} {V : α → Type} :
-    ∀ (as : List α) {bs : List α} (xs : HList V (as ++ bs)),
-      (HList.split as xs).1.append (HList.split as xs).2 = xs
-  | [], _, _ => rfl
-  | _ :: as, _, .cons x rest => by
-      simp only [HList.split, HList.append, split_append as rest]
-
 theorem dyns_split {carried each : List D.Ty} (out : HList sem.Val (carried ++ each)) :
     sem.dyns out = sem.dyns (HList.split carried out).1 ++ sem.dyns (HList.split carried out).2 := by
   conv => lhs; rw [← split_append carried out]

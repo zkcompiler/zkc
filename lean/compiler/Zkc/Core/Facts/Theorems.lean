@@ -72,29 +72,28 @@ theorem follow_same (binding : rules.values.Binding sem Run undefined) (lawful :
   have wf : Table.WF types.length (Table.empty rules.place : Table Raw) := trivial
   have runs := analyse_runs rules checks sem permitted Run undefined binding definition role inputs
     body path values safe
-  have grown := ValueSide.walk_grows rules checks definition role [] body none
+  have grown := Facts.walk_grows rules checks definition role [] body none
     (bindIds Ctx.empty inputs (List.range types.length)) (start rules types)
-    ⟨⟨Table.empty rules.place, types.length, [], []⟩, []⟩ agrees.inScope wf
-    ValueSide.FollowedBelow.none
-  have built := ValueSide.walk_built rules checks definition role [] body
+    ⟨⟨Table.empty rules.place, types.length, [], []⟩, []⟩ ⟨wf, agrees.inScope⟩ trivial
+  have built := Facts.walk_skeleton rules checks definition role [] body
     (bindIds Ctx.empty inputs (List.range types.length)) (start rules types)
-    ⟨⟨Table.empty rules.place, types.length, [], []⟩, []⟩ agrees.inScope wf
+    ⟨⟨Table.empty rules.place, types.length, [], []⟩, []⟩ ⟨wf, agrees.inScope⟩
   simp only [analyse, follow] at runs followed
   generalize walk rules checks definition role [] body none _ _ _ = first
     at runs followed grown built
-  obtain ⟨wf1, grows1⟩ := grown
-  obtain ⟨below1, apart1, inOrder1⟩ := built
+  obtain ⟨⟨wf1, -⟩, grows1⟩ := grown
+  obtain ⟨ordered1, apart1⟩ := built
+  have below1 := ordered1.below
   have agrees1 := agrees'.mono grows1.sub grows1.next (.refl _)
   have runs' := ValueSide.walk_runs_followed rules checks definition' role sem permitted Run binding
     lawful [] body' first.skel _ (start rules types)
     ⟨{ first.state.st with refusals := [], bounds := [] }, []⟩ path _ _ types.length followed wf1
-    below1 apart1 support inOrder1 agrees1 safe'
-  have grown' := ValueSide.walk_grows rules checks definition' role [] body' (some first.skel)
+    below1 apart1 support ordered1.fresh agrees1 safe'
+  have grown' := Facts.walk_grows rules checks definition' role [] body' (some first.skel)
     (bindIds Ctx.empty inputs' (List.range types.length)) (start rules types)
-    ⟨{ first.state.st with refusals := [], bounds := [] }, []⟩ agrees1.inScope wf1
-    (ValueSide.FollowedBelow.of_some below1)
+    ⟨{ first.state.st with refusals := [], bounds := [] }, []⟩ ⟨wf1, agrees1.inScope⟩ below1
   generalize walk rules checks definition' role [] body' _ _ _ _ = second at runs' grown'
-  obtain ⟨wf2, grows2⟩ := grown'
+  obtain ⟨⟨wf2, -⟩, grows2⟩ := grown'
   have grows1' : St.Grows (⟨Table.empty rules.place, types.length, [], []⟩ : St D.Ty Raw)
       { first.state.st with refusals := [], bounds := [] } := ⟨grows1.next, grows1.table⟩
   have leaves : Leaves second.state.st.table

@@ -7,22 +7,29 @@ public import Zkc.Core.Value.Leaves
 @[expose] public section
 
 /-!
-What the walk of the analysis does to its state, whatever the run (the facts side).
+What the walk of the analysis does to its state, to the places that differ and to the skeleton,
+whatever the run: the lemmas, in the namespace `Analysis.Facts`, on which both the runs of the
+walk (`Facts/WalkRuns.lean`) and its soundness (`Facts/Soundness.lean`,
+`Facts/SoundnessFollowing.lean`) rest.
 
 It only adds refusals, bounds at the addresses of the loops that it walks, and places that differ
 (`Analysis.Facts.walk_adds`); so the bounds that the check of facts gives a body are at the
-places of its definition (`checkFacts_places`). From a well-formed state where every name in
-scope has an identifier below the next (`FactCheck.Scoped`), and a followed skeleton whose leaves
-are below the next, it keeps the table well formed, makes identifiers and entries above those
-that it had, and returns identifiers below the next (`Analysis.Facts.walk_grows`). The skeleton
-that it builds when it follows none has its leaves made in order from the state's next
-identifier on, below its next at the end, and apart from its table
-(`Analysis.Facts.walk_skeleton`): what following a skeleton relies on. And a skeleton that is
-followed is, at a kept instruction that it matches, that instruction's entry, with the parts
-that the walk takes (the lemmas `*Entry_some`). That new identifiers and a shared application
-keep the table well formed, and that binding names keeps every name in scope with an identifier
-below the next (`FactCheck.InScope`), is in `Value/Valuation.lean`; that deciding the
-requirements of an application does, here (`FactCheck.checkRequirements_grows`).
+places of its definition (`checkFacts_places`). A place that differs is added only where a
+skeleton is followed and the next entry is not found, so where none is added the entry was found
+(`found_of_differs`, `hit_of_no_place`), and where no skeleton is followed none is added
+(`walk_free_differs`). From a well-formed state where every name in scope has an identifier below
+the next (`FactCheck.Scoped`), and a followed skeleton whose leaves are below the next, it keeps
+the table well formed, makes identifiers and entries above those that it had, and returns
+identifiers below the next (`Analysis.Facts.walk_grows`). The skeleton that it builds when it
+follows none has its leaves made in order from the state's next identifier on, below its next at
+the end, and apart from its table (`Analysis.Facts.walk_skeleton`): what following a skeleton
+relies on, below the next identifier (`Skel.Ordered.below`) and made in order as the runs of a
+followed skeleton ask (`Skel.Ordered.fresh`). And a skeleton that is followed is, at a kept
+instruction that is found, that instruction's entry, with the parts that the walk takes (the
+lemmas `*Entry_hit`). That new identifiers and a shared application keep the table well formed,
+and that binding names keeps every name in scope with an identifier below the next
+(`FactCheck.InScope`), is in `Value/Valuation.lean`; that deciding the requirements of an
+application does, here (`FactCheck.checkRequirements_grows`).
 -/
 
 namespace Zkc.Core
@@ -302,12 +309,72 @@ mutual
           Skel.Ordered.below (skel := arm) h.2.1, SkelArms.Ordered.below (arms := rest) h.2.2⟩
 end
 
+mutual
+  /-- Leaves made in order from a number on are made in order from it as following a skeleton
+  asks (`Skel.Fresh`). -/
+  theorem Skel.Ordered.fresh : ∀ {outs : List D.Ty} {skel : Skel D outs} {lo hi : Nat},
+      Skel.Ordered skel lo hi → skel.Fresh lo
+    | _, .ret _, _, _, _ => trivial
+    | _, .effect _ _ _ _ rest, _, _, h => ⟨h.1, Skel.Ordered.fresh (skel := rest) h.2⟩
+    | _, .guard _ _ _ _ _ rest, _, _, h => Skel.Ordered.fresh (skel := rest) h
+    | _, .choose _ _ _ _ onTrue onFalse _ rest, _, _, h =>
+        ⟨Skel.Ordered.fresh (skel := onTrue) h.1, Skel.Ordered.fresh (skel := onFalse) h.2.1,
+          Skel.Ordered.le (skel := onTrue) h.1, Skel.Ordered.fresh (skel := rest) h.2.2⟩
+    | _, .cases _ _ _ _ arms _ rest, _, _, h =>
+        ⟨SkelArms.Ordered.fresh (arms := arms) h.1, SkelArms.Ordered.le (arms := arms) h.1,
+          Skel.Ordered.fresh (skel := rest) h.2⟩
+    | _, .loop _ _ _ _ _ body _ rest, _, _, h =>
+        have b := Skel.Ordered.le (skel := body) h.2.1
+        ⟨h.1, Skel.Ordered.fresh (skel := body) h.2.1, by have := h.1; omega,
+          Skel.Ordered.fresh (skel := rest) h.2.2⟩
+    | _, .block _ _ body _ rest, _, _, h =>
+        ⟨Skel.Ordered.fresh (skel := body) h.1, Skel.Ordered.le (skel := body) h.1,
+          Skel.Ordered.fresh (skel := rest) h.2⟩
+    | _, .attempt _ _ _ body _ rest, _, _, h =>
+        have b := Skel.Ordered.le (skel := body) h.2.1
+        ⟨h.1, Skel.Ordered.fresh (skel := body) h.2.1, by have := h.1; omega,
+          Skel.Ordered.fresh (skel := rest) h.2.2⟩
+  /-- Leaves of arms made in order from a number on are made in order from it as following a
+  skeleton asks (`SkelArms.Fresh`). -/
+  theorem SkelArms.Ordered.fresh : ∀ {mid payloads : List D.Ty} {arms : SkelArms D mid payloads}
+      {lo hi : Nat}, SkelArms.Ordered arms lo hi → arms.Fresh lo
+    | _, _, .nil, _, _, _ => trivial
+    | _, _, .cons _ arm rest, _, _, h =>
+        ⟨h.1, Skel.Ordered.fresh (skel := arm) h.2.1, SkelArms.Ordered.fresh (arms := rest) h.2.2⟩
 end
 
-/-! ## What the walk adds to the state -/
+end
+
+/-! ## The places that differ -/
 
 section
 variable {D : Dialect} {Raw : Type}
+
+/-- The second state has the places that differ of the first, and perhaps more before them. -/
+def AddsPlaces {T : Type} (s s' : State T Raw) : Prop :=
+  ∃ new, s'.differs = new ++ s.differs
+
+/-- A state adds no place to itself. -/
+theorem AddsPlaces.refl {T : Type} (s : State T Raw) : AddsPlaces s s := ⟨[], rfl⟩
+
+/-- Adding places twice adds places. -/
+theorem AddsPlaces.trans {T : Type} {s s' s'' : State T Raw} (first : AddsPlaces s s')
+    (second : AddsPlaces s' s'') : AddsPlaces s s'' := by
+  obtain ⟨new, e⟩ := first
+  obtain ⟨new', e'⟩ := second
+  exact ⟨new' ++ new, by rw [e', e, List.append_assoc]⟩
+
+/-- A state with another table adds no place that differs. -/
+theorem AddsPlaces.with_st {T : Type} (s : State T Raw) (st : St T Raw) :
+    AddsPlaces s { s with st := st } := AddsPlaces.refl _
+
+/-- The places that a state added to another are none when the second has none: the first has
+none either. -/
+theorem AddsPlaces.none_before {T : Type} {s s' : State T Raw} (adds : AddsPlaces s s')
+    (none : s'.differs = []) : s.differs = [] := by
+  obtain ⟨new, e⟩ := adds
+  rw [none] at e
+  exact (List.append_eq_nil_iff.mp e.symm).2
 
 /-- A place where the term differs is added only when a skeleton is followed and its entry was not
 found; the table, the identifiers, the refusals and the bounds stay. -/
@@ -316,12 +383,13 @@ theorem miss_st {T : Type} (place : Place) (following found : Bool) (s : State T
   unfold miss
   split <;> rfl
 
+/-- A place that is missed is added, at most. -/
 theorem miss_differs {T : Type} (place : Place) (following found : Bool) (s : State T Raw) :
-    ∃ new, (miss place following found s).differs = new ++ s.differs := by
+    AddsPlaces s (miss place following found s) := by
   unfold miss
   split
   · exact ⟨[place], rfl⟩
-  · exact ⟨[], rfl⟩
+  · exact AddsPlaces.refl s
 
 /-- Where the entry is found, no place is added. -/
 theorem miss_found {T : Type} (place : Place) (following : Bool) (s : State T Raw) :
@@ -341,7 +409,67 @@ theorem miss_lost {T : Type} (place : Place) (s : State T Raw) :
   unfold miss
   simp
 
+/-- Where a skeleton is followed and no place differs at the end, the entry was found. -/
+theorem hit_of_no_place {α T : Type} {place : Place} {hit : Option α} {s s' : State T Raw}
+    (adds : AddsPlaces (miss place true hit.isSome s) s') (noPlace : s'.differs = []) :
+    ∃ a, hit = some a := by
+  cases hit with
+  | none =>
+      have nothing := adds.none_before noPlace
+      simp [miss] at nothing
+  | some a => exact ⟨a, rfl⟩
+
+/-- Where a skeleton is followed and no place differs at the end, the exit was found. -/
+theorem found_of_no_place {T : Type} {place : Place} {found : Bool} {s s' : State T Raw}
+    (adds : AddsPlaces (miss place true found s) s') (noPlace : s'.differs = []) :
+    found = true := by
+  cases found with
+  | false =>
+      have nothing := adds.none_before noPlace
+      simp [miss] at nothing
+  | true => rfl
+
+/-- A walk that follows a skeleton and adds no place that differs found the entry of each kept
+instruction. -/
+theorem found_of_differs {s s' : State D.Ty Raw} {place : Place} {found : Bool}
+    (adds : AddsPlaces (miss place true found s) s') (same : s'.differs = s.differs) :
+    found = true := by
+  cases found with
+  | true => rfl
+  | false =>
+      obtain ⟨n, e⟩ := adds
+      rw [miss_lost, same] at e
+      have := congrArg List.length e
+      simp only [List.length_append, List.length_cons] at this
+      omega
+
+/-- The leaves of a followed entry are the entry's. -/
+theorem leaves_some {T : Type} (lo count : Nat) (s : State T Raw) :
+    leaves (some lo) count s = (List.range' lo count, s) := rfl
+
+/-- Without a followed entry, the leaves are new identifiers. -/
+theorem leaves_none {T : Type} (count : Nat) (s : State T Raw) :
+    leaves none count s = ((fresh count s.st).1, { s with st := (fresh count s.st).2 }) := rfl
+
+/-- The leaves of an entry keep the places that differ. -/
+theorem leaves_differs {T : Type} (followed : Option Nat) (count : Nat) (s : State T Raw) :
+    (leaves followed count s).2.differs = s.differs := by
+  cases followed <;> rfl
+
+/-- Leaves add no place that differs. -/
+theorem leaves_adds {T : Type} (followed : Option Nat) (count : Nat) (s : State T Raw) :
+    AddsPlaces s (leaves followed count s).2 :=
+  ⟨[], leaves_differs followed count s⟩
+
+/-- What follows the leaves of an entry adds places that differ to those of the state before the
+leaves. -/
+theorem adds_after_leaves {T : Type} {s' : State T Raw} {followed : Option Nat} {count : Nat}
+    {s : State T Raw} (adds : AddsPlaces (leaves followed count s).2 s') : AddsPlaces s s' :=
+  (leaves_adds followed count s).trans adds
+
 end
+
+/-! ## What the walk adds to the state -/
 
 section
 variable {D : Dialect} {Raw : Type} (definition : Key) (role : Option Role)
@@ -351,7 +479,7 @@ the term differs, each before what was there. -/
 def Adds (addresses : List (List (Key × Nat) × Key)) (s s' : State D.Ty Raw) : Prop :=
   (∃ new, s'.st.refusals = new ++ s.st.refusals) ∧
     (∃ new, s'.st.bounds = new ++ s.st.bounds ∧ BoundsAt definition role addresses new) ∧
-    (∃ new, s'.differs = new ++ s.differs)
+    AddsPlaces s s'
 
 variable {definition role}
 
@@ -382,8 +510,8 @@ theorem Adds.of_refusals {A : List (List (Key × Nat) × Key)} {s s' : State D.T
 
 theorem Adds.miss (A : List (List (Key × Nat) × Key)) (place : Place) (following found : Bool)
     (s : State D.Ty Raw) : Adds definition role A s (miss place following found s) := by
-  refine ⟨⟨[], by rw [miss_st]; rfl⟩, ⟨[], by rw [miss_st]; rfl, fun _ m => nomatch m⟩, ?_⟩
-  exact miss_differs place following found s
+  exact ⟨⟨[], by rw [miss_st]; rfl⟩, ⟨[], by rw [miss_st]; rfl, fun _ m => nomatch m⟩,
+    miss_differs place following found s⟩
 
 theorem Adds.leaves (A : List (List (Key × Nat) × Key)) (followed : Option Nat) (count : Nat)
     (s : State D.Ty Raw) : Adds definition role A s (leaves followed count s).2 := by
@@ -529,163 +657,258 @@ end
 section
 variable {D : Dialect} (checks : SkelRules D)
 
-theorem retEntry_true {outs : List D.Ty} {exit : List Nat} :
-    ∀ {skel : Skel D outs}, retEntry exit skel = true → skel = .ret exit
-  | .ret exit', h => by
-      simp only [retEntry, decide_eq_true_eq] at h
-      rw [h]
-  | .effect .., h => by simp [retEntry] at h
-  | .guard .., h => by simp [retEntry] at h
-  | .choose .., h => by simp [retEntry] at h
-  | .cases .., h => by simp [retEntry] at h
-  | .loop .., h => by simp [retEntry] at h
-  | .block .., h => by simp [retEntry] at h
-  | .attempt .., h => by simp [retEntry] at h
+/-- An exit that is found is the followed skeleton's exit. -/
+theorem retEntry_hit {outs : List D.Ty} {exit : List Nat} {followed : Option (Skel D outs)}
+    (hit : (followed.map (retEntry exit)).getD false = true) : followed = some (.ret exit) := by
+  cases followed with
+  | none => simp at hit
+  | some skel =>
+      cases skel <;> simp [retEntry] at hit
+      subst hit
+      rfl
 
-theorem effectEntry_some {outs ins res : List D.Ty} {key : Key} {o : D.Op ins res}
-    {operands : List Nat} {skel : Skel D outs} {results : Nat} {rest : Skel D outs}
-    (h : effectEntry checks key o operands (some skel) = some (results, rest)) :
-    ∃ (ins' : List D.Ty) (key' : Key) (o' : D.Op ins' res) (operands' : List Nat),
-      skel = .effect key' o' operands' results rest := by
-  cases skel
-  case effect ins' res' key' o' operands' results' rest' =>
-    simp only [effectEntry] at h
-    split at h
-    · next sameIns sameRes _ _ =>
-        split at h
-        · subst sameRes
-          simp only [Option.some.injEq, Prod.mk.injEq] at h
-          obtain ⟨rfl, rfl⟩ := h
-          exact ⟨_, _, _, _, rfl⟩
-        · cases h
-    · cases h
-  all_goals simp [effectEntry] at h
+/-- An operation kept in order that is found is the followed skeleton's next entry, on the same
+key and operands, with an operation that the dialect finds the same. -/
+theorem effectEntry_hit {outs ins res : List D.Ty} {key : Key} {o : D.Op ins res}
+    {operands : List Nat} {followed : Option (Skel D outs)} {results : Nat}
+    {rest : Skel D outs} (hit : effectEntry checks key o operands followed = some (results, rest)) :
+    ∃ o' : D.Op ins res, checks.sameOp o o' = true ∧
+      followed = some (.effect key o' operands results rest) := by
+  cases followed with
+  | none => simp [effectEntry] at hit
+  | some skel =>
+      cases skel
+      case effect ins' res' key' o' operands' results' rest' =>
+        simp only [effectEntry] at hit
+        split at hit
+        · next sameIns sameRes _ _ =>
+            subst sameIns sameRes
+            split at hit
+            · next decided =>
+                obtain ⟨sameOp, rfl, rfl⟩ := decided
+                cases hit
+                exact ⟨o', sameOp, rfl⟩
+            · cases hit
+        · cases hit
+      all_goals simp [effectEntry] at hit
 
-theorem guardEntry_some {outs : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who} {condition : Nat}
-    {why : Reason} {skel rest : Skel D outs}
-    (h : guardEntry checks (t := t) key w condition why (some skel) = some rest) :
-    ∃ (t' : D.Ty) (key' : Key) (w' : D.Who) (condition' : Nat) (ok' : D.Condition w' t')
-      (why' : Reason), skel = .guard key' w' condition' ok' why' rest := by
-  cases skel
-  case guard t' key' w' condition' ok' why' rest' =>
-    simp only [guardEntry] at h
-    split at h
-    · split at h
-      · simp only [Option.some.injEq] at h
-        subst h
-        exact ⟨_, _, _, _, _, _, rfl⟩
-      · cases h
-    · cases h
-  all_goals simp [guardEntry] at h
+/-- A guard that is found is the followed skeleton's next entry, on the same key, performers,
+condition and reason. -/
+theorem guardEntry_hit {outs : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who} {condition : Nat}
+    {why : Reason} {followed : Option (Skel D outs)} {rest : Skel D outs}
+    (hit : guardEntry checks (t := t) key w condition why followed = some rest) :
+    ∃ ok : D.Condition w t, followed = some (.guard key w condition ok why rest) := by
+  cases followed with
+  | none => simp [guardEntry] at hit
+  | some skel =>
+      cases skel
+      case guard t' key' w' condition' ok' why' rest' =>
+        simp only [guardEntry] at hit
+        split at hit
+        · next sameWho sameTy _ _ =>
+            subst sameWho sameTy
+            split at hit
+            · next decided =>
+                obtain ⟨rfl, rfl, rfl⟩ := decided
+                cases hit
+                exact ⟨ok', rfl⟩
+            · cases hit
+        · cases hit
+      all_goals simp [guardEntry] at hit
 
-theorem chooseEntry_some {outs mid : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who}
-    {condition : Nat} {skel : Skel D outs} {onTrue onFalse : Skel D mid} {results : Nat}
-    {rest : Skel D outs}
-    (h : chooseEntry checks (mid := mid) (t := t) key w condition (some skel) =
+/-- A choice that is found is the followed skeleton's next entry, on the same key, performers and
+condition, with the entry's regions, leaves and rest. -/
+theorem chooseEntry_hit {outs mid : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who}
+    {condition : Nat} {followed : Option (Skel D outs)} {onTrue onFalse : Skel D mid}
+    {results : Nat} {rest : Skel D outs}
+    (hit : chooseEntry checks (mid := mid) (t := t) key w condition followed =
       some (onTrue, onFalse, results, rest)) :
-    ∃ (t' : D.Ty) (key' : Key) (w' : D.Who) (condition' : Nat) (ok' : D.Condition w' t'),
-      skel = .choose key' w' condition' ok' onTrue onFalse results rest := by
-  cases skel
-  case choose mid' t' key' w' condition' ok' onTrue' onFalse' results' rest' =>
-    simp only [chooseEntry] at h
-    split at h
-    · next sameMid _ _ _ =>
-        split at h
-        · subst sameMid
-          simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at h
-          obtain ⟨rfl, rfl, rfl, rfl⟩ := h
-          exact ⟨_, _, _, _, _, rfl⟩
-        · cases h
-    · cases h
-  all_goals simp [chooseEntry] at h
+    ∃ ok : D.Condition w t,
+      followed = some (.choose key w condition ok onTrue onFalse results rest) := by
+  cases followed with
+  | none => simp [chooseEntry] at hit
+  | some skel =>
+      cases skel
+      case choose mid' t' key' w' condition' ok' onTrue' onFalse' results' rest' =>
+        simp only [chooseEntry] at hit
+        split at hit
+        · next sameWho sameTy sameMid _ _ _ =>
+            subst sameWho sameTy sameMid
+            split at hit
+            · next decided =>
+                obtain ⟨rfl, rfl⟩ := decided
+                simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at hit
+                obtain ⟨rfl, rfl, rfl, rfl⟩ := hit
+                exact ⟨ok', rfl⟩
+            · cases hit
+        · cases hit
+      all_goals simp [chooseEntry] at hit
 
-theorem casesEntry_some {outs mid payloads : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who}
-    {subject : Nat} {skel : Skel D outs} {arms : SkelArms D mid payloads} {results : Nat}
-    {rest : Skel D outs}
-    (h : casesEntry checks (mid := mid) (t := t) (payloads := payloads) key w subject (some skel) =
+/-- A case analysis that is found is the followed skeleton's next entry, on the same key,
+performers and subject, with the entry's arms, leaves and rest. -/
+theorem casesEntry_hit {outs mid payloads : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who}
+    {subject : Nat} {followed : Option (Skel D outs)} {arms : SkelArms D mid payloads}
+    {results : Nat} {rest : Skel D outs}
+    (hit : casesEntry checks (mid := mid) (t := t) (payloads := payloads) key w subject followed =
       some (arms, results, rest)) :
-    ∃ (t' : D.Ty) (key' : Key) (w' : D.Who) (subject' : Nat) (ok' : D.Alternatives w' t' payloads),
-      skel = .cases key' w' subject' ok' arms results rest := by
-  cases skel
-  case cases mid' t' payloads' key' w' subject' ok' arms' results' rest' =>
-    simp only [casesEntry] at h
-    split at h
-    · next sameMid samePayloads _ _ _ _ =>
-        split at h
-        · subst sameMid samePayloads
-          simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at h
-          obtain ⟨rfl, rfl, rfl⟩ := h
-          exact ⟨_, _, _, _, _, rfl⟩
-        · cases h
-    · cases h
-  all_goals simp [casesEntry] at h
+    ∃ ok : D.Alternatives w t payloads,
+      followed = some (.cases key w subject ok arms results rest) := by
+  cases followed with
+  | none => simp [casesEntry] at hit
+  | some skel =>
+      cases skel
+      case cases mid' t' payloads' key' w' subject' ok' arms' results' rest' =>
+        simp only [casesEntry] at hit
+        split at hit
+        · next sameWho sameTy sameMid samePayloads _ _ _ _ =>
+            subst sameWho sameTy sameMid samePayloads
+            split at hit
+            · next decided =>
+                obtain ⟨rfl, rfl⟩ := decided
+                simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at hit
+                obtain ⟨rfl, rfl, rfl⟩ := hit
+                exact ⟨ok', rfl⟩
+            · cases hit
+        · cases hit
+      all_goals simp [casesEntry] at hit
 
-theorem loopEntry_some {outs carried each : List D.Ty} {key : Key} {w : D.Who}
-    {sameTimes : Count D w → Bool} {initial : List Nat} {skel : Skel D outs} {inputs : Nat}
-    {body : Skel D (carried ++ each)} {results : Nat} {rest : Skel D outs}
-    (h : loopEntry checks (carried := carried) (each := each) key w sameTimes initial (some skel) =
+/-- A loop that is found is the followed skeleton's next entry, on the same key, performers and
+initial values, with a count that the loop's count follows, and the entry's leaves, body and
+rest. -/
+theorem loopEntry_hit {outs carried each : List D.Ty} {key : Key} {w : D.Who}
+    {sameTimes : Count D w → Bool} {initial : List Nat} {followed : Option (Skel D outs)}
+    {inputs : Nat} {body : Skel D (carried ++ each)} {results : Nat} {rest : Skel D outs}
+    (hit : loopEntry checks (carried := carried) (each := each) key w sameTimes initial followed =
       some (inputs, body, results, rest)) :
-    ∃ (key' : Key) (w' : D.Who) (times' : Count D w') (initial' : List Nat),
-      skel = .loop key' w' times' initial' inputs body results rest := by
-  cases skel
-  case loop carried' each' key' w' times' initial' inputs' body' results' rest' =>
-    simp only [loopEntry] at h
-    split at h
-    · next sameWho sameCarried sameEach _ _ _ =>
-        split at h
-        · subst sameCarried sameEach
-          simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at h
-          obtain ⟨rfl, rfl, rfl, rfl⟩ := h
-          exact ⟨_, _, _, _, rfl⟩
-        · cases h
-    · cases h
-  all_goals simp [loopEntry] at h
+    ∃ times : Count D w, sameTimes times = true ∧
+      followed = some (.loop key w times initial inputs body results rest) := by
+  cases followed with
+  | none => simp [loopEntry] at hit
+  | some skel =>
+      cases skel
+      case loop carried' each' key' w' times' initial' inputs' body' results' rest' =>
+        simp only [loopEntry] at hit
+        split at hit
+        · next sameWho sameCarried sameEach _ _ _ =>
+            subst sameWho sameCarried sameEach
+            split at hit
+            · next decided =>
+                obtain ⟨rfl, sameCount, rfl⟩ := decided
+                simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at hit sameCount
+                obtain ⟨rfl, rfl, rfl, rfl⟩ := hit
+                exact ⟨times', sameCount, rfl⟩
+            · cases hit
+        · cases hit
+      all_goals simp [loopEntry] at hit
 
-theorem blockEntry_some {outs mid : List D.Ty} {key : Key} {number : Nat} {skel : Skel D outs}
-    {body : Skel D mid} {results : Nat} {rest : Skel D outs}
-    (h : blockEntry checks (mid := mid) key number (some skel) = some (body, results, rest)) :
-    ∃ (key' : Key) (number' : Nat), skel = .block key' number' body results rest := by
-  cases skel
-  case block mid' key' number' body' results' rest' =>
-    simp only [blockEntry] at h
-    split at h
-    · next sameMid _ =>
-        split at h
-        · subst sameMid
-          simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at h
-          obtain ⟨rfl, rfl, rfl⟩ := h
-          exact ⟨_, _, rfl⟩
-        · cases h
-    · cases h
-  all_goals simp [blockEntry] at h
+/-- A block that is found is the followed skeleton's next entry, on the same key and number,
+with the entry's body, leaves and rest. -/
+theorem blockEntry_hit {outs mid : List D.Ty} {key : Key} {number : Nat}
+    {followed : Option (Skel D outs)} {body : Skel D mid} {results : Nat} {rest : Skel D outs}
+    (hit : blockEntry checks (mid := mid) key number followed = some (body, results, rest)) :
+    followed = some (.block key number body results rest) := by
+  cases followed with
+  | none => simp [blockEntry] at hit
+  | some skel =>
+      cases skel
+      case block mid' key' number' body' results' rest' =>
+        simp only [blockEntry] at hit
+        split at hit
+        · next sameMid _ =>
+            subst sameMid
+            split at hit
+            · next decided =>
+                obtain ⟨rfl, rfl⟩ := decided
+                simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at hit
+                obtain ⟨rfl, rfl, rfl⟩ := hit
+                rfl
+            · cases hit
+        · cases hit
+      all_goals simp [blockEntry] at hit
 
-theorem attemptEntry_some {outs mid : List D.Ty} {key : Key} {w : D.Who} {skel : Skel D outs}
-    {input : Nat} {body : Skel D mid} {results : Nat} {rest : Skel D outs}
-    (h : attemptEntry checks (mid := mid) key w (some skel) = some (input, body, results, rest)) :
-    ∃ (key' : Key) (w' : D.Who), skel = .attempt key' w' input body results rest := by
-  cases skel
-  case attempt mid' key' w' input' body' results' rest' =>
-    simp only [attemptEntry] at h
-    split at h
-    · next sameMid _ _ =>
-        split at h
-        · subst sameMid
-          simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at h
-          obtain ⟨rfl, rfl, rfl, rfl⟩ := h
-          exact ⟨_, _, rfl⟩
-        · cases h
-    · cases h
-  all_goals simp [attemptEntry] at h
+/-- An attempt that is found is the followed skeleton's next entry, on the same key and
+performers, with the entry's leaves, body and rest. -/
+theorem attemptEntry_hit {outs mid : List D.Ty} {key : Key} {w : D.Who}
+    {followed : Option (Skel D outs)} {input : Nat} {body : Skel D mid} {results : Nat}
+    {rest : Skel D outs}
+    (hit : attemptEntry checks (mid := mid) key w followed = some (input, body, results, rest)) :
+    followed = some (.attempt key w input body results rest) := by
+  cases followed with
+  | none => simp [attemptEntry] at hit
+  | some skel =>
+      cases skel
+      case attempt mid' key' w' input' body' results' rest' =>
+        simp only [attemptEntry] at hit
+        split at hit
+        · next sameWho sameMid _ _ =>
+            subst sameWho sameMid
+            split at hit
+            · next decided =>
+                subst decided
+                simp only [cast_eq, Option.some.injEq, Prod.mk.injEq] at hit
+                obtain ⟨rfl, rfl, rfl, rfl⟩ := hit
+                rfl
+            · cases hit
+        · cases hit
+      all_goals simp [attemptEntry] at hit
 
-theorem armEntry_some {mid payloads : List D.Ty} {payload : D.Ty}
-    {arms : SkelArms D mid (payload :: payloads)} {input : Nat} {arm : Skel D mid}
-    {rest : SkelArms D mid payloads} (h : armEntry (some arms) = some (input, arm, rest)) :
-    arms = .cons input arm rest := by
-  cases arms
-  case cons input' arm' rest' =>
-    simp only [armEntry, Option.some.injEq, Prod.mk.injEq] at h
-    obtain ⟨rfl, rfl, rfl⟩ := h
-    rfl
+/-- No operation is found where no skeleton is followed. -/
+theorem effectEntry_none {outs ins res : List D.Ty} (key : Key) (o : D.Op ins res)
+    (operands : List Nat) :
+    effectEntry checks key o operands (none : Option (Skel D outs)) = none := rfl
+
+/-- No guard is found where no skeleton is followed. -/
+theorem guardEntry_none {outs : List D.Ty} {t : D.Ty} (key : Key) (w : D.Who) (condition : Nat)
+    (why : Reason) :
+    guardEntry checks (t := t) key w condition why (none : Option (Skel D outs)) = none := rfl
+
+/-- No choice is found where no skeleton is followed. -/
+theorem chooseEntry_none {outs mid : List D.Ty} {t : D.Ty} (key : Key) (w : D.Who)
+    (condition : Nat) :
+    chooseEntry checks (mid := mid) (t := t) key w condition (none : Option (Skel D outs)) =
+      none := rfl
+
+/-- No case analysis is found where no skeleton is followed. -/
+theorem casesEntry_none {outs mid payloads : List D.Ty} {t : D.Ty} (key : Key) (w : D.Who)
+    (subject : Nat) :
+    casesEntry checks (mid := mid) (t := t) (payloads := payloads) key w subject
+      (none : Option (Skel D outs)) = none := rfl
+
+/-- No loop is found where no skeleton is followed. -/
+theorem loopEntry_none {outs carried each : List D.Ty} (key : Key) (w : D.Who)
+    (sameTimes : Count D w → Bool) (initial : List Nat) :
+    loopEntry checks (carried := carried) (each := each) key w sameTimes initial
+      (none : Option (Skel D outs)) = none := rfl
+
+/-- No block is found where no skeleton is followed. -/
+theorem blockEntry_none {outs mid : List D.Ty} (key : Key) (number : Nat) :
+    blockEntry checks (mid := mid) key number (none : Option (Skel D outs)) = none := rfl
+
+/-- No attempt is found where no skeleton is followed. -/
+theorem attemptEntry_none {outs mid : List D.Ty} (key : Key) (w : D.Who) :
+    attemptEntry checks (mid := mid) key w (none : Option (Skel D outs)) = none := rfl
+
+/-- The first of the arms that are followed is found when arms are followed, and is their first
+arm. -/
+theorem armEntry_hit {mid payloads : List D.Ty} {payload : D.Ty}
+    {followed : Option (SkelArms D mid (payload :: payloads))} {input : Nat} {arm : Skel D mid}
+    {rest : SkelArms D mid payloads} (hit : armEntry followed = some (input, arm, rest)) :
+    followed = some (.cons input arm rest) := by
+  cases followed with
+  | none => simp [armEntry] at hit
+  | some arms =>
+      cases arms with
+      | cons input' arm' rest' =>
+          simp only [armEntry, Option.some.injEq, Prod.mk.injEq] at hit
+          obtain ⟨rfl, rfl, rfl⟩ := hit
+          rfl
+
+/-- No arm is found where no arms are followed. -/
+theorem armEntry_none {mid payloads : List D.Ty} {payload : D.Ty} :
+    armEntry (none : Option (SkelArms D mid (payload :: payloads))) = none := rfl
+
+/-- Without a skeleton to follow, the skeleton of a region is the one built. -/
+theorem kept_none {outs : List D.Ty} (built : Skel D outs) : kept none built = built := rfl
 
 end
 
@@ -729,14 +952,11 @@ theorem effectEntry_below {outs ins res : List D.Ty} {key : Key} {o : D.Op ins r
   | none => simp [FollowedBelow]
   | some h =>
       obtain ⟨r, rest⟩ := h
-      cases followed with
-      | none => simp [effectEntry] at hit
-      | some skel =>
-          obtain ⟨_, _, _, _, rfl⟩ := effectEntry_some checks hit
-          refine ⟨fun lo e => ?_, below.2⟩
-          simp only [Option.map_some, Option.some.injEq] at e
-          subst e
-          exact below.1
+      obtain ⟨_, _, rfl⟩ := effectEntry_hit checks hit
+      refine ⟨fun lo e => ?_, below.2⟩
+      simp only [Option.map_some, Option.some.injEq] at e
+      subst e
+      exact below.1
 
 theorem guardEntry_below {outs : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who} {condition : Nat}
     {why : Reason} {followed : Option (Skel D outs)} {n : Nat} (below : FollowedBelow followed n) :
@@ -744,11 +964,8 @@ theorem guardEntry_below {outs : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who} {
   cases hit : guardEntry checks (t := t) key w condition why followed with
   | none => trivial
   | some rest =>
-      cases followed with
-      | none => simp [guardEntry] at hit
-      | some skel =>
-          obtain ⟨_, _, _, _, _, _, rfl⟩ := guardEntry_some checks hit
-          exact below
+      obtain ⟨_, rfl⟩ := guardEntry_hit checks hit
+      exact below
 
 theorem chooseEntry_below {outs mid : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who}
     {condition : Nat} {followed : Option (Skel D outs)} {n : Nat}
@@ -765,14 +982,11 @@ theorem chooseEntry_below {outs mid : List D.Ty} {t : D.Ty} {key : Key} {w : D.W
   | none => simp [FollowedBelow]
   | some h =>
       obtain ⟨a, b, r, rest⟩ := h
-      cases followed with
-      | none => simp [chooseEntry] at hit
-      | some skel =>
-          obtain ⟨_, _, _, _, _, rfl⟩ := chooseEntry_some checks hit
-          refine ⟨below.1, below.2.1, fun lo e => ?_, below.2.2.2⟩
-          simp only [Option.map_some, Option.some.injEq] at e
-          subst e
-          exact below.2.2.1
+      obtain ⟨_, rfl⟩ := chooseEntry_hit checks hit
+      refine ⟨below.1, below.2.1, fun lo e => ?_, below.2.2.2⟩
+      simp only [Option.map_some, Option.some.injEq] at e
+      subst e
+      exact below.2.2.1
 
 theorem casesEntry_below {outs mid payloads : List D.Ty} {t : D.Ty} {key : Key} {w : D.Who}
     {subject : Nat} {followed : Option (Skel D outs)} {n : Nat}
@@ -788,14 +1002,11 @@ theorem casesEntry_below {outs mid payloads : List D.Ty} {t : D.Ty} {key : Key} 
   | none => simp [FollowedBelow, FollowedArmsBelow]
   | some h =>
       obtain ⟨a, r, rest⟩ := h
-      cases followed with
-      | none => simp [casesEntry] at hit
-      | some skel =>
-          obtain ⟨_, _, _, _, _, rfl⟩ := casesEntry_some checks hit
-          refine ⟨below.1, fun lo e => ?_, below.2.2⟩
-          simp only [Option.map_some, Option.some.injEq] at e
-          subst e
-          exact below.2.1
+      obtain ⟨_, rfl⟩ := casesEntry_hit checks hit
+      refine ⟨below.1, fun lo e => ?_, below.2.2⟩
+      simp only [Option.map_some, Option.some.injEq] at e
+      subst e
+      exact below.2.1
 
 theorem loopEntry_below {outs carried each : List D.Ty} {key : Key} {w : D.Who}
     {sameTimes : Count D w → Bool} {initial : List Nat} {followed : Option (Skel D outs)} {n : Nat}
@@ -813,17 +1024,14 @@ theorem loopEntry_below {outs carried each : List D.Ty} {key : Key} {w : D.Who}
   | none => simp [FollowedBelow]
   | some h =>
       obtain ⟨i, b, r, rest⟩ := h
-      cases followed with
-      | none => simp [loopEntry] at hit
-      | some skel =>
-          obtain ⟨_, _, _, _, rfl⟩ := loopEntry_some checks hit
-          refine ⟨fun lo e => ?_, below.2.1, fun lo e => ?_, below.2.2.2⟩
-          · simp only [Option.map_some, Option.some.injEq] at e
-            subst e
-            exact below.1
-          · simp only [Option.map_some, Option.some.injEq] at e
-            subst e
-            exact below.2.2.1
+      obtain ⟨_, _, rfl⟩ := loopEntry_hit checks hit
+      refine ⟨fun lo e => ?_, below.2.1, fun lo e => ?_, below.2.2.2⟩
+      · simp only [Option.map_some, Option.some.injEq] at e
+        subst e
+        exact below.1
+      · simp only [Option.map_some, Option.some.injEq] at e
+        subst e
+        exact below.2.2.1
 
 theorem blockEntry_below {outs mid : List D.Ty} {key : Key} {number : Nat}
     {followed : Option (Skel D outs)} {n : Nat} (below : FollowedBelow followed n) :
@@ -835,14 +1043,11 @@ theorem blockEntry_below {outs mid : List D.Ty} {key : Key} {number : Nat}
   | none => simp [FollowedBelow]
   | some h =>
       obtain ⟨b, r, rest⟩ := h
-      cases followed with
-      | none => simp [blockEntry] at hit
-      | some skel =>
-          obtain ⟨_, _, rfl⟩ := blockEntry_some checks hit
-          refine ⟨below.1, fun lo e => ?_, below.2.2⟩
-          simp only [Option.map_some, Option.some.injEq] at e
-          subst e
-          exact below.2.1
+      obtain rfl := blockEntry_hit checks hit
+      refine ⟨below.1, fun lo e => ?_, below.2.2⟩
+      simp only [Option.map_some, Option.some.injEq] at e
+      subst e
+      exact below.2.1
 
 theorem attemptEntry_below {outs mid : List D.Ty} {key : Key} {w : D.Who}
     {followed : Option (Skel D outs)} {n : Nat} (below : FollowedBelow followed n) :
@@ -855,17 +1060,14 @@ theorem attemptEntry_below {outs mid : List D.Ty} {key : Key} {w : D.Who}
   | none => simp [FollowedBelow]
   | some h =>
       obtain ⟨i, b, r, rest⟩ := h
-      cases followed with
-      | none => simp [attemptEntry] at hit
-      | some skel =>
-          obtain ⟨_, _, rfl⟩ := attemptEntry_some checks hit
-          refine ⟨fun lo e => ?_, below.2.1, fun lo e => ?_, below.2.2.2⟩
-          · simp only [Option.map_some, Option.some.injEq] at e
-            subst e
-            exact below.1
-          · simp only [Option.map_some, Option.some.injEq] at e
-            subst e
-            exact below.2.2.1
+      obtain rfl := attemptEntry_hit checks hit
+      refine ⟨fun lo e => ?_, below.2.1, fun lo e => ?_, below.2.2.2⟩
+      · simp only [Option.map_some, Option.some.injEq] at e
+        subst e
+        exact below.1
+      · simp only [Option.map_some, Option.some.injEq] at e
+        subst e
+        exact below.2.2.1
 
 theorem armEntry_below {mid payloads : List D.Ty} {payload : D.Ty}
     {followed : Option (SkelArms D mid (payload :: payloads))} {n : Nat}
@@ -877,14 +1079,11 @@ theorem armEntry_below {mid payloads : List D.Ty} {payload : D.Ty}
   | none => simp [FollowedBelow, FollowedArmsBelow]
   | some h =>
       obtain ⟨i, a, rest⟩ := h
-      cases followed with
-      | none => simp [armEntry] at hit
-      | some arms =>
-          obtain rfl := armEntry_some hit
-          refine ⟨fun lo e => ?_, below.2.1, below.2.2⟩
-          simp only [Option.map_some, Option.some.injEq] at e
-          subst e
-          exact below.1
+      obtain rfl := armEntry_hit hit
+      refine ⟨fun lo e => ?_, below.2.1, below.2.2⟩
+      simp only [Option.map_some, Option.some.injEq] at e
+      subst e
+      exact below.1
 
 end
 

@@ -15,7 +15,7 @@ these is kept as the table grows above the leaves. An application is placed on t
 written, in the order that `ValueRules.order` gives, which are the same identifiers
 (`ValueRules.mem_order`). Nothing here reads a semantics: these are the facts about identifiers
 that the meaning of a skeleton (`Value/Runs.lean`) and the walk that builds and follows skeletons
-(`Facts/WalkSkeleton.lean`) rest on.
+(`Facts/Growth.lean`) rest on.
 -/
 
 namespace Zkc.Core

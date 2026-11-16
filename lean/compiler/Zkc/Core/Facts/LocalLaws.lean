@@ -795,10 +795,10 @@ theorem env_all_valid {Γ : Ctx V.Ty} {env : Env M.Val Γ}
   | [], .nil => trivial
   | _ :: _, .cons x rest => HList.all_cons.mpr ⟨h _ x, env_all_valid h rest⟩
 
-/-- The payload of an alternative is valid. -/
-def PickValid : {payloads : List V.Ty} → Pick M.Val payloads → Prop
-  | _, .here v => M.Valid _ v
-  | _, .there p => PickValid p
+/-- The payload of an alternative is valid in the model: `Pick.All` of the model's validity, as
+`Zkc.Core.PickValid` is of the validity of a semantics. -/
+def PickValid {payloads : List V.Ty} (p : Pick M.Val payloads) : Prop :=
+  p.All M.Valid
 
 theorem Tys.pick_valid : ∀ (alts : Tys V.TypeKey) (c : alts.Choice M.toCarriers),
     Tys.ValidChoice M.toCarriers alts c → PickValid (Tys.pick M alts c)
@@ -1035,18 +1035,6 @@ theorem requirement_holds_mono {R : Reading Val} {args : List Val} {req : Requir
 
 end
 
-section
-variable {V : Vocabulary} (M : Model V)
-
-/-- The payload of a valid variant, as the core says it, is valid as the laws say it. -/
-theorem pickValid_local {fns : List (FnHeader V)} (table : FnTable M fns) :
-    ∀ {payloads : List V.Ty} (p : Pick M.Val payloads), FactCheck.PickValid (M := M) p →
-      PickValid (localSem M fns table) (ValidDyn M) p
-  | _, .here _, h => h
-  | _, .there p, h => pickValid_local table p h
-
-end
-
 end Facts
 
 section
@@ -1158,7 +1146,7 @@ theorem localFactRules_lawful (distinct : (fns.map (·.key)).Nodup) (safe : FnTa
     intro w t ok v _
     subst ok
     rfl
-  pick := fun ok v valid => Analysis.Facts.pickValid_local M table _ (localPick_valid ok v valid)
+  pick := fun ok v valid => localPick_valid ok v valid
   index := fun _ _ => ⟨trivial, rfl⟩
   collect := fun _ _ _ length valid => ⟨valid, length⟩
   begin := fun _ _ _ => trivial

@@ -83,6 +83,14 @@ def HList.split {α : Type} {V : α → Type} :
   | [], _, ys => (.nil, ys)
   | _ :: as, _, .cons x rest => let parts := HList.split as rest; (.cons x parts.1, parts.2)
 
+/-- The values of a list that is two lists, split and put together, are the values. -/
+theorem split_append {α : Type} {F : α → Type} :
+    ∀ (as : List α) {bs : List α} (xs : HList F (as ++ bs)),
+      (HList.split as xs).1.append (HList.split as xs).2 = xs
+  | [], _, _ => rfl
+  | _ :: as, _, .cons x rest => by
+      simp only [HList.split, HList.append, split_append as rest]
+
 theorem HList.all_cons {α : Type} {F : α → Type} {P : ∀ a, F a → Prop} {a : α} {rest : List α}
     {v : F a} {vs : HList F rest} : (HList.cons v vs).All P ↔ P a v ∧ vs.All P := Iff.rfl
 
@@ -342,12 +350,6 @@ theorem all_append : ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M
   | [], _, .nil, _ => by simp [HList.append, HList.All]
   | _ :: _, _, .cons x xs, ys => by
       simp only [HList.append, HList.all_cons, all_append xs ys, and_assoc]
-
-theorem split_append : ∀ (as : List V.Ty) {bs : List V.Ty} (xs : HList M.Val (as ++ bs)),
-    (HList.split as xs).1.append (HList.split as xs).2 = xs
-  | [], _, _ => rfl
-  | _ :: as, _, .cons x rest => by
-      simp only [HList.split, HList.append, split_append as rest]
 
 end
 

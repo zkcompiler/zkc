@@ -54,7 +54,6 @@ public import Zkc.Core.Facts.Valuation
 public import Zkc.Core.Facts.Learning
 public import Zkc.Core.Facts.Laws
 public import Zkc.Core.Facts.Growth
-public import Zkc.Core.Facts.WalkSkeleton
 public import Zkc.Core.Facts.WalkRuns
 public import Zkc.Core.Facts.Soundness
 public import Zkc.Core.Facts.SoundnessFollowing

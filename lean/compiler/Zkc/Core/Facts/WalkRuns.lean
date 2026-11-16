@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Facts.WalkSkeleton
+public import Zkc.Core.Facts.Growth
 public import Zkc.Core.Value.Agrees
 
 @[expose] public section
@@ -12,12 +12,13 @@ runs the skeleton that the walk builds, over the table that the walk gives
 (`walk_runs_built`); with a skeleton to follow and no place that differs, it runs the skeleton
 that it follows (`walk_runs_followed`). A value of the walk also checks its requirements, which
 may enter applications in the table before the value is shared: the table only grows across it
-(`valueStep_reads`).
+(`valueStep_reads`). What the walk does to its state, to the places that differ and to the
+skeleton is in `Facts/Growth.lean`.
 -/
 
 namespace Zkc.Core.Analysis.ValueSide
 
-open FactCheck
+open FactCheck Analysis.Facts
 
 section
 variable {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : FactRules D Raw) (checks : SkelRules D)
@@ -85,14 +86,14 @@ mutual
             · simp only [Term.denote, halted, Process.bind] at safe
               exact absurd bad safe
         | none =>
-            simp only [walk, written, effectEntry_none, Option.isSome_none, miss_not_following,
+            simp only [walk, written, effectEntry_none, Option.isSome_none, miss_free,
               Option.map_none, leaves_none, kept_none]
             simp only [Term.denote] at safe ⊢
             obtain ⟨wf1, grows1, made1⟩ := fresh_grows res.length s.st wf
             generalize Known.enter rules _ _ = k1
             have scope1 := (agrees.inScope.mono grows1.next).bind results _ (by simp [fresh]) made1
             obtain ⟨-, grows2⟩ := walk_grows rules checks definition role blocks rest none _ k1
-              { s with st := (fresh res.length s.st).2 } scope1 wf1 FollowedBelow.none
+              { s with st := (fresh res.length s.st).2 } ⟨wf1, scope1⟩ trivial
             refine .effect (env.all args)
               (ReadsAll.mono Run _ (grows1.trans grows2).sub (.refl ρ) (agrees.readsAll args))
               fun returned returns => ?_
@@ -102,11 +103,11 @@ mutual
               { s with st := (fresh res.length s.st).2 } path _ _ wf1 bound.1 bound.2
               (safe.of_bind_canReturn returns)
     | _, _, .guard key w c ok why rest, ids, k, s, path, env, ρ, wf, support, agrees, safe => by
-        simp only [walk, guardEntry_none, Option.isSome_none, miss_not_following, kept_none]
+        simp only [walk, guardEntry_none, Option.isSome_none, miss_free, kept_none]
         simp only [Term.denote] at safe ⊢
         generalize assume rules.ops _ _ _ _ _ = k1
         obtain ⟨-, grows⟩ := walk_grows rules checks definition role blocks rest none ids k1 s
-          agrees.inScope wf FollowedBelow.none
+          ⟨wf, agrees.inScope⟩ trivial
         have read := Reads.mono Run _ grows.sub (.refl ρ) (agrees.read c).2
         cases holds : sem.holds ok (env.get c) with
         | true =>
@@ -118,20 +119,20 @@ mutual
             exact .guardStops _ read holds
     | _, _, .choose (mid := mid) key w c ok _ onTrue onFalse results rest, ids, k, s, path, env, ρ,
         wf, support, agrees, safe => by
-        simp only [walk, chooseEntry_none, Option.isSome_none, miss_not_following,
+        simp only [walk, chooseEntry_none, Option.isSome_none, miss_free,
           Option.map_none, leaves_none, kept_none]
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
         generalize assume rules.ops _ _ k _ true = k1
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks onTrue none ids k1 s
-          scope wf FollowedBelow.none
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks onTrue none ids
+          k1 s ⟨wf, scope⟩ trivial
         have runsTrue := fun safeTrue =>
           walk_runs_built binding blocks onTrue ids k1 s path env ρ wf support agrees safeTrue
         generalize walk rules checks definition role blocks onTrue none ids k1 s = first
           at wf1 grows1 runsTrue ⊢
         generalize assume rules.ops _ _ k _ false = k2
-        obtain ⟨wf2, grows2⟩ := walk_grows rules checks definition role blocks onFalse none ids k2
-          first.state (scope.mono grows1.next) wf1 FollowedBelow.none
+        obtain ⟨⟨wf2, -⟩, grows2⟩ := walk_grows rules checks definition role blocks onFalse none ids
+          k2 first.state ⟨wf1, scope.mono grows1.next⟩ trivial
         have runsFalse := fun safeFalse =>
           walk_runs_built binding blocks onFalse ids k2 first.state path env ρ wf1
             (support.mono grows1.next) (agrees.mono grows1.sub grows1.next (.refl ρ)) safeFalse
@@ -142,8 +143,7 @@ mutual
         have toRest := grows1.trans (grows2.trans grows3)
         have scope3 := (scope.mono toRest.next).bind results _ (by simp [fresh]) made3
         obtain ⟨-, grows4⟩ := walk_grows rules checks definition role blocks rest none _ k3
-          { second.state with st := (fresh mid.length second.state.st).2 } scope3 wf3
-          FollowedBelow.none
+          { second.state with st := (fresh mid.length second.state.st).2 } ⟨wf3, scope3⟩ trivial
         have read := Reads.mono Run _ (toRest.trans grows4).sub (.refl ρ) (agrees.read c).2
         cases holds : sem.holds ok (env.get c) with
         | true =>
@@ -170,12 +170,12 @@ mutual
               (safe.of_bind_canReturn returns)
     | _, _, .cases (mid := mid) key w x ok _ arms results rest, ids, k, s, path, env, ρ, wf,
         support, agrees, safe => by
-        simp only [walk, casesEntry_none, Option.isSome_none, miss_not_following,
+        simp only [walk, casesEntry_none, Option.isSome_none, miss_free,
           Option.map_none, leaves_none, kept_none]
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
-        obtain ⟨wf1, grows1⟩ := walkArms_grows rules checks definition role blocks arms none ids k
-          s scope wf ArmsFollowedBelow.none
+        obtain ⟨-, ⟨wf1, -⟩, grows1⟩ := walkArms_grows rules checks definition role blocks arms
+          none ids k s ⟨wf, scope⟩ trivial
         have runsArms := walkArms_runs_built binding blocks arms ids k s path env ρ
           (sem.pick ok (env.get x)) wf support agrees safe.of_bind
         generalize walkArms rules checks definition role blocks arms none ids k s = regions
@@ -185,8 +185,7 @@ mutual
         have scope3 := (scope.mono (grows1.trans grows3).next).bind results _ (by simp [fresh])
           made3
         obtain ⟨-, grows4⟩ := walk_grows rules checks definition role blocks rest none _ k3
-          { regions.state with st := (fresh mid.length regions.state.st).2 } scope3 wf3
-          FollowedBelow.none
+          { regions.state with st := (fresh mid.length regions.state.st).2 } ⟨wf3, scope3⟩ trivial
         refine .cases (env.get x)
           (Reads.mono Run _ (grows1.trans (grows3.trans grows4)).sub (.refl ρ) (agrees.read x).2)
           (SkelArms.Runs.grow sem permitted Run _ (grows3.trans grows4).sub _ runsArms)
@@ -198,15 +197,15 @@ mutual
           (safe.of_bind_canReturn returns)
     | _, _, .loop (carried := carried) (each := each) key w times _ initial inputs body results
         rest, ids, k, s, path, env, ρ, wf, support, agrees, safe => by
-        simp only [walk, loopEntry_none, Option.isSome_none, miss_not_following,
+        simp only [walk, loopEntry_none, Option.isSome_none, miss_free,
           Option.map_none, leaves_none, kept_none]
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
         obtain ⟨wf0, grows0, made0⟩ := fresh_grows (carried.length + 1) s.st wf
         generalize bodyKnown rules _ _ _ _ _ _ = k1
         have scope0 := (scope.mono grows0.next).bind inputs _ (by simp [fresh]) made0
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks body none _ k1
-          { s with st := (fresh (carried.length + 1) s.st).2 } scope0 wf0 FollowedBelow.none
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks body none _ k1
+          { s with st := (fresh (carried.length + 1) s.st).2 } ⟨wf0, scope0⟩ trivial
         have runsBody := fun path' env' ρ' support' agrees' safe' =>
           walk_runs_built binding blocks body
             (bindIds ids inputs (fresh (carried.length + 1) s.st).1) k1
@@ -230,8 +229,7 @@ mutual
         have scope3 := (scope.mono toRest.next).bind results _ (by simp [fresh]) made3
         obtain ⟨-, grows4⟩ := walk_grows rules checks definition role blocks rest none _ k3
           { e.state with st := (fresh (carried.length + each.length)
-              ⟨e.state.st.table, e.state.st.next, refusals₁, bounds₁⟩).2 } scope3 wf3
-          FollowedBelow.none
+              ⟨e.state.st.table, e.state.st.next, refusals₁, bounds₁⟩).2 } ⟨wf3, scope3⟩ trivial
         have toEnd := toRest.trans grows4
         let bodyOf : Nat → HList sem.Val carried →
             Process sem.S sem.H (HList sem.Val (carried ++ each)) := fun i values =>
@@ -260,12 +258,12 @@ mutual
             (safe.of_bind_canReturn returns)
     | _, _, .block (mid := mid) key number body results rest, ids, k, s, path, env, ρ, wf, support,
         agrees, safe => by
-        simp only [walk, blockEntry_none, Option.isSome_none, miss_not_following,
+        simp only [walk, blockEntry_none, Option.isSome_none, miss_free,
           Option.map_none, leaves_none, kept_none]
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role (blocks ++ [(key, number)])
-          body none ids k s scope wf FollowedBelow.none
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role
+          (blocks ++ [(key, number)]) body none ids k s ⟨wf, scope⟩ trivial
         have runsBody := fun path' safe' =>
           walk_runs_built binding (blocks ++ [(key, number)]) body ids k s path' env ρ wf support
             agrees safe'
@@ -276,7 +274,7 @@ mutual
         have scope3 := (scope.mono (grows1.trans grows3).next).bind results _ (by simp [fresh])
           made3
         obtain ⟨-, grows4⟩ := walk_grows rules checks definition role blocks rest none _ k3
-          { e.state with st := (fresh mid.length e.state.st).2 } scope3 wf3 FollowedBelow.none
+          { e.state with st := (fresh mid.length e.state.st).2 } ⟨wf3, scope3⟩ trivial
         refine .block (Skel.Runs.grow sem permitted Run _ (grows3.trans grows4).sub _
             (runsBody _ safe.of_bind))
           fun returned returns => ?_
@@ -287,15 +285,15 @@ mutual
           (safe.of_bind_canReturn returns)
     | _, _, .attempt (mid := mid) key w _ inputs body results rest, ids, k, s, path, env, ρ, wf,
         support, agrees, safe => by
-        simp only [walk, attemptEntry_none, Option.isSome_none, miss_not_following,
+        simp only [walk, attemptEntry_none, Option.isSome_none, miss_free,
           Option.map_none, leaves_none, kept_none]
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
         obtain ⟨wf0, grows0, made0⟩ := fresh_grows 1 s.st wf
         generalize Known.enter rules (Known.addRanges k _ _) _ = k1
         have scope0 := (scope.mono grows0.next).bind inputs _ (by simp [fresh]) made0
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks body none _ k1
-          { s with st := (fresh 1 s.st).2 } scope0 wf0 FollowedBelow.none
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks body none _ k1
+          { s with st := (fresh 1 s.st).2 } ⟨wf0, scope0⟩ trivial
         have runsBody := fun env' ρ' support' agrees' safe' =>
           walk_runs_built binding blocks body (bindIds ids inputs (fresh 1 s.st).1) k1
             { s with st := (fresh 1 s.st).2 } path env' ρ' wf0 support' agrees' safe'
@@ -306,7 +304,7 @@ mutual
         have toRest := grows0.trans (grows1.trans grows3)
         have scope3 := (scope.mono toRest.next).bind results _ (by simp [fresh]) made3
         obtain ⟨-, grows4⟩ := walk_grows rules checks definition role blocks rest none _ k3
-          { e.state with st := (fresh mid.length e.state.st).2 } scope3 wf3 FollowedBelow.none
+          { e.state with st := (fresh mid.length e.state.st).2 } ⟨wf3, scope3⟩ trivial
         refine .attempt (fun number => body.denote sem path (env.extend inputs (.cons number .nil)))
           (fun number began => ?_) (fun number returned began ran settled => ?_)
         · have bound := (agrees.mono grows0.sub grows0.next (.refl ρ)).leaves support inputs
@@ -342,16 +340,16 @@ mutual
         obtain ⟨wf0, grows0, made0⟩ := fresh_grows 1 s.st wf
         generalize Known.enter rules _ _ = k1
         have scope0 := (scope.mono grows0.next).bind inputs _ (by simp [fresh]) made0
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks arm none _ k1
-          { s with st := (fresh 1 s.st).2 } scope0 wf0 FollowedBelow.none
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks arm none _ k1
+          { s with st := (fresh 1 s.st).2 } ⟨wf0, scope0⟩ trivial
         have bound := (agrees.mono grows0.sub grows0.next (.refl ρ)).leaves support inputs
           (.cons v .nil) s.st.next 1 rfl (Nat.le_refl _) (Nat.le_refl _)
         have runsArm := walk_runs_built binding blocks arm (bindIds ids inputs (fresh 1 s.st).1) k1
           { s with st := (fresh 1 s.st).2 } path _ _ wf0 bound.1 bound.2 safe
         generalize walk rules checks definition role blocks arm none _ k1 _ = e
           at wf1 grows1 runsArm ⊢
-        obtain ⟨-, grows2⟩ := walkArms_grows rules checks definition role blocks rest none ids k
-          e.state (scope.mono (grows0.trans grows1).next) wf1 ArmsFollowedBelow.none
+        obtain ⟨-, -, grows2⟩ := walkArms_grows rules checks definition role blocks rest none ids k
+          e.state ⟨wf1, scope.mono (grows0.trans grows1).next⟩ trivial
         exact .here (Skel.Runs.grow sem permitted Run _ grows2.sub _ runsArm)
     | _, _, _, .cons inputs arm rest, ids, k, s, path, env, ρ, .there pick, wf, support, agrees,
         safe => by
@@ -361,8 +359,8 @@ mutual
         obtain ⟨wf0, grows0, made0⟩ := fresh_grows 1 s.st wf
         generalize Known.enter rules _ _ = k1
         have scope0 := (scope.mono grows0.next).bind inputs _ (by simp [fresh]) made0
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks arm none _ k1
-          { s with st := (fresh 1 s.st).2 } scope0 wf0 FollowedBelow.none
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks arm none _ k1
+          { s with st := (fresh 1 s.st).2 } ⟨wf0, scope0⟩ trivial
         generalize walk rules checks definition role blocks arm none _ k1 _ = e at wf1 grows1 ⊢
         have toRest := grows0.trans grows1
         exact .there (walkArms_runs_built binding blocks rest ids k e.state path env ρ pick wf1
@@ -425,7 +423,7 @@ mutual
               at noPlace ⊢
             obtain ⟨⟨r, rest'⟩, rfl⟩ : ∃ a, hit = some a := hit_of_no_place (by
               refine AddsPlaces.trans ?_
-                (walk_adds rules checks definition role blocks rest _ _ _ _)
+                (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
               exact leaves_adds _ _ _) noPlace
             obtain ⟨o', sameOp, e⟩ := effectEntry_hit checks hhit
             obtain rfl := Option.some.inj e
@@ -441,7 +439,7 @@ mutual
                 have := below.1
                 omega
             obtain ⟨-, grows⟩ := walk_grows rules checks definition role blocks rest (some rest') _
-              k1 s scope1 wf (FollowedBelow.of_some below.2)
+              k1 s ⟨wf, scope1⟩ below.2
             refine .effect (env.all args)
               (ReadsAll.mono Run _ grows.sub (.refl ρ) (agrees.readsAll args))
               fun returned returns => ?_
@@ -454,13 +452,13 @@ mutual
         generalize hhit : guardEntry checks (t := t) key w (idOf ids c.name) why (some skel) = hit
           at noPlace ⊢
         obtain ⟨rest', rfl⟩ : ∃ a, hit = some a := hit_of_no_place
-          (walk_adds rules checks definition role blocks rest _ _ _ _) noPlace
+          (walk_adds rules checks definition role blocks rest _ _ _ _).2.2 noPlace
         obtain ⟨ok', e⟩ := guardEntry_hit checks hhit
         obtain rfl := Option.some.inj e
         simp only [Option.isSome_some, miss_found] at noPlace ⊢
         generalize assume rules.ops _ _ _ _ _ = k1 at noPlace ⊢
         obtain ⟨-, grows⟩ := walk_grows rules checks definition role blocks rest (some rest') ids k1
-          s agrees.inScope wf (FollowedBelow.of_some below)
+          s ⟨wf, agrees.inScope⟩ below
         have read := Reads.mono Run _ grows.sub (.refl ρ) (agrees.read c).2
         simp only [Term.denote] at safe ⊢
         cases holds : sem.holds ok (env.get c) with
@@ -478,33 +476,36 @@ mutual
         generalize hhit : chooseEntry checks (mid := mid) (t := t) key w (idOf ids c.name)
           (some skel) = hit at noPlace ⊢
         obtain ⟨⟨onTrue', onFalse', r, rest'⟩, rfl⟩ : ∃ a, hit = some a := hit_of_no_place (by
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks rest _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
           refine AddsPlaces.trans ?_ (leaves_adds _ _ _)
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks onFalse _ _ _ _)
-          exact walk_adds rules checks definition role blocks onTrue _ _ _ _) noPlace
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks onFalse _ _ _ _).2.2
+          exact (walk_adds rules checks definition role blocks onTrue _ _ _ _).2.2) noPlace
         obtain ⟨ok', e⟩ := chooseEntry_hit checks hhit
         obtain rfl := Option.some.inj e
         simp only [Option.isSome_some, miss_found, Option.map_some, leaves_some] at noPlace ⊢
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
         generalize assume rules.ops _ _ k _ true = k1 at noPlace ⊢
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks onTrue (some onTrue')
-          ids k1 s scope wf (FollowedBelow.of_some below.1)
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks onTrue
+          (some onTrue') ids k1 s ⟨wf, scope⟩ below.1
         have noPlaceTrue : (walk rules checks definition role blocks onTrue (some onTrue') ids k1
             s).state.differs = [] := AddsPlaces.none_before (by
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks rest _ _ _ _)
-          exact walk_adds rules checks definition role blocks onFalse _ _ _ _) noPlace
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
+          exact (walk_adds rules checks definition role blocks onFalse _ _ _ _).2.2) noPlace
         have runsTrue := fun safeTrue =>
           walk_runs_followed binding lawful blocks onTrue onTrue' ids k1 s path env ρ lo
             noPlaceTrue wf below.1 apart.1 support inOrder.1 agrees safeTrue
         generalize walk rules checks definition role blocks onTrue (some onTrue') ids k1 s = first
           at wf1 grows1 noPlaceTrue runsTrue noPlace ⊢
         generalize assume rules.ops _ _ k _ false = k2 at noPlace ⊢
-        obtain ⟨wf2, grows2⟩ := walk_grows rules checks definition role blocks onFalse
-          (some onFalse') ids k2 first.state (scope.mono grows1.next) wf1
-          (FollowedBelow.of_some (below.2.1.mono grows1.next))
+        obtain ⟨⟨wf2, -⟩, grows2⟩ := walk_grows rules checks definition role blocks onFalse
+          (some onFalse') ids k2 first.state ⟨wf1, scope.mono grows1.next⟩
+          (below.2.1.mono grows1.next)
         have noPlaceFalse := AddsPlaces.none_before
-          (walk_adds rules checks definition role blocks rest _ _ _ _) noPlace
+          (walk_adds rules checks definition role blocks rest _ _ _ _).2.2 noPlace
         have runsFalse := fun safeFalse =>
           walk_runs_followed binding lawful blocks onFalse onFalse' ids k2 first.state path env ρ lo
             noPlaceFalse wf1 (below.2.1.mono grows1.next)
@@ -521,7 +522,7 @@ mutual
             have := toRest.next
             omega
         obtain ⟨-, grows3⟩ := walk_grows rules checks definition role blocks rest (some rest') _ k3
-          second.state scope3 wf2 (FollowedBelow.of_some (below.2.2.2.mono toRest.next))
+          second.state ⟨wf2, scope3⟩ (below.2.2.2.mono toRest.next)
         have read := Reads.mono Run _ (toRest.trans grows3).sub (.refl ρ) (agrees.read c).2
         cases holds : sem.holds ok (env.get c) with
         | true =>
@@ -554,18 +555,19 @@ mutual
         generalize hhit : casesEntry checks (mid := mid) (t := t) (payloads := payloads) key w
           (idOf ids x.name) (some skel) = hit at noPlace ⊢
         obtain ⟨⟨arms', r, rest'⟩, rfl⟩ : ∃ a, hit = some a := hit_of_no_place (by
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks rest _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
           refine AddsPlaces.trans ?_ (leaves_adds _ _ _)
-          exact walkArms_adds rules checks definition role blocks arms _ _ _ _) noPlace
+          exact (walkArms_adds rules checks definition role blocks arms _ _ _ _).2.2) noPlace
         obtain ⟨ok', e⟩ := casesEntry_hit checks hhit
         obtain rfl := Option.some.inj e
         simp only [Option.isSome_some, miss_found, Option.map_some, leaves_some] at noPlace ⊢
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
-        obtain ⟨wf1, grows1⟩ := walkArms_grows rules checks definition role blocks arms (some arms')
-          ids k s scope wf (ArmsFollowedBelow.of_some below.1)
+        obtain ⟨-, ⟨wf1, -⟩, grows1⟩ := walkArms_grows rules checks definition role blocks arms
+          (some arms') ids k s ⟨wf, scope⟩ below.1
         have noPlaceArms := AddsPlaces.none_before
-          (walk_adds rules checks definition role blocks rest _ _ _ _) noPlace
+          (walk_adds rules checks definition role blocks rest _ _ _ _).2.2 noPlace
         have runsArms := walkArms_runs_followed binding lawful blocks arms arms' ids k s path env ρ
           lo (sem.pick ok (env.get x)) noPlaceArms wf below.1 apart.1 support inOrder.1 agrees
           safe.of_bind
@@ -579,7 +581,7 @@ mutual
             have := grows1.next
             omega
         obtain ⟨-, grows3⟩ := walk_grows rules checks definition role blocks rest (some rest') _ k3
-          regions.state scope3 wf1 (FollowedBelow.of_some (below.2.2.mono grows1.next))
+          regions.state ⟨wf1, scope3⟩ (below.2.2.mono grows1.next)
         refine .cases (env.get x)
           (Reads.mono Run _ (grows1.trans grows3).sub (.refl ρ) (agrees.read x).2)
           (SkelArms.Runs.grow sem permitted Run _ grows3.sub _ runsArms)
@@ -597,10 +599,12 @@ mutual
           (fun count => times.follows checks ids count) (idsOf ids initial) (some skel) = hit
           at noPlace ⊢
         obtain ⟨⟨inputs', body', r, rest'⟩, rfl⟩ : ∃ a, hit = some a := hit_of_no_place (by
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks rest _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
           refine AddsPlaces.trans ?_ (leaves_adds _ _ _)
           refine AddsPlaces.trans ?_ (AddsPlaces.with_st _ _)
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks body _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks body _ _ _ _).2.2
           exact leaves_adds _ _ _) noPlace
         obtain ⟨times', sameTimes, e⟩ := loopEntry_hit checks hhit
         obtain rfl := Option.some.inj e
@@ -614,12 +618,13 @@ mutual
             have := mem_range'_bounds m
             have := below.1
             omega
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks body (some body')
-          _ k1 s scope0 wf (FollowedBelow.of_some below.2.1)
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks body
+          (some body') _ k1 s ⟨wf, scope0⟩ below.2.1
         have noPlaceBody : (walk rules checks definition role blocks body (some body')
             (bindIds ids inputs (List.range' inputs' (carried.length + 1))) k1 s).state.differs =
             [] := AddsPlaces.none_before (by
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks rest _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
           exact AddsPlaces.with_st _ _) noPlace
         have runsBody := fun path' env' ρ' support' agrees' safe' =>
           walk_runs_followed binding lawful blocks body body'
@@ -644,8 +649,8 @@ mutual
             have := grows1.next
             omega
         obtain ⟨-, grows3⟩ := walk_grows rules checks definition role blocks rest (some rest') _ k3
-          { e.state with st := ⟨e.state.st.table, e.state.st.next, refusals₁, bounds₁⟩ } scope3 wf1
-          (FollowedBelow.of_some (below.2.2.2.mono grows1.next))
+          { e.state with st := ⟨e.state.st.table, e.state.st.next, refusals₁, bounds₁⟩ }
+          ⟨wf1, scope3⟩ (below.2.2.2.mono grows1.next)
         have toEnd := grows1.trans (grows2.trans grows3)
         let bodyOf : Nat → HList sem.Val carried →
             Process sem.S sem.H (HList sem.Val (carried ++ each)) := fun i values =>
@@ -676,18 +681,19 @@ mutual
         simp only [walk] at noPlace ⊢
         generalize hhit : blockEntry checks (mid := mid) key number (some skel) = hit at noPlace ⊢
         obtain ⟨⟨body', r, rest'⟩, rfl⟩ : ∃ a, hit = some a := hit_of_no_place (by
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks rest _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
           refine AddsPlaces.trans ?_ (leaves_adds _ _ _)
-          exact walk_adds rules checks definition role (blocks ++ [(key, number)]) body _ _ _ _)
-          noPlace
+          exact (walk_adds rules checks definition role (blocks ++ [(key, number)]) body _ _ _
+            _).2.2) noPlace
         obtain rfl := Option.some.inj (blockEntry_hit checks hhit)
         simp only [Option.isSome_some, miss_found, Option.map_some, leaves_some] at noPlace ⊢
         simp only [Term.denote] at safe ⊢
         have scope := agrees.inScope
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role (blocks ++ [(key, number)])
-          body (some body') ids k s scope wf (FollowedBelow.of_some below.1)
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role
+          (blocks ++ [(key, number)]) body (some body') ids k s ⟨wf, scope⟩ below.1
         have noPlaceBody := AddsPlaces.none_before
-          (walk_adds rules checks definition role blocks rest _ _ _ _) noPlace
+          (walk_adds rules checks definition role blocks rest _ _ _ _).2.2 noPlace
         have runsBody := fun path' safe' =>
           walk_runs_followed binding lawful (blocks ++ [(key, number)]) body body' ids k s path' env
             ρ lo noPlaceBody wf below.1 apart.1 support inOrder.1 agrees safe'
@@ -701,7 +707,7 @@ mutual
             have := grows1.next
             omega
         obtain ⟨-, grows3⟩ := walk_grows rules checks definition role blocks rest (some rest') _ k3
-          e.state scope3 wf1 (FollowedBelow.of_some (below.2.2.mono grows1.next))
+          e.state ⟨wf1, scope3⟩ (below.2.2.mono grows1.next)
         refine .block (Skel.Runs.grow sem permitted Run _ grows3.sub _ (runsBody _ safe.of_bind))
           fun returned returns => ?_
         have bound := (agrees.mono grows1.sub grows1.next (.refl ρ)).leaves support results
@@ -714,9 +720,11 @@ mutual
         simp only [walk] at noPlace ⊢
         generalize hhit : attemptEntry checks (mid := mid) key w (some skel) = hit at noPlace ⊢
         obtain ⟨⟨input', body', r, rest'⟩, rfl⟩ : ∃ a, hit = some a := hit_of_no_place (by
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks rest _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks rest _ _ _ _).2.2
           refine AddsPlaces.trans ?_ (leaves_adds _ _ _)
-          refine AddsPlaces.trans ?_ (walk_adds rules checks definition role blocks body _ _ _ _)
+          refine AddsPlaces.trans ?_
+            (walk_adds rules checks definition role blocks body _ _ _ _).2.2
           exact leaves_adds _ _ _) noPlace
         obtain rfl := Option.some.inj (attemptEntry_hit checks hhit)
         simp only [Option.isSome_some, miss_found, Option.map_some, leaves_some] at noPlace ⊢
@@ -727,10 +735,10 @@ mutual
           have := mem_range'_bounds m
           have := below.1
           omega
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks body (some body') _
-          k1 s scope0 wf (FollowedBelow.of_some below.2.1)
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks body
+          (some body') _ k1 s ⟨wf, scope0⟩ below.2.1
         have noPlaceBody := AddsPlaces.none_before
-          (walk_adds rules checks definition role blocks rest _ _ _ _) noPlace
+          (walk_adds rules checks definition role blocks rest _ _ _ _).2.2 noPlace
         have runsBody := fun env' ρ' support' agrees' safe' =>
           walk_runs_followed binding lawful blocks body body'
             (bindIds ids inputs (List.range' input' 1)) k1 s path env' ρ' _ noPlaceBody wf below.2.1
@@ -745,7 +753,7 @@ mutual
             have := grows1.next
             omega
         obtain ⟨-, grows3⟩ := walk_grows rules checks definition role blocks rest (some rest') _ k3
-          e.state scope3 wf1 (FollowedBelow.of_some (below.2.2.2.mono grows1.next))
+          e.state ⟨wf1, scope3⟩ (below.2.2.2.mono grows1.next)
         refine .attempt (fun number => body.denote sem path (env.extend inputs (.cons number .nil)))
           (fun number began => ?_) (fun number returned began ran settled => ?_)
         · have bound := agrees.leaves support inputs (.cons number .nil) input' 1 rfl inOrder.1
@@ -787,19 +795,18 @@ mutual
           have := mem_range'_bounds m
           have := below.1
           omega
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks arm (some arm') _ k1
-          s scope0 wf (FollowedBelow.of_some below.2.1)
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks arm (some arm')
+          _ k1 s ⟨wf, scope0⟩ below.2.1
         have noPlaceArm := AddsPlaces.none_before
-          (walkArms_adds rules checks definition role blocks rest _ _ _ _) noPlace
+          (walkArms_adds rules checks definition role blocks rest _ _ _ _).2.2 noPlace
         have bound := agrees.leaves support inputs (.cons v .nil) input' 1 rfl inOrder.1 below.1
         have runsArm := walk_runs_followed binding lawful blocks arm arm'
           (bindIds ids inputs (List.range' input' 1)) k1 s path _ _ _ noPlaceArm wf below.2.1
           apart.2.1 bound.1 inOrder.2.1 bound.2 safe
         generalize walk rules checks definition role blocks arm (some arm') _ k1 s = e
           at wf1 grows1 runsArm noPlace ⊢
-        obtain ⟨-, grows2⟩ := walkArms_grows rules checks definition role blocks rest (some rest')
-          ids k e.state (scope.mono grows1.next) wf1
-          (ArmsFollowedBelow.of_some (below.2.2.mono grows1.next))
+        obtain ⟨-, -, grows2⟩ := walkArms_grows rules checks definition role blocks rest
+          (some rest') ids k e.state ⟨wf1, scope.mono grows1.next⟩ (below.2.2.mono grows1.next)
         exact .here (Skel.Runs.grow sem permitted Run _ grows2.sub _ runsArm)
     | _, _, _, .cons inputs arm rest, .cons input' arm' rest', ids, k, s, path, env, ρ, lo,
         .there pick, noPlace, wf, below, apart, support, inOrder, agrees, safe => by
@@ -811,9 +818,8 @@ mutual
           have := mem_range'_bounds m
           have := below.1
           omega
-        obtain ⟨wf1, grows1⟩ := walk_grows rules checks definition role blocks arm (some arm')
-          (bindIds ids inputs (List.range' input' 1)) k1 s scope0 wf
-          (FollowedBelow.of_some below.2.1)
+        obtain ⟨⟨wf1, -⟩, grows1⟩ := walk_grows rules checks definition role blocks arm (some arm')
+          (bindIds ids inputs (List.range' input' 1)) k1 s ⟨wf, scope0⟩ below.2.1
         generalize walk rules checks definition role blocks arm (some arm') _ k1 s = e
           at wf1 grows1 noPlace ⊢
         exact .there (walkArms_runs_followed binding lawful blocks rest rest' ids k e.state path env

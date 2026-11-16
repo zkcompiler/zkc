@@ -9,8 +9,8 @@ The walk of the analysis is sound while it follows a skeleton, for any dialect a
 that satisfy the laws of `FactRules.Lawful` (`Facts/Laws.lean`).
 
 A walk that follows a skeleton and adds no place that differs finds, at each instruction that it
-keeps in order, the skeleton's entry (`hit_of_differs`): it takes the entry's leaves and follows
-the entry's regions. The leaves are made in order (`Skel.Ordered`), below the next identifier and
+keeps in order, the skeleton's entry (`found_of_differs`, `Facts/Growth.lean`): it takes the
+entry's leaves and follows the entry's regions. The leaves are made in order (`Skel.Ordered`), below the next identifier and
 apart from the table; along a run, every identifier from the first leaf not yet reached on that
 has a value is a result of an entry of the table (`Quiet`). So setting a leaf never changes a
 value (`leaves_at`): the leaf has none, the entries whose results it is are none, and an entry
@@ -24,46 +24,10 @@ namespace Zkc.Core.Analysis.Facts
 open FactCheck
 
 
-/-! ## A kept instruction finds its entry -/
+/-! ## Values at the leaves of a followed entry -/
 
 section
-variable {D : Dialect} {Raw : Type}
-
-/-- A walk that follows a skeleton and adds no place that differs found the entry of each kept
-instruction. -/
-theorem found_of_differs {s s' : State D.Ty Raw} {place : Place} {found : Bool}
-    (adds : ∃ n, s'.differs = n ++ (miss place true found s).differs)
-    (same : s'.differs = s.differs) : found = true := by
-  cases found with
-  | true => rfl
-  | false =>
-      obtain ⟨n, e⟩ := adds
-      rw [miss_lost, same] at e
-      have := congrArg List.length e
-      simp only [List.length_append, List.length_cons] at this
-      omega
-
-/-- The leaves of an entry keep the places that differ. -/
-theorem leaves_differs {T : Type} (followed : Option Nat) (count : Nat) (s : State T Raw) :
-    (leaves followed count s).2.differs = s.differs := by
-  cases followed <;> rfl
-
-/-- What follows the leaves of an entry adds places that differ to those of the state before the
-leaves. -/
-theorem adds_after_leaves {T : Type} {s' : State T Raw} {followed : Option Nat} {count : Nat}
-    {s : State T Raw} (adds : ∃ n, s'.differs = n ++ (leaves followed count s).2.differs) :
-    ∃ n, s'.differs = n ++ s.differs := by
-  obtain ⟨n, e⟩ := adds
-  exact ⟨n, by rw [e, leaves_differs]⟩
-
-/-- Places added on two steps are added on both. -/
-theorem adds_compose {a b c : List Place} (first : ∃ n, a = n ++ b) (second : ∃ n, b = n ++ c) :
-    ∃ n, a = n ++ c := by
-  obtain ⟨n1, e1⟩ := first
-  obtain ⟨n2, e2⟩ := second
-  exact ⟨n1 ++ n2, by rw [e1, e2, List.append_assoc]⟩
-
-variable {σ : Setting D Raw}
+variable {D : Dialect} {Raw : Type} {σ : Setting D Raw}
 
 /-- Values set at leaves of a followed entry, which have no value and are no results of entries,
 keep the state and the valuation in agreement; the leaves have them, and every identifier above
@@ -92,7 +56,7 @@ theorem ret_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D.T
   have found := found_of_differs ⟨[], rfl⟩ differs
   simp only [found, miss_found]
   obtain ⟨ordered, _, _, quiet⟩ := following
-  rw [retEntry_true found] at ordered
+  rw [Option.some.inj (retEntry_hit (followed := some skel) found)] at ordered
   simp only [Shows, Term.EveryLoop, Term.denote, Process.Every]
   exact ⟨trivial, ρ, Valuation.Le.refl ρ, ⟨inv.coherent, valuesOf_idsOf inv.agree xs, inv.holds⟩,
     quiet.low ordered⟩
@@ -139,7 +103,8 @@ theorem op_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs ins res : L
         cases hit with
         | none => cases found
         | some h => exact ⟨h, rfl⟩
-      obtain ⟨_, _, _, _, rfl⟩ := effectEntry_some σ.checks hhit
+      obtain ⟨_, _, e⟩ := effectEntry_hit σ.checks hhit
+      obtain rfl := Option.some.inj e
       simp only [Option.isSome_some, miss_found, Option.map_some, leaves]
         at differs hnone recorded ⊢
       obtain ⟨low, orderedRest⟩ := ordered
@@ -206,7 +171,8 @@ theorem guard_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D
     cases hit with
     | none => cases found
     | some h => exact ⟨h, rfl⟩
-  obtain ⟨_, _, _, _, _, _, rfl⟩ := guardEntry_some σ.checks hhit
+  obtain ⟨_, e⟩ := guardEntry_hit σ.checks hhit
+  obtain rfl := Option.some.inj e
   simp only [Option.isSome_some, miss_found] at differs hnone recorded ⊢
   have hc := inv.agree.idOf c
   have read := laws.condition ok (env.get c) (inv.coherent.valid _ _ hc)
@@ -240,14 +206,14 @@ theorem block_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid : Li
   simp only [Term.addresses] at nodup apart recorded
   generalize hhit : blockEntry σ.checks (mid := mid) key number (some skel) = hit
     at differs hnone recorded ⊢
-  have found := found_of_differs (adds_compose (adds_after_leaves (walk_adds σ.rules σ.checks
-    σ.definition σ.role blocks rest _ _ _ _).2.2) (walk_adds σ.rules σ.checks σ.definition σ.role
-    (blocks ++ [(key, number)]) body _ _ _ _).2.2) differs
+  have found := found_of_differs (AddsPlaces.trans (walk_adds σ.rules σ.checks σ.definition
+    σ.role (blocks ++ [(key, number)]) body _ _ _ _).2.2 (adds_after_leaves (walk_adds σ.rules
+    σ.checks σ.definition σ.role blocks rest _ _ _ _).2.2)) differs
   obtain ⟨⟨body', r, rest'⟩, rfl⟩ : ∃ h, hit = some h := by
     cases hit with
     | none => cases found
     | some h => exact ⟨h, rfl⟩
-  obtain ⟨_, _, rfl⟩ := blockEntry_some σ.checks hhit
+  obtain rfl := Option.some.inj (blockEntry_hit σ.checks hhit)
   simp only [Option.isSome_some, miss_found, Option.map_some, leaves]
     at differs hnone recorded ⊢
   obtain ⟨⟨orderedB, orderedR⟩, below, ⟨apartB, apartHere, apartRest⟩, quiet⟩ := following
@@ -329,14 +295,14 @@ theorem attempt_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid : 
   simp only [Term.addresses] at nodup apart recorded
   generalize hhit : attemptEntry σ.checks (mid := mid) key w (some skel) = hit
     at differs hnone recorded ⊢
-  have found := found_of_differs (adds_after_leaves (adds_compose (adds_after_leaves (walk_adds
-    σ.rules σ.checks σ.definition σ.role blocks rest _ _ _ _).2.2) (walk_adds σ.rules σ.checks
-    σ.definition σ.role blocks body _ _ _ _).2.2)) differs
+  have found := found_of_differs (adds_after_leaves (AddsPlaces.trans (walk_adds σ.rules σ.checks
+    σ.definition σ.role blocks body _ _ _ _).2.2 (adds_after_leaves (walk_adds σ.rules σ.checks
+    σ.definition σ.role blocks rest _ _ _ _).2.2))) differs
   obtain ⟨⟨input, body', r, rest'⟩, rfl⟩ : ∃ h, hit = some h := by
     cases hit with
     | none => cases found
     | some h => exact ⟨h, rfl⟩
-  obtain ⟨_, _, rfl⟩ := attemptEntry_some σ.checks hhit
+  obtain rfl := Option.some.inj (attemptEntry_hit σ.checks hhit)
   simp only [Option.isSome_some, miss_found, Option.map_some, leaves]
     at differs hnone recorded ⊢
   obtain ⟨⟨lowInput, orderedB, orderedR⟩, below, ⟨apartInput, apartB, apartHere, apartRest⟩,
@@ -467,15 +433,16 @@ theorem choose_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid : L
   generalize idOf ids c.name = cid at hc differs hnone recorded ⊢
   generalize hhit : chooseEntry σ.checks (mid := mid) (t := t) key w cid (some skel) = hit
     at differs hnone recorded ⊢
-  have found := found_of_differs (adds_compose (adds_compose (adds_after_leaves (walk_adds
-    σ.rules σ.checks σ.definition σ.role blocks rest _ _ _ _).2.2) (walk_adds σ.rules σ.checks
-    σ.definition σ.role blocks onFalse _ _ _ _).2.2) (walk_adds σ.rules σ.checks σ.definition
-    σ.role blocks onTrue _ _ _ _).2.2) differs
+  have found := found_of_differs (AddsPlaces.trans (walk_adds σ.rules σ.checks σ.definition
+    σ.role blocks onTrue _ _ _ _).2.2 (AddsPlaces.trans (walk_adds σ.rules σ.checks σ.definition
+    σ.role blocks onFalse _ _ _ _).2.2 (adds_after_leaves (walk_adds σ.rules σ.checks
+    σ.definition σ.role blocks rest _ _ _ _).2.2))) differs
   obtain ⟨⟨onTrue', onFalse', r, rest'⟩, rfl⟩ : ∃ h, hit = some h := by
     cases hit with
     | none => cases found
     | some h => exact ⟨h, rfl⟩
-  obtain ⟨_, _, _, _, _, rfl⟩ := chooseEntry_some σ.checks hhit
+  obtain ⟨_, e⟩ := chooseEntry_hit σ.checks hhit
+  obtain rfl := Option.some.inj e
   simp only [Option.isSome_some, miss_found, Option.map_some, leaves]
     at differs hnone recorded ⊢
   obtain ⟨⟨orderedT, orderedF, orderedR⟩, below, ⟨apartT, apartF, apartHere, apartRest⟩, quiet⟩ :=
@@ -733,14 +700,15 @@ theorem cases_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid payl
   simp only [Term.addresses] at nodup apart recorded
   generalize hhit : casesEntry σ.checks (mid := mid) (t := t) (payloads := payloads) key w
     (idOf ids x.name) (some skel) = hit at differs hnone recorded ⊢
-  have found := found_of_differs (adds_compose (adds_after_leaves (walk_adds σ.rules σ.checks
-    σ.definition σ.role blocks rest _ _ _ _).2.2) (walkArms_adds σ.rules σ.checks σ.definition
-    σ.role blocks arms _ _ _ _).2.2) differs
+  have found := found_of_differs (AddsPlaces.trans (walkArms_adds σ.rules σ.checks σ.definition
+    σ.role blocks arms _ _ _ _).2.2 (adds_after_leaves (walk_adds σ.rules σ.checks σ.definition
+    σ.role blocks rest _ _ _ _).2.2)) differs
   obtain ⟨⟨arms', r, rest'⟩, rfl⟩ : ∃ h, hit = some h := by
     cases hit with
     | none => cases found
     | some h => exact ⟨h, rfl⟩
-  obtain ⟨_, _, _, _, _, rfl⟩ := casesEntry_some σ.checks hhit
+  obtain ⟨_, e⟩ := casesEntry_hit σ.checks hhit
+  obtain rfl := Option.some.inj e
   simp only [Option.isSome_some, miss_found, Option.map_some, leaves]
     at differs hnone recorded ⊢
   obtain ⟨⟨orderedA, orderedR⟩, below, ⟨apartA, apartHere, apartRest⟩, quiet⟩ := following
@@ -830,14 +798,16 @@ theorem loop_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried e
   generalize hhit : loopEntry σ.checks (carried := carried) (each := each) key w
     (fun count => times.follows σ.checks ids count) (idsOf ids init) (some skel) = hit
     at differs hnone recorded ⊢
-  have found := found_of_differs (by exact adds_after_leaves (adds_compose (adds_after_leaves
-    (walk_adds σ.rules σ.checks σ.definition σ.role blocks rest _ _ _ _).2.2) (walk_adds σ.rules
-    σ.checks σ.definition σ.role blocks body _ _ _ _).2.2)) differs
+  have found := found_of_differs (adds_after_leaves (AddsPlaces.trans (walk_adds σ.rules σ.checks
+    σ.definition σ.role blocks body _ _ _ _).2.2 (AddsPlaces.trans (AddsPlaces.with_st _ _)
+    (adds_after_leaves (walk_adds σ.rules σ.checks σ.definition σ.role blocks rest _ _ _ _).2.2))))
+    differs
   obtain ⟨⟨inp, body', r, rest'⟩, rfl⟩ : ∃ h, hit = some h := by
     cases hit with
     | none => cases found
     | some h => exact ⟨h, rfl⟩
-  obtain ⟨_, _, _, _, rfl⟩ := loopEntry_some σ.checks hhit
+  obtain ⟨_, _, e⟩ := loopEntry_hit σ.checks hhit
+  obtain rfl := Option.some.inj e
   simp only [Option.isSome_some, miss_found, Option.map_some, leaves]
     at differs hnone recorded ⊢
   obtain ⟨⟨lowInputs, orderedB, orderedR⟩, below,
