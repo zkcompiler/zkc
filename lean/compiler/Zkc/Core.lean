@@ -2,6 +2,7 @@ module
 
 public import Zkc.Core.Process.Handler
 public import Zkc.Core.Process.Process
+public import Zkc.Core.Process.Same
 public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.Conditions
 public import Zkc.Core.Program.Context
